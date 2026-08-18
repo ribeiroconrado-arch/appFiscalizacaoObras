@@ -1,0 +1,396 @@
+/* ══════════════════════════════════════════════════════════════
+   TEMA F — "Tipografia"
+   Carregado DEPOIS de app.css, sobrescrevendo os tokens e acrescentando os
+   componentes de lista da Etapa 6.
+
+   Por que camada de tema e não reescrita do app.css: o design ainda está em
+   avaliação (seis variantes). Mantendo o tema num arquivo à parte, trocar de
+   proposta — ou voltar ao verde original — é remover uma linha do <head>, e
+   não refazer a folha inteira. Quando a escolha for definitiva, este arquivo
+   se funde ao app.css.
+
+   Os nomes de variável do app.css são reaproveitados de propósito: como todo
+   componente já lê `var(--g)`, `var(--gd)` etc., redefinir o token aqui
+   repinta a aplicação inteira sem tocar em nenhum seletor de componente.
+   ══════════════════════════════════════════════════════════════ */
+
+:root{
+  /* ── PALETA ÂMBAR sobre os tokens existentes ── */
+  --g:#F97316; --gd:#EA580C; --gxd:#B4470D; --gl:#FFF2E8; --gm:#FDBA8C;
+  --gold:#D97706; --gold-lt:#FDF3E3; --gold-dk:#B45309;
+
+  /* Neutros quentes: cinza puro brigaria com o laranja */
+  --bg:#FAF7F4; --sur:#FFFFFF; --bord:#EAE1D9; --blt:#F4EEE8;
+  --tx:#4A423C; --tx2:#6A5C52; --tx3:#9B8B7F;
+  --chumbo:#37413F;
+
+  --red:#C2352B; --rlt:#FCECEA;
+  --warn:#B45309; --wlt:#FDF3E3;
+  --blue:#1D4ED8; --blt2:#EAF0FE;
+
+  /* ── CINZAS DE FORMULÁRIO ──
+     Deliberadamente fora da faixa do laranja. Num sistema de fiscalização a
+     cor quente carrega significado (prazo, irregularidade); se a borda de
+     foco de um campo usa a mesma faixa, o usuário aprende a ignorá-la e a
+     cor perde força justamente onde precisa alertar. */
+  --f-bord:#CFCAC4; --f-bord-foco:#6B6560; --f-anel:rgba(107,101,96,.14);
+  --f-fundo:#FFFFFF; --f-fundo-ro:#F3F1EF; --f-rot:#7A736C;
+}
+
+/* ── CAMPOS EM CINZA ────────────────────────────────────────── */
+.field{background:var(--f-fundo);border-color:var(--f-bord)}
+.field:focus-within{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.field label{color:var(--f-rot)}
+.field input[readonly],.field select:disabled{background:var(--f-fundo-ro)}
+.data-hora-combo{border-color:var(--f-bord)}
+.data-hora-combo:focus-within{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.chk-item.marcado{border-color:var(--f-bord-foco);background:#F4F2F0}
+.chk-item input,.field input[type=checkbox]{accent-color:var(--f-bord-foco)}
+
+/* ── TAGS "Modelo D" do AppPOSTURAS ─────────────────────────
+   Fundo em gradiente do tom do status, ícone por máscara CSS pintado na cor
+   do status, e TEXTO SEMPRE cinza-chumbo — nunca colorido. Só o fundo e o
+   ícone carregam a cor, o que mantém a leitura quando há várias tags juntas. */
+:root{
+  --ic-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5v5.5l4 2.4-1 1.6-5-3V7h2z'/%3E%3C/svg%3E");
+  --ic-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E");
+  --ic-alert: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 1 21h22L12 2zm-1 7h2v6h-2V9zm0 8h2v2h-2v-2z'/%3E%3C/svg%3E");
+  --ic-x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.3 19.71 2.89 18.3 9.17 12 2.89 5.71 4.3 4.29l6.29 6.3 6.29-6.3z'/%3E%3C/svg%3E");
+  --ic-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='7'/%3E%3C/svg%3E");
+  --ic-file: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 7V3.5L19.5 9H14z'/%3E%3C/svg%3E");
+}
+.badge{gap:5px;padding:4px 9px 4px 7px;border-radius:8px;color:var(--chumbo);
+  border:1px solid var(--badge-border);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.badge::before{width:11px;height:11px;border-radius:0;background:var(--badge-color);
+  -webkit-mask-image:var(--badge-icon);mask-image:var(--badge-icon);
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center}
+.bd-ok  {background:linear-gradient(135deg,#E7F6EC,#D5F0DE);--badge-border:#C6EAD2;--badge-color:#2E7D32;--badge-icon:var(--ic-check)}
+.bd-al  {background:linear-gradient(135deg,#FFF6DD,#FCECBE);--badge-border:#F2DE9C;--badge-color:#B8860B;--badge-icon:var(--ic-clock)}
+.bd-pe  {background:linear-gradient(135deg,#FFF6DD,#FCECBE);--badge-border:#F2DE9C;--badge-color:#B8860B;--badge-icon:var(--ic-clock)}
+.bd-er  {background:linear-gradient(135deg,#FCEAE9,#F8D6D2);--badge-border:#F2C4C0;--badge-color:#C62828;--badge-icon:var(--ic-alert)}
+.bd-in  {background:linear-gradient(135deg,#F1F5F9,#E3E9EF);--badge-border:#E2E8F0;--badge-color:#6B7280;--badge-icon:var(--ic-dot)}
+.bd-cx  {background:linear-gradient(135deg,#FCEAE9,#F5CDC8);--badge-border:#F0B8B3;--badge-color:#B71C1C;--badge-icon:var(--ic-x)}
+.bd-tipo{background:linear-gradient(135deg,#F6F3F0,#EDE8E3);--badge-border:#E2DCD6;--badge-color:#8A8078;--badge-icon:var(--ic-file)}
+
+/* ── ABAS ───────────────────────────────────────────────────── */
+/* Rodapé: FLEX, não grid de N colunas fixas. Com grid o número de colunas
+   precisa acompanhar a quantidade de abas — foi o que quebrou ao entrar a
+   terceira aba num grid de 2: a última ficava fora da barra. Em flex, cada
+   aba divide o espaço sozinha e acrescentar uma nova não exige tocar no CSS. */
+.abas{position:fixed;left:0;right:0;bottom:0;z-index:950;min-height:62px;background:var(--sur);
+  border-top:1px solid var(--bord);display:flex;align-items:stretch;
+  padding-bottom:env(safe-area-inset-bottom)}
+.aba{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;padding:8px 2px;border:none;background:none;cursor:pointer;
+  font-size:10px;line-height:1.15;color:var(--tx3);position:relative;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aba svg{width:20px;height:20px;color:var(--g)}
+.aba.at{color:var(--gd)}
+.aba.at::before{content:'';position:absolute;top:0;left:20%;right:20%;height:3px;
+  background:var(--g);border-radius:0 0 3px 3px}
+.abas-topo{display:none;gap:4px;margin-left:22px}
+.abas-topo button{background:rgba(255,255,255,.14);border:none;color:#fff;font-size:12px;
+  padding:7px 13px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.abas-topo button svg{width:15px;height:15px;color:#fff}
+.abas-topo button.at{background:#fff;color:var(--gd)}
+.abas-topo button.at svg{color:var(--gd)}
+
+.tela{display:none}
+.tela.at{display:block}
+
+/* ── LISTA DE DOCUMENTOS — padrão do módulo Autos do AppPOSTURAS ──
+   Ficha de quatro linhas: a primeira carrega o peso (data · tipo · número em
+   badge monoespaçado · status), as demais formam pares rótulo/valor. */
+.mob-card{background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--rl);
+  padding:14px 16px;margin-bottom:10px;box-shadow:var(--sh);cursor:pointer}
+.mob-card:hover{box-shadow:var(--shl);border-color:var(--gm)}
+.mc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;gap:8px;flex-wrap:wrap}
+.mc-top > :first-child{min-width:0;flex:1}
+.mc-acoes{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.notif-card-l1{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.notif-card-data{font-size:12px;color:var(--tx3)}
+.notif-card-tipo{font-size:14px;color:var(--chumbo)}
+.notif-card-linhas{margin-top:10px;padding-top:10px;border-top:1px solid var(--blt);
+  display:flex;flex-direction:column;gap:5px}
+.notif-card-linhas>div{font-size:12.5px;color:var(--tx2);display:flex;gap:6px;line-height:1.4}
+.notif-card-rot{flex-shrink:0;min-width:74px;font-size:10px;color:var(--tx3);
+  text-transform:uppercase;letter-spacing:.04em;padding-top:1px}
+.proto-badge{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;
+  border-radius:6px;background:var(--blt);color:var(--chumbo);letter-spacing:.05em;
+  border:1.5px solid var(--bord)}
+
+.topo-lista{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.topo-lista .sec-simples{margin:0;flex:1}
+.sec-simples{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--chumbo);
+  display:flex;align-items:center;gap:9px;margin:0 0 10px}
+.sec-simples .cont{background:var(--gl);color:var(--gd);border-radius:999px;padding:2px 9px;
+  font-size:10px;letter-spacing:0}
+.linha-filtro{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap}
+.linha-filtro input,.linha-filtro select{font-size:13px;padding:8px 10px;
+  border:1.5px solid var(--f-bord);border-radius:var(--r);background:#fff;
+  color:var(--chumbo);outline:none}
+.linha-filtro input{flex:2;min-width:150px}
+.linha-filtro select{flex:1;min-width:130px;cursor:pointer}
+.linha-filtro input:focus,.linha-filtro select:focus{border-color:var(--f-bord-foco);
+  box-shadow:0 0 0 3px var(--f-anel)}
+.lista-vazia{font-size:12.5px;color:var(--tx3);text-align:center;padding:22px 10px;
+  border:1.5px dashed var(--bord);border-radius:var(--rl)}
+.aviso-legal{background:var(--rlt);border:1.5px solid #F3CFCB;border-radius:var(--r);
+  padding:11px 13px;font-size:12.5px;color:var(--tx2);margin-bottom:12px}
+.aviso-legal b{color:var(--chumbo)}
+
+#t-documentos,#t-protocolos,#t-parametros{padding:14px;padding-bottom:80px}
+
+/* ── PARÂMETROS ──
+   Tela fora do fluxo das abas (só o admin chega por aqui, via engrenagem no
+   cabeçalho), então tem topo próprio com "Voltar" em vez de reaproveitar o
+   header fixo do mapa. */
+#t-parametros{position:fixed;inset:0;z-index:970;background:var(--bg);
+  overflow-y:auto;display:none}
+#t-parametros.at{display:block}
+.par-topo{display:flex;align-items:center;gap:10px;padding:14px 16px;
+  background:linear-gradient(135deg,var(--gxd),var(--gd));color:#fff;position:sticky;top:0;z-index:5}
+.par-topo button{background:rgba(255,255,255,.16);border:none;color:#fff;width:34px;height:34px;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.par-topo button svg{width:18px;height:18px}
+.par-topo h2{font-size:15px;font-weight:800}
+
+.sub-abas{display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto}
+.sub-abas button{flex-shrink:0;border:1.5px solid var(--f-bord);background:#fff;border-radius:999px;
+  padding:7px 14px;font-size:12.5px;font-weight:600;color:var(--tx2);cursor:pointer;white-space:nowrap}
+.sub-abas button.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+.par-painel{display:none;padding:14px}
+.par-painel.at{display:block}
+
+/* Linha de dados simples (UPF/feriado): não é ficha, cabe numa linha. */
+.par-linha{display:flex;align-items:center;gap:10px;background:var(--sur);
+  border:1.5px solid var(--bord);border-radius:var(--rl);padding:11px 14px;margin-bottom:8px}
+.par-linha .principal{flex:1;min-width:0}
+.par-linha .principal b{font-size:13.5px;color:var(--chumbo);display:block}
+.par-linha .principal span{font-size:11.5px;color:var(--tx3)}
+.par-linha .acao-x{background:none;border:none;color:var(--tx3);cursor:pointer;padding:4px;flex-shrink:0}
+.par-linha .acao-x:hover{color:var(--red)}
+
+.par-secao{margin-bottom:18px}
+.par-secao-tit{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+
+/* Ficha do protocolo: pares rótulo/valor em coluna estreita à esquerda. */
+.ficha-linha{display:flex;gap:8px;font-size:13px;color:var(--tx2);line-height:1.45;
+  padding:7px 0;border-bottom:1px solid var(--blt)}
+.ficha-linha:last-child{border-bottom:none}
+.ficha-rot{flex-shrink:0;width:104px;font-size:10px;color:var(--tx3);
+  text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+
+@media(min-width:1024px){
+  .abas{display:none}
+  .abas-topo{display:flex}
+  #t-documentos,#t-protocolos{max-width:900px;margin:0 auto;padding:18px 20px 40px}
+  .acoes{max-width:none}
+}
+
+/* ── AJUSTES DE TELA ESTREITA ──
+   No celular o cabeçalho do cartão não cabe em uma linha: título e badges
+   disputavam a mesma faixa e a data acabava cortada ("11/") com o tipo
+   quebrando letra a letra. Aqui os badges descem para a própria linha. */
+@media(max-width:560px){
+  .mc-top{flex-direction:column;align-items:flex-start;gap:6px}
+  .mc-top > :first-child{flex:1 1 auto;width:100%}
+  .notif-card-rot{min-width:64px}
+  /* Dois campos por linha em 375px só cabem com mínimos menores. */
+  .linha-filtro input{min-width:0;flex:1 1 55%}
+  .linha-filtro select{min-width:0;flex:1 1 40%}
+  .ficha-rot{width:84px}
+}
+
+/* Com quatro abas o rótulo não cabe inteiro em telas de 360px. Reduzir a
+   fonte e o ícone é preferível a cortar o texto: "Protocolos" e "Documentos"
+   só se distinguem pelas letras, não pelos ícones. */
+@media(max-width:400px){
+  .aba{font-size:9px;padding:8px 1px}
+  .aba svg{width:18px;height:18px}
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SISTEMA TIPOGRÁFICO — por último, de propósito.
+   Peso de fonte é definido em dezenas de componentes no app.css; se estas
+   regras viessem antes, cada componente sobrescreveria o peso e o sistema
+   não valeria nada. Vindo depois, vence por ordem de cascata.
+   ══════════════════════════════════════════════════════════════ */
+body{font-family:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;font-weight:400}
+
+/* Display — Manrope 800 */
+.topo h1,.mc .n{font-family:'Manrope',sans-serif;font-weight:800;letter-spacing:-.025em}
+
+/* Títulos — Manrope 700 (seções em 600) */
+h1,h2,h3,h4,.modal h3,.notif-card-tipo,.item .t,.field .valor,.hist-data,
+.login-logo h1{font-family:'Manrope',sans-serif;font-weight:700;letter-spacing:-.012em}
+.sec-title,.sec-simples{font-family:'Manrope',sans-serif;font-weight:600}
+
+/* Números e KPIs — Manrope, dígitos tabulares para alinhar coluna */
+.sec-simples .cont,.mc .n{font-family:'Manrope',sans-serif;font-variant-numeric:tabular-nums;font-weight:700}
+
+/* Corpo — Inter 400/500 */
+.item .s,.hist-irr,.hist-obs,.modal .sub,.tl-x{font-family:'Inter',sans-serif;font-weight:400}
+
+/* Rótulos — Inter 500 */
+.field label,.notif-card-rot,.notif-card-data,.hist-meta,.chk-item .cod,
+.aba{font-family:'Inter',sans-serif;font-weight:500}
+
+/* Botões — Inter 600 */
+.btn,.abas-topo button,.linha-filtro select,.linha-filtro input,.modal-x,
+.badge{font-family:'Inter',sans-serif;font-weight:600}
+
+/* Dado técnico — JetBrains Mono 500: número de documento, coordenada, chave.
+   Monoespaçado alinha dígito com dígito, o que importa ao comparar dois
+   protocolos na vertical. */
+.proto-badge,.mono,#fi-chave,#fi-coord{font-family:'JetBrains Mono','Courier New',monospace;
+  font-weight:500;letter-spacing:0}
+
+/* ══════════════════════════════════════════════════════════════
+   TELA DE LOGIN no tema F
+   O gradiente e o cartão já vêm do app.css lendo os tokens, que esta folha
+   redefiniu — então o verde virou âmbar sozinho. O que sobra aqui é o que o
+   app.css fixou em verde por nome, mais o ajuste do selo para o ícone.
+   ══════════════════════════════════════════════════════════════ */
+body.login-bg{
+  background:linear-gradient(150deg,var(--gxd) 0%,var(--gd) 52%,var(--g) 100%);
+}
+.login-card{border-radius:22px;padding:36px 30px}
+.login-seal{width:auto;height:auto;margin:0 auto 18px}
+.login-logo h1{font-family:'Manrope',sans-serif;font-weight:700;color:var(--gd);
+  font-size:18px;letter-spacing:-.02em}
+.login-logo p{font-family:'Inter',sans-serif;font-weight:500;color:var(--tx3)}
+
+/* Campos e botão do login também saem do laranja: formulário é cinza. */
+.login-card .field{border-color:var(--f-bord)}
+.login-card .field:focus-within{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.lembrar{font-family:'Inter',sans-serif;font-weight:500;color:var(--tx2)}
+.lembrar input{accent-color:var(--f-bord-foco)}
+.pass-olho{color:var(--tx3)}
+.pass-olho:hover{color:var(--f-bord-foco)}
+.login-rodape{font-family:'Inter',sans-serif;font-weight:400;color:var(--tx3)}
+.alerta-erro{font-family:'Inter',sans-serif;font-weight:500}
+
+/* ══════════════════════════════════════════════════════════════
+   PAINEL, SINO E RÓTULOS DO MAPA
+   ══════════════════════════════════════════════════════════════ */
+
+/* O corpo do app rola só dentro da aba ativa; o mapa é a exceção (tela cheia) */
+#t-painel, #t-documentos, #t-protocolos{position:fixed;top:96px;left:0;right:0;bottom:64px;
+  overflow-y:auto;padding:14px}
+#t-mapa{position:fixed;top:96px;left:0;right:0;bottom:64px}
+#t-mapa #map{position:absolute;inset:0}
+
+.painel-grid{display:flex;flex-direction:column;gap:14px}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.bloco{background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--rl);
+  padding:14px;box-shadow:var(--sh)}
+
+.metricas{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mc{background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--rl);
+  padding:13px 14px;box-shadow:var(--sh);position:relative;overflow:hidden}
+.mc::after{content:'';position:absolute;top:0;right:0;width:46px;height:46px;
+  border-radius:0 0 0 46px;background:var(--g);opacity:.1}
+.mc .n{font-size:25px;line-height:1.05}
+.mc .l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-top:4px;
+  line-height:1.3;color:var(--tx3)}
+.mc .dt{font-size:11px;color:var(--tx2);margin-top:5px}
+
+/* Item acionável de "precisa de atenção" */
+.item{background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--rl);
+  padding:11px 13px;margin-bottom:8px;box-shadow:var(--sh);cursor:pointer;
+  display:flex;gap:11px;align-items:flex-start}
+.item:hover{border-color:var(--gm)}
+.item .ic{width:34px;height:34px;border-radius:10px;flex-shrink:0;display:flex;
+  align-items:center;justify-content:center;background:var(--gl)}
+.item .ic svg{width:17px;height:17px;color:var(--g)}
+.item .tx{flex:1;min-width:0}
+.item .t{font-size:14px;line-height:1.35}
+.item .s{font-size:12.5px;color:var(--tx2);margin-top:1px}
+.item .m{font-size:11px;color:var(--tx3);margin-top:6px;display:flex;gap:9px;flex-wrap:wrap}
+
+/* Feed de alterações (auditoria) */
+.feed .fd{display:flex;gap:11px;padding:9px 0;border-bottom:1px solid var(--blt)}
+.feed .fd:last-child{border-bottom:none;padding-bottom:0}
+.feed .fd:first-child{padding-top:0}
+.fd .pt{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0;background:var(--g)}
+.fd .c{flex:1;min-width:0}
+.fd .a{font-size:13px;line-height:1.35}
+.fd .h{font-size:10.5px;color:var(--tx3);white-space:nowrap;margin-top:2px}
+
+/* Barras proporcionais */
+.barra{margin-bottom:9px}
+.barra:last-child{margin-bottom:0}
+.barra .lin{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;gap:10px}
+.barra .lin span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.barra .tr{height:6px;background:var(--blt);border-radius:999px;overflow:hidden}
+.barra .pr{height:100%;background:linear-gradient(90deg,var(--g),var(--gd));border-radius:999px}
+
+/* Sino de avisos */
+.sino{position:relative;background:rgba(255,255,255,.16);border:none;width:36px;height:36px;
+  border-radius:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sino svg{width:18px;height:18px;color:#fff}
+.sino .n{position:absolute;top:-4px;right:-4px;background:#fff;color:var(--gd);font-size:10px;
+  font-weight:700;min-width:18px;height:18px;border-radius:999px;display:flex;align-items:center;
+  justify-content:center;padding:0 5px;box-shadow:0 2px 6px rgba(90,40,10,.3)}
+.notif{display:flex;gap:11px;padding:12px 4px;border-bottom:1px solid var(--blt);cursor:pointer}
+.notif:last-child{border-bottom:none}
+.notif .ic{width:34px;height:34px;border-radius:10px;background:var(--gl);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.notif .ic svg{width:17px;height:17px;color:var(--g)}
+.notif .c{flex:1;min-width:0}
+.notif .t{font-size:13.5px;line-height:1.35}
+.notif .b{font-size:12px;color:var(--tx2);margin-top:2px}
+.notif .h{font-size:10.5px;color:var(--tx3);margin-top:4px}
+
+/* Controle de cores e legenda sobre o mapa */
+.ctrl-mapa{position:absolute;left:12px;top:56px;z-index:600;background:rgba(255,255,255,.95);
+  border:1.5px solid var(--bord);border-radius:var(--r);padding:9px 11px;box-shadow:var(--sh);
+  max-width:230px}
+.ctrl-mapa b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;
+  margin-bottom:6px;color:var(--chumbo)}
+.ctrl-mapa .seg{display:flex;gap:4px;margin-bottom:8px}
+.ctrl-mapa .seg button{flex:1;border:1.5px solid var(--f-bord);background:#fff;border-radius:999px;
+  font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:var(--tx2);
+  padding:4px 8px;cursor:pointer}
+.ctrl-mapa .seg button.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+.ctrl-mapa .leg{font-size:10.5px;color:var(--tx2);line-height:1.5}
+.ctrl-mapa .cor{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px}
+.ctrl-mapa .cor i{width:12px;height:12px;border-radius:3px;display:block;flex-shrink:0}
+
+/* Rótulos do mapa, por faixa de zoom */
+.leaflet-tooltip.rot{background:none;border:none;box-shadow:none;padding:0;
+  font-family:'JetBrains Mono','Courier New',monospace;font-weight:500;white-space:nowrap}
+.leaflet-tooltip.rot::before{display:none}
+.leaflet-tooltip.rot.rot-lote{font-size:10.5px;color:var(--chumbo);display:none;
+  text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff}
+/* Repetir `.leaflet-tooltip.rot` é necessário: sozinha, a classe do rótulo
+   perde para a regra de reset acima e a pastilha sai sem fundo. */
+.leaflet-tooltip.rot.rot-quadra{font-size:11.5px;color:var(--chumbo);display:none;
+  background:rgba(255,255,255,.92);border:1.5px solid var(--bord);padding:1px 8px;
+  border-radius:999px;box-shadow:0 1px 4px rgba(60,40,25,.14)}
+.leaflet-tooltip.rot.rot-bairro{font-family:'Manrope',sans-serif;font-weight:700;font-size:12.5px;
+  color:var(--chumbo);text-transform:uppercase;letter-spacing:.08em;display:none;
+  text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 4px #fff,0 0 8px #fff}
+body.z-lote .leaflet-tooltip.rot.rot-lote{display:block}
+body.z-quadra .leaflet-tooltip.rot.rot-quadra{display:block}
+body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
+
+@media(min-width:1024px){
+  #t-painel, #t-documentos, #t-protocolos, #t-mapa{bottom:0}
+  #t-painel{padding:16px 20px}
+  /* Três colunas: o painel cabe inteiro numa tela grande. A densidade
+     compacta só no desktop é o que faz caber — sem dedo mirando, o alvo de
+     44 px deixa de ser requisito e o espaço vertical vale mais. */
+  .painel-grid{display:grid;grid-template-columns:minmax(280px,1fr) minmax(320px,1.15fr) minmax(300px,1fr);
+    gap:16px;align-items:start}
+  .item{padding:8px 11px;margin-bottom:6px}
+  .item .ic{width:30px;height:30px}
+  .item .t{font-size:13.5px}
+  .mc{padding:11px 13px}
+  .mc .n{font-size:23px}
+  .bloco{padding:12px 13px}
+  .feed .fd{padding:8px 0}
+}

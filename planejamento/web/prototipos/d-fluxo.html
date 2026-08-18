@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Variante D · Fluxo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   VARIANTE D — "FLUXO"
+   As outras três organizam o sistema por ONDE a coisa está (mapa), por
+   O QUE ela é (lista de imóveis) ou por REGISTRO (tabela). Esta organiza
+   por TAREFA: o que o fiscal precisa fazer hoje, na ordem em que faz.
+
+   A tela inicial não é o mapa — é a fila do dia. O mapa vira ferramenta de
+   apoio, aberta quando ele precisa se localizar. E a vistoria deixa de ser
+   um formulão único e vira três passos curtos, um por vez: Identificação →
+   Constatação → Evidências. Formulário longo em celular, de pé, é onde o
+   registro fica pela metade.
+
+   Identidade: clara e arejada, índigo com menta, cantos generosos,
+   tipografia grande. Menos "sistema", mais "ferramenta de trabalho".
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#F6F7FB; --sur:#FFFFFF; --bord:#E4E7F0; --blt:#EEF0F7;
+  --tx:#1B1E2E; --tx2:#565C77; --tx3:#8B92AC;
+  --pri:#4A5BC4; --pri-d:#3A48A0; --pri-l:#EDEFFC;
+  --mint:#0FA47F; --mint-l:#E4F6F1;
+  --amb:#E0913A; --amb-l:#FDF2E4;
+  --er:#D6535A; --er-l:#FCEBEC;
+  --r:14px; --rl:20px;
+  --sh:0 1px 2px rgba(27,30,46,.05),0 6px 18px rgba(27,30,46,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
+  background:var(--bg);color:var(--tx);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;padding-top:38px;
+}
+.barra-nav{position:fixed;top:0;left:0;right:0;z-index:2000;background:#14172A;display:flex;gap:2px;padding:6px;font-size:11px}
+.barra-nav a{flex:1;text-align:center;padding:7px 4px;color:#8B92AC;text-decoration:none;font-weight:700;border-radius:7px}
+.barra-nav a.at{background:var(--pri);color:#fff}
+
+.tela{position:fixed;top:38px;left:0;right:0;bottom:0;overflow-y:auto;display:none}
+.tela.at{display:block}
+.tela.cheia{overflow:hidden}
+
+/* ── CABEÇALHO DO DIA ─────────────────────────────────────── */
+.saudacao{padding:22px 20px 6px}
+.saudacao .oi{font-size:13px;color:var(--tx3);font-weight:600}
+.saudacao h1{font-size:26px;font-weight:800;letter-spacing:-.03em;margin-top:2px}
+.saudacao .data{font-size:13px;color:var(--tx2);margin-top:3px}
+
+.resumo{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px 20px 4px}
+.rc{background:var(--sur);border:1px solid var(--bord);border-radius:var(--rl);
+    padding:14px 12px;text-align:center;box-shadow:var(--sh)}
+.rc .n{font-size:26px;font-weight:800;letter-spacing:-.04em;line-height:1}
+.rc .l{font-size:10.5px;color:var(--tx3);font-weight:700;text-transform:uppercase;
+       letter-spacing:.06em;margin-top:6px}
+.rc.a .n{color:var(--amb)} .rc.e .n{color:var(--er)} .rc.m .n{color:var(--mint)}
+
+.grupo{padding:22px 20px 0}
+.grupo h2{font-size:12px;font-weight:800;color:var(--tx3);text-transform:uppercase;
+          letter-spacing:.1em;margin-bottom:12px;display:flex;align-items:center;gap:9px}
+.grupo h2 .cont{background:var(--blt);color:var(--tx2);border-radius:999px;
+                padding:2px 8px;font-size:10.5px;letter-spacing:0}
+
+/* ── CARTÃO DE TAREFA — o elemento central desta variante ──── */
+.tarefa{
+  background:var(--sur);border:1px solid var(--bord);border-radius:var(--rl);
+  padding:15px 16px;margin-bottom:11px;box-shadow:var(--sh);cursor:pointer;
+  display:flex;gap:13px;align-items:flex-start;transition:transform .12s;
+}
+.tarefa:active{transform:scale(.99)}
+.tarefa .marca{
+  width:42px;height:42px;border-radius:13px;flex-shrink:0;display:flex;
+  align-items:center;justify-content:center;
+}
+.tarefa .marca svg{width:20px;height:20px}
+.tarefa.pend .marca{background:var(--amb-l);color:var(--amb)}
+.tarefa.prazo .marca{background:var(--er-l);color:var(--er)}
+.tarefa.nova .marca{background:var(--pri-l);color:var(--pri)}
+.tarefa.feita .marca{background:var(--mint-l);color:var(--mint)}
+.tarefa .txt{flex:1;min-width:0}
+.tarefa .t{font-size:15.5px;font-weight:800;letter-spacing:-.01em}
+.tarefa .s{font-size:13px;color:var(--tx2);margin-top:2px}
+.tarefa .m{font-size:11.5px;color:var(--tx3);margin-top:6px;display:flex;gap:12px;flex-wrap:wrap}
+.tarefa .seta{color:var(--tx3);align-self:center;flex-shrink:0}
+.tarefa .seta svg{width:18px;height:18px}
+
+.tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:800;
+     padding:3px 8px;border-radius:6px;letter-spacing:.03em}
+.tag.a{background:var(--amb-l);color:var(--amb)}
+.tag.e{background:var(--er-l);color:var(--er)}
+.tag.m{background:var(--mint-l);color:var(--mint)}
+
+/* ── BARRA INFERIOR: 3 destinos, ação principal ao centro ──── */
+.rodape{
+  position:fixed;left:0;right:0;bottom:0;z-index:950;height:72px;background:var(--sur);
+  border-top:1px solid var(--bord);display:grid;grid-template-columns:1fr 1fr 1fr;
+  align-items:center;padding-bottom:env(safe-area-inset-bottom);
+}
+.rd{display:flex;flex-direction:column;align-items:center;gap:3px;border:none;
+    background:none;cursor:pointer;font-family:inherit;font-size:10.5px;font-weight:700;color:var(--tx3)}
+.rd svg{width:22px;height:22px}
+.rd.at{color:var(--pri)}
+.fab{
+  justify-self:center;width:58px;height:58px;border-radius:20px;border:none;
+  background:var(--pri);color:#fff;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;box-shadow:0 8px 20px rgba(74,91,196,.34);margin-top:-14px;
+}
+.fab svg{width:26px;height:26px}
+.tela .pad-fim{height:92px}
+
+#map{position:absolute;inset:0}
+
+/* ── PASSO A PASSO DA VISTORIA ────────────────────────────── */
+.folha{
+  position:fixed;inset:38px 0 0;z-index:1300;background:var(--bg);
+  transform:translateY(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);
+  display:flex;flex-direction:column;
+}
+.folha.aberta{transform:translateY(0)}
+.folha-topo{background:var(--sur);border-bottom:1px solid var(--bord);padding:14px 18px 0;flex-shrink:0}
+.folha-topo .linha{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.folha-topo h2{font-size:18px;font-weight:800;letter-spacing:-.02em}
+.folha-topo .x{margin-left:auto;background:var(--blt);border:none;width:32px;height:32px;
+                border-radius:50%;cursor:pointer;color:var(--tx2);font-size:15px}
+/* Passos: mostrar onde se está reduz a sensação de formulário sem fim */
+.passos{display:flex;gap:6px;padding-bottom:14px}
+.passo{flex:1;text-align:center}
+.passo .bola{height:4px;border-radius:999px;background:var(--bord);margin-bottom:7px}
+.passo.at .bola,.passo.ok .bola{background:var(--pri)}
+.passo .nome{font-size:10.5px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em}
+.passo.at .nome{color:var(--pri)}
+.folha-corpo{flex:1;overflow-y:auto;padding:20px 18px 16px}
+.folha-pe{border-top:1px solid var(--bord);background:var(--sur);padding:12px 18px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px}
+
+.painel-passo{display:none}
+.painel-passo.at{display:block}
+.pergunta{font-size:19px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+.ajuda{font-size:13px;color:var(--tx3);margin-bottom:16px}
+
+.campo{background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--r);
+       padding:11px 14px;margin-bottom:11px}
+.campo:focus-within{border-color:var(--pri);box-shadow:0 0 0 4px var(--pri-l)}
+.campo label{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;font-weight:800}
+.campo input,.campo select,.campo textarea{width:100%;border:none;background:none;color:var(--tx);
+  font-family:inherit;font-size:16px;font-weight:600;padding:0;margin-top:3px;outline:none}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.g2 .campo{margin-bottom:0}
+
+/* Situação como escolha visual, não select escondido */
+.opcoes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+.opc{border:1.5px solid var(--bord);background:var(--sur);border-radius:var(--r);
+     padding:14px 12px;text-align:center;cursor:pointer;font-weight:700;font-size:14px}
+.opc.on{border-color:var(--pri);background:var(--pri-l);color:var(--pri-d)}
+
+.chk label{display:flex;gap:12px;align-items:center;padding:13px 14px;border-radius:var(--r);
+  background:var(--sur);border:1.5px solid var(--bord);cursor:pointer;font-size:14px;margin-bottom:9px}
+.chk label.on{border-color:var(--pri);background:var(--pri-l)}
+.chk input{width:19px;height:19px;accent-color:var(--pri);flex-shrink:0}
+
+.solta{border:2px dashed var(--bord);border-radius:var(--rl);padding:28px 16px;text-align:center;
+       color:var(--tx3);background:var(--sur)}
+.solta svg{width:30px;height:30px;margin-bottom:8px;color:var(--tx3)}
+
+.bt{border:1.5px solid transparent;border-radius:var(--r);cursor:pointer;font-family:inherit;
+    font-size:15px;font-weight:800;padding:14px 20px;display:inline-flex;align-items:center;
+    justify-content:center;gap:8px}
+.bt.pri{background:var(--pri);color:#fff}
+.bt.pri:hover{background:var(--pri-d)}
+.bt.out{background:var(--sur);border-color:var(--bord);color:var(--tx2)}
+.bt.full{flex:1}
+.bt svg{width:17px;height:17px}
+
+/* Ficha do imóvel, em folha também */
+.ficha-linha{display:flex;padding:11px 0;border-bottom:1px solid var(--bord);font-size:14.5px}
+.ficha-linha .k{width:140px;color:var(--tx3);flex-shrink:0;font-size:13px}
+.ficha-linha .v{font-weight:700}
+.tl-item{border-left:2px solid var(--bord);padding:0 0 17px 15px;position:relative}
+.tl-item::before{content:'';position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--mint)}
+.tl-item.er::before{background:var(--er)}
+.tl-d{font-size:14px;font-weight:800}
+.tl-m{font-size:12px;color:var(--tx3);margin-top:1px}
+.tl-x{font-size:13px;color:var(--tx2);margin-top:5px}
+</style>
+</head>
+<body>
+
+<nav class="barra-nav">
+  <a href="index.html">Comparar</a>
+  <a href="a-campo.html">A · Campo</a>
+  <a href="b-operacao.html">B · Operação</a>
+  <a href="c-institucional.html">C · Institucional</a>
+  <a href="d-fluxo.html" class="at">D · Fluxo</a>
+  <a href="e-ambar.html">E · Âmbar</a>
+  <a href="f-tipografia.html">F · Tipografia</a>
+</nav>
+
+<!-- TELA: O DIA -->
+<section class="tela at" id="t-dia">
+  <div class="saudacao">
+    <div class="oi">Bom dia,</div>
+    <h1>Fiscal de Obras</h1>
+    <div class="data">Segunda-feira, 17 de agosto · Jardim Europa IV</div>
+  </div>
+
+  <div class="resumo">
+    <div class="rc e"><div class="n">2</div><div class="l">Prazo vencendo</div></div>
+    <div class="rc a"><div class="n">4</div><div class="l">Pendentes</div></div>
+    <div class="rc m"><div class="n">7</div><div class="l">Feitas hoje</div></div>
+  </div>
+
+  <div class="grupo">
+    <h2>Precisa de atenção <span class="cont">2</span></h2>
+    <div class="tarefa prazo" onclick="abrirFicha({quadra:'24',numero_lote:'9',area_gis_m2:240,chave:'Jardim Europa IV|24|9'})">
+      <div class="marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+      <div class="txt">
+        <div class="t">Quadra 24 · Lote 9</div>
+        <div class="s">Prazo de notificação vence amanhã</div>
+        <div class="m"><span class="tag e">Irregular</span><span>Notificado em 17/08</span></div>
+      </div>
+      <div class="seta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+    </div>
+    <div class="tarefa prazo" onclick="abrirFicha({quadra:'30',numero_lote:'11',area_gis_m2:240,chave:'Jardim Europa IV|30|11'})">
+      <div class="marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+      <div class="txt">
+        <div class="t">Quadra 30 · Lote 11</div>
+        <div class="s">Reinspeção após prazo de regularização</div>
+        <div class="m"><span class="tag a">Em acompanhamento</span><span>Prazo até 19/08</span></div>
+      </div>
+      <div class="seta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+    </div>
+  </div>
+
+  <div class="grupo">
+    <h2>Roteiro do dia <span class="cont">4</span></h2>
+    <div id="fila"></div>
+  </div>
+
+  <div class="grupo">
+    <h2>Concluídas hoje <span class="cont">7</span></h2>
+    <div class="tarefa feita" onclick="abrirFicha({quadra:'17',numero_lote:'14',area_gis_m2:315,chave:'Jardim Europa IV|17|14'})">
+      <div class="marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+      <div class="txt">
+        <div class="t">Quadra 17 · Lote 14</div>
+        <div class="s">Vistoria registrada às 09:40</div>
+        <div class="m"><span class="tag m">Regular</span><span>2 evidências</span></div>
+      </div>
+      <div class="seta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+    </div>
+  </div>
+  <div class="pad-fim"></div>
+</section>
+
+<!-- TELA: MAPA -->
+<section class="tela cheia" id="t-mapa"><div id="map"></div></section>
+
+<!-- TELA: BUSCAR -->
+<section class="tela" id="t-buscar">
+  <div class="saudacao"><h1 style="font-size:22px">Buscar imóvel</h1></div>
+  <div style="padding:12px 20px 0">
+    <div class="campo"><label>Quadra, lote ou inscrição</label><input placeholder="Ex.: 24/9"></div>
+    <div id="lista-busca"></div>
+  </div>
+  <div class="pad-fim"></div>
+</section>
+
+<nav class="rodape">
+  <button class="rd at" onclick="ir('dia',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Meu dia
+  </button>
+  <button class="fab" onclick="abrirVistoria()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+  <button class="rd" onclick="ir('buscar',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    Buscar
+  </button>
+</nav>
+
+<!-- FOLHA: FICHA -->
+<div class="folha" id="f-ficha">
+  <div class="folha-topo">
+    <div class="linha">
+      <h2 id="fi-tit">Quadra 24 · Lote 9</h2>
+      <button class="x" onclick="fecharFolha('f-ficha')">✕</button>
+    </div>
+    <div style="padding-bottom:14px"><span class="tag e">Irregular</span></div>
+  </div>
+  <div class="folha-corpo">
+    <div class="ficha-linha"><span class="k">Bairro</span><span class="v">Jardim Europa IV</span></div>
+    <div class="ficha-linha"><span class="k">Quadra</span><span class="v" id="fi-q">24</span></div>
+    <div class="ficha-linha"><span class="k">Lote</span><span class="v" id="fi-l">9</span></div>
+    <div class="ficha-linha"><span class="k">Área GIS</span><span class="v" id="fi-a">240 m²</span></div>
+    <div class="ficha-linha"><span class="k">Chave</span><span class="v" style="font-size:13px" id="fi-c">Jardim Europa IV|24|9</span></div>
+
+    <h2 style="font-size:12px;font-weight:800;color:var(--tx3);text-transform:uppercase;letter-spacing:.1em;margin:24px 0 13px">Histórico</h2>
+    <div class="tl-item er"><div class="tl-d">17/08/2026 14:30</div><div class="tl-m">Fiscal de Obras · 1 evidência</div>
+      <div class="tl-x">Construção sem alvará · Ausência de placa · Material na calçada</div></div>
+    <div class="tl-item"><div class="tl-d">02/07/2026 09:15</div><div class="tl-m">Fiscal de Obras</div>
+      <div class="tl-x">Vistoria inicial — obra não iniciada</div></div>
+  </div>
+  <div class="folha-pe">
+    <button class="bt out" onclick="fecharFolha('f-ficha')">Fechar</button>
+    <button class="bt pri full" onclick="fecharFolha('f-ficha');abrirVistoria()">Nova vistoria</button>
+  </div>
+</div>
+
+<!-- FOLHA: VISTORIA EM 3 PASSOS -->
+<div class="folha" id="f-vist">
+  <div class="folha-topo">
+    <div class="linha">
+      <h2>Nova vistoria</h2>
+      <button class="x" onclick="fecharFolha('f-vist')">✕</button>
+    </div>
+    <div class="passos">
+      <div class="passo at" id="ps1"><div class="bola"></div><div class="nome">Identificação</div></div>
+      <div class="passo" id="ps2"><div class="bola"></div><div class="nome">Constatação</div></div>
+      <div class="passo" id="ps3"><div class="bola"></div><div class="nome">Evidências</div></div>
+    </div>
+  </div>
+
+  <div class="folha-corpo">
+    <div class="painel-passo at" id="pp1">
+      <div class="pergunta">Onde e quando?</div>
+      <div class="ajuda">Data e hora já vêm preenchidas com o momento da abertura.</div>
+      <div class="campo"><label>Imóvel</label><input value="Quadra 24 · Lote 9 — Jardim Europa IV" readonly></div>
+      <div class="g2">
+        <div class="campo"><label>Data</label><input type="date" value="2026-08-17"></div>
+        <div class="campo"><label>Hora</label><input type="time" value="14:30"></div>
+      </div>
+      <div class="campo" style="margin-top:11px;background:var(--mint-l);border-color:#BFE7DC">
+        <label style="color:var(--mint)">GPS capturado</label>
+        <div style="font-size:15px;font-weight:700;color:var(--mint)">-15,517933 · -54,310573 &nbsp;(±8 m)</div>
+      </div>
+    </div>
+
+    <div class="painel-passo" id="pp2">
+      <div class="pergunta">O que você constatou?</div>
+      <div class="ajuda">Escolha a situação e marque o que se aplica.</div>
+      <div class="opcoes">
+        <div class="opc on" onclick="escolher(this)">Irregular</div>
+        <div class="opc" onclick="escolher(this)">Regular</div>
+        <div class="opc" onclick="escolher(this)">Em acompanhamento</div>
+        <div class="opc" onclick="escolher(this)">Não localizado</div>
+      </div>
+      <div style="font-size:12px;font-weight:800;color:var(--tx3);text-transform:uppercase;letter-spacing:.1em;margin:20px 0 12px">Irregularidades</div>
+      <div class="chk">
+        <label class="on"><input type="checkbox" checked onchange="this.parentElement.classList.toggle('on',this.checked)"> Construção sem alvará de licença</label>
+        <label class="on"><input type="checkbox" checked onchange="this.parentElement.classList.toggle('on',this.checked)"> Ausência de placa de identificação</label>
+        <label><input type="checkbox" onchange="this.parentElement.classList.toggle('on',this.checked)"> Obra em desacordo com o projeto</label>
+        <label><input type="checkbox" onchange="this.parentElement.classList.toggle('on',this.checked)"> Material de construção em via pública</label>
+        <label><input type="checkbox" onchange="this.parentElement.classList.toggle('on',this.checked)"> Calçada irregular ou inexistente</label>
+      </div>
+      <div class="campo" style="margin-top:14px"><label>Observações</label>
+        <textarea rows="3" placeholder="Detalhe o que foi constatado"></textarea></div>
+    </div>
+
+    <div class="painel-passo" id="pp3">
+      <div class="pergunta">Registre as evidências</div>
+      <div class="ajuda">Fotos sustentam o documento que virá depois. Sem elas, a vistoria não se defende sozinha.</div>
+      <div class="solta">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+        </svg>
+        <div style="font-weight:700;color:var(--tx2)">Toque para fotografar</div>
+        <div style="font-size:12.5px;margin-top:3px">ou escolher da galeria</div>
+      </div>
+      <div style="margin-top:20px;padding:14px 16px;background:var(--pri-l);border-radius:var(--r);font-size:13.5px;color:var(--pri-d)">
+        <b>Resumo:</b> Quadra 24 · Lote 9 — Irregular, 2 irregularidades, 0 evidências.
+      </div>
+    </div>
+  </div>
+
+  <div class="folha-pe">
+    <button class="bt out" id="bt-voltar" onclick="passo(-1)" style="display:none">Voltar</button>
+    <button class="bt pri full" id="bt-avancar" onclick="passo(1)">Avançar</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="dados.js"></script>
+<script>
+// ── mapa (tela de apoio) ──
+const mapa=L.map('map',{zoomControl:true}).setView([-15.5178,-54.3103],17)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  {attribution:'© OSM © CARTO',subdomains:'abcd',maxZoom:20}).addTo(mapa)
+let sel=null
+const camada=L.geoJSON(LOTES,{
+  style:()=>({color:'#4A5BC4',weight:1,opacity:.75,fillColor:'#4A5BC4',fillOpacity:.11}),
+  onEachFeature:(f,c)=>c.on('click',()=>{
+    if(sel) sel.setStyle({color:'#4A5BC4',weight:1,fillOpacity:.11})
+    sel=c; c.setStyle({color:'#E0913A',weight:3,fillOpacity:.34}); c.bringToFront()
+    abrirFicha(f.properties)
+  })
+}).addTo(mapa)
+
+// ── fila do dia, a partir de lotes reais ──
+const ROTEIRO=[
+  ['Vistoria inicial programada','nova'],
+  ['Denúncia recebida — obra sem placa','pend'],
+  ['Vistoria inicial programada','nova'],
+  ['Reinspeção solicitada pela coordenação','pend'],
+]
+fila.innerHTML = LOTES.features.slice(3,7).map((f,i)=>{
+  const p=f.properties, [txt,cls]=ROTEIRO[i]
+  const ico = cls==='nova'
+    ? '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'
+    : '<path d="M12 9v4M12 17v.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'
+  return `<div class="tarefa ${cls}" onclick='abrirFicha(${JSON.stringify(p)})'>
+    <div class="marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${ico}</svg></div>
+    <div class="txt">
+      <div class="t">Quadra ${p.quadra} · Lote ${p.numero_lote}</div>
+      <div class="s">${txt}</div>
+      <div class="m"><span>${Number(p.area_gis_m2).toLocaleString('pt-BR')} m²</span><span>a 220 m de você</span></div>
+    </div>
+    <div class="seta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+  </div>`
+}).join('')
+
+lista_busca.innerHTML = LOTES.features.slice(10,20).map(f=>{
+  const p=f.properties
+  return `<div class="tarefa" style="padding:12px 14px" onclick='abrirFicha(${JSON.stringify(p)})'>
+    <div class="txt"><div class="t" style="font-size:14.5px">Quadra ${p.quadra} · Lote ${p.numero_lote}</div>
+    <div class="s" style="font-size:12.5px">${p.bairro} · ${Number(p.area_gis_m2).toLocaleString('pt-BR')} m²</div></div>
+    <div class="seta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+  </div>`
+}).join('')
+
+function ir(id,btn){
+  document.querySelectorAll('.tela').forEach(t=>t.classList.remove('at'))
+  document.getElementById('t-'+id).classList.add('at')
+  document.querySelectorAll('.rd').forEach(a=>a.classList.remove('at'))
+  if(btn) btn.classList.add('at')
+  if(id==='mapa') setTimeout(()=>{mapa.invalidateSize();mapa.fitBounds(camada.getBounds(),{padding:[30,30]})},80)
+}
+function abrirFicha(p){
+  fi_tit.textContent=`Quadra ${p.quadra} · Lote ${p.numero_lote}`
+  fi_q.textContent=p.quadra; fi_l.textContent=p.numero_lote
+  fi_a.textContent=Number(p.area_gis_m2).toLocaleString('pt-BR')+' m²'
+  fi_c.textContent=p.chave
+  document.getElementById('f-ficha').classList.add('aberta')
+}
+function fecharFolha(id){document.getElementById(id).classList.remove('aberta')}
+
+let n=1
+function abrirVistoria(){ n=1; render(); document.getElementById('f-vist').classList.add('aberta') }
+function passo(d){
+  if(n===3&&d===1){ fecharFolha('f-vist'); return }
+  n=Math.min(3,Math.max(1,n+d)); render()
+}
+function render(){
+  for(let i=1;i<=3;i++){
+    document.getElementById('pp'+i).classList.toggle('at',i===n)
+    const p=document.getElementById('ps'+i)
+    p.classList.toggle('at',i===n); p.classList.toggle('ok',i<n)
+  }
+  bt_voltar.style.display = n===1 ? 'none' : ''
+  bt_avancar.textContent = n===3 ? 'Gravar vistoria' : 'Avançar'
+}
+function escolher(el){
+  el.parentElement.querySelectorAll('.opc').forEach(o=>o.classList.remove('on'))
+  el.classList.add('on')
+}
+</script>
+</body>
+</html>

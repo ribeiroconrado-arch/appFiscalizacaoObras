@@ -1,0 +1,14 @@
+{
+  "name": "Fiscalização de Obras",
+  "short_name": "Fiscalização",
+  "description": "Sistema municipal de fiscalização de obras — Prefeitura de Primavera do Leste",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F5F2",
+  "theme_color": "#004D1C",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/img/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/img/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
