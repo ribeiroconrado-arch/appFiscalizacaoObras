@@ -25,3 +25,6 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Material de planejamento/design — fica só local, não vai pro repositório
+/planejamento
