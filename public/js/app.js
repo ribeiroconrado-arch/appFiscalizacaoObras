@@ -361,8 +361,8 @@ document.addEventListener('DOMContentLoaded', bootstrap)
  * escondido (display:none) quando isso aconteceu, ele volta com dimensão
  * zerada. Daí o invalidateSize() ao reentrar na aba.
  *
- * `ordem` precisa espelhar a sequência dos botões nas duas barras: o realce
- * é feito por índice, não por nome. Ao acrescentar uma aba, acrescente aqui.
+ * `ordem` precisa espelhar a sequência dos botões da barra: o realce é feito
+ * por índice, não por nome. Ao acrescentar uma aba, acrescente aqui.
  *
  * @param {'painel'|'mapa'|'documentos'|'protocolos'} destino
  */
@@ -374,8 +374,6 @@ function irPara(destino) {
   const i = ordem.indexOf(destino)
   document.querySelectorAll('.aba').forEach(a => a.classList.remove('at'))
   document.querySelectorAll('.aba')[i]?.classList.add('at')
-  document.querySelectorAll('.abas-topo button').forEach(a => a.classList.remove('at'))
-  document.querySelectorAll('.abas-topo button')[i]?.classList.add('at')
 
   if (destino === 'mapa') {
     // O Leaflet mede o contêiner na criação; se o mapa estava escondido,

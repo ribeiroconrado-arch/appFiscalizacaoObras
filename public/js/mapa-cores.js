@@ -130,18 +130,27 @@ function desenharRotulosDeGrupo() {
   for (const chave of ['bairro', 'quadra']) {
     const g = {}
     for (const f of state.lotes.values()) {
-      const k = String(f.properties[chave] ?? '?')
+      // A quadra é agrupada por BAIRRO + número. O número só é único dentro
+      // do loteamento: existe "Q 05" no Jardim Europa IV e outra no Buritis
+      // V. Agrupando só pelo número, os dois conjuntos viravam um grupo só e
+      // a média das coordenadas caía no vazio ENTRE os bairros — era o
+      // rótulo solto no meio do nada.
+      const k = chave === 'quadra'
+        ? String(f.properties.bairro ?? '?') + '|' + String(f.properties.quadra ?? '?')
+        : String(f.properties.bairro ?? '?')
       ;(g[k] = g[k] || []).push(centroLote(f))
     }
     for (const [k, pts] of Object.entries(g)) {
-      if (k === '?' || k === 'null') continue
+      const rotulo = chave === 'quadra' ? k.split('|')[1] : k
+      if (!rotulo || rotulo === '?' || rotulo === 'null') continue
+
       const lat = pts.reduce((a, p) => a + p[0], 0) / pts.length
       const lon = pts.reduce((a, p) => a + p[1], 0) / pts.length
       const m = L.marker([lat, lon], {
         interactive: false,
         icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }),
       })
-        .bindTooltip(chave === 'quadra' ? 'Q ' + k : k, {
+        .bindTooltip(chave === 'quadra' ? 'Q ' + rotulo : rotulo, {
           permanent: true, direction: 'center',
           className: 'rot rot-' + chave,
         })

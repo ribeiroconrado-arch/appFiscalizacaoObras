@@ -1,9 +1,14 @@
 // ══════════════════════════════════════════════
 // MÓDULO: PARÂMETROS DO SISTEMA (só administrador)
 //
-// Usuários, legislação (leis + artigos), UPF por exercício e calendário de
-// feriados. Tela fora do fluxo das abas — abre por cima de tudo via a
-// engrenagem no cabeçalho, porque é configuração, não trabalho do dia a dia.
+// Usuários, legislação, UPF e feriados. A navegação segue o padrão do
+// AppPOSTURAS: onde há hierarquia (lei → artigos, ano → feriados), a lista
+// do pai ocupa a tela inteira e tocar num item leva ao detalhe, com
+// "← Voltar". Aninhar tudo numa árvore só produzia uma página longa demais
+// para achar qualquer coisa.
+//
+// Cadastros simples entram direto na linha (.cad-row), sem modal: abrir uma
+// janela para digitar um ano e um valor custa mais cliques do que o dado vale.
 // ══════════════════════════════════════════════
 
 /** Estado carregado de uma vez em /api/parametros. */
@@ -15,22 +20,18 @@ const parState = {
   upfs: [],
   feriados: [],
   geral: [],
+  /** id da lei aberta no detalhe */   leiAberta: null,
+  /** ano aberto na lista de feriados */ anoAberto: null,
 }
 
 function abrirParametros() {
-  document.getElementById('t-parametros').classList.add('at')
-  document.body.style.overflow = 'hidden'
+  openModal('m-parametros')
   carregarParametros()
-}
-
-function fecharParametros() {
-  document.getElementById('t-parametros').classList.remove('at')
-  document.body.style.overflow = ''
 }
 
 /** @param {string} nome */
 function subParametros(nome) {
-  document.querySelectorAll('.sub-abas button').forEach(b => b.classList.toggle('at', b.dataset.sub === nome))
+  document.querySelectorAll('.sub-abas > button[data-sub]').forEach(b => b.classList.toggle('at', b.dataset.sub === nome))
   document.querySelectorAll('.par-painel').forEach(p => p.classList.toggle('at', p.id === 'par-' + nome))
 }
 
@@ -46,7 +47,7 @@ async function carregarParametros() {
     parState.carregado = true
     renderUsuarios()
     renderUpfs()
-    renderFeriados()
+    renderAnosFeriados()
     renderGeral()
     await recarregarLegislacao()
   } catch (e) {
@@ -66,11 +67,7 @@ function renderUsuarios() {
         <span>${esc(u.email)}${u.matricula ? ' · ' + esc(u.matricula) : ''} · ${esc(u.perfil_rotulo)}
           ${u.tipo_usuario ? '· ' + esc(u.tipo_usuario) : ''}${u.ativo ? '' : ' · inativo'}</span>
       </div>
-      <button class="acao-x" onclick="editarUsuario(${u.id})" title="Editar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-      </button>
+      <button class="acao-x" onclick="editarUsuario(${u.id})" title="Editar">${ICO_EDITAR}</button>
     </div>`).join('') || '<div class="lista-vazia">Nenhum usuário cadastrado.</div>'
 }
 
@@ -110,7 +107,7 @@ async function salvarUsuario() {
   const senha2 = document.getElementById('us-senha2').value
   if (senha && senha !== senha2) { toast('As senhas não conferem', 'err'); return }
 
-  const corpo = {
+  await postParametro('/api/parametros/usuarios', {
     id: document.getElementById('us-id').value || null,
     name: document.getElementById('us-nome').value.trim(),
     email: document.getElementById('us-email').value.trim(),
@@ -120,71 +117,73 @@ async function salvarUsuario() {
     ativo: document.getElementById('us-ativo').checked,
     senha: senha || null,
     senha_confirmation: senha2 || null,
-  }
-  await postParametro('/api/parametros/usuarios', corpo, 'm-usuario', carregarParametros)
+  }, 'm-usuario', carregarParametros)
 }
 
-// ── LEGISLAÇÃO ───────────────────────────────────────────────
+// ── LEGISLAÇÃO: LISTA DE LEIS ────────────────────────────────
+
+async function recarregarLegislacao() {
+  const r = await fetch('/api/legislacao', { headers: { Accept: 'application/json' } })
+  const d = await r.json()
+  parState.leis = d.leis
+  parState.irregularidades = d.irregularidades
+  parState.semEnquadramento = d.sem_enquadramento
+  renderLeis()
+  if (parState.leiAberta) { renderArtigosDaLei() }
+}
 
 function renderLeis() {
   document.getElementById('cont-leis').textContent = parState.leis.length
 
-  const avisoEl = document.getElementById('par-legislacao-aviso')
-  avisoEl.innerHTML = parState._semEnquadramento
-    ? `<p class="aviso-legal"><b>${parState._semEnquadramento} irregularidade(s) sem artigo vinculado.</b>
+  document.getElementById('par-legislacao-aviso').innerHTML = parState.semEnquadramento
+    ? `<p class="aviso-legal"><b>${parState.semEnquadramento} irregularidade(s) sem artigo vinculado.</b>
        Enquanto isso, o sistema recusa lavrar o auto correspondente.</p>` : ''
 
   document.getElementById('lista-leis').innerHTML = parState.leis.map(l => `
-    <div class="bloco" style="margin-bottom:12px">
-      <div class="topo-lista">
-        <div>
-          <b style="font-size:14px;color:var(--chumbo)">${esc(l.nome)}</b>
-          <div style="font-size:11.5px;color:var(--tx3)">${esc(l.numero)}${l.ano ? ' · ' + l.ano : ''}
-            ${l.ativa ? '' : ' · <span style="color:var(--red)">inativa</span>'}</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn sm" onclick="editarLei(${l.id})">Editar</button>
-          <button class="btn sm primary" onclick="novoArtigo(${l.id})">+ Artigo</button>
-        </div>
+    <div class="par-linha clicavel" onclick="abrirLei(${l.id})">
+      <div class="principal">
+        <b>${esc(l.nome)}</b>
+        <span>${esc(l.numero)}${l.ano ? ' · ' + l.ano : ''} · ${l.artigos.length} artigo(s)${l.ativa ? '' : ' · inativa'}</span>
       </div>
-      <div>${(l.artigos || []).map(a => `
-        <div class="par-linha" style="cursor:pointer" onclick="editarArtigo(${l.id},${a.id})">
-          <div class="principal">
-            <b>${esc(a.apelido || a.numero)}</b>
-            <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.irregularidades.length ? ' · ' + a.irregularidades.length + ' irregularidade(s)' : ' · <span style="color:var(--red)">sem irregularidade vinculada</span>'}
-              ${a.ativo ? '' : ' · inativo'}</span>
-          </div>
-        </div>`).join('') || '<div class="lista-vazia">Nenhum artigo cadastrado nesta lei.</div>'}
-      </div>
+      <span class="seta">›</span>
     </div>`).join('') || '<div class="lista-vazia">Nenhuma lei cadastrada.</div>'
 }
 
-/** @param {Object} a */
-function rotuloBaseMulta(a) {
-  if (a.base_multa === 'fixa') return fmtNum(a.multa_upf || 0) + ' UPF'
-  if (a.base_multa === 'sem_multa') return 'sem multa'
-  const alvo = a.base_multa === 'area_terreno' ? 'terreno' : 'construído'
-  return fmtNum(a.multa_upf_m2 || 0) + ' UPF/m² · ' + alvo
+/** Cria a lei com o mínimo e já abre o detalhe para completar o resto. */
+async function novaLei() {
+  const numero = document.getElementById('nova-lei-numero').value.trim()
+  const nome = document.getElementById('nova-lei-nome').value.trim()
+  if (!numero || !nome) { toast('Informe o número e o nome da lei', 'err'); return }
+
+  const d = await postParametro('/api/legislacao', {
+    numero, nome,
+    ano: new Date().getFullYear(),
+    // Padrões da praxe; o detalhe da lei permite ajustar.
+    prazo_defesa_dias: 5,
+    prazo_cumprimento_dias: 10,
+    ativa: true,
+  }, null, recarregarLegislacao)
+
+  if (d) {
+    document.getElementById('nova-lei-numero').value = ''
+    document.getElementById('nova-lei-nome').value = ''
+    if (d.id) abrirLei(d.id)
+  }
 }
 
-function novaLei() {
-  document.getElementById('lei-id').value = ''
-  document.getElementById('lei-numero').value = ''
-  document.getElementById('lei-nome').value = ''
-  document.getElementById('lei-ano').value = new Date().getFullYear()
-  document.getElementById('lei-ementa').value = ''
-  document.getElementById('lei-prazo-defesa').value = 5
-  document.getElementById('lei-prazo-cumprimento').value = 10
-  document.getElementById('lei-ciencia-notif').value = ''
-  document.getElementById('lei-ciencia-auto').value = ''
-  document.getElementById('lei-ativa').checked = true
-  openModal('m-lei')
-}
+// ── LEGISLAÇÃO: DETALHE DA LEI ───────────────────────────────
 
 /** @param {number} id */
-function editarLei(id) {
+function abrirLei(id) {
   const l = parState.leis.find(x => x.id === id)
   if (!l) return
+  parState.leiAberta = id
+
+  document.getElementById('leg-lista').style.display = 'none'
+  document.getElementById('leg-detalhe').style.display = ''
+  document.getElementById('leg-detalhe-titulo').textContent = l.nome
+  subLei('dados')
+
   document.getElementById('lei-id').value = l.id
   document.getElementById('lei-numero').value = l.numero
   document.getElementById('lei-nome').value = l.nome
@@ -195,11 +194,24 @@ function editarLei(id) {
   document.getElementById('lei-ciencia-notif').value = l.ciencia_notificacao || ''
   document.getElementById('lei-ciencia-auto').value = l.ciencia_auto || ''
   document.getElementById('lei-ativa').checked = !!l.ativa
-  openModal('m-lei')
+
+  renderArtigosDaLei()
+}
+
+function voltarLeis() {
+  parState.leiAberta = null
+  document.getElementById('leg-detalhe').style.display = 'none'
+  document.getElementById('leg-lista').style.display = ''
+}
+
+/** @param {string} nome */
+function subLei(nome) {
+  document.querySelectorAll('#leg-detalhe .sub-abas button').forEach(b => b.classList.toggle('at', b.dataset.leg === nome))
+  document.querySelectorAll('.leg-painel').forEach(p => p.classList.toggle('at', p.id === 'leg-' + nome))
 }
 
 async function salvarLei() {
-  const corpo = {
+  await postParametro('/api/legislacao', {
     id: document.getElementById('lei-id').value || null,
     numero: document.getElementById('lei-numero').value.trim(),
     nome: document.getElementById('lei-nome').value.trim(),
@@ -210,33 +222,44 @@ async function salvarLei() {
     ciencia_notificacao: document.getElementById('lei-ciencia-notif').value.trim() || null,
     ciencia_auto: document.getElementById('lei-ciencia-auto').value.trim() || null,
     ativa: document.getElementById('lei-ativa').checked,
-  }
-  await postParametro('/api/legislacao', corpo, 'm-lei', recarregarLegislacao)
+  }, null, recarregarLegislacao)
 }
 
-/** Só a legislação — evita re-buscar usuários/UPF/feriados ao salvar um artigo. */
-async function recarregarLegislacao() {
-  const r = await fetch('/api/legislacao', { headers: { Accept: 'application/json' } })
-  const d = await r.json()
-  parState.leis = d.leis
-  parState.irregularidades = d.irregularidades
-  parState._semEnquadramento = d.sem_enquadramento
-  renderLeis()
+function renderArtigosDaLei() {
+  const l = parState.leis.find(x => x.id === parState.leiAberta)
+  if (!l) return
+  document.getElementById('leg-detalhe-titulo').textContent = l.nome
+  document.getElementById('cont-artigos').textContent = l.artigos.length
+
+  document.getElementById('lista-artigos').innerHTML = l.artigos.map(a => `
+    <div class="par-linha clicavel" onclick="editarArtigo(${a.id})">
+      <div class="principal">
+        <b>${esc(a.apelido || a.numero)}</b>
+        <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.irregularidades.length
+          ? ' · ' + a.irregularidades.length + ' irregularidade(s)'
+          : ' · <span style="color:var(--red)">sem irregularidade vinculada</span>'}${a.ativo ? '' : ' · inativo'}</span>
+      </div>
+      <span class="seta">›</span>
+    </div>`).join('') || '<div class="lista-vazia">Nenhum artigo cadastrado nesta lei.</div>'
 }
 
-function trocarBaseMulta() {
-  const base = document.getElementById('art-base').value
-  document.getElementById('art-bloco-fixa').style.display = base === 'fixa' ? '' : 'none'
-  document.getElementById('art-bloco-area').style.display = (base === 'area_construida' || base === 'area_terreno') ? '' : 'none'
+/** @param {Object} a */
+function rotuloBaseMulta(a) {
+  if (a.base_multa === 'fixa') return fmtNum(a.multa_upf || 0) + ' UPF'
+  if (a.base_multa === 'sem_multa') return 'sem multa'
+  const alvo = a.base_multa === 'area_terreno' ? 'terreno' : 'construído'
+  return fmtNum(a.multa_upf_m2 || 0) + ' UPF/m² · ' + alvo
 }
 
-/** @param {number} legislacaoId */
-function novoArtigo(legislacaoId) {
-  const lei = parState.leis.find(x => x.id === legislacaoId)
+// ── ARTIGOS (modal: tem campos demais para caber numa linha) ──
+
+function novoArtigoDaLei() {
+  const l = parState.leis.find(x => x.id === parState.leiAberta)
+  if (!l) return
   document.getElementById('art-titulo').textContent = 'Novo artigo'
-  document.getElementById('art-lei').textContent = lei ? lei.nome : '—'
+  document.getElementById('art-lei').textContent = l.nome
   document.getElementById('art-id').value = ''
-  document.getElementById('art-legislacao-id').value = legislacaoId
+  document.getElementById('art-legislacao-id').value = l.id
   document.getElementById('art-numero').value = ''
   document.getElementById('art-apelido').value = ''
   document.getElementById('art-conduta').value = ''
@@ -252,15 +275,15 @@ function novoArtigo(legislacaoId) {
   openModal('m-artigo')
 }
 
-/** @param {number} legislacaoId @param {number} artigoId */
-function editarArtigo(legislacaoId, artigoId) {
-  const lei = parState.leis.find(x => x.id === legislacaoId)
-  const a = lei?.artigos.find(x => x.id === artigoId)
+/** @param {number} artigoId */
+function editarArtigo(artigoId) {
+  const l = parState.leis.find(x => x.id === parState.leiAberta)
+  const a = l?.artigos.find(x => x.id === artigoId)
   if (!a) return
   document.getElementById('art-titulo').textContent = a.apelido || a.numero
-  document.getElementById('art-lei').textContent = lei.nome
+  document.getElementById('art-lei').textContent = l.nome
   document.getElementById('art-id').value = a.id
-  document.getElementById('art-legislacao-id').value = legislacaoId
+  document.getElementById('art-legislacao-id').value = l.id
   document.getElementById('art-numero').value = a.numero
   document.getElementById('art-apelido').value = a.apelido || ''
   document.getElementById('art-conduta').value = a.conduta || ''
@@ -276,10 +299,16 @@ function editarArtigo(legislacaoId, artigoId) {
   openModal('m-artigo')
 }
 
+function trocarBaseMulta() {
+  const base = document.getElementById('art-base').value
+  document.getElementById('art-bloco-fixa').style.display = base === 'fixa' ? '' : 'none'
+  document.getElementById('art-bloco-area').style.display =
+    (base === 'area_construida' || base === 'area_terreno') ? '' : 'none'
+}
+
 /** @param {Array<number>} marcadas */
 function renderIrregularidadesChecklist(marcadas) {
-  const alvo = document.getElementById('art-irregularidades')
-  alvo.innerHTML = parState.irregularidades.map(i => `
+  document.getElementById('art-irregularidades').innerHTML = parState.irregularidades.map(i => `
     <label class="chk-item ${marcadas.includes(i.id) ? 'marcado' : ''}"
            onclick="setTimeout(()=>this.classList.toggle('marcado', this.querySelector('input').checked),0)">
       <input type="checkbox" value="${i.id}" ${marcadas.includes(i.id) ? 'checked' : ''}>
@@ -289,7 +318,7 @@ function renderIrregularidadesChecklist(marcadas) {
 
 async function salvarArtigo() {
   const irregularidades = [...document.querySelectorAll('#art-irregularidades input:checked')].map(i => Number(i.value))
-  const corpo = {
+  await postParametro('/api/legislacao/artigos', {
     id: document.getElementById('art-id').value || null,
     legislacao_id: document.getElementById('art-legislacao-id').value,
     numero: document.getElementById('art-numero').value.trim(),
@@ -303,8 +332,7 @@ async function salvarArtigo() {
     multa_max_upf: document.getElementById('art-multa-max').value || null,
     ativo: document.getElementById('art-ativo').checked,
     irregularidades,
-  }
-  await postParametro('/api/legislacao/artigos', corpo, 'm-artigo', recarregarLegislacao)
+  }, 'm-artigo', recarregarLegislacao)
 }
 
 // ── UPF ──────────────────────────────────────────────────────
@@ -317,89 +345,141 @@ function renderUpfs() {
         <b>${u.exercicio} · ${fmtNum(u.valor)}</b>
         <span>Vigente desde ${formatarDataBR(u.vigencia_inicio)}${u.norma ? ' · ' + esc(u.norma) : ''}</span>
       </div>
-      <button class="acao-x" onclick="excluirUpf(${u.id})" title="Excluir">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
-          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
-      </button>
+      <button class="acao-x" onclick="excluirUpf(${u.id})" title="Excluir">${ICO_LIXO}</button>
     </div>`).join('') || '<div class="lista-vazia">Nenhuma UPF cadastrada.</div>'
 }
 
-function novaUpf() {
-  document.getElementById('upf-exercicio').value = new Date().getFullYear()
-  document.getElementById('upf-valor').value = ''
-  document.getElementById('upf-vigencia').value = ''
-  atualizarDisplayData(document.getElementById('upf-vigencia'))
-  document.getElementById('upf-norma').value = ''
-  openModal('m-upf')
-}
-
 async function salvarUpf() {
-  const corpo = {
-    exercicio: document.getElementById('upf-exercicio').value,
-    valor: document.getElementById('upf-valor').value,
-    vigencia_inicio: document.getElementById('upf-vigencia').value,
-    norma: document.getElementById('upf-norma').value.trim() || null,
+  const exercicio = document.getElementById('novo-upf-ano').value
+  const valor = document.getElementById('novo-upf-valor').value
+  if (!exercicio || !valor) { toast('Informe o ano e o valor da UPF', 'err'); return }
+
+  const d = await postParametro('/api/parametros/upf', {
+    exercicio, valor,
+    // A vigência começa em 1º de janeiro do exercício, que é a regra: a UPF
+    // é anual. Decreto que muda no meio do ano é a exceção, e aí se edita.
+    vigencia_inicio: exercicio + '-01-01',
+    norma: document.getElementById('novo-upf-norma').value.trim() || null,
+  }, null, carregarParametros)
+
+  if (d) {
+    document.getElementById('novo-upf-ano').value = ''
+    document.getElementById('novo-upf-valor').value = ''
+    document.getElementById('novo-upf-norma').value = ''
   }
-  if (!corpo.exercicio || !corpo.valor || !corpo.vigencia_inicio) {
-    toast('Exercício, valor e vigência são obrigatórios', 'err'); return
-  }
-  await postParametro('/api/parametros/upf', corpo, 'm-upf', carregarParametros)
 }
 
 /** @param {number} id */
 function excluirUpf(id) {
   confirmarAcao({
     titulo: 'Excluir UPF',
-    mensagem: 'Documentos já lavrados mantêm o valor de UPF que foi congelado neles. Excluir?',
+    mensagem: 'Documentos já lavrados mantêm o valor de UPF congelado neles. Excluir?',
     perigo: true,
-    onConfirm: async () => {
-      const r = await fetch('/api/parametros/upf/' + id, {
-        method: 'DELETE',
-        headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-      })
-      const d = await r.json()
-      if (!r.ok) { toast(d.message || 'Não foi possível excluir', 'err'); return }
-      toast(d.message)
-      carregarParametros()
-    },
+    onConfirm: () => excluirParametro('/api/parametros/upf/' + id),
   })
 }
 
-// ── FERIADOS ─────────────────────────────────────────────────
+// ── FERIADOS: ANOS ───────────────────────────────────────────
 
-function renderFeriados() {
+/** Anos existentes, deduzidos das datas cadastradas. */
+function anosDeFeriados() {
+  const porAno = {}
+  for (const f of parState.feriados) {
+    const ano = f.data.slice(0, 4)
+    porAno[ano] = (porAno[ano] || 0) + 1
+  }
+  return Object.entries(porAno).sort((a, b) => b[0].localeCompare(a[0]))
+}
+
+function renderAnosFeriados() {
+  const anos = anosDeFeriados()
   document.getElementById('cont-feriados').textContent = parState.feriados.length
-  document.getElementById('lista-feriados').innerHTML = parState.feriados.map(f => `
+  document.getElementById('lista-anos-feriados').innerHTML = anos.map(([ano, n]) => `
+    <div class="par-linha clicavel" onclick="abrirAnoFeriados('${ano}')">
+      <div class="principal">
+        <b>${ano}</b>
+        <span>${n} feriado(s) cadastrado(s)</span>
+      </div>
+      <span class="seta">›</span>
+    </div>`).join('') || '<div class="lista-vazia">Nenhum ano com feriados cadastrados.</div>'
+}
+
+/**
+ * "Novo ano" só abre a sub-tela: o ano passa a existir quando o primeiro
+ * feriado é gravado. Criar um registro vazio só para o ano aparecer na lista
+ * seria uma linha sem significado no banco.
+ */
+function novoAnoFeriados() {
+  const inp = document.getElementById('novo-ano-feriados')
+  const ano = parseInt(inp.value, 10)
+  if (!ano || ano < 1900 || ano > 2200) { toast('Informe um ano válido', 'err'); return }
+  inp.value = ''
+  abrirAnoFeriados(String(ano))
+}
+
+/** @param {string} ano */
+function abrirAnoFeriados(ano) {
+  parState.anoAberto = ano
+  document.getElementById('fer-anos').style.display = 'none'
+  document.getElementById('fer-lista').style.display = ''
+  document.getElementById('fer-ano-titulo').textContent = ano
+
+  // Trava a data ao ano aberto: sem isso é fácil cadastrar 2027 dentro de 2026.
+  const data = document.getElementById('novo-feriado-data')
+  data.min = ano + '-01-01'
+  data.max = ano + '-12-31'
+  data.value = ''
+  atualizarDisplayData(data)
+  document.getElementById('novo-feriado-nome').value = ''
+
+  renderFeriadosDoAno()
+}
+
+function voltarAnosFeriados() {
+  parState.anoAberto = null
+  document.getElementById('fer-lista').style.display = 'none'
+  document.getElementById('fer-anos').style.display = ''
+  renderAnosFeriados()
+}
+
+function renderFeriadosDoAno() {
+  const doAno = parState.feriados
+    .filter(f => f.data.startsWith(parState.anoAberto))
+    .sort((a, b) => a.data.localeCompare(b.data))
+
+  document.getElementById('lista-feriados').innerHTML = doAno.map(f => `
     <div class="par-linha">
       <div class="principal">
         <b>${formatarDataBR(f.data)} — ${esc(f.nome)}</b>
         <span>${esc(f.tipo)}${f.recorrente ? ' · repete todo ano' : ''}</span>
       </div>
-      <button class="acao-x" onclick="excluirFeriado(${f.id})" title="Excluir">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
-          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
-      </button>
-    </div>`).join('') || '<div class="lista-vazia">Nenhum feriado cadastrado.</div>'
-}
-
-function novoFeriado() {
-  document.getElementById('fer-data').value = ''
-  atualizarDisplayData(document.getElementById('fer-data'))
-  document.getElementById('fer-nome').value = ''
-  document.getElementById('fer-tipo').value = 'municipal'
-  document.getElementById('fer-recorrente').checked = false
-  openModal('m-feriado')
+      <button class="acao-x" onclick="excluirFeriado(${f.id})" title="Excluir">${ICO_LIXO}</button>
+    </div>`).join('') || '<div class="lista-vazia">Nenhum feriado neste ano.</div>'
 }
 
 async function salvarFeriado() {
-  const corpo = {
-    data: document.getElementById('fer-data').value,
-    nome: document.getElementById('fer-nome').value.trim(),
-    tipo: document.getElementById('fer-tipo').value,
-    recorrente: document.getElementById('fer-recorrente').checked,
+  const data = document.getElementById('novo-feriado-data').value
+  const nome = document.getElementById('novo-feriado-nome').value.trim()
+  if (!data || !nome) { toast('Informe a data e o nome do feriado', 'err'); return }
+  if (parState.anoAberto && !data.startsWith(parState.anoAberto)) {
+    toast('A data precisa ser do ano ' + parState.anoAberto, 'err'); return
   }
-  if (!corpo.data || !corpo.nome) { toast('Data e nome são obrigatórios', 'err'); return }
-  await postParametro('/api/parametros/feriados', corpo, 'm-feriado', carregarParametros)
+
+  const d = await postParametro('/api/parametros/feriados', {
+    data, nome,
+    tipo: document.getElementById('novo-feriado-tipo').value,
+    recorrente: document.getElementById('novo-feriado-recorrente').checked,
+  }, null, async () => {
+    await carregarParametros()
+    if (parState.anoAberto) renderFeriadosDoAno()
+  })
+
+  if (d) {
+    document.getElementById('novo-feriado-data').value = ''
+    atualizarDisplayData(document.getElementById('novo-feriado-data'))
+    document.getElementById('novo-feriado-nome').value = ''
+    document.getElementById('novo-feriado-recorrente').checked = false
+  }
 }
 
 /** @param {number} id */
@@ -409,14 +489,8 @@ function excluirFeriado(id) {
     mensagem: 'Prazos já calculados não mudam retroativamente. Excluir mesmo assim?',
     perigo: true,
     onConfirm: async () => {
-      const r = await fetch('/api/parametros/feriados/' + id, {
-        method: 'DELETE',
-        headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-      })
-      const d = await r.json()
-      if (!r.ok) { toast(d.message || 'Não foi possível excluir', 'err'); return }
-      toast(d.message)
-      carregarParametros()
+      await excluirParametro('/api/parametros/feriados/' + id)
+      if (parState.anoAberto) renderFeriadosDoAno()
     },
   })
 }
@@ -435,24 +509,25 @@ function renderGeral() {
 async function salvarGeral() {
   const valores = {}
   document.querySelectorAll('#lista-geral [data-chave]').forEach(i => { valores[i.dataset.chave] = i.value })
-  const r = await fetch('/api/parametros/geral', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json', Accept: 'application/json',
-      'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
-    },
-    body: JSON.stringify({ valores }),
-  })
-  const d = await r.json()
-  if (!r.ok) { toast(d.message || 'Não foi possível salvar', 'err'); return }
-  toast(d.message)
+  await postParametro('/api/parametros/geral', { valores }, null, async () => {})
 }
 
-// ── HELPER COMUM ─────────────────────────────────────────────
+// ── HELPERS COMUNS ───────────────────────────────────────────
+
+const ICO_EDITAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
+  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+  <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`
+
+const ICO_LIXO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
+  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>`
 
 /**
- * POST genérico dos formulários desta tela: mesmo padrão de cabeçalho, erro
- * e fechamento em todos — só muda o endpoint, o modal e o que recarregar.
+ * POST dos formulários desta tela. `modalId` nulo quando o cadastro é feito
+ * na própria linha e não há janela para fechar.
+ *
+ * @returns {Object|null} corpo da resposta, ou null se falhou
  */
 async function postParametro(url, corpo, modalId, aoTerminar) {
   try {
@@ -465,15 +540,29 @@ async function postParametro(url, corpo, modalId, aoTerminar) {
       body: JSON.stringify(corpo),
     })
     const d = await r.json()
-    if (!r.ok) { toast(d.message || primeiroErroPar(d), 'err'); return }
-    toast(d.message || (d.aviso ?? 'Gravado.'))
+    if (!r.ok) { toast(d.message || primeiroErroPar(d), 'err'); return null }
+    toast(d.message || 'Gravado.')
     if (d.aviso) toast(d.aviso, 'err')
-    fModalBtn(modalId)
+    if (modalId) fModalBtn(modalId)
     await aoTerminar()
+    return d
   } catch (e) {
     console.error(e)
     toast('Falha de rede ao salvar', 'err')
+    return null
   }
+}
+
+/** DELETE com recarga do painel. */
+async function excluirParametro(url) {
+  const r = await fetch(url, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+  })
+  const d = await r.json()
+  if (!r.ok) { toast(d.message || 'Não foi possível excluir', 'err'); return }
+  toast(d.message)
+  await carregarParametros()
 }
 
 function primeiroErroPar(d) {

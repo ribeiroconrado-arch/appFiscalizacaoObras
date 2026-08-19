@@ -46,4 +46,28 @@ return [
     'srid_origem'        => 31981,
     'translacao_local'   => ['dx' => 792035.2782, 'dy' => 8260796.2988],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Imagem aérea alternativa (opcional)
+    |--------------------------------------------------------------------------
+    | O satélite gratuito da Esri termina no zoom 17 em Primavera do Leste —
+    | verificado no centro, no Jardim Europa, no Buritis e na entrada sul, e
+    | nas 196 capturas do acervo histórico Wayback. Acima disso o tile é só
+    | ampliado, e o detalhe que não foi fotografado não aparece.
+    |
+    | Preenchendo estas chaves, uma terceira opção entra no seletor de camadas.
+    | Serve para provedor comercial com chave (Mapbox, MapTiler, Bing) e,
+    | principalmente, para a ORTOFOTO DO MUNICÍPIO servida em tiles — que é a
+    | solução de fato, a única que chega a 10-15 cm/px.
+    |
+    | Exemplo com ortofoto própria:
+    |   SATELITE_ALT_URL="https://gis.primaveradoleste.mt.gov.br/orto/{z}/{x}/{y}.png"
+    |   SATELITE_ALT_ROTULO="Ortofoto 2025"
+    |   SATELITE_ALT_MAXZOOM=20
+    */
+    'satelite_alt_url'        => env('SATELITE_ALT_URL'),
+    'satelite_alt_rotulo'     => env('SATELITE_ALT_ROTULO', 'Imagem HD'),
+    'satelite_alt_atribuicao' => env('SATELITE_ALT_ATRIBUICAO', ''),
+    'satelite_alt_maxzoom'    => env('SATELITE_ALT_MAXZOOM', 19),
+
 ];

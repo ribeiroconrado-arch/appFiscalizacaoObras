@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'matricula', 'password', 'perfil', 'tipo_usuario', 'ativo'])]
+#[Fillable(['name', 'email', 'matricula', 'password', 'perfil', 'tipo_usuario', 'ativo', 'assinatura'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -84,6 +84,29 @@ class User extends Authenticatable
             return 'viewer';
         }
         return $this->perfil;
+    }
+
+    /**
+     * Duas letras para o avatar: iniciais do primeiro e do último nome.
+     *
+     * Ignora as partículas ("de", "dos", "da"), senão "João da Silva" viraria
+     * "JD" — que não identifica ninguém numa lista de servidores.
+     */
+    public function iniciais(): string
+    {
+        $partes = array_values(array_filter(
+            preg_split('/\s+/', trim($this->name)),
+            fn ($p) => ! in_array(mb_strtolower($p), ['de', 'da', 'do', 'das', 'dos', 'e'], true)
+        ));
+
+        if (! $partes) {
+            return '?';
+        }
+
+        $primeira = mb_substr($partes[0], 0, 1);
+        $ultima = count($partes) > 1 ? mb_substr(end($partes), 0, 1) : '';
+
+        return mb_strtoupper($primeira . $ultima);
     }
 
     /** Rótulo do perfil para exibição. */

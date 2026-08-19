@@ -33,11 +33,16 @@ async function carregarPainel() {
 /** @param {Object} d resposta de /api/painel */
 function renderPainel(d) {
   // ── métricas ──
+  // Número e rótulo lado a lado, não empilhados: com o rótulo embaixo, o card
+  // que tem detalhe extra ("não lavrados") ficava mais alto que os vizinhos e
+  // a fileira saía desalinhada.
   document.getElementById('pn-metricas').innerHTML = Object.values(d.metricas).map(m => `
     <div class="mc">
       <div class="n">${m.n}</div>
-      <div class="l">${esc(m.rotulo)}</div>
-      ${m.detalhe ? `<div class="dt">${esc(m.detalhe)}</div>` : ''}
+      <div class="tx">
+        <div class="l">${esc(m.rotulo)}</div>
+        ${m.detalhe ? `<div class="dt">${esc(m.detalhe)}</div>` : ''}
+      </div>
     </div>`).join('')
 
   // ── precisa de atenção ──
@@ -60,12 +65,18 @@ function renderPainel(d) {
     : '<div class="lista-vazia">Nada pendente no momento.</div>'
 
   // ── alterações recentes (vêm da auditoria) ──
+  // Avatar + título + frase + data. O autor entra como "por você" quando é o
+  // próprio usuário: repetir o nome dele em toda linha da lista não informa
+  // nada, e é o caso mais comum de quem está olhando o painel.
   document.getElementById('pn-recentes').innerHTML = d.recentes.length
     ? d.recentes.map(r => `
-        <div class="fd">
-          <div class="pt"></div>
+        <div class="fd" title="${esc(r.hora)}">
+          <div class="av ${r.eu ? 'eu' : ''}">${esc(r.eu ? 'EU' : r.iniciais)}</div>
           <div class="c">
-            <div class="a">${esc(r.usuario)} ${esc(r.acao)} ${esc(r.alvo)}</div>
+            <div class="a">${esc(r.titulo)}</div>
+            <div class="b">${esc(r.detalhe)} ${r.eu
+              ? '<b>por você</b>'
+              : 'por ' + esc(r.usuario)}</div>
           </div>
           <div class="h">${esc(r.quando)}</div>
         </div>`).join('')

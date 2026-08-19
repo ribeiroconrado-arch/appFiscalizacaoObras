@@ -28,6 +28,13 @@ const mapaState = {
 /** Cores dos polígonos. Hex puro: o Leaflet não lê variável CSS. */
 const COR = { lote: '#006C16', loteFundo: '#009B3A', destaque: '#F5C400' }
 
+/**
+ * Retângulo inicial de navegação, trocado pelo bbox real do município assim
+ * que a malha do IBGE carrega (ver recortarMunicipio). Existe só para o mapa
+ * já nascer travado, antes do fetch responder.
+ */
+let LIMITE_MUNICIPIO = [[-15.70, -54.75], [-14.58, -53.72]]
+
 function estiloLote() {
   return { color: COR.lote, weight: 1, opacity: .85, fillColor: COR.loteFundo, fillOpacity: .18 }
 }
@@ -45,14 +52,38 @@ function iniciarMapa() {
   const claro = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 20,
   })
+  // maxNativeZoom 17: nesta região o acervo da Esri termina no zoom 17 —
+  // z18, z19 e z20 devolvem o MESMO arquivo de 2.521 bytes, que é a placa
+  // cinza "Map data not yet available". Verificado no centro, no Jardim
+  // Europa, no Buritis e na entrada sul, e nas 196 capturas históricas do
+  // acervo Wayback: nenhuma passa de 17. Declarando o limite real, o Leaflet
+  // amplia o tile de 17 em vez de pedir um que não existe.
   const satelite = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    { attribution: '© Esri', maxZoom: 20 })
+    { attribution: '© Esri', maxZoom: 20, maxNativeZoom: 17, className: 'tile-satelite' })
 
-  mapaState.obj = L.map('map', { zoomControl: false, layers: [claro] })
+  const bases = { 'Mapa': claro, 'Satélite': satelite }
+
+  // Camada opcional de imagem melhor (Mapbox, MapTiler, Bing...). Só entra
+  // no seletor se houver URL configurada no .env — sem chave, o app não
+  // oferece uma opção que não funcionaria.
+  if (window.SATELITE_ALT?.url) {
+    bases[window.SATELITE_ALT.rotulo || 'Satélite HD'] = L.tileLayer(window.SATELITE_ALT.url, {
+      attribution: window.SATELITE_ALT.atribuicao || '',
+      maxZoom: 20,
+      maxNativeZoom: Number(window.SATELITE_ALT.maxNativeZoom) || 19,
+      className: 'tile-satelite',
+    })
+  }
+
+  mapaState.obj = L.map('map', {
+    zoomControl: false, layers: [claro],
+    // Prende a navegação ao município: viscosity 1 faz a borda não ceder,
+    // então arrastar para fora simplesmente não sai do lugar.
+    maxBounds: LIMITE_MUNICIPIO, maxBoundsViscosity: 1, minZoom: 11,
+  })
   L.control.zoom({ position: 'topright' }).addTo(mapaState.obj)
-  L.control.layers({ 'Mapa': claro, 'Satélite': satelite }, null,
-                   { position: 'topright' }).addTo(mapaState.obj)
+  L.control.layers(bases, null, { position: 'topright' }).addTo(mapaState.obj)
 
   mapaState.camadaLotes = L.geoJSON(null, { style: estiloLote }).addTo(mapaState.obj)
 
@@ -63,7 +94,85 @@ function iniciarMapa() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
     { subdomains: 'abcd', maxZoom: 20, pane: 'rotulos' }).addTo(mapaState.obj)
 
-  mapaState.obj.on('zoomend', () => rotulosPorZoom())
+  mapaState.obj.on('zoomend', () => { rotulosPorZoom(); ajustarNitidezSatelite() })
+  mapaState.obj.on('baselayerchange', () => ajustarNitidezSatelite())
+
+  recortarMunicipio()
+}
+
+/**
+ * Realce leve quando a imagem aérea está sendo ampliada além do zoom que ela
+ * realmente tem.
+ *
+ * Não inventa detalhe — isso é impossível: o pixel que não foi fotografado
+ * não existe. O que o filtro faz é recuperar contraste e definição de borda
+ * que a interpolação do navegador achata, deixando telhado e muro um pouco
+ * mais legíveis. É um ganho de leitura, não de resolução. A solução de fato
+ * é a ortofoto municipal.
+ */
+function ajustarNitidezSatelite() {
+  const m = mapaState.obj
+  if (!m) return
+
+  let ampliando = false
+  m.eachLayer(l => {
+    if (!l.options?.className?.includes('tile-satelite')) return
+    const nativo = l.options.maxNativeZoom ?? l.options.maxZoom ?? 20
+    if (m.getZoom() > nativo) ampliando = true
+  })
+
+  document.getElementById('map')?.classList.toggle('sat-ampliado', ampliando)
+}
+
+/**
+ * Recorta o mapa no limite de Primavera do Leste.
+ *
+ * A máscara é UM polígono com dois anéis: o externo cobre o mundo, o interno
+ * é o município. Pela regra even-odd, o interior do anel interno fica de
+ * fora do preenchimento — ou seja, o município aparece limpo e todo o resto
+ * some sob a cor de fundo. É mais barato que recortar cada tile e funciona
+ * igual nas duas bases (mapa e satélite).
+ *
+ * O contorno vai numa camada própria, acima dos lotes, para a divisa
+ * continuar visível quando o fiscal estiver com a malha toda desenhada.
+ */
+async function recortarMunicipio() {
+  try {
+    const r = await fetch('/geo/primavera-do-leste.geojson', { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    const f = await r.json()
+
+    // GeoJSON é [lon, lat]; o Leaflet quer [lat, lon].
+    const paraLatLng = anel => anel.map(([lon, lat]) => [lat, lon])
+    const aneis = f.geometry.type === 'MultiPolygon'
+      ? f.geometry.coordinates.flat().map(paraLatLng)
+      : f.geometry.coordinates.map(paraLatLng)
+
+    const mundo = [[-90, -360], [-90, 360], [90, 360], [90, -360]]
+
+    mapaState.obj.createPane('mascara')
+    mapaState.obj.getPane('mascara').style.zIndex = 350
+    mapaState.obj.getPane('mascara').style.pointerEvents = 'none'
+
+    L.polygon([mundo, ...aneis], {
+      pane: 'mascara', stroke: false, fillColor: '#FAF7F4', fillOpacity: .93,
+      interactive: false,
+    }).addTo(mapaState.obj)
+
+    const contorno = L.polygon(aneis, {
+      pane: 'rotulos', color: '#EA580C', weight: 1.6, opacity: .75,
+      fill: false, interactive: false,
+    }).addTo(mapaState.obj)
+
+    // Limite de navegação = o próprio município, com uma folga pequena para
+    // a divisa não colar na borda da tela.
+    LIMITE_MUNICIPIO = contorno.getBounds().pad(0.04)
+    mapaState.obj.setMaxBounds(LIMITE_MUNICIPIO)
+  } catch (e) {
+    // Sem a malha o mapa continua utilizável: perde o recorte, mantém o
+    // retângulo de navegação declarado acima.
+    console.warn('Não foi possível carregar o limite do município:', e)
+  }
 }
 
 /**
@@ -77,7 +186,11 @@ function adicionarAoMapa(geojson, aoClicar) {
     onEachFeature: (feicao, camada) => {
       mapaState.porId.set(feicao.properties.id, camada)
       mapaState.camadas.push(camada)
-      camada.on('click', () => { destacar(camada); aoClicar(feicao) })
+      // Clique abre o BALÃO, não a ficha: a maior parte das consultas em
+      // campo é "que lote é este?", e para isso abrir um modal de tela cheia
+      // é caro demais. A ficha completa fica a um toque de distância, dentro
+      // do balão.
+      camada.on('click', () => { destacar(camada); abrirBalao(feicao, camada) })
       // Número do lote sobre o polígono, visível só a partir do zoom 18
       // (regra em mapa-cores.js) — antes disso vira borrão.
       if (feicao.properties.numero_lote) {
@@ -87,6 +200,44 @@ function adicionarAoMapa(geojson, aoClicar) {
       mapaState.camadaLotes.addLayer(camada)
     },
   })
+}
+
+/**
+ * Balão com o essencial do lote e o caminho para a ficha completa.
+ *
+ * @param {Object} feicao feição GeoJSON
+ * @param {L.Path} camada polígono clicado
+ */
+function abrirBalao(feicao, camada) {
+  const p = feicao.properties
+  state.selecionado = feicao
+
+  const area = p.area_gis_m2
+    ? Number(p.area_gis_m2).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' m²'
+    : 'área não informada'
+
+  // O chip só aparece quando existe inscrição imobiliária — o código pelo
+  // qual a prefeitura conhece o imóvel. Cair para a chave interna aqui
+  // repetiria bairro, quadra e lote, que já estão no título; enquanto o
+  // cadastro não é integrado (Etapa 4), o balão fica sem o chip.
+  const html = `
+    <div class="balao">
+      <div class="balao-tit">Quadra ${esc(p.quadra ?? '—')} · Lote ${esc(p.numero_lote ?? '—')}</div>
+      <div class="balao-sub">${esc(p.bairro ?? '')}</div>
+      ${p.inscricao ? `<div class="balao-chip">${esc(p.inscricao)}</div>` : ''}
+      <div class="balao-area">${area}</div>
+      <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Ver ficha completa</button>
+    </div>`
+
+  camada.bindPopup(html, {
+    className: 'popup-lote', closeButton: true, maxWidth: 260, autoPan: true,
+  }).openPopup()
+}
+
+/** Ponte do balão para a ficha: o lote já está em `state.selecionado`. */
+function abrirFichaDoBalao() {
+  mapaState.obj?.closePopup()
+  if (state.selecionado) abrirFicha(state.selecionado)
 }
 
 /** Destaca uma camada, devolvendo a anterior ao estilo padrão. @param {L.Path} camada */

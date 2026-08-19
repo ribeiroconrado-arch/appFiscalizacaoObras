@@ -71,6 +71,14 @@ class LavraturaService
             $doc->status         = 'lavrado';
             $doc->data_lavratura = now();
 
+            // Rubrica do agente, copiada do perfil dele para dentro do
+            // documento. É cópia e não referência: se ele redesenhar a
+            // assinatura depois, os documentos já lavrados continuam
+            // exibindo a que valia no dia — como qualquer papel assinado.
+            if (! $doc->assinatura_agente) {
+                $doc->assinatura_agente = $doc->agente()->first()?->assinatura;
+            }
+
             // Prazos são calculados e CONGELADOS na lavratura. Recalcular ao
             // reabrir renovaria o prazo de um documento antigo — o autuado
             // ganharia tempo toda vez que alguém abrisse a tela.

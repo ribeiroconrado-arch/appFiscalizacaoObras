@@ -61,13 +61,15 @@ function renderDocumentos() {
                             : '<span style="color:var(--red)">sem fundamentação</span>'],
     ]
 
+    // Número primeiro: é por ele que o documento é citado, cobrado e
+    // procurado. Tipo e data vêm depois, como qualificação.
     return `
       <div class="mob-card" onclick="abrirDocumento(${d.id})">
         <div class="mc-top">
           <div class="notif-card-l1">
-            <span class="notif-card-data">${esc(d.data)}</span>
-            <span class="notif-card-tipo">${esc(d.tipo_rotulo)}:</span>
             <span class="proto-badge">${esc(d.numero)}</span>
+            <span class="notif-card-tipo">${esc(d.tipo_rotulo)}</span>
+            <span class="notif-card-data">${esc(d.data)}</span>
           </div>
           <div class="mc-acoes">${tags}</div>
         </div>

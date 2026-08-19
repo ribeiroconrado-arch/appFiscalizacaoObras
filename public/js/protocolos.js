@@ -67,9 +67,9 @@ function renderProtocolos() {
       <div class="mob-card notif-card" onclick="abrirProtocolo(${p.id})">
         <div class="mc-top">
           <div class="notif-card-l1">
-            <span class="notif-card-data">${esc(p.data ?? '—')}</span>
-            <span class="notif-card-tipo">${esc(p.tipo_rotulo)}:</span>
             <span class="proto-badge">${esc(p.numero)}</span>
+            <span class="notif-card-tipo">${esc(p.tipo_rotulo)}</span>
+            <span class="notif-card-data">${esc(p.data ?? '—')}</span>
           </div>
           <div class="mc-acoes">${tags}</div>
         </div>

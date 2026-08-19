@@ -6,6 +6,7 @@ use App\Http\Controllers\LegislacaoController;
 use App\Http\Controllers\MapaController;
 use App\Http\Controllers\PainelController;
 use App\Http\Controllers\ParametroController;
+use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\ProtocoloController;
 use App\Http\Controllers\VistoriaController;
 use App\Repositories\LoteRepository;
@@ -74,6 +75,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/protocolos', [ProtocoloController::class, 'index']);
         Route::post('/protocolos', [ProtocoloController::class, 'store']);
         Route::patch('/protocolos/{protocolo}', [ProtocoloController::class, 'update']);
+
+        // Meu perfil — qualquer usuário autenticado, só sobre si mesmo
+        Route::get('/perfil', [PerfilController::class, 'index']);
+        Route::post('/perfil/senha', [PerfilController::class, 'trocarSenha']);
+        Route::post('/perfil/assinatura', [PerfilController::class, 'salvarAssinatura']);
+        Route::delete('/perfil/assinatura', [PerfilController::class, 'excluirAssinatura']);
 
         // Parâmetros do sistema (só administrador — trava no controller)
         Route::get('/parametros', [ParametroController::class, 'index']);

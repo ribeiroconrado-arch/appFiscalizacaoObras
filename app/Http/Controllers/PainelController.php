@@ -44,7 +44,7 @@ class PainelController extends Controller
             'periodo'   => ['dias' => $dias, 'desde' => $desde->format('d/m/Y')],
             'metricas'  => $this->metricas(clone $vistorias, clone $documentos),
             'atencao'   => $this->atencao($uid),
-            'recentes'  => $this->recentes(),
+            'recentes'  => $this->recentes($uid),
             'por_tipo'  => $this->documentosPorTipo(clone $documentos),
             'irregularidades' => $this->irregularidadesFrequentes($desde),
             'bairros'   => DB::table('lotes')->distinct()->orderBy('bairro')->pluck('bairro'),
@@ -138,16 +138,76 @@ class PainelController extends Controller
      *
      * @return list<array<string,mixed>>
      */
-    private function recentes(): array
+    private function recentes(int $uid): array
     {
-        return DB::table('auditoria')
-            ->orderByDesc('id')->limit(12)->get()
-            ->map(fn ($a) => [
-                'acao'     => $a->acao,
+        $linhas = DB::table('auditoria')->orderByDesc('id')->limit(12)->get();
+
+        // O registro de auditoria guarda só o id do documento; o número e o
+        // tipo, que é o que identifica a peça para quem lê, moram na tabela
+        // `documentos`. Uma consulta para todos de uma vez, não uma por linha.
+        $idsDoc = $linhas->where('tabela', 'documentos')->pluck('registro_id')->filter()->unique();
+        $docs = $idsDoc->isEmpty()
+            ? collect()
+            : Documento::whereIn('id', $idsDoc)->get()->keyBy('id');
+
+        return $linhas->map(function ($a) use ($docs, $uid) {
+            $doc = $a->tabela === 'documentos' ? $docs->get($a->registro_id) : null;
+
+            return [
+                // Título: o que foi mexido, identificável de relance.
+                'titulo'   => $doc
+                    ? $doc->numeroFormatado() . ' · ' . $doc->rotuloTipo()
+                    : ucfirst($this->rotuloTabela($a->tabela)) . ($a->descricao ? ' ' . $a->descricao : ''),
+                // Descrição: o que aconteceu, em frase.
+                'detalhe'  => $this->fraseAcao($a->acao, $a->tabela),
                 'usuario'  => $a->usuario_nome ?? 'sistema',
-                'alvo'     => $this->rotuloTabela($a->tabela) . ($a->descricao ? ' ' . $a->descricao : ''),
-                'quando'   => $this->quando($a->created_at),
-            ])->all();
+                // "por você" pesa menos que repetir o próprio nome na lista.
+                'eu'       => $a->user_id !== null && (int) $a->user_id === $uid,
+                'iniciais' => $this->iniciaisDe($a->usuario_nome),
+                'quando'   => \Carbon\Carbon::parse($a->created_at)->format('d/m/Y'),
+                'hora'     => \Carbon\Carbon::parse($a->created_at)->format('d/m/Y H:i'),
+            ];
+        })->all();
+    }
+
+    /** Ação da auditoria em frase, no gênero do que foi alterado. */
+    private function fraseAcao(string $acao, string $tabela): string
+    {
+        $alvo = $this->rotuloTabela($tabela);
+        $feminino = in_array($alvo, ['vistoria', 'lei', 'evidência'], true);
+
+        $participio = match ($acao) {
+            'criou'        => $feminino ? 'registrada' : 'registrado',
+            'alterou'      => $feminino ? 'alterada' : 'alterado',
+            'excluiu'      => $feminino ? 'excluída' : 'excluído',
+            'lavrou'       => 'lavrado',
+            'anulou'       => $feminino ? 'anulada' : 'anulado',
+            'assinou'      => $feminino ? 'assinada' : 'assinado',
+            'alterou prazo' => 'com prazo alterado',
+            default        => $acao,
+        };
+
+        return ucfirst($alvo) . ' ' . $participio;
+    }
+
+    /** Iniciais para o avatar do feed — mesma regra de User::iniciais(). */
+    private function iniciaisDe(?string $nome): string
+    {
+        if (! $nome) {
+            return '··';
+        }
+
+        $partes = array_values(array_filter(
+            preg_split('/\s+/', trim($nome)),
+            fn ($p) => ! in_array(mb_strtolower($p), ['de', 'da', 'do', 'das', 'dos', 'e'], true)
+        ));
+
+        if (! $partes) {
+            return '?';
+        }
+
+        return mb_strtoupper(mb_substr($partes[0], 0, 1)
+            . (count($partes) > 1 ? mb_substr(end($partes), 0, 1) : ''));
     }
 
     private function rotuloTabela(string $t): string
@@ -161,15 +221,6 @@ class PainelController extends Controller
             'users'          => 'usuário',
             default          => $t,
         };
-    }
-
-    /** "há 2 h", "ontem", "15/08" — mais legível que timestamp na lista. */
-    private function quando(string $data): string
-    {
-        $d = \Carbon\Carbon::parse($data);
-        if ($d->isToday())     { return $d->format('H:i'); }
-        if ($d->isYesterday()) { return 'ontem'; }
-        return $d->format('d/m');
     }
 
     /** @return list<array{rotulo:string,n:int}> */

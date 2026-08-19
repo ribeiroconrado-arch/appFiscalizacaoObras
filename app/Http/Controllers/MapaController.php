@@ -50,6 +50,9 @@ class MapaController extends Controller
                 'quadra'      => $l->quadra,
                 'numero_lote' => $l->numero_lote,
                 'chave'       => $l->chave,
+                // Código oficial do imóvel: é ele que o balão mostra quando
+                // existe, no lugar da chave interna de integração.
+                'inscricao'   => $l->inscricao_imobiliaria,
                 'area_gis_m2' => (float) $l->area_gis_m2,
             ],
         ], $linhas);

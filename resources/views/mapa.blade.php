@@ -37,33 +37,9 @@
     <div class="sub">{{ number_format($total, 0, ',', '.') }} lotes na base</div>
   </div>
 
-  {{-- Abas no cabeçalho: aparecem só no desktop (ver tema-f.css). No celular
-       a navegação fica no rodapé, ao alcance do polegar. --}}
-  <div class="abas-topo">
-    <button class="at" onclick="irPara('painel')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-        <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/>
-        <rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-      Painel
-    </button>
-    <button onclick="irPara('mapa')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-        <path d="M9 20l-6 3V6l6-3 6 3 6-3v17l-6 3z"/><path d="M9 3v17M15 6v17"/></svg>
-      Mapa
-    </button>
-    <button onclick="irPara('documentos')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
-      Documentos
-    </button>
-    <button onclick="irPara('protocolos')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-        <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
-        <rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 12h8M8 16h5"/></svg>
-      Protocolos
-    </button>
-  </div>
+  {{-- A navegação vive só no rodapé, em qualquer largura: repeti-la aqui no
+       desktop deixava dois menus para a mesma coisa, e ainda era o que
+       espremia o cabeçalho no celular. --}}
 
   <div class="usuario-topo">
     @if (auth()->user()->isAdmin())
@@ -83,12 +59,17 @@
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       <span class="n" id="sino-n" style="display:none">0</span>
     </button>
-    <div>
-      <div class="nome">{{ auth()->user()->name }}</div>
-      <div class="cargo">
-        {{ auth()->user()->perfilRotulo() }}@if (auth()->user()->tipo_usuario) · {{ ucfirst(auth()->user()->tipo_usuario) }}@endif
-      </div>
-    </div>
+    {{-- Avatar e identificação num alvo só: são a mesma coisa para quem
+         clica — "meus dados". No celular o texto sai e sobra o avatar. --}}
+    <button class="perfil-btn" onclick="abrirPerfil()" title="Meu perfil">
+      <span class="avatar">{{ auth()->user()->iniciais() }}</span>
+      <span class="ident">
+        <span class="nome">{{ auth()->user()->name }}</span>
+        <span class="cargo">
+          {{ auth()->user()->perfilRotulo() }}@if (auth()->user()->tipo_usuario) · {{ ucfirst(auth()->user()->tipo_usuario) }}@endif
+        </span>
+      </span>
+    </button>
     <form method="POST" action="{{ route('logout') }}">
       @csrf
       <button type="submit" class="btn-sair" title="Sair">
@@ -120,9 +101,21 @@
     </select>
   </div>
 
+  {{-- Ordem das colunas = ordem de leitura no celular, onde a grade vira uma
+       coluna só. Pendência vem antes de estatística: o painel existe para
+       responder "o que precisa de mim?", não para exibir gráfico. --}}
   <div class="painel-grid">
     <div class="col">
       <div class="metricas" id="pn-metricas"></div>
+      <div class="bloco">
+        <div class="sec-simples">Precisa de atenção <span class="cont" id="pn-atencao-n">0</span></div>
+        {{-- Inclui os documentos com prazo vencendo ou vencido do próprio
+             agente — é aqui que a pendência de documento aparece. --}}
+        <div id="pn-atencao"></div>
+      </div>
+    </div>
+
+    <div class="col">
       <div class="bloco">
         <div class="sec-simples">Documentos por tipo</div>
         <div id="pn-por-tipo"></div>
@@ -131,11 +124,6 @@
         <div class="sec-simples">Irregularidades frequentes</div>
         <div id="pn-irregs"></div>
       </div>
-    </div>
-
-    <div class="col">
-      <div class="sec-simples">Precisa de atenção <span class="cont" id="pn-atencao-n">0</span></div>
-      <div id="pn-atencao"></div>
     </div>
 
     <div class="col">
@@ -280,16 +268,19 @@
   <div id="lista-protocolos"></div>
 </section>
 
-{{-- ══════ PARÂMETROS DO SISTEMA (só administrador, fora do fluxo das abas) ══════ --}}
+{{-- ══════ PARÂMETROS DO SISTEMA — modal (só administrador) ══════ --}}
 @if (auth()->user()->isAdmin())
-<section class="tela" id="t-parametros">
-  <div class="par-topo">
-    <button onclick="fecharParametros()" title="Voltar">
+<div class="modal-bg" id="m-parametros" onclick="fModal()">
+  <div class="modal largo" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fModalBtn('m-parametros')">&#10005;</button>
+    <h3>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-    </button>
-    <h2>Parâmetros do sistema</h2>
-  </div>
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Parâmetros do sistema
+    </h3>
 
   <div class="sub-abas">
     <button class="at" data-sub="usuarios" onclick="subParametros('usuarios')">Usuários</button>
@@ -311,50 +302,143 @@
     <div id="lista-usuarios"></div>
   </div>
 
-  {{-- LEGISLAÇÃO --}}
+  {{-- LEGISLAÇÃO — lista de leis → detalhe da lei, como no AppPOSTURAS.
+       Aninhar os artigos dentro da lista virava uma árvore longa demais
+       para achar qualquer coisa. --}}
   <div class="par-painel" id="par-legislacao">
-    <div id="par-legislacao-aviso"></div>
-    <div class="topo-lista">
+
+    {{-- SUB-TELA: LISTA DE LEIS --}}
+    <div id="leg-lista">
+      <div id="par-legislacao-aviso"></div>
       <div class="sec-simples">Leis <span class="cont" id="cont-leis">0</span></div>
-      <button class="btn primary sm" onclick="novaLei()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Nova lei
-      </button>
+      <div class="cad-row">
+        <input type="text" id="nova-lei-numero" class="mono" placeholder="Número (Lei Complementar 1/2023)">
+        <input type="text" id="nova-lei-nome" placeholder="Nome (Código de Obras)"
+               onkeydown="if(event.key==='Enter')novaLei()">
+        <button class="btn primary sm" onclick="novaLei()">+ Nova lei</button>
+      </div>
+      <div class="cad-dica">Toque numa lei para ver os artigos e os textos de ciência.</div>
+      <div id="lista-leis"></div>
     </div>
-    <div id="lista-leis"></div>
+
+    {{-- SUB-TELA: DETALHE DA LEI --}}
+    <div id="leg-detalhe" style="display:none">
+      <div class="sub-topo">
+        <button class="btn sm" onclick="voltarLeis()">← Voltar</button>
+        <div class="titulo" id="leg-detalhe-titulo">—</div>
+      </div>
+
+      <div class="sub-abas">
+        <button class="at" data-leg="dados" onclick="subLei('dados')">Dados</button>
+        <button data-leg="textos" onclick="subLei('textos')">Textos de ciência</button>
+        <button data-leg="artigos" onclick="subLei('artigos')">Artigos</button>
+      </div>
+
+      <div class="leg-painel at" id="leg-dados">
+        <input type="hidden" id="lei-id">
+        <div class="field"><label for="lei-numero">Número</label><input type="text" id="lei-numero" class="mono" maxlength="40"></div>
+        <div class="field"><label for="lei-nome">Nome</label><input type="text" id="lei-nome" maxlength="160"></div>
+        <div class="field"><label for="lei-ano">Ano</label><input type="number" id="lei-ano" min="1900" max="2100"></div>
+        <div class="field"><label for="lei-ementa">Ementa</label>
+          <textarea id="lei-ementa" rows="2" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea></div>
+        <div class="field">
+          {{-- Prazo de defesa é DA LEI, não do documento: o auto não tem esse
+               campo no formulário, o sistema calcula a data a partir daqui. --}}
+          <label for="lei-prazo-defesa">Prazo de defesa (dias úteis)</label>
+          <input type="number" id="lei-prazo-defesa" min="1" max="120">
+        </div>
+        <div class="field">
+          <label for="lei-prazo-cumprimento">Prazo de cumprimento sugerido (dias corridos)</label>
+          <input type="number" id="lei-prazo-cumprimento" min="0" max="365">
+        </div>
+        <label class="lembrar"><input type="checkbox" id="lei-ativa"> Lei ativa</label>
+        <div class="btn-row"><button class="btn primary" onclick="salvarLei()">Salvar lei</button></div>
+      </div>
+
+      <div class="leg-painel" id="leg-textos">
+        <div class="field">
+          <label for="lei-ciencia-notif">Ciência da notificação (aceita {prazo})</label>
+          <textarea id="lei-ciencia-notif" rows="8" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
+        </div>
+        <div class="field">
+          <label for="lei-ciencia-auto">Ciência do auto de infração</label>
+          <textarea id="lei-ciencia-auto" rows="8" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
+        </div>
+        <div class="btn-row"><button class="btn primary" onclick="salvarLei()">Salvar textos</button></div>
+      </div>
+
+      <div class="leg-painel" id="leg-artigos">
+        <div class="topo-lista">
+          <div class="sec-simples">Artigos <span class="cont" id="cont-artigos">0</span></div>
+          <button class="btn primary sm" onclick="novoArtigoDaLei()">+ Novo artigo</button>
+        </div>
+        <div id="lista-artigos"></div>
+      </div>
+    </div>
   </div>
 
-  {{-- UPF --}}
+  {{-- UPF — cadastro direto na linha, sem modal (padrão AppPOSTURAS) --}}
   <div class="par-painel" id="par-upf">
-    <div class="topo-lista">
-      <div class="sec-simples">UPF por exercício <span class="cont" id="cont-upf">0</span></div>
-      <button class="btn primary sm" onclick="novaUpf()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Nova UPF
-      </button>
-    </div>
+    <div class="sec-simples">UPF por exercício <span class="cont" id="cont-upf">0</span></div>
     <p class="aviso-legal">
       <b>Por que por exercício:</b> um documento lavrado em 2026 tem de continuar
       valendo a UPF de 2026 mesmo depois que o decreto do ano seguinte entrar —
       o valor em reais de um auto já emitido não pode mudar sozinho.
     </p>
+    <div class="cad-row">
+      <input type="number" id="novo-upf-ano" placeholder="Ano (2026)" min="2020" max="2100">
+      <input type="number" id="novo-upf-valor" placeholder="Valor (5,8234)" step="0.0001" min="0">
+      <input type="text" id="novo-upf-norma" placeholder="Norma (Decreto 1.234/2025)"
+             onkeydown="if(event.key==='Enter')salvarUpf()">
+      <button class="btn primary sm" onclick="salvarUpf()">+ Nova UPF</button>
+    </div>
     <div id="lista-upf"></div>
   </div>
 
-  {{-- FERIADOS --}}
+  {{-- FERIADOS — lista de anos → feriados do ano --}}
   <div class="par-painel" id="par-feriados">
-    <div class="topo-lista">
+
+    {{-- SUB-TELA: ANOS --}}
+    <div id="fer-anos">
       <div class="sec-simples">Calendário de feriados <span class="cont" id="cont-feriados">0</span></div>
-      <button class="btn primary sm" onclick="novoFeriado()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Novo feriado
-      </button>
+      <p class="aviso-legal">
+        Usado para contar o prazo de defesa em <b>dias úteis</b>. Feriado errado
+        ou faltando encurta o prazo real do autuado e vicia o processo.
+      </p>
+      <div class="cad-row">
+        <input type="number" id="novo-ano-feriados" placeholder="Ano (2026)" min="1900" max="2200"
+               onkeydown="if(event.key==='Enter')novoAnoFeriados()">
+        <button class="btn primary sm" onclick="novoAnoFeriados()">+ Novo ano</button>
+      </div>
+      <div class="cad-dica">Toque num ano para ver os feriados cadastrados.</div>
+      <div id="lista-anos-feriados"></div>
     </div>
-    <p class="aviso-legal">
-      Usado para contar o prazo de defesa em <b>dias úteis</b>. Feriado errado
-      ou faltando encurta o prazo real do autuado e vicia o processo.
-    </p>
-    <div id="lista-feriados"></div>
+
+    {{-- SUB-TELA: FERIADOS DO ANO --}}
+    <div id="fer-lista" style="display:none">
+      <div class="sub-topo">
+        <button class="btn sm" onclick="voltarAnosFeriados()">← Voltar</button>
+        <div class="titulo" id="fer-ano-titulo">—</div>
+      </div>
+      <div class="cad-row">
+        {{-- min/max presos ao ano aberto: evita cadastrar 2027 dentro de 2026. --}}
+        <label class="date-ov" style="flex:1;min-width:130px">
+          <input type="date" id="novo-feriado-data" onchange="atualizarDisplayData(this)">
+          <span class="date-ov-txt vazio">dd/mm/aaaa</span>
+        </label>
+        <input type="text" id="novo-feriado-nome" placeholder="Nome (Natal)"
+               onkeydown="if(event.key==='Enter')salvarFeriado()">
+        <select id="novo-feriado-tipo">
+          <option value="municipal">Municipal</option>
+          <option value="nacional">Nacional</option>
+          <option value="estadual">Estadual</option>
+          <option value="facultativo">Facultativo</option>
+        </select>
+        <label class="lembrar" style="margin:0"><input type="checkbox" id="novo-feriado-recorrente"> Repete todo ano</label>
+        <button class="btn primary sm" onclick="salvarFeriado()">+ Novo feriado</button>
+      </div>
+      <div id="lista-feriados"></div>
+    </div>
   </div>
 
   {{-- ÓRGÃO --}}
@@ -366,7 +450,8 @@
       <button class="btn primary" onclick="salvarGeral()">Salvar</button>
     </div>
   </div>
-</section>
+  </div>
+</div>
 @endif
 
 {{-- ══════ ABAS ══════ --}}
@@ -878,50 +963,6 @@
 </div>
 
 {{-- NOVA/EDITAR LEI --}}
-<div class="modal-bg" id="m-lei" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-x" onclick="fModalBtn('m-lei')">&#10005;</button>
-    <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
-      <span id="lei-titulo">Nova lei</span>
-    </h3>
-    <input type="hidden" id="lei-id">
-
-    <div class="field"><label for="lei-numero">Número</label><input type="text" id="lei-numero" class="mono" placeholder="Lei Complementar 1/2023" maxlength="40"></div>
-    <div class="field"><label for="lei-nome">Nome</label><input type="text" id="lei-nome" placeholder="Código de Obras" maxlength="160"></div>
-    <div class="field"><label for="lei-ano">Ano</label><input type="number" id="lei-ano" min="1900" max="2100"></div>
-    <div class="field"><label for="lei-ementa">Ementa</label><textarea id="lei-ementa" rows="2" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea></div>
-
-    <div class="sec-title">Prazos</div>
-    <div class="field">
-      <label for="lei-prazo-defesa">Prazo de defesa (dias úteis)</label>
-      <input type="number" id="lei-prazo-defesa" min="1" max="120" value="5">
-    </div>
-    <div class="field">
-      <label for="lei-prazo-cumprimento">Prazo de cumprimento sugerido (dias corridos)</label>
-      <input type="number" id="lei-prazo-cumprimento" min="0" max="365" value="10">
-    </div>
-
-    <div class="sec-title">Textos de ciência</div>
-    <div class="field">
-      <label for="lei-ciencia-notif">Notificação (aceita {prazo})</label>
-      <textarea id="lei-ciencia-notif" rows="3" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
-    </div>
-    <div class="field">
-      <label for="lei-ciencia-auto">Auto de infração</label>
-      <textarea id="lei-ciencia-auto" rows="3" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
-    </div>
-    <label class="lembrar"><input type="checkbox" id="lei-ativa" checked> Lei ativa</label>
-
-    <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-lei')">Cancelar</button>
-      <button class="btn primary" onclick="salvarLei()">Salvar</button>
-    </div>
-  </div>
-</div>
 
 {{-- NOVO/EDITAR ARTIGO --}}
 <div class="modal-bg" id="m-artigo" onclick="fModal()">
@@ -978,56 +1019,91 @@
 </div>
 
 {{-- NOVA UPF --}}
-<div class="modal-bg" id="m-upf" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-x" onclick="fModalBtn('m-upf')">&#10005;</button>
-    <h3>Nova UPF</h3>
-    <div class="field"><label for="upf-exercicio">Exercício</label><input type="number" id="upf-exercicio" min="2020" max="2100"></div>
-    <div class="field"><label for="upf-valor">Valor (R$)</label><input type="number" id="upf-valor" min="0" step="0.0001"></div>
-    <div class="field">
-      <label for="upf-vigencia">Vigência a partir de</label>
-      <label class="date-ov"><input type="date" id="upf-vigencia" onchange="atualizarDisplayData(this)"><span class="date-ov-txt vazio">dd/mm/aaaa</span></label>
-    </div>
-    <div class="field"><label for="upf-norma">Norma</label><input type="text" id="upf-norma" placeholder="Decreto 1.234/2025" maxlength="80"></div>
-    <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-upf')">Cancelar</button>
-      <button class="btn primary" onclick="salvarUpf()">Salvar</button>
-    </div>
-  </div>
-</div>
 
 {{-- NOVO FERIADO --}}
-<div class="modal-bg" id="m-feriado" onclick="fModal()">
+@endif
+
+{{-- MEU PERFIL — senha e assinatura do próprio usuário --}}
+<div class="modal-bg" id="m-perfil" onclick="fModal()">
   <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-x" onclick="fModalBtn('m-feriado')">&#10005;</button>
-    <h3>Novo feriado</h3>
-    <div class="field">
-      <label for="fer-data">Data</label>
-      <label class="date-ov"><input type="date" id="fer-data" onchange="atualizarDisplayData(this)"><span class="date-ov-txt vazio">dd/mm/aaaa</span></label>
+    <button class="modal-x" onclick="fModalBtn('m-perfil')">&#10005;</button>
+
+    <div class="perfil-cabeca">
+      <div class="avatar grande">{{ auth()->user()->iniciais() }}</div>
+      <div>
+        <h3 style="margin:0">{{ auth()->user()->name }}</h3>
+        <div class="sub" style="margin:0">
+          {{ auth()->user()->perfilRotulo() }}@if (auth()->user()->tipo_usuario) · {{ ucfirst(auth()->user()->tipo_usuario) }}@endif
+        </div>
+      </div>
     </div>
-    <div class="field"><label for="fer-nome">Nome</label><input type="text" id="fer-nome" maxlength="80"></div>
+
+    <div class="sec-title">Identificação</div>
     <div class="field">
-      <label for="fer-tipo">Tipo</label>
-      <select id="fer-tipo">
-        <option value="municipal">Municipal</option>
-        <option value="nacional">Nacional</option>
-        <option value="estadual">Estadual</option>
-        <option value="facultativo">Ponto facultativo</option>
-      </select>
+      <label>E-mail</label>
+      <input type="text" value="{{ auth()->user()->email }}" readonly>
     </div>
-    <label class="lembrar">
-      <input type="checkbox" id="fer-recorrente">
-      Repete todo ano nesta data (ex.: 25/12)
-    </label>
+    <div class="field">
+      <label>Matrícula</label>
+      <input type="text" class="mono" value="{{ auth()->user()->matricula ?: '—' }}" readonly>
+    </div>
+    <p class="aviso-legal">
+      Nome, e-mail, matrícula e perfil são alterados pelo administrador do
+      sistema — mudam quem você é no processo administrativo.
+    </p>
+
+    <div class="sec-title">Trocar senha</div>
+    <div class="field">
+      {{-- Exigida mesmo com a sessão aberta: sem isso, um computador deixado
+           destravado na repartição vira perda da conta. --}}
+      <label for="pf-senha-atual">Senha atual</label>
+      <input type="password" id="pf-senha-atual" autocomplete="current-password">
+    </div>
+    <div class="field">
+      <label for="pf-senha-nova">Nova senha (mínimo 8 caracteres)</label>
+      <input type="password" id="pf-senha-nova" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label for="pf-senha-conf">Confirmar nova senha</label>
+      <input type="password" id="pf-senha-conf" autocomplete="new-password">
+    </div>
     <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-feriado')">Cancelar</button>
-      <button class="btn primary" onclick="salvarFeriado()">Salvar</button>
+      <button class="btn primary" onclick="salvarSenha()">Alterar senha</button>
+    </div>
+
+    <div class="sec-title">Minha assinatura</div>
+    <p class="aviso-legal">
+      Desenhada uma vez e aplicada automaticamente nos documentos que você
+      lavrar. Documentos já lavrados guardam a assinatura do dia e não mudam.
+    </p>
+    <div id="pf-assinatura-atual"></div>
+    <div class="assina-caixa">
+      <canvas id="pf-canvas"></canvas>
+      <span class="assina-linha"></span>
+      <span class="assina-dica">Assine acima com o dedo ou o mouse</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="limparAssinatura()">Limpar</button>
+      <button class="btn" onclick="removerAssinatura()">Remover salva</button>
+      <button class="btn primary" onclick="salvarAssinatura()">Salvar assinatura</button>
     </div>
   </div>
 </div>
-@endif
 
-<script>window.USUARIO_ID = {{ auth()->id() }}</script>
+@php
+  // Camada de imagem aérea alternativa, ligada pelo .env (ver config/gis.php).
+  // Sem URL configurada o array sai vazio e o seletor mostra só Mapa e Satélite.
+  $sateliteAlt = array_filter([
+      'url'           => config('gis.satelite_alt_url'),
+      'rotulo'        => config('gis.satelite_alt_rotulo'),
+      'atribuicao'    => config('gis.satelite_alt_atribuicao'),
+      'maxNativeZoom' => config('gis.satelite_alt_maxzoom'),
+  ]);
+@endphp
+<script>
+window.USUARIO_ID = {{ auth()->id() }}
+window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
+</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="@assetv('js/ui.js')"></script>
 <script src="@assetv('js/geo.js')"></script>
@@ -1037,6 +1113,7 @@
 <script src="@assetv('js/painel.js')"></script>
 <script src="@assetv('js/documentos.js')"></script>
 <script src="@assetv('js/protocolos.js')"></script>
+<script src="@assetv('js/perfil.js')"></script>
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
 @endif
