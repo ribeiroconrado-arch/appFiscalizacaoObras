@@ -64,18 +64,6 @@ function iniciarMapa() {
 
   const bases = { 'Mapa': claro, 'Satélite': satelite }
 
-  // Camada opcional de imagem melhor (Mapbox, MapTiler, Bing...). Só entra
-  // no seletor se houver URL configurada no .env — sem chave, o app não
-  // oferece uma opção que não funcionaria.
-  if (window.SATELITE_ALT?.url) {
-    bases[window.SATELITE_ALT.rotulo || 'Satélite HD'] = L.tileLayer(window.SATELITE_ALT.url, {
-      attribution: window.SATELITE_ALT.atribuicao || '',
-      maxZoom: 20,
-      maxNativeZoom: Number(window.SATELITE_ALT.maxNativeZoom) || 19,
-      className: 'tile-satelite',
-    })
-  }
-
   mapaState.obj = L.map('map', {
     zoomControl: false, layers: [claro],
     // Prende a navegação ao município: viscosity 1 faz a borda não ceder,
@@ -83,7 +71,12 @@ function iniciarMapa() {
     maxBounds: LIMITE_MUNICIPIO, maxBoundsViscosity: 1, minZoom: 11,
   })
   L.control.zoom({ position: 'topright' }).addTo(mapaState.obj)
-  L.control.layers(bases, null, { position: 'topright' }).addTo(mapaState.obj)
+
+  // Ortofoto por cima do satélite, em vez de no lugar dele — ver
+  // montarOrtofoto(). O seletor recebe a camada depois, já como sobreposição.
+  mapaState.controleCamadas = L.control.layers(bases, null, { position: 'topright' })
+    .addTo(mapaState.obj)
+  montarOrtofoto(satelite)
 
   mapaState.camadaLotes = L.geoJSON(null, { style: estiloLote }).addTo(mapaState.obj)
 
@@ -93,6 +86,8 @@ function iniciarMapa() {
   mapaState.obj.getPane('rotulos').style.pointerEvents = 'none'
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
     { subdomains: 'abcd', maxZoom: 20, pane: 'rotulos' }).addTo(mapaState.obj)
+
+  ancorarControleCores()
 
   mapaState.obj.on('zoomend', () => { rotulosPorZoom(); ajustarNitidezSatelite() })
   mapaState.obj.on('baselayerchange', () => ajustarNitidezSatelite())
@@ -122,6 +117,104 @@ function ajustarNitidezSatelite() {
   })
 
   document.getElementById('map')?.classList.toggle('sat-ampliado', ampliando)
+}
+
+/**
+ * Registra o painel de cores como CONTROLE do Leaflet, no mesmo canto do
+ * zoom e do seletor de camadas.
+ *
+ * Medir a posição e aplicar `top` no CSS não funciona: quando o mapa é
+ * criado ele ainda está escondido (o app abre no Painel), então a medição
+ * sai zerada e o botão gruda no topo. Como controle, quem empilha é o
+ * próprio Leaflet — e a ordem se ajusta sozinha se o seletor de camadas
+ * mudar de altura ao ganhar a ortofoto.
+ */
+function ancorarControleCores() {
+  const el = document.getElementById('ctrl-mapa')
+  if (!el) return
+
+  const Cores = L.Control.extend({
+    onAdd() {
+      // Sem isto, clicar nos botões arrasta o mapa e a roda dá zoom.
+      L.DomEvent.disableClickPropagation(el)
+      L.DomEvent.disableScrollPropagation(el)
+      return el
+    },
+    onRemove() {},
+  })
+
+  new Cores({ position: 'topright' }).addTo(mapaState.obj)
+}
+
+/** Abre e fecha a legenda de cores. */
+function alternarLegenda() {
+  const corpo = document.getElementById('ctrl-corpo')
+  const botao = document.querySelector('.ctrl-btn')
+  const abrindo = corpo.hasAttribute('hidden')
+  corpo.toggleAttribute('hidden', !abrindo)
+  botao.classList.toggle('aberto', abrindo)
+  botao.setAttribute('aria-expanded', String(abrindo))
+}
+
+/**
+ * Ortofoto em modo HÍBRIDO, sobreposta ao satélite.
+ *
+ * A ortofoto entra como camada de cima, não como base alternativa. Isso
+ * resolve dois problemas de uma vez:
+ *
+ *   1. cobertura parcial — a imagem municipal costuma cobrir só a mancha
+ *      urbana; com `bounds`, o Leaflet nem pede tile fora dela, e o satélite
+ *      continua aparecendo no resto do município;
+ *   2. zoom — com `minZoom`, ela só entra quando o satélite já esgotou o que
+ *      tinha (zoom 17). Abaixo disso o Esri dá contexto melhor e a ortofoto
+ *      seria download desperdiçado.
+ *
+ * O resultado é o que o mapa deve fazer: mostrar a melhor imagem disponível
+ * para aquele ponto e aquela escala, sem o fiscal escolher camada.
+ *
+ * @param {L.TileLayer} satelite camada base que a ortofoto complementa
+ */
+function montarOrtofoto(satelite) {
+  const alt = window.SATELITE_ALT
+  if (!alt?.url) return
+
+  const m = mapaState.obj
+
+  const opcoes = {
+    attribution: alt.atribuicao || '',
+    maxZoom: 20,
+    maxNativeZoom: Number(alt.maxNativeZoom) || 19,
+    // Só pede tile a partir do zoom em que o satélite já não ajuda.
+    minZoom: Number(alt.minZoom) || 17,
+    // O Mapbox serve tile de 512 px (@2x). Declarar o tamanho evita que o
+    // Leaflet trate como 256 e desloque a imagem meio tile.
+    tileSize: Number(alt.tamanhoTile) || 256,
+    zoomOffset: Number(alt.tamanhoTile) === 512 ? -1 : 0,
+    className: 'tile-satelite',
+    // Fora da área coberta o tile simplesmente não é requisitado.
+    bounds: alt.bounds ? L.latLngBounds(alt.bounds) : undefined,
+  }
+
+  const orto = L.tileLayer(alt.url, opcoes)
+  mapaState.ortofoto = orto
+
+  // Sobreposição, e não base: pode ficar ligada junto com o satélite.
+  mapaState.controleCamadas.addOverlay(orto, alt.rotulo || 'Ortofoto')
+
+  // Ligada por padrão — é a melhor imagem que existe; e como só se manifesta
+  // dentro da área e do zoom dela, não atrapalha o resto.
+  orto.addTo(m)
+
+  // Com a ortofoto ligada, entrar no zoom alto sem estar na base de satélite
+  // mostraria a foto sobre o mapa de ruas, o que confunde. Então a base de
+  // satélite acompanha quando a ortofoto começa a valer.
+  m.on('zoomend', () => {
+    if (!m.hasLayer(orto)) return
+    const dentro = !opcoes.bounds || opcoes.bounds.intersects(m.getBounds())
+    if (dentro && m.getZoom() >= opcoes.minZoom && !m.hasLayer(satelite)) {
+      m.addLayer(satelite)
+    }
+  })
 }
 
 /**

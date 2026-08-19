@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Documento;
 use App\Models\Evidencia;
 use App\Models\Irregularidade;
 use App\Models\Lote;
+use App\Models\Protocolo;
 use App\Models\Vistoria;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,10 +52,69 @@ class VistoriaController extends Controller
                 ]),
             ]);
 
+        // Linha do tempo: vistoria não é o único fato da vida do imóvel. O que
+        // o fiscal precisa ver antes da visita é a sequência inteira — vistoria,
+        // documento lavrado e requerimento do contribuinte —, porque é ela que
+        // explica em que pé o processo está.
+        $eventos = [];
+
+        foreach ($vistorias as $v) {
+            $eventos[] = [
+                'tipo'    => 'vistoria',
+                'quando'  => $v['data_hora'],
+                'titulo'  => 'Vistoria — ' . $v['situacao_rotulo'],
+                'detalhe' => $v['fiscal'] ? 'Fiscal: ' . $v['fiscal'] : null,
+                'badge'   => ['texto' => $v['situacao_rotulo'], 'classe' => $v['situacao_badge']],
+                'itens'   => collect($v['irregularidades'])->pluck('descricao')->all(),
+                'obs'     => $v['observacoes'],
+            ];
+        }
+
+        foreach (Documento::where('lote_id', $lote->id)->get() as $d) {
+            [$sTxt, $sCls] = $d->statusBadge();
+            $eventos[] = [
+                'tipo'    => 'documento',
+                'quando'  => ($d->data_lavratura ?? $d->created_at)?->format('d/m/Y H:i'),
+                'titulo'  => $d->numeroFormatado() . ' — ' . $d->rotuloTipo(),
+                'detalhe' => $d->autuado_nome ? 'Autuado: ' . $d->autuado_nome : null,
+                'badge'   => ['texto' => $sTxt, 'classe' => $sCls],
+                'itens'   => [],
+                'obs'     => $d->descricao,
+            ];
+        }
+
+        foreach (Protocolo::where('lote_id', $lote->id)->get() as $p) {
+            [$sTxt, $sCls] = $p->situacaoBadge();
+            $eventos[] = [
+                'tipo'    => 'protocolo',
+                'quando'  => $p->protocolado_em?->format('d/m/Y'),
+                'titulo'  => $p->numero . ' — ' . $p->rotuloTipo(),
+                'detalhe' => $p->requerente_nome ? 'Requerente: ' . $p->requerente_nome : null,
+                'badge'   => ['texto' => $sTxt, 'classe' => $sCls],
+                'itens'   => [],
+                'obs'     => $p->objeto,
+            ];
+        }
+
+        // Mais recente primeiro: o último fato é o que decide o que fazer hoje.
+        usort($eventos, fn ($a, $b) => strcmp(
+            $this->chaveOrdem($b['quando']), $this->chaveOrdem($a['quando'])
+        ));
+
         return response()->json([
             'lote'      => $lote->only(['id', 'bairro', 'quadra', 'numero_lote', 'chave']),
             'vistorias' => $vistorias,
+            'eventos'   => $eventos,
         ]);
+    }
+
+    /** "dd/mm/aaaa hh:mm" -> "aaaammddhhmm", para ordenar comparando texto. */
+    private function chaveOrdem(?string $data): string
+    {
+        if (! $data) { return '0'; }
+        $partes = explode(' ', $data);
+        [$d, $m, $a] = array_pad(explode('/', $partes[0]), 3, '00');
+        return $a . $m . $d . str_replace(':', '', $partes[1] ?? '0000');
     }
 
     /** GET /api/irregularidades — catálogo para montar o checklist. */

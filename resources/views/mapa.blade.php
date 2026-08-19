@@ -151,14 +151,28 @@
 </div>
 
 {{-- Controle de coloração e legenda dos rótulos --}}
-<div class="ctrl-mapa">
-  <b>Colorir por</b>
-  <div class="seg ctrl-cor">
-    <button class="at" data-chave="bairro" onclick="aplicarCores('bairro')">Bairro</button>
-    <button data-chave="quadra" onclick="aplicarCores('quadra')">Quadra</button>
+{{-- Legenda recolhida num ícone, logo abaixo do seletor de camadas: o painel
+     aberto comia um pedaço do mapa o tempo todo, e a legenda só é consultada
+     de vez em quando. O JS o posiciona sob o controle do Leaflet. --}}
+<div class="ctrl-mapa" id="ctrl-mapa">
+  <button class="ctrl-btn" onclick="alternarLegenda()" title="Cores e legenda" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="14" r="2.5"/>
+      <circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/>
+      <path d="M12 2a10 10 0 1 0 0 20 1.5 1.5 0 0 0 1.1-2.5 1.4 1.4 0 0 1 1-2.4h2.3A4.6 4.6 0 0 0 22 12 10 10 0 0 0 12 2z"/>
+    </svg>
+  </button>
+
+  <div class="ctrl-corpo" id="ctrl-corpo" hidden>
+    <b>Colorir por</b>
+    <div class="seg ctrl-cor">
+      <button class="at" data-chave="bairro" onclick="aplicarCores('bairro')">Bairro</button>
+      <button data-chave="quadra" onclick="aplicarCores('quadra')">Quadra</button>
+    </div>
+    <div class="leg" id="leg-zoom">Bairro e logradouro · aproxime para quadra e lote</div>
+    <div id="leg-cores"></div>
   </div>
-  <div class="leg" id="leg-zoom">Bairro e logradouro · aproxime para quadra e lote</div>
-  <div id="leg-cores"></div>
 </div>
 
 <div class="acoes">
@@ -517,46 +531,79 @@
       <span class="badge bd-ok"><span id="fi-dist"></span></span>
     </div>
 
-    <div class="sec-title">Identificação</div>
-    <div class="field">
-      <label>Bairro / loteamento</label>
-      <div class="valor" id="fi-bairro">—</div>
-    </div>
-    <div class="g2">
-      <div class="field"><label>Quadra</label><div class="valor" id="fi-quadra">—</div></div>
-      <div class="field"><label>Lote</label><div class="valor" id="fi-lote">—</div></div>
-    </div>
-    <div class="g2" style="margin-top:9px">
-      <div class="field"><label>Área GIS</label><div class="valor" id="fi-area">—</div></div>
-      <div class="field"><label>Coordenada</label><div class="valor" id="fi-coord" style="font-size:12px">—</div></div>
+    <div class="sub-abas">
+      <button class="at" data-fi="dados" onclick="subFicha('dados')">Dados</button>
+      <button data-fi="historico" onclick="subFicha('historico')">Histórico</button>
+      <button data-fi="cadastro" onclick="subFicha('cadastro')">Cadastro imobiliário</button>
+      <button data-fi="croquis" onclick="subFicha('croquis')">Croquis</button>
+      <button data-fi="anexos" onclick="subFicha('anexos')">Anexos</button>
     </div>
 
-    <div class="sec-title">Chave de integração</div>
-    <div class="field">
-      <label>Bairro | quadra | lote</label>
-      <div class="valor" id="fi-chave" style="font-size:12.5px">—</div>
-    </div>
-    <div class="field">
-      <label>Inscrição imobiliária</label>
-      <div class="valor" id="fi-inscricao" style="font-size:12.5px">—</div>
-    </div>
-
-    <div class="sec-title-row">
-      <div class="sec-title">Histórico do imóvel</div>
-      <span class="sec-title-acao" id="fi-hist-total"
-            style="font-size:11px;color:var(--tx3);font-weight:700"></span>
-    </div>
-    <div class="historico" id="fi-historico">
-      <div class="vazio-msg">Carregando histórico…</div>
-    </div>
-
-    <div class="sec-title">Cadastro imobiliário</div>
-    <div class="field" style="background:var(--gold-lt);border-color:#FFE9A8">
-      <label>Situação</label>
-      <div class="valor" style="font-size:12.5px;font-weight:600">
-        Proprietário e obra entram na integração com o cadastro da prefeitura
-        (Etapa 4 do plano).
+    {{-- DADOS --}}
+    <div class="fi-painel at" id="fi-dados">
+      {{-- Endereço como texto corrido, não em campos: aqui ninguém edita, só
+           lê. Campo com moldura sugere edição que não existe. --}}
+      <div class="fi-bloco">
+        <div class="fi-rot">Endereço</div>
+        <div class="fi-endereco" id="fi-endereco">—</div>
       </div>
+
+      <div class="fi-grade">
+        <div><div class="fi-rot">Inscrição imobiliária</div><div class="fi-val mono" id="fi-inscricao">—</div></div>
+        <div><div class="fi-rot">Situação</div><div class="fi-val" id="fi-situacao">—</div></div>
+        <div><div class="fi-rot">Coordenadas</div><div class="fi-val mono" id="fi-coord">—</div></div>
+        <div><div class="fi-rot">Última integração</div><div class="fi-val" id="fi-integracao">—</div></div>
+      </div>
+
+      {{-- Fachada e croqui lado a lado: são as duas imagens que respondem
+           "como é o imóvel" antes de ir a campo. --}}
+      <div class="fi-midias">
+        <figure class="fi-midia" id="fi-fachada">
+          <figcaption>Fachada mais recente</figcaption>
+          <div class="fi-vazio">Sem foto de fachada registrada</div>
+        </figure>
+        <figure class="fi-midia" id="fi-croqui-atual">
+          <figcaption>Croqui mais recente</figcaption>
+          <div class="fi-vazio">Sem croqui registrado</div>
+        </figure>
+      </div>
+    </div>
+
+    {{-- HISTÓRICO --}}
+    <div class="fi-painel" id="fi-historico-painel">
+      <div class="sec-title-row">
+        <div class="sec-title">Linha do tempo</div>
+        <span class="sec-title-acao" id="fi-hist-total"
+              style="font-size:11px;color:var(--tx3);font-weight:700"></span>
+      </div>
+      <div class="linha-tempo" id="fi-historico">
+        <div class="vazio-msg">Carregando histórico…</div>
+      </div>
+    </div>
+
+    {{-- CADASTRO IMOBILIÁRIO (integração — Etapa 4) --}}
+    <div class="fi-painel" id="fi-cadastro">
+      <div class="field" style="background:var(--gold-lt);border-color:#FFE9A8">
+        <label>Situação da integração</label>
+        <div class="valor" style="font-size:12.5px;font-weight:600">
+          Proprietário, área construída, uso e situação fiscal virão do cadastro
+          da prefeitura. A integração é a Etapa 4 do plano.
+        </div>
+      </div>
+      <div class="fi-grade" style="margin-top:12px">
+        <div><div class="fi-rot">Chave de integração</div><div class="fi-val mono" id="fi-chave">—</div></div>
+        <div><div class="fi-rot">Área GIS</div><div class="fi-val" id="fi-area">—</div></div>
+      </div>
+    </div>
+
+    {{-- CROQUIS --}}
+    <div class="fi-painel" id="fi-croquis">
+      <div id="fi-lista-croquis"><div class="vazio-msg">Nenhum croqui registrado neste imóvel.</div></div>
+    </div>
+
+    {{-- ANEXOS --}}
+    <div class="fi-painel" id="fi-anexos">
+      <div id="fi-lista-anexos"><div class="vazio-msg">Nenhum anexo neste imóvel.</div></div>
     </div>
 
     <div class="btn-row">
@@ -1092,13 +1139,40 @@
 
 @php
   // Camada de imagem aérea alternativa, ligada pelo .env (ver config/gis.php).
-  // Sem URL configurada o array sai vazio e o seletor mostra só Mapa e Satélite.
-  $sateliteAlt = array_filter([
-      'url'           => config('gis.satelite_alt_url'),
-      'rotulo'        => config('gis.satelite_alt_rotulo'),
-      'atribuicao'    => config('gis.satelite_alt_atribuicao'),
-      'maxNativeZoom' => config('gis.satelite_alt_maxzoom'),
-  ]);
+  // Sem configuração o array sai vazio e o seletor mostra só Mapa e Satélite.
+  //
+  // Duas formas: MAPBOX_TOKEN monta a URL do Mapbox sozinho; SATELITE_ALT_URL
+  // aceita qualquer serviço de tiles — é por onde a ortofoto municipal entra.
+  $sateliteAlt = [];
+
+  if ($token = config('gis.mapbox_token')) {
+      $estilo = config('gis.mapbox_estilo');
+      $sateliteAlt = [
+          // @2x = tile de 512 px, que rende o dobro de definição na mesma área.
+          'url'           => "https://api.mapbox.com/v4/{$estilo}/{z}/{x}/{y}@2x.jpg90?access_token={$token}",
+          'rotulo'        => 'Satélite HD (Mapbox)',
+          'atribuicao'    => '© Mapbox © Maxar',
+          'maxNativeZoom' => 20,
+          'tamanhoTile'   => 512,
+      ];
+  } elseif (config('gis.satelite_alt_url')) {
+      $sateliteAlt = array_filter([
+          'url'           => config('gis.satelite_alt_url'),
+          'rotulo'        => config('gis.satelite_alt_rotulo'),
+          'atribuicao'    => config('gis.satelite_alt_atribuicao'),
+          'maxNativeZoom' => config('gis.satelite_alt_maxzoom'),
+          // A partir de qual zoom a ortofoto entra por cima do satélite.
+          'minZoom'       => config('gis.satelite_alt_minzoom'),
+          // Retângulo coberto pela imagem: fora dele o tile nem é pedido, e
+          // o satélite continua valendo. É o que permite ortofoto parcial.
+          'bounds'        => config('gis.satelite_alt_bounds')
+              ? array_map(
+                  fn ($par) => array_map('floatval', explode(',', $par)),
+                  explode(';', config('gis.satelite_alt_bounds'))
+                )
+              : null,
+      ]);
+  }
 @endphp
 <script>
 window.USUARIO_ID = {{ auth()->id() }}

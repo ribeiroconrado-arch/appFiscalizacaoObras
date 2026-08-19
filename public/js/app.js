@@ -177,18 +177,28 @@ function abrirFicha(feicao) {
   const p = feicao.properties
   state.selecionado = feicao
 
-  document.getElementById('fi-titulo').textContent =
-    `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'}`
-  document.getElementById('fi-bairro').textContent = p.bairro || '—'
-  document.getElementById('fi-quadra').textContent = p.quadra ?? '—'
-  document.getElementById('fi-lote').textContent = p.numero_lote ?? '—'
+  // O título é a INSCRIÇÃO: é por ela que a prefeitura identifica o imóvel
+  // em lançamento, certidão e processo. Quadra e lote viram subtítulo.
+  const inscricao = p.inscricao || montarInscricao(p)
+  document.getElementById('fi-titulo').textContent = inscricao
+  document.getElementById('fi-inscricao').textContent = inscricao
+
+  document.getElementById('fi-endereco').innerHTML = montarEndereco(p)
+  document.getElementById('fi-situacao').innerHTML =
+    '<span class="badge bd-ok">Ativo</span>'
+  // Enquanto a Etapa 4 não roda, não há data de integração para mostrar —
+  // e inventar "hoje" faria o dado parecer conferido.
+  document.getElementById('fi-integracao').textContent =
+    p.integrado_em ? formatarDataBR(p.integrado_em) : 'sem integração'
+
   document.getElementById('fi-area').textContent = fmtNum(p.area_gis_m2) + ' m²'
   document.getElementById('fi-chave').textContent = p.chave || '—'
-  document.getElementById('fi-inscricao').textContent = p.inscricao_imobiliaria || '—'
 
   const c = centroide(feicao.geometry)
   document.getElementById('fi-coord').textContent =
     `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`
+
+  subFicha('dados')
 
   const linhaDist = document.getElementById('fi-linha-dist')
   if (state.pos) {
@@ -204,6 +214,49 @@ function abrirFicha(feicao) {
   if (p.id) carregarHistorico(p.id)
 
   openModal('m-ficha')
+}
+
+/** @param {string} nome aba da ficha do imóvel */
+function subFicha(nome) {
+  document.querySelectorAll('#m-ficha .sub-abas button')
+    .forEach(b => b.classList.toggle('at', b.dataset.fi === nome))
+  document.querySelectorAll('#m-ficha .fi-painel').forEach(p => {
+    const alvo = nome === 'historico' ? 'fi-historico-painel' : 'fi-' + nome
+    p.classList.toggle('at', p.id === alvo)
+  })
+}
+
+/**
+ * Inscrição imobiliária no formato 01.BBB.QQQ.LLLL.DDD
+ *
+ *   01   constante do município
+ *   BBB  código do bairro
+ *   QQQ  quadra
+ *   LLLL lote
+ *   DDD  sufixo de desmembramento (000 enquanto o lote for original)
+ *
+ * Montada aqui só enquanto o cadastro imobiliário não é integrado: a partir
+ * da Etapa 4 a inscrição vem da prefeitura, que é a fonte legítima. O código
+ * do bairro sai do cadastro; sem ele, fica 000 — melhor um campo visivelmente
+ * incompleto do que um número plausível e errado numa certidão.
+ *
+ * @param {Object} p propriedades do lote
+ */
+function montarInscricao(p) {
+  const pad = (v, n) => String(v ?? '').replace(/\D/g, '').padStart(n, '0').slice(-n)
+  return ['01', pad(p.codigo_bairro, 3), pad(p.quadra, 3),
+          pad(p.numero_lote, 4), pad(p.desmembramento, 3)].join('.')
+}
+
+/** Endereço em uma linha, do jeito que se lê num ofício. */
+function montarEndereco(p) {
+  const via = [p.logradouro, p.numero_predial].filter(Boolean).join(', ')
+  const local = `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'}`
+  return [
+    via || '<span style="color:var(--tx3)">logradouro não cadastrado</span>',
+    local,
+    esc(p.bairro || ''),
+  ].filter(Boolean).join('<br>')
 }
 
 /** Abre a ficha a partir do que a API devolveu (sem geometria). @param {Object} lote */

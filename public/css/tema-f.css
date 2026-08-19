@@ -463,20 +463,31 @@ body.login-bg{
 .notif .b{font-size:12px;color:var(--tx2);margin-top:2px}
 .notif .h{font-size:10.5px;color:var(--tx3);margin-top:4px}
 
-/* Controle de cores e legenda sobre o mapa */
-.ctrl-mapa{position:absolute;left:12px;top:56px;z-index:600;background:rgba(255,255,255,.95);
-  border:1.5px solid var(--bord);border-radius:var(--r);padding:9px 11px;box-shadow:var(--sh);
-  max-width:230px}
-.ctrl-mapa b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;
+/* Controle de cores: ícone recolhido, empilhado pelo próprio Leaflet no
+   canto superior direito (ver ancorarControleCores). Sem position own: quem
+   posiciona é o container de controles. */
+.ctrl-mapa{display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+  clear:both}
+.ctrl-btn{width:34px;height:34px;border-radius:var(--r);cursor:pointer;flex-shrink:0;
+  background:#fff;border:2px solid rgba(0,0,0,.2);box-shadow:0 1px 5px rgba(0,0,0,.4);
+  display:flex;align-items:center;justify-content:center;padding:0}
+.ctrl-btn svg{width:19px;height:19px;color:var(--chumbo)}
+.ctrl-btn:hover{background:var(--blt)}
+.ctrl-btn.aberto{background:var(--gl);border-color:var(--gm)}
+.ctrl-btn.aberto svg{color:var(--gd)}
+.ctrl-corpo{background:rgba(255,255,255,.96);border:1.5px solid var(--bord);
+  border-radius:var(--r);padding:9px 11px;box-shadow:var(--sh);max-width:220px}
+.ctrl-corpo[hidden]{display:none}
+.ctrl-corpo b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;
   margin-bottom:6px;color:var(--chumbo)}
-.ctrl-mapa .seg{display:flex;gap:4px;margin-bottom:8px}
-.ctrl-mapa .seg button{flex:1;border:1.5px solid var(--f-bord);background:#fff;border-radius:999px;
+.ctrl-corpo .seg{display:flex;gap:4px;margin-bottom:8px}
+.ctrl-corpo .seg button{flex:1;border:1.5px solid var(--f-bord);background:#fff;border-radius:999px;
   font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:var(--tx2);
   padding:4px 8px;cursor:pointer}
-.ctrl-mapa .seg button.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
-.ctrl-mapa .leg{font-size:10.5px;color:var(--tx2);line-height:1.5}
-.ctrl-mapa .cor{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px}
-.ctrl-mapa .cor i{width:12px;height:12px;border-radius:3px;display:block;flex-shrink:0}
+.ctrl-corpo .seg button.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+.ctrl-corpo .leg{font-size:10.5px;color:var(--tx2);line-height:1.5}
+.ctrl-corpo .cor{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px}
+.ctrl-corpo .cor i{width:12px;height:12px;border-radius:3px;display:block;flex-shrink:0}
 
 /* Rótulos do mapa, por faixa de zoom */
 .leaflet-tooltip.rot{background:none;border:none;box-shadow:none;padding:0;

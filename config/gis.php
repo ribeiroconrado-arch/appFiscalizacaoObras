@@ -65,9 +65,41 @@ return [
     |   SATELITE_ALT_ROTULO="Ortofoto 2025"
     |   SATELITE_ALT_MAXZOOM=20
     */
+    /*
+    | Mapbox Satellite — acervo Maxar, resolução tipicamente entre 15 e 30 cm/px
+    | em cidades deste porte, contra ~1,15 m/px do satélite gratuito da Esri.
+    |
+    | O token é do tipo público (pk.…) e vai para o HTML: é assim que o Mapbox
+    | funciona no navegador. Por isso, RESTRINJA o token por URL no painel da
+    | conta (Account > Tokens > URL restrictions), senão qualquer um que veja o
+    | código-fonte pode consumir a cota da prefeitura.
+    |
+    | Plano gratuito: verifique a franquia mensal vigente no painel do Mapbox
+    | antes de liberar para todos os fiscais.
+    */
+    'mapbox_token'  => env('MAPBOX_TOKEN'),
+    'mapbox_estilo' => env('MAPBOX_ESTILO', 'mapbox.satellite'),
+
     'satelite_alt_url'        => env('SATELITE_ALT_URL'),
     'satelite_alt_rotulo'     => env('SATELITE_ALT_ROTULO', 'Imagem HD'),
     'satelite_alt_atribuicao' => env('SATELITE_ALT_ATRIBUICAO', ''),
     'satelite_alt_maxzoom'    => env('SATELITE_ALT_MAXZOOM', 19),
+
+    /*
+    | Modo híbrido: a ortofoto entra POR CIMA do satélite, não no lugar dele.
+    |
+    | _MINZOOM  a partir de que zoom ela vale. Abaixo disso o satélite dá mais
+    |           contexto, e baixar a ortofoto seria desperdício. 17 é onde o
+    |           acervo da Esri se esgota nesta região.
+    | _BOUNDS   retângulo coberto pela imagem, no formato sul,oeste;norte,leste
+    |           Fora dele o Leaflet nem pede o tile, então uma ortofoto que
+    |           cubra só a mancha urbana convive com o satélite no resto do
+    |           município: sem buraco no mapa e sem requisição inútil.
+    |
+    | Exemplo, mancha urbana de Primavera do Leste:
+    |   SATELITE_ALT_BOUNDS=-15.60,-54.40;-15.50,-54.22
+    */
+    'satelite_alt_minzoom'    => env('SATELITE_ALT_MINZOOM', 17),
+    'satelite_alt_bounds'     => env('SATELITE_ALT_BOUNDS'),
 
 ];
