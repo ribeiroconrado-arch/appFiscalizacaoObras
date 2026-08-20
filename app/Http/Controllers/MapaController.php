@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 
 /**
  * API do mapa e da identificação por GPS.
@@ -15,6 +17,60 @@ use Illuminate\Http\Request;
 class MapaController extends Controller
 {
     public function __construct(private LoteRepository $lotes) {}
+
+    /**
+     * GET /api/mapa/google-sessao
+     *
+     * Token de sessão da Map Tiles API do Google.
+     *
+     * O Google não serve tile por URL fixa como Esri e Mapbox: é preciso
+     * abrir uma sessão e repetir o token em cada requisição. O token dura
+     * cerca de duas semanas, então é criado no SERVIDOR e guardado em cache —
+     * se cada aparelho abrisse a própria sessão, seriam dezenas de chamadas
+     * por dia à API só para começar a desenhar o mapa.
+     *
+     * A chave ainda vai para o navegador, porque a URL do tile a exige; o que
+     * a protege é a restrição por referrer no console do Google.
+     */
+    public function googleSessao(): JsonResponse
+    {
+        $chave = config('gis.google_key');
+        if (! $chave) {
+            return response()->json(['message' => 'Google Maps não configurado.'], 404);
+        }
+
+        $dados = Cache::remember('mapa:google-sessao', now()->addDays(10), function () use ($chave) {
+            $r = Http::timeout(15)
+                ->post('https://tile.googleapis.com/v1/createSession?key=' . $chave, [
+                    'mapType'  => 'satellite',
+                    'language' => 'pt-BR',
+                    'region'   => 'BR',
+                ]);
+
+            // Sem sessão não há tile. Devolver null mantém o mapa funcionando
+            // com o satélite da Esri em vez de derrubar a tela.
+            if (! $r->successful()) {
+                return ['erro' => $r->json('error.message') ?? 'falha ao abrir sessão'];
+            }
+
+            return [
+                'session' => $r->json('session'),
+                'expiry'  => $r->json('expiry'),
+            ];
+        });
+
+        if (isset($dados['erro'])) {
+            // Não fica em cache um erro que o administrador pode já ter
+            // corrigido no console do Google.
+            Cache::forget('mapa:google-sessao');
+            return response()->json(['message' => $dados['erro']], 502);
+        }
+
+        return response()->json([
+            'session' => $dados['session'],
+            'key'     => $chave,
+        ]);
+    }
 
     /**
      * GET /api/mapa/lotes?bbox=oeste,sul,leste,norte

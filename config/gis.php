@@ -77,6 +77,22 @@ return [
     | Plano gratuito: verifique a franquia mensal vigente no painel do Mapbox
     | antes de liberar para todos os fiscais.
     */
+    /*
+    | Google Map Tiles API — imagem aérea de alta resolução.
+    |
+    | Diferente de Mapbox e Esri, o Google não aceita URL fixa de tile: exige
+    | criar uma SESSÃO antes e usar o token dela em cada requisição. Daí o
+    | endpoint /api/mapa/google-sessao, que cria o token e o guarda em cache
+    | até expirar.
+    |
+    | A chave vai para o navegador — é assim que a API funciona no cliente.
+    | RESTRINJA por referrer HTTP no console do Google: sem isso, quem ler o
+    | código-fonte gera faturamento no projeto da prefeitura.
+    |
+    | Exige a Map Tiles API habilitada no projeto do Google Cloud.
+    */
+    'google_key'    => env('GOOGLE_MAPS_API_KEY'),
+
     'mapbox_token'  => env('MAPBOX_TOKEN'),
     'mapbox_estilo' => env('MAPBOX_ESTILO', 'mapbox.satellite'),
 

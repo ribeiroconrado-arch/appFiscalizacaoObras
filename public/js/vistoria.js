@@ -27,38 +27,58 @@ async function carregarHistorico(loteId) {
     const r = await fetch(`/api/lotes/${loteId}/historico`, { headers: { 'Accept': 'application/json' } })
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
-    renderHistorico(d.vistorias)
+    renderHistorico(d.eventos ?? [])
   } catch (e) {
     console.error(e)
     alvo.innerHTML = '<div class="vazio-msg">Não foi possível carregar o histórico.</div>'
   }
 }
 
-/** @param {Array<Object>} vistorias */
-function renderHistorico(vistorias) {
+/** Ícone de cada tipo de evento da linha do tempo. */
+const ICO_EVENTO = {
+  vistoria: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/>',
+  documento: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
+  protocolo: '<path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/><rect x="9" y="2" width="6" height="4" rx="1"/>',
+}
+
+/**
+ * Linha do tempo do imóvel, do mais recente para o mais antigo.
+ *
+ * Um evento por marco: vistoria, documento lavrado e requerimento. O traço
+ * vertical ligando os marcos é o que transforma uma lista em sequência —
+ * é a sequência que conta a história do processo.
+ *
+ * @param {Array<Object>} eventos
+ */
+function renderHistorico(eventos) {
   const alvo = document.getElementById('fi-historico')
   document.getElementById('fi-hist-total').textContent =
-    vistorias.length ? `${vistorias.length} vistoria${vistorias.length > 1 ? 's' : ''}` : ''
+    eventos.length ? `${eventos.length} registro${eventos.length > 1 ? 's' : ''}` : ''
 
-  if (!vistorias.length) {
-    alvo.innerHTML = '<div class="vazio-msg">Nenhuma vistoria registrada neste imóvel.</div>'
+  if (!eventos.length) {
+    alvo.innerHTML = '<div class="vazio-msg">Nada registrado neste imóvel ainda.</div>'
     return
   }
 
-  alvo.innerHTML = vistorias.map(v => {
-    const irr = v.irregularidades.length
-      ? `<div class="hist-irr">${v.irregularidades.map(i => '• ' + esc(i.descricao)).join('<br>')}</div>`
-      : ''
-    const obs = v.observacoes ? `<div class="hist-obs">${esc(v.observacoes)}</div>` : ''
-    const fotos = v.evidencias ? ` · ${v.evidencias} evidência${v.evidencias > 1 ? 's' : ''}` : ''
+  alvo.innerHTML = eventos.map(e => {
+    const itens = (e.itens || []).length
+      ? `<div class="lt-itens">${e.itens.map(i => '• ' + esc(i)).join('<br>')}</div>` : ''
+    const obs = e.obs ? `<div class="lt-obs">${esc(e.obs)}</div>` : ''
+    const det = e.detalhe ? `<div class="lt-det">${esc(e.detalhe)}</div>` : ''
     return `
-      <div class="hist-item ${esc(v.situacao)}">
-        <div class="hist-topo">
-          <span class="hist-data">${esc(v.data_hora)}</span>
-          <span class="badge ${esc(v.situacao_badge)}">${esc(v.situacao_rotulo)}</span>
+      <div class="lt-item lt-${esc(e.tipo)}">
+        <div class="lt-marca">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">${ICO_EVENTO[e.tipo] || ''}</svg>
         </div>
-        <div class="hist-meta">${esc(v.fiscal ?? '—')}${fotos}</div>
-        ${irr}${obs}
+        <div class="lt-corpo">
+          <div class="lt-topo">
+            <span class="lt-data">${esc(e.quando ?? '—')}</span>
+            ${e.badge ? `<span class="badge ${esc(e.badge.classe)}">${esc(e.badge.texto)}</span>` : ''}
+          </div>
+          <div class="lt-tit">${esc(e.titulo)}</div>
+          ${det}${itens}${obs}
+        </div>
       </div>`
   }).join('')
 }

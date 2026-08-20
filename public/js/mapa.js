@@ -87,6 +87,7 @@ function iniciarMapa() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
     { subdomains: 'abcd', maxZoom: 20, pane: 'rotulos' }).addTo(mapaState.obj)
 
+  montarGoogle(satelite)
   ancorarControleCores()
 
   mapaState.obj.on('zoomend', () => { rotulosPorZoom(); ajustarNitidezSatelite() })
@@ -117,6 +118,46 @@ function ajustarNitidezSatelite() {
   })
 
   document.getElementById('map')?.classList.toggle('sat-ampliado', ampliando)
+}
+
+/**
+ * Imagem aérea do Google (Map Tiles API), quando configurada.
+ *
+ * Entra como camada BASE ao lado do satélite da Esri, e não como
+ * sobreposição: cobre o município inteiro, então não há área sem imagem
+ * para o Esri complementar. O acervo do Google nesta região chega ao zoom
+ * 20 — contra 17 da Esri —, que é o ganho de nitidez procurado.
+ *
+ * A sessão vem do servidor (ver MapaController::googleSessao). Se a API não
+ * estiver habilitada ou a chave for recusada, a camada simplesmente não
+ * aparece e o mapa segue com o que já tinha.
+ *
+ * @param {L.TileLayer} satelite camada da Esri, usada como referência de ordem
+ */
+async function montarGoogle(satelite) {
+  try {
+    const r = await fetch('/api/mapa/google-sessao', { headers: { Accept: 'application/json' } })
+    if (!r.ok) {
+      if (r.status !== 404) {
+        console.warn('Google Tiles indisponível:', (await r.json()).message)
+      }
+      return
+    }
+    const { session, key } = await r.json()
+
+    const google = L.tileLayer(
+      `https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=${session}&key=${key}`,
+      {
+        attribution: '© Google', maxZoom: 20, maxNativeZoom: 20,
+        className: 'tile-satelite',
+      }
+    )
+
+    mapaState.controleCamadas.addBaseLayer(google, 'Satélite HD (Google)')
+    mapaState.googleTiles = google
+  } catch (e) {
+    console.warn('Não foi possível preparar a camada do Google:', e)
+  }
 }
 
 /**

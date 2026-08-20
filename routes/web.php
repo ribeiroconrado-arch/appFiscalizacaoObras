@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/mapa/lotes', [MapaController::class, 'lotes']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
+        Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);
         Route::post('/localizacao/identificar', [MapaController::class, 'identificar']);
 
         // Fiscalização
