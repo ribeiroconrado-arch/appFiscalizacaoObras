@@ -278,7 +278,7 @@ function usarMinhaLocalizacao() {
 
   if (!navigator.geolocation) { toast('GPS não disponível neste aparelho', 'err'); return }
   btn.disabled = true
-  document.getElementById('gps-txt').textContent = 'Localizando...'
+  rotuloGps('Localizando…')
 
   navigator.geolocation.getCurrentPosition(
     async pos => {
@@ -288,7 +288,7 @@ function usarMinhaLocalizacao() {
       marcarMinhaPosicao(lat, lon, prec)
       btn.classList.add('gps-ativo')
       btn.dataset.gpsCapturado = '1'
-      document.getElementById('gps-txt').textContent = 'Remover GPS'
+      rotuloGps('Remover GPS')
       mapaState.obj.setView([lat, lon], 18)
       await identificarNoServidor(lat, lon, prec)
     },
@@ -296,7 +296,7 @@ function usarMinhaLocalizacao() {
       btn.disabled = false
       const m = { 1: 'Permissão de localização negada.', 2: 'Sinal de GPS fraco.', 3: 'Tempo esgotado.' }
       toast(m[err.code] || 'Erro ao obter GPS', 'err')
-      document.getElementById('gps-txt').textContent = 'Usar minha localização'
+      rotuloGps('Usar minha localização')
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   )
@@ -315,7 +315,7 @@ function removerGPS() {
       const btn = document.getElementById('btn-gps')
       btn.classList.remove('gps-ativo')
       btn.dataset.gpsCapturado = ''
-      document.getElementById('gps-txt').textContent = 'Usar minha localização'
+      rotuloGps('Usar minha localização')
       toast('Localização removida')
     },
   })
@@ -423,12 +423,18 @@ function irPara(destino) {
   document.querySelectorAll('.tela').forEach(t => t.classList.remove('at'))
   document.getElementById('t-' + destino).classList.add('at')
 
-  const ordem = ['painel', 'mapa', 'documentos', 'protocolos']
+  // A ordem tem de acompanhar a dos botões no rodapé: é o índice que decide
+  // qual aba fica marcada.
+  const ordem = ['painel', 'busca', 'mapa', 'documentos', 'protocolos']
   const i = ordem.indexOf(destino)
   document.querySelectorAll('.aba').forEach(a => a.classList.remove('at'))
   document.querySelectorAll('.aba')[i]?.classList.add('at')
 
-  if (destino === 'mapa') {
+  marcarModuloNoSubcabecalho(destino)
+
+  if (destino === 'busca') {
+    prepararBusca()
+  } else if (destino === 'mapa') {
     // O Leaflet mede o contêiner na criação; se o mapa estava escondido,
     // volta com dimensão zerada. Daí o invalidateSize ao reentrar.
     setTimeout(() => {
@@ -443,4 +449,40 @@ function irPara(destino) {
   } else if (destino === 'painel') {
     carregarPainel()
   }
+}
+
+/**
+ * Texto do botão de GPS.
+ *
+ * O botão virou ícone quadrado na coluna de controles — não há mais rótulo
+ * visível para trocar. O estado passa a viver no `title`, que é o que o
+ * usuário lê ao pousar o ponteiro e o que o leitor de tela anuncia. A cor do
+ * botão (.gps-ativo) continua sendo o aviso imediato de que há posição
+ * capturada.
+ *
+ * @param {string} texto
+ */
+function rotuloGps(texto) {
+  const btn = document.getElementById('btn-gps')
+  if (btn) { btn.title = texto; btn.setAttribute('aria-label', texto) }
+}
+
+// ── SUB-CABEÇALHO ────────────────────────────────────────────
+
+/**
+ * Nome e ícone de cada módulo, no sub-cabeçalho.
+ *
+ * O rótulo é copiado do botão do rodapé em tempo de execução, e não escrito de
+ * novo aqui: rótulo repetido em dois lugares vira rótulo divergente na
+ * primeira vez que alguém renomear um só deles.
+ */
+function marcarModuloNoSubcabecalho(destino) {
+  const ordem = ['painel', 'busca', 'mapa', 'documentos', 'protocolos']
+  const botao = document.querySelectorAll('.aba')[ordem.indexOf(destino)]
+  if (!botao) return
+
+  const nome = document.getElementById('subcab-nome')
+  const ico = document.getElementById('subcab-ico')
+  if (nome) nome.textContent = botao.textContent.trim()
+  if (ico) ico.innerHTML = botao.querySelector('svg')?.outerHTML || ''
 }

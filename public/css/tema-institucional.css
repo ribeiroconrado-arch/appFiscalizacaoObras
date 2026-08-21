@@ -1,0 +1,123 @@
+/* ══════════════════════════════════════════════════════════════
+   TEMA INSTITUCIONAL — verde do município
+   Carregado DEPOIS de tema-f.css e ativo só quando o <html> traz
+   data-tema="institucional". Sem esse atributo, este arquivo não pinta nada
+   e o Tema F continua exatamente como estava.
+
+   Por que dá para manter os dois temas sem custo: todo componente já lê
+   token (`var(--g)`, `var(--r)`, `var(--sh)`…). Um tema inteiro é, por isso,
+   um bloco de variáveis — não uma segunda folha de componentes. O peso disto
+   no navegador é uma requisição a mais de poucos KB, e a troca é a mudança de
+   um atributo, sem recarregar a página.
+
+   O verde não foi escolhido aqui: é o do próprio app.css original, onde está
+   comentado como "VERDE — identidade visual da prefeitura", e é o mesmo verde
+   do ícone oficial do aplicativo (#05933D, amostrado da arte).
+
+   O que NÃO muda de propósito: as tags de status ("Modelo D"), por pedido
+   explícito — fundo em degradê do tom do status e texto sempre cinza-chumbo.
+   Elas continuam idênticas nos dois temas.
+   ══════════════════════════════════════════════════════════════ */
+
+html[data-tema="institucional"]{
+  /* ── PALETA ──
+     --g   verde vivo, para realce e estado ativo
+     --gd  verde institucional, ações primárias
+     --gxd verde profundo, barra superior e superfícies pequenas */
+  --g:#009B3A; --gd:#006B28; --gxd:#00451A; --gl:#E8F3EB; --gm:#A5D6A7;
+
+  /* Âmbar continua sendo âmbar: num sistema de fiscalização o tom quente
+     significa prazo correndo. Tirado da interface, ele volta a ser sinal. */
+  --gold:#B45309; --gold-lt:#FDF3E3; --gold-dk:#8A4B00;
+
+  /* Neutros com leve viés verde, para não brigar com a marca. Cinza puro
+     ao lado de verde institucional lê como cinza sujo. */
+  --bg:#F6F8F6; --sur:#FFFFFF; --bord:#D8E3DA; --blt:#EEF3EF;
+  --tx:#16211C; --tx2:#42544A; --tx3:#71857A;
+
+  /* --chumbo fica de fora da repintura DE PROPÓSITO. É o único token que as
+     tags de status leem (o resto da tag é cor própria, fixa), e a instrução
+     foi manter as tags como estão. Mudá-lo aqui alteraria a cor do texto de
+     todas elas — exatamente o que não se quer. */
+
+  --red:#B3261E; --rlt:#FBEAE8;
+  --warn:#B45309; --wlt:#FDF3E3;
+  --blue:#1D4ED8; --blt2:#EAF0FE;
+
+  /* Cinzas de formulário: mesma regra do Tema F — fora da faixa da marca,
+     para a borda de foco não competir com a cor que carrega significado. */
+  --f-bord:#C6CFC8; --f-bord-foco:#5A6B60; --f-anel:rgba(90,107,96,.16);
+  --f-fundo:#FFFFFF; --f-fundo-ro:#F1F4F2; --f-rot:#6B7A70;
+
+  /* ── FORMA ──
+     Raios curtos e sombra de 1px: a gramática de sistema administrativo, no
+     lugar da de aplicativo de consumo. O toque generoso no celular vem do
+     tamanho do alvo, não do arredondamento. */
+  --r:6px; --rl:8px;
+  --sh:0 1px 2px rgba(22,33,28,.07), 0 1px 1px rgba(22,33,28,.04);
+  --shl:0 4px 14px rgba(22,33,28,.10);
+
+  /* ── BARRA SUPERIOR ──
+     Degradê contido, do verde profundo ao institucional: numa faixa que
+     ocupa a largura inteira da tela, contraste alto entre as pontas vira
+     ruído. É o mesmo raciocínio do Tema F, com a paleta certa. */
+  --grad-topo: linear-gradient(160deg, var(--gxd) 0%, var(--gd) 100%);
+  --grad-fundo: linear-gradient(150deg, var(--gxd) 0%, var(--gd) 60%, #0A7A32 100%);
+}
+
+/* ── BOTÃO PRIMÁRIO ──
+   A sombra colorida do app.css está fixa em rgba(0,155,58,.3) — que por
+   acaso já é verde. Redefinida aqui só para acompanhar o raio menor. */
+html[data-tema="institucional"] .btn.primary{
+  box-shadow:0 1px 2px rgba(0,69,26,.22);
+}
+
+/* ── RODAPÉ ──
+   No celular a pílula flutuante permanece: é acerto real de campo, com o
+   polegar. No desktop ela vira barra fixa de ponta a ponta — a pílula
+   centralizada numa estação de trabalho lê como app de celular esticado.
+   O corte em 900px acompanha o ponto em que o app deixa de ser operado com
+   o polegar e passa a ser operado com mouse. */
+@media (min-width: 900px){
+  html[data-tema="institucional"] .abas{
+    left:0;right:0;transform:none;width:100%;
+    bottom:0;border-radius:0;
+    border-left:0;border-right:0;border-bottom:0;
+    border-top:1px solid var(--bord);
+    box-shadow:0 -1px 3px rgba(22,33,28,.06);
+    padding:0;gap:0;
+    justify-content:center;
+  }
+  html[data-tema="institucional"] .aba{
+    flex:0 1 132px;border-radius:0;padding:9px 6px 8px;
+  }
+  /* Aba ativa marcada por traço no topo, não por pílula: numa barra reta a
+     pílula não tem onde se apoiar e fica boiando. */
+  html[data-tema="institucional"] .aba.at{
+    background:var(--gl);color:var(--gd);
+    box-shadow:inset 0 2px 0 var(--gd);
+  }
+}
+
+/* ── SELETOR DE TEMA (Meu perfil) ── */
+.tema-opcoes{display:flex;gap:10px;flex-wrap:wrap}
+.tema-op{flex:1 1 150px;min-width:0;display:flex;align-items:center;gap:9px;
+  padding:10px 12px;border:1.5px solid var(--bord);border-radius:var(--r);
+  background:var(--sur);cursor:pointer;text-align:left;font:inherit;color:var(--tx)}
+.tema-op:hover{border-color:var(--gm)}
+.tema-op.sel{border-color:var(--gd);background:var(--gl)}
+.tema-op .amostra{width:30px;height:30px;border-radius:var(--r);flex-shrink:0;
+  border:1px solid rgba(0,0,0,.08)}
+.tema-op .nome{display:block;font-size:13px;font-weight:600;line-height:1.25}
+.tema-op .obs{display:block;font-size:11px;color:var(--tx3);line-height:1.25}
+
+/* ── ABAS DO PERFIL ──
+   Mesmo componente das abas da ficha do imóvel (.sub-abas); só os painéis são
+   próprios. Sem tema no seletor: vale nos dois. */
+.pf-painel{display:none}
+.pf-painel.at{display:block}
+
+/* Caixa de assinatura alta: a altura real é calculada no JavaScript (acompanha
+   a tela), aqui fica só o mínimo para o layout não colapsar antes disso. */
+.assina-caixa.alta{min-height:190px}
+.assina-caixa.alta canvas{display:block}

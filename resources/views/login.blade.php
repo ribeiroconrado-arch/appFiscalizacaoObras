@@ -8,26 +8,33 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-{{-- PNG e não o SVG oficial: o SVG é um trace de 3.500+ caminhos (430 KB) —
-     ótimo para impressão, pesado demais para favicon. Os PNGs vêm do mesmo
-     arquivo, com o fundo fora do ícone removido. --}}
-<link rel="icon" type="image/png" sizes="32x32" href="@assetv('img/favicon-32.png')">
-<link rel="icon" type="image/png" sizes="16x16" href="@assetv('img/favicon-16.png')">
-<link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')">
+{{-- Todos os PNGs saem da mesma arte, com o fundo de fora do squircle tornado
+     transparente pela inundação a partir dos cantos (ver o script que os gera).
+     O icone.svg ao lado é só a versão de 512 embrulhada — serve como peça
+     única citável, não como fonte para a tela. --}}
+<link rel="icon" type="image/png" sizes="32x32" href="@assetv('img/favicon-32.png')"
+      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')">
+<link rel="icon" type="image/png" sizes="16x16" href="@assetv('img/favicon-16.png')"
+      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')">
+<link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')"
+      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')">
 <link rel="stylesheet" href="@assetv('css/app.css')">
 {{-- Mesmo tema da tela do mapa: trocar de variante é trocar esta linha. --}}
 <link rel="stylesheet" href="@assetv('css/tema-f.css')">
+<link rel="stylesheet" href="@assetv('css/tema-institucional.css')">
+{{-- A escolha vive no navegador, então já vale na porta de entrada: quem
+     escolheu o tema institucional não entra por uma tela laranja. --}}
+<script src="@assetv('js/tema.js')"></script>
 </head>
 <body class="login-bg">
 
-{{-- Cartão sobre gradiente âmbar, no tema F. --}}
+{{-- Cartão sobre o gradiente da marca — âmbar no Tema F, verde no institucional. --}}
 <div class="login-card">
   <div class="login-logo">
     <div class="login-seal">
-      {{-- logo-128.png: recorte do ícone oficial (public/img/icone.svg) sem
-           o fundo branco fora do squircle — só o quadrado laranja arredondado
-           e o miolo branco ficam. 128px cobre 104px em telas retina. --}}
-      <img src="@assetv('img/logo-128.png')" alt="" style="width:104px;height:104px;display:block">
+      {{-- 128px cobre os 104px em telas retina. Troca junto com o tema. --}}
+      <img src="@assetv('img/logo-128.png')" alt="" style="width:104px;height:104px;display:block"
+           data-src-institucional="@assetv('img/logo-128.png')" data-src-f="@assetv('img/logo-128-ambar.png')">
     </div>
     <h1>Fiscalização de Obras</h1>
     <p>Prefeitura de Primavera do Leste</p>

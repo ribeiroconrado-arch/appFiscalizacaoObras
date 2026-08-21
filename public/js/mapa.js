@@ -47,11 +47,14 @@ function iniciarMapa() {
   if (mapaState.obj) return
   if (typeof L === 'undefined') { console.warn('Leaflet não carregado'); return }
 
-  // Base SEM rótulos: os nomes de rua entram numa camada própria, desenhada
-  // ACIMA dos polígonos. Com a base rotulada, os lotes cobrem os logradouros.
-  const claro = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-    attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 20,
-  })
+  // BASE ÚNICA: imagem de satélite.
+  //
+  // O mapa vetorial saiu, e com ele o seletor de camadas. É decisão de uso,
+  // não de estilo: os polígonos de quadra e lote foram digitalizados sobre
+  // foto aérea, então é sobre foto que eles coincidem com o que está no chão.
+  // Sobre base vetorial o desenho e a rua não batem, e o fiscal passa a
+  // duvidar do dado certo.
+  //
   // maxNativeZoom 17: nesta região o acervo da Esri termina no zoom 17 —
   // z18, z19 e z20 devolvem o MESMO arquivo de 2.521 bytes, que é a placa
   // cinza "Map data not yet available". Verificado no centro, no Jardim
@@ -62,23 +65,20 @@ function iniciarMapa() {
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     { attribution: '© Esri', maxZoom: 20, maxNativeZoom: 17, className: 'tile-satelite' })
 
-  const bases = { 'Mapa': claro, 'Satélite': satelite }
-
   mapaState.obj = L.map('map', {
-    zoomControl: false, layers: [claro],
+    zoomControl: false, layers: [satelite],
     // Prende a navegação ao município: viscosity 1 faz a borda não ceder,
     // então arrastar para fora simplesmente não sai do lugar.
     maxBounds: LIMITE_MUNICIPIO, maxBoundsViscosity: 1, minZoom: 11,
   })
   L.control.zoom({ position: 'topright' }).addTo(mapaState.obj)
 
-  // Ortofoto por cima do satélite, em vez de no lugar dele — ver
-  // montarOrtofoto(). O seletor recebe a camada depois, já como sobreposição.
-  mapaState.controleCamadas = L.control.layers(bases, null, { position: 'topright' })
-    .addTo(mapaState.obj)
   montarOrtofoto(satelite)
 
-  mapaState.camadaLotes = L.geoJSON(null, { style: estiloLote }).addTo(mapaState.obj)
+  // estiloColorido, e não estiloLote: o lote nasce já na coloração corrente
+  // (uniforme, por bairro ou destacado por filtro). Com estiloLote ele nascia
+  // verde e só era repintado na chamada seguinte de aplicarCores.
+  mapaState.camadaLotes = L.geoJSON(null, { style: f => estiloColorido(f) }).addTo(mapaState.obj)
 
   // Painel dedicado aos rótulos de logradouro, acima dos lotes.
   mapaState.obj.createPane('rotulos')
@@ -110,11 +110,21 @@ function ajustarNitidezSatelite() {
   const m = mapaState.obj
   if (!m) return
 
+  const z = m.getZoom()
+
+  // Com o Google no ar acima do zoom 18, a imagem no topo é nativa e não
+  // precisa de realce nenhum — aplicá-lo ali só degradaria uma foto boa.
+  const g = mapaState.googleTiles
+  if (g && m.hasLayer(g) && z >= (g.options.minZoom ?? 18)) {
+    document.getElementById('map')?.classList.remove('sat-ampliado')
+    return
+  }
+
   let ampliando = false
   m.eachLayer(l => {
     if (!l.options?.className?.includes('tile-satelite')) return
     const nativo = l.options.maxNativeZoom ?? l.options.maxZoom ?? 20
-    if (m.getZoom() > nativo) ampliando = true
+    if (z > nativo) ampliando = true
   })
 
   document.getElementById('map')?.classList.toggle('sat-ampliado', ampliando)
@@ -149,11 +159,25 @@ async function montarGoogle(satelite) {
       `https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=${session}&key=${key}`,
       {
         attribution: '© Google', maxZoom: 20, maxNativeZoom: 20,
+        // ── O PONTO DE ECONOMIA ──
+        // minZoom 18: abaixo disso o Leaflet nem pede o tile, e a Esri (que é
+        // gratuita) cobre sozinha. Como o acervo da Esri aqui para no 17, do
+        // 18 em diante ela só ampliaria o mesmo pixel — que é exatamente onde
+        // o Google passa a acrescentar detalhe de verdade.
+        //
+        // Ou seja: paga-se pelo tile só no zoom em que ele melhora a imagem.
+        // Navegar, procurar bairro e enquadrar quadra acontece abaixo de 18 e
+        // não gera uma requisição sequer.
+        minZoom: 18,
         className: 'tile-satelite',
       }
     )
 
-    mapaState.controleCamadas.addBaseLayer(google, 'Satélite HD (Google)')
+    // Sobreposição sempre ligada, e não base alternativa: sem seletor, quem
+    // decide qual imagem aparece é o zoom. Acima do 17 o Google cobre a Esri;
+    // abaixo, ele simplesmente não existe. Se a chave for recusada ou a API
+    // falhar, a Esri continua embaixo e o mapa não fica em branco.
+    google.addTo(mapaState.obj)
     mapaState.googleTiles = google
   } catch (e) {
     console.warn('Não foi possível preparar a camada do Google:', e)
@@ -185,16 +209,279 @@ function ancorarControleCores() {
   })
 
   new Cores({ position: 'topright' }).addTo(mapaState.obj)
+  igualarAoControleDeCamadas()
 }
 
-/** Abre e fecha a legenda de cores. */
-function alternarLegenda() {
-  const corpo = document.getElementById('ctrl-corpo')
-  const botao = document.querySelector('.ctrl-btn')
-  const abrindo = corpo.hasAttribute('hidden')
-  corpo.toggleAttribute('hidden', !abrindo)
-  botao.classList.toggle('aberto', abrindo)
-  botao.setAttribute('aria-expanded', String(abrindo))
+/**
+ * Copia as medidas do seletor de camadas do Leaflet para os nossos botões.
+ *
+ * Fixar 36px ou 40px no CSS não resolve: o tamanho do controle de camadas
+ * muda com o modo de toque (36 no ponteiro, 44 no toque) e com a versão da
+ * biblioteca, e qualquer número escrito à mão fica errado num dos casos — foi
+ * assim que os botões saíram ~10% menores que o vizinho. Medindo o vizinho de
+ * verdade, eles casam sempre.
+ */
+function igualarAoControleDeCamadas() {
+  const vizinho = document.querySelector('.leaflet-control-layers')
+  if (!vizinho) return
+
+  const r = vizinho.getBoundingClientRect()
+  if (!r.width || !r.height) return
+
+  document.getElementById('ctrl-mapa')?.style.setProperty('--ctrl-lado-l', r.width + 'px')
+  document.getElementById('ctrl-mapa')?.style.setProperty('--ctrl-lado-a', r.height + 'px')
+}
+
+/**
+ * Abre e fecha um painel da coluna de controles.
+ *
+ * O grupo aberto troca o ícone pelo painel (o CSS cuida disso a partir da
+ * classe `.aberto`), como faz o seletor de camadas do Leaflet logo acima.
+ * Só um por vez: abertos juntos, os painéis empilhados cobririam o mapa, que
+ * é justamente o que recolhê-los pretendia evitar.
+ *
+ * @param {string} idGrupo grupo a alternar
+ */
+function alternarPainelMapa(idGrupo) {
+  const grupo = document.getElementById(idGrupo)
+  if (!grupo) return
+  const abrindo = !grupo.classList.contains('aberto')
+
+  fecharPaineisMapa()
+  if (!abrindo) return
+
+  grupo.classList.add('aberto')
+  grupo.querySelector('.ctrl-btn')?.setAttribute('aria-expanded', 'true')
+
+  // Ao abrir a busca o cursor já entra no campo — quem clicou na lupa quer
+  // digitar, não clicar de novo.
+  if (idGrupo === 'grupo-busca') setTimeout(() => document.getElementById('mb-termo')?.focus(), 20)
+  if (idGrupo === 'grupo-pins') popularBairrosPins()
+}
+
+/**
+ * Escreve (ou apaga) o selo de estado no ícone recolhido de um controle.
+ *
+ * Recolhido, o botão não diz nada sobre o que está aplicado — e um mapa com
+ * pinos filtrados ou pintado por quadra parece um mapa comum para quem chegou
+ * depois. O selo é o único aviso de que há filtro em vigor.
+ *
+ * @param {string} idGrupo
+ * @param {string|number|null} texto null apaga o selo
+ */
+function marcarIndicadorControle(idGrupo, texto) {
+  const btn = document.querySelector('#' + idGrupo + ' .ctrl-btn')
+  if (!btn) return
+
+  let selo = btn.querySelector('.ctrl-selo')
+  if (texto === null || texto === '' || texto === 0) {
+    selo?.remove()
+    btn.classList.remove('com-filtro')
+    return
+  }
+
+  if (!selo) {
+    selo = document.createElement('span')
+    selo.className = 'ctrl-selo'
+    btn.appendChild(selo)
+  }
+  selo.textContent = String(texto)
+  btn.classList.add('com-filtro')
+}
+
+/** Recolhe todos os painéis. */
+function fecharPaineisMapa() {
+  for (const g of document.querySelectorAll('#ctrl-mapa .ctrl-grupo')) {
+    g.classList.remove('aberto')
+    g.querySelector('.ctrl-btn')?.setAttribute('aria-expanded', 'false')
+  }
+}
+
+// Clique fora recolhe o painel, como no seletor de camadas.
+//
+// O teste de "fora" é explícito, e não pode ser delegado ao Leaflet: o
+// disableClickPropagation aplicado em ancorarControleCores intercepta
+// mousedown, touchstart, dblclick e contextmenu — mas NÃO o `click`. Sem esta
+// verificação, o clique que abria o painel subia até aqui e o fechava no mesmo
+// gesto (no desktop o painel nunca abria; no tablet abria no segundo toque e
+// depois fechava ao tocar em qualquer campo de dentro).
+document.addEventListener('click', ev => {
+  if (ev.target.closest?.('#ctrl-mapa')) return
+  fecharPaineisMapa()
+})
+
+/**
+ * Localiza um imóvel e leva o mapa até ele.
+ *
+ * Campo único de propósito: aceita bairro, inscrição imobiliária, chave ou
+ * "quadra lote", e quem decide o que é cada coisa é o servidor (ver
+ * BuscaController::aplicarFiltros). Obrigar o usuário a escolher antes em qual
+ * campo o que ele sabe se encaixa é transferir a ele um trabalho que a
+ * consulta faz sozinha.
+ */
+async function buscarNoMapa() {
+  const termo = document.getElementById('mb-termo').value.trim()
+  const saida = document.getElementById('mb-resultado')
+  if (!termo) { saida.textContent = 'Digite bairro, inscrição imobiliária ou “quadra lote”.'; return }
+
+  saida.textContent = 'Procurando…'
+
+  try {
+    const p = new URLSearchParams({ termo })
+    const r = await fetch('/api/imoveis/busca?' + p, { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
+    if (!d.imoveis.length) { saida.textContent = 'Nenhum imóvel encontrado.'; return }
+
+    // Vários acertos NÃO viram pino. O pino é a resposta do filtro, que é uma
+    // pergunta sobre situação ("onde estão os embargados"); a busca é uma
+    // pergunta sobre identidade ("cadê este imóvel"), e enfileirar alfinetes
+    // por um termo genérico só suja o mapa. Aqui o resultado é pintado: os
+    // lotes que casam ganham destaque, os demais recuam.
+    if (d.imoveis.length > 1) {
+      destacarLotes(d.imoveis.map(i => i.id))
+      saida.innerHTML = `${d.total} imóveis destacados. `
+        + '<a href="#" onclick="limparDestaqueMapa();return false">Limpar</a>'
+      return
+    }
+
+    const f = await fetch('/api/imoveis/' + d.imoveis[0].id, { headers: { Accept: 'application/json' } })
+    const ficha = await f.json()
+    if (!ficha.lat) { saida.textContent = 'Imóvel sem geometria cadastrada.'; return }
+
+    mapaState.obj?.setView([ficha.lat, ficha.lon], 19)
+    saida.innerHTML = `${esc(ficha.bairro || '')} · Q ${esc(ficha.quadra ?? '—')} · Lt ${esc(ficha.lote ?? '—')}`
+  } catch (e) {
+    console.error(e)
+    saida.textContent = e.message || 'Falha na busca.'
+  }
+}
+
+// ── PINOS POR FILTRO ─────────────────────────────────────────
+// Marcam no mapa os imóveis que atendem a um critério de fiscalização.
+// Camada própria, separada dos polígonos: os pinos entram e saem sem tocar
+// nos lotes desenhados, e o "Limpar" é remover uma camada, não redesenhar o
+// mapa inteiro.
+
+/** @type {L.LayerGroup|null} */
+let camadaPins = null
+
+/** Preenche o seletor de bairro do painel, uma vez. */
+async function popularBairrosPins() {
+  const sel = document.getElementById('pin-bairro')
+  if (!sel || sel.dataset.pronto) return
+  try {
+    const r = await fetch('/api/imoveis/bairros', { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    sel.innerHTML = '<option value="">Bairro — todos</option>'
+      + d.bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')
+    sel.dataset.pronto = '1'
+  } catch (e) { console.error(e) }
+}
+
+/** Lê o painel e marca no mapa o que o filtro devolver. */
+async function marcarPins() {
+  const saida = document.getElementById('pin-resultado')
+  const p = new URLSearchParams()
+
+  const bairro = document.getElementById('pin-bairro').value
+  const vistoria = document.getElementById('pin-vistoria').value
+  if (bairro) p.set('bairro', bairro)
+  if (vistoria) p.set('vistoria', vistoria)
+  if (document.getElementById('pin-embargo').checked) p.set('embargo', '1')
+  if (document.getElementById('pin-pendente').checked) p.set('doc_pendente', '1')
+  if (document.getElementById('pin-sem-vistoria').checked) p.set('obra_sem_vistoria', '1')
+
+  if (![...p.keys()].length) { saida.textContent = 'Escolha ao menos um filtro.'; return }
+
+  saida.textContent = 'Marcando…'
+
+  try {
+    const r = await fetch('/api/imoveis/pins?' + p, { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
+
+    if (!d.pins.length) { limparPins(); saida.textContent = 'Nenhum imóvel atende ao filtro.'; return }
+
+    plotarPins(d.pins)
+    marcarIndicadorControle('grupo-pins', d.total)
+
+    // O filtro também PINTA os lotes que atendem. O pino diz onde procurar
+    // de longe; a cor mostra qual é o lote quando o zoom chega perto, onde o
+    // alfinete já cobre a própria construção que se quer ver.
+    destacarLotes(d.pins.map(p => p.id))
+
+    saida.innerHTML = `${d.total} marcado(s).`
+      + (d.truncado ? ` <b>Teto de ${d.teto} — refine o filtro.</b>` : '')
+  } catch (e) {
+    console.error(e)
+    saida.textContent = e.message || 'Falha ao marcar.'
+  }
+}
+
+/**
+ * Busca as coordenadas de uma lista de ids e marca. Usada pela busca do mapa,
+ * quando o termo casa com vários imóveis.
+ * @param {number[]} ids @returns {Promise<number>} quantos foram marcados
+ */
+async function desenharPins(ids) {
+  const pins = []
+  // Sequencial e limitado: a ficha é uma consulta por imóvel, e disparar
+  // duzentas de uma vez trava o aparelho do fiscal — que é o alvo.
+  for (const id of ids.slice(0, 60)) {
+    try {
+      const r = await fetch('/api/imoveis/' + id, { headers: { Accept: 'application/json' } })
+      const f = await r.json()
+      if (f.lat) pins.push({ id: f.id, lat: f.lat, lon: f.lon, bairro: f.bairro, quadra: f.quadra, lote: f.lote })
+    } catch (e) { /* um imóvel sem geometria não invalida os demais */ }
+  }
+  if (pins.length) plotarPins(pins)
+  return pins.length
+}
+
+/** @param {Array<{id:number,lat:number,lon:number,bairro:string,quadra:string,lote:string}>} pins */
+function plotarPins(pins) {
+  if (!mapaState.obj) return
+  limparPins()
+
+  camadaPins = L.layerGroup(pins.map(p => {
+    const m = L.marker([p.lat, p.lon], { title: `Q ${p.quadra ?? '—'} · Lt ${p.lote ?? '—'}` })
+    m.bindPopup(
+      `<div class="pin-balao"><b>Quadra ${esc(p.quadra ?? '—')} · Lote ${esc(p.lote ?? '—')}</b>`
+      + `<div>${esc(p.bairro || '')}</div>`
+      + `<button type="button" onclick="abrirFichaDoPin(${p.id})">Abrir ficha</button></div>`
+    )
+    return m
+  })).addTo(mapaState.obj)
+
+  // Enquadra o conjunto: marcar cem imóveis e deixar o mapa onde estava
+  // esconde o resultado do próprio filtro.
+  const grupo = L.featureGroup(camadaPins.getLayers())
+  mapaState.obj.fitBounds(grupo.getBounds().pad(0.15))
+}
+
+/** Limpa só a pintura de destaque, mantendo os pinos (usado pela busca). */
+function limparDestaqueMapa() {
+  destacarLotes(null)
+  const saida = document.getElementById('mb-resultado')
+  if (saida) saida.textContent = 'Digite bairro, inscrição imobiliária ou “quadra lote”.'
+}
+
+function limparPins() {
+  marcarIndicadorControle('grupo-pins', null)
+  destacarLotes(null)
+  if (camadaPins) {
+    mapaState.obj?.removeLayer(camadaPins)
+    camadaPins = null
+  }
+  const saida = document.getElementById('pin-resultado')
+  if (saida) saida.textContent = 'Escolha ao menos um filtro.'
+}
+
+/** Abre a ficha do imóvel a partir do balão de um pino. @param {number} id */
+function abrirFichaDoPin(id) {
+  irPara('busca')
+  setTimeout(() => abrirImovel(id), 60)
 }
 
 /**
@@ -239,23 +526,16 @@ function montarOrtofoto(satelite) {
   const orto = L.tileLayer(alt.url, opcoes)
   mapaState.ortofoto = orto
 
-  // Sobreposição, e não base: pode ficar ligada junto com o satélite.
-  mapaState.controleCamadas.addOverlay(orto, alt.rotulo || 'Ortofoto')
-
-  // Ligada por padrão — é a melhor imagem que existe; e como só se manifesta
-  // dentro da área e do zoom dela, não atrapalha o resto.
+  // Sempre ligada, sem entrada em seletor: o seletor de camadas saiu junto com
+  // a base vetorial. Como a ortofoto só se manifesta dentro da área e do zoom
+  // dela, ligá-la de vez não atrapalha o resto — e é a melhor imagem que
+  // existe onde existe.
+  //
+  // Ela fica ACIMA do Google porque é imagem municipal, de voo próprio e mais
+  // recente; onde houver ortofoto, é ela que vale — e cada tile dela é um
+  // tile do Google que deixa de ser cobrado.
   orto.addTo(m)
-
-  // Com a ortofoto ligada, entrar no zoom alto sem estar na base de satélite
-  // mostraria a foto sobre o mapa de ruas, o que confunde. Então a base de
-  // satélite acompanha quando a ortofoto começa a valer.
-  m.on('zoomend', () => {
-    if (!m.hasLayer(orto)) return
-    const dentro = !opcoes.bounds || opcoes.bounds.intersects(m.getBounds())
-    if (dentro && m.getZoom() >= opcoes.minZoom && !m.hasLayer(satelite)) {
-      m.addLayer(satelite)
-    }
-  })
+  orto.bringToFront?.()
 }
 
 /**
@@ -316,7 +596,9 @@ async function recortarMunicipio() {
  */
 function adicionarAoMapa(geojson, aoClicar) {
   L.geoJSON(geojson, {
-    style: estiloLote,
+    // A coloração corrente vale já na criação — ver o comentário em
+    // iniciarMapa(). Nascer verde e ser repintado depois fazia o lote piscar.
+    style: f => estiloColorido(f),
     onEachFeature: (feicao, camada) => {
       mapaState.porId.set(feicao.properties.id, camada)
       mapaState.camadas.push(camada)
@@ -374,13 +656,50 @@ function abrirFichaDoBalao() {
   if (state.selecionado) abrirFicha(state.selecionado)
 }
 
-/** Destaca uma camada, devolvendo a anterior ao estilo padrão. @param {L.Path} camada */
+/**
+ * Destaca uma camada, devolvendo a anterior à coloração CORRENTE.
+ *
+ * Antes ela voltava com `estiloLote()`, o verde fixo do começo do projeto —
+ * então cada lote que saía da seleção ficava verde, independentemente de o
+ * mapa estar uniforme, colorido por bairro ou com filtro aplicado. É a mesma
+ * razão de o estilo inicial da camada também ler `estiloColorido`: só existe
+ * uma resposta para "de que cor este lote deveria estar", e é essa.
+ *
+ * @param {L.Path} camada
+ */
 function destacar(camada) {
-  if (mapaState.destacado) mapaState.destacado.setStyle(estiloLote())
+  if (mapaState.destacado) {
+    mapaState.destacado.setStyle(estiloColorido(mapaState.destacado.feature))
+  }
   mapaState.destacado = camada
   camada.setStyle(estiloDestaque())
   camada.bringToFront()
 }
+
+/**
+ * Tira a seleção do lote e fecha o que ela abriu.
+ *
+ * Sem isto o único jeito de largar um lote era selecionar outro — e o fiscal
+ * que clicou por engano ficava com um lote preso em amarelo e com o "Novo
+ * documento" apontando para o imóvel errado.
+ */
+function limparSelecao() {
+  if (mapaState.destacado) {
+    mapaState.destacado.setStyle(estiloColorido(mapaState.destacado.feature))
+    mapaState.destacado = null
+  }
+  state.selecionado = null
+  mapaState.obj?.closePopup()
+}
+
+// Esc larga a seleção. Só age quando não há modal aberto: dentro de um
+// formulário, Esc é do formulário, e desfazer a seleção por baixo dele
+// deixaria o documento sem imóvel sem que ninguém pedisse.
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape') return
+  if (document.querySelector('.modal-bg.open')) return
+  limparSelecao()
+})
 
 /** Destaca e enquadra um lote pelo id. @param {number} id */
 function destacarPorId(id) {

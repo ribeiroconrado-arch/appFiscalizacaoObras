@@ -22,8 +22,25 @@ const PALETA_MAPA = ['#E8834A', '#7FA98C', '#6E93B8', '#C98BA8', '#B9A24F', '#8E
 /** Distância (m) abaixo da qual dois grupos são considerados vizinhos. */
 const TOL_VIZINHO = { bairro: 400, quadra: 70 }
 
-/** Estado da coloração. */
-const corState = { chave: 'bairro', cores: {}, rotulos: [] }
+/**
+ * Estado da coloração.
+ *
+ * `chave: null` é o PADRÃO e significa lote uniforme. Antes o mapa abria
+ * pintado por bairro, e sobre a imagem de satélite isso vira um mosaico que
+ * disputa com a própria foto — as manchas de cor passam a ser o que se vê, não
+ * as construções. Cor no mapa deixou de ser decoração e passou a ser resposta:
+ * ela só aparece quando o usuário pergunta alguma coisa pelo botão de filtro.
+ *
+ * `destacados` guarda os ids que o filtro devolveu; são eles, e só eles, que
+ * saem da cor uniforme.
+ */
+const corState = { chave: null, cores: {}, rotulos: [], destacados: null }
+
+/** Cor única dos lotes quando nenhum filtro está aplicado. */
+const COR_UNIFORME = '#FFFFFF'
+
+/** Cor dos lotes que atendem ao filtro corrente. */
+const COR_DESTAQUE = '#F5C400'
 
 /** Centroide aproximado (média dos vértices do anel externo). */
 function centroLote(f) {
@@ -88,16 +105,70 @@ function colorirPorAdjacencia(chave) {
   return { cores, conflitos }
 }
 
-/** Estilo de um lote conforme a coloração corrente. */
+/**
+ * Estilo de um lote conforme a coloração corrente.
+ *
+ * Três casos, nesta ordem:
+ *   1. há filtro aplicado — o lote é destacado ou apagado, e nada mais importa;
+ *   2. o usuário escolheu colorir por bairro/quadra — paleta por adjacência;
+ *   3. padrão — todos iguais, discretos sobre a foto.
+ */
 function estiloColorido(f) {
-  const k = String(f.properties[corState.chave] ?? '?')
-  const cor = PALETA_MAPA[corState.cores[k] ?? 0]
-  return { color: cor, weight: 1, opacity: .9, fillColor: cor, fillOpacity: .3 }
+  if (corState.destacados) {
+    const dentro = corState.destacados.has(f.properties.id)
+    return dentro
+      ? { color: COR_DESTAQUE, weight: 2, opacity: 1, fillColor: COR_DESTAQUE, fillOpacity: .45 }
+      // O que ficou de fora não some: continua legível, só recua. Escondê-lo
+      // tiraria a referência de vizinhança que faz o resultado significar algo.
+      : { color: COR_UNIFORME, weight: .6, opacity: .35, fillColor: COR_UNIFORME, fillOpacity: .06 }
+  }
+
+  if (corState.chave) {
+    const k = String(f.properties[corState.chave] ?? '?')
+    const cor = PALETA_MAPA[corState.cores[k] ?? 0]
+    return { color: cor, weight: 1, opacity: .9, fillColor: cor, fillOpacity: .3 }
+  }
+
+  // Contorno branco fino com preenchimento quase transparente: marca o limite
+  // do lote sem cobrir o telhado, que é o que o fiscal precisa enxergar.
+  return { color: COR_UNIFORME, weight: 1, opacity: .9, fillColor: COR_UNIFORME, fillOpacity: .08 }
 }
 
-/** Recalcula cores e repinta. @param {'bairro'|'quadra'} [chave] */
+/**
+ * Liga ou desliga o destaque por filtro.
+ *
+ * @param {number[]|null} ids null limpa o destaque e devolve o mapa ao uniforme
+ */
+function destacarLotes(ids) {
+  corState.destacados = ids?.length ? new Set(ids) : null
+  mapaState.camadas.forEach(c => c.setStyle(estiloColorido(c.feature)))
+  marcarIndicadorControle('grupo-cores', corState.destacados ? corState.destacados.size : null)
+}
+
+/**
+ * Recalcula cores e repinta.
+ *
+ * @param {'bairro'|'quadra'|'uniforme'} [chave] omitido, mantém o que estava —
+ *        é o caso da recarga por bbox, que só precisa pintar o que chegou.
+ */
 function aplicarCores(chave) {
-  if (chave) corState.chave = chave
+  if (chave) corState.chave = chave === 'uniforme' ? null : chave
+
+  const leg = document.getElementById('leg-cores')
+
+  if (!corState.chave) {
+    corState.cores = {}
+    mapaState.camadas.forEach(c => c.setStyle(estiloColorido(c.feature)))
+    document.querySelectorAll('.ctrl-cor button').forEach(b =>
+      b.classList.toggle('at', b.dataset.chave === 'uniforme'))
+    // Sem critério de cor não há selo: o mapa está no estado normal, e um
+    // indicador aceso sem filtro nenhum treina o usuário a ignorá-lo.
+    if (!corState.destacados) marcarIndicadorControle('grupo-cores', null)
+    if (leg) leg.innerHTML = ''
+    desenharRotulosDeGrupo()
+    return
+  }
+
   const { cores, conflitos } = colorirPorAdjacencia(corState.chave)
   corState.cores = cores
 
@@ -106,7 +177,13 @@ function aplicarCores(chave) {
   document.querySelectorAll('.ctrl-cor button').forEach(b =>
     b.classList.toggle('at', b.dataset.chave === corState.chave))
 
-  const leg = document.getElementById('leg-cores')
+  // Marca no ícone recolhido qual critério está pintando o mapa. Com o painel
+  // fechado nada na tela diz se as cores separam bairro ou quadra — e as duas
+  // leituras levam a conclusões diferentes sobre o mesmo desenho.
+  if (!corState.destacados) {
+    marcarIndicadorControle('grupo-cores', corState.chave === 'quadra' ? 'Q' : 'B')
+  }
+
   if (leg) {
     const nomes = Object.keys(cores).sort().slice(0, 8)
     leg.innerHTML = nomes.map(n =>

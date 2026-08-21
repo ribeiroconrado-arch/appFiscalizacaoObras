@@ -11,7 +11,23 @@ const dState = {
   /** @type {Array<Object>} */ lista: [],
   /** @type {Object|null} */   opcoes: null,
   filtros: { tipo: '', status: '', agente: 'eu', busca: '' },
-  /** rascunho em edição */    atual: null,
+}
+
+/**
+ * O documento aberto na ficha, e o formato de saída escolhido no menu.
+ *
+ * Vive fora de `dState` porque não é estado da LISTA: o formulário
+ * (documento-form.js) lê o mesmo objeto, e as ações do menu de Opções — lavrar,
+ * anular, excluir, imprimir — precisam saber sobre qual documento agem, tanto
+ * quando o menu sai do cartão da lista quanto quando sai do rodapé da ficha.
+ *
+ * `saida` guarda a escolha entre o clique no menu e a resposta sobre anexos:
+ * a pergunta "imprimir com as fotos?" fica no meio do caminho, e sem isso a
+ * confirmação não saberia se era PDF, A4 ou bobina.
+ */
+const dFicha = {
+  /** @type {Object|null} */                  doc: null,
+  /** @type {'pdf'|'a4'|'termica'|null} */    saida: null,
 }
 
 // ── LISTA ────────────────────────────────────────────────────
@@ -63,6 +79,10 @@ function renderDocumentos() {
 
     // Número primeiro: é por ele que o documento é citado, cobrado e
     // procurado. Tipo e data vêm depois, como qualificação.
+    //
+    // O ⋮ ao lado das tags é o menu de opções do cartão, como no AppPOSTURAS:
+    // imprimir ou anular direto da lista, sem abrir a ficha para depois
+    // procurar a mesma ação lá dentro.
     return `
       <div class="mob-card" onclick="abrirDocumento(${d.id})">
         <div class="mc-top">
@@ -71,13 +91,29 @@ function renderDocumentos() {
             <span class="notif-card-tipo">${esc(d.tipo_rotulo)}</span>
             <span class="notif-card-data">${esc(d.data)}</span>
           </div>
-          <div class="mc-acoes">${tags}</div>
+          <div class="mc-acoes">
+            ${tags}
+            <div class="df-opcoes card-opcoes">
+              <button type="button" class="card-opcoes-btn" title="Opções"
+                      onclick="alternarOpcoesDoc(event, 'menu-card-${d.id}')">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+              <div class="df-menu" id="menu-card-${d.id}"></div>
+            </div>
+          </div>
         </div>
         <div class="notif-card-linhas">
           ${linhas.map(([r, v]) => `<div><span class="notif-card-rot">${r}</span>${v}</div>`).join('')}
         </div>
       </div>`
   }).join('')
+
+  // Os menus são montados depois do innerHTML: cada um depende das opções
+  // que o servidor liberou para aquele documento.
+  for (const d of dState.lista) {
+    montarMenuOpcoes(d.opcoes || [], 'menu-card-' + d.id, d.id)
+  }
 }
 
 /** @param {string} campo @param {string} valor */
@@ -86,7 +122,10 @@ function filtrarDocumentos(campo, valor) {
   carregarDocumentos()
 }
 
-// ── NOVO DOCUMENTO ───────────────────────────────────────────
+// ── APOIO AO FORMULÁRIO ──────────────────────────────────────
+// A montagem, o estado e a gravação do formulário vivem em documento-form.js.
+// O que fica aqui é o que a LISTA também usa (opções, sugestão de artigos) e
+// os campos cujo comportamento é do formulário mas cuja lógica é de negócio.
 
 /** Carrega tipos e leis uma vez por sessão. */
 async function carregarOpcoes() {
@@ -94,48 +133,6 @@ async function carregarOpcoes() {
   const r = await fetch('/api/documentos/opcoes', { headers: { Accept: 'application/json' } })
   dState.opcoes = await r.json()
   return dState.opcoes
-}
-
-/**
- * Abre o formulário de novo documento para o lote selecionado no mapa.
- * Sem lote não há documento: o imóvel é a entidade central do sistema.
- */
-async function novoDocumento() {
-  if (!state.selecionado) {
-    toast('Selecione um lote no mapa antes de emitir um documento', 'err')
-    return
-  }
-  const p = state.selecionado.properties
-  dState.atual = { lote_id: p.id, artigos: [], vistoria_id: null }
-
-  const o = await carregarOpcoes()
-  document.getElementById('nd-imovel').textContent =
-    `${p.bairro} · Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'}`
-
-  document.getElementById('nd-tipo').innerHTML =
-    o.tipos.map(t => `<option value="${t.valor}">${esc(t.rotulo)}</option>`).join('')
-  document.getElementById('nd-lei').innerHTML =
-    '<option value="">— selecione —</option>' +
-    o.leis.map(l => `<option value="${l.id}">${esc(l.rotulo)}</option>`).join('')
-
-  document.getElementById('nd-data').value = dataHojeLocal()
-  document.getElementById('nd-hora').value = horaAgoraLocal()
-  syncDataDoc()
-  document.getElementById('nd-autuado').value = ''
-  document.getElementById('nd-descricao').value = ''
-  document.getElementById('nd-artigos').innerHTML =
-    '<div class="lista-vazia">Escolha a lei para ver os artigos.</div>'
-
-  // Terreno vem do GIS e o fiscal só confere; construída não existe em
-  // cadastro nenhum — só a medição em campo é confiável para basear multa.
-  document.getElementById('nd-area-terreno').value = p.area_gis_m2 ? Number(p.area_gis_m2).toFixed(2) : ''
-  document.getElementById('nd-area-construida').value = ''
-  document.getElementById('nd-bloco-area').style.display = 'none'
-  document.getElementById('nd-memoria-calculo').innerHTML = ''
-
-  trocarTipoDoc()
-  await sugerirDaUltimaVistoria(p.id)
-  openModal('m-doc')
 }
 
 /** Mantém o campo escondido com aaaa-mm-ddThh:mm. */
@@ -149,9 +146,9 @@ function syncDataDoc() {
 /**
  * Ajusta o formulário ao tipo escolhido.
  *
- * Vistoria documental não impõe sanção: some a fundamentação e o prazo.
- * Auto tem prazo de DEFESA, fixo pela lei e não digitável. Notificação tem
- * prazo de CUMPRIMENTO, esse sim por documento.
+ * Vistoria não impõe sanção: some a fundamentação e o prazo. Auto tem prazo de
+ * DEFESA, fixo pela lei e não digitável. Notificação tem prazo de CUMPRIMENTO,
+ * esse sim por documento.
  */
 function trocarTipoDoc() {
   const tipo = document.getElementById('nd-tipo').value
@@ -171,6 +168,11 @@ function trocarTipoDoc() {
   } else {
     aviso.style.display = 'none'
   }
+
+  // O rótulo do cabeçalho acompanha o tipo escolhido.
+  const sel = document.getElementById('nd-tipo')
+  const rot = document.getElementById('fd-tipo-rotulo')
+  if (rot) rot.textContent = sel.options[sel.selectedIndex]?.textContent || 'Documento'
 }
 
 /** Renderiza os artigos da lei escolhida, marcando os sugeridos. */
@@ -191,23 +193,26 @@ function trocarLeiDoc() {
   }
 
   alvo.innerHTML = lei.artigos.map(a => `
-    <label class="chk-item ${dState.atual.artigos.includes(a.id) ? 'marcado' : ''}">
-      <input type="checkbox" value="${a.id}" ${dState.atual.artigos.includes(a.id) ? 'checked' : ''}
+    <label class="chk-item ${fdState.artigos.includes(a.id) ? 'marcado' : ''}">
+      <input type="checkbox" value="${a.id}" ${fdState.artigos.includes(a.id) ? 'checked' : ''}
              onchange="marcarArtigo(${a.id}, this.checked); this.closest('.chk-item').classList.toggle('marcado', this.checked)">
       <span class="desc">${esc(a.rotulo)} · ${a.base_multa === 'fixa' ? fmtNum(a.multa_upf || 0) + ' UPF'
           : a.base_multa === 'sem_multa' ? 'sem multa'
           : fmtNum(a.multa_upf_m2 || 0) + ' UPF/m² · ' + (a.base_multa === 'area_terreno' ? 'terreno' : 'construído')}
         <br><span class="cod">${esc(a.conduta ?? '')}</span></span>
     </label>`).join('')
+
   trocarTipoDoc()
   recalcularMultaDoc()
+  // Artigo recém-renderizado nasce habilitado; o estado do documento manda.
+  travarCamposDoc(fdState.estado !== 'novo' && !fdState.editando)
 }
 
 /** @param {number} id @param {boolean} marcado */
 function marcarArtigo(id, marcado) {
-  const i = dState.atual.artigos.indexOf(id)
-  if (marcado && i < 0) dState.atual.artigos.push(id)
-  if (!marcado && i >= 0) dState.atual.artigos.splice(i, 1)
+  const i = fdState.artigos.indexOf(id)
+  if (marcado && i < 0) fdState.artigos.push(id)
+  if (!marcado && i >= 0) fdState.artigos.splice(i, 1)
   recalcularMultaDoc()
 }
 
@@ -219,7 +224,7 @@ function marcarArtigo(id, marcado) {
  */
 function recalcularMultaDoc() {
   const lei = dState.opcoes.leis.find(l => String(l.id) === document.getElementById('nd-lei').value)
-  const artigos = (lei?.artigos || []).filter(a => dState.atual.artigos.includes(a.id))
+  const artigos = (lei?.artigos || []).filter(a => fdState.artigos.includes(a.id))
   const porArea = artigos.filter(a => a.base_multa === 'area_construida' || a.base_multa === 'area_terreno')
 
   document.getElementById('nd-bloco-area').style.display = porArea.length ? '' : 'none'
@@ -254,27 +259,27 @@ function recalcularMultaDoc() {
 
 /**
  * Motor de legislação: busca a última vistoria do lote e pede ao servidor os
- * artigos que enquadram as irregularidades constatadas. É o passo que
- * dispensa o fiscal de procurar dispositivo na lei impressa (§18 do projeto).
+ * artigos que enquadram as irregularidades constatadas. É o passo que dispensa
+ * o fiscal de procurar dispositivo na lei impressa (§18 do projeto).
  */
 async function sugerirDaUltimaVistoria(loteId) {
   const caixa = document.getElementById('nd-sugestao')
   caixa.innerHTML = ''
+  if (!loteId) return
+
   try {
     const h = await fetch(`/api/lotes/${loteId}/historico`, { headers: { Accept: 'application/json' } })
     const dados = await h.json()
     const ultima = dados.vistorias?.[0]
     if (!ultima) { caixa.innerHTML = '<div class="lista-vazia">Sem vistoria neste imóvel — o documento nascerá sem vínculo.</div>'; return }
 
-    dState.atual.vistoria_id = ultima.id
+    fdState.vistoriaId = ultima.id
     const r = await fetch(`/api/vistorias/${ultima.id}/sugestao`, { headers: { Accept: 'application/json' } })
     const s = await r.json()
 
-    if (s.aviso) {
-      caixa.innerHTML = `<div class="aviso-legal">${esc(s.aviso)}</div>`
-      return
-    }
-    dState.atual.artigos = s.artigos.map(a => a.id)
+    if (s.aviso) { caixa.innerHTML = `<div class="aviso-legal">${esc(s.aviso)}</div>`; return }
+
+    fdState.artigos = s.artigos.map(a => a.id)
     if (s.artigos[0]?.legislacao_id) {
       document.getElementById('nd-lei').value = s.artigos[0].legislacao_id
       trocarLeiDoc()
@@ -289,88 +294,243 @@ async function sugerirDaUltimaVistoria(loteId) {
   }
 }
 
-// ── GRAVAR E LAVRAR ──────────────────────────────────────────
+// ── ABERTURA A PARTIR DA LISTA ───────────────────────────────
 
-/** Grava como rascunho. Sem número: o número nasce só na lavratura. */
-function salvarRascunho() {
-  confirmarAcao({
-    titulo: 'Salvar rascunho',
-    mensagem: 'O documento será salvo sem número. O número é atribuído apenas na lavratura.',
-    textoBtn: 'Salvar',
-    onConfirm: () => enviarDocumento(false),
-  })
+/**
+ * Abre o documento no FORMULÁRIO, não numa ficha separada.
+ *
+ * É o desenho do AppPOSTURAS: uma tela só por documento, e a aba Resumo faz o
+ * papel de leitura. Duas telas para a mesma peça obrigariam a manter dois
+ * lugares em dia com o mesmo conteúdo.
+ *
+ * @param {number} id
+ */
+async function abrirDocumento(id) {
+  try {
+    const r = await fetch('/api/documentos/' + id, { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    const doc = await r.json()
+
+    // dFicha alimenta o menu de Opções, compartilhado entre o formulário e o
+    // cartão da lista.
+    dFicha.doc = doc
+    await abrirFormDoc({ documento: doc })
+    montarMenuOpcoes(doc.opcoes || [], 'fd-menu')
+  } catch (e) {
+    console.error(e)
+    toast('Não foi possível abrir o documento', 'err')
+  }
+}
+// ── MENU DE OPÇÕES ───────────────────────────────────────────
+
+/**
+ * Catálogo do menu "Opções": chave, rótulo e se a ação é destrutiva.
+ *
+ * As chaves são exatamente as de Documento::opcoesPara() — é o servidor que
+ * decide o que cada usuário pode fazer com cada documento, e este arquivo só
+ * dá nome ao que veio liberado. Chave nova lá tem de ganhar rótulo aqui,
+ * senão a ação existe e não aparece.
+ *
+ * A ordem é a da leitura: primeiro tirar uma via, depois agir sobre a peça,
+ * e por último o que não tem volta — anular e excluir, marcados como perigo.
+ *
+ * @type {Array<[string, string, boolean]>}
+ */
+const OPCOES_DOC = [
+  ['pdf',              'Gerar PDF',                 false],
+  ['imprimir_a4',      'Imprimir em A4',            false],
+  ['imprimir_termica', 'Imprimir em bobina 80mm',   false],
+  ['lavrar',           'Lavrar documento',          false],
+  ['anular',           'Anular documento',          true],
+  ['excluir',          'Excluir rascunho',          true],
+]
+
+/**
+ * Itens do menu, a partir do que o SERVIDOR liberou.
+ *
+ * A visibilidade é por classe `.open`, e não pelo atributo `hidden`: o menu é
+ * um flex container, e `display:flex` na classe vence o `display:none` que o
+ * `hidden` traz do navegador — foi assim que ele passou a nascer aberto.
+ *
+ * @param {string[]} liberadas
+ * @param {string} [alvo] id do elemento de menu (o da ficha, por padrão)
+ * @param {number} [id] documento, quando o menu é o de um cartão da lista
+ */
+function montarMenuOpcoes(liberadas, alvo = 'df-menu', id = null) {
+  const menu = document.getElementById(alvo)
+  if (!menu) return
+  const chamada = c => (id === null ? `acaoDoc('${c}')` : `acaoDocDaLista(event, ${id}, '${c}')`)
+  menu.innerHTML = OPCOES_DOC
+    .filter(([chave]) => liberadas.includes(chave))
+    .map(([chave, rotulo, perigo]) =>
+      `<button type="button" class="df-item${perigo ? ' perigo' : ''}" onclick="${chamada(chave)}">${esc(rotulo)}</button>`)
+    .join('')
+  menu.classList.remove('open')
 }
 
-/** Grava e lavra: atribui número, congela prazo e fecha para edição. */
-function lavrarDocumento() {
-  const tipo = document.getElementById('nd-tipo').value
-  const t = dState.opcoes.tipos.find(x => x.valor === tipo)
-  if (t?.exige_artigos && !dState.atual.artigos.length) {
-    toast('Selecione ao menos um artigo — documento sem fundamentação não pode ser lavrado', 'err')
-    return
+/** Fecha todos os menus abertos — só um por vez faz sentido. */
+function fecharMenusOpcoes() {
+  document.querySelectorAll('.df-menu.open').forEach(m => m.classList.remove('open'))
+}
+
+/** @param {MouseEvent} e @param {string} [alvo] */
+function alternarOpcoesDoc(e, alvo = 'df-menu') {
+  e.stopPropagation()
+  const menu = document.getElementById(alvo)
+  const jaAberto = menu.classList.contains('open')
+  fecharMenusOpcoes()
+  if (!jaAberto) menu.classList.add('open')
+}
+
+/** Clique em qualquer outro lugar fecha o menu — comportamento esperado de menu. */
+document.addEventListener('click', fecharMenusOpcoes)
+
+/** @param {string} chave */
+function acaoDoc(chave) {
+  fecharMenusOpcoes()
+
+  switch (chave) {
+    case 'pdf':              return pedirAnexos('pdf')
+    case 'imprimir_a4':      return pedirAnexos('a4')
+    case 'imprimir_termica': return pedirAnexos('termica')
+    case 'lavrar':           return lavrarDaFicha()
+    case 'anular':           return abrirAnulacaoDoc()
+    case 'excluir':          return excluirRascunhoDoc()
   }
+}
+
+/**
+ * Ação disparada do cartão da lista, sem abrir a ficha.
+ *
+ * Carrega a ficha em memória antes de agir — o cartão só traz as colunas
+ * leves da lista, e as ações precisam do documento inteiro (quantidade de
+ * anexos, por exemplo, decide se a pergunta de impressão aparece). Mesmo
+ * atalho do menu de opções do cartão no AppPOSTURAS.
+ *
+ * @param {MouseEvent} e @param {number} id @param {string} chave
+ */
+async function acaoDocDaLista(e, id, chave) {
+  e.stopPropagation()
+  fecharMenusOpcoes()
+  try {
+    const r = await fetch('/api/documentos/' + id, { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    dFicha.doc = await r.json()
+    acaoDoc(chave)
+  } catch (err) {
+    console.error(err)
+    toast('Não foi possível carregar o documento', 'err')
+  }
+}
+
+// ── IMPRESSÃO ────────────────────────────────────────────────
+
+/**
+ * Pergunta sobre os anexos antes de imprimir, e só quando há anexos: foto de
+ * evidência ocupa página inteira, e boa parte das vias impressas circula sem
+ * elas. Sem anexo nenhum, não há o que perguntar — sai direto.
+ *
+ * @param {'pdf'|'a4'|'termica'} saida
+ */
+function pedirAnexos(saida) {
+  dFicha.saida = saida
+  const qtd = dFicha.doc?.anexos || 0
+  if (!qtd) { imprimirDoc(true); return }
+
+  document.getElementById('imp-anexos-msg').textContent =
+    `Este documento tem ${qtd} anexo${qtd > 1 ? 's' : ''} da vistoria vinculada. `
+    + 'Cada foto entra em tamanho grande na via impressa.'
+  openModal('m-imp-anexos')
+}
+
+/** @param {boolean} comAnexos */
+function imprimirDoc(comAnexos) {
+  fModalBtn('m-imp-anexos')
+  const id = dFicha.doc.id
+  const a = comAnexos ? 1 : 0
+
+  // O PDF é gerado no servidor e vira arquivo de verdade — é o que se anexa
+  // ao processo. As duas impressões abrem uma página que se manda para a
+  // impressora sozinha; a bobina de 80mm só existe por esse caminho, porque
+  // o gerador de PDF não trabalha com página de altura variável.
+  const url = dFicha.saida === 'pdf'
+    ? `/documentos/${id}/pdf?anexos=${a}`
+    : `/documentos/${id}/impressao?formato=${dFicha.saida === 'termica' ? 'termica' : 'a4'}&anexos=${a}`
+
+  const win = window.open(url, '_blank')
+  if (!win) toast('Permita pop-ups para imprimir', 'err')
+}
+
+// ── AÇÕES DA FICHA ───────────────────────────────────────────
+
+function lavrarDaFicha() {
   confirmarAcao({
     titulo: 'Lavrar documento',
     mensagem: 'A lavratura atribui número definitivo, congela o prazo e fecha o documento '
             + 'para edição. Esta ação não pode ser desfeita — só anulada.',
     textoBtn: 'Lavrar',
-    onConfirm: () => enviarDocumento(true),
+    onConfirm: async () => {
+      const r = await fetch(`/api/documentos/${dFicha.doc.id}/lavrar`, { method: 'POST', headers: cabecalhoDoc() })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
+      toast(d.message)
+      fModalBtn('m-doc-ficha')
+      carregarDocumentos()
+    },
   })
 }
 
-/** @param {boolean} lavrar */
-async function enviarDocumento(lavrar) {
-  const fd = new FormData()
-  fd.append('tipo', document.getElementById('nd-tipo').value)
-  fd.append('data_fato', document.getElementById('nd-datahora').value)
-  fd.append('autuado_nome', document.getElementById('nd-autuado').value)
-  fd.append('descricao', document.getElementById('nd-descricao').value)
-  const lei = document.getElementById('nd-lei').value
-  if (lei) fd.append('legislacao_id', lei)
-  if (dState.atual.vistoria_id) fd.append('vistoria_id', dState.atual.vistoria_id)
-  const prazo = document.getElementById('nd-prazo').value
-  if (prazo !== '') fd.append('prazo_dias', prazo)
-  const areaTerreno = document.getElementById('nd-area-terreno').value
-  const areaConstruida = document.getElementById('nd-area-construida').value
-  if (areaTerreno !== '') fd.append('area_terreno_m2', areaTerreno)
-  if (areaConstruida !== '') fd.append('area_construida_m2', areaConstruida)
-  dState.atual.artigos.forEach(a => fd.append('artigos[]', a))
+function abrirAnulacaoDoc() {
+  document.getElementById('da-motivo').value = ''
+  openModal('m-doc-anular')
+}
 
-  const cab = {
-    Accept: 'application/json',
-    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+async function confirmarAnulacaoDoc() {
+  const motivo = document.getElementById('da-motivo').value.trim()
+  if (motivo.length < 10) {
+    toast('Descreva o motivo da anulação com pelo menos 10 caracteres', 'err')
+    return
   }
-
   try {
-    const r = await fetch(`/api/lotes/${dState.atual.lote_id}/documentos`, { method: 'POST', headers: cab, body: fd })
-    if (r.status === 419) { toast('Sessão expirada. Recarregando...', 'err'); setTimeout(() => location.reload(), 1500); return }
+    const r = await fetch(`/api/documentos/${dFicha.doc.id}/anular`, {
+      method: 'POST',
+      headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motivo }),
+    })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
-
-    if (!lavrar) {
-      fModalBtn('m-doc'); toast('Rascunho salvo'); irPara('documentos'); return
-    }
-
-    const l = await fetch(`/api/documentos/${d.documento.id}/lavrar`, { method: 'POST', headers: cab })
-    const dl = await l.json().catch(() => ({}))
-    if (!l.ok) throw new Error(dl.message || 'HTTP ' + l.status)
-
-    fModalBtn('m-doc')
-    toast(dl.message)
-    irPara('documentos')
+    fModalBtn('m-doc-anular')
+    fModalBtn('m-doc-ficha')
+    toast(d.message)
+    carregarDocumentos()
   } catch (e) {
     console.error(e)
-    toast(e.message || 'Falha ao gravar o documento', 'err')
-    throw e   // mantém o modal de confirmação aberto para nova tentativa
+    toast(e.message || 'Falha ao anular', 'err')
   }
 }
 
-/** Placeholder — a ficha completa do documento entra junto com o PDF. */
-function abrirDocumento(id) {
-  const d = dState.lista.find(x => x.id === id)
-  if (!d) return
-  // Abre numa aba nova — é o próprio navegador quem renderiza o PDF, não
-  // uma tela do app. Rascunho também imprime (com marca-d'água), útil para
-  // conferir antes de lavrar.
-  window.open('/documentos/' + id + '/pdf', '_blank')
+function excluirRascunhoDoc() {
+  confirmarAcao({
+    titulo: 'Excluir rascunho',
+    mensagem: 'O rascunho será apagado definitivamente. Documento já lavrado nunca é '
+            + 'excluído — para desfazê-lo existe a anulação, que deixa rastro.',
+    textoBtn: 'Excluir',
+    perigo: true,
+    onConfirm: async () => {
+      const r = await fetch(`/api/documentos/${dFicha.doc.id}`, { method: 'DELETE', headers: cabecalhoDoc() })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
+      toast(d.message)
+      fModalBtn('m-doc-ficha')
+      carregarDocumentos()
+    },
+  })
+}
+
+/** Cabeçalhos com o token CSRF — toda escrita passa por aqui. */
+function cabecalhoDoc() {
+  return {
+    Accept: 'application/json',
+    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+  }
 }

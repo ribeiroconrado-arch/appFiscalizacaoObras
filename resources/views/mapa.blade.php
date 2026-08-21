@@ -7,9 +7,15 @@
 {{-- O POST de identificação passa pelo grupo `web`, então precisa do token. --}}
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <title>Fiscalização de Obras — Mapa</title>
-<link rel="icon" type="image/png" sizes="32x32" href="@assetv('img/favicon-32.png')">
-<link rel="icon" type="image/png" sizes="16x16" href="@assetv('img/favicon-16.png')">
-<link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')">
+{{-- Dois conjuntos de ícone, um por tema. Os dois endereços vêm daqui, e não
+     montados no JavaScript, para não perder o ?v= do @assetv — sem ele, uma
+     regeração de ícones sairia do cache do navegador. --}}
+<link rel="icon" type="image/png" sizes="32x32" href="@assetv('img/favicon-32.png')"
+      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')">
+<link rel="icon" type="image/png" sizes="16x16" href="@assetv('img/favicon-16.png')"
+      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')">
+<link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')"
+      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')">
 <link rel="manifest" href="@assetv('manifest.json')">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,6 +25,13 @@
 {{-- Tema em camada separada: o design ainda está em avaliação (seis
      variantes). Trocar de proposta é trocar esta linha, não refazer o CSS. --}}
 <link rel="stylesheet" href="@assetv('css/tema-f.css')">
+{{-- Camada institucional (verde do município). Só pinta quando o <html> traz
+     data-tema="institucional" — sem o atributo este arquivo é inerte, e é por
+     isso que os dois temas convivem sem custo: um tema é um bloco de tokens,
+     não uma segunda folha de componentes. --}}
+<link rel="stylesheet" href="@assetv('css/tema-institucional.css')">
+{{-- Sem defer: precisa rodar antes do primeiro pintar (ver js/tema.js). --}}
+<script src="@assetv('js/tema.js')"></script>
 </head>
 <body>
 
@@ -30,8 +43,10 @@
 --}}
 
 <header class="topo">
-  {{-- Ícone oficial (public/img/icone.svg), sem o fundo fora do squircle. --}}
-  <img src="@assetv('img/logo-64.png')" alt="" style="width:26px;height:26px;flex-shrink:0">
+  {{-- Ícone oficial, sem o fundo de fora do squircle. Troca junto com o tema
+       (ver js/tema.js): verde no institucional, âmbar no Tema F. --}}
+  <img class="topo-marca" src="@assetv('img/logo-64.png')" alt=""
+       data-src-institucional="@assetv('img/logo-64.png')" data-src-f="@assetv('img/logo-64-ambar.png')">
   <div>
     <h1>Fiscalização de Obras</h1>
     <div class="sub">{{ number_format($total, 0, ',', '.') }} lotes na base</div>
@@ -82,6 +97,29 @@
     </form>
   </div>
 </header>
+
+{{-- ══════ SUB-CABEÇALHO ══════
+     Diz DE QUEM é o sistema (esquerda) e ONDE se está dentro dele (direita).
+
+     A entidade vem dos parâmetros e o brasão de um arquivo enviado em
+     Parâmetros → Órgão — não há nada de Primavera do Leste escrito no código.
+     É o que permite instalar o mesmo sistema em outro município trocando dois
+     cadastros, em vez de mexer no fonte.
+
+     O nome do módulo é preenchido a cada troca de aba (ver irPara). --}}
+<div class="subcab">
+  <div class="subcab-entidade">
+    @php $brasaoUrl = \App\Models\Parametro::get('brasao_url'); @endphp
+    @if ($brasaoUrl)
+      <img src="{{ $brasaoUrl }}" alt="" class="subcab-brasao">
+    @endif
+    <span class="subcab-nome">{{ \App\Models\Parametro::get('orgao_secretaria') }}</span>
+  </div>
+  <div class="subcab-modulo">
+    <span class="subcab-ico" id="subcab-ico"></span>
+    <span id="subcab-nome">Painel</span>
+  </div>
+</div>
 
 {{-- ══════ ABA: PAINEL ══════ --}}
 <section class="tela at" id="t-painel">
@@ -150,48 +188,226 @@
   <span id="chip-txt">Carregando…</span>
 </div>
 
-{{-- Controle de coloração e legenda dos rótulos --}}
-{{-- Legenda recolhida num ícone, logo abaixo do seletor de camadas: o painel
-     aberto comia um pedaço do mapa o tempo todo, e a legenda só é consultada
-     de vez em quando. O JS o posiciona sob o controle do Leaflet. --}}
+{{-- Coluna de controles recolhidos, sob o seletor de camadas do Leaflet.
+
+     Cada controle é um GRUPO: enquanto fechado mostra só o ícone; aberto, o
+     ícone dá lugar ao painel, e clicar fora devolve o ícone. É exatamente o
+     comportamento do seletor de camadas logo acima — e é o que mantém o mapa
+     visível, que era o motivo de recolher os painéis.
+
+     A troca ícone/painel é feita por CSS a partir da classe .aberto no grupo
+     (ver .ctrl-grupo em tema-f.css), não escondendo elementos no JavaScript. --}}
 <div class="ctrl-mapa" id="ctrl-mapa">
-  <button class="ctrl-btn" onclick="alternarLegenda()" title="Cores e legenda" aria-expanded="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="14" r="2.5"/>
-      <circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/>
-      <path d="M12 2a10 10 0 1 0 0 20 1.5 1.5 0 0 0 1.1-2.5 1.4 1.4 0 0 1 1-2.4h2.3A4.6 4.6 0 0 0 22 12 10 10 0 0 0 12 2z"/>
-    </svg>
-  </button>
 
-  <div class="ctrl-corpo" id="ctrl-corpo" hidden>
-    <b>Colorir por</b>
-    <div class="seg ctrl-cor">
-      <button class="at" data-chave="bairro" onclick="aplicarCores('bairro')">Bairro</button>
-      <button data-chave="quadra" onclick="aplicarCores('quadra')">Quadra</button>
-    </div>
-    <div class="leg" id="leg-zoom">Bairro e logradouro · aproxime para quadra e lote</div>
-    <div id="leg-cores"></div>
-  </div>
-</div>
-
-<div class="acoes">
-  <button class="btn primary" id="btn-gps" onclick="usarMinhaLocalizacao()">
+  {{-- LOCALIZAÇÃO E ENQUADRAMENTO
+       Eram dois botões largos flutuando sobre o rodapé; viraram ícones da
+       mesma coluna dos demais. Ganho duplo: devolvem ao mapa a faixa que
+       ocupavam na base da tela, e as ações do mapa passam a estar todas no
+       mesmo lugar em vez de espalhadas por dois cantos.
+       Ação direta, sem painel — por isso ficam fora de .ctrl-grupo. --}}
+  <button class="ctrl-btn" id="btn-gps" onclick="usarMinhaLocalizacao()" title="Usar minha localização">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-      <circle cx="12" cy="12" r="8"/>
-    </svg>
-    <span id="gps-txt">Usar minha localização</span>
+      <circle cx="12" cy="12" r="8"/></svg>
   </button>
-  <button class="btn" onclick="verTudo()">
+
+  <button class="ctrl-btn" onclick="verTudo()" title="Ver tudo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/>
-    </svg>
-    Ver tudo
+      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
   </button>
+
+  {{-- CORES E LEGENDA --}}
+  <div class="ctrl-grupo" id="grupo-cores">
+    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-cores')"
+            title="Cores e legenda" aria-expanded="false">
+      {{-- Leque de amostras, não a palheta do pintor: o botão escolhe entre
+           esquemas de cor prontos, e o leque é o objeto que se folheia
+           procurando um. A palheta sugeria misturar cor à mão. --}}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.6" y="2.4" width="5.8" height="19.2" rx="2"/>
+        <path d="M2.6 7.2h5.8M2.6 12h5.8M2.6 16.8h5.8"/>
+        <circle cx="5.5" cy="19.2" r="1"/>
+        <rect x="8.6" y="3.3" width="4.6" height="16.8" rx="1.8" transform="rotate(12 8.6 20.1)"/>
+        <rect x="8.6" y="3.3" width="4.6" height="16.8" rx="1.8" transform="rotate(25 8.6 20.1)"/>
+        <rect x="8.6" y="3.3" width="4.6" height="16.8" rx="1.8" transform="rotate(38 8.6 20.1)"/>
+      </svg>
+    </button>
+    <div class="ctrl-corpo">
+      <b>Colorir por</b>
+      {{-- "Uniforme" é o padrão. Sobre a imagem de satélite, pintar cada
+           bairro de uma cor vira um mosaico que disputa com a própria foto: as
+           manchas passam a ser o que se vê, no lugar das construções. Bairro e
+           quadra continuam à mão para quem precisa da leitura de conjunto. --}}
+      <div class="seg ctrl-cor">
+        <button class="at" data-chave="uniforme" onclick="aplicarCores('uniforme')">Uniforme</button>
+        <button data-chave="bairro" onclick="aplicarCores('bairro')">Bairro</button>
+        <button data-chave="quadra" onclick="aplicarCores('quadra')">Quadra</button>
+      </div>
+      <div class="leg" id="leg-zoom">Bairro e logradouro · aproxime para quadra e lote</div>
+      <div id="leg-cores"></div>
+    </div>
+  </div>
+
+  {{-- LOCALIZAR IMÓVEL
+       Campo único: bairro, inscrição imobiliária, chave ou "quadra lote". Quem
+       procura não deveria ter de decidir antes em qual campo o que sabe se
+       encaixa. Consulta o cadastro do próprio município — nenhum
+       geocodificador externo, nenhum custo por consulta. --}}
+  <div class="ctrl-grupo" id="grupo-busca">
+    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-busca')"
+            title="Localizar imóvel" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+    </button>
+    <div class="ctrl-corpo">
+      <b>Localizar imóvel</b>
+      <input type="text" id="mb-termo" class="ctrl-input" placeholder="Bairro, inscrição ou quadra/lote"
+             aria-label="Bairro, inscrição imobiliária ou quadra e lote"
+             onkeydown="if(event.key==='Enter')buscarNoMapa()">
+      <div class="seg" style="margin:8px 0 0">
+        <button type="button" onclick="buscarNoMapa()">Localizar</button>
+      </div>
+      <div class="leg" id="mb-resultado">Digite bairro, inscrição imobiliária ou “quadra lote”.</div>
+    </div>
+  </div>
+
+  {{-- PINOS POR FILTRO
+       Marca no mapa os imóveis que atendem a um critério de fiscalização. É a
+       pergunta que o mapa responde melhor que uma lista: onde estão. --}}
+  <div class="ctrl-grupo" id="grupo-pins">
+    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-pins')"
+            title="Marcar imóveis no mapa" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+    </button>
+    <div class="ctrl-corpo">
+      <b>Marcar no mapa</b>
+      <select id="pin-bairro" class="ctrl-input" style="margin-bottom:6px">
+        <option value="">Bairro — todos</option>
+      </select>
+      <select id="pin-vistoria" class="ctrl-input" style="margin-bottom:6px">
+        <option value="">Situação da vistoria — qualquer</option>
+        @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
+          <option value="{{ $valor }}">{{ $rotulo }}</option>
+        @endforeach
+      </select>
+      <label class="ctrl-chk"><input type="checkbox" id="pin-embargo"> Com embargo ativo</label>
+      <label class="ctrl-chk"><input type="checkbox" id="pin-pendente"> Com documento pendente</label>
+      <label class="ctrl-chk"><input type="checkbox" id="pin-sem-vistoria"> Projeto aprovado sem vistoria</label>
+      <div class="seg" style="margin:8px 0 0">
+        <button type="button" onclick="limparPins()">Limpar</button>
+        <button type="button" onclick="marcarPins()">Marcar</button>
+      </div>
+      <div class="leg" id="pin-resultado">Escolha ao menos um filtro.</div>
+    </div>
+  </div>
 </div>
+
+
+</section>
+
+{{-- ══════ ABA: BUSCA DE IMÓVEIS ══════
+     Consulta de cadastro sem abrir o mapa. A camada de satélite é serviço
+     pago por requisição; conferir a situação de um lote — que é a maior parte
+     das consultas de balcão — não deveria gerar faturamento de imagem aérea
+     para ler quatro campos de texto.
+
+     Resultado com vários imóveis vira TABELA (só o essencial). Escolhido um,
+     a ficha técnica abre NA PRÓPRIA TELA, não em modal: aqui não há mapa por
+     baixo para preservar, então a sobreposição só atrapalharia. --}}
+<section class="tela" id="t-busca">
+  <div class="topo-lista">
+    <div class="sec-simples">Consulta de imóveis</div>
+    <span class="bs-selo" id="bs-selo" hidden></span>
+  </div>
+
+  <div class="busca-form">
+    {{-- Uma linha só, e a inscrição imobiliária primeiro: ela é o identificador
+         do imóvel e tem precedência sobre todos os demais filtros (ver
+         marcarPrecedencia). A ordem na tela acompanha a ordem da regra.
+         As larguras seguem o conteúdo real: quadra e lote têm dois ou três
+         dígitos, a inscrição tem formato fixo, e a sobra vai para o bairro. --}}
+    <div class="busca-campos">
+      <div class="field bc-insc">
+        <label for="bs-inscricao">Inscrição imobiliária</label>
+        <input type="text" id="bs-inscricao" class="mono" maxlength="40"
+               placeholder="01.000.024.0009.000" oninput="marcarPrecedencia()">
+      </div>
+      <div class="field bc-bairro">
+        <label for="bs-bairro">Bairro / loteamento</label>
+        <select id="bs-bairro" onchange="marcarPrecedencia()">
+          <option value="">— todos —</option>
+        </select>
+      </div>
+      <div class="field bc-num">
+        <label for="bs-quadra">Quadra</label>
+        <input type="text" id="bs-quadra" class="mono" inputmode="numeric" maxlength="20"
+               placeholder="24" oninput="marcarPrecedencia()">
+      </div>
+      <div class="field bc-num">
+        <label for="bs-lote">Lote</label>
+        <input type="text" id="bs-lote" class="mono" inputmode="numeric" maxlength="20"
+               placeholder="9" oninput="marcarPrecedencia()">
+      </div>
+
+      {{-- Mais filtros recolhidos: são de uso ocasional e ocupariam a linha
+           inteira o tempo todo se ficassem expostos. --}}
+      <button type="button" class="bs-mais" id="bs-mais" onclick="alternarFiltrosAvancados()"
+              title="Mais filtros" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+
+    <div class="busca-avancado" id="busca-avancado" hidden>
+      <div class="busca-campos">
+        <div class="field bc-insc">
+          <label for="bs-bci-de">BCI — de</label>
+          <input type="text" id="bs-bci-de" class="mono" maxlength="40"
+                 placeholder="01.000.024.0001.000" oninput="marcarPrecedencia()">
+        </div>
+        <div class="field bc-insc">
+          <label for="bs-bci-ate">BCI — até</label>
+          <input type="text" id="bs-bci-ate" class="mono" maxlength="40"
+                 placeholder="01.000.024.0099.000" oninput="marcarPrecedencia()">
+        </div>
+        <div class="field bc-bairro">
+          <label for="bs-vistoria">Situação da última vistoria</label>
+          <select id="bs-vistoria" onchange="marcarPrecedencia()">
+            <option value="">— qualquer —</option>
+            @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
+              <option value="{{ $valor }}">{{ $rotulo }}</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
+      <div class="bs-chks">
+        <label class="chk-item"><input type="checkbox" id="bs-embargo" onchange="marcarPrecedencia()">
+          <span class="desc">Com embargo ativo</span></label>
+        <label class="chk-item"><input type="checkbox" id="bs-pendente" onchange="marcarPrecedencia()">
+          <span class="desc">Com documento pendente</span></label>
+        <label class="chk-item"><input type="checkbox" id="bs-sem-vistoria" onchange="marcarPrecedencia()">
+          <span class="desc">Projeto aprovado sem vistoria</span></label>
+      </div>
+    </div>
+
+    {{-- Aviso de precedência: a inscrição identifica UM imóvel, então combiná-la
+         com bairro ou quadra só produziria contradição. Em vez de devolver
+         vazio e parecer defeito, o sistema diz o que está valendo. --}}
+    <div class="bs-precedencia" id="bs-precedencia" hidden></div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="limparBusca()">Limpar</button>
+      <button class="btn primary" onclick="executarBusca()">Buscar</button>
+    </div>
+  </div>
+
+  <div id="busca-resultado"></div>
 </section>
 
 {{-- ══════ ABA: DOCUMENTOS (Etapa 6) ══════ --}}
@@ -199,7 +415,7 @@
   <div class="topo-lista">
     <div class="sec-simples">Documentos <span class="cont" id="cont-doc">0</span></div>
     @if (auth()->user()->podeLavrarDocumento())
-      <button class="btn primary sm" onclick="novoDocumento()">
+      <button class="btn primary sm" onclick="novoDocumento(event)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Novo documento
       </button>
@@ -304,16 +520,13 @@
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
 
-  {{-- USUÁRIOS --}}
+  {{-- USUÁRIOS — desenho do painel administrativo do AppPOSTURAS: seção
+       numerada, botão de contorno para criar, e um cartão por usuário com
+       avatar, identificação e o Editar à direita. --}}
   <div class="par-painel at" id="par-usuarios">
-    <div class="topo-lista">
-      <div class="sec-simples">Usuários <span class="cont" id="cont-usuarios">0</span></div>
-      <button class="btn primary sm" onclick="novoUsuario()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Novo usuário
-      </button>
-    </div>
-    <div id="lista-usuarios"></div>
+    <div class="par-sec"><span class="par-num">1</span>Usuários<span class="cont" id="cont-usuarios">0</span></div>
+    <button class="btn out-verde sm" onclick="novoUsuario()">+ Novo usuário</button>
+    <div id="lista-usuarios" style="margin-top:12px"></div>
   </div>
 
   {{-- LEGISLAÇÃO — lista de leis → detalhe da lei, como no AppPOSTURAS.
@@ -324,12 +537,16 @@
     {{-- SUB-TELA: LISTA DE LEIS --}}
     <div id="leg-lista">
       <div id="par-legislacao-aviso"></div>
-      <div class="sec-simples">Leis <span class="cont" id="cont-leis">0</span></div>
-      <div class="cad-row">
-        <input type="text" id="nova-lei-numero" class="mono" placeholder="Número (Lei Complementar 1/2023)">
-        <input type="text" id="nova-lei-nome" placeholder="Nome (Código de Obras)"
-               onkeydown="if(event.key==='Enter')novaLei()">
-        <button class="btn primary sm" onclick="novaLei()">+ Nova lei</button>
+      <div class="par-sec"><span class="par-num">1</span>Leis<span class="cont" id="cont-leis">0</span></div>
+
+      {{-- Busca e criação na mesma linha, como no AppPOSTURAS. O campo serve
+           aos dois: filtra a lista enquanto se digita e, se nada casar, o
+           texto vira o nome da lei nova — quem procurou e não achou está,
+           quase sempre, prestes a cadastrar. --}}
+      <div class="par-busca">
+        <input type="text" id="lei-busca" placeholder="Nome da lei (ex: Lei Complementar 1.234/2020)…"
+               oninput="filtrarLeis()" onkeydown="if(event.key==='Enter')novaLei()">
+        <button class="btn out-verde sm" onclick="novaLei()">+ Nova lei</button>
       </div>
       <div class="cad-dica">Toque numa lei para ver os artigos e os textos de ciência.</div>
       <div id="lista-leis"></div>
@@ -457,7 +674,29 @@
 
   {{-- ÓRGÃO --}}
   <div class="par-painel" id="par-geral">
-    <div class="sec-simples">Dados do órgão <span class="cont" id="cont-geral">0</span></div>
+    <div class="par-sec"><span class="par-num">1</span>Brasão do município</div>
+    {{-- É o brasão que torna o sistema replicável: instalar a mesma aplicação
+         em outra prefeitura passa a ser trocar dois cadastros, em vez de mexer
+         no código. Por isso ele é enviado aqui, e não embutido em public/img. --}}
+    <p class="aviso-legal">
+      Aparece no sub-cabeçalho da tela e no cabeçalho dos documentos impressos.
+      O fundo branco de fora do desenho é removido automaticamente no envio.
+    </p>
+    <div class="brasao-caixa">
+      <div class="brasao-previa" id="brasao-previa"></div>
+      <div class="brasao-acoes">
+        <input type="file" id="brasao-arquivo" accept="image/png,image/jpeg" hidden
+               onchange="enviarBrasao(this)">
+        <button class="btn out-verde sm" onclick="document.getElementById('brasao-arquivo').click()">
+          Enviar imagem
+        </button>
+        <button class="btn out-vermelho sm" id="brasao-remover" onclick="removerBrasao()" hidden>
+          Remover
+        </button>
+      </div>
+    </div>
+
+    <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Dados do órgão<span class="cont" id="cont-geral">0</span></div>
     <p class="aviso-legal">Impressos no cabeçalho e rodapé dos documentos emitidos.</p>
     <div id="lista-geral"></div>
     <div class="btn-row" style="margin-top:14px">
@@ -476,6 +715,16 @@
       <rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
     Painel
   </button>
+  {{-- Busca antes do Mapa de propósito: a camada de satélite é paga por
+       requisição, e conferir a situação de um lote — que é a maior parte das
+       consultas — não precisa de imagem aérea. O caminho mais barato vem
+       primeiro. --}}
+  <button class="aba" onclick="irPara('busca')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+    Consulta
+  </button>
   <button class="aba" onclick="irPara('mapa')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M9 20l-6 3V6l6-3 6 3 6-3v17l-6 3z"/><path d="M9 3v17M15 6v17"/></svg>
@@ -491,7 +740,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
       <rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 12h8M8 16h5"/></svg>
-    Protocolos
+    Protocolo &amp; OS
   </button>
 </nav>
 
@@ -549,7 +798,11 @@
       </div>
 
       <div class="fi-grade">
-        <div><div class="fi-rot">Inscrição imobiliária</div><div class="fi-val mono" id="fi-inscricao">—</div></div>
+        {{-- A inscrição ocupa a faixa inteira: é o dado mais largo da ficha e a
+             identidade do registro. Dividindo a faixa com outro dado, o número
+             quebrava em duas linhas — justamente o que não se quer num campo
+             que se confere dígito a dígito. --}}
+        <div class="fi-largo"><div class="fi-rot">Inscrição imobiliária</div><div class="fi-val mono" id="fi-inscricao">—</div></div>
         <div><div class="fi-rot">Situação</div><div class="fi-val" id="fi-situacao">—</div></div>
         <div><div class="fi-rot">Coordenadas</div><div class="fi-val mono" id="fi-coord">—</div></div>
         <div><div class="fi-rot">Última integração</div><div class="fi-val" id="fi-integracao">—</div></div>
@@ -702,97 +955,210 @@
 </div>
 
 {{-- NOVO DOCUMENTO (Etapa 6) --}}
+{{-- ══════════════════════════════════════════════
+     FORMULÁRIO DE DOCUMENTO (#m-doc)
+
+     Estrutura do formulário de Notificação do AppPOSTURAS: cabeçalho e rodapé
+     FIXOS, corpo rolável no meio, altura travada (a caixa não muda de tamanho
+     ao trocar de aba). Abas em sequência — Autuado → Imóvel/Origem → Infração
+     → Anexos → Resumo — e um rodapé que muda conforme o estado do documento
+     (novo → rascunho gravado → lavrado).
+
+     Regra de edição, também herdada do POSTURAS: o que já está GRAVADO só
+     volta a ser editável clicando em "Editar". Formulário gravado que continua
+     aberto para digitação convida à alteração acidental de peça de processo.
+     Os campos travados carregam data-lock (ver travarCamposDoc).
+
+     As quatro peças de obras: Vistoria, Notificação, Auto de Infração e Auto
+     de Embargo. A vistoria usa o mesmo invólucro, sem a parte de sanção — ela
+     ganha formulário próprio depois.
+     ══════════════════════════════════════════════ --}}
 <div class="modal-bg" id="m-doc" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-x" onclick="fModalBtn('m-doc')">&#10005;</button>
-    <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
-      Novo documento
-    </h3>
-    <div class="sub" id="nd-imovel">—</div>
+<div class="modal modal-flex" onclick="event.stopPropagation()">
+  <button class="modal-x" onclick="fecharFormDoc()">&#10005;</button>
 
-    <div class="sec-title">Tipo e data</div>
-    <div class="field">
-      <label for="nd-tipo">Tipo de documento</label>
-      <select id="nd-tipo" onchange="trocarTipoDoc()"></select>
+  {{-- ── CABEÇALHO FIXO ── --}}
+  <div class="doc-head">
+    <div class="doc-head-top">
+      <span class="doc-head-doc" id="fd-tipo-rotulo">Documento</span>
+      <span class="doc-head-num-wrap">
+        <span class="doc-head-lbl">Nº</span>
+        <span id="fd-numero" class="proto-badge doc-head-num">—</span>
+      </span>
+      <span id="fd-status" class="badge bd-in">Novo</span>
+    </div>
+    <div class="doc-head-meta">
+      <div><span class="doc-head-lbl">Data registro:</span> <span id="fd-registro">—</span></div>
+      <div><span class="doc-head-lbl">Agente</span> <span id="fd-agente">—</span></div>
+      <div id="fd-prazo-wrap" hidden><span class="doc-head-lbl">Prazo</span> <span id="fd-prazo-badge" class="badge bd-al"></span></div>
     </div>
 
-    {{-- Data + hora como um campo visual, dois inputs nativos por baixo.
-         Nunca datetime-local: mistura os dois no formato do sistema. --}}
-    <div class="data-hora-combo">
-      <span class="rot" style="font-size:10px;font-weight:700;color:var(--f-rot);
-            text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">Data do fato</span>
-      <div class="campos" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-        <label class="date-ov" style="flex:1;min-width:0">
-          <input type="date" id="nd-data" onchange="syncDataDoc()" onfocus="preencherDataHojeSeVazio(this)">
-          <span class="date-ov-txt vazio">dd/mm/aaaa</span>
-        </label>
-        <span style="width:1px;height:18px;background:var(--bord)"></span>
-        <input type="time" id="nd-hora" onchange="syncDataDoc()" onfocus="preencherHoraAgoraSeVazio(this)"
-               style="border:none;background:none;font-family:inherit;font-size:14px;font-weight:700;
-                      color:var(--chumbo);padding:0;width:74px;outline:none">
-      </div>
-    </div>
-    <input type="hidden" id="nd-datahora">
-
-    <div class="sec-title">Autuado</div>
-    <div class="field">
-      <label for="nd-autuado">Nome do autuado / interessado</label>
-      <input id="nd-autuado" type="text" maxlength="160" placeholder="Como consta no cadastro">
-    </div>
-
-    <div id="bloco-fundamentacao">
-      <div class="sec-title">Fundamentação legal</div>
-      <div id="nd-sugestao" style="margin-bottom:10px"></div>
-      <div class="field">
-        <label for="nd-lei">Lei aplicável</label>
-        <select id="nd-lei" onchange="trocarLeiDoc()"></select>
-      </div>
-      <div class="checklist" id="nd-artigos"></div>
-
-      {{-- Só aparece quando algum artigo marcado cobra por área — a maioria
-           das multas de obras é assim, diferente de posturas. --}}
-      <div id="nd-bloco-area" style="display:none">
-        <div class="field">
-          <label for="nd-area-terreno">Área do terreno (m²)</label>
-          <input id="nd-area-terreno" type="number" min="0" step="0.01" oninput="recalcularMultaDoc()">
-        </div>
-        <div class="field">
-          {{-- Não vem do GIS: só a medição em campo é confiável para multa. --}}
-          <label for="nd-area-construida">Área construída (m²) — medida em campo</label>
-          <input id="nd-area-construida" type="number" min="0" step="0.01" oninput="recalcularMultaDoc()">
-        </div>
-        <div id="nd-memoria-calculo"></div>
-      </div>
-    </div>
-
-    <div id="bloco-prazo">
-      <div class="sec-title">Prazo de cumprimento</div>
-      <div class="field">
-        <label for="nd-prazo">Dias para cumprimento (0 = imediato)</label>
-        <input id="nd-prazo" type="number" min="0" max="365" value="10">
-      </div>
-    </div>
-    <div id="nd-aviso-prazo" class="aviso-legal" style="display:none"></div>
-
-    <div class="sec-title">Descrição</div>
-    <div class="field">
-      <label for="nd-descricao">Relato do fato</label>
-      <textarea id="nd-descricao" rows="3" maxlength="5000"
-                style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
-                placeholder="O que foi constatado e está sendo imputado"></textarea>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-doc')">Cancelar</button>
-      <button class="btn" onclick="salvarRascunho()">Salvar rascunho</button>
-      <button class="btn primary" onclick="lavrarDocumento()">Lavrar</button>
+    <div class="doc-tabs" id="fd-tabs">
+      <button class="doc-tab ativa" data-aba="autuado"  onclick="irAbaDoc('autuado')">Autuado</button>
+      <button class="doc-tab" data-aba="imovel"   onclick="irAbaDoc('imovel')">Imóvel/Origem</button>
+      <button class="doc-tab" data-aba="infracao" onclick="irAbaDoc('infracao')">Infração</button>
+      <button class="doc-tab" data-aba="anexos"   onclick="irAbaDoc('anexos')">Anexos</button>
+      <button class="doc-tab" data-aba="resumo"   onclick="irAbaDoc('resumo')">Resumo</button>
     </div>
   </div>
+
+  {{-- ── CORPO ROLÁVEL ── --}}
+  <div class="doc-body" id="fd-body">
+
+    {{-- AUTUADO --}}
+    <div class="doc-painel ativa" id="fdp-autuado">
+      <div class="sec-title">Dados do autuado</div>
+      <div class="field">
+        <label for="nd-autuado-doc">CPF / CNPJ</label>
+        <input type="text" id="nd-autuado-doc" class="mono" maxlength="20" data-lock
+               placeholder="000.000.000-00">
+      </div>
+      <div class="field">
+        <label for="nd-autuado">Nome / razão social</label>
+        <input type="text" id="nd-autuado" maxlength="160" data-lock
+               placeholder="Como consta no cadastro">
+      </div>
+      <p class="aviso-legal">
+        Sem autuado identificado o documento ainda pode ser lavrado — a
+        fiscalização encontra obra sem responsável no local o tempo todo. O
+        nome pode ser completado antes da entrega da via.
+      </p>
+    </div>
+
+    {{-- IMÓVEL / ORIGEM --}}
+    <div class="doc-painel" id="fdp-imovel">
+      <div class="sec-title">Imóvel</div>
+      {{-- Só leitura: o imóvel vem do mapa ou da busca, e trocá-lo aqui
+           faria o documento mudar de objeto no meio da lavratura. --}}
+      <div class="df-grade" id="nd-imovel-dados"></div>
+
+      <div class="sec-title">Endereço da obra</div>
+      <div class="field">
+        <label for="nd-endereco">Endereço</label>
+        <input type="text" id="nd-endereco" maxlength="200" data-lock
+               placeholder="Rua, número — complemento">
+      </div>
+
+      <div class="sec-title">Origem</div>
+      <div class="field">
+        <label for="nd-origem">Documento que originou este</label>
+        <select id="nd-origem" data-lock>
+          <option value="">Direta — sem documento anterior</option>
+        </select>
+      </div>
+    </div>
+
+    {{-- INFRAÇÃO --}}
+    <div class="doc-painel" id="fdp-infracao">
+      <div class="sec-title">Tipo e data</div>
+      <div class="field">
+        <label for="nd-tipo">Tipo de documento</label>
+        <select id="nd-tipo" data-lock onchange="trocarTipoDoc()"></select>
+      </div>
+      <div class="field">
+        <label for="nd-data">Data e hora do fato</label>
+        <div class="data-hora-combo">
+          <input type="date" id="nd-data" data-lock onchange="syncDataDoc()" onfocus="preencherDataHojeSeVazio(this)">
+          <input type="time" id="nd-hora" data-lock onchange="syncDataDoc()" onfocus="preencherHoraAgoraSeVazio(this)">
+        </div>
+      </div>
+      <input type="hidden" id="nd-datahora">
+
+      <div id="bloco-fundamentacao">
+        <div class="sec-title">Legislação infringida</div>
+        <div id="nd-sugestao" style="margin-bottom:10px"></div>
+        <div class="field">
+          <label for="nd-lei">Lei</label>
+          <select id="nd-lei" data-lock onchange="trocarLeiDoc()"></select>
+        </div>
+        <div class="checklist" id="nd-artigos"></div>
+
+        {{-- Áreas: a base da multa em obras. Aparece só quando algum artigo
+             escolhido cobra por metro quadrado. --}}
+        <div id="nd-bloco-area" style="display:none">
+          <div class="sec-title">Áreas para cálculo</div>
+          <div class="field">
+            <label for="nd-area-terreno">Área do terreno (m²)</label>
+            <input id="nd-area-terreno" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+          </div>
+          <div class="field">
+            <label for="nd-area-construida">Área construída aferida (m²)</label>
+            <input id="nd-area-construida" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+          </div>
+          <div id="nd-memoria-calculo"></div>
+        </div>
+      </div>
+
+      <div id="bloco-prazo">
+        <div class="sec-title">Prazo para cumprimento</div>
+        <div class="field">
+          <label for="nd-prazo">Prazo (dias corridos)</label>
+          <input id="nd-prazo" type="number" min="0" max="365" value="10" data-lock>
+        </div>
+      </div>
+      <div id="nd-aviso-prazo" class="aviso-legal" style="display:none"></div>
+
+      <div class="sec-title">Constatação</div>
+      <div class="field">
+        <label for="nd-descricao">Descrição do fato</label>
+        <textarea id="nd-descricao" rows="4" maxlength="5000" data-lock
+                  style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
+                  placeholder="O que foi constatado e está sendo imputado"></textarea>
+      </div>
+    </div>
+
+    {{-- ANEXOS --}}
+    <div class="doc-painel" id="fdp-anexos">
+      <div class="sec-title">Anexos</div>
+      <div id="nd-anexos"></div>
+      <p class="aviso-legal">
+        Os anexos deste documento são as evidências da vistoria vinculada —
+        em obras a prova é fotografada na vistoria, e é ela que instrui o auto.
+        Para acrescentar fotos, registre-as na vistoria do imóvel.
+      </p>
+    </div>
+
+    {{-- RESUMO --}}
+    <div class="doc-painel" id="fdp-resumo">
+      <div class="doc-resumo" id="nd-resumo"></div>
+    </div>
+  </div>
+
+  {{-- ── RODAPÉ FIXO ──
+       Navegação entre abas à esquerda; ações à direita. Quais ações aparecem
+       depende do estado — ver renderRodapeDoc(). --}}
+  <div class="doc-foot">
+    <button class="btn sm" id="fd-primeira" title="Primeira aba" onclick="irAbaDoc('autuado')">&laquo;</button>
+    <button class="btn" id="fd-voltar" title="Aba anterior" onclick="passoAbaDoc(-1)">&lsaquo;</button>
+    <button class="btn primary" id="fd-avancar" title="Próxima aba" onclick="passoAbaDoc(1)">&rsaquo;</button>
+    <button class="btn sm" id="fd-ultima" title="Última aba" onclick="irAbaDoc('resumo')">&raquo;</button>
+    <div style="flex:1"></div>
+
+    <div class="df-opcoes" id="fd-opcoes-wrap" hidden>
+      <button type="button" class="btn" id="fd-btn-opcoes" onclick="alternarOpcoesDoc(event, 'fd-menu')">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        Opções
+      </button>
+      <div class="df-menu df-menu-cima" id="fd-menu"></div>
+    </div>
+
+    <button class="btn" id="fd-sair-edicao" onclick="sairEdicaoDoc()" hidden>Sair</button>
+    {{-- Mesmo desenho do Editar de usuários e de leis: verde de contorno com
+         o lápis. Era o único da aplicação sem o ícone, e sem ele não se
+         reconhecia como o mesmo gesto. --}}
+    <button class="btn edit-verde" id="fd-editar" onclick="editarDoc()" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>
+      </svg>Editar</button>
+    <button class="btn primary" id="fd-gravar" onclick="gravarDoc()" hidden>Gravar</button>
+    <button class="btn atencao" id="fd-lavrar" onclick="lavrarDocumento()" hidden>Lavrar</button>
+  </div>
 </div>
+</div>
+
 
 {{-- CONFIRMAÇÃO DE LOTE (GPS não conclusivo) --}}
 <div class="modal-bg" id="m-confirmar-lote" onclick="fModal()">
@@ -1085,54 +1451,131 @@
       </div>
     </div>
 
-    <div class="sec-title">Identificação</div>
-    <div class="field">
-      <label>E-mail</label>
-      <input type="text" value="{{ auth()->user()->email }}" readonly>
-    </div>
-    <div class="field">
-      <label>Matrícula</label>
-      <input type="text" class="mono" value="{{ auth()->user()->matricula ?: '—' }}" readonly>
-    </div>
-    <p class="aviso-legal">
-      Nome, e-mail, matrícula e perfil são alterados pelo administrador do
-      sistema — mudam quem você é no processo administrativo.
-    </p>
-
-    <div class="sec-title">Trocar senha</div>
-    <div class="field">
-      {{-- Exigida mesmo com a sessão aberta: sem isso, um computador deixado
-           destravado na repartição vira perda da conta. --}}
-      <label for="pf-senha-atual">Senha atual</label>
-      <input type="password" id="pf-senha-atual" autocomplete="current-password">
-    </div>
-    <div class="field">
-      <label for="pf-senha-nova">Nova senha (mínimo 8 caracteres)</label>
-      <input type="password" id="pf-senha-nova" autocomplete="new-password">
-    </div>
-    <div class="field">
-      <label for="pf-senha-conf">Confirmar nova senha</label>
-      <input type="password" id="pf-senha-conf" autocomplete="new-password">
-    </div>
-    <div class="btn-row">
-      <button class="btn primary" onclick="salvarSenha()">Alterar senha</button>
+    {{-- Duas abas, e não uma coluna só: empilhado, o conteúdo estourava a
+         altura do modal e a assinatura acabava desenhada dentro de uma área
+         rolante — o pior lugar possível para arrastar o dedo, porque o gesto
+         de desenhar disputa com o gesto de rolar. Separadas, cada aba cabe na
+         tela e o canvas ganha a altura que a assinatura precisa. --}}
+    <div class="sub-abas">
+      <button class="at" data-pf="dados" onclick="subPerfil('dados')">Dados</button>
+      <button data-pf="assinatura" onclick="subPerfil('assinatura')">Assinatura</button>
     </div>
 
-    <div class="sec-title">Minha assinatura</div>
-    <p class="aviso-legal">
-      Desenhada uma vez e aplicada automaticamente nos documentos que você
-      lavrar. Documentos já lavrados guardam a assinatura do dia e não mudam.
-    </p>
-    <div id="pf-assinatura-atual"></div>
-    <div class="assina-caixa">
-      <canvas id="pf-canvas"></canvas>
-      <span class="assina-linha"></span>
-      <span class="assina-dica">Assine acima com o dedo ou o mouse</span>
+    {{-- ── DADOS ── --}}
+    <div class="pf-painel at" id="pf-dados">
+      <div class="sec-title">Identificação</div>
+      <div class="field">
+        <label>E-mail</label>
+        <input type="text" value="{{ auth()->user()->email }}" readonly>
+      </div>
+      <div class="field">
+        <label>Matrícula</label>
+        <input type="text" class="mono" value="{{ auth()->user()->matricula ?: '—' }}" readonly>
+      </div>
+      <p class="aviso-legal">
+        Nome, e-mail, matrícula e perfil são alterados pelo administrador do
+        sistema — mudam quem você é no processo administrativo.
+      </p>
+
+      {{-- A escolha fica no navegador (localStorage), não no cadastro: é
+           preferência de exibição, não dado do servidor administrativo. Vale
+           por aparelho, que é o comportamento esperado de quem usa o celular
+           em campo e o desktop na repartição. --}}
+      <div class="sec-title">Aparência</div>
+      <div class="tema-opcoes">
+        <button type="button" class="tema-op" id="tema-op-institucional" onclick="escolherTema('institucional')">
+          <span class="amostra" style="background:linear-gradient(160deg,#00451A,#006B28)"></span>
+          <span>
+            <span class="nome">Institucional</span>
+            <span class="obs">Verde do município</span>
+          </span>
+        </button>
+        <button type="button" class="tema-op" id="tema-op-f" onclick="escolherTema('f')">
+          <span class="amostra" style="background:linear-gradient(135deg,#EA580C,#F97316)"></span>
+          <span>
+            <span class="nome">Âmbar</span>
+            <span class="obs">Tema anterior</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="sec-title">Trocar senha</div>
+      <div class="field">
+        {{-- Exigida mesmo com a sessão aberta: sem isso, um computador deixado
+             destravado na repartição vira perda da conta. --}}
+        <label for="pf-senha-atual">Senha atual</label>
+        <input type="password" id="pf-senha-atual" autocomplete="current-password">
+      </div>
+      <div class="field">
+        <label for="pf-senha-nova">Nova senha (mínimo 8 caracteres)</label>
+        <input type="password" id="pf-senha-nova" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="pf-senha-conf">Confirmar nova senha</label>
+        <input type="password" id="pf-senha-conf" autocomplete="new-password">
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="salvarSenha()">Alterar senha</button>
+      </div>
+    </div>
+
+    {{-- ── ASSINATURA ── --}}
+    <div class="pf-painel" id="pf-assinatura">
+      <p class="aviso-legal">
+        Desenhada uma vez e aplicada automaticamente nos documentos que você
+        lavrar. Documentos já lavrados guardam a assinatura do dia e não mudam.
+      </p>
+      <div id="pf-assinatura-atual"></div>
+      <div class="assina-caixa alta">
+        <canvas id="pf-canvas"></canvas>
+        <span class="assina-linha"></span>
+        <span class="assina-dica">Assine acima com o dedo ou o mouse</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="limparAssinatura()">Limpar</button>
+        <button class="btn" onclick="removerAssinatura()">Remover salva</button>
+        <button class="btn primary" onclick="salvarAssinatura()">Salvar assinatura</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{{-- ESCOLHA DE ANEXOS ANTES DE IMPRIMIR
+     Foto de evidência ocupa espaço grande na via impressa, e nem toda cópia
+     precisa delas — a mesma pergunta do `#m-pdf-anexos` do AppPOSTURAS. --}}
+<div class="modal-bg" id="m-imp-anexos" onclick="fModal()">
+  <div class="modal sm" onclick="event.stopPropagation()" style="max-width:420px">
+    <button class="modal-x" onclick="fModalBtn('m-imp-anexos')">&#10005;</button>
+    <h3>Incluir anexos?</h3>
+    <div class="sub" id="imp-anexos-msg" style="color:var(--tx2);font-size:13px">—</div>
+    <div class="btn-row">
+      <button class="btn" onclick="imprimirDoc(false)">Sem anexos</button>
+      <button class="btn primary" onclick="imprimirDoc(true)">Com anexos</button>
+    </div>
+  </div>
+</div>
+
+{{-- ANULAÇÃO
+     Motivo obrigatório: anulação sem motivação declarada não é ato
+     administrativo. O documento não é apagado — passa a sair com marca. --}}
+<div class="modal-bg" id="m-doc-anular" onclick="fModal()">
+  <div class="modal sm" onclick="event.stopPropagation()" style="max-width:460px">
+    <button class="modal-x" onclick="fModalBtn('m-doc-anular')">&#10005;</button>
+    <h3>Anular documento</h3>
+    <div class="sub" style="color:var(--tx2);font-size:13px">
+      O documento continua no processo e passa a ser impresso com a marca
+      <b>ANULADO</b>. O motivo fica registrado com o seu nome.
+    </div>
+    <div class="field">
+      <label for="da-motivo">Motivo da anulação</label>
+      <textarea id="da-motivo" rows="4" maxlength="1000"
+                style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
+                placeholder="Ex.: erro na identificação do imóvel autuado…"></textarea>
     </div>
     <div class="btn-row">
-      <button class="btn" onclick="limparAssinatura()">Limpar</button>
-      <button class="btn" onclick="removerAssinatura()">Remover salva</button>
-      <button class="btn primary" onclick="salvarAssinatura()">Salvar assinatura</button>
+      <button class="btn" onclick="fModalBtn('m-doc-anular')">Cancelar</button>
+      <button class="btn danger" onclick="confirmarAnulacaoDoc()">Anular</button>
     </div>
   </div>
 </div>
@@ -1176,6 +1619,10 @@
 @endphp
 <script>
 window.USUARIO_ID = {{ auth()->id() }}
+window.USUARIO_NOME = {{ Js::from(auth()->user()->name) }}
+{{-- A tela usa isto so para ESCONDER o que o usuario nao pode fazer. Quem
+     autoriza de verdade e o servidor, em QuarteiraoController::aplicar(). --}}
+window.USUARIO_ADMIN = {{ Js::from(auth()->user()->isAdmin()) }}
 window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1185,7 +1632,9 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/vistoria.js')"></script>
 <script src="@assetv('js/mapa-cores.js')"></script>
 <script src="@assetv('js/painel.js')"></script>
+<script src="@assetv('js/busca.js')"></script>
 <script src="@assetv('js/documentos.js')"></script>
+<script src="@assetv('js/documento-form.js')"></script>
 <script src="@assetv('js/protocolos.js')"></script>
 <script src="@assetv('js/perfil.js')"></script>
 @if (auth()->user()->isAdmin())

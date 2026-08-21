@@ -7,6 +7,7 @@ use App\Models\Legislacao;
 use App\Models\Lote;
 use App\Models\Parametro;
 use App\Models\Vistoria;
+use App\Services\DocumentoImpressao;
 use App\Services\LavraturaService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -55,7 +56,9 @@ class DocumentoController extends Controller
             });
         }
 
-        $itens = $q->limit(300)->get()->map(function (Documento $doc) {
+        $usuario = $request->user();
+
+        $itens = $q->limit(300)->get()->map(function (Documento $doc) use ($usuario) {
             [$stTxt, $stCls] = $doc->statusBadge();
             $prazo = $doc->situacaoPrazo();
 
@@ -74,6 +77,9 @@ class DocumentoController extends Controller
                 'lei'         => $doc->legislacao?->rotulo() ?: '—',
                 'artigos'     => $doc->artigos_count,
                 'valor_upf'   => $doc->valor_upf,
+                // O cartão da lista também tem menu de opções, como no
+                // AppPOSTURAS: imprimir ou anular sem precisar abrir a ficha.
+                'opcoes'      => $doc->opcoesPara($usuario),
             ];
         });
 
@@ -148,7 +154,20 @@ class DocumentoController extends Controller
     }
 
     /** POST /api/lotes/{lote}/documentos — cria como RASCUNHO, sem número. */
-    public function store(Request $request, Lote $lote): JsonResponse
+    /**
+     * POST /api/documentos — mesma criação, SEM imóvel definido.
+     *
+     * O fiscal abre a peça com o que tem em campo e amarra o imóvel depois,
+     * pela aba Imóvel. A obrigatoriedade não sumiu: mudou de lugar, para a
+     * lavratura (ver LavraturaService::lavrar). Exigi-la aqui obrigava a
+     * passar pelo mapa — que é o caminho pago — só para começar a escrever.
+     */
+    public function storeSemLote(Request $request): JsonResponse
+    {
+        return $this->store($request, null);
+    }
+
+    public function store(Request $request, ?Lote $lote = null): JsonResponse
     {
         if (! $request->user()->podeLavrarDocumento()) {
             return response()->json([
@@ -178,7 +197,7 @@ class DocumentoController extends Controller
 
         $doc = Documento::create([
             'tipo'          => $d['tipo'],
-            'lote_id'       => $lote->id,
+            'lote_id'       => $lote?->id,
             'vistoria_id'   => $d['vistoria_id'] ?? null,
             'legislacao_id' => $d['legislacao_id'] ?? null,
             'agente_id'     => $request->user()->id,
@@ -190,7 +209,7 @@ class DocumentoController extends Controller
             'endereco'      => $d['endereco'] ?? null,
             'descricao'     => $d['descricao'] ?? null,
             'observacoes'   => $d['observacoes'] ?? null,
-            'area_terreno_m2'    => $d['area_terreno_m2'] ?? $lote->area_gis_m2 ?? null,
+            'area_terreno_m2'    => $d['area_terreno_m2'] ?? $lote?->area_gis_m2 ?? null,
             'area_construida_m2' => $d['area_construida_m2'] ?? null,
         ]);
 
@@ -233,26 +252,199 @@ class DocumentoController extends Controller
     }
 
     /**
-     * GET /documentos/{documento}/pdf — impressão do documento.
+     * GET /api/documentos/{documento} — ficha completa, para o modal.
+     *
+     * A lista traz só o que cabe no cartão. Antes desta rota, clicar num
+     * documento abria o PDF direto: não havia onde ver o conteúdo na tela nem
+     * onde pendurar o menu de opções. É a ficha do AppPOSTURAS.
+     */
+    public function ficha(Request $request, Documento $documento): JsonResponse
+    {
+        $documento->load(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'anuladoPor', 'vistoria.evidencias']);
+
+        [$stTxt, $stCls] = $documento->statusBadge();
+        $prazo = $documento->situacaoPrazo();
+
+        return response()->json([
+            'id'          => $documento->id,
+            'tipo'        => $documento->tipo,
+            'tipo_rotulo' => $documento->rotuloTipo(),
+            'numero'      => $documento->numeroFormatado(),
+            'status'      => ['valor' => $documento->status, 'texto' => $stTxt, 'classe' => $stCls],
+            'prazo_badge' => $prazo ? ['texto' => $prazo[0], 'classe' => $prazo[1]] : null,
+
+            'data_fato'      => $documento->data_fato?->format('d/m/Y H:i'),
+            'data_lavratura' => $documento->data_lavratura?->format('d/m/Y H:i'),
+            'criado_em'      => $documento->created_at?->format('d/m/Y H:i'),
+            'agente'         => $documento->agente?->name,
+            'matricula'      => $documento->agente?->matricula,
+            'origem'         => $documento->origem?->numeroFormatado(),
+
+            'imovel' => [
+                'inscricao' => $documento->lote?->inscricao_imobiliaria,
+                'bairro'    => $documento->lote?->bairro,
+                'quadra'    => $documento->lote?->quadra,
+                'lote'      => $documento->lote?->numero_lote,
+                'endereco'  => $documento->endereco,
+                'terreno'   => $documento->area_terreno_m2,
+                'construida'=> $documento->area_construida_m2,
+            ],
+
+            'autuado'   => ['nome' => $documento->autuado_nome, 'documento' => $documento->autuado_documento],
+            'descricao' => $documento->descricao,
+            'observacoes' => $documento->observacoes,
+
+            'lei'     => $documento->legislacao?->rotulo(),
+            'artigos' => $documento->artigos->map(fn ($a) => [
+                'numero'  => $a->numero,
+                'conduta' => $a->conduta,
+                'sancao'  => $a->sancao,
+                'base'    => $a->base_multa,
+                'calculo' => $a->base_multa === 'fixa'
+                    ? $a->multa_upf . ' UPF (fixo)'
+                    : ($a->base_multa === 'sem_multa'
+                        ? 'sem multa'
+                        : $a->multa_upf_m2 . ' UPF/m²' . ($a->area_m2 ? ' × ' . $a->area_m2 . ' m²' : '')),
+                'valor'   => $a->valor_upf,
+            ]),
+
+            'valor_upf' => $documento->valor_upf,
+            'upf_valor' => $documento->upf_valor,
+            'valor_reais' => $documento->valor_upf && $documento->upf_valor
+                ? $documento->valor_upf * $documento->upf_valor
+                : null,
+
+            'prazo_ate'  => $documento->prazo_ate?->format('d/m/Y'),
+            'defesa_ate' => $documento->defesa_ate?->format('d/m/Y'),
+
+            'anexos' => $documento->vistoria?->evidencias->count() ?? 0,
+
+            'anulacao' => $documento->anulado_em ? [
+                'em'     => $documento->anulado_em->format('d/m/Y H:i'),
+                'por'    => $documento->anuladoPor?->name,
+                'motivo' => $documento->anulacao_motivo,
+            ] : null,
+
+            // As opções vêm do servidor, não do JavaScript: é o servidor que
+            // recusa a ação de verdade, e um menu que oferece o que a regra
+            // depois nega é pior do que um menu curto.
+            'opcoes' => $documento->opcoesPara($request->user()),
+        ]);
+    }
+
+    /**
+     * POST /api/documentos/{documento}/anular — cancela um documento lavrado.
+     *
+     * Não apaga: um auto anulado continua sendo peça do processo. Ele passa a
+     * sair impresso com a marca "ANULADO", e o motivo fica registrado com o
+     * nome de quem anulou — anulação sem motivo declarado não é ato, é sumiço.
+     */
+    public function anular(Request $request, Documento $documento): JsonResponse
+    {
+        $d = $request->validate([
+            'motivo' => ['required', 'string', 'min:10', 'max:1000'],
+        ], [
+            'motivo.required' => 'Informe o motivo da anulação.',
+            'motivo.min'      => 'Descreva o motivo com pelo menos 10 caracteres.',
+        ]);
+
+        if (! in_array('anular', $documento->opcoesPara($request->user()), true)) {
+            return response()->json(['message' => 'Este documento não pode ser anulado por você.'], 403);
+        }
+
+        $documento->update([
+            'status'          => 'anulado',
+            'anulado_em'      => now(),
+            'anulado_por'     => $request->user()->id,
+            'anulacao_motivo' => $d['motivo'],
+        ]);
+
+        return response()->json(['message' => 'Documento anulado.']);
+    }
+
+    /**
+     * PATCH /api/documentos/{documento} — altera um rascunho.
+     *
+     * Só rascunho, e só do autor. Documento lavrado é peça de processo: seu
+     * conteúdo não muda depois de assinado — para desfazê-lo existe a
+     * anulação, que deixa rastro de quem, quando e por quê.
+     */
+    public function update(Request $request, Documento $documento): JsonResponse
+    {
+        if ($documento->status !== 'rascunho') {
+            return response()->json(['message' => 'Documento lavrado não pode ser alterado. Use a anulação.'], 422);
+        }
+        if ($documento->agente_id !== $request->user()->id) {
+            return response()->json(['message' => 'Só o autor pode alterar o próprio rascunho.'], 403);
+        }
+
+        $d = $request->validate([
+            'tipo'               => ['required', Rule::in(array_keys(Documento::TIPOS))],
+            'data_fato'          => ['required', 'date'],
+            // O imóvel pode entrar aqui, depois da criação — é o caminho de
+            // quem abriu a peça em campo sem tê-lo identificado ainda.
+            'lote_id'            => ['nullable', 'exists:lotes,id'],
+            'legislacao_id'      => ['nullable', 'exists:legislacoes,id'],
+            'origem_id'          => ['nullable', 'exists:documentos,id'],
+            'autuado_nome'       => ['nullable', 'string', 'max:160'],
+            'autuado_documento'  => ['nullable', 'string', 'max:20'],
+            'endereco'           => ['nullable', 'string', 'max:200'],
+            'descricao'          => ['nullable', 'string', 'max:5000'],
+            'observacoes'        => ['nullable', 'string', 'max:5000'],
+            'prazo_dias'         => ['nullable', 'integer', 'min:0', 'max:365'],
+            'area_terreno_m2'    => ['nullable', 'numeric', 'min:0'],
+            'area_construida_m2' => ['nullable', 'numeric', 'min:0'],
+            'artigos'            => ['nullable', 'array'],
+            'artigos.*'          => ['integer', 'exists:artigos,id'],
+        ]);
+
+        $documento->update(collect($d)->except('artigos')->all());
+
+        // Os artigos são refixados por inteiro: manter os antigos e somar os
+        // novos deixaria no documento um enquadramento que o fiscal removeu
+        // da tela e acredita ter tirado.
+        $documento->artigos()->delete();
+        if (! empty($d['artigos'])) {
+            $this->lavratura->fixarArtigos($documento, $d['artigos']);
+        }
+
+        return response()->json(['message' => 'Rascunho atualizado.']);
+    }
+
+    /**
+     * DELETE /api/documentos/{documento} — descarta um rascunho.
+     *
+     * Só rascunho, e só do próprio autor. Documento lavrado nunca é excluído:
+     * para desfazê-lo existe a anulação, que deixa rastro.
+     */
+    public function destroy(Request $request, Documento $documento): JsonResponse
+    {
+        if (! in_array('excluir', $documento->opcoesPara($request->user()), true)) {
+            return response()->json(['message' => 'Só o autor pode excluir o próprio rascunho.'], 403);
+        }
+
+        $documento->artigos()->delete();
+        $documento->delete();
+
+        return response()->json(['message' => 'Rascunho excluído.']);
+    }
+
+    /**
+     * GET /documentos/{documento}/pdf — PDF do documento, no layout oficial.
      *
      * Fora do prefixo /api de propósito, como a rota de evidência: devolve um
      * arquivo, não JSON, e o navegador precisa poder abri-la direto numa aba
      * (o front usa window.open, não fetch).
      */
-    public function pdf(Documento $documento): Response
+    public function pdf(Request $request, Documento $documento, DocumentoImpressao $impressao): Response
     {
-        $documento->load(['lote', 'legislacao', 'agente', 'artigos']);
+        $dados = $impressao->montar(
+            $documento,
+            paraPdf: true,
+            comAnexos: $request->boolean('anexos', true),
+        );
 
-        $prazoDias = $documento->tipo === 'notificacao' ? $documento->prazo_dias : null;
-
-        $pdf = Pdf::loadView('pdf.documento', [
-            'doc'             => $documento,
-            'orgaoNome'       => Parametro::get('orgao_nome'),
-            'orgaoSecretaria' => Parametro::get('orgao_secretaria'),
-            'orgaoEndereco'   => Parametro::get('orgao_endereco'),
-            'orgaoTelefone'   => Parametro::get('orgao_telefone'),
-            'textoCiencia'    => $documento->legislacao?->ciencia($documento->tipo, $prazoDias),
-        ])->setPaper('a4');
+        $pdf = Pdf::loadView('impressao.a4', $dados + ['navegador' => false])->setPaper('a4');
 
         // O nome do arquivo não aceita "/" — e numeroFormatado() tem um
         // ("AI 2026/0002"), por ser o formato natural de citar o documento.
@@ -261,5 +453,30 @@ class DocumentoController extends Controller
         // Inline (não "attachment"): abre na aba, como qualquer visualizador
         // de PDF do navegador — o fiscal só baixa se quiser, via o próprio Chrome.
         return $pdf->stream($nomeArquivo);
+    }
+
+    /**
+     * GET /documentos/{documento}/impressao?formato=a4|termica&anexos=0|1
+     *
+     * Página HTML que se manda para a impressora sozinha. Existe ao lado do
+     * PDF porque a bobina térmica de 80mm tem altura variável (`size:80mm
+     * auto`) e o dompdf só trabalha com página de altura fixa — a via que o
+     * fiscal entrega em campo não sairia certa por lá.
+     */
+    public function impressao(Request $request, Documento $documento, DocumentoImpressao $impressao): Response
+    {
+        $d = $request->validate([
+            'formato' => ['nullable', Rule::in(['a4', 'termica'])],
+        ]);
+
+        $formato = $d['formato'] ?? 'a4';
+
+        $dados = $impressao->montar(
+            $documento,
+            paraPdf: false,
+            comAnexos: $request->boolean('anexos', true),
+        );
+
+        return response()->view('impressao.' . $formato, $dados + ['navegador' => true]);
     }
 }

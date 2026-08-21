@@ -35,6 +35,18 @@ class LavraturaService
         if ($doc->status !== 'rascunho') {
             throw new RuntimeException('Só rascunho pode ser lavrado.');
         }
+
+        // O imóvel é dispensado na CRIAÇÃO — o fiscal começa a peça com o que
+        // tem em mãos — mas não aqui. Na lavratura o documento vira ato, e ato
+        // de fiscalização de obras sem imóvel identificado não tem contra o
+        // que valer: não há o que notificar, embargar ou cobrar.
+        if (! $doc->lote_id) {
+            throw new RuntimeException(
+                'Documento sem imóvel identificado não pode ser lavrado. '
+                . 'Informe o imóvel na aba Imóvel/Origem.'
+            );
+        }
+
         if ($doc->exigeFundamentacao() && $doc->artigos()->count() === 0) {
             throw new RuntimeException(
                 'Documento sem fundamentação legal não pode ser lavrado. '

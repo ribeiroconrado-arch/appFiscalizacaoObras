@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Artigo;
+use App\Models\Documento;
 use App\Models\Irregularidade;
 use App\Models\Legislacao;
 use Illuminate\Http\JsonResponse;
@@ -155,5 +156,32 @@ class LegislacaoController extends Controller
         $artigo->delete();
 
         return response()->json(['message' => 'Artigo excluído. Documentos já lavrados mantêm a redação original.']);
+    }
+
+    /**
+     * DELETE /api/legislacao/{legislacao} — exclui a lei e seus artigos.
+     *
+     * Recusa quando algum documento cita a lei: o cadastro é o que sustenta a
+     * fundamentação exibida na tela e na reimpressão, e apagá-lo deixaria o
+     * documento apontando para o vazio. Nesse caso o caminho é DESATIVAR a lei
+     * — ela some das opções de novos documentos e continua sustentando os
+     * antigos.
+     */
+    public function excluirLei(Request $r, Legislacao $legislacao): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        $emUso = Documento::where('legislacao_id', $legislacao->id)->count();
+        if ($emUso) {
+            return response()->json([
+                'message' => "Esta lei é citada por {$emUso} documento(s) e não pode ser excluída. "
+                           . 'Desative-a para que deixe de aparecer em novos documentos.',
+            ], 422);
+        }
+
+        $legislacao->artigos()->delete();
+        $legislacao->delete();
+
+        return response()->json(['message' => 'Lei excluída.']);
     }
 }

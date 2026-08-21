@@ -7,16 +7,83 @@
 // ══════════════════════════════════════════════
 
 /**
- * Mensagem curta e efêmera no rodapé. Substitui `alert()` em todo o sistema.
+ * Aviso curto e efêmero. Substitui `alert()` em todo o sistema.
+ *
  * @param {string} msg
- * @param {'ok'|'err'} [tipo='ok']
+ * @param {'ok'|'err'|'aviso'} [tipo='ok']
+ * @param {{campo?: string}} [opts] campo: id do campo que impediu a ação
  */
-function toast(msg, tipo = 'ok') {
+function toast(msg, tipo = 'ok', opts = {}) {
   const el = document.getElementById('toast')
-  el.textContent = msg
-  el.className = tipo === 'err' ? 'show err' : 'show'
+
+  // Aviso em SUPERFÍCIE, não em bloco colorido.
+  //
+  // O formato anterior era uma pílula inteiramente vermelha ou verde ocupando
+  // quase a largura da tela. Duas consequências: mensagem longa virava um
+  // paredão sobre a interface, e a cor gritava com a mesma intensidade para
+  // "salvo" e para "campo obrigatório" — avisos de peso muito diferente.
+  // Agora a cor vive na barra lateral e no ícone, o texto fica escuro e
+  // legível, e a caixa tem o tamanho do que precisa dizer.
+  const t = TIPOS_AVISO[tipo] ? tipo : 'ok'
+  el.className = 'toast toast-' + t + ' show'
+  el.innerHTML = `<span class="toast-ico">${TIPOS_AVISO[t]}</span>`
+    + `<span class="toast-txt">${esc(msg)}</span>`
+
+  // Clicar dispensa: aviso que só sai sozinho obriga a esperar.
+  el.onclick = () => { el.className = 'toast'; clearTimeout(el._t) }
+
   clearTimeout(el._t)
-  el._t = setTimeout(() => { el.className = '' }, 3200)
+  // Erro fica mais tempo: costuma pedir uma ação, não só informar.
+  el._t = setTimeout(() => { el.className = 'toast' }, t === 'err' ? 5000 : 3200)
+
+  if (opts.campo) marcarCampoInvalido(opts.campo)
+}
+
+/** Ícone de cada tipo de aviso. */
+const TIPOS_AVISO = {
+  ok: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`,
+  err: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+    stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h.01"/></svg>`,
+  aviso: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>`,
+}
+
+/**
+ * Marca o campo que impediu a ação e leva o usuário até ele.
+ *
+ * Um aviso de "campo obrigatório" que não diz QUAL campo obriga a varrer o
+ * formulário inteiro — e num formulário com abas o campo pode nem estar na
+ * aba visível. A marca sai sozinha assim que o usuário mexe no campo: exigir
+ * que ele a apague seria cobrar duas ações por um erro.
+ *
+ * @param {string} id
+ */
+function marcarCampoInvalido(id) {
+  const el = document.getElementById(id)
+  if (!el) return
+
+  el.classList.add('campo-invalido')
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  setTimeout(() => el.focus?.(), 220)
+
+  const limpar = () => {
+    el.classList.remove('campo-invalido')
+    el.removeEventListener('input', limpar)
+    el.removeEventListener('change', limpar)
+  }
+  el.addEventListener('input', limpar)
+  el.addEventListener('change', limpar)
+}
+
+/**
+ * Exigência de preenchimento: avisa e aponta o campo, numa chamada só.
+ *
+ * @param {string} id  campo que falta
+ * @param {string} msg o que se espera dele
+ */
+function exigirCampo(id, msg) {
+  toast(msg, 'err', { campo: id })
 }
 
 /** Abre o modal e trava o scroll do body. @param {string} id */
@@ -165,3 +232,98 @@ function preencherDataHojeSeVazio(i) {
 function preencherHoraAgoraSeVazio(i) {
   if (!i.value) i.value = horaAgoraLocal()
 }
+
+// ── MENU "NOVO" ANCORADO ─────────────────────────────────────
+// Componente único para qualquer botão de criar que tenha MAIS DE UMA opção.
+// Antes cada botão desses resolvia do seu jeito — um abria modal, outro já
+// criava direto —, e o usuário precisava descobrir o comportamento de cada um.
+//
+// O menu nasce do próprio botão (speed-dial), como no AppPOSTURAS: a lista
+// aparece colada nele, não no centro da tela, para não perder a relação entre
+// o que foi clicado e o que abriu.
+
+/**
+ * Abre o menu de opções ancorado a um botão.
+ *
+ * Aceita o EVENTO ou o próprio elemento. A distinção importa: `currentTarget`
+ * só existe enquanto o evento está sendo despachado, e vira `null` assim que o
+ * manipulador devolve o controle. Quem abre o menu depois de um `await` —
+ * carregar os tipos de documento, por exemplo — recebe `null` ali e o menu
+ * ficava sem posição nenhuma, encalhado no canto superior esquerdo da tela.
+ * Acontecia só na PRIMEIRA vez, porque na segunda a resposta vinha do cache e
+ * não havia espera.
+ *
+ * @param {MouseEvent|HTMLElement} origem  o clique, ou o botão que ancora
+ * @param {Array<{rotulo:string, icone?:string, acao:Function}>} opcoes
+ */
+function abrirMenuNovo(origem, opcoes) {
+  const ev = origem instanceof Event ? origem : null
+  ev?.stopPropagation()
+  fecharMenuNovo()
+
+  const botao = ev ? (ev.currentTarget || ev.target) : origem
+  if (!botao?.getBoundingClientRect) {
+    console.error('abrirMenuNovo: sem elemento para ancorar o menu.')
+    return
+  }
+
+  const fundo = document.createElement('div')
+  fundo.className = 'menu-novo-fundo'
+  fundo.id = 'menu-novo-fundo'
+  fundo.onclick = fecharMenuNovo
+
+  const menu = document.createElement('div')
+  menu.className = 'menu-novo'
+  menu.id = 'menu-novo'
+
+  opcoes.forEach((o, i) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'menu-novo-op'
+    b.innerHTML = (o.icone ? `<span class="menu-novo-ico">${o.icone}</span>` : '')
+      + `<span>${esc(o.rotulo)}</span>`
+    b.onclick = () => { fecharMenuNovo(); o.acao() }
+    // Entrada escalonada: as opções descem uma após a outra, o que mostra de
+    // onde a lista saiu. Sem isso ela apenas aparece, e o vínculo com o botão
+    // se perde.
+    b.style.animationDelay = (i * 35) + 'ms'
+    menu.appendChild(b)
+  })
+
+  document.body.append(fundo, menu)
+  posicionarMenuNovo(menu, botao)
+  botao.classList.add('menu-aberto')
+}
+
+/**
+ * Coloca o menu junto ao botão, dentro da tela.
+ *
+ * Abre para baixo quando há espaço e para cima quando não há — um menu que
+ * nasce fora da viewport é um menu que não existe. O alinhamento acompanha a
+ * borda direita do botão, que é onde esses botões costumam ficar.
+ */
+function posicionarMenuNovo(menu, botao) {
+  const r = botao.getBoundingClientRect()
+  const alt = menu.offsetHeight
+  const larg = menu.offsetWidth
+
+  const cabeAbaixo = r.bottom + 8 + alt <= window.innerHeight - 8
+  menu.style.top = cabeAbaixo ? (r.bottom + 8) + 'px' : Math.max(8, r.top - 8 - alt) + 'px'
+
+  const esquerda = Math.min(
+    Math.max(8, r.right - larg),
+    window.innerWidth - larg - 8
+  )
+  menu.style.left = esquerda + 'px'
+}
+
+function fecharMenuNovo() {
+  document.getElementById('menu-novo')?.remove()
+  document.getElementById('menu-novo-fundo')?.remove()
+  document.querySelectorAll('.menu-aberto').forEach(b => b.classList.remove('menu-aberto'))
+}
+
+// Esc fecha, como qualquer menu.
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') fecharMenuNovo()
+})

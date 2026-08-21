@@ -94,7 +94,39 @@ class CorrigirQuadras extends Command
         $empates = 0;
         $semNumero = 0;
 
+        $fundidos = 0;
+
         foreach ($grupos as $ids) {
+            // ── TRAVA CONTRA FUSÃO DE QUADRAS ──
+            //
+            // A adjacência assume que quadras vizinhas são separadas pela rua.
+            // Onde a digitalização não respeita isso, lotes de quadras
+            // diferentes se tocam e viram UM componente só — e a maioria
+            // engole todas. Foi o que aconteceu no Residencial Buritis V: a
+            // Q38 saiu de 89 para 150 lotes, absorvendo seis quadras vizinhas.
+            //
+            // O teste não é um limite de tamanho (que seria chute), é
+            // estrutural: numa quadra de verdade cada número de lote aparece
+            // UMA vez. Número repetido dentro do componente prova que ali há
+            // mais de uma quadra, e então não há o que decidir por maioria.
+            $vistos = [];
+            $repetido = null;
+            foreach ($ids as $id) {
+                $n = $lotes[$id]->numero_lote;
+                if ($n === null || $n === '') { continue; }
+                if (isset($vistos[$n])) { $repetido = $n; break; }
+                $vistos[$n] = true;
+            }
+            if ($repetido !== null) {
+                $fundidos++;
+                $this->warn(sprintf(
+                    '  grupo de %d lotes IGNORADO: número de lote "%s" repetido dentro dele '
+                    . '— são quadras distintas coladas, não uma só.',
+                    count($ids), $repetido
+                ));
+                continue;
+            }
+
             $votos = [];
             foreach ($ids as $id) {
                 $q = $lotes[$id]->quadra;
@@ -105,7 +137,14 @@ class CorrigirQuadras extends Command
             if (! $votos) { $semNumero++; continue; }
 
             arsort($votos);
-            $vencedor = array_key_first($votos);
+
+            // O (string) é obrigatório: o PHP converte chave de array numérica
+            // em INTEIRO, então `$votos["24"]` vira `$votos[24]` e
+            // array_key_first() devolve int. A comparação estrita lá embaixo
+            // (`!==`) passava a dar verdadeiro para TODO lote de quadra sem
+            // zero à esquerda — 570 falsos positivos de 707 lotes, exibidos
+            // como "Q24 -> Q24", escondendo as correções reais no meio.
+            $vencedor = (string) array_key_first($votos);
             $maisVotos = $votos[$vencedor];
 
             // Empate real: dois números com a mesma votação. Não decide sozinho.
@@ -131,10 +170,15 @@ class CorrigirQuadras extends Command
 
         $this->newLine();
         $this->info('Lotes a corrigir: ' . count($correcoes));
+        if ($fundidos)  {
+            $this->error('Grupos IGNORADOS por fusão de quadras: ' . $fundidos);
+            $this->line('  Nesses o desenho não separa as quadras pela rua — a adjacência não');
+            $this->line('  resolve, e forçar produziria uma quadra fictícia. Corrija no DWG.');
+        }
         if ($empates)   { $this->warn('Grupos sem maioria clara: ' . $empates); }
         if ($semNumero) { $this->warn('Grupos sem nenhum número: ' . $semNumero); }
 
-        foreach (array_slice($correcoes, 0, 15) as $c) {
+        foreach (array_slice($correcoes, 0, 100) as $c) {
             $this->line(sprintf('  %s: lote %s  Q%s -> Q%s', $c['bairro'], $c['lote'], $c['de'], $c['para']));
         }
         if (count($correcoes) > 15) {

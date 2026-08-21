@@ -49,6 +49,7 @@ async function carregarParametros() {
     renderUpfs()
     renderAnosFeriados()
     renderGeral()
+    renderBrasao()
     await recarregarLegislacao()
   } catch (e) {
     console.error(e)
@@ -58,19 +59,124 @@ async function carregarParametros() {
 
 // ── USUÁRIOS ─────────────────────────────────────────────────
 
+/**
+ * Cartão de usuário — desenho do painel administrativo do AppPOSTURAS:
+ * avatar com a inicial, nome, e uma linha de identificação com login,
+ * matrícula, situação e perfil. O "Editar" fica à direita, cheio de verde,
+ * porque é a única ação do cartão.
+ */
 function renderUsuarios() {
   document.getElementById('cont-usuarios').textContent = parState.usuarios.length
-  document.getElementById('lista-usuarios').innerHTML = parState.usuarios.map(u => `
-    <div class="par-linha">
-      <div class="principal">
-        <b>${esc(u.name)}</b>
-        <span>${esc(u.email)}${u.matricula ? ' · ' + esc(u.matricula) : ''} · ${esc(u.perfil_rotulo)}
-          ${u.tipo_usuario ? '· ' + esc(u.tipo_usuario) : ''}${u.ativo ? '' : ' · inativo'}</span>
-      </div>
-      <button class="acao-x" onclick="editarUsuario(${u.id})" title="Editar">${ICO_EDITAR}</button>
-    </div>`).join('') || '<div class="lista-vazia">Nenhum usuário cadastrado.</div>'
+
+  document.getElementById('lista-usuarios').innerHTML = parState.usuarios.map(u => {
+    const inicial = (u.name || '?').trim().charAt(0).toUpperCase()
+    const login = (u.email || '').split('@')[0]
+    const admin = u.perfil === 'admin'
+
+    return `
+      <div class="par-card">
+        <div class="par-card-ident">
+          <div class="par-av${admin ? ' adm' : ''}">${esc(inicial)}</div>
+          <div class="par-card-txt">
+            <div class="par-card-nome">${esc(u.name)}</div>
+            <div class="par-card-meta">
+              @${esc(login)}${u.matricula ? ' · ' + esc(u.matricula) : ''} ·
+              <span class="pil ${u.ativo ? 'pil-ok' : 'pil-off'}">${u.ativo ? 'Ativo' : 'Inativo'}</span>
+              <span class="badge ${admin ? 'bd-cx' : 'bd-in'}">${esc(u.perfil_rotulo)}</span>
+              ${u.tipo_usuario ? `<span class="par-card-cargo">${esc(u.tipo_usuario)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <button class="btn edit-verde sm" onclick="editarUsuario(${u.id})">${ICO_EDITAR}Editar</button>
+      </div>`
+  }).join('') || '<div class="lista-vazia">Nenhum usuário cadastrado.</div>'
 }
 
+/**
+ * Lista de leis — cartão com nome, contagem de artigos e as duas ações.
+ *
+ * O cartão inteiro abre os artigos; os botões param a propagação, senão
+ * clicar em "Excluir" abriria o detalhe por baixo do modal de confirmação.
+ */
+function renderLeis() {
+  document.getElementById('cont-leis').textContent = parState.leis.length
+
+  document.getElementById('par-legislacao-aviso').innerHTML = parState.semEnquadramento
+    ? `<p class="aviso-legal"><b>${parState.semEnquadramento} irregularidade(s) sem artigo vinculado.</b>
+       Enquanto isso, o sistema recusa lavrar o auto correspondente.</p>` : ''
+
+  const termo = (document.getElementById('lei-busca')?.value || '').trim().toLowerCase()
+  const leis = termo
+    ? parState.leis.filter(l => (l.nome + ' ' + l.numero).toLowerCase().includes(termo))
+    : parState.leis
+
+  document.getElementById('lista-leis').innerHTML = leis.map(l => `
+    <div class="par-card clicavel" onclick="abrirLei(${l.id})">
+      <div class="par-card-txt">
+        <div class="par-card-nome">${esc(l.numero)} - ${esc(l.nome)}</div>
+        <div class="par-card-meta">${l.artigos.length} artigo(s)${l.ativa ? '' : ' · inativa'}</div>
+      </div>
+      <div class="par-card-acoes" onclick="event.stopPropagation()">
+        <button class="btn edit-verde sm" onclick="abrirLei(${l.id})">${ICO_EDITAR}Editar</button>
+        <button class="btn out-vermelho sm" onclick="excluirLei(${l.id})">Excluir</button>
+      </div>
+    </div>`).join('')
+    || `<div class="lista-vazia">${termo ? 'Nenhuma lei com esse nome.' : 'Nenhuma lei cadastrada.'}</div>`
+}
+
+/** Refiltra sem ir ao servidor: a lista inteira já está em memória. */
+function filtrarLeis() { renderLeis() }
+
+/**
+ * Cria a lei com o mínimo e já abre o detalhe para completar o resto.
+ *
+ * O nome vem do próprio campo de busca: quem procurou e não achou está, quase
+ * sempre, prestes a cadastrar o que procurava. O número entra depois, no
+ * detalhe, junto dos prazos e dos textos de ciência.
+ */
+async function novaLei() {
+  const campo = document.getElementById('lei-busca')
+  const nome = campo.value.trim()
+  if (!nome) { exigirCampo('lei-busca', 'Digite o nome da lei no campo ao lado.'); return }
+
+  const d = await postParametro('/api/legislacao', {
+    numero: nome,
+    nome,
+    ano: new Date().getFullYear(),
+    // Padrões da praxe; o detalhe da lei permite ajustar.
+    prazo_defesa_dias: 5,
+    prazo_cumprimento_dias: 10,
+    ativa: true,
+  }, null, recarregarLegislacao)
+
+  if (d) {
+    campo.value = ''
+    if (d.id) abrirLei(d.id)
+  }
+}
+
+/**
+ * Exclui a lei. O servidor recusa quando algum documento a cita — nesse caso
+ * o caminho é desativá-la, e a mensagem de erro diz isso.
+ *
+ * @param {number} id
+ */
+function excluirLei(id) {
+  const l = parState.leis.find(x => x.id === id)
+  if (!l) return
+
+  confirmarAcao({
+    titulo: 'Excluir lei',
+    mensagem: `"${l.nome}" e seus ${l.artigos.length} artigo(s) serão apagados. `
+            + 'Documentos já lavrados guardam cópia da redação e não mudam.',
+    textoBtn: 'Excluir',
+    perigo: true,
+    onConfirm: async () => {
+      await excluirParametro('/api/legislacao/' + id)
+      await recarregarLegislacao()
+    },
+  })
+}
 function novoUsuario() {
   document.getElementById('us-titulo').textContent = 'Novo usuário'
   document.getElementById('us-id').value = ''
@@ -105,7 +211,7 @@ function editarUsuario(id) {
 async function salvarUsuario() {
   const senha = document.getElementById('us-senha').value
   const senha2 = document.getElementById('us-senha2').value
-  if (senha && senha !== senha2) { toast('As senhas não conferem', 'err'); return }
+  if (senha && senha !== senha2) { exigirCampo('us-senha2', 'As senhas não conferem.'); return }
 
   await postParametro('/api/parametros/usuarios', {
     id: document.getElementById('us-id').value || null,
@@ -132,44 +238,6 @@ async function recarregarLegislacao() {
   if (parState.leiAberta) { renderArtigosDaLei() }
 }
 
-function renderLeis() {
-  document.getElementById('cont-leis').textContent = parState.leis.length
-
-  document.getElementById('par-legislacao-aviso').innerHTML = parState.semEnquadramento
-    ? `<p class="aviso-legal"><b>${parState.semEnquadramento} irregularidade(s) sem artigo vinculado.</b>
-       Enquanto isso, o sistema recusa lavrar o auto correspondente.</p>` : ''
-
-  document.getElementById('lista-leis').innerHTML = parState.leis.map(l => `
-    <div class="par-linha clicavel" onclick="abrirLei(${l.id})">
-      <div class="principal">
-        <b>${esc(l.nome)}</b>
-        <span>${esc(l.numero)}${l.ano ? ' · ' + l.ano : ''} · ${l.artigos.length} artigo(s)${l.ativa ? '' : ' · inativa'}</span>
-      </div>
-      <span class="seta">›</span>
-    </div>`).join('') || '<div class="lista-vazia">Nenhuma lei cadastrada.</div>'
-}
-
-/** Cria a lei com o mínimo e já abre o detalhe para completar o resto. */
-async function novaLei() {
-  const numero = document.getElementById('nova-lei-numero').value.trim()
-  const nome = document.getElementById('nova-lei-nome').value.trim()
-  if (!numero || !nome) { toast('Informe o número e o nome da lei', 'err'); return }
-
-  const d = await postParametro('/api/legislacao', {
-    numero, nome,
-    ano: new Date().getFullYear(),
-    // Padrões da praxe; o detalhe da lei permite ajustar.
-    prazo_defesa_dias: 5,
-    prazo_cumprimento_dias: 10,
-    ativa: true,
-  }, null, recarregarLegislacao)
-
-  if (d) {
-    document.getElementById('nova-lei-numero').value = ''
-    document.getElementById('nova-lei-nome').value = ''
-    if (d.id) abrirLei(d.id)
-  }
-}
 
 // ── LEGISLAÇÃO: DETALHE DA LEI ───────────────────────────────
 
@@ -568,4 +636,85 @@ async function excluirParametro(url) {
 function primeiroErroPar(d) {
   const e = d?.errors && Object.values(d.errors)[0]
   return Array.isArray(e) ? e[0] : 'Não foi possível concluir a operação'
+}
+
+// ── BRASÃO DO MUNICÍPIO ──────────────────────────────────────
+// O sistema não traz brasão embutido. É esta tela que o torna replicável:
+// instalar a mesma aplicação em outra prefeitura passa a ser trocar dois
+// cadastros — brasão e nome da entidade — em vez de mexer no código.
+
+/** Mostra o brasão em uso, ou o convite para enviar um. */
+function renderBrasao() {
+  const url = parState.geral.find(p => p.chave === 'brasao_url')?.valor
+  const previa = document.getElementById('brasao-previa')
+  const remover = document.getElementById('brasao-remover')
+  if (!previa) return
+
+  previa.innerHTML = url
+    ? `<img src="${esc(url)}" alt="Brasão do município">`
+    : '<span class="brasao-vazio">Nenhum brasão enviado</span>'
+  if (remover) remover.hidden = !url
+}
+
+/** @param {HTMLInputElement} input */
+async function enviarBrasao(input) {
+  const arquivo = input.files?.[0]
+  if (!arquivo) return
+
+  const fd = new FormData()
+  fd.append('brasao', arquivo)
+
+  try {
+    const r = await fetch('/api/parametros/brasao', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+      body: fd,
+    })
+    const d = await r.json()
+    if (!r.ok) throw new Error(primeiroErroPar(d))
+
+    toast(d.message)
+    await carregarParametros()
+    renderBrasao()
+    // O sub-cabeçalho mostra o brasão: sem atualizá-lo, o antigo continua na
+    // tela até alguém recarregar a página.
+    trocarBrasaoNoSubcabecalho(d.url)
+  } catch (e) {
+    console.error(e)
+    toast(e.message || 'Não foi possível enviar o brasão', 'err')
+  } finally {
+    input.value = ''   // permite reenviar o mesmo arquivo
+  }
+}
+
+function removerBrasao() {
+  confirmarAcao({
+    titulo: 'Remover brasão',
+    mensagem: 'A tela e os documentos passam a sair sem o símbolo do município.',
+    textoBtn: 'Remover',
+    perigo: true,
+    onConfirm: async () => {
+      await excluirParametro('/api/parametros/brasao')
+      await carregarParametros()
+      renderBrasao()
+      trocarBrasaoNoSubcabecalho(null)
+    },
+  })
+}
+
+/** @param {string|null} url */
+function trocarBrasaoNoSubcabecalho(url) {
+  const cx = document.querySelector('.subcab-entidade')
+  if (!cx) return
+  let img = cx.querySelector('.subcab-brasao')
+
+  if (!url) { img?.remove(); return }
+
+  if (!img) {
+    img = document.createElement('img')
+    img.className = 'subcab-brasao'
+    img.alt = ''
+    cx.prepend(img)
+  }
+  img.src = url
 }
