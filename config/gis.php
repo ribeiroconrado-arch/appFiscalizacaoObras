@@ -42,6 +42,35 @@ return [
     | e é aplicada no pipeline Python, não aqui. Fica registrada para quem
     | precisar conferir a procedência de uma coordenada.
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Correção cadastral pelo mapa
+    |--------------------------------------------------------------------------
+    | Faixas e tolerâncias das operações de desenho, desmembramento e
+    | unificação. Ficam aqui, e não no código, porque o sistema é replicável em
+    | outro município — e lá o lote típico pode ser outro.
+    |
+    | SOBREPOSIÇÃO TOLERADA. Não é folga de conveniência: é o resíduo de
+    | digitalização. Dois lotes desenhados por pessoas diferentes deixam
+    | frestas e cavalgamentos de fração de metro na divisa comum — foi medido
+    | 0,85 m² entre dois lotes reais do Jardim Europa. Meio metro quadrado é
+    | menos do que qualquer imprecisão cadastral relevante.
+    |
+    | FAIXA DE ÁREA. Abaixo do mínimo não existe lote urbano: é toque
+    | acidental ou desenho abandonado. Acima do máximo é gleba, que entra por
+    | aprovação de loteamento, não por desenho no mapa.
+    |
+    | DISTÂNCIA MÁXIMA. Não há polígono de limite municipal no banco (o
+    | contorno do mapa vem de GeoJSON no front), então a prova possível de que
+    | o desenho está no lugar certo é a distância até o lote mais próximo DO
+    | MESMO BAIRRO. 50 m cobrem avenida e praça, e recusam um desenho a 2 km ou
+    | com o bairro trocado.
+    */
+    'sobreposicao_tolerada_m2' => env('GIS_SOBREPOSICAO_M2', 0.5),
+    'lote_area_min_m2'         => env('GIS_LOTE_AREA_MIN', 20),
+    'lote_area_max_m2'         => env('GIS_LOTE_AREA_MAX', 20000),
+    'desenho_distancia_max_m'  => env('GIS_DESENHO_DIST_MAX', 50),
+
     'srid_armazenamento' => 4326,
     'srid_origem'        => 31981,
     'translacao_local'   => ['dx' => 792035.2782, 'dy' => 8260796.2988],
@@ -92,6 +121,27 @@ return [
     | Exige a Map Tiles API habilitada no projeto do Google Cloud.
     */
     'google_key'    => env('GOOGLE_MAPS_API_KEY'),
+
+    /*
+     | DUAS CHAVES, E NÃO UMA
+     |
+     | A mesma chave é usada de dois jeitos incompatíveis entre si:
+     |
+     |   servidor  -> abre a sessão (createSession). Requisição sem referrer,
+     |                partindo do IP fixo da máquina. Trava-se por ENDEREÇO IP.
+     |   navegador -> pede cada tile. Requisição com referrer, partindo do
+     |                aparelho de cada fiscal, de IP imprevisível. Trava-se por
+     |                REFERRER HTTP.
+     |
+     | Restrição por referrer recusa a chamada do servidor; restrição por IP
+     | recusa a do navegador. Com uma chave só, a única forma de os dois
+     | funcionarem é deixá-la SEM RESTRIÇÃO — que é uma chave de faturamento
+     | aberta a quem a encontrar. Foi o que estava acontecendo aqui.
+     |
+     | Sem a segunda chave configurada, cai na primeira e tudo continua
+     | funcionando — só que sem a proteção.
+     */
+    'google_key_navegador' => env('GOOGLE_MAPS_BROWSER_KEY') ?: env('GOOGLE_MAPS_API_KEY'),
 
     'mapbox_token'  => env('MAPBOX_TOKEN'),
     'mapbox_estilo' => env('MAPBOX_ESTILO', 'mapbox.satellite'),

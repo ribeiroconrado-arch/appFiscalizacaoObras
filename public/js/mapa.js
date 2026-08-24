@@ -73,6 +73,16 @@ function iniciarMapa() {
   })
   L.control.zoom({ position: 'topright' }).addTo(mapaState.obj)
 
+  // Sem o "Leaflet |" no rodapé: o espaço ali é curto e o que precisa aparecer
+  // é o crédito da IMAGEM — exigido pelos termos de uso da API e útil ao
+  // fiscal, que vê de quem e de que ano é a foto que está olhando.
+  //
+  // `setPrefix` depois de criar o mapa, e não `attributionControl: {prefix}`
+  // nas opções: o Leaflet lê essa opção só como sim/não e cria o controle sem
+  // repassar nada. Passar o objeto não dá erro — dá o prefixo lá, do mesmo
+  // jeito, que foi o que aconteceu aqui antes de medir no navegador.
+  mapaState.obj.attributionControl.setPrefix(false)
+
   montarOrtofoto(satelite)
 
   // estiloColorido, e não estiloLote: o lote nasce já na coloração corrente
@@ -153,12 +163,17 @@ async function montarGoogle(satelite) {
       }
       return
     }
-    const { session, key } = await r.json()
+    const { session, key, creditos } = await r.json()
 
     const google = L.tileLayer(
       `https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=${session}&key=${key}`,
       {
-        attribution: '© Google', maxZoom: 20, maxNativeZoom: 20,
+        // O crédito vem do próprio Google (endpoint `viewport`) e traz quem
+        // produziu a imagem e o ANO dela — "Imagens ©2026 Airbus, Maxar
+        // Technologies". É a única informação de tempo que a API expõe: data
+        // de captura, dia e mês, ela não devolve. Exibi-lo também é exigência
+        // dos termos de uso, que o "© Google" fixo não cumpria.
+        attribution: creditos || '© Google', maxZoom: 20, maxNativeZoom: 20,
         // ── O PONTO DE ECONOMIA ──
         // minZoom 18: abaixo disso o Leaflet nem pede o tile, e a Esri (que é
         // gratuita) cobre sozinha. Como o acervo da Esri aqui para no 17, do
@@ -606,7 +621,17 @@ function adicionarAoMapa(geojson, aoClicar) {
       // campo é "que lote é este?", e para isso abrir um modal de tela cheia
       // é caro demais. A ficha completa fica a um toque de distância, dentro
       // do balão.
-      camada.on('click', () => { destacar(camada); abrirBalao(feicao, camada) })
+      //
+      // Em modo de correção cadastral o clique MARCA o lote em vez de abrir o
+      // balão — ver cadastro.js. Fora dele, nada muda.
+      camada.on('click', () => {
+        if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
+          alternarSelecao(feicao, camada)
+          return
+        }
+        destacar(camada)
+        abrirBalao(feicao, camada)
+      })
       // Número do lote sobre o polígono, visível só a partir do zoom 18
       // (regra em mapa-cores.js) — antes disso vira borrão.
       if (feicao.properties.numero_lote) {
@@ -698,6 +723,15 @@ function limparSelecao() {
 document.addEventListener('keydown', ev => {
   if (ev.key !== 'Escape') return
   if (document.querySelector('.modal-bg.open')) return
+
+  // O modo de correção sai PRIMEIRO e consome o Esc. Sem o `return`, os dois
+  // comportamentos disparariam no mesmo toque: a pessoa sairia do modo e ainda
+  // perderia a seleção de consulta por baixo, sem ter pedido.
+  if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
+    desligarSelecao()
+    return
+  }
+
   limparSelecao()
 })
 

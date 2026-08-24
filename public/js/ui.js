@@ -147,6 +147,23 @@ async function _mcgConfirmar() {
   }
 }
 
+/* ── TEMPOS DO OVERLAY DE CARREGAMENTO ──
+   Duas medidas, e cada uma resolve um defeito oposto.
+
+   ATRASO: abaixo disso o overlay não chega a aparecer. Em rede boa a carga
+   dos lotes termina em 100 ms, e um overlay que pisca por 100 ms é lido como
+   falha de renderização, não como "estou trabalhando".
+
+   MÍNIMO: uma vez aparecido, fica no mínimo esse tempo. Sem ele, uma carga de
+   250 ms produz um lampejo — o overlay entra e sai antes de o olho concluir o
+   que viu, e o usuário fica com a sensação de que a tela deu um salto.
+   520 ms é uma volta inteira da marca mais o tempo de esmaecer. */
+const CARREGANDO_ATRASO = 180
+const CARREGANDO_MINIMO = 520
+
+let _carregandoTimer = null
+let _carregandoDesde = 0
+
 /**
  * Overlay de tela cheia para transições que dependem de carga de dados.
  * Sempre usar em try/finally, para não deixar o overlay preso se a carga falhar.
@@ -154,12 +171,34 @@ async function _mcgConfirmar() {
  */
 function mostrarCarregandoTela(txt = 'Carregando...') {
   document.getElementById('tela-carregando-txt').textContent = txt
-  document.getElementById('tela-carregando').classList.add('show')
+
+  // Já visível (ou já agendado): só troca o texto. Reagendar reiniciaria a
+  // contagem e o overlay nunca sairia numa sequência de cargas curtas.
+  if (_carregandoTimer || _carregandoDesde) { return }
+
+  _carregandoTimer = setTimeout(() => {
+    _carregandoTimer = null
+    _carregandoDesde = Date.now()
+    document.getElementById('tela-carregando').classList.add('show')
+  }, CARREGANDO_ATRASO)
 }
 
-/** Esconde o overlay de carregamento. */
+/** Esconde o overlay de carregamento — respeitando o tempo mínimo em tela. */
 function esconderCarregandoTela() {
-  document.getElementById('tela-carregando').classList.remove('show')
+  // Terminou antes de o overlay aparecer: cancela e ninguém viu nada.
+  if (_carregandoTimer) {
+    clearTimeout(_carregandoTimer)
+    _carregandoTimer = null
+    return
+  }
+  if (!_carregandoDesde) { return }
+
+  const falta = CARREGANDO_MINIMO - (Date.now() - _carregandoDesde)
+  const fechar = () => {
+    _carregandoDesde = 0
+    document.getElementById('tela-carregando').classList.remove('show')
+  }
+  falta > 0 ? setTimeout(fechar, falta) : fechar()
 }
 
 /** Escapa texto antes de injetar em innerHTML. @param {*} s @returns {string} */

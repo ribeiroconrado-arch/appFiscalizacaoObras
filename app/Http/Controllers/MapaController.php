@@ -54,8 +54,9 @@ class MapaController extends Controller
             }
 
             return [
-                'session' => $r->json('session'),
-                'expiry'  => $r->json('expiry'),
+                'session'   => $r->json('session'),
+                'expiry'    => $r->json('expiry'),
+                'creditos'  => $this->creditosDaImagem($r->json('session'), $chave),
             ];
         });
 
@@ -67,9 +68,57 @@ class MapaController extends Controller
         }
 
         return response()->json([
-            'session' => $dados['session'],
-            'key'     => $chave,
+            'session'  => $dados['session'],
+            // A chave que vai para o NAVEGADOR é outra: a do servidor fica
+            // trancada por IP e não pode sair daqui. Ver config/gis.php.
+            'key'      => config('gis.google_key_navegador'),
+            'creditos' => $dados['creditos'] ?? null,
         ]);
+    }
+
+    /**
+     * Crédito da imagem aérea: quem a produziu e de que ano ela é.
+     *
+     * ── Sobre a DATA ──
+     *
+     * A Map Tiles API não devolve a data de captura de cada imagem. Foi
+     * conferido contra a API, não suposto: o endpoint `viewport` responde só
+     * `copyright` e `maxZoomRects` — nada de `imageryDate`. O ano do copyright
+     * é a informação de tempo que existe, e é ela que vai para a tela. Dizer
+     * "imagem de 2026" quando o Google só afirma o ano do direito autoral já é
+     * o limite do que o dado sustenta; inventar dia e mês seria pior do que
+     * não mostrar nada, porque numa fiscalização a data da imagem é prova.
+     *
+     * ── Sobre a obrigação ──
+     *
+     * Exibir este crédito não é enfeite: os termos da API exigem a atribuição
+     * que o `viewport` devolve, e ela muda conforme o fornecedor da imagem
+     * naquela área (aqui, Airbus e Maxar). O "© Google" fixo que estava no
+     * código não cumpria isso.
+     *
+     * Uma chamada por sessão, guardada junto dela: a área do município inteiro
+     * tem o mesmo crédito, e refazer a consulta a cada movimento do mapa seria
+     * uma requisição paga por arrasto de dedo.
+     */
+    private function creditosDaImagem(?string $sessao, string $chave): ?string
+    {
+        $ext = $this->lotes->extensao();
+        if (! $sessao || ! $ext) {
+            return null;
+        }
+
+        $r = Http::timeout(10)->get('https://tile.googleapis.com/tile/v1/viewport', [
+            'session' => $sessao,
+            'key'     => $chave,
+            'zoom'    => 18,
+            'north'   => $ext['norte'], 'south' => $ext['sul'],
+            'east'    => $ext['leste'], 'west'  => $ext['oeste'],
+        ]);
+
+        // Sem crédito o mapa continua funcionando — mostra o "© Google" de
+        // sempre. Falhar aqui derrubaria a camada inteira por causa de um
+        // rodapé.
+        return $r->successful() ? $r->json('copyright') : null;
     }
 
     /**
