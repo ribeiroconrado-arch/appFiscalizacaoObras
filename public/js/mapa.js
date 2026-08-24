@@ -67,6 +67,21 @@ function iniciarMapa() {
 
   mapaState.obj = L.map('map', {
     zoomControl: false, layers: [satelite],
+    /*
+     * CANVAS, NÃO SVG — e é isto que faz o mapa funcionar no celular.
+     *
+     * Com o renderizador padrão, cada lote vira um elemento <path> no DOM.
+     * São 2.239 lotes no município: 2.239 elementos que o navegador precisa
+     * criar, posicionar e transformar a cada arrasto e a cada zoom. No
+     * desktop passa; no iOS (onde todo navegador é WebKit por baixo, Chrome
+     * inclusive) o mapa fica arrastado a ponto de não dar para usar.
+     *
+     * No canvas os polígonos são pintados num bitmap só — um elemento, não
+     * milhares. Perde-se a possibilidade de estilizar lote por CSS, o que
+     * aqui não custa nada: os estilos saem todos de estiloColorido(), em
+     * opções do Leaflet (color, weight, fillColor), que o canvas suporta.
+     */
+    preferCanvas: true,
     // Prende a navegação ao município: viscosity 1 faz a borda não ceder,
     // então arrastar para fora simplesmente não sai do lugar.
     maxBounds: LIMITE_MUNICIPIO, maxBoundsViscosity: 1, minZoom: 11,
