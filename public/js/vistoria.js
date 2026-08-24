@@ -11,6 +11,13 @@ const vState = {
   /** @type {Object|null} lote sendo vistoriado */ lote: null,
   /** @type {Array<Object>} catálogo de irregularidades (cache da sessão) */ catalogo: [],
   /** @type {Array<{arquivo:File, titulo:string, url:string}>} */ anexos: [],
+  /**
+   * Protocolo de desmembramento/unificação que esta vistoria vai atender.
+   *
+   * Preenchido quando o formulário é aberto A PARTIR do protocolo; nulo
+   * quando o fiscal abriu pelo mapa, e aí o seletor pergunta.
+   */
+  /** @type {number|null} */ protocoloId: null,
   enviando: false,
 }
 
@@ -77,10 +84,41 @@ function renderHistorico(eventos) {
             ${e.badge ? `<span class="badge ${esc(e.badge.classe)}">${esc(e.badge.texto)}</span>` : ''}
           </div>
           <div class="lt-tit">${esc(e.titulo)}</div>
-          ${det}${itens}${obs}
+          ${det}${itens}${obs}${_atoCadastral(e)}
         </div>
       </div>`
   }).join('')
+}
+
+/**
+ * Bloco do ato cadastral dentro do evento de vistoria.
+ *
+ * Aparece em três estados, e o do meio é o que costuma faltar nos sistemas:
+ *
+ *   nada        vistoria comum, sem protocolo de desmembramento/unificação;
+ *   explicação  há o protocolo, mas algo trava — e o texto diz o quê;
+ *   botão       tudo no lugar: executa o ato a partir desta vistoria.
+ *
+ * Mostrar o motivo em vez de simplesmente esconder o botão é o que evita o
+ * chamado "por que não aparece a opção de unificar?".
+ *
+ * @param {Object} e evento da linha do tempo
+ */
+function _atoCadastral(e) {
+  const a = e.ato_cadastral
+  if (!a || !a.tipo) { return '' }
+
+  const rotulo = a.tipo === 'unificacao' ? 'Unificar lotes' : 'Desenhar desmembramento'
+  const proto = a.protocolo ? `Protocolo ${esc(a.protocolo.numero)}` : ''
+
+  if (!a.pode) {
+    return `<div class="lt-ato lt-ato-travado">${proto}: ${esc(a.motivo || 'ato indisponível.')}</div>`
+  }
+
+  return `<div class="lt-ato">
+    <span>${proto} — deferido e vistoriado.</span>
+    <button class="btn sm primary" onclick="iniciarAtoCadastral(${a.protocolo.id}, '${esc(a.tipo)}', ${e.lote_id ?? 'null'})">
+      ${rotulo}</button></div>`
 }
 
 // ── FORMULÁRIO ───────────────────────────────────────────────
@@ -116,8 +154,53 @@ async function novaVistoria() {
     gps.parentElement.style.display = 'none'
   }
 
+  await carregarProtocolosCadastrais(f.properties.id)
   await carregarCatalogo()
   openModal('m-vistoria')
+}
+
+/**
+ * Protocolos de desmembramento/unificação deste imóvel à espera de vistoria.
+ *
+ * O seletor só aparece quando há algum: numa vistoria de rotina — que é a
+ * esmagadora maioria — perguntar "atende a qual protocolo?" seria ruído.
+ *
+ * Este é o caminho de quem parte do MAPA, em campo. Quem parte da tela de
+ * protocolos chega pelo botão "Registrar vistoria", que já traz o protocolo
+ * escolhido.
+ *
+ * @param {number} loteId
+ */
+async function carregarProtocolosCadastrais(loteId) {
+  const caixa = document.getElementById('nv-protocolo-caixa')
+  const sel = document.getElementById('nv-protocolo')
+  if (!caixa || !sel) { return }
+
+  sel.innerHTML = '<option value="">— nenhum —</option>'
+  caixa.hidden = true
+  if (!loteId) { return }
+
+  try {
+    const r = await fetch('/api/lotes/' + loteId + '/protocolos-cadastrais',
+      { headers: { Accept: 'application/json' } })
+    if (!r.ok) { return }
+    const d = await r.json()
+    if (!d.protocolos.length) { return }
+
+    d.protocolos.forEach(p => {
+      const o = document.createElement('option')
+      o.value = p.id
+      o.textContent = p.rotulo
+      sel.appendChild(o)
+    })
+    caixa.hidden = false
+
+    // Quando a vistoria foi aberta A PARTIR de um protocolo, ele já vem
+    // escolhido e o campo não é uma pergunta, é uma confirmação.
+    if (vState.protocoloId) { sel.value = String(vState.protocoloId) }
+  } catch (e) {
+    console.error(e)   // sem protocolo o formulário funciona igual
+  }
 }
 
 /** Busca o catálogo de irregularidades uma vez por sessão. */
@@ -239,6 +322,9 @@ async function enviarVistoria(marcadas) {
   fd.append('data_hora', document.getElementById('nv-datahora').value)
   fd.append('situacao', document.getElementById('nv-situacao').value)
   fd.append('observacoes', document.getElementById('nv-obs').value)
+  // O vínculo com o protocolo é o que, mais tarde, libera o ato cadastral.
+  const proto = document.getElementById('nv-protocolo')?.value
+  if (proto) { fd.append('protocolo_id', proto) }
   marcadas.forEach(c => fd.append('irregularidades[]', c.value))
   if (state.pos) {
     fd.append('latitude', state.pos.lat)
@@ -272,6 +358,9 @@ async function enviarVistoria(marcadas) {
 
     vState.anexos.forEach(a => a.url && URL.revokeObjectURL(a.url))
     vState.anexos = []
+    // Zera o vinculo: sem isto ele vazaria para a proxima vistoria aberta
+    // na mesma sessao, amarrando-a a um protocolo que ninguem escolheu.
+    vState.protocoloId = null
     fModalBtn('m-vistoria')
     toast('Vistoria registrada')
 

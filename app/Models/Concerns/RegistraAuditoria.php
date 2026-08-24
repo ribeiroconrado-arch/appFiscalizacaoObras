@@ -75,7 +75,7 @@ trait RegistraAuditoria
 
         DB::table('auditoria')->insert([
             'user_id'          => $u?->id,
-            'usuario_nome'     => $u?->name,
+            'usuario_nome'     => $u?->name ?? $this->autorDeConsole(),
             'matricula'        => $u?->matricula,
             'acao'             => $acao,
             'tabela'           => $this->getTable(),
@@ -87,6 +87,29 @@ trait RegistraAuditoria
             'dispositivo'      => substr((string) Request::userAgent(), 0, 255),
             'created_at'       => now(),
         ]);
+    }
+
+    /**
+     * Quem responde por uma alteração feita fora do navegador.
+     *
+     * Comando de terminal roda sem sessão, então `Auth::user()` é nulo e a
+     * linha sairia com autor em branco — o que na trilha se lê como "ninguém
+     * fez", exatamente onde a alteração costuma ser em massa. `lotes:corrigir-quadras`
+     * reatribui a quadra de centenas de imóveis de uma vez; sem isto, a maior
+     * intervenção que o sistema permite seria a única anônima.
+     *
+     * Não substitui o usuário: `user_id` continua nulo, porque não houve
+     * usuário. O que se registra é a PORTA por onde a alteração entrou.
+     */
+    private function autorDeConsole(): ?string
+    {
+        if (! app()->runningInConsole()) {
+            return null;
+        }
+
+        $comando = $_SERVER['argv'][1] ?? null;
+
+        return $comando ? 'terminal: ' . $comando : 'terminal';
     }
 
     /** Resumo legível do registro, para a lista de auditoria não ser só ids. */

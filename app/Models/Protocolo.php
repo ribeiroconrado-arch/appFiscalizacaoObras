@@ -22,7 +22,12 @@ class Protocolo extends Model
         'vistoria_calcada' => 'Vistoria de calçada',
         'contestacao_area' => 'Contestação de área',
         'renovacao_alvara' => 'Renovação de alvará de construção',
-        'desmembramento'   => 'Desmembramento / remembramento',
+        'desmembramento'   => 'Desmembramento (dividir lote)',
+        // Separado do desmembramento porque o ATO executado e outro:
+        // N->1 contra 1->N. Sem o tipo, o botao de executar teria de
+        // perguntar ao operador qual dos dois fazer — que e exatamente a
+        // ambiguidade que produz o ato errado.
+        'unificacao'       => 'Unificação / remembramento (juntar lotes)',
         'outro'            => 'Outro',
     ];
 

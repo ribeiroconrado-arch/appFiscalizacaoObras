@@ -46,7 +46,8 @@ class QuadraDoQuarteirao
      */
     public function quarteiroes(string $bairro): array
     {
-        $ids = DB::table('lotes')->where('bairro', $bairro)
+        // Lote baixado nao se corrige: quem tem quadra a corrigir e o sucessor.
+        $ids = DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')
             ->whereNull('quadra')->orderBy('id')->pluck('id')->all();
 
         if (! $ids) {
@@ -58,7 +59,8 @@ class QuadraDoQuarteirao
         $pares = DB::select(
             'SELECT a.id a, b.id b FROM lotes a
                JOIN lotes b ON b.id > a.id AND a.bairro = b.bairro
-              WHERE a.bairro = ? AND a.quadra IS NULL AND b.quadra IS NULL
+              WHERE a.bairro = ? AND a.situacao = \'ativo\' AND b.situacao = \'ativo\'
+                AND a.quadra IS NULL AND b.quadra IS NULL
                 AND MBRIntersects(a.geom, b.geom)
                 AND ST_Distance(a.geom, b.geom) <= ?',
             [$bairro, self::TOLERANCIA_M]
@@ -157,7 +159,7 @@ class QuadraDoQuarteirao
         $linhas = DB::select(
             'SELECT DISTINCT v.quadra q FROM lotes v
                JOIN lotes s ON s.bairro = v.bairro AND s.id IN (' . implode(',', array_map('intval', $ids)) . ')
-              WHERE v.bairro = ? AND v.quadra IS NOT NULL
+              WHERE v.bairro = ? AND v.situacao = \'ativo\' AND v.quadra IS NOT NULL
                 AND MBRIntersects(v.geom, s.geom) AND ST_Distance(v.geom, s.geom) <= ?',
             [$bairro, self::TOLERANCIA_M]
         );
@@ -182,7 +184,7 @@ class QuadraDoQuarteirao
      */
     public function sugestao(string $bairro): ?string
     {
-        $nums = DB::table('lotes')->where('bairro', $bairro)
+        $nums = DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')
             ->whereNotNull('quadra')->distinct()->pluck('quadra')
             ->map(fn ($q) => (int) $q)->filter()->unique()->sort()->values();
 
@@ -231,6 +233,7 @@ class QuadraDoQuarteirao
             ->pluck('numero_lote')->filter()->all();
 
         $choque = DB::table('lotes')->where('bairro', $bairro)->where('quadra', $quadra)
+            ->where('situacao', 'ativo')
             ->whereIn('numero_lote', $numeros)->pluck('numero_lote');
 
         if ($choque->isNotEmpty()) {
@@ -244,17 +247,25 @@ class QuadraDoQuarteirao
     /**
      * Grava a quadra em todo o quarteirão. Devolve quantos lotes mudaram.
      *
+     * Passa pelo Eloquent, e não por `DB::table()`, porque só o Eloquent
+     * dispara os eventos que alimentam a trilha de auditoria (ver
+     * App\Models\Concerns\RegistraAuditoria). Escrevendo direto na tabela, a
+     * alteração da identificação de dezenas de imóveis não deixava rastro
+     * nenhum — nem de quem, nem de quando, nem de qual quadra para qual.
+     *
+     * O custo é o mesmo: o método já fazia um UPDATE por lote, em laço.
+     * Acrescenta uma linha de auditoria por lote, que é o objetivo.
+     *
      * @param  list<int>  $ids
      */
     public function aplicar(string $bairro, array $ids, string $quadra): int
     {
         return DB::transaction(function () use ($bairro, $ids, $quadra) {
             $n = 0;
-            foreach (DB::table('lotes')->whereIn('id', $ids)->get(['id', 'numero_lote']) as $l) {
-                DB::table('lotes')->where('id', $l->id)->update([
-                    'quadra'     => $quadra,
-                    'chave'      => $bairro . '|' . $quadra . '|' . ($l->numero_lote ?: '?'),
-                    'updated_at' => now(),
+            foreach (Lote::whereIn('id', $ids)->get() as $lote) {
+                $lote->update([
+                    'quadra' => $quadra,
+                    'chave'  => $bairro . '|' . $quadra . '|' . ($lote->numero_lote ?: '?'),
                 ]);
                 $n++;
             }
@@ -266,9 +277,13 @@ class QuadraDoQuarteirao
     /**
      * O primeiro número de lote que aparece duas vezes no quarteirão, ou null.
      *
+     * Público porque QuadraDeLotesSelecionados aplica a mesma prova sobre uma
+     * seleção feita a dedo: numa quadra de verdade cada número aparece uma vez,
+     * e isso não depende de como o conjunto de lotes foi montado.
+     *
      * @param  list<int>  $ids
      */
-    private function numeroRepetido(array $ids): ?string
+    public function numeroRepetido(array $ids): ?string
     {
         $vistos = [];
         foreach (DB::table('lotes')->whereIn('id', $ids)->pluck('numero_lote') as $num) {

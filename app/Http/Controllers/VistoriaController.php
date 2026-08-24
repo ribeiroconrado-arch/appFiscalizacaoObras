@@ -8,6 +8,7 @@ use App\Models\Irregularidade;
 use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
+use App\Services\SucessaoDeLotes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,35 @@ class VistoriaController extends Controller
      * consulta ANTES de vistoriar: saber que o lote já foi notificado no mês
      * passado muda o que ele vai fazer na visita de hoje.
      */
+    /**
+     * GET /api/lotes/{lote}/protocolos-cadastrais
+     *
+     * Protocolos de desmembramento/unificação deste imóvel que ainda esperam
+     * vistoria. Alimenta o seletor do formulário de vistoria — o caminho de
+     * quem parte do mapa, em campo, e não da tela de protocolos.
+     *
+     * Só os DEFERIDOS: antes da decisão não há ato a fundamentar, e oferecer
+     * um protocolo em análise faria a vistoria nascer amarrada a algo que
+     * ainda pode ser indeferido.
+     */
+    public function protocolosCadastrais(Lote $lote): JsonResponse
+    {
+        $protocolos = Protocolo::where('lote_id', $lote->id)
+            ->whereIn('tipo', ['desmembramento', 'unificacao'])
+            ->where('situacao', 'deferido')
+            ->whereNull('vistoria_id')
+            ->orderByDesc('protocolado_em')
+            ->get(['id', 'numero', 'tipo', 'objeto'])
+            ->map(fn (Protocolo $p) => [
+                'id'     => $p->id,
+                'numero' => $p->numero,
+                'tipo'   => $p->tipo,
+                'rotulo' => $p->numero . ' — ' . $p->rotuloTipo(),
+            ]);
+
+        return response()->json(['protocolos' => $protocolos]);
+    }
+
     public function historico(Lote $lote): JsonResponse
     {
         $vistorias = $lote->vistorias()
@@ -40,6 +70,9 @@ class VistoriaController extends Controller
             ->get()
             ->map(fn (Vistoria $v) => [
                 'id'               => $v->id,
+                // O que a tela precisa para oferecer (ou explicar) o ato
+                // cadastral: unificar ou desmembrar a partir DESTA vistoria.
+                'ato_cadastral'    => app(SucessaoDeLotes::class)->atoDaVistoria($v),
                 'data_hora'        => $v->data_hora?->format('d/m/Y H:i'),
                 'situacao'         => $v->situacao,
                 'situacao_rotulo'  => $v->situacaoRotulo(),
@@ -61,10 +94,14 @@ class VistoriaController extends Controller
         foreach ($vistorias as $v) {
             $eventos[] = [
                 'tipo'    => 'vistoria',
+                // O ato de desmembramento precisa saber QUAL lote dividir, e a
+                // linha do tempo e a unica coisa que a tela tem em maos ali.
+                'lote_id' => $lote->id,
                 'quando'  => $v['data_hora'],
                 'titulo'  => 'Vistoria — ' . $v['situacao_rotulo'],
                 'detalhe' => $v['fiscal'] ? 'Fiscal: ' . $v['fiscal'] : null,
                 'badge'   => ['texto' => $v['situacao_rotulo'], 'classe' => $v['situacao_badge']],
+                'ato_cadastral' => $v['ato_cadastral'],
                 'itens'   => collect($v['irregularidades'])->pluck('descricao')->all(),
                 'obs'     => $v['observacoes'],
             ];
@@ -152,6 +189,10 @@ class VistoriaController extends Controller
             'evidencias.*'       => ['file', 'max:' . self::MAX_KB, 'mimetypes:' . implode(',', self::MIMES)],
             'titulos'            => ['array'],
             'titulos.*'          => ['nullable', 'string', 'max:160'],
+            // Protocolo de desmembramento/unificacao que esta vistoria atende.
+            // E o vinculo que, mais tarde, libera o ato cadastral — ver
+            // App\Services\SucessaoDeLotes::atoDaVistoria().
+            'protocolo_id'       => ['nullable', 'integer', 'exists:protocolos,id'],
         ], [
             'data_hora.date_format' => 'Informe data e hora da vistoria.',
             'evidencias.*.max'      => 'Cada arquivo deve ter no máximo 12 MB.',
@@ -184,6 +225,20 @@ class VistoriaController extends Controller
 
             if (! empty($d['irregularidades'])) {
                 $v->irregularidades()->sync($d['irregularidades']);
+            }
+
+            // Amarra a vistoria ao protocolo que ela atende.
+            //
+            // O vinculo mora em `protocolos.vistoria_id`, que ja existia e nao
+            // tinha como ser preenchido pela interface. So aceita protocolo de
+            // desmembramento/unificacao ainda sem vistoria: sobrescrever o
+            // vinculo de um protocolo ja atendido apagaria, em silencio, a
+            // vistoria que fundamentou um ato.
+            if (! empty($d['protocolo_id'])) {
+                Protocolo::where('id', $d['protocolo_id'])
+                    ->whereIn('tipo', ['desmembramento', 'unificacao'])
+                    ->whereNull('vistoria_id')
+                    ->update(['vistoria_id' => $v->id]);
             }
 
             foreach ($request->file('evidencias', []) as $i => $arquivo) {

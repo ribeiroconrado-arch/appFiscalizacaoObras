@@ -105,15 +105,34 @@ function colorirPorAdjacencia(chave) {
   return { cores, conflitos }
 }
 
+/** Lote marcado para correção cadastral. */
+const COR_SELECAO = '#EA580C'
+
 /**
  * Estilo de um lote conforme a coloração corrente.
  *
- * Três casos, nesta ordem:
+ * Quatro casos, nesta ordem:
+ *   0. o lote está MARCADO para correção — precede tudo, inclusive o filtro:
+ *      quem está corrigindo precisa enxergar o que marcou, aconteça o que
+ *      acontecer com a coloração por baixo;
  *   1. há filtro aplicado — o lote é destacado ou apagado, e nada mais importa;
  *   2. o usuário escolheu colorir por bairro/quadra — paleta por adjacência;
  *   3. padrão — todos iguais, discretos sobre a foto.
+ *
+ * O caso 0 mora AQUI, e não numa camada de sobreposição, por um motivo que só
+ * aparece no uso: `adicionarAoMapa` aplica este estilo na CRIAÇÃO da camada,
+ * então o lote marcado que sai da tela e volta pela recarga por bbox volta
+ * marcado sozinho. Uma sobreposição teria de reconciliar isso à mão a cada
+ * `moveend`.
+ *
+ * A guarda `typeof` existe porque cadastro.js carrega depois deste arquivo, e
+ * a coloração inicial do mapa pode rodar antes de `selState` existir.
  */
 function estiloColorido(f) {
+  if (typeof selState !== 'undefined' && selState.ids.has(f.properties.id)) {
+    return { color: COR_SELECAO, weight: 3, opacity: 1, fillColor: COR_SELECAO, fillOpacity: .5 }
+  }
+
   if (corState.destacados) {
     const dentro = corState.destacados.has(f.properties.id)
     return dentro

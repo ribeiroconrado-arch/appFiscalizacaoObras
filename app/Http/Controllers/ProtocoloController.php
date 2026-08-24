@@ -68,6 +68,15 @@ class ProtocoloController extends Controller
                     : 'Não vinculado a lote',
                 'responsavel' => $p->responsavel?->name ?? 'Não distribuído',
                 'objeto'      => $p->objeto,
+                'lote_id'     => $p->lote_id,
+                // Este protocolo está esperando a vistoria que vai fundamentar
+                // o ato cadastral? É o que faz aparecer o botão "Registrar
+                // vistoria" — o caminho de quem parte da tela de protocolos.
+                'espera_vistoria' => in_array($p->tipo, ['desmembramento', 'unificacao'], true)
+                    && $p->situacao === 'deferido'
+                    && $p->vistoria_id === null
+                    && $p->lote_id !== null,
+                'vistoria_id' => $p->vistoria_id,
             ];
         });
 

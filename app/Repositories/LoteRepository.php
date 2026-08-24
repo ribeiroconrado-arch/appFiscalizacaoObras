@@ -23,6 +23,20 @@ class LoteRepository
     private const CAMPOS = 'id, bairro, quadra, numero_lote, chave, area_gis_m2, inscricao_imobiliaria';
 
     /**
+     * Recorte padrão de TODA consulta de mapa, GPS e busca.
+     *
+     * Lote baixado — o que foi unificado ou desmembrado — continua na base
+     * para o histórico do imóvel responder por si, mas não é mais um imóvel
+     * que existe: não pode ser pintado no mapa, encontrado pelo GPS do fiscal
+     * em campo nem devolvido numa busca de balcão.
+     *
+     * É constante, e não um método, porque entra por concatenação em SQL cru.
+     * Fica a um lugar só para a próxima consulta espacial não esquecer dela —
+     * esquecer é silencioso: devolve dado a mais, nunca erro.
+     */
+    private const SO_ATIVOS = "situacao = 'ativo'";
+
+    /**
      * Lote que CONTÉM a coordenada. É o caminho feliz do fluxo de GPS.
      * Usa o índice espacial via ST_Contains.
      */
@@ -30,7 +44,8 @@ class LoteRepository
     {
         $sql = 'SELECT ' . self::CAMPOS . '
                   FROM lotes
-                 WHERE ST_Contains(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
+                 WHERE ' . self::SO_ATIVOS . '
+                   AND ST_Contains(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
                  LIMIT 1';
 
         return DB::selectOne($sql, [$this->ponto($lat, $lon)]);
@@ -74,7 +89,8 @@ class LoteRepository
                        ST_Distance(geom,
                            ST_GeomFromText(?, 4326, \'axis-order=long-lat\')) AS dist_m
                   FROM lotes
-                 WHERE MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
+                 WHERE ' . self::SO_ATIVOS . '
+                   AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
                 HAVING dist_m <= ?
               ORDER BY dist_m
                  LIMIT ' . (int) $limite;
@@ -96,7 +112,8 @@ class LoteRepository
     {
         $sql = 'SELECT ' . self::CAMPOS . ', ST_AsGeoJSON(geom) AS geojson
                   FROM lotes
-                 WHERE MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
+                 WHERE ' . self::SO_ATIVOS . '
+                   AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
                  LIMIT ' . (int) $limite;
 
         return DB::select($sql, [$this->retangulo($oeste, $sul, $leste, $norte)]);
@@ -105,7 +122,7 @@ class LoteRepository
     /** Total de lotes carregados. Usado pelo cabeçalho do mapa e pela conferência. */
     public function total(): int
     {
-        return (int) DB::scalar('SELECT COUNT(*) FROM lotes');
+        return (int) DB::scalar('SELECT COUNT(*) FROM lotes WHERE ' . self::SO_ATIVOS);
     }
 
     /**
@@ -127,7 +144,9 @@ class LoteRepository
         $sql = 'SELECT MIN(ST_X(p)) AS sul, MAX(ST_X(p)) AS norte,
                        MIN(ST_Y(p)) AS oeste, MAX(ST_Y(p)) AS leste
                   FROM (SELECT ST_PointN(ST_ExteriorRing(geom), 1) AS p
-                          FROM lotes' . ($bairro ? ' WHERE bairro = ?' : '') . ') t';
+                          FROM lotes
+                         WHERE ' . self::SO_ATIVOS
+                            . ($bairro ? ' AND bairro = ?' : '') . ') t';
 
         $r = DB::selectOne($sql, $bairro ? [$bairro] : []);
 
@@ -140,15 +159,21 @@ class LoteRepository
     /**
      * Conferência pós-importação. Um SRID errado não lança erro — dá mapa vazio,
      * que é bem pior de diagnosticar. Por isso a verificação é explícita.
+     *
+     * É a ÚNICA consulta deste repositório que não filtra por lote ativo, e de
+     * propósito: geometria inválida ou SRID errado num lote baixado é defeito
+     * do mesmo jeito, e escondê-lo da conferência derrotaria o objetivo dela.
+     * Os baixados aparecem contados à parte.
      */
     public function diagnostico(): object
     {
-        return DB::selectOne('SELECT COUNT(*)                    AS total,
+        return DB::selectOne("SELECT COUNT(*)                    AS total,
+                                     SUM(situacao = 'baixado')   AS baixados,
                                      SUM(ST_SRID(geom) <> 4326)  AS srid_errado,
                                      SUM(NOT ST_IsValid(geom))   AS geometria_invalida,
                                      COUNT(DISTINCT chave)       AS chaves_distintas,
                                      COUNT(DISTINCT bairro)      AS bairros
-                                FROM lotes');
+                                FROM lotes");
     }
 
     // ── construção de WKT ────────────────────────────────────────
@@ -170,5 +195,249 @@ class LoteRepository
             'POLYGON((%1$.10F %2$.10F, %3$.10F %2$.10F, %3$.10F %4$.10F, %1$.10F %4$.10F, %1$.10F %2$.10F))',
             $oeste, $sul, $leste, $norte
         );
+    }
+
+    // ── ESCRITA E MEDIDA DE GEOMETRIA ────────────────────────────
+    //
+    // Tudo abaixo serve às correções cadastrais feitas pelo mapa: desenhar
+    // lote faltante, desmembrar, unificar.
+    //
+    // Uma divisão de trabalho vale a pena registrar, porque não é arbitrária:
+    // o BANCO responde o que sabe responder — se a geometria é válida, qual a
+    // área de UM polígono, quais lotes um retângulo alcança (índice espacial) —
+    // e o PHP mede o que o banco erra. Em SRID 4326 o `ST_Intersection` do
+    // MySQL devolveu 215,5 m² de área comum entre dois lotes de 214,47 m² que
+    // na verdade não se sobrepõem; a medida certa sai de
+    // App\Support\GeometriaPlana, conferida contra o shapely com divergência
+    // máxima de 0,00005 m² em 60 lotes reais.
+
+    /**
+     * Anel externo de um lote, em [[lon,lat],…] — a forma que GeometriaPlana
+     * e o GeoJSON usam.
+     *
+     * @return list<array{0:float,1:float}>|null
+     */
+    public function anel(int $id): ?array
+    {
+        $gj = DB::scalar('SELECT ST_AsGeoJSON(geom) FROM lotes WHERE id = ?', [$id]);
+
+        return $gj ? (json_decode($gj, true)['coordinates'][0] ?? null) : null;
+    }
+
+    /**
+     * Área de um polígono GeoJSON, medida pelo BANCO, em m².
+     *
+     * `ST_Area` de um polígono só (sem operação booleana antes) é confiável em
+     * SRID 4326 — foi conferido contra a área cadastral do DWG com diferença
+     * de 0,23%. É a medida que vai para `area_gis_m2`, para o lote desenhado
+     * ficar na mesma régua dos 2.239 que vieram da importação.
+     */
+    public function areaDoGeoJson(string $geojson): float
+    {
+        return (float) DB::scalar(
+            'SELECT ST_Area(ST_GeomFromGeoJSON(?, 1, 4326))', [$geojson]
+        );
+    }
+
+    /** O polígono fecha, não se cruza e é aceito pelo MySQL? */
+    public function ehValido(string $geojson): bool
+    {
+        return (bool) DB::scalar(
+            'SELECT ST_IsValid(ST_GeomFromGeoJSON(?, 1, 4326))', [$geojson]
+        );
+    }
+
+    /** Tipo devolvido pelo MySQL ao ler o documento — recusa MultiPolygon. */
+    public function tipoDoGeoJson(string $geojson): string
+    {
+        return (string) DB::scalar(
+            'SELECT ST_GeometryType(ST_GeomFromGeoJSON(?, 1, 4326))', [$geojson]
+        );
+    }
+
+    /**
+     * Lotes ATIVOS cujo retângulo envolvente alcança este polígono.
+     *
+     * É só o primeiro filtro, de propósito: `MBRIntersects` compara retângulos,
+     * usa o índice espacial e não erra — mas responde "talvez", não "sim".
+     * Quem decide se há sobreposição de verdade é GeometriaPlana, sobre os
+     * anéis devolvidos aqui.
+     *
+     * @return array<int,object> com id, quadra, numero_lote e `anel`
+     */
+    public function candidatosASobrepor(string $geojson, string $bairro, array $ignorar = []): array
+    {
+        $linhas = DB::select(
+            'SELECT id, quadra, numero_lote, ST_AsGeoJSON(geom) AS geojson
+               FROM lotes
+              WHERE ' . self::SO_ATIVOS . '
+                AND bairro = ?
+                AND MBRIntersects(geom, ST_GeomFromGeoJSON(?, 1, 4326))'
+            . ($ignorar ? ' AND id NOT IN (' . implode(',', array_map('intval', $ignorar)) . ')' : ''),
+            [$bairro, $geojson]
+        );
+
+        foreach ($linhas as $l) {
+            $l->anel = json_decode($l->geojson, true)['coordinates'][0] ?? [];
+            unset($l->geojson);
+        }
+
+        return $linhas;
+    }
+
+    /**
+     * Distância em metros até o lote ativo mais próximo do bairro.
+     *
+     * Serve para recusar desenho no lugar errado. Não há polígono de limite
+     * municipal no banco — o contorno do mapa vem de um GeoJSON no front —,
+     * então "está perto de outro lote do mesmo bairro" é a prova possível.
+     *
+     * `ST_Distance` é uma das funções que o MySQL implementa corretamente em
+     * SRS geográfico, e devolve metros até a DIVISA, que é a medida certa aqui.
+     */
+    public function distanciaAoBairro(string $geojson, string $bairro): ?float
+    {
+        $d = DB::scalar(
+            'SELECT MIN(ST_Distance(geom, ST_GeomFromGeoJSON(?, 1, 4326)))
+               FROM lotes WHERE ' . self::SO_ATIVOS . ' AND bairro = ?',
+            [$geojson, $bairro]
+        );
+
+        return $d === null ? null : (float) $d;
+    }
+
+    /**
+     * União de vários lotes, encadeada.
+     *
+     * O `ST_Union` do MySQL é binário — não existe versão agregada —, então a
+     * acumulação acontece aqui, id a id, em GeoJSON.
+     *
+     * O que se devolve é matéria-prima, não veredito: o TIPO importa tanto
+     * quanto a geometria. Lotes que não se encostam produzem `MULTIPOLYGON`,
+     * que a coluna `geom POLYGON` recusaria no INSERT — melhor devolver o tipo
+     * e deixar o serviço dar a mensagem do que colher uma exceção de banco.
+     *
+     * A ÁREA daqui é a do MySQL e serve só de referência cruzada. Quem decide
+     * é GeometriaPlana: em SRID 4326 as operações booleanas do MySQL já se
+     * mostraram erradas (o `ST_Intersection` reportou 215,5 m² entre dois lotes
+     * de 214,47 m² que não se sobrepõem).
+     *
+     * @param  list<int>  $ids
+     * @return array{geojson:string, tipo:string, area_m2:float, furos:int}|null
+     */
+    public function uniao(array $ids): ?array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (count($ids) < 2) {
+            return null;
+        }
+
+        $acumulado = DB::scalar('SELECT ST_AsGeoJSON(geom) FROM lotes WHERE id = ?', [array_shift($ids)]);
+        if (! $acumulado) {
+            return null;
+        }
+
+        foreach ($ids as $id) {
+            $acumulado = DB::scalar(
+                'SELECT ST_AsGeoJSON(ST_Union(ST_GeomFromGeoJSON(?, 1, 4326), geom))
+                   FROM lotes WHERE id = ?',
+                [$acumulado, $id]
+            );
+            if (! $acumulado) {
+                return null;
+            }
+        }
+
+        $r = DB::selectOne(
+            'SELECT ST_GeometryType(g) tipo, ST_Area(g) area,
+                    IF(ST_GeometryType(g) = "POLYGON", ST_NumInteriorRing(g), 0) furos
+               FROM (SELECT ST_GeomFromGeoJSON(?, 1, 4326) g) t',
+            [$acumulado]
+        );
+
+        return [
+            'geojson' => $acumulado,
+            'tipo'    => (string) $r->tipo,
+            'area_m2' => (float) $r->area,
+            'furos'   => (int) $r->furos,
+        ];
+    }
+
+    /**
+     * O que sobra de um lote depois de tirar dele os polígonos informados.
+     *
+     * É como a ÚLTIMA parte de um desmembramento é obtida: em vez de exigir
+     * que o operador desenhe N partes perfeitamente encaixadas, ele desenha
+     * N−1 e a última é o resto — e aí `∪ partes = pai` por construção, exato,
+     * sem depender de tolerância nenhuma.
+     *
+     * O tipo do resultado importa: `MULTIPOLYGON` significa que as partes
+     * desenhadas partiram o resto em ilhas separadas, e isso não é um lote.
+     *
+     * A ÁREA devolvida é a do MySQL e serve de referência cruzada apenas —
+     * quem mede é GeometriaPlana, pelo anel devolvido aqui.
+     *
+     * @param  list<string>  $geojsons  partes a subtrair
+     * @return array{geojson:string, tipo:string, area_m2:float, furos:int}|null
+     */
+    public function diferenca(int $paiId, array $geojsons): ?array
+    {
+        $acumulado = DB::scalar('SELECT ST_AsGeoJSON(geom) FROM lotes WHERE id = ?', [$paiId]);
+        if (! $acumulado) {
+            return null;
+        }
+
+        foreach ($geojsons as $g) {
+            $acumulado = DB::scalar(
+                'SELECT ST_AsGeoJSON(ST_Difference(
+                    ST_GeomFromGeoJSON(?, 1, 4326), ST_GeomFromGeoJSON(?, 1, 4326)))',
+                [$acumulado, $g]
+            );
+            if (! $acumulado) {
+                return null;   // a subtração esvaziou: as partes cobrem o pai inteiro
+            }
+        }
+
+        $r = DB::selectOne(
+            'SELECT ST_GeometryType(g) tipo, ST_Area(g) area,
+                    IF(ST_GeometryType(g) = "POLYGON", ST_NumInteriorRing(g), 0) furos
+               FROM (SELECT ST_GeomFromGeoJSON(?, 1, 4326) g) t',
+            [$acumulado]
+        );
+
+        return [
+            'geojson' => $acumulado,
+            'tipo'    => (string) $r->tipo,
+            'area_m2' => (float) $r->area,
+            'furos'   => (int) $r->furos,
+        ];
+    }
+
+    /**
+     * Cria um lote com geometria e devolve o id.
+     *
+     * O INSERT é cru porque `geom` é NOT NULL e só se escreve por expressão
+     * SQL — `Lote::create()` não dá conta. A auditoria fica por conta de quem
+     * chama (`registrarAuditoria`, que é público justamente para isto), e o
+     * SQL espacial continua morando só aqui, como manda a ADR-001.
+     *
+     * `ST_GeomFromGeoJSON` e não WKT: com GeoJSON o MySQL aplica a RFC 7946
+     * (longitude, latitude) sozinho, e a ordem dos eixos — o erro mais caro de
+     * diagnosticar deste módulo — nunca precisa ser pensada de novo.
+     *
+     * @param  array<string,mixed>  $atributos
+     */
+    public function criarComGeometria(array $atributos, string $geojson): int
+    {
+        $colunas = array_keys($atributos);
+        $marcas  = array_fill(0, count($colunas), '?');
+
+        DB::insert(
+            'INSERT INTO lotes (' . implode(', ', $colunas) . ', geom, created_at, updated_at)
+             VALUES (' . implode(', ', $marcas) . ', ST_GeomFromGeoJSON(?, 1, 4326), ?, ?)',
+            [...array_values($atributos), $geojson, now(), now()]
+        );
+
+        return (int) DB::getPdo()->lastInsertId();
     }
 }

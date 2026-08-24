@@ -108,7 +108,51 @@ function abrirProtocolo(id) {
 
   document.getElementById('pf-situacao').value = ''
   document.getElementById('pf-parecer').value  = ''
+
+  // Protocolo de desmembramento/unificação já deferido e ainda sem vistoria:
+  // oferece registrar a vistoria que vai fundamentar o ato. É o caminho de
+  // quem parte do processo, e não do mapa.
+  const caixa = document.getElementById('pf-vistoria-cadastral')
+  if (caixa) {
+    caixa.hidden = ! p.espera_vistoria
+    if (p.espera_vistoria) {
+      caixa.innerHTML = `<div class="cad-nota">Deferido. O ato cadastral depende de uma
+        vistoria do imóvel — é ela que confirma em campo o que o processo autorizou.</div>
+        <button class="btn primary sm" style="width:100%"
+                onclick="vistoriaDoProtocolo(${p.id}, ${p.lote_id})">Registrar vistoria</button>`
+    }
+  }
+
   openModal('m-proto')
+}
+
+/**
+ * Abre o formulário de vistoria já amarrado a este protocolo.
+ *
+ * O imóvel vem do próprio protocolo, então o fiscal não precisa achá-lo no
+ * mapa — que é justamente o atrito de quem começou pelo processo.
+ *
+ * @param {number} protocoloId @param {number} loteId
+ */
+async function vistoriaDoProtocolo(protocoloId, loteId) {
+  fModalBtn('m-proto')
+
+  try {
+    const r = await fetch('/api/imoveis/' + loteId, { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    const d = await r.json()
+
+    // `novaVistoria()` lê o lote de `state.selecionado`; o formato é o mesmo
+    // da feição do mapa, com as propriedades dentro de `properties`.
+    state.selecionado = { properties: {
+      id: d.id, bairro: d.bairro, quadra: d.quadra, numero_lote: d.lote,
+    } }
+    vState.protocoloId = protocoloId
+    await novaVistoria()
+  } catch (e) {
+    console.error(e)
+    toast('Não foi possível abrir o imóvel do protocolo.', 'err')
+  }
 }
 
 /**

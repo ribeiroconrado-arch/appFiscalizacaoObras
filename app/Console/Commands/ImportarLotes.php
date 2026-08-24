@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Importa lotes de um GeoJSON (EPSG:4326) gerado pelo pipeline da Etapa 1
@@ -110,6 +111,26 @@ class ImportarLotes extends Command
                 return self::FAILURE;
             }
 
+            // Lote que participou de desmembramento ou unificação não está na
+            // conta acima e seria apagado — arrastando o ato pela FK RESTRICT
+            // (erro cru de banco) ou, pior, deixando a cadeia de sucessão do
+            // imóvel manca. O baixado entra junto: ele só existe para contar a
+            // história, e apagá-lo apaga a história.
+            $emSucessao = DB::table('lotes')->whereIn('bairro', $nomes)
+                ->where(fn ($q) => $q
+                    ->where('situacao', 'baixado')
+                    ->orWhereExists(fn ($s) => $s->from('lote_ato_lotes')
+                        ->whereColumn('lote_ato_lotes.lote_id', 'lotes.id')))
+                ->count();
+
+            if ($emSucessao) {
+                $this->error("ABORTADO: {$emSucessao} lote(s) destes bairros participam de desmembramento ou unificação.");
+                $this->line('  Apagá-los destruiria a cadeia de sucessão dos imóveis — o histórico');
+                $this->line('  que diz de onde cada lote atual veio.');
+                $this->line('  Rode SEM --substituir: o lote existente é atualizado no lugar.');
+                return self::FAILURE;
+            }
+
             $apagados = DB::table('lotes')->whereIn('bairro', $nomes)->delete();
             $this->warn(sprintf('Removidos %d lotes de: %s', $apagados, implode(', ', $nomes)));
         }
@@ -135,6 +156,10 @@ class ImportarLotes extends Command
         // interpreta o documento conforme a RFC 7946 (longitude, latitude) e
         // faz a conversão para a ordem interna sozinho. Montar WKT à mão aqui
         // exigiria o 'axis-order=long-lat' e abriria espaço para erro silencioso.
+        // Contado ANTES de gravar: depois do INSERT já não dá para distinguir
+        // quem foi preservado de quem simplesmente não mudou.
+        $preservados = $this->contarPreservados($linhas);
+
         $barra = $this->output->createProgressBar(count($linhas));
         $barra->start();
         $inseridos = 0;
@@ -153,21 +178,38 @@ class ImportarLotes extends Command
                 // lote em vez de criar um segundo. O id sobrevive, e com ele
                 // toda vistoria, obra, documento e protocolo já ligados.
                 //
-                // Depende do índice único (bairro, quadra, numero_lote) — sem
-                // ele o MySQL não reconhece "o mesmo lote" e volta a duplicar.
-                // Ver a migração 2026_08_20_000200.
+                // Depende do índice único da identificação — sem ele o MySQL
+                // não reconhece "o mesmo lote" e volta a duplicar. Hoje o
+                // índice é sobre a coluna gerada `chave_identidade`, que só
+                // tem valor para lote ATIVO: reimportar não ressuscita lote
+                // baixado, ele simplesmente não é reconhecido como o mesmo.
                 //
                 // created_at fica de fora do UPDATE de propósito: é a data em
                 // que o lote entrou na base, não a da última reimportação.
+                //
+                // ── A GEOMETRIA SÓ É SOBRESCRITA SE VEIO DO DWG ──
+                //
+                // Este era o risco mais caro do módulo. Um lote desenhado à
+                // mão no mapa, ou nascido de um desmembramento, cuja
+                // identificação bata com a do DWG teria a geometria trocada
+                // pela do desenho antigo — em silêncio, com o comando
+                // terminando "com sucesso". O trabalho manual desapareceria
+                // sem nada no log.
+                //
+                // `origem` existe para isto: só `importacao` aceita ser
+                // sobrescrito. O resto é preservado, e o comando RELATA
+                // quantos preservou — nunca truncar em silêncio é regra
+                // declarada do projeto (ver o comentário de max_lotes em
+                // config/gis.php).
                 DB::insert(
                     'INSERT INTO lotes (bairro, quadra, numero_lote, chave, area_gis_m2,
                                         fonte, geom, created_at, updated_at) VALUES '
                     . implode(',', $valores)
                     . ' ON DUPLICATE KEY UPDATE
-                          chave       = VALUES(chave),
-                          area_gis_m2 = VALUES(area_gis_m2),
-                          fonte       = VALUES(fonte),
-                          geom        = VALUES(geom),
+                          chave       = IF(origem = \'importacao\', VALUES(chave), chave),
+                          area_gis_m2 = IF(origem = \'importacao\', VALUES(area_gis_m2), area_gis_m2),
+                          fonte       = IF(origem = \'importacao\', VALUES(fonte), fonte),
+                          geom        = IF(origem = \'importacao\', VALUES(geom), geom),
                           updated_at  = VALUES(updated_at)',
                     $params
                 );
@@ -179,6 +221,16 @@ class ImportarLotes extends Command
         $barra->finish();
         $this->newLine(2);
         $this->info("Inseridos: {$inseridos}");
+
+        if ($preservados > 0) {
+            $this->newLine();
+            $this->warn("Geometria PRESERVADA em {$preservados} lote(s).");
+            $this->line('  São lotes desenhados à mão ou nascidos de desmembramento/unificação,');
+            $this->line('  cuja identificação também existe no DWG. O desenho do arquivo NÃO os');
+            $this->line('  sobrescreveu — se a intenção era justamente voltar ao DWG, é preciso');
+            $this->line('  tratar cada um deliberadamente.');
+            $this->line('  Lista: php artisan gis:conferir');
+        }
 
         // ── conferência ──
         // SRID errado não lança erro: dá mapa vazio. Conferir aqui é mais barato
@@ -211,36 +263,86 @@ class ImportarLotes extends Command
     }
 
     /**
-     * Garante o índice único (bairro, quadra, numero_lote), criando-o se
-     * faltar. Devolve false — e explica — quando a duplicidade impede.
+     * Quantos lotes do arquivo já existem na base com geometria feita à mão.
      *
-     * Quadra nula não atrapalha: no MySQL o índice único trata cada NULL como
-     * distinto, então lote cuja quadra o desenho não permitiu provar entra sem
-     * travar a identidade dos demais. Ele aparece na conferência
-     * (php artisan gis:conferir) para correção manual.
+     * São os que o `IF(origem = 'importacao', ...)` da gravação vai preservar.
+     * Contar aqui é o que permite RELATAR a preservação: sem isso ela seria
+     * silenciosa, e silêncio é exatamente o defeito que ela veio corrigir —
+     * quem reimporta o bairro precisa saber que o DWG não venceu em N lotes.
+     *
+     * @param  list<array<string,mixed>>  $linhas
+     */
+    private function contarPreservados(array $linhas): int
+    {
+        if (! Schema::hasColumn('lotes', 'origem')) {
+            return 0;   // base ainda sem a migração da sucessão
+        }
+
+        $n = 0;
+        // Em blocos: um `whereIn` com 23 mil triplas estoura o max_allowed_packet.
+        foreach (array_chunk($linhas, 500) as $bloco) {
+            $n += DB::table('lotes')
+                ->where('origem', '<>', 'importacao')
+                ->where('situacao', 'ativo')
+                ->where(function ($q) use ($bloco) {
+                    foreach ($bloco as $l) {
+                        $q->orWhere(fn ($w) => $w
+                            ->where('bairro', $l['bairro'])
+                            ->where('quadra', $l['quadra'])
+                            ->where('numero_lote', $l['numero_lote']));
+                    }
+                })
+                ->count();
+        }
+
+        return $n;
+    }
+
+    /**
+     * Garante que existe um índice único de identificação, criando o antigo se
+     * a base ainda não migrou. Devolve false — e explica — quando a
+     * duplicidade impede.
+     *
+     * Dois índices podem ocupar este papel, e qualquer um dos dois serve para
+     * o ON DUPLICATE KEY UPDATE funcionar:
+     *
+     *   uk_lotes_identificacao         (bairro, quadra, numero_lote) — o antigo
+     *   uk_lotes_identificacao_ativos  sobre a coluna gerada `chave_identidade`,
+     *                                  que só tem valor quando o lote está ativo
+     *
+     * O segundo veio com a sucessão (migração 2026_08_21_000100): sem ele,
+     * unificar os lotes 05 e 06 e chamar o resultado de "05" colidiria com o
+     * 05 recém-baixado, que é o caminho normal da unificação.
+     *
+     * Quadra nula não atrapalha em nenhum dos dois: no MySQL o índice único
+     * trata cada NULL como distinto, então lote cuja quadra o desenho não
+     * permitiu provar entra sem travar a identidade dos demais. Ele aparece na
+     * conferência (php artisan gis:conferir) para correção manual.
      */
     private function garantirIndice(): bool
     {
-        $existe = fn () => (bool) DB::selectOne(
+        $existe = fn (string $nome) => (bool) DB::selectOne(
             'SELECT COUNT(*) n FROM information_schema.statistics
               WHERE table_schema = DATABASE() AND table_name = "lotes"
-                AND index_name = "uk_lotes_identificacao"'
+                AND index_name = ?',
+            [$nome]
         )->n;
 
-        if ($existe()) {
+        if ($existe('uk_lotes_identificacao_ativos') || $existe('uk_lotes_identificacao')) {
             return true;
         }
 
+        // Só entre ATIVOS: lote baixado não disputa identidade com ninguém.
         $duplicadas = DB::selectOne('SELECT COUNT(*) n FROM (
             SELECT 1 FROM lotes
-             WHERE quadra IS NOT NULL AND numero_lote IS NOT NULL
+             WHERE situacao = "ativo" AND quadra IS NOT NULL AND numero_lote IS NOT NULL
              GROUP BY bairro, quadra, numero_lote
             HAVING COUNT(*) > 1
         ) t')->n;
 
         if ($duplicadas > 0) {
-            $this->error("ABORTADO: o índice único uk_lotes_identificacao não existe e não pode ser criado.");
-            $this->line("  {$duplicadas} combinações bairro|quadra|lote estão repetidas na base.");
+            $this->error('ABORTADO: não há índice único de identificação, e ele não pode ser criado.');
+            $this->line("  {$duplicadas} combinações bairro|quadra|lote estão repetidas entre lotes ativos.");
             $this->line('  Sem o índice esta importação DUPLICARIA os lotes em vez de atualizá-los.');
             $this->line('  Diagnóstico: php artisan gis:conferir');
             return false;

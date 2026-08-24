@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Lote;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -44,7 +45,7 @@ class CorrigirQuadras extends Command
         $bairro = $this->option('bairro');
         $aplicar = $this->option('aplicar');
 
-        $lotes = DB::table('lotes')
+        $lotes = DB::table('lotes')->where('situacao', 'ativo')
             ->when($bairro, fn ($q) => $q->where('bairro', $bairro))
             ->select('id', 'bairro', 'quadra', 'numero_lote')
             ->get()->keyBy('id');
@@ -59,7 +60,8 @@ class CorrigirQuadras extends Command
             'SELECT a.id a, b.id b
                FROM lotes a
                JOIN lotes b ON b.id > a.id AND a.bairro = b.bairro
-              WHERE MBRIntersects(a.geom, b.geom)
+              WHERE a.situacao = \'ativo\' AND b.situacao = \'ativo\'
+                AND MBRIntersects(a.geom, b.geom)
                 AND ST_Distance(a.geom, b.geom) <= ?'
             . ($bairro ? ' AND a.bairro = ?' : ''),
             $bairro ? [self::TOLERANCIA_M, $bairro] : [self::TOLERANCIA_M]
@@ -192,12 +194,23 @@ class CorrigirQuadras extends Command
         }
 
         // ── grava, e refaz a chave de integração junto ──
+        //
+        // Pelo Eloquent, não por `DB::table()`: só ele dispara os eventos da
+        // trilha de auditoria. Este comando é a maior intervenção que o
+        // sistema permite — reatribui a quadra de centenas de imóveis de uma
+        // vez — e era justamente a única que não deixava rastro.
+        //
+        // Rodando no terminal não há sessão, então o autor sai como
+        // "terminal: lotes:corrigir-quadras" (ver RegistraAuditoria).
         DB::transaction(function () use ($correcoes) {
             foreach ($correcoes as $c) {
-                DB::table('lotes')->where('id', $c['id'])->update([
+                $lote = Lote::find($c['id']);
+                if (! $lote) {
+                    continue;
+                }
+                $lote->update([
                     'quadra' => $c['para'],
-                    'chave'  => $c['bairro'] . '|' . $c['para'] . '|' . DB::table('lotes')
-                        ->where('id', $c['id'])->value('numero_lote'),
+                    'chave'  => $c['bairro'] . '|' . $c['para'] . '|' . $lote->numero_lote,
                 ]);
             }
         });
@@ -211,7 +224,8 @@ class CorrigirQuadras extends Command
     private function relatorioDuplicidade(): void
     {
         $dup = DB::select('SELECT COUNT(*) n FROM (
-            SELECT 1 FROM lotes GROUP BY bairro, quadra, numero_lote HAVING COUNT(*) > 1
+            SELECT 1 FROM lotes WHERE situacao = \'ativo\'
+             GROUP BY bairro, quadra, numero_lote HAVING COUNT(*) > 1
         ) t');
         $this->newLine();
         $this->info('Chaves duplicadas restantes: ' . ($dup[0]->n ?? '?'));
