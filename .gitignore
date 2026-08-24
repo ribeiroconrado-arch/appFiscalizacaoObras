@@ -28,3 +28,6 @@ Thumbs.db
 
 # Material de planejamento/design — fica só local, não vai pro repositório
 /planejamento
+
+# Cópias do .env feitas antes de mudanças de ambiente: têm senha dentro.
+.env.backup*

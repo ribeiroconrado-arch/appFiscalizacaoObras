@@ -72,7 +72,11 @@ class ParametroController extends Controller
             'id'           => ['nullable', 'exists:users,id'],
             'name'         => ['required', 'string', 'max:160'],
             'email'        => ['required', 'email', 'max:160', Rule::unique('users', 'email')->ignore($r->input('id'))],
-            'matricula'    => ['nullable', 'string', 'max:30'],
+            // Única desde que a matrícula virou identificador de login: sem
+            // isto, cadastrar uma repetida só falharia lá no banco, com erro
+            // 500 e sem dizer ao usuário qual campo está errado.
+            'matricula'    => ['nullable', 'string', 'max:30',
+                Rule::unique('users', 'matricula')->ignore($r->input('id'))],
             'perfil'       => ['required', Rule::in(User::PERFIS)],
             'tipo_usuario' => ['required', Rule::in(User::CARGOS)],
             'ativo'        => ['nullable', 'boolean'],
@@ -89,7 +93,10 @@ class ParametroController extends Controller
         $usuario = User::updateOrCreate(
             ['id' => $d['id'] ?? null],
             [
-                'name' => $d['name'], 'email' => $d['email'], 'matricula' => $d['matricula'] ?? null,
+                // Vazio vira NULO: '' não é distinto num índice único, então
+                // dois usuários sem matrícula colidiriam entre si.
+                'name' => $d['name'], 'email' => $d['email'],
+                'matricula' => ($d['matricula'] ?? '') !== '' ? $d['matricula'] : null,
                 'perfil' => $d['perfil'], 'tipo_usuario' => $d['tipo_usuario'], 'ativo' => $d['ativo'] ?? true,
             ]
         );

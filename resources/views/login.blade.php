@@ -53,11 +53,14 @@
   <form method="POST" action="{{ route('login.entrar') }}" autocomplete="on">
     @csrf
 
+    {{-- Um campo para os dois: matrícula (o caminho curto, para quem está em
+         campo) ou e-mail. O type é `text`, e não `email`, porque com `email` o
+         navegador recusa a matrícula antes mesmo de enviar o formulário. --}}
     <div class="field">
-      <label for="email">E-mail</label>
-      <input id="email" name="email" type="email" required autofocus
-             autocomplete="username" value="{{ old('email') }}"
-             class="{{ $errors->has('email') ? 'campo-invalido' : '' }}">
+      <label for="identificador">Matrícula ou e-mail</label>
+      <input id="identificador" name="identificador" type="text" required autofocus
+             autocomplete="username" value="{{ old('identificador') }}"
+             class="{{ $errors->has('identificador') ? 'campo-invalido' : '' }}">
     </div>
 
     <div class="field">

@@ -22,28 +22,44 @@ class AuthController extends Controller
         return Auth::check() ? redirect()->route('mapa') : view('login');
     }
 
+    /**
+     * Entra com MATRÍCULA ou e-mail, no mesmo campo.
+     *
+     * A matrícula existe para o campo: são seis dígitos contra trinta
+     * caracteres, digitados numa tela de celular, com sol na cara. O e-mail
+     * continua aceito — e continua obrigatório no cadastro, porque ele não é
+     * identificador, é CANAL: é por ele que se recupera senha e se avisa de um
+     * acesso suspeito. Trocar um pelo outro perderia isso; aceitar os dois,
+     * não.
+     */
     public function entrar(Request $request): RedirectResponse
     {
         $dados = $request->validate([
-            'email'    => ['required', 'string', 'email'],
-            'password' => ['required', 'string'],
+            'identificador' => ['required', 'string', 'max:255'],
+            'password'      => ['required', 'string'],
         ], [], [
-            'email'    => 'e-mail',
-            'password' => 'senha',
+            'identificador' => 'matrícula ou e-mail',
+            'password'      => 'senha',
         ]);
+
+        // A arroba decide qual coluna consultar. Matrícula não tem arroba e
+        // e-mail sempre tem — não há como um valor ser os dois, então não há
+        // ambiguidade a resolver depois.
+        $campo = str_contains($dados['identificador'], '@') ? 'email' : 'matricula';
 
         // `ativo` entra na tentativa: desativar alguém precisa ter efeito
         // imediato no login, não só no cadastro de usuários.
         $ok = Auth::attempt(
-            ['email' => $dados['email'], 'password' => $dados['password'], 'ativo' => true],
+            [$campo => $dados['identificador'], 'password' => $dados['password'], 'ativo' => true],
             $request->boolean('lembrar')
         );
 
         if (! $ok) {
-            // Mensagem única para senha errada, e-mail inexistente ou conta
-            // desativada: dizer qual dos três é enumerar usuários válidos.
+            // Mensagem única para senha errada, usuário inexistente ou conta
+            // desativada: dizer qual dos três é enumerar usuários válidos — e
+            // matrícula, sendo sequencial, seria varrida em minutos.
             throw ValidationException::withMessages([
-                'email' => 'Credenciais inválidas ou usuário sem acesso.',
+                'identificador' => 'Credenciais inválidas ou usuário sem acesso.',
             ]);
         }
 
