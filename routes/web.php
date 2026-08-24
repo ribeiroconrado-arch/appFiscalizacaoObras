@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BuscaController;
+use App\Http\Controllers\CadastroImobiliarioController;
+use App\Http\Controllers\CadastroLoteController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\LegislacaoController;
 use App\Http\Controllers\MapaController;
@@ -32,7 +34,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/entrar', [AuthController::class, 'mostrarLogin'])->name('login');
     Route::post('/entrar', [AuthController::class, 'entrar'])
-        ->middleware('throttle:5,1')   // trava tentativa de força bruta
+        ->middleware('throttle:login')   // ver AppServiceProvider: conta por identificador E por IP
         ->name('login.entrar');
 });
 
@@ -58,6 +60,9 @@ Route::middleware('auth')->group(function () {
         // Depois das rotas fixas: registrada antes, a curinga engoliria
         // "bairros" e "busca" como se fossem id de lote.
         Route::get('/imoveis/{lote}', [BuscaController::class, 'ficha']);
+        // Cadastro imobiliário: só quando a aba é aberta, nunca junto do mapa.
+        Route::get('/imoveis/{lote}/bci', [CadastroImobiliarioController::class, 'mostrar']);
+        Route::post('/imoveis/{lote}/bci/atualizar', [CadastroImobiliarioController::class, 'atualizar']);
 
         Route::get('/mapa/lotes', [MapaController::class, 'lotes']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
@@ -72,6 +77,33 @@ Route::middleware('auth')->group(function () {
         Route::get('/lotes/{lote}/quarteirao', [QuarteiraoController::class, 'mostrar']);
         Route::post('/lotes/{lote}/quadra', [QuarteiraoController::class, 'aplicar']);
 
+        // Correcao de quadra ERRADA, a partir de selecao feita a dedo no mapa.
+        // O par acima so preenche quadra vazia; este sobrescreve, e por isso
+        // tem provas proprias — ver App\Services\QuadraDeLotesSelecionados.
+        //
+        // A previa e POST apesar de nao alterar nada: leva a lista de ids, que
+        // nao cabe confortavelmente numa query string.
+        Route::post('/lotes/quadra-em-massa/previa', [CadastroLoteController::class, 'previaQuadra']);
+        Route::post('/lotes/quadra-em-massa', [CadastroLoteController::class, 'aplicarQuadra']);
+
+        // Desenhar lote que a importacao nao trouxe. O extrator suprime lote em
+        // silencio quando o desenho do DWG nao coopera — foi assim que a Quadra
+        // 05 do Jardim Europa, um lote unico de 12.008 m2, simplesmente nao veio.
+        Route::post('/lotes/previa', [CadastroLoteController::class, 'previaDesenho']);
+        Route::post('/lotes', [CadastroLoteController::class, 'criarDesenho']);
+
+        // Atos cadastrais. O portao NAO e o perfil: e a VISTORIA regular
+        // amarrada ao protocolo deferido. O deferimento diz que o pedido
+        // procede no papel; a vistoria diz que o papel bate com o chao.
+        Route::post('/protocolos/{protocolo}/unificacao/previa', [CadastroLoteController::class, 'previaUnificacao']);
+        Route::post('/protocolos/{protocolo}/unificacao', [CadastroLoteController::class, 'unificar']);
+        Route::post('/protocolos/{protocolo}/desmembramento/previa', [CadastroLoteController::class, 'previaDesmembramento']);
+        Route::post('/protocolos/{protocolo}/desmembramento', [CadastroLoteController::class, 'desmembrar']);
+
+        // Protocolos de desmembramento/unificacao a espera de vistoria. A
+        // vistoria e o portao do ato cadastral: o deferimento diz que o pedido
+        // procede no papel, a vistoria diz que o papel bate com o chao.
+        Route::get('/lotes/{lote}/protocolos-cadastrais', [VistoriaController::class, 'protocolosCadastrais']);
         Route::get('/lotes/{lote}/historico', [VistoriaController::class, 'historico']);
         Route::post('/lotes/{lote}/vistorias', [VistoriaController::class, 'store']);
         Route::delete('/evidencias/{evidencia}', [VistoriaController::class, 'excluirEvidencia']);
