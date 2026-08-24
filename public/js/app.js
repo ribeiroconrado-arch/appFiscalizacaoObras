@@ -177,22 +177,22 @@ function abrirFicha(feicao) {
   const p = feicao.properties
   state.selecionado = feicao
 
-  // O título é a INSCRIÇÃO: é por ela que a prefeitura identifica o imóvel
-  // em lançamento, certidão e processo. Quadra e lote viram subtítulo.
+  // O título é fixo — "Ficha Imóvel". A inscrição saiu dele e desceu para a
+  // faixa de campos: no cabeçalho ela competia com o nome da tela, e quem
+  // abre a ficha já sabe qual imóvel abriu.
   const inscricao = p.inscricao || montarInscricao(p)
-  document.getElementById('fi-titulo').textContent = inscricao
   document.getElementById('fi-inscricao').textContent = inscricao
 
   document.getElementById('fi-endereco').innerHTML = montarEndereco(p)
   document.getElementById('fi-situacao').innerHTML =
     '<span class="badge bd-ok">Ativo</span>'
-  // Enquanto a Etapa 4 não roda, não há data de integração para mostrar —
-  // e inventar "hoje" faria o dado parecer conferido.
+  // Enquanto a integração com o cadastro da prefeitura não roda, não há data
+  // para mostrar — e inventar "hoje" faria o dado parecer conferido. O travessão
+  // é o vazio pedido: diz "nunca integrado" sem gastar uma frase no cabeçalho.
   document.getElementById('fi-integracao').textContent =
-    p.integrado_em ? formatarDataBR(p.integrado_em) : 'sem integração'
+    p.integrado_em ? formatarDataHoraCurta(p.integrado_em) : '—'
 
   document.getElementById('fi-area').textContent = fmtNum(p.area_gis_m2) + ' m²'
-  document.getElementById('fi-chave').textContent = p.chave || '—'
 
   const c = centroide(feicao.geometry)
   document.getElementById('fi-coord').textContent =
@@ -224,6 +224,10 @@ function subFicha(nome) {
     const alvo = nome === 'historico' ? 'fi-historico-painel' : 'fi-' + nome
     p.classList.toggle('at', p.id === alvo)
   })
+
+  // O cadastro imobiliário é buscado ao ABRIR a aba, não junto da ficha: o
+  // mapa carrega até 3.000 lotes de uma vez.
+  if (nome === 'cadastro') { carregarBci(state.selecionado?.properties?.id) }
 }
 
 /**
@@ -248,15 +252,34 @@ function montarInscricao(p) {
           pad(p.numero_lote, 4), pad(p.desmembramento, 3)].join('.')
 }
 
-/** Endereço em uma linha, do jeito que se lê num ofício. */
+/**
+ * Endereço em UMA linha, do jeito que se lê num ofício.
+ *
+ * Antes eram três linhas empilhadas, e o endereço sozinho gastava um terço da
+ * altura útil da ficha. Quadra e lote abreviam porque nesta linha eles são
+ * referência de localização, não rótulo de campo — quem precisa deles por
+ * extenso lê a inscrição, logo abaixo.
+ */
 function montarEndereco(p) {
   const via = [p.logradouro, p.numero_predial].filter(Boolean).join(', ')
-  const local = `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'}`
   return [
-    via || '<span style="color:var(--tx3)">logradouro não cadastrado</span>',
-    local,
+    via ? esc(via) : '<span style="color:var(--tx3)">logradouro não cadastrado</span>',
+    `Qd. ${esc(p.quadra ?? '—')}`,
+    `Lt. ${esc(p.numero_lote ?? '—')}`,
     esc(p.bairro || ''),
-  ].filter(Boolean).join('<br>')
+  ].filter(Boolean).join(' · ')
+}
+
+/**
+ * Data e hora curtas — dd/mm/aa - hh:mm — para o cabeçalho da ficha.
+ * Ano com dois dígitos porque ali o espaço é o que sobra ao lado do título.
+ */
+function formatarDataHoraCurta(iso) {
+  const d = new Date(iso)
+  if (isNaN(d)) { return '—' }
+  const dd = n => String(n).padStart(2, '0')
+  return `${dd(d.getDate())}/${dd(d.getMonth() + 1)}/${dd(d.getFullYear() % 100)}`
+       + ` - ${dd(d.getHours())}:${dd(d.getMinutes())}`
 }
 
 /** Abre a ficha a partir do que a API devolveu (sem geometria). @param {Object} lote */

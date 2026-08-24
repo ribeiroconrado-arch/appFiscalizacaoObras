@@ -222,17 +222,18 @@
   <div class="ctrl-grupo" id="grupo-cores">
     <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-cores')"
             title="Cores e legenda" aria-expanded="false">
-      {{-- Leque de amostras, não a palheta do pintor: o botão escolhe entre
-           esquemas de cor prontos, e o leque é o objeto que se folheia
-           procurando um. A palheta sugeria misturar cor à mão. --}}
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+      {{-- Balde de tinta despejando.
+           O leque de amostras que estava aqui tinha lâminas demais: a 40px, que
+           é o tamanho real do botão, elas se fundiam num borrão. Quatro formas
+           grandes e separadas sobrevivem à miniatura; quatro finas e
+           sobrepostas, não. --}}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2.6" y="2.4" width="5.8" height="19.2" rx="2"/>
-        <path d="M2.6 7.2h5.8M2.6 12h5.8M2.6 16.8h5.8"/>
-        <circle cx="5.5" cy="19.2" r="1"/>
-        <rect x="8.6" y="3.3" width="4.6" height="16.8" rx="1.8" transform="rotate(12 8.6 20.1)"/>
-        <rect x="8.6" y="3.3" width="4.6" height="16.8" rx="1.8" transform="rotate(25 8.6 20.1)"/>
-        <rect x="8.6" y="3.3" width="4.6" height="16.8" rx="1.8" transform="rotate(38 8.6 20.1)"/>
+        <g transform="rotate(-32 11 11)">
+          <path d="M5.6 7.4h10.8l-1.7 8a1.7 1.7 0 0 1-1.7 1.4H9a1.7 1.7 0 0 1-1.7-1.4z"/>
+          <path d="M8.8 7.4C8.8 3.6 9.9 2 11 2s2.2 1.6 2.2 5.4"/>
+        </g>
+        <path d="M18.4 15.4s-2.1 2.6-2.1 3.9a2.1 2.1 0 0 0 4.2 0c0-1.3-2.1-3.9-2.1-3.9z"/>
       </svg>
     </button>
     <div class="ctrl-corpo">
@@ -306,6 +307,98 @@
       <div class="leg" id="pin-resultado">Escolha ao menos um filtro.</div>
     </div>
   </div>
+
+  {{-- CORREÇÃO CADASTRAL — só administrador.
+       Esconder o controle não é a segurança: quem autoriza de verdade é o
+       servidor, em CadastroLoteController. Aqui é para não oferecer a quem
+       não pode. --}}
+  @if (auth()->user()->isAdmin())
+  <div class="ctrl-grupo" id="grupo-cadastro">
+    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-cadastro')"
+            title="Correção cadastral" aria-expanded="false">
+      {{-- Lápis sobre quadrículas: corrigir o desenho do cadastro, não o mapa. --}}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.5" y="2.5" width="8" height="8" rx="1.4"/>
+        <rect x="2.5" y="13.5" width="8" height="8" rx="1.4"/>
+        <rect x="13.5" y="13.5" width="8" height="8" rx="1.4"/>
+        <path d="M21.2 2.8a1.9 1.9 0 0 1 0 2.7l-6 6-3 .8.8-3 6-6a1.9 1.9 0 0 1 2.2-.5z"/>
+      </svg>
+    </button>
+    <div class="ctrl-corpo">
+      <b>Correção cadastral</b>
+
+      {{-- Painel do DESMEMBRAMENTO. Toma a vez do resto enquanto o ato está em
+           curso: oferecer "corrigir quadra" e "desenhar lote faltante" no meio
+           de um desmembramento seriam três assuntos ao mesmo tempo. --}}
+      <div id="desm-caixa" hidden></div>
+
+      <div id="cad-geral">
+      <button type="button" class="btn sm" id="cad-modo" style="width:100%;margin-bottom:6px"
+              onclick="alternarModoSelecao()">Selecionar lotes</button>
+
+      <div id="cad-corpo" hidden>
+        {{-- Quando a seleção está a serviço de um ato cadastral, o painel muda
+             de assunto: não é mais corrigir quadra, é executar a unificação
+             daquele protocolo. --}}
+        <div id="cad-ato" hidden></div>
+        <div class="leg" id="cad-contagem">Toque nos lotes do mapa para marcá-los.</div>
+
+        <div id="cad-acoes" hidden>
+          <div class="field" style="margin:8px 0 6px" id="cad-quadra-campo">
+            <label for="cad-quadra">Quadra a gravar</label>
+            <input type="text" id="cad-quadra" class="mono" inputmode="numeric" maxlength="20"
+                   placeholder="24">
+          </div>
+          <div class="seg" style="margin:0">
+            <button type="button" id="cad-btn-limpar" onclick="limparSelecaoCadastral()">Limpar</button>
+            <button type="button" id="cad-btn-conferir" onclick="conferirQuadraSelecao()">Conferir</button>
+          </div>
+          <div id="cad-previa"></div>
+        </div>
+      </div>
+
+      {{-- DESENHAR LOTE FALTANTE.
+           O extrator suprime lote em silêncio quando o DWG não coopera; até
+           agora o único conserto era corrigir o desenho e reimportar o bairro
+           inteiro, o que só quem opera o QGIS consegue fazer. --}}
+      <hr class="cad-risco">
+      <button type="button" class="btn sm" id="des-iniciar" style="width:100%"
+              onclick="iniciarDesenhoDeLote()">Desenhar lote faltante</button>
+
+      <div id="des-desenhando" hidden>
+        <div class="leg" id="des-contagem">Toque nos cantos do lote. Duplo toque fecha.</div>
+        <div class="seg" style="margin:6px 0 0">
+          <button type="button" onclick="desfazerVertice()">Desfazer canto</button>
+          <button type="button" onclick="largarDesenho()">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="des-dados" hidden>
+        <div class="field" style="margin:8px 0 6px">
+          <label for="des-bairro">Bairro</label>
+          <input type="text" id="des-bairro" maxlength="120" placeholder="Jardim Europa IV">
+        </div>
+        <div class="g2" style="margin-bottom:6px">
+          <div class="field" style="margin:0">
+            <label for="des-quadra">Quadra</label>
+            <input type="text" id="des-quadra" class="mono" inputmode="numeric" maxlength="20" placeholder="05">
+          </div>
+          <div class="field" style="margin:0">
+            <label for="des-lote">Lote</label>
+            <input type="text" id="des-lote" class="mono" maxlength="20" placeholder="1">
+          </div>
+        </div>
+        <div class="seg" style="margin:0">
+          <button type="button" onclick="largarDesenho()">Descartar</button>
+          <button type="button" onclick="conferirDesenho()">Conferir</button>
+        </div>
+        <div id="des-previa"></div>
+      </div>
+      </div>{{-- /cad-geral --}}
+    </div>
+  </div>
+  @endif
 </div>
 
 
@@ -774,7 +867,12 @@
            stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
       </svg>
-      <span id="fi-titulo">Imóvel</span>
+      <span id="fi-titulo">Ficha Imóvel</span>
+      {{-- A data da última consulta ao cadastro da prefeitura fica no
+           cabeçalho, e não entre os campos, porque ela qualifica a ficha
+           INTEIRA: diz de quando é o que está sendo lido. --}}
+      <span class="fi-integracao-topo">Últ. Integração:
+        <b id="fi-integracao">—</b></span>
     </h3>
     <div class="sub" id="fi-linha-dist" style="display:none">
       <span class="badge bd-ok"><span id="fi-dist"></span></span>
@@ -797,15 +895,23 @@
         <div class="fi-endereco" id="fi-endereco">—</div>
       </div>
 
-      <div class="fi-grade">
-        {{-- A inscrição ocupa a faixa inteira: é o dado mais largo da ficha e a
-             identidade do registro. Dividindo a faixa com outro dado, o número
-             quebrava em duas linhas — justamente o que não se quer num campo
-             que se confere dígito a dígito. --}}
-        <div class="fi-largo"><div class="fi-rot">Inscrição imobiliária</div><div class="fi-val mono" id="fi-inscricao">—</div></div>
-        <div><div class="fi-rot">Situação</div><div class="fi-val" id="fi-situacao">—</div></div>
-        <div><div class="fi-rot">Coordenadas</div><div class="fi-val mono" id="fi-coord">—</div></div>
-        <div><div class="fi-rot">Última integração</div><div class="fi-val" id="fi-integracao">—</div></div>
+      {{-- FAIXAS, não grade.
+           O separador é do TRAÇO da faixa, e não de cada campo. Com a grade
+           antiga, dois campos lado a lado desenhavam dois traços independentes
+           com uma falha no meio, e faixa de número ímpar de campos terminava
+           com meia linha. Ver .fi-linha em tema-f.css. --}}
+      <div class="fi-linhas">
+        <div class="fi-linha">
+          <div class="fi-campo"><span class="fi-rot">Insc. Imob.</span><span class="fi-val mono" id="fi-inscricao">—</span></div>
+          <div class="fi-campo"><span class="fi-rot">Coord.</span><span class="fi-val mono" id="fi-coord">—</span></div>
+          <div class="fi-campo"><span class="fi-rot">Situação</span><span class="fi-val" id="fi-situacao">—</span></div>
+        </div>
+        <div class="fi-linha">
+          {{-- Área do GIS, não do cadastro: são réguas diferentes e não se
+               misturam. A do cadastro fica na aba Cadastro imobiliário, ao
+               lado das medidas do terreno. --}}
+          <div class="fi-campo"><span class="fi-rot">Área GIS</span><span class="fi-val" id="fi-area">—</span></div>
+        </div>
       </div>
 
       {{-- Fachada e croqui lado a lado: são as duas imagens que respondem
@@ -834,19 +940,12 @@
       </div>
     </div>
 
-    {{-- CADASTRO IMOBILIÁRIO (integração — Etapa 4) --}}
+    {{-- CADASTRO IMOBILIÁRIO — a cópia local do BCI da prefeitura.
+         O conteúdo é montado em cadastro-imobiliario.js quando a aba é aberta,
+         e não junto da ficha: o mapa carrega até 3.000 lotes de uma vez, e
+         enriquecer todos seria pagar por um dado que quase ninguém vai olhar. --}}
     <div class="fi-painel" id="fi-cadastro">
-      <div class="field" style="background:var(--gold-lt);border-color:#FFE9A8">
-        <label>Situação da integração</label>
-        <div class="valor" style="font-size:12.5px;font-weight:600">
-          Proprietário, área construída, uso e situação fiscal virão do cadastro
-          da prefeitura. A integração é a Etapa 4 do plano.
-        </div>
-      </div>
-      <div class="fi-grade" style="margin-top:12px">
-        <div><div class="fi-rot">Chave de integração</div><div class="fi-val mono" id="fi-chave">—</div></div>
-        <div><div class="fi-rot">Área GIS</div><div class="fi-val" id="fi-area">—</div></div>
-      </div>
+      <div id="fi-bci"><div class="vazio-msg">Carregando cadastro…</div></div>
     </div>
 
     {{-- CROQUIS --}}
@@ -917,6 +1016,18 @@
     <div class="field" style="display:none">
       <label>Coordenada capturada</label>
       <div class="valor" id="nv-gps" style="font-size:12.5px">—</div>
+    </div>
+
+    {{-- Só aparece quando o imóvel tem protocolo de desmembramento ou
+         unificação deferido e ainda sem vistoria. Numa vistoria de rotina —
+         a esmagadora maioria — perguntar "atende a qual protocolo?" é ruído.
+         É o vínculo que, mais tarde, libera o ato cadastral. --}}
+    <div id="nv-protocolo-caixa" hidden>
+      <div class="sec-title">Processo atendido</div>
+      <div class="field">
+        <label for="nv-protocolo">Esta vistoria atende ao protocolo</label>
+        <select id="nv-protocolo"><option value="">— nenhum —</option></select>
+      </div>
     </div>
 
     <div class="sec-title">Irregularidades constatadas</div>
@@ -1196,9 +1307,26 @@
   </div>
 </div>
 
+{{-- OVERLAY DE CARREGAMENTO
+
+     A MARCA girando, não um anel genérico. As duas logos são as duas faces do
+     mesmo cartão: a institucional na frente, a âmbar no verso. A cada meia
+     volta o giro entrega uma à outra — a alternância é o próprio movimento, e
+     não dois desenhos piscando por conta própria.
+
+     Estas duas imagens NÃO levam `data-src-institucional`, de propósito: o
+     seletor de tema (tema.js) troca a logo de quem tem esse atributo, e aqui
+     as duas precisam coexistir, uma em cada face, seja qual for o tema.
+
+     `aria-hidden` na marca e `aria-live` no texto: para quem usa leitor de
+     tela, o que informa é a frase, não o desenho. --}}
 <div class="tela-carregando" id="tela-carregando">
-  <div class="tela-carregando-spin"></div>
-  <div class="tela-carregando-txt" id="tela-carregando-txt">Carregando...</div>
+  <div class="carregando-marca" aria-hidden="true">
+    <img class="marca-face" src="@assetv('img/logo-128.png')" alt="">
+    <img class="marca-face marca-verso" src="@assetv('img/logo-128-ambar.png')" alt="">
+  </div>
+  <div class="tela-carregando-txt" id="tela-carregando-txt" role="status"
+       aria-live="polite">Carregando...</div>
 </div>
 
 <div id="toast"></div>
@@ -1218,6 +1346,9 @@
 
     <div class="sec-title">Dados do requerimento</div>
     <div id="pf-corpo"></div>
+    {{-- Só em protocolo de desmembramento/unificação já deferido e ainda sem
+         vistoria: o ato cadastral depende dela para ter fundamento. --}}
+    <div id="pf-vistoria-cadastral" hidden></div>
 
     @if (auth()->user()->canEdit())
       <div class="sec-title">Tramitação</div>
@@ -1631,6 +1762,17 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/mapa.js')"></script>
 <script src="@assetv('js/vistoria.js')"></script>
 <script src="@assetv('js/mapa-cores.js')"></script>
+{{-- Depois de mapa-cores.js: `estiloColorido` consulta o `selState` daqui. A
+     ordem não é obrigatória (o acesso é sempre em tempo de execução), mas
+     manter o leitor perto do escritor poupa a próxima pessoa. --}}
+{{-- Antes de cadastro.js: sao quem oferece iniciarDesenho/estaDesenhando e
+     cortarPorLinha. O corte vive num arquivo proprio porque e geometria pura —
+     nao toca no mapa, nao toca na tela, e por isso pode ser exercitado fora do
+     navegador. --}}
+<script src="@assetv('js/desenho.js')"></script>
+<script src="@assetv('js/corte.js')"></script>
+<script src="@assetv('js/cadastro.js')"></script>
+<script src="@assetv('js/cadastro-imobiliario.js')"></script>
 <script src="@assetv('js/painel.js')"></script>
 <script src="@assetv('js/busca.js')"></script>
 <script src="@assetv('js/documentos.js')"></script>

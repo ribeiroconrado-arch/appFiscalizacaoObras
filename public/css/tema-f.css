@@ -630,29 +630,47 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Endereço como texto, não como campo: aqui ninguém edita, só lê. */
 .fi-endereco{font-size:14px;line-height:1.4;color:var(--chumbo)}
 
-/* ── DADOS DO IMÓVEL EM LINHAS, NÃO EM BLOCOS ──
+/* Data da última consulta ao cadastro, no cabeçalho.
+   `margin-left:auto` a empurra para a direita do título; o `padding-right`
+   do próprio h3 já reserva os 34px do botão de fechar, então ela para antes
+   do X em vez de passar por baixo dele. */
+.fi-integracao-topo{margin-left:auto;font-size:10.5px;font-weight:500;
+  color:var(--tx3);text-transform:none;letter-spacing:0;white-space:nowrap}
+.fi-integracao-topo b{color:var(--tx2);font-weight:700}
+
+/* ── DADOS DO IMÓVEL EM FAIXAS ──
    Antes cada dado era um bloco de rótulo em cima e valor embaixo, com folga
    entre eles: quatro dados ocupavam a altura de meia tela e a leitura ficava
-   picotada. Agora é ficha de verdade — rótulo à esquerda, valor à direita,
-   linha fina separando. Ocupa metade do espaço e a coluna de valores fica
-   alinhada, que é o que permite correr o olho. */
-.fi-grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));
-  gap:0 14px;margin-bottom:12px;border-top:1px solid var(--bord)}
-/* Centro, não linha de base: a Situação traz uma pílula, e alinhar pela base
-   de um bloco inline empurra a linha inteira para baixo — a primeira faixa da
-   grade ficava 18px mais alta que as outras sem nenhum motivo visível. */
-.fi-grade>div{display:flex;align-items:center;justify-content:space-between;
-  gap:10px;min-width:0;padding:7px 0;border-bottom:1px solid var(--bord)}
-/* O rótulo não quebra: ele é a etiqueta da linha e, partido em duas, dobra a
-   altura da linha inteira. Quem cede é o valor, que sabe quebrar.
+   picotada. Depois virou grade de duas colunas, e aí apareceu outro defeito.
 
-   Os 268px de coluna são a medida da linha mais larga — "INSCRIÇÃO
-   IMOBILIÁRIA" ao lado de 01.000.050.0004.000. Abaixo disso a grade cai
-   sozinha para uma coluna, e cada linha ganha a largura inteira. */
-.fi-grade .fi-rot{margin-bottom:0;flex:0 0 auto;white-space:nowrap;
+   O TRAÇO É DA FAIXA, NÃO DO CAMPO — e é essa a diferença que importa. Na
+   grade anterior o `border-bottom` ficava em cada célula: dois campos lado a
+   lado desenhavam DOIS traços independentes, com uma falha de 14px no meio, e
+   faixa com número ímpar de campos terminava com meia linha, um traço à
+   esquerda e nada à direita. Com a faixa sendo o elemento, o traço atravessa a
+   linha inteira, quantos campos ela tiver. */
+.fi-linhas{margin-bottom:12px;border-top:1px solid var(--bord)}
+.fi-linha{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  padding:7px 0;border-bottom:1px solid var(--bord)}
+.fi-linha:last-child{border-bottom:0}
+
+/* O campo cede a largura pelo VALOR, nunca pelo rótulo: o rótulo é a etiqueta
+   e, partido em duas, dobra a altura da faixa inteira. */
+/* `flex:0 1 auto` — o campo NÃO cresce. Crescer distribuiria a sobra entre
+   os três e nenhum ficaria alinhado com nada; encolher ele pode, e é o valor
+   que cede (o rótulo tem `white-space:nowrap`). */
+.fi-campo{display:flex;align-items:center;gap:7px;min-width:0;flex:0 1 auto}
+.fi-campo .fi-rot{margin-bottom:0;flex:0 0 auto;white-space:nowrap;
   font-size:9.5px;letter-spacing:.04em}
-.fi-grade .fi-val{min-width:0;text-align:right;overflow-wrap:anywhere}
-.fi-grade .fi-largo{grid-column:1 / -1}
+.fi-campo .fi-val{min-width:0;overflow-wrap:anywhere}
+/* Meio ponto a menos no monoespaçado da faixa, e só nele: com 13.5px a
+   inscrição e a coordenada juntas mediam 589px numa faixa de 578, e a
+   Situação caía sozinha para a linha de baixo. Medido no modal de 620px. */
+.fi-linha .fi-val.mono{font-size:12.5px}
+
+/* Campo que ocupa a faixa sozinho — para o dado largo que não deve dividir
+   espaço com ninguém. */
+.fi-linha .fi-largo{flex:1 1 100%}
 
 /* Fachada e croqui lado a lado: as duas imagens que respondem "como é o
    imóvel" antes de o fiscal sair para a rua. */
@@ -967,6 +985,64 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    que estava certo enquanto o rótulo morava dentro da moldura. Com o rótulo
    fora, esticar deixava o botão 19px mais alto que a caixa ao lado dele. */
 .bs-mais{height:42px;align-self:flex-end}
+
+/* ── PAINEL DE CORREÇÃO CADASTRAL ──
+   Notas curtas empilhadas dentro do controle do mapa. Três pesos: neutra
+   (o que vai acontecer), aviso (o que o sistema desconfia) e erro (o que ele
+   recusa). A cor vem da barra lateral, não do fundo inteiro — mesmo desenho
+   do toast, pela mesma razão: bloco colorido grita igual para "3 lotes mudam"
+   e para "isto criaria identificação duplicada". */
+.cad-nota{margin:6px 0;padding:6px 8px;border-left:3px solid var(--bord);
+  background:var(--blt);border-radius:0 var(--r) var(--r) 0;font-size:11.5px;
+  line-height:1.45;color:var(--tx)}
+.cad-nota.cad-aviso{border-left-color:var(--warn);background:var(--wlt)}
+.cad-nota.cad-erro{border-left-color:var(--red);background:var(--rlt);color:var(--red)}
+/* Lista de "de → para": rolagem própria, senão uma correção de 300 lotes
+   estica o controle para fora da tela. */
+.cad-lista{display:flex;flex-direction:column;gap:2px;max-height:132px;overflow-y:auto;
+  margin:6px 0;font-size:11px;color:var(--tx2)}
+#cad-previa .btn{width:100%;margin-top:8px}
+#grupo-cadastro .ctrl-corpo{max-width:262px}
+#grupo-cadastro .field{margin-bottom:0}
+#cad-modo.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+#des-iniciar.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+#des-previa .btn{width:100%;margin-top:8px}
+/* Separa as duas ferramentas do painel: corrigir quadra e desenhar lote sao
+   coisas diferentes e nao devem parecer passos de um mesmo formulario. */
+.cad-risco{border:0;border-top:1px solid var(--bord);margin:12px 0 8px}
+
+/* ── ATO CADASTRAL DENTRO DA LINHA DO TEMPO ──
+   Aparece embaixo do evento de vistoria. Dois estados: liberado (o ato pode
+   ser executado) e travado (existe o processo, mas falta alguma condicao — e
+   o texto diz qual). Mostrar o motivo em vez de esconder o botao e o que
+   evita o chamado "por que nao aparece a opcao de unificar?". */
+.lt-ato{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  flex-wrap:wrap;margin-top:8px;padding:8px 10px;border-radius:var(--r);
+  background:var(--gl);border:1.5px solid var(--gm);font-size:12px;color:var(--gxd)}
+.lt-ato .btn{flex-shrink:0}
+.lt-ato-travado{display:block;background:var(--blt);border-color:var(--bord);
+  color:var(--tx2);line-height:1.45}
+
+/* ── PARTES DO DESMEMBRAMENTO ──
+   Uma linha por parte desenhada: numero de ordem, numero do lote, sufixo da
+   inscricao e o botao de remover. A ultima aparece marcada como "resto"
+   porque ela nao e desenhada — sai do que sobra do lote. */
+.desm-parte{display:flex;align-items:center;gap:5px;margin:4px 0}
+.desm-parte input{min-width:0;flex:1 1 auto;border:1.5px solid var(--f-bord);
+  border-radius:var(--r);background:var(--f-fundo);padding:5px 7px;font-size:12px}
+.desm-num{flex:0 0 18px;height:18px;border-radius:50%;background:var(--gd);color:#fff;
+  font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.desm-x{flex:0 0 auto;border:0;background:none;color:var(--tx3);cursor:pointer;font-size:12px;padding:2px 4px}
+.desm-x:hover{color:var(--red)}
+.desm-derivada{opacity:.9}
+.desm-derivada .desm-num{background:var(--tx3)}
+.desm-tag{flex:0 0 auto;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--tx3);padding:0 3px}
+#desm-previa .btn{width:100%;margin-top:8px}
+/* Cursor de mira enquanto desenha: o mapa deixa de ser algo que se arrasta e
+   passa a ser superficie de desenho, e o ponteiro tem de dizer isso. */
+.desenhando .leaflet-container{cursor:crosshair}
+.desenho-captura{cursor:crosshair}
 
 /* ── SELO DE FILTRO ATIVO NOS CONTROLES DO MAPA ──
    Recolhido, o botão não diz o que está aplicado: um mapa com pinos filtrados
@@ -1293,3 +1369,73 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    com o aviso do sistema, que é transitório e mais importante. O canto
    superior esquerdo segue livre — os controles do Leaflet ficam à direita. */
 .chip-estado{top:118px;left:12px;z-index:880;max-width:calc(100vw - 24px)}
+
+/* ══════════════════════════════════════════════
+   ABA "CADASTRO IMOBILIÁRIO" (cópia local do BCI)
+
+   Requisito de origem: TUDO CABE NA ABA. São quatro seções e, no BCI de
+   Primavera, 22 características. Por isso as características vão em grade de
+   duas colunas com fonte de 11px, e nenhuma seção rola por dentro — quem rola
+   é o painel, e só se precisar.
+   ══════════════════════════════════════════════ */
+.bci-sec{margin-bottom:9px}
+.bci-sec:last-child{margin-bottom:0}
+.bci-sec-t{
+  font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--tx3);margin-bottom:5px;
+}
+
+/* Faixas mais apertadas aqui do que na aba Dados: são quatro seções na mesma
+   altura de tela, e cada 2px por faixa é uma característica que cabe. */
+.bci-sec .fi-linha{padding:5px 0}
+
+/* Proprietário: nome em destaque, documento ao lado, endereço abaixo em
+   corpo menor. É a hierarquia com que se lê um ofício. */
+.bci-prop{padding:6px 0;border-bottom:1px solid var(--bord)}
+.bci-prop:last-child{border-bottom:0}
+.bci-prop-n{font-size:12.5px;font-weight:700;color:var(--chumbo);line-height:1.35}
+.bci-doc{font-size:11px;font-weight:600;color:var(--tx2)}
+.bci-prop-e{font-size:11.5px;color:var(--tx2);line-height:1.35;margin-top:1px}
+
+/* Duas colunas de pares. `auto-fit` com mínimo largo faz virar uma coluna
+   sozinha quando o modal estreita, sem media query. */
+/* TRÊS colunas, medidas e não estimadas: com duas, as 22 características do
+   BCI de Primavera davam 594px de conteúdo numa aba de 507px — a seção rolava
+   por dentro, que é justamente o que não pode. Com três, o conteúdo fecha em
+   499px numa tela de 1280×800, a menor em uso. `auto-fit` faz cair para duas e
+   para uma sozinho quando a janela estreita. */
+.bci-carac{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));
+  gap:0 20px}
+.bci-par{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  font-size:11px;padding:2px 0;border-bottom:1px solid var(--bord);min-width:0}
+.bci-par span{color:var(--tx3);white-space:nowrap}
+/* `break-word`, não `anywhere`: com `anywhere` o navegador parte a PALAVRA na
+   coluna estreita — "PARTICULAR" saía como "PARTICUL AR". Quebrar entre
+   palavras é o suficiente, e o que sobrar de largura o texto pode ocupar. */
+.bci-par b{color:var(--chumbo);font-weight:700;text-align:right;overflow-wrap:break-word}
+
+/* Unidades: tabela porque são linhas comparáveis entre si — o olho corre a
+   coluna do ano e a da área. */
+.bci-tab{width:100%;border-collapse:collapse;font-size:11.5px}
+.bci-tab th{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--tx3);text-align:left;padding:3px 8px 3px 0;border-bottom:1px solid var(--bord)}
+.bci-tab td{padding:4px 8px 4px 0;border-bottom:1px solid var(--bord);color:var(--chumbo)}
+.bci-tab tr:last-child td{border-bottom:0}
+.bci-tab .num{text-align:right;font-variant-numeric:tabular-nums;padding-right:14px}
+
+/* Vazio EXPLICADO: diz que falta o acesso ao cadastro, não que falta o
+   imóvel. Campo em branco deixaria o fiscal em dúvida sobre qual dos dois é. */
+.bci-vazio{padding:14px;border:1px solid var(--bord);border-radius:10px;
+  background:var(--bg);max-width:520px}
+.bci-vazio-t{font-size:12.5px;font-weight:800;color:var(--chumbo);margin-bottom:5px}
+.bci-vazio p{font-size:11.5px;color:var(--tx2);line-height:1.5;margin:0 0 6px}
+.bci-vazio p:last-child{margin-bottom:0}
+.bci-vazio-p{color:var(--tx3)}
+
+/* Linha de topo da aba de cadastro: de quando é o dado, e o botão de buscar de
+   novo. A data fica À ESQUERDA do botão porque ela é a pergunta que o usuário
+   faz antes de decidir apertá-lo. */
+.bci-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-size:11px;color:var(--tx3);margin-bottom:10px}
+.bci-topo b{color:var(--tx2);font-weight:700}
+.bci-vazio .btn{margin-top:10px}

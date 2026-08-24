@@ -8,6 +8,7 @@ use App\Models\Vistoria;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 /**
@@ -47,7 +48,10 @@ class BuscaController extends Controller
             'termo'         => ['nullable', 'string', 'max:120'],
         ]);
 
-        $q = Lote::query();
+        // Lote baixado (unificado ou desmembrado) nao e mais um imovel que
+        // existe: fica na base para o historico, mas nao se busca nem se marca
+        // no mapa. A ficha dele continua abrindo — ver ficha().
+        $q = Lote::query()->ativos();
         $usou = $this->aplicarFiltros($q, $d);
 
         if (! $usou) {
@@ -209,6 +213,7 @@ class BuscaController extends Controller
     {
         return response()->json([
             'bairros' => DB::table('lotes')
+                ->where('situacao', 'ativo')
                 ->whereNotNull('bairro')->where('bairro', '<>', '')
                 ->distinct()->orderBy('bairro')
                 ->pluck('bairro'),
@@ -236,7 +241,10 @@ class BuscaController extends Controller
             'obra_sem_vistoria' => ['nullable', 'boolean'],
         ]);
 
-        $q = Lote::query();
+        // Lote baixado (unificado ou desmembrado) nao e mais um imovel que
+        // existe: fica na base para o historico, mas nao se busca nem se marca
+        // no mapa. A ficha dele continua abrindo — ver ficha().
+        $q = Lote::query()->ativos();
         if (! $this->aplicarFiltros($q, $d)) {
             return response()->json(['message' => 'Escolha ao menos um filtro.'], 422);
         }
@@ -331,10 +339,63 @@ class BuscaController extends Controller
             'chave'     => $lote->chave,
             'area'      => $lote->area_gis_m2,
             'fonte'     => $lote->fonte,
+            'situacao'  => $lote->situacao,
+            'baixado_em' => $lote->baixado_em?->format('d/m/Y'),
             'lat'       => $p?->lat !== null ? (float) $p->lat : null,
             'lon'       => $p?->lon !== null ? (float) $p->lon : null,
             'documentos' => $documentos,
             'vistorias'  => $vistorias,
+            'sucessao'  => $this->sucessao($lote),
         ]);
+    }
+
+    /**
+     * De onde este imóvel veio e no que ele se transformou.
+     *
+     * Vai embutido na ficha, e não numa rota própria, por duas razões: é uma
+     * requisição a menos no aparelho do fiscal, e o modal já monta tudo de um
+     * payload só.
+     *
+     * A consulta é o mesmo par de tabelas lido nos dois sentidos — quem foi
+     * `anterior` num ato em que este lote é `posterior` é origem; quem é
+     * `posterior` num ato em que ele é `anterior` é destino.
+     *
+     * @return array{origens: list<array<string,mixed>>, destinos: list<array<string,mixed>>}
+     */
+    private function sucessao(Lote $lote): array
+    {
+        // Base ainda sem a migração da sucessão: devolve vazio em vez de
+        // estourar. A ficha é a tela mais usada do sistema.
+        if (! Schema::hasTable('lote_ato_lotes')) {
+            return ['origens' => [], 'destinos' => []];
+        }
+
+        $lado = fn (string $euSou, string $procuro) => DB::table('lote_ato_lotes as eu')
+            ->join('lote_ato_lotes as outro', 'outro.ato_id', '=', 'eu.ato_id')
+            ->join('lote_atos as ato', 'ato.id', '=', 'eu.ato_id')
+            ->join('lotes as l', 'l.id', '=', 'outro.lote_id')
+            ->where('eu.lote_id', $lote->id)->where('eu.papel', $euSou)
+            ->where('outro.papel', $procuro)
+            ->orderBy('l.numero_lote')
+            ->get([
+                'l.id', 'l.bairro', 'l.quadra', 'l.numero_lote', 'l.situacao',
+                'ato.tipo', 'ato.protocolo_id', 'ato.created_at',
+                'outro.area_m2',
+            ])
+            ->map(fn ($r) => [
+                'id'        => $r->id,
+                'rotulo'    => 'Quadra ' . ($r->quadra ?? '—') . ' · Lote ' . ($r->numero_lote ?? '—'),
+                'bairro'    => $r->bairro,
+                'situacao'  => $r->situacao,
+                'tipo'      => $r->tipo,
+                'protocolo' => $r->protocolo_id,
+                'area'      => $r->area_m2,
+                'data'      => $r->created_at ? date('d/m/Y', strtotime($r->created_at)) : null,
+            ])->all();
+
+        return [
+            'origens'  => $lado('posterior', 'anterior'),
+            'destinos' => $lado('anterior', 'posterior'),
+        ];
     }
 }
