@@ -116,6 +116,10 @@ function iniciarMapa() {
   ancorarControleCores()
 
   mapaState.obj.on('zoomend', () => { rotulosPorZoom(); ajustarNitidezSatelite() })
+
+  // Arrastar também mexe nos rótulos: no zoom em que eles aparecem, cada
+  // deslocamento traz lotes novos para a tela e leva outros embora.
+  mapaState.obj.on('moveend', sincronizarRotulos)
   mapaState.obj.on('baselayerchange', () => ajustarNitidezSatelite())
 
   recortarMunicipio()
@@ -647,15 +651,58 @@ function adicionarAoMapa(geojson, aoClicar) {
         destacar(camada)
         abrirBalao(feicao, camada)
       })
-      // Número do lote sobre o polígono, visível só a partir do zoom 18
-      // (regra em mapa-cores.js) — antes disso vira borrão.
-      if (feicao.properties.numero_lote) {
-        camada.bindTooltip(String(feicao.properties.numero_lote),
-          { permanent: true, direction: 'center', className: 'rot rot-lote' })
-      }
+      // O número do lote fica GUARDADO, não criado.
+      //
+      // Antes, cada lote recebia aqui um tooltip permanente, escondido por CSS
+      // abaixo do zoom 18. Escondido por CSS continua existindo: eram 2.239
+      // elementos que o Leaflet reposicionava a cada arrasto e a cada zoom,
+      // invisíveis e caros — a maior fonte de lentidão do mapa no celular.
+      //
+      // Agora o rótulo nasce só quando vai ser visto, e só para os lotes que
+      // estão na tela. Ver sincronizarRotulos().
+      camada._numeroLote = feicao.properties.numero_lote
+        ? String(feicao.properties.numero_lote) : null
       mapaState.camadaLotes.addLayer(camada)
     },
   })
+
+  // Os lotes chegam por lote (a cada movimento do mapa). Sem esta chamada, os
+  // que entram depois só ganhariam rótulo no próximo arrasto.
+  sincronizarRotulos()
+}
+
+/** A partir deste zoom o número do lote é legível — abaixo, vira borrão. */
+const ZOOM_ROTULO_LOTE = 18
+
+/**
+ * Cria e destrói os rótulos de lote conforme o zoom e o que está na tela.
+ *
+ * Dois cortes, e os dois importam. O do ZOOM evita 2.239 elementos existirem
+ * quando nenhum deles seria legível. O do ENQUADRAMENTO evita que, no zoom em
+ * que eles aparecem, sejam criados também os do bairro inteiro — em zoom 18
+ * cabem algumas dezenas de lotes na tela, não milhares.
+ */
+function sincronizarRotulos() {
+  const mapa = mapaState.obj
+  if (!mapa) { return }
+
+  const mostrar = mapa.getZoom() >= ZOOM_ROTULO_LOTE
+  const vista = mostrar ? mapa.getBounds().pad(0.2) : null
+
+  for (const camada of mapaState.camadas) {
+    if (!camada._numeroLote) { continue }
+
+    // `getBounds` do polígono é barato: o Leaflet já o mantém calculado.
+    const dentro = mostrar && vista.intersects(camada.getBounds())
+    const tem = !!camada.getTooltip()
+
+    if (dentro && !tem) {
+      camada.bindTooltip(camada._numeroLote,
+        { permanent: true, direction: 'center', className: 'rot rot-lote' })
+    } else if (!dentro && tem) {
+      camada.unbindTooltip()
+    }
+  }
 }
 
 /**

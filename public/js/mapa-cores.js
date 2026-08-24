@@ -264,6 +264,10 @@ function desenharRotulosDeGrupo() {
 function rotulosPorZoom() {
   const z = mapaState.obj?.getZoom() ?? 0
   document.body.classList.toggle('z-lote', z >= 18)
+
+  // Os rótulos de lote são criados e destruídos por zoom e por enquadramento,
+  // e não apenas escondidos por CSS. Ver sincronizarRotulos() em mapa.js.
+  if (typeof sincronizarRotulos === 'function') { sincronizarRotulos() }
   document.body.classList.toggle('z-quadra', z >= 16)
   document.body.classList.toggle('z-bairro', z <= 17)
 
