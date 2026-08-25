@@ -1299,7 +1299,11 @@
   <div class="modal sm" onclick="event.stopPropagation()" style="max-width:400px">
     <button class="modal-x" onclick="fModalBtn('m-confirm')">&#10005;</button>
     <h3 id="mcg-titulo">Confirmar ação</h3>
-    <div class="sub" id="mcg-msg" style="color:var(--tx2);font-size:13px">Tem certeza?</div>
+    {{-- `pre-line` para a mensagem poder ter parágrafos: instrução de
+         configuração em bloco corrido não se lê, e é justamente quando o
+         usuário está travado que ela precisa ser fácil de seguir. --}}
+    <div class="sub" id="mcg-msg"
+         style="color:var(--tx2);font-size:13px;white-space:pre-line;line-height:1.5">Tem certeza?</div>
     <div class="btn-row">
       <button class="btn" onclick="fModalBtn('m-confirm')">Cancelar</button>
       <button class="btn primary" id="mcg-btn-ok" onclick="_mcgConfirmar()">Confirmar</button>

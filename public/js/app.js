@@ -317,12 +317,76 @@ function usarMinhaLocalizacao() {
     },
     err => {
       btn.disabled = false
-      const m = { 1: 'Permissão de localização negada.', 2: 'Sinal de GPS fraco.', 3: 'Tempo esgotado.' }
-      toast(m[err.code] || 'Erro ao obter GPS', 'err')
       rotuloGps('Usar minha localização')
+
+      // Permissão negada não é um aviso passageiro: é uma trava que só o
+      // usuário destrava, e num lugar que ele não vai adivinhar. Por isso vai
+      // para um modal com o caminho exato, e não para um toast que some em
+      // dois segundos deixando o fiscal sem saber o que fazer.
+      if (err.code === 1) {
+        confirmarAcao({
+          titulo: 'Localização bloqueada',
+          mensagem: comoLiberarLocalizacao(),
+          textoBtn: 'Entendi',
+          onConfirm: () => {},
+        })
+
+        return
+      }
+
+      toast({ 2: 'Sinal de GPS fraco. Tente a céu aberto.',
+              3: 'O GPS demorou demais para responder. Tente de novo.' }[err.code]
+            || 'Erro ao obter GPS', 'err')
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   )
+}
+
+/** Quebra de linha das instruções — ver o `white-space` de #mcg-msg. */
+const SALTO = '\n'
+
+/**
+ * O caminho para destravar a localização, no aparelho de quem está lendo.
+ *
+ * No iPhone são DUAS travas em lugares diferentes, e é por isso que a
+ * instrução genérica ("permita nas configurações") não resolve: o app precisa
+ * de permissão nos Ajustes do iOS E o site precisa de permissão dentro do
+ * navegador. Quem só mexe numa continua sem GPS e conclui que o sistema está
+ * quebrado.
+ */
+function comoLiberarLocalizacao() {
+  const ua = navigator.userAgent
+  const iOS = /iPad|iPhone|iPod/.test(ua)
+    // iPad recente se apresenta como Mac; o toque no lugar do mouse denuncia.
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const chromeNoIOS = iOS && /CriOS/.test(ua)
+
+  if (chromeNoIOS) {
+    return [
+      'No iPhone, o Chrome precisa de duas permissões:',
+      '1) Ajustes do iPhone > Privacidade e Segurança > Serviços de Localização'
+        + ' > Chrome > "Ao Usar o App".',
+      '2) No Chrome, três pontos > Configurações > Configurações do site >'
+        + ' Localização, e permita para fiscobras.duckdns.org.',
+      'Depois feche a aba e abra o sistema de novo.',
+    ].join(SALTO + SALTO)
+  }
+
+  if (iOS) {
+    return [
+      'No iPhone, o Safari precisa de duas permissões:',
+      '1) Ajustes do iPhone > Privacidade e Segurança > Serviços de Localização'
+        + ' > Safari > "Ao Usar o App".',
+      '2) Ajustes > Apps > Safari > Localização > Perguntar ou Permitir.',
+      'Depois recarregue a página e toque no botão outra vez.',
+    ].join(SALTO + SALTO)
+  }
+
+  return [
+    'O navegador está bloqueando a localização deste site.',
+    'Toque no cadeado ao lado do endereço, encontre "Localização" e mude para'
+      + ' Permitir. Depois recarregue a página.',
+  ].join(SALTO + SALTO)
 }
 
 /** Limpa a posição capturada. */
