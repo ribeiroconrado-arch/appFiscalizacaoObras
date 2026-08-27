@@ -141,9 +141,14 @@ function bciSecao(titulo, corpo) {
 function bciFaixa(campos) {
   const cheios = campos.filter(c => c[1] !== null && c[1] !== undefined && c[1] !== '')
   if (!cheios.length) { return '' }
-  return '<div class="fi-linha">' + cheios.map(([rot, val]) =>
-    `<div class="fi-campo"><span class="fi-rot">${esc(rot)}</span>`
-    + `<span class="fi-val">${esc(val)}</span></div>`).join('') + '</div>'
+  return '<div class="fi-linha">' + cheios.map(([rot, val]) => {
+    // Monoespaçado quando o valor é para CONFERIR dígito a dígito — código,
+    // inscrição, área, medida. Texto corrido (setor, isenção) fica na fonte
+    // do sistema, que é mais legível para ler do que para comparar.
+    const numero = /^[\d.,\/\s-]+(\s?m²|\s?m)?$/.test(String(val))
+    return `<div class="fi-campo"><span class="fi-rot">${esc(rot)}</span>`
+      + `<span class="fi-val${numero ? ' mono' : ''}">${esc(val)}</span></div>`
+  }).join('') + '</div>'
 }
 
 const bciM2 = v => (v || v === 0) ? fmtNum(v) + ' m²' : null

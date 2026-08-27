@@ -31,6 +31,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Perímetro urbano — o enquadramento do botão "ver tudo"
+    |--------------------------------------------------------------------------
+    |
+    | Retângulo "oeste,sul,leste,norte" que o mapa mostra ao pedir "ver tudo".
+    |
+    | Por que não usar a extensão dos lotes cadastrados: ela cobre só o que já
+    | foi levantado — hoje dois loteamentos no extremo noroeste da cidade. Quem
+    | aperta "ver tudo" quer ver A CIDADE, inclusive a parte que ainda não foi
+    | importada, para saber o que falta. Enquanto o levantamento não cobre o
+    | município, esses são dois retângulos diferentes, e o botão precisa do
+    | segundo.
+    |
+    | O padrão abaixo enquadra a mancha urbana de Primavera do Leste. É uma
+    | aproximação: quando houver o polígono oficial do perímetro (a prefeitura
+    | tem, em DWG), ele entra como camada e este retângulo sai de cena.
+    */
+    'perimetro_urbano' => array_map(
+        'floatval',
+        explode(',', (string) env('PERIMETRO_URBANO', '-54.42,-15.62,-54.20,-15.49'))
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
     | Sistema de referência
     |--------------------------------------------------------------------------
     | Armazenamento em EPSG:4326, que é o que o Leaflet consome. A base

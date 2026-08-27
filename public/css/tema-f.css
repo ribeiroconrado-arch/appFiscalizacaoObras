@@ -447,9 +447,30 @@ body.login-bg{
    responsiva por vir depois na cascata. */
 /* Mesmo âmbar do avatar da lista de usuários: é a mesma identidade vista de
    dois lugares, e trocar de cor no caminho faz parecer outra pessoa. */
-.avatar.grande{width:52px;height:52px;font-size:17px;cursor:default;
-  background:var(--gold-lt);border-color:var(--gold);color:var(--gold-dk)}
-.perfil-cabeca{display:flex;align-items:center;gap:13px;margin-bottom:6px}
+/* ── AVATAR DO PERFIL ──
+   Deixou de ser um círculo âmbar claro, que se confundia com um aviso, e virou
+   um quadrado arredondado com o verde institucional — a mesma família do
+   cabeçalho da ficha. Quadrado e não círculo de propósito: o círculo é o
+   avatar pequeno da barra do topo, e ver os dois diferentes ajuda a entender
+   que um é atalho e o outro é a tela do próprio cadastro. */
+.avatar.grande{
+  width:54px;height:54px;border-radius:16px;font-size:19px;cursor:default;
+  background:linear-gradient(150deg, var(--g), var(--gd));
+  border:none;color:#fff;letter-spacing:.03em;
+  box-shadow:0 4px 14px rgba(0,77,28,.28);
+}
+.perfil-cabeca{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+
+/* ── O PERFIL CABE NA TELA ──
+   Identificação e senha em duas colunas. Empilhados, os cinco campos somavam
+   ~300px a mais e o modal rolava — e rolagem numa tela de cadastro esconde
+   justamente o botão que a conclui. Em coluna única abaixo de 560px, onde duas
+   colunas não caberiam. */
+#m-perfil .pf-dupla{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media(max-width:560px){ #m-perfil .pf-dupla{grid-template-columns:1fr} }
+#m-perfil .field{margin-bottom:9px}
+#m-perfil .sec-title{margin-top:10px}
+#m-perfil .aviso-legal{margin:6px 0 2px}
 
 /* ── ASSINATURA EM CANVAS ── */
 .assina-caixa{position:relative;border:1.5px dashed var(--f-bord);border-radius:var(--rl);
@@ -1273,8 +1294,13 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    Padrão único para qualquer botão de criar com mais de uma opção. Nasce do
    próprio botão, e não no centro da tela, para não perder a relação entre o
    que foi clicado e o que abriu. */
-.menu-novo-fundo{position:fixed;inset:0;z-index:1400;background:rgba(22,33,28,.28)}
-.menu-novo{position:fixed;z-index:1401;display:flex;flex-direction:column;gap:8px;
+/* ACIMA dos modais (z-index 2000), e não abaixo.
+   Com 1401 o menu nascia atrás da ficha do imóvel: o botão respondia, o menu
+   abria, e o usuário não via nada. Quem precisa ficar por cima é sempre o
+   último elemento aberto — só o toast (3000) passa na frente, porque avisa de
+   erro que vale mais do que qualquer escolha em curso. */
+.menu-novo-fundo{position:fixed;inset:0;z-index:2100;background:rgba(22,33,28,.28)}
+.menu-novo{position:fixed;z-index:2101;display:flex;flex-direction:column;gap:8px;
   width:min(300px, calc(100vw - 24px))}
 .menu-novo-op{display:flex;align-items:center;gap:11px;width:100%;text-align:left;
   background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--rl);
@@ -1400,6 +1426,16 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Faixas mais apertadas aqui do que na aba Dados: são quatro seções na mesma
    altura de tela, e cada 2px por faixa é uma característica que cabe. */
 .bci-sec .fi-linha{padding:5px 0}
+
+/* A MESMA tipografia da linha de identificação (.fi-fixo-dados): rótulo
+   minúsculo em versalete cinza, valor em corpo maior e escuro. Manter duas
+   gramáticas visuais para o mesmo tipo de informação faz o BCI parecer outro
+   sistema colado dentro deste. */
+.bci-sec .fi-campo .fi-rot{font-size:9.5px;letter-spacing:.04em}
+.bci-sec .fi-campo .fi-val{font-size:12px;color:var(--chumbo);font-weight:600}
+/* Número em monoespaçado, como na identificação: código, inscrição, área e
+   medida são para conferir dígito a dígito, e fonte proporcional atrapalha. */
+.bci-sec .fi-campo .fi-val.mono{font-size:12px;font-weight:500}
 
 /* Proprietário: nome em destaque, documento ao lado, endereço abaixo em
    corpo menor. É a hierarquia com que se lê um ofício. */

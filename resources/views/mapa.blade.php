@@ -308,11 +308,11 @@
     </div>
   </div>
 
-  {{-- CORREÇÃO CADASTRAL — só administrador.
+  {{-- CORREÇÃO CADASTRAL — só quem tem curadoria cadastral.
        Esconder o controle não é a segurança: quem autoriza de verdade é o
        servidor, em CadastroLoteController. Aqui é para não oferecer a quem
        não pode. --}}
-  @if (auth()->user()->isAdmin())
+  @if (auth()->user()->podeCurarCadastro())
   <div class="ctrl-grupo" id="grupo-cadastro">
     <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-cadastro')"
             title="Correção cadastral" aria-expanded="false">
@@ -365,6 +365,29 @@
       <hr class="cad-risco">
       <button type="button" class="btn sm" id="des-iniciar" style="width:100%"
               onclick="iniciarDesenhoDeLote()">Desenhar lote faltante</button>
+
+      {{-- POR COORDENADAS — a terceira via.
+           O lote vem descrito no memorial da matrícula, vértice a vértice, em
+           graus/minutos/segundos. Digitar isso no mapa a dedo perderia a
+           precisão que o memorial tem: cada décimo de segundo vale ~3 m, e
+           acertar isso clicando é impossível. --}}
+      <button type="button" class="btn sm" id="coo-abrir" style="width:100%;margin-top:6px"
+              onclick="abrirCoordenadas()">Lote por coordenadas</button>
+
+      <div id="coo-caixa" hidden>
+        <div class="leg" style="margin-top:6px">
+          Um vértice por linha, como vem no memorial. Exemplo:<br>
+          <span class="mono" style="font-size:10.5px">V1 15°31'03,7"S 54°18'39,9"W</span>
+        </div>
+        <textarea id="coo-texto" rows="6" spellcheck="false"
+                  style="width:100%;margin:6px 0;font-family:var(--mono, monospace);font-size:11.5px"
+                  placeholder="15°31'03,7&quot;S 54°18'39,9&quot;W&#10;15°31'03,7&quot;S 54°18'39,5&quot;W&#10;15°31'04,4&quot;S 54°18'39,5&quot;W"></textarea>
+        <div class="seg" style="margin:0">
+          <button type="button" onclick="largarCoordenadas()">Cancelar</button>
+          <button type="button" onclick="lerCoordenadas()">Ler coordenadas</button>
+        </div>
+        <div id="coo-resultado"></div>
+      </div>
 
       <div id="des-desenhando" hidden>
         <div class="leg" id="des-contagem">Toque nos cantos do lote. Duplo toque fecha.</div>
@@ -976,11 +999,11 @@
              estando na ficha, o fiscal já sabe sobre qual imóvel vai lavrar —
              obrigá-lo a sair daqui para abrir uma notificação era um desvio sem
              motivo. --}}
-        <button class="btn primary" onclick="novoDocumento(event)">+ Novo documento</button>
+        <button class="btn primary" onclick="novoDocumento(event)">Opções</button>
       @else
         {{-- Visualizador não registra: esconder o botão evita a ida ao
              servidor só para receber 403. A regra real está no controller. --}}
-        <button class="btn" disabled title="Seu perfil permite apenas consulta">+ Novo documento</button>
+        <button class="btn" disabled title="Seu perfil permite apenas consulta">Opções</button>
       @endif
     </div>
   </div>
@@ -1507,6 +1530,13 @@
     <label class="lembrar">
       <input type="checkbox" id="us-ativo" checked> Usuário ativo
     </label>
+    {{-- Permissão à parte do perfil: corrigir a base do mapa muda a geometria
+         que fundamenta o cálculo de área, e área é a base da multa. Quem
+         administra o sistema não é, por isso, quem responde pelo cadastro. --}}
+    <label class="lembrar">
+      <input type="checkbox" id="us-curador"> Curadoria cadastral
+      <span class="lembrar-obs">— pode corrigir quadra e desenhar lote direto no mapa</span>
+    </label>
 
     <div class="sec-title">Senha</div>
     <div class="field">
@@ -1608,19 +1638,24 @@
          tela e o canvas ganha a altura que a assinatura precisa. --}}
     <div class="sub-abas">
       <button class="at" data-pf="dados" onclick="subPerfil('dados')">Dados</button>
+      <button data-pf="senha" onclick="subPerfil('senha')">Senha</button>
       <button data-pf="assinatura" onclick="subPerfil('assinatura')">Assinatura</button>
     </div>
 
     {{-- ── DADOS ── --}}
     <div class="pf-painel at" id="pf-dados">
       <div class="sec-title">Identificação</div>
-      <div class="field">
-        <label>E-mail</label>
-        <input type="text" value="{{ auth()->user()->email }}" readonly>
-      </div>
-      <div class="field">
-        <label>Matrícula</label>
-        <input type="text" class="mono" value="{{ auth()->user()->matricula ?: '—' }}" readonly>
+      {{-- Duas colunas: ver o perfil não pode exigir rolagem, e é a rolagem
+           que esconde o botão de salvar a senha lá embaixo. --}}
+      <div class="pf-dupla">
+        <div class="field">
+          <label>E-mail</label>
+          <input type="text" value="{{ auth()->user()->email }}" readonly>
+        </div>
+        <div class="field">
+          <label>Matrícula</label>
+          <input type="text" class="mono" value="{{ auth()->user()->matricula ?: '—' }}" readonly>
+        </div>
       </div>
       <p class="aviso-legal">
         Nome, e-mail, matrícula e perfil são alterados pelo administrador do
@@ -1649,21 +1684,35 @@
         </button>
       </div>
 
-      <div class="sec-title">Trocar senha</div>
+    </div>
+
+    {{-- ── SENHA ──
+         Aba própria, e não uma seção no fim de Dados. Empilhado, o conteúdo
+         somava 443px numa área de 322 e a tela rolava — e o que ficava
+         escondido embaixo era justamente o botão que conclui a troca. Espremer
+         os campos resolveria a rolagem e criaria outro problema; separar
+         resolve os dois. --}}
+    <div class="pf-painel" id="pf-senha">
       <div class="field">
         {{-- Exigida mesmo com a sessão aberta: sem isso, um computador deixado
              destravado na repartição vira perda da conta. --}}
         <label for="pf-senha-atual">Senha atual</label>
         <input type="password" id="pf-senha-atual" autocomplete="current-password">
       </div>
-      <div class="field">
-        <label for="pf-senha-nova">Nova senha (mínimo 8 caracteres)</label>
-        <input type="password" id="pf-senha-nova" autocomplete="new-password">
+      <div class="pf-dupla">
+        <div class="field">
+          <label for="pf-senha-nova">Nova senha (mín. 8)</label>
+          <input type="password" id="pf-senha-nova" autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label for="pf-senha-conf">Confirmar nova senha</label>
+          <input type="password" id="pf-senha-conf" autocomplete="new-password">
+        </div>
       </div>
-      <div class="field">
-        <label for="pf-senha-conf">Confirmar nova senha</label>
-        <input type="password" id="pf-senha-conf" autocomplete="new-password">
-      </div>
+      <p class="aviso-legal">
+        A troca vale só para você. Senha de outro servidor é redefinida pelo
+        administrador, em Parâmetros.
+      </p>
       <div class="btn-row">
         <button class="btn primary" onclick="salvarSenha()">Alterar senha</button>
       </div>
@@ -1778,6 +1827,12 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="@assetv('js/ui.js')"></script>
 <script src="@assetv('js/geo.js')"></script>
+{{-- O perímetro urbano vem do servidor porque é configuração de município,
+     e não constante de código: outra prefeitura muda o retângulo sem tocar no
+     JavaScript. Ver config/gis.php. --}}
+<script>
+  const PERIMETRO_URBANO = @json(config('gis.perimetro_urbano'))
+</script>
 <script src="@assetv('js/mapa.js')"></script>
 <script src="@assetv('js/vistoria.js')"></script>
 <script src="@assetv('js/mapa-cores.js')"></script>
@@ -1789,6 +1844,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
      nao toca no mapa, nao toca na tela, e por isso pode ser exercitado fora do
      navegador. --}}
 <script src="@assetv('js/desenho.js')"></script>
+<script src="@assetv('js/coordenadas.js')"></script>
 <script src="@assetv('js/corte.js')"></script>
 <script src="@assetv('js/cadastro.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>

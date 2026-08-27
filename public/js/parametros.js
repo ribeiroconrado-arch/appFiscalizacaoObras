@@ -186,6 +186,10 @@ function novoUsuario() {
   document.getElementById('us-cargo').value = 'agente'
   document.getElementById('us-perfil').value = 'comum'
   document.getElementById('us-ativo').checked = true
+  // Curadoria cadastral nasce DESMARCADA: é permissão para redesenhar a base
+  // do município, e permissão desse porte se concede uma a uma, nunca por
+  // padrão de formulário.
+  document.getElementById('us-curador').checked = false
   document.getElementById('us-senha').value = ''
   document.getElementById('us-senha2').value = ''
   openModal('m-usuario')
@@ -203,6 +207,7 @@ function editarUsuario(id) {
   document.getElementById('us-cargo').value = u.tipo_usuario || 'agente'
   document.getElementById('us-perfil').value = u.perfil
   document.getElementById('us-ativo').checked = !!u.ativo
+  document.getElementById('us-curador').checked = !!u.curador_cadastral
   document.getElementById('us-senha').value = ''
   document.getElementById('us-senha2').value = ''
   openModal('m-usuario')
@@ -221,6 +226,7 @@ async function salvarUsuario() {
     tipo_usuario: document.getElementById('us-cargo').value,
     perfil: document.getElementById('us-perfil').value,
     ativo: document.getElementById('us-ativo').checked,
+    curador_cadastral: document.getElementById('us-curador').checked,
     senha: senha || null,
     senha_confirmation: senha2 || null,
   }, 'm-usuario', carregarParametros)

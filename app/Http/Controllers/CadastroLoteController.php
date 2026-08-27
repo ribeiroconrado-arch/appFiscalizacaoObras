@@ -340,14 +340,24 @@ class CadastroLoteController extends Controller
         return $d;
     }
 
+    /**
+     * Correção direta da base: exige CURADORIA CADASTRAL, não perfil.
+     *
+     * Era `isAdmin()`. Mudou porque administrar o sistema e responder pelo
+     * cadastro são coisas diferentes: alterar a quadra de um lote ou desenhar
+     * um imóvel muda a geometria que fundamenta o cálculo de área — e a área é
+     * a base da multa. Quem cria usuários não é, por isso, quem pode redesenhar
+     * o município.
+     */
     private function recusarNaoAdmin(Request $request): ?JsonResponse
     {
-        if ($request->user()?->isAdmin()) {
+        if ($request->user()?->podeCurarCadastro()) {
             return null;
         }
 
         return response()->json([
-            'message' => 'Só o administrador pode alterar a identificação do imóvel.',
+            'message' => 'Alterar a identificação do imóvel exige a permissão de '
+                . 'curadoria cadastral, concedida em Parâmetros > Usuários.',
         ], 403);
     }
 }

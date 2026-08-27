@@ -603,6 +603,86 @@ function iniciarDesenhoDeLote() {
   pintarPainelCadastro()
 }
 
+// ── LOTE POR COORDENADAS ─────────────────────────────────────
+
+/** Camada da prévia. Fica fora do mapaState porque é efêmera. */
+let previaCoordenadas = null
+
+function abrirCoordenadas() {
+  if (selState.ativa) { desligarSelecao() }
+  if (estaDesenhando()) { largarDesenho() }
+
+  document.getElementById('coo-caixa').hidden = false
+  document.getElementById('coo-abrir').hidden = true
+  document.getElementById('coo-texto').focus()
+}
+
+function largarCoordenadas() {
+  document.getElementById('coo-caixa').hidden = true
+  document.getElementById('coo-abrir').hidden = false
+  document.getElementById('coo-resultado').innerHTML = ''
+  document.getElementById('coo-texto').value = ''
+  limparPreviaCoordenadas()
+  desenhoPendente = null
+  pintarPainelCadastro()
+}
+
+function limparPreviaCoordenadas() {
+  if (previaCoordenadas) {
+    mapaState.obj.removeLayer(previaCoordenadas)
+    previaCoordenadas = null
+  }
+}
+
+/**
+ * Lê o texto, desenha a prévia e entrega o polígono ao MESMO fluxo do desenho
+ * livre — conferir no servidor, ver a área, criar o lote.
+ *
+ * Reaproveitar o fluxo não é economia de código: é o que garante que o lote
+ * criado por coordenada passe pelas mesmas provas de sobreposição e cobertura
+ * que o desenhado à mão. Um segundo caminho de escrita seria um segundo
+ * conjunto de regras para manter em pé.
+ */
+function lerCoordenadas() {
+  const alvo = document.getElementById('coo-resultado')
+  const { vertices, erros } = lerCoordenadasGMS(document.getElementById('coo-texto').value)
+
+  if (erros.length) {
+    alvo.innerHTML = erros.map(e => `<div class="cad-nota cad-erro">${esc(e)}</div>`).join('')
+    limparPreviaCoordenadas()
+    desenhoPendente = null
+    pintarPainelCadastro()
+    return
+  }
+
+  const p = poligonoDeCoordenadas(vertices)
+  if (p.erro) {
+    alvo.innerHTML = `<div class="cad-nota cad-erro">${esc(p.erro)}</div>`
+    return
+  }
+
+  desenhoPendente = p.geometry
+
+  limparPreviaCoordenadas()
+  const anel = p.geometry.coordinates[0].map(c => [c[1], c[0]])   // GeoJSON -> Leaflet
+  previaCoordenadas = L.polygon(anel, {
+    color: '#F97316', weight: 3, fillColor: '#F97316', fillOpacity: .25, dashArray: '6 4',
+  }).addTo(mapaState.obj)
+  mapaState.obj.fitBounds(previaCoordenadas.getBounds(), { padding: [40, 40] })
+
+  alvo.innerHTML = `<div class="cad-nota">${vertices.length} vértice(s) lidos`
+    + `${p.fechado ? ', perímetro já fechado no texto' : ''}. `
+    + 'Confira o desenho no mapa e preencha os dados abaixo.</div>'
+
+  // O bairro do lote selecionado poupa digitação, como no desenho livre.
+  const f = state.selecionado
+  if (f && !document.getElementById('des-bairro').value) {
+    document.getElementById('des-bairro').value = f.bairro || f.properties?.bairro || ''
+  }
+  pintarPainelCadastro()
+  document.getElementById('des-quadra')?.focus()
+}
+
 /** Chamado por desenho.js a cada vértice — mantém a contagem na tela. */
 function aoDesenharVertice(n) {
   const el = document.getElementById('des-contagem')
@@ -617,6 +697,7 @@ function aoDesenharVertice(n) {
 function largarDesenho() {
   desenhoPendente = null
   cancelarDesenho()
+  limparPreviaCoordenadas()
   pintarPainelCadastro()
 }
 
@@ -664,6 +745,7 @@ async function gravarDesenho() {
 
       toast(d.message)
       largarDesenho()
+      largarCoordenadas()
       document.getElementById('des-quadra').value = ''
       document.getElementById('des-lote').value = ''
       // O lote novo só existe no servidor: forçar a recarga do bbox é o que o

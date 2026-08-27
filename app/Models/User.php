@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'matricula', 'password', 'perfil', 'tipo_usuario', 'ativo', 'assinatura'])]
+#[Fillable(['name', 'email', 'matricula', 'password', 'perfil', 'tipo_usuario', 'ativo', 'assinatura', 'curador_cadastral'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -56,6 +56,22 @@ class User extends Authenticatable
     }
 
     /** Pode criar e alterar registros (vistorias, obras, documentos). */
+    /**
+     * Pode corrigir a BASE CADASTRAL direto no mapa?
+     *
+     * Poder transversal, e não um degrau acima de administrador: administrar o
+     * sistema (usuários, legislação, UPF) e responder pelo cadastro são
+     * responsabilidades diferentes, e podem estar em pessoas diferentes.
+     *
+     * Exige `canEdit` junto porque visualizador não escreve nada, marcado ou
+     * não — a permissão acrescenta poder a quem já opera, nunca cria acesso do
+     * nada.
+     */
+    public function podeCurarCadastro(): bool
+    {
+        return $this->canEdit() && (bool) $this->curador_cadastral;
+    }
+
     public function canEdit(): bool
     {
         return $this->ativo && in_array($this->perfilEfetivo(), ['admin', 'comum'], true);

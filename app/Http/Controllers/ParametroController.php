@@ -38,6 +38,7 @@ class ParametroController extends Controller
             'usuarios' => User::orderBy('name')->get()->map(fn (User $u) => [
                 'id' => $u->id, 'name' => $u->name, 'email' => $u->email,
                 'matricula' => $u->matricula, 'perfil' => $u->perfil,
+                'curador_cadastral' => (bool) $u->curador_cadastral,
                 'tipo_usuario' => $u->tipo_usuario, 'ativo' => $u->ativo,
                 'perfil_rotulo' => $u->perfilRotulo(),
             ]),
@@ -80,6 +81,9 @@ class ParametroController extends Controller
             'perfil'       => ['required', Rule::in(User::PERFIS)],
             'tipo_usuario' => ['required', Rule::in(User::CARGOS)],
             'ativo'        => ['nullable', 'boolean'],
+            // Permissão para corrigir a base do mapa. Ver a migration
+            // 2026_08_27_000100 para por que ela não é um perfil.
+            'curador_cadastral' => ['nullable', 'boolean'],
             'senha'        => ['nullable', 'string', Password::min(8), 'confirmed'],
         ]);
 
@@ -98,6 +102,7 @@ class ParametroController extends Controller
                 'name' => $d['name'], 'email' => $d['email'],
                 'matricula' => ($d['matricula'] ?? '') !== '' ? $d['matricula'] : null,
                 'perfil' => $d['perfil'], 'tipo_usuario' => $d['tipo_usuario'], 'ativo' => $d['ativo'] ?? true,
+                'curador_cadastral' => $d['curador_cadastral'] ?? false,
             ]
         );
 

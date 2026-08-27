@@ -493,24 +493,33 @@ function confirmarLote() {
 }
 
 /**
- * Enquadra TODA a base carregada, e não um ponto fixo.
+ * Enquadra o PERÍMETRO URBANO do município.
  *
- * Antes era `setView` numa coordenada do bairro piloto: com um bairro só isso
- * passava, mas a cada loteamento importado o "ver tudo" mostrava menos do
- * "tudo". Agora o enquadramento vem da extensão real dos lotes (o mesmo
- * cálculo que abre o mapa), então ele cresce sozinho conforme o município é
- * carregado.
+ * Não é a extensão dos lotes cadastrados, e a diferença importa: a base cobre
+ * hoje dois loteamentos no extremo noroeste, enquanto quem aperta "ver tudo"
+ * quer ver a cidade inteira — inclusive o que ainda não foi levantado, que é
+ * justamente a informação de quanto falta.
  *
- * `mapaState.extensao` é preenchido em enquadrarBase(). Se ela ainda não
- * chegou, cai no limite do município — nunca deixa o botão sem efeito.
+ * O retângulo vem do servidor (config/gis.php), porque é configuração de
+ * município. Sem ele, cai na extensão da base, e depois no limite do mapa:
+ * nesta ordem, o botão nunca fica sem efeito.
  */
 function verTudo() {
-  const e = mapaState.extensao
-  if (e) {
-    mapaState.obj.fitBounds([[e.sul, e.oeste], [e.norte, e.leste]], { padding: [24, 24] })
+  const mapa = mapaState.obj
+
+  if (typeof PERIMETRO_URBANO !== 'undefined' && PERIMETRO_URBANO?.length === 4) {
+    const [oeste, sul, leste, norte] = PERIMETRO_URBANO
+    mapa.fitBounds([[sul, oeste], [norte, leste]], { padding: [12, 12] })
     return
   }
-  mapaState.obj.fitBounds(LIMITE_MUNICIPIO)
+
+  const e = mapaState.extensao
+  if (e) {
+    mapa.fitBounds([[e.sul, e.oeste], [e.norte, e.leste]], { padding: [24, 24] })
+    return
+  }
+
+  mapa.fitBounds(LIMITE_MUNICIPIO)
 }
 
 document.addEventListener('DOMContentLoaded', bootstrap)
