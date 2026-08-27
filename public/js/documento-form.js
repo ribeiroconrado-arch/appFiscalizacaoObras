@@ -55,9 +55,32 @@ async function novoDocumento(ev) {
 
   abrirMenuNovo(botao, o.tipos.map(t => ({
     rotulo: t.rotulo,
+    obs: OBS_TIPO_DOC[t.valor] || '',
     icone: ICO_TIPO_DOC[t.valor] || ICO_TIPO_DOC.padrao,
+    // Traço antes do primeiro auto: acima ficam os atos que AVISAM, abaixo os
+    // que SANCIONAM. Ver o comentário em OBS_TIPO_DOC.
+    separar: t.valor === 'auto_embargo',
     acao: () => escolherTipoDoc(t.valor),
   })))
+}
+
+/**
+ * Uma linha por peça, dizendo para que ela serve.
+ *
+ * Quem abre o menu raramente está em dúvida sobre onde clicar; está em dúvida
+ * sobre QUAL peça lavrar. Notificação dá prazo, auto aplica sanção — escolher
+ * errado não é um erro de tela, é vício no processo administrativo, e ele só
+ * aparece meses depois, quando a defesa aponta.
+ *
+ * O texto é curto de propósito: o menu não é o lugar de ensinar direito
+ * administrativo, é o lugar de impedir a troca grosseira.
+ */
+const OBS_TIPO_DOC = {
+  vistoria: 'Registra o que foi visto no imóvel.',
+  notificacao: 'Dá prazo para regularizar, antes da multa.',
+  notificacao_embargo: 'Avisa que a obra deve parar.',
+  auto_embargo: 'Para a obra de imediato.',
+  auto_infracao: 'Aplica a multa, com memória de cálculo.',
 }
 
 /** Ícone de cada peça, no menu de criação. */
@@ -343,6 +366,10 @@ function renderCabecalhoDoc(d) {
   const rotulo = tipoSel.options[tipoSel.selectedIndex]?.textContent || 'Documento'
 
   document.getElementById('fd-tipo-rotulo').textContent = rotulo
+  // O ícone segue o tipo: quem abre um auto de embargo reconhece a peça pelo
+  // símbolo antes de ler o nome dela.
+  const ico = document.getElementById('fd-icone')
+  if (ico) { ico.innerHTML = ICO_TIPO_DOC[tipoSel.value] || ICO_TIPO_DOC.padrao }
   document.getElementById('fd-numero').textContent = d?.numero || 'Sem número'
   document.getElementById('fd-registro').textContent = d?.criado_em || 'agora'
   document.getElementById('fd-agente').textContent =

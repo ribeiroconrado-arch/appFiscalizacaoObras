@@ -292,8 +292,17 @@ function preencherHoraAgoraSeVazio(i) {
  * Acontecia só na PRIMEIRA vez, porque na segunda a resposta vinha do cache e
  * não havia espera.
  *
+ * Cada opção pode trazer `obs` — uma linha dizendo PARA QUE serve. Não é
+ * enfeite: a dúvida real de quem abre este menu não é onde clicar, é qual peça
+ * lavrar (notificação ou auto? embargo ou infração?), e a resposta custa uma
+ * linha aqui contra um processo anulado depois.
+ *
+ * `separar: true` desenha um traço ANTES da opção, para agrupar o que é da
+ * mesma natureza — aviso de um lado, sanção do outro.
+ *
  * @param {MouseEvent|HTMLElement} origem  o clique, ou o botão que ancora
- * @param {Array<{rotulo:string, icone?:string, acao:Function}>} opcoes
+ * @param {Array<{rotulo:string, obs?:string, icone?:string, separar?:boolean,
+ *                acao:Function}>} opcoes
  */
 function abrirMenuNovo(origem, opcoes) {
   const ev = origem instanceof Event ? origem : null
@@ -316,11 +325,19 @@ function abrirMenuNovo(origem, opcoes) {
   menu.id = 'menu-novo'
 
   opcoes.forEach((o, i) => {
+    if (o.separar) {
+      const traco = document.createElement('div')
+      traco.className = 'menu-novo-sep'
+      menu.appendChild(traco)
+    }
+
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'menu-novo-op'
     b.innerHTML = (o.icone ? `<span class="menu-novo-ico">${o.icone}</span>` : '')
-      + `<span>${esc(o.rotulo)}</span>`
+      + `<span class="menu-novo-txt"><span class="menu-novo-nome">${esc(o.rotulo)}</span>`
+      + (o.obs ? `<span class="menu-novo-obs">${esc(o.obs)}</span>` : '')
+      + '</span>'
     b.onclick = () => { fecharMenuNovo(); o.acao() }
     // Entrada escalonada: as opções descem uma após a outra, o que mostra de
     // onde a lista saiu. Sem isso ela apenas aparece, e o vínculo com o botão

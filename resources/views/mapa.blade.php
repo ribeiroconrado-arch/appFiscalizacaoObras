@@ -890,7 +890,7 @@
          da integração diz de quando é o dado lido do cadastro, e por isso fica
          por último, encostada no ✕. --}}
     <h3 class="fi-cabeca">
-      <span class="fi-cabeca-ico">
+      <span class="cab-ico">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
@@ -1129,6 +1129,10 @@
   {{-- ── CABEÇALHO FIXO ── --}}
   <div class="doc-head">
     <div class="doc-head-top">
+      {{-- O ícone diz que peça é ANTES de o nome ser lido — e muda com o tipo,
+           em irAbaDoc/abrirFormDoc. Mesmo tratamento do cabeçalho da ficha do
+           imóvel e do avatar do usuário. --}}
+      <span class="cab-ico" id="fd-icone"></span>
       <span class="doc-head-doc" id="fd-tipo-rotulo">Documento</span>
       <span class="doc-head-num-wrap">
         <span class="doc-head-lbl">Nº</span>
