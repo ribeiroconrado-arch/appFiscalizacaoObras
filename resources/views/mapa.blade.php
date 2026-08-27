@@ -999,11 +999,11 @@
              estando na ficha, o fiscal já sabe sobre qual imóvel vai lavrar —
              obrigá-lo a sair daqui para abrir uma notificação era um desvio sem
              motivo. --}}
-        <button class="btn primary" onclick="novoDocumento(event)">Opções</button>
+        <button class="btn opcoes" onclick="novoDocumento(event)">Opções</button>
       @else
         {{-- Visualizador não registra: esconder o botão evita a ida ao
              servidor só para receber 403. A regra real está no controller. --}}
-        <button class="btn" disabled title="Seu perfil permite apenas consulta">Opções</button>
+        <button class="btn opcoes" disabled title="Seu perfil permite apenas consulta">Opções</button>
       @endif
     </div>
   </div>
@@ -1284,7 +1284,7 @@
     <div style="flex:1"></div>
 
     <div class="df-opcoes" id="fd-opcoes-wrap" hidden>
-      <button type="button" class="btn" id="fd-btn-opcoes" onclick="alternarOpcoesDoc(event, 'fd-menu')">
+      <button type="button" class="btn opcoes" id="fd-btn-opcoes" onclick="alternarOpcoesDoc(event, 'fd-menu')">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
         Opções

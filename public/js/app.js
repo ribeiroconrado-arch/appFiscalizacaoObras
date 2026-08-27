@@ -116,6 +116,11 @@ async function enquadrarBase() {
     const d = await r.json()
     if (!d.extensao) throw new Error('base vazia')
     const e = d.extensao
+
+    // Guardada para o botão "ver tudo" usar como segunda opção, quando o
+    // perímetro urbano não estiver configurado: é a extensão REAL do que está
+    // cadastrado, e cresce sozinha a cada bairro importado.
+    mapaState.extensao = e
     mapaState.obj.fitBounds([[e.sul, e.oeste], [e.norte, e.leste]], { padding: [30, 30] })
   } catch (erro) {
     console.warn(erro)

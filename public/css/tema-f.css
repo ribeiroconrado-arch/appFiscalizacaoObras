@@ -1160,8 +1160,22 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 
 /* Editar em verde de contorno e Lavrar em âmbar: são atos de peso diferente e
    a cor separa os dois à distância, como no AppPOSTURAS. */
-.btn.edit-verde{background:var(--gl);border-color:var(--gm);color:var(--gd)}
-.btn.edit-verde:hover{background:var(--gm);color:var(--gxd)}
+/* EDITAR — verde cheio, texto branco.
+   Era verde claro de contorno, e num cartão de lista ele desaparecia ao lado
+   do Excluir. Editar é a ação que o usuário vai querer na maioria das vezes
+   que olha o cartão; quem tem peso visual é ela. */
+.btn.edit-verde{background:var(--g);border-color:var(--g);color:#fff;
+  box-shadow:0 3px 10px rgba(0,155,58,.28)}
+.btn.edit-verde:hover{background:var(--gd);border-color:var(--gd);color:#fff}
+
+/* OPÇÕES — cinza, e cinza de verdade.
+   O `.btn` neutro herda `--blt`, que nos dois temas é um tom lavado da cor da
+   marca (esverdeado no institucional, amarelado no âmbar) — e ao lado de um
+   botão verde cheio ele lia como "verde apagado", como se estivesse
+   desabilitado. Aqui o cinza é declarado, não herdado: é um botão de menu, e
+   menu não disputa com a ação principal. */
+.btn.opcoes{background:#EFEFEF;border-color:#DEDEDE;color:#4A4A4A;box-shadow:none}
+.btn.opcoes:hover{background:#E4E4E4;border-color:#D2D2D2}
 .btn.atencao{background:var(--gold);border-color:var(--gold-dk);color:#fff}
 .btn.atencao:hover{background:var(--gold-dk)}
 
@@ -1237,16 +1251,17 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .par-card-cargo{font-size:10.5px;color:var(--tx3)}
 .par-card-acoes{display:flex;gap:6px;flex-shrink:0}
 
-/* Avatar: UM âmbar, igual para todo mundo — o mesmo do AppPOSTURAS.
-   Antes cada perfil tinha a sua cor (azul-marinho para o administrador,
-   laranja para os demais), e a lista virava um mostruário: as cores brigavam
-   entre si e ainda repetiam, em código de cor, o que a etiqueta de perfil já
-   diz por escrito ao lado. Quem é quem se lê no texto; o avatar só ancora a
-   linha. */
-.par-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;
+/* Avatar da lista de usuários — mesma família do avatar do perfil.
+   Quadrado arredondado, cor do sistema, sem borda. O âmbar de antes brigava
+   com a pílula "Ativo" e com a etiqueta de perfil na mesma linha: três coisas
+   coloridas disputando atenção, sendo que só duas informam algo.
+   Continua sendo UM tratamento para todo mundo — quem é quem se lê na etiqueta
+   ao lado, não na cor do círculo. */
+.par-av{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;
   justify-content:center;font-family:'Manrope',sans-serif;font-size:15px;font-weight:800;
-  flex-shrink:0;color:var(--gold-dk);background:var(--gold-lt);
-  border:1.5px solid var(--gold)}
+  flex-shrink:0;color:#fff;border:none;
+  background:linear-gradient(150deg, var(--g), var(--gd));
+  box-shadow:0 2px 7px rgba(0,77,28,.22)}
 
 /* Pílula de situação: verde para ativo, vermelha para inativo. Menor que a
    tag de status dos documentos, porque aqui é qualificação, não estado de
@@ -1257,10 +1272,17 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .par-card-meta .badge{font-size:10px;padding:2px 8px 2px 6px}
 .par-card-meta .badge::before{width:9px;height:9px}
 
-/* Botões de contorno: criar e excluir não são a ação principal do cartão,
-   então não competem com o Editar, que é cheio. */
+/* Botão de contorno para criar — não é a ação principal do cartão, então não
+   compete com o Editar. */
 .btn.out-verde{background:var(--sur);border-color:var(--g);color:var(--gd)}
 .btn.out-verde:hover{background:var(--gl)}
+
+/* EXCLUIR — branco com contorno vermelho.
+   Par do Editar cheio: um chama, o outro adverte. O vermelho fica na borda e
+   no texto, nunca no fundo — fundo vermelho num botão de lista transforma a
+   tela num campo minado visual, e a exclusão aqui ainda passa por confirmação.
+   O ícone saiu: no par, o lápis identifica a ação principal e a palavra basta
+   para a outra. */
 .btn.out-vermelho{background:var(--sur);border-color:var(--red);color:var(--red)}
 .btn.out-vermelho:hover{background:var(--rlt)}
 /* O ícone padrão do app tem 18px; num botão pequeno ele domina o rótulo. */
