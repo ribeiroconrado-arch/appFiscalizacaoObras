@@ -563,7 +563,19 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    ele cabia por 14 px de folga, e qualquer nome real de servidor ("Maria
    Aparecida dos Santos Oliveira") estourava a barra. Some o texto, fica o
    avatar — que continua identificando quem está logado e abrindo o perfil. */
-@media(max-width:820px){
+/* Em TABLET o texto fica — só encurtado.
+   O corte em 820px foi feito contra nome longo estourando a barra, e resolveu
+   pelo lado errado: sumia com a identificação de quem está logado justamente
+   no aparelho que o fiscal leva a campo (um iPad em retrato tem ~810px). O que
+   estourava era a largura sem limite, não a existência do texto — então o
+   limite entra, e o nome que não couber termina em reticências. */
+@media(max-width:1024px){
+  .perfil-btn .ident{max-width:132px}
+}
+
+/* No celular, aí sim, sai: abaixo de 600px cada pixel do cabeçalho está
+   disputado, e o avatar sozinho continua identificando e abrindo o perfil. */
+@media(max-width:600px){
   .perfil-btn{padding:0;background:none;border:none;max-width:none}
   .perfil-btn .ident{display:none}
 }
@@ -1439,3 +1451,64 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   font-size:11px;color:var(--tx3);margin-bottom:10px}
 .bci-topo b{color:var(--tx2);font-weight:700}
 .bci-vazio .btn{margin-top:10px}
+
+
+/* ══════════════════════════════════════════════════════════════
+   CABEÇALHO E IDENTIFICAÇÃO DA FICHA
+   ══════════════════════════════════════════════════════════════ */
+
+/* A primeira linha estava "vazia": um ícone fino, um título e muito ar até o
+   ✕. Ela é a linha que identifica a peça — merece peso. O ícone ganha um
+   quadrado de fundo (âncora visual), o título sobe de corpo, e a situação
+   entra ao lado dele, que é onde o olho já está. */
+#m-ficha h3.fi-cabeca{
+  align-items:center;gap:10px;font-size:16px;letter-spacing:-.01em;
+  padding-bottom:10px;margin-bottom:0;
+  border-bottom:1.5px solid var(--bord);
+}
+.fi-cabeca-ico{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:30px;height:30px;border-radius:9px;
+  background:var(--gl);color:var(--gd);
+}
+.fi-cabeca-ico svg{width:17px;height:17px}
+/* A situação não é enfeite do título: é o estado do imóvel, e por isso vem
+   logo depois dele — antes da data de integração, que fala do DADO e não do
+   imóvel. */
+#m-ficha h3.fi-cabeca #fi-situacao{flex:0 0 auto;font-size:10.5px}
+
+/* ── IDENTIFICAÇÃO FIXA, ACIMA DAS ABAS ──
+   Endereço, inscrição, coordenada e área respondem "qual imóvel é este". Como
+   a resposta vale para todas as abas, ela não pode viver dentro de uma delas —
+   ficava sumindo justamente quando o fiscal ia ao histórico conferir algo. */
+.fi-fixo{
+  padding:10px 0 11px;border-bottom:1px solid var(--bord);
+}
+.fi-fixo .fi-endereco{font-size:14px;line-height:1.35;color:var(--chumbo);
+  font-weight:600;margin-bottom:6px}
+.fi-fixo-dados{
+  display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;
+  font-size:12px;color:var(--chumbo);
+}
+.fi-fixo-dados > span{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.fi-fixo-dados .fi-rot{margin-bottom:0;white-space:nowrap;font-size:9.5px;
+  letter-spacing:.04em}
+.fi-fixo-dados .mono{font-size:12px}
+
+/* ── MÍDIAS OCUPANDO A ALTURA QUE SOBRA ──
+   Fachada e croqui em 90px de altura não respondem "como está o imóvel", que é
+   a única pergunta que elas existem para responder. Agora a aba Dados é uma
+   coluna flexível e as mídias tomam o espaço restante até o rodapé de botões.
+   `min-height:0` é obrigatório: sem ele o item flex se recusa a encolher e a
+   imagem empurra o rodapé para fora da tela. */
+#m-ficha #fi-dados.at{display:flex;flex-direction:column;min-height:0}
+#fi-dados .fi-midias{flex:1 1 auto;min-height:180px;align-items:stretch}
+#fi-dados .fi-midia{display:flex;flex-direction:column;min-height:0}
+#fi-dados .fi-midia .fi-vazio{flex:1 1 auto;display:flex;align-items:center;
+  justify-content:center;text-align:center}
+#fi-dados .fi-midia img{flex:1 1 auto;min-height:0;width:100%;
+  object-fit:cover;border-radius:8px}
+/* A data ao lado do rótulo: foto de ontem e foto de dois anos atrás valem
+   coisas diferentes numa fiscalização, e o rótulo sozinho não diz qual é. */
+.fi-midia-data{color:var(--tx3);font-weight:600;text-transform:none;
+  letter-spacing:0;margin-left:4px}

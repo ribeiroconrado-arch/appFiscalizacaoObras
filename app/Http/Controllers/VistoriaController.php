@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Documento;
+use App\Models\Obra;
 use App\Models\Evidencia;
 use App\Models\Irregularidade;
 use App\Models\Lote;
@@ -142,7 +143,71 @@ class VistoriaController extends Controller
             'lote'      => $lote->only(['id', 'bairro', 'quadra', 'numero_lote', 'chave']),
             'vistorias' => $vistorias,
             'eventos'   => $eventos,
+            'resumo'    => $this->resumoDoImovel($lote),
         ]);
+    }
+
+    /**
+     * O que a aba Dados mostra sem precisar ler a linha do tempo inteira:
+     * em que pé está o imóvel, quantas vistorias já teve e quando foi a última.
+     *
+     * ── Sobre o STATUS ──
+     *
+     * Ele é DERIVADO do que já está registrado, não digitado por ninguém. A
+     * ordem abaixo é de precedência, e cada degrau existe por um motivo:
+     *
+     *   baixado    o lote deixou de existir por unificação ou desmembramento,
+     *              e isso vence qualquer outra informação;
+     *   embargado  há auto ou notificação de embargo lavrado e não anulado —
+     *              é o estado que MUDA o que o fiscal pode fazer em campo;
+     *   irregular  a última vistoria apontou irregularidade;
+     *   obra       havendo obra cadastrada, vale a situação dela;
+     *   regular    houve vistoria e ela não apontou nada;
+     *   sem visita nunca foi vistoriado — que é diferente de estar tudo bem.
+     *
+     * É provisório de propósito: "vazio / em construção" depende de uma
+     * definição que ainda não existe (§ combinar com o usuário). Enquanto ela
+     * não vem, o status responde pelo que o sistema PODE provar, em vez de
+     * inventar um estado que ninguém registrou.
+     */
+    private function resumoDoImovel(Lote $lote): array
+    {
+        $vistorias = $lote->vistorias()->orderByDesc('data_hora')->get();
+        $ultima = $vistorias->first();
+
+        $embargo = Documento::where('lote_id', $lote->id)
+            ->whereIn('tipo', ['auto_embargo', 'notificacao_embargo'])
+            ->whereNotNull('data_lavratura')
+            ->where('status', '!=', 'anulado')
+            ->exists();
+
+        $obra = Obra::where('lote_id', $lote->id)->latest('id')->first();
+
+        $status = match (true) {
+            $lote->situacao === 'baixado' => ['Baixado', 'bd-cx'],
+            $embargo                      => ['Embargado', 'bd-cx'],
+            $ultima?->situacao === 'irregular' => ['Irregular', 'bd-al'],
+            $obra !== null                => [$obra->situacaoRotulo(), 'bd-in'],
+            $ultima !== null              => ['Regular', 'bd-ok'],
+            default                       => ['Sem vistoria', 'bd-in'],
+        };
+
+        // Fachada: a foto mais recente de qualquer vistoria do imóvel. É a
+        // pergunta "como está hoje", e quem responde é sempre a última.
+        $foto = Evidencia::whereIn('vistoria_id', $vistorias->pluck('id'))
+            ->where('tipo', 'foto')
+            ->orderByDesc('data_hora')->orderByDesc('id')
+            ->first();
+
+        return [
+            'status'          => ['texto' => $status[0], 'classe' => $status[1]],
+            'vistorias'       => $vistorias->count(),
+            'ultima_vistoria' => $ultima?->data_hora?->format('d/m/Y'),
+            'fachada'         => $foto ? [
+                'url'    => route('evidencia.arquivo', $foto),
+                'quando' => $foto->data_hora?->format('d/m/Y'),
+            ] : null,
+        ];
     }
 
     /** "dd/mm/aaaa hh:mm" -> "aaaammddhhmm", para ordenar comparando texto. */

@@ -862,15 +862,19 @@
 <div class="modal-bg" id="m-ficha" onclick="fModal()">
   <div class="modal" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fModalBtn('m-ficha')">&#10005;</button>
-    <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
-      </svg>
+    {{-- CABEÇALHO — a linha que responde "que imóvel é este e como ele está".
+         A situação vem ANTES da integração porque é o estado do imóvel; a data
+         da integração diz de quando é o dado lido do cadastro, e por isso fica
+         por último, encostada no ✕. --}}
+    <h3 class="fi-cabeca">
+      <span class="fi-cabeca-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
+        </svg>
+      </span>
       <span id="fi-titulo">Ficha Imóvel</span>
-      {{-- A data da última consulta ao cadastro da prefeitura fica no
-           cabeçalho, e não entre os campos, porque ela qualifica a ficha
-           INTEIRA: diz de quando é o que está sendo lido. --}}
+      <span class="badge bd-ok" id="fi-situacao">Ativo</span>
       <span class="fi-integracao-topo">Últ. Integração:
         <b id="fi-integracao">—</b></span>
     </h3>
@@ -878,51 +882,58 @@
       <span class="badge bd-ok"><span id="fi-dist"></span></span>
     </div>
 
+    {{-- IDENTIFICAÇÃO FIXA, acima das abas.
+         Endereço, inscrição, coordenada e área não pertencem a nenhuma aba: são
+         a resposta a "de qual imóvel estamos falando", e essa pergunta continua
+         valendo enquanto se navega pelo histórico ou pelo BCI. Aqui, ela não
+         some quando a aba muda. --}}
+    <div class="fi-fixo">
+      <div class="fi-endereco" id="fi-endereco">—</div>
+      <div class="fi-fixo-dados">
+        <span><span class="fi-rot">Insc. Imob.</span><span class="mono" id="fi-inscricao">—</span></span>
+        <span><span class="fi-rot">Coord.</span><span class="mono" id="fi-coord">—</span></span>
+        <span><span class="fi-rot">Área GIS</span><span id="fi-area">—</span></span>
+      </div>
+    </div>
+
     <div class="sub-abas">
       <button class="at" data-fi="dados" onclick="subFicha('dados')">Dados</button>
       <button data-fi="historico" onclick="subFicha('historico')">Histórico</button>
-      <button data-fi="cadastro" onclick="subFicha('cadastro')">Cadastro imobiliário</button>
+      <button data-fi="cadastro" onclick="subFicha('cadastro')">BCI</button>
       <button data-fi="croquis" onclick="subFicha('croquis')">Croquis</button>
       <button data-fi="anexos" onclick="subFicha('anexos')">Anexos</button>
     </div>
 
     {{-- DADOS --}}
     <div class="fi-painel at" id="fi-dados">
-      {{-- Endereço como texto corrido, não em campos: aqui ninguém edita, só
-           lê. Campo com moldura sugere edição que não existe. --}}
-      <div class="fi-bloco">
-        <div class="fi-rot">Endereço</div>
-        <div class="fi-endereco" id="fi-endereco">—</div>
-      </div>
-
-      {{-- FAIXAS, não grade.
-           O separador é do TRAÇO da faixa, e não de cada campo. Com a grade
-           antiga, dois campos lado a lado desenhavam dois traços independentes
-           com uma falha no meio, e faixa de número ímpar de campos terminava
-           com meia linha. Ver .fi-linha em tema-f.css. --}}
+      {{-- O que muda o que o fiscal faz HOJE: em que pé está o imóvel, quantas
+           vistorias já teve e quando foi a última. Tudo derivado do que está
+           registrado — ver resumoDoImovel() em VistoriaController. --}}
       <div class="fi-linhas">
         <div class="fi-linha">
-          <div class="fi-campo"><span class="fi-rot">Insc. Imob.</span><span class="fi-val mono" id="fi-inscricao">—</span></div>
-          <div class="fi-campo"><span class="fi-rot">Coord.</span><span class="fi-val mono" id="fi-coord">—</span></div>
-          <div class="fi-campo"><span class="fi-rot">Situação</span><span class="fi-val" id="fi-situacao">—</span></div>
-        </div>
-        <div class="fi-linha">
-          {{-- Área do GIS, não do cadastro: são réguas diferentes e não se
-               misturam. A do cadastro fica na aba Cadastro imobiliário, ao
-               lado das medidas do terreno. --}}
-          <div class="fi-campo"><span class="fi-rot">Área GIS</span><span class="fi-val" id="fi-area">—</span></div>
+          <div class="fi-campo"><span class="fi-rot">Status</span>
+            <span class="fi-val" id="fi-status">—</span></div>
+          <div class="fi-campo"><span class="fi-rot">Vistorias</span>
+            <span class="fi-val" id="fi-qt-vistorias">—</span></div>
+          <div class="fi-campo"><span class="fi-rot">Última vistoria</span>
+            <span class="fi-val" id="fi-ultima-vistoria">—</span></div>
         </div>
       </div>
 
-      {{-- Fachada e croqui lado a lado: são as duas imagens que respondem
-           "como é o imóvel" antes de ir a campo. --}}
+      {{-- Fachada e croqui lado a lado, ocupando o que sobra da altura: são as
+           duas imagens que respondem "como é o imóvel" antes de ir a campo, e
+           imagem espremida em 90px não responde nada. A data de cada uma vai no
+           rótulo — foto de dois anos atrás e foto de ontem valem coisas
+           diferentes numa fiscalização. --}}
       <div class="fi-midias">
         <figure class="fi-midia" id="fi-fachada">
-          <figcaption>Fachada mais recente</figcaption>
+          <figcaption>Fachada mais recente
+            <span class="fi-midia-data" id="fi-fachada-data"></span></figcaption>
           <div class="fi-vazio">Sem foto de fachada registrada</div>
         </figure>
         <figure class="fi-midia" id="fi-croqui-atual">
-          <figcaption>Croqui mais recente</figcaption>
+          <figcaption>Croqui mais recente
+            <span class="fi-midia-data" id="fi-croqui-data"></span></figcaption>
           <div class="fi-vazio">Sem croqui registrado</div>
         </figure>
       </div>
@@ -961,11 +972,15 @@
     <div class="btn-row">
       <button class="btn" onclick="fModalBtn('m-ficha')">Fechar</button>
       @if (auth()->user()->canEdit())
-        <button class="btn primary" onclick="novaVistoria()">Nova vistoria</button>
+        {{-- As mesmas peças do botão da tela de Documentos, e não só vistoria:
+             estando na ficha, o fiscal já sabe sobre qual imóvel vai lavrar —
+             obrigá-lo a sair daqui para abrir uma notificação era um desvio sem
+             motivo. --}}
+        <button class="btn primary" onclick="novoDocumento(event)">+ Novo documento</button>
       @else
         {{-- Visualizador não registra: esconder o botão evita a ida ao
              servidor só para receber 403. A regra real está no controller. --}}
-        <button class="btn" disabled title="Seu perfil permite apenas consulta">Nova vistoria</button>
+        <button class="btn" disabled title="Seu perfil permite apenas consulta">+ Novo documento</button>
       @endif
     </div>
   </div>

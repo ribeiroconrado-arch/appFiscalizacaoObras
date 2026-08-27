@@ -614,6 +614,9 @@ async function recortarMunicipio() {
 
     // Limite de navegação = o próprio município, com uma folga pequena para
     // a divisa não colar na borda da tela.
+    // Guardada para o botão "ver tudo": é a extensão REAL do que está
+    // cadastrado, e cresce sozinha a cada bairro importado.
+    mapaState.extensao = d.extensao
     LIMITE_MUNICIPIO = contorno.getBounds().pad(0.04)
     mapaState.obj.setMaxBounds(LIMITE_MUNICIPIO)
   } catch (e) {

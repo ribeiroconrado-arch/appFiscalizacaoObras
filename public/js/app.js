@@ -184,8 +184,13 @@ function abrirFicha(feicao) {
   document.getElementById('fi-inscricao').textContent = inscricao
 
   document.getElementById('fi-endereco').innerHTML = montarEndereco(p)
-  document.getElementById('fi-situacao').innerHTML =
-    '<span class="badge bd-ok">Ativo</span>'
+
+  // A situação nasce "Ativo" e é corrigida pelo resumo, que chega junto do
+  // histórico. Só o mapa nunca traz lote baixado, então este é o estado certo
+  // enquanto a resposta não volta — e não um travessão que pisca.
+  const sit = document.getElementById('fi-situacao')
+  sit.className = 'badge bd-ok'
+  sit.textContent = 'Ativo'
   // Enquanto a integração com o cadastro da prefeitura não roda, não há data
   // para mostrar — e inventar "hoje" faria o dado parecer conferido. O travessão
   // é o vazio pedido: diz "nunca integrado" sem gastar uma frase no cabeçalho.
@@ -487,9 +492,25 @@ function confirmarLote() {
   if (lote) abrirFichaPorLote(lote)
 }
 
-/** Volta ao enquadramento do bairro piloto. */
+/**
+ * Enquadra TODA a base carregada, e não um ponto fixo.
+ *
+ * Antes era `setView` numa coordenada do bairro piloto: com um bairro só isso
+ * passava, mas a cada loteamento importado o "ver tudo" mostrava menos do
+ * "tudo". Agora o enquadramento vem da extensão real dos lotes (o mesmo
+ * cálculo que abre o mapa), então ele cresce sozinho conforme o município é
+ * carregado.
+ *
+ * `mapaState.extensao` é preenchido em enquadrarBase(). Se ela ainda não
+ * chegou, cai no limite do município — nunca deixa o botão sem efeito.
+ */
 function verTudo() {
-  mapaState.obj.setView([-15.5165, -54.3105], 16)
+  const e = mapaState.extensao
+  if (e) {
+    mapaState.obj.fitBounds([[e.sul, e.oeste], [e.norte, e.leste]], { padding: [24, 24] })
+    return
+  }
+  mapaState.obj.fitBounds(LIMITE_MUNICIPIO)
 }
 
 document.addEventListener('DOMContentLoaded', bootstrap)

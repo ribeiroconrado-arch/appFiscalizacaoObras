@@ -34,8 +34,11 @@ class Documento extends Model
         'vistoria'            => ['Vistoria',                'VIS'],
         'notificacao'         => ['Notificação',             'NOT'],
         'notificacao_embargo' => ['Notificação de Embargo',  'NE'],
-        'auto_infracao'       => ['Auto de Infração',        'AI'],
+        // Embargo antes de infração: em obras, primeiro se PARA a obra e
+        // depois se apura a penalidade. A ordem do menu segue a ordem do
+        // trabalho, não a do alfabeto.
         'auto_embargo'        => ['Auto de Embargo',         'AE'],
+        'auto_infracao'       => ['Auto de Infração',        'AI'],
     ];
 
     /*

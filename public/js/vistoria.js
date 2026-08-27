@@ -35,10 +35,77 @@ async function carregarHistorico(loteId) {
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
     renderHistorico(d.eventos ?? [])
+    renderResumo(d.resumo ?? null)
   } catch (e) {
     console.error(e)
     alvo.innerHTML = '<div class="vazio-msg">Não foi possível carregar o histórico.</div>'
   }
+}
+
+/**
+ * Preenche a aba Dados com o retrato do imóvel: status, vistorias, fachada.
+ *
+ * Vem junto do histórico de propósito — é a mesma consulta, e pedir duas vezes
+ * ao servidor a mesma informação seria trabalho dobrado para o aparelho do
+ * fiscal, que é o dispositivo mais fraco da cadeia.
+ *
+ * @param {Object|null} resumo
+ */
+function renderResumo(resumo) {
+  const põe = (id, texto) => {
+    const el = document.getElementById(id)
+    if (el) { el.textContent = texto }
+  }
+
+  if (!resumo) {
+    põe('fi-status', '—'); põe('fi-qt-vistorias', '—'); põe('fi-ultima-vistoria', '—')
+    return
+  }
+
+  const st = document.getElementById('fi-status')
+  if (st) {
+    st.innerHTML = `<span class="badge ${esc(resumo.status.classe)}">${esc(resumo.status.texto)}</span>`
+  }
+
+  põe('fi-qt-vistorias', String(resumo.vistorias ?? 0))
+  põe('fi-ultima-vistoria', resumo.ultima_vistoria || 'nenhuma')
+
+  // A situação do cabeçalho segue o status quando ele é definitivo (lote
+  // baixado), porque aí o imóvel não existe mais e isso vale mais do que
+  // qualquer outra informação da ficha.
+  const sit = document.getElementById('fi-situacao')
+  if (sit && resumo.status.texto === 'Baixado') {
+    sit.className = 'badge bd-cx'
+    sit.textContent = 'Baixado'
+  }
+
+  renderFachada(resumo.fachada)
+}
+
+/** A foto mais recente do imóvel, com a data dela. @param {Object|null} f */
+function renderFachada(f) {
+  const fig = document.getElementById('fi-fachada')
+  const data = document.getElementById('fi-fachada-data')
+  if (!fig) { return }
+
+  const vazio = fig.querySelector('.fi-vazio')
+  const img = fig.querySelector('img')
+
+  if (!f) {
+    if (data) { data.textContent = '' }
+    if (img) { img.remove() }
+    if (vazio) { vazio.style.display = '' }
+    return
+  }
+
+  if (data) { data.textContent = f.quando ? '· ' + f.quando : '' }
+  if (vazio) { vazio.style.display = 'none' }
+
+  const alvo = img || document.createElement('img')
+  alvo.src = f.url
+  alvo.alt = 'Fachada do imóvel'
+  alvo.loading = 'lazy'
+  if (!img) { fig.appendChild(alvo) }
 }
 
 /** Ícone de cada tipo de evento da linha do tempo. */
