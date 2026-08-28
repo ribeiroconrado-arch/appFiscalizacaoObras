@@ -70,7 +70,9 @@ class User extends Authenticatable
     /** As ordens de serviço em que este usuário foi designado. */
     public function ordensServico(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsToMany(OrdemServico::class, 'os_fiscais')->withTimestamps();
+        return $this->belongsToMany(OrdemServico::class, 'os_fiscais')
+            ->withPivot(['ciencia_em', 'assinatura'])
+            ->withTimestamps();
     }
 
     public function podeCurarCadastro(): bool

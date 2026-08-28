@@ -145,6 +145,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/os', [OrdemServicoController::class, 'store']);
         Route::get('/os/{ordem}', [OrdemServicoController::class, 'show']);
         Route::post('/os/{ordem}/situacao', [OrdemServicoController::class, 'situacao']);
+        Route::post('/os/{ordem}/ciencia', [OrdemServicoController::class, 'ciencia']);
 
         Route::get('/protocolos', [ProtocoloController::class, 'index']);
         Route::post('/protocolos', [ProtocoloController::class, 'store']);
@@ -179,4 +180,8 @@ Route::middleware('auth')->group(function () {
     // dompdf não consegue gerar (página de altura variável).
     Route::get('/documentos/{documento}/impressao', [DocumentoController::class, 'impressao'])
         ->name('documento.impressao');
+    // A via em papel da ordem de servico, no mesmo lugar e pelo mesmo motivo:
+    // devolve HTML para a impressora, e a tela abre com window.open.
+    Route::get('/os/{ordem}/impressao', [OrdemServicoController::class, 'impressao'])
+        ->name('os.impressao');
 });

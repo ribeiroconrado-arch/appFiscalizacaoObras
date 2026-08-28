@@ -1860,6 +1860,7 @@
     <div class="sec-title">A determinação</div>
     <div id="osf-corpo"></div>
 
+    <div id="osf-ciencia"></div>
     <div id="osf-tramitacao"></div>
   </div>
 </div>

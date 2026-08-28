@@ -40,10 +40,7 @@ class DocumentoImpressao
             'doc'    => $doc,
             'titulo' => mb_strtoupper($doc->rotuloTipo()),
             'orgao'  => $this->orgao(),
-            'rodape' => array_values(array_filter([
-                Parametro::get('rodape_protocolo'),
-                Parametro::get('rodape_ouvidoria'),
-            ])),
+            'rodape' => app(CabecalhoOficial::class)->rodape(),
             'brasao'      => $this->brasao($paraPdf),
             'imovel'      => $this->imovel($doc),
             'origemTexto' => $this->origem($doc),
@@ -56,39 +53,19 @@ class DocumentoImpressao
         ];
     }
 
-    /** Cabeçalho institucional — cadastrado em Parâmetros, nunca fixo no código. */
+    /**
+     * Cabeçalho institucional — agora em CabecalhoOficial, porque a ordem de
+     * serviço imprime o mesmo. Duas cópias envelheceriam separadas: mudar o
+     * nome da secretaria em Parâmetros corrigiria um papel e não o outro.
+     */
     private function orgao(): array
     {
-        return [
-            'nome'         => Parametro::get('orgao_nome'),
-            'secretaria'   => Parametro::get('orgao_secretaria'),
-            'departamento' => Parametro::get('orgao_departamento'),
-            'divisao'      => Parametro::get('orgao_divisao'),
-            'municipio'    => Parametro::get('orgao_municipio'),
-            'endereco'     => Parametro::get('orgao_endereco'),
-            'telefone'     => Parametro::get('orgao_telefone'),
-            'cnpj'         => Parametro::get('orgao_cnpj'),
-            'selo'         => Parametro::get('impressao_selo'),
-        ];
+        return app(CabecalhoOficial::class)->orgao();
     }
 
-    /**
-     * Brasão do município. Ausente, o cabeçalho fecha sem ele — travar a
-     * emissão de um auto porque falta uma imagem seria pior do que emiti-lo
-     * sem o símbolo.
-     *
-     * O dompdf não segue URL: recebe o caminho do arquivo no disco.
-     */
     private function brasao(bool $paraPdf): ?string
     {
-        foreach (['img/brasao-prefeitura.png', 'img/brasao.png'] as $relativo) {
-            $caminho = public_path($relativo);
-            if (is_file($caminho)) {
-                return $paraPdf ? $caminho : '/' . $relativo;
-            }
-        }
-
-        return null;
+        return app(CabecalhoOficial::class)->brasao($paraPdf);
     }
 
     /**

@@ -533,11 +533,16 @@ body.login-bg{
 .ctrl-corpo[hidden]{display:none}
 .ctrl-corpo b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;
   margin-bottom:6px;color:var(--chumbo)}
-.ctrl-corpo .seg{display:flex;gap:4px;margin-bottom:8px}
-.ctrl-corpo .seg button{flex:1;border:1.5px solid var(--f-bord);background:#fff;border-radius:999px;
+/* O `.seg` era estilizado SO dentro de `.ctrl-corpo`, o painel lateral do
+   mapa. Quando a correcao cadastral saiu de la para a janela, os blocos vieram
+   junto e perderam o ancestral — e "Descartar"/"Conferir" passaram a sair como
+   botao cru do navegador, com a moldura do sistema operacional. O segmentado e
+   um padrao, e padrao nao pode depender de onde foi colado. */
+.seg{display:flex;gap:4px;margin-bottom:8px}
+.seg button{flex:1;border:1.5px solid var(--f-bord);background:#fff;border-radius:999px;
   font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:var(--tx2);
   padding:4px 8px;cursor:pointer}
-.ctrl-corpo .seg button.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+.seg button.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
 .ctrl-corpo .leg{font-size:10.5px;color:var(--tx2);line-height:1.5}
 .ctrl-corpo .cor{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px}
 .ctrl-corpo .cor i{width:12px;height:12px;border-radius:3px;display:block;flex-shrink:0}
@@ -1924,3 +1929,27 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* A linha de marcar dia: data larga, horários estreitos, "+" fixo. */
 #os-dias .vs-nova-exig input[type=date]{flex:1.4}
 #os-dias .vs-nova-exig input[type=time]{flex:0 0 96px}
+
+
+/* O FOCO NAO PODE DESENHAR DUAS VEZES.
+   As caixas de texto longo moram dentro de `.field`, que ja marca o foco na
+   moldura inteira (`:focus-within`, com o anel verde). O <textarea> por dentro
+   continuava recebendo o outline PADRAO do navegador — um retangulo preto,
+   colado por dentro do campo, que aparecia so ao clicar. Sao dois avisos para
+   o mesmo evento, e o de dentro nao e nosso.
+
+   O anel de fora fica: e ele que atende a navegacao por teclado. */
+.field textarea:focus,
+.field input:focus,
+.field select:focus{outline:none}
+
+/* A caixa do memorial de coordenadas é a única de texto longo que vive fora de
+   um `.field` — e por isso saía com a moldura crua do navegador, destoando de
+   todos os outros campos da mesma janela. */
+#coo-texto{border:1.5px solid var(--f-bord);border-radius:var(--r);padding:8px 10px;
+  background:var(--sur);color:var(--tx);outline:none}
+#coo-texto:focus{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+
+/* Quem já deu ciência aparece com a data ao lado do nome: é o que distingue
+   "foi designado" de "ficou sabendo". */
+.os-ciente{font-size:10.5px;font-weight:700;color:var(--g)}

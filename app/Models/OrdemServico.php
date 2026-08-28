@@ -65,9 +65,19 @@ class OrdemServico extends Model
         ];
     }
 
+    /**
+     * Os designados, com a CIÊNCIA de cada um.
+     *
+     * `withPivot` é obrigatório: sem declarar as colunas, o Eloquent grava
+     * (updateExistingPivot escreve direto no banco) mas não LÊ — e a via
+     * impressa sairia sem a assinatura de quem acabou de assinar, sem erro
+     * nenhum para avisar.
+     */
     public function fiscais(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'os_fiscais')->withTimestamps();
+        return $this->belongsToMany(User::class, 'os_fiscais')
+            ->withPivot(['ciencia_em', 'assinatura'])
+            ->withTimestamps();
     }
 
     /** Os dias marcados, em ordem cronológica — que é a ordem em que se cumpre. */

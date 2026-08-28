@@ -69,7 +69,15 @@ async function carregarOs() {
   }
 }
 
-/** @param {Array<Object>} ordens */
+/**
+ * A lista no mesmo cartão do resto do sistema (`.mob-card.notif-card`).
+ *
+ * Era uma linha própria, inventada aqui. Duas listas com desenho diferente
+ * para o mesmo tipo de conteúdo obrigam quem usa a reaprender onde olhar a
+ * cada aba — e é a mesma pergunta nas duas: número, estado, e é comigo?
+ *
+ * @param {Array<Object>} ordens
+ */
 function renderOs(ordens) {
   const alvo = document.getElementById('lista-os')
 
@@ -79,25 +87,32 @@ function renderOs(ordens) {
   }
 
   alvo.innerHTML = ordens.map(o => {
+    const tags = `<span class="badge ${esc(o.situacao.classe)}">${esc(o.situacao.texto)}</span>`
+      + (o.prioridade === 'alta' ? '<span class="badge bd-cr">Alta</span>' : '')
+
     // Os designados são o dado que responde "isto é comigo?" — a pergunta que
-    // faz o fiscal abrir a tela. Por isso ficam na linha, e não escondidos na
-    // ficha.
-    const quem = o.fiscais.length
-      ? o.fiscais.slice(0, 3).map(esc).join(', ') + (o.fiscais.length > 3 ? ` +${o.fiscais.length - 3}` : '')
-      : '<i>sem designado</i>'
+    // faz o fiscal abrir a tela. Por isso ficam na primeira linha do corpo.
+    const linhas = [
+      ['Designados', o.fiscais.length
+        ? esc(o.fiscais.join(', '))
+        : '<span style="color:var(--red)">ninguém designado</span>'],
+      ['Quando', esc(o.quando)],
+      ['Emitida por', esc(o.emitente ?? '—')],
+    ]
+    if (o.imovel) { linhas.push(['Imóvel', esc(o.imovel)]) }
 
     return `
-      <div class="item os-item${o.prioridade === 'alta' ? ' os-alta' : ''}" onclick="abrirOs(${o.id})">
-        <div class="os-topo">
-          <span class="mono os-num">${esc(o.numero)}</span>
-          <span class="badge ${esc(o.situacao.classe)}">${esc(o.situacao.texto)}</span>
-          ${o.prioridade === 'alta' ? '<span class="badge bd-cr">Alta</span>' : ''}
-          <span class="os-nat">${esc(o.natureza)}</span>
+      <div class="mob-card notif-card" onclick="abrirOs(${o.id})">
+        <div class="mc-top">
+          <div class="notif-card-l1">
+            <span class="proto-badge">${esc(o.numero)}</span>
+            <span class="notif-card-tipo">${esc(o.natureza)}</span>
+          </div>
+          <div class="mc-acoes">${tags}</div>
         </div>
         <div class="os-obj">${esc(o.objeto)}</div>
-        <div class="os-linha">
-          <span class="os-quem">${quem}</span>
-          <span class="os-quando">${esc(o.quando)}</span>
+        <div class="notif-card-linhas">
+          ${linhas.map(([r, v]) => `<div><span class="notif-card-rot">${r}</span>${v}</div>`).join('')}
         </div>
       </div>`
   }).join('')
@@ -133,7 +148,9 @@ async function abrirOs(id) {
         linha('Natureza', esc(o.natureza_rotulo ?? ''))
       + linha('Quando', esc(o.quando))
       + (dias ? `<div class="sec-title">Dias marcados</div>${dias}` : '')
-      + linha('Designados', o.fiscais.map(f => esc(f.name)).join(', ') || '<i>nenhum</i>')
+      + linha('Designados', o.fiscais.map(f => esc(f.name)
+          + (f.ciencia_em ? ` <span class="os-ciente">ciente em ${esc(f.ciencia_em)}</span>` : ''))
+          .join('<br>') || '<i>nenhum</i>')
       + linha('Emitida por', esc(o.emitente ?? '—') + (o.emitida_em ? ' · ' + esc(o.emitida_em) : ''))
       + linha('Imóvel', o.imovel ? esc(o.imovel) : '')
       + linha('Protocolo', o.protocolo ? esc(o.protocolo) : '')
@@ -141,11 +158,85 @@ async function abrirOs(id) {
       + (o.encerramento ? `<div class="sec-title">Encerramento</div><div class="os-desc">${esc(o.encerramento)}</div>` : '')
 
     renderTramitacaoOs(o)
+    renderCienciaOs(o)
     openModal('m-os')
   } catch (e) {
     console.error(e)
     toast('Não foi possível abrir a ordem', 'err')
   }
+}
+
+/**
+ * A ciência e a via em papel.
+ *
+ * Uma ordem que ninguém confirma ter recebido não delega: na hora de cobrar,
+ * "não fiquei sabendo" não se distingue de "fiquei e não fiz". Assinar pelo
+ * sistema é o caminho curto para isso — e quem preferir o papel imprime, que
+ * a via sai com a linha para assinar à mão.
+ *
+ * @param {Object} o
+ */
+function renderCienciaOs(o) {
+  const alvo = document.getElementById('osf-ciencia')
+  if (!alvo) { return }
+
+  const imprimir = `<button class="btn out-green sm" onclick="imprimirOs(${o.id})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <path d="M6 14h12v8H6z"/>
+      </svg> Imprimir</button>`
+
+  if (!o.sou_designado) {
+    alvo.innerHTML = `<div class="btn-row" style="margin-top:10px">${imprimir}</div>`
+    return
+  }
+
+  alvo.innerHTML = o.minha_ciencia
+    ? `<div class="cad-nota" style="margin-top:10px">Você deu ciência nesta ordem.</div>
+       <div class="btn-row">${imprimir}</div>`
+    : `<div class="btn-row" style="margin-top:10px">
+         ${imprimir}
+         <div style="flex:1"></div>
+         <button class="btn primary sm" onclick="darCienciaOs(${o.id})">Assinar ciência</button>
+       </div>`
+}
+
+/** @param {number} id */
+function imprimirOs(id) {
+  // Aba nova, e não fetch: é uma página que se manda para a impressora.
+  window.open('/os/' + id + '/impressao', '_blank')
+}
+
+/**
+ * Assina a ordem com a assinatura do perfil.
+ *
+ * O traço é copiado do perfil para a ordem no servidor, e não lido na hora de
+ * imprimir: quem trocar a assinatura depois não muda o que já foi assinado.
+ *
+ * @param {number} id
+ */
+function darCienciaOs(id) {
+  confirmarAcao({
+    titulo: 'Assinar ciência',
+    mensagem: 'Confirmar que você tomou conhecimento desta ordem de serviço? '
+            + 'A sua assinatura do perfil vai para a via impressa.',
+    textoBtn: 'Assinar',
+    onConfirm: async () => {
+      const r = await fetch(`/api/os/${id}/ciencia`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+        },
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { throw new Error(d.message || 'HTTP ' + r.status) }
+
+      toast('Ciência registrada')
+      abrirOs(id)     // a ficha se reabre já mostrando a data
+    },
+  })
 }
 
 /**

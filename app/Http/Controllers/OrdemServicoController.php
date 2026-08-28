@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\OrdemServico;
 use App\Models\User;
+use App\Services\CabecalhoOficial;
+use Illuminate\Http\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -118,7 +120,17 @@ class OrdemServicoController extends Controller
             'encerrada_em' => $ordem->encerrada_em?->format('d/m/Y H:i'),
             'imovel'    => $ordem->lote ? trim("Quadra {$ordem->lote->quadra} · Lote {$ordem->lote->numero_lote} — {$ordem->lote->bairro}") : null,
             'protocolo' => $ordem->protocolo?->numero,
-            'fiscais'   => $ordem->fiscais->map(fn ($f) => ['id' => $f->id, 'name' => $f->name]),
+            'fiscais'   => $ordem->fiscais->map(fn ($f) => [
+                'id' => $f->id, 'name' => $f->name,
+                'ciencia_em' => $f->pivot->ciencia_em
+                    ? \Illuminate\Support\Carbon::parse($f->pivot->ciencia_em)->format('d/m/Y H:i')
+                    : null,
+            ]),
+            // O que a tela precisa saber sobre QUEM está olhando: se lhe cabe
+            // dar ciência, e se já deu.
+            'sou_designado' => $ordem->fiscais->contains('id', request()->user()->id),
+            'minha_ciencia' => $ordem->fiscais->firstWhere('id', request()->user()->id)
+                ?->pivot?->ciencia_em !== null,
             'jornadas'  => $ordem->jornadas->map(fn ($j) => [
                 'id' => $j->id,
                 'data' => $j->data->format('Y-m-d'),
@@ -226,6 +238,74 @@ class OrdemServicoController extends Controller
         return response()->json([
             'message' => 'Ordem atualizada.',
             'situacao_tag' => $ordem->fresh()->situacaoTag(),
+        ]);
+    }
+
+    /**
+     * POST /api/os/{ordem}/ciencia — o fiscal assina a ordem pelo sistema.
+     *
+     * A assinatura é COPIADA do perfil para a ligação, e não lida de lá na
+     * hora de imprimir: o traço guardado no perfil pode mudar depois, e a via
+     * impressa tem de continuar mostrando o que ele usou naquele dia.
+     */
+    public function ciencia(Request $request, OrdemServico $ordem): JsonResponse
+    {
+        $u = $request->user();
+
+        $vinculo = $ordem->fiscais()->where('users.id', $u->id)->first();
+        if (! $vinculo) {
+            return response()->json([
+                'message' => 'Só quem foi designado dá ciência nesta ordem.',
+            ], 403);
+        }
+
+        if ($vinculo->pivot->ciencia_em) {
+            return response()->json([
+                'message' => 'Você já deu ciência nesta ordem.',
+            ], 409);
+        }
+
+        if (! $u->assinatura) {
+            return response()->json([
+                'message' => 'Cadastre a sua assinatura no perfil antes de dar ciência.',
+            ], 422);
+        }
+
+        $ordem->fiscais()->updateExistingPivot($u->id, [
+            'ciencia_em' => now(),
+            'assinatura' => $u->assinatura,
+        ]);
+
+        return response()->json([
+            'message'    => 'Ciência registrada.',
+            'ciencia_em' => now()->format('d/m/Y H:i'),
+        ]);
+    }
+
+    /**
+     * GET /os/{ordem}/impressao — a via em papel.
+     *
+     * Fora do prefixo /api de propósito, como a do documento: devolve HTML
+     * para a impressora, e o front abre com window.open, não com fetch.
+     */
+    public function impressao(Request $request, OrdemServico $ordem, CabecalhoOficial $cabecalho): Response
+    {
+        $u = $request->user();
+        $designado = $ordem->fiscais()->where('users.id', $u->id)->exists();
+
+        if (! $u->isAdmin() && ! $designado) {
+            abort(403, 'Esta ordem não é sua.');
+        }
+
+        $ordem->load(['fiscais', 'emitente', 'jornadas',
+                      'lote:id,bairro,quadra,numero_lote', 'protocolo:id,numero']);
+
+        return response()->view('impressao.os', [
+            'os'        => $ordem,
+            'orgao'     => $cabecalho->orgao(),
+            'brasao'    => $cabecalho->brasao(false),
+            'rodape'    => $cabecalho->rodape(),
+            'navegador' => true,
         ]);
     }
 
