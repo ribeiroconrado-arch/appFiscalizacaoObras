@@ -243,10 +243,24 @@
         <table class="ciencia">
           <tr>
             <td>
+              {{-- A assinatura de quem DETERMINA é o que transforma um pedido
+                   em ordem: é dela que o fiscal se vale se depois perguntarem
+                   por que ele estava ali. --}}
+              @if ($os->assinatura_emitente)
+                <img class="assina" src="{{ $os->assinatura_emitente }}" alt="">
+              @endif
               <div class="linha">
                 <span class="nome">{{ $os->emitente?->name ?? '—' }}</span>
+                @if ($os->emitente?->matricula)
+                  <span class="papel"> · matrícula {{ $os->emitente->matricula }}</span>
+                @endif
                 <span class="papel"> · coordenação</span>
-                <div class="quando">Emitida em {{ $os->created_at?->format('d/m/Y H:i') }}</div>
+                <div class="quando">
+                  Emitida em {{ $os->created_at?->format('d/m/Y H:i') }}
+                  @if ($os->assinada_em)
+                    · assinada em {{ $os->assinada_em->format('d/m/Y H:i') }}, pelo sistema
+                  @endif
+                </div>
               </div>
             </td>
             <td></td>

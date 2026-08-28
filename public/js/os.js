@@ -187,18 +187,30 @@ function renderCienciaOs(o) {
         <path d="M6 14h12v8H6z"/>
       </svg> Imprimir</button>`
 
-  if (!o.sou_designado) {
-    alvo.innerHTML = `<div class="btn-row" style="margin-top:10px">${imprimir}</div>`
-    return
-  }
+  // Quem EMITIU assina como autoridade que determinou; quem foi DESIGNADO
+  // assina a ciência. São dois papéis, em dois blocos do papel — e quem
+  // emitiu para si mesmo assina os dois, um de cada vez.
+  const pendencia = o.sou_emitente && o.falta_assinar
+    ? { texto: 'Assinar a ordem', nota: 'Falta a sua assinatura como quem determinou.' }
+    : o.sou_designado && !o.minha_ciencia
+      ? { texto: 'Assinar ciência', nota: null }
+      : null
 
-  alvo.innerHTML = o.minha_ciencia
-    ? `<div class="cad-nota" style="margin-top:10px">Você deu ciência nesta ordem.</div>
-       <div class="btn-row">${imprimir}</div>`
-    : `<div class="btn-row" style="margin-top:10px">
+  const feito = []
+  if (o.sou_emitente && !o.falta_assinar) {
+    feito.push('Você assinou como quem determinou' + (o.assinada_em ? ' em ' + esc(o.assinada_em) : '') + '.')
+  }
+  if (o.sou_designado && o.minha_ciencia) { feito.push('Você deu ciência nesta ordem.') }
+
+  alvo.innerHTML =
+      (feito.length ? `<div class="cad-nota" style="margin-top:10px">${feito.join(' ')}</div>` : '')
+    + (pendencia?.nota ? `<div class="cad-nota">${esc(pendencia.nota)}</div>` : '')
+    + `<div class="btn-row" style="margin-top:${feito.length || pendencia?.nota ? '0' : '10px'}">
          ${imprimir}
          <div style="flex:1"></div>
-         <button class="btn primary sm" onclick="darCienciaOs(${o.id})">Assinar ciência</button>
+         ${pendencia
+           ? `<button class="btn primary sm" onclick="darCienciaOs(${o.id})">${esc(pendencia.texto)}</button>`
+           : ''}
        </div>`
 }
 
@@ -217,10 +229,16 @@ function imprimirOs(id) {
  * @param {number} id
  */
 function darCienciaOs(id) {
+  const o = osState.aberta
+  const comoEmitente = o?.sou_emitente && o?.falta_assinar
+
   confirmarAcao({
-    titulo: 'Assinar ciência',
-    mensagem: 'Confirmar que você tomou conhecimento desta ordem de serviço? '
-            + 'A sua assinatura do perfil vai para a via impressa.',
+    titulo: comoEmitente ? 'Assinar a ordem' : 'Assinar ciência',
+    mensagem: comoEmitente
+      ? 'Assinar como quem determinou este serviço? A sua assinatura do perfil '
+        + 'vai para a via impressa, no bloco da determinação.'
+      : 'Confirmar que você tomou conhecimento desta ordem de serviço? '
+        + 'A sua assinatura do perfil vai para a via impressa.',
     textoBtn: 'Assinar',
     onConfirm: async () => {
       const r = await fetch(`/api/os/${id}/ciencia`, {
@@ -233,7 +251,7 @@ function darCienciaOs(id) {
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { throw new Error(d.message || 'HTTP ' + r.status) }
 
-      toast('Ciência registrada')
+      toast(d.message || 'Assinatura registrada')
       abrirOs(id)     // a ficha se reabre já mostrando a data
     },
   })

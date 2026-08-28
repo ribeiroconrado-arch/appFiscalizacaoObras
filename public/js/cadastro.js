@@ -203,8 +203,16 @@ function pintarBarraCadastral() {
   const barra = document.getElementById('cad-barra')
   if (!barra) { return }
 
-  barra.hidden = !cadModo
-  if (!cadModo) { return }
+  // A barra e `position:fixed` e mora FORA de `#t-mapa` — precisa estar fora
+  // para flutuar sobre o mapa inteiro. O preco e que ela nao some junto com a
+  // tela: quem trocava de modulo com um modo cadastral em curso levava a barra
+  // para o Painel, para os Documentos e para o Protocolo & OS.
+  //
+  // Esconder, e nao sair do modo: o trabalho em curso (lotes marcados, desenho
+  // pendente) continua de pe, e volta a aparecer ao voltar para o mapa.
+  const noMapa = typeof mapaVisivel !== 'function' || mapaVisivel()
+  barra.hidden = !cadModo || !noMapa
+  if (!cadModo || !noMapa) { return }
 
   const n = selState.ids.size
   const emAto = atoState.tipo === 'unificacao'

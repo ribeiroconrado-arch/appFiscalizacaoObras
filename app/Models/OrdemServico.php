@@ -62,6 +62,7 @@ class OrdemServico extends Model
             'inicio'       => 'date',
             'fim'          => 'date',
             'encerrada_em' => 'datetime',
+            'assinada_em'  => 'datetime',
         ];
     }
 

@@ -554,6 +554,12 @@ function irPara(destino) {
 
   marcarModuloNoSubcabecalho(destino)
 
+  // Sobreposicoes do mapa que vivem fora de `#t-mapa` nao somem sozinhas ao
+  // trocar de modulo — a barra do modo cadastral e a unica hoje, e ela sabe
+  // se esconder quando o mapa nao esta a vista.
+  if (typeof pintarBarraCadastral === 'function') { pintarBarraCadastral() }
+  if (typeof fecharPaineisMapa === 'function' && destino !== 'mapa') { fecharPaineisMapa() }
+
   if (destino === 'busca') {
     prepararBusca()
   } else if (destino === 'mapa') {

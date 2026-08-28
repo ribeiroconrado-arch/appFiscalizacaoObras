@@ -116,6 +116,12 @@ class OrdemServicoController extends Controller
             'prioridade'=> $ordem->prioridade,
             'emitente'  => $ordem->emitente?->name,
             'emitida_em'=> $ordem->created_at?->format('d/m/Y H:i'),
+            'assinada_em' => $ordem->assinada_em?->format('d/m/Y H:i'),
+            // Quem emitiu pode ter emitido sem ter assinatura cadastrada no
+            // perfil. A ordem vale assim mesmo, mas a via sai com a linha em
+            // branco — e é ele, e mais ninguém, quem pode fechá-la depois.
+            'sou_emitente'  => $ordem->emitida_por === request()->user()->id,
+            'falta_assinar' => $ordem->assinatura_emitente === null,
             'encerramento' => $ordem->encerramento,
             'encerrada_em' => $ordem->encerrada_em?->format('d/m/Y H:i'),
             'imovel'    => $ordem->lote ? trim("Quadra {$ordem->lote->quadra} · Lote {$ordem->lote->numero_lote} — {$ordem->lote->bairro}") : null,
@@ -173,6 +179,13 @@ class OrdemServicoController extends Controller
                 'fim'        => $d['regime'] === 'periodo' ? ($d['fim'] ?? null) : null,
                 'prioridade' => $d['prioridade'] ?? 'normal',
                 'emitida_por'=> $request->user()->id,
+                // Quem determina assina no ato: emitir a ordem É o ato dele, e
+                // pedir um segundo clique para confirmar o que ele acabou de
+                // fazer não acrescenta nada. Cópia, e não referência — quem
+                // redesenhar a própria assinatura amanhã não reescreve o que
+                // já assinou (mesmo princípio de LavraturaService).
+                'assinatura_emitente' => $request->user()->assinatura,
+                'assinada_em'         => $request->user()->assinatura ? now() : null,
                 'lote_id'    => $d['lote_id'] ?? null,
                 'protocolo_id' => $d['protocolo_id'] ?? null,
             ]);
@@ -251,6 +264,28 @@ class OrdemServicoController extends Controller
     public function ciencia(Request $request, OrdemServico $ordem): JsonResponse
     {
         $u = $request->user();
+
+        // Quem EMITIU assina como autoridade que determinou, e não como quem
+        // tomou ciência — são dois papéis, e o papel sai impresso em blocos
+        // diferentes. Um coordenador designado na própria ordem assina os
+        // dois, cada um no seu lugar.
+        if ($ordem->emitida_por === $u->id && ! $ordem->assinatura_emitente) {
+            if (! $u->assinatura) {
+                return response()->json([
+                    'message' => 'Cadastre a sua assinatura no perfil antes de assinar.',
+                ], 422);
+            }
+
+            $ordem->update([
+                'assinatura_emitente' => $u->assinatura,
+                'assinada_em'         => now(),
+            ]);
+
+            return response()->json([
+                'message'    => 'Ordem assinada.',
+                'ciencia_em' => now()->format('d/m/Y H:i'),
+            ]);
+        }
 
         $vinculo = $ordem->fiscais()->where('users.id', $u->id)->first();
         if (! $vinculo) {
