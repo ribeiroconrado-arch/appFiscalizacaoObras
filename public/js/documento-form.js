@@ -161,7 +161,11 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null 
   aplicarEstadoDoc()
   openModal('m-doc')
 
-  if (!documento) await sugerirDaUltimaVistoria(fdState.lote.id)
+  // `?.` porque a peça PODE nascer sem imóvel: é o caminho de quem abre o
+  // documento com o que tem em campo e amarra o lote depois, pela aba Imóvel
+  // (ver DocumentoController::storeSemLote). Sem imóvel não há última vistoria
+  // a consultar, e a função já trata o id ausente limpando a caixa.
+  if (!documento) await sugerirDaUltimaVistoria(fdState.lote?.id ?? null)
 }
 
 /** Campos em branco, com os padrões de um documento novo. */
