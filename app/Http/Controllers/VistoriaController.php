@@ -321,6 +321,10 @@ class VistoriaController extends Controller
         $d = $request->validate([
             'data_hora'          => ['required', 'date_format:Y-m-d\TH:i'],
             'situacao'           => ['required', Rule::in(array_keys(Vistoria::SITUACOES))],
+            // A finalidade decide o que a vistoria pergunta — ver
+            // Vistoria::FINALIDADES. Sem ela, o padrão é fiscalização de obra,
+            // que é o que a tela fazia antes de haver escolha.
+            'finalidade'         => ['nullable', Rule::in(array_keys(Vistoria::FINALIDADES))],
             'observacoes'        => ['nullable', 'string', 'max:5000'],
             'latitude'           => ['nullable', 'numeric', 'between:-90,90'],
             'longitude'          => ['nullable', 'numeric', 'between:-180,180'],
@@ -354,6 +358,9 @@ class VistoriaController extends Controller
             'area_construida_aferida_m2' => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'area_metodo'        => ['nullable', Rule::in(array_keys(Vistoria::METODOS_AREA))],
             'fase_obra'          => ['nullable', Rule::in(array_keys(Vistoria::FASES_OBRA))],
+            'conforme_projeto'   => ['nullable', Rule::in(array_keys(Vistoria::CONFORMIDADES))],
+            'uso_constatado'     => ['nullable', Rule::in(array_keys(Vistoria::USOS))],
+            'ano_construcao_estimado' => ['nullable', 'integer', 'min:1900', 'max:' . (date('Y') + 1)],
 
             // ── o relatório ──
             // `artigos[]` continua sendo o CONJUNTO de dispositivos que a
@@ -382,7 +389,11 @@ class VistoriaController extends Controller
 
         // Área medida sem dizer COMO é número que não se sustenta em defesa. E
         // método sem área é campo órfão. Os dois andam juntos ou nenhum anda.
-        if (! empty($d['area_construida_aferida_m2']) && empty($d['area_metodo'])) {
+        $finalidade = $d['finalidade'] ?? 'obras';
+        $blocos = Vistoria::FINALIDADES[$finalidade]['campos'];
+
+        if (in_array('area', $blocos, true)
+            && ! empty($d['area_construida_aferida_m2']) && empty($d['area_metodo'])) {
             return response()->json([
                 'message' => 'Informe como a área foi obtida (trena, estimativa, projeto ou croqui).',
                 'errors'  => ['area_metodo' => ['Escolha o método.']],
@@ -399,7 +410,7 @@ class VistoriaController extends Controller
             ], 422);
         }
 
-        $vistoria = DB::transaction(function () use ($request, $lote, $u, $d) {
+        $vistoria = DB::transaction(function () use ($request, $lote, $u, $d, $finalidade) {
             $v = Vistoria::create([
                 'lote_id'     => $lote->id,
                 'fiscal_id'   => $u->id,
@@ -412,6 +423,7 @@ class VistoriaController extends Controller
                 'longitude'   => $d['longitude'] ?? null,
                 'accuracy'    => $d['accuracy'] ?? null,
 
+                'finalidade'                => $finalidade,
                 'acompanhante_nome'         => $d['acompanhante_nome'] ?? null,
                 'acompanhante_qualificacao' => $d['acompanhante_qualificacao'] ?? null,
                 'alvara_situacao'    => $d['alvara_situacao'] ?? null,
@@ -419,7 +431,19 @@ class VistoriaController extends Controller
                 'area_construida_aferida_m2' => $d['area_construida_aferida_m2'] ?? null,
                 'area_metodo'        => $d['area_metodo'] ?? null,
                 'fase_obra'          => $d['fase_obra'] ?? null,
+                'conforme_projeto'   => $d['conforme_projeto'] ?? null,
+                'ano_construcao_estimado' => $d['ano_construcao_estimado'] ?? null,
+                'uso_constatado'     => $d['uso_constatado'] ?? null,
             ]);
+
+            // O que veio sobrando é apagado, e não guardado "por via das
+            // dúvidas": campo fora da finalidade é dado que ninguém conferiu
+            // em campo, e dado não conferido com cara de conferido é pior, num
+            // processo administrativo, do que campo vazio.
+            $fora = Vistoria::colunasForaDa($finalidade);
+            if ($fora) {
+                $v->forceFill(array_fill_keys($fora, null))->save();
+            }
 
             if (! empty($d['irregularidades'])) {
                 $v->irregularidades()->sync($d['irregularidades']);
@@ -505,6 +529,7 @@ class VistoriaController extends Controller
             'vistoria' => [
                 'id'          => $vistoria->id,
                 'data_hora'   => $vistoria->data_hora?->format('d/m/Y H:i'),
+                'finalidade'  => $vistoria->finalidadeRotulo(),
                 'area'        => $vistoria->areaAferidaRotulo(),
                 'exigencias'  => $vistoria->exigencias()->count(),
                 'artigos'     => $vistoria->itensDeArtigo()->count() ?: $vistoria->artigos()->count(),

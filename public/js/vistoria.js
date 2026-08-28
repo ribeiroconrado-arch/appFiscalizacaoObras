@@ -27,11 +27,13 @@ const vState = {
   /** @type {number|null} índice do item aberto na janela de edição */ itemAberto: null,
   /** @type {Array<Object>} artigos sugeridos pelas irregularidades marcadas */ artigos: [],
   /** @type {Set<number>} artigos confirmados pelo fiscal */ artigosMarcados: new Set(),
-  /** @type {{alvara:string, fase:string}} escolhas em botão */
-  obra: { alvara: '', fase: '' },
+  /** @type {string} para que serve esta vistoria — decide os passos */
+  finalidade: 'obras',
+  /** @type {{alvara:string, fase:string, projeto:string, uso:string}} escolhas em botão */
+  obra: { alvara: '', fase: '', projeto: '', uso: '' },
   /** @type {{lat:number, lon:number, prec:number}|null} posição da vistoria */ gps: null,
-  /** @type {number} passo visível, de 1 a 5 */ passo: 1,
-  /** @type {number} maior passo já alcançado — é o que marca ✓ na barra */ visitados: 1,
+  /** @type {string} chave do passo visível */ passo: 'id',
+  /** @type {number} índice do passo mais avançado — é o que marca ✓ na barra */ visitados: 0,
   /** @type {Array<string>|null} marcas do rascunho à espera do catálogo */ rascunhoIrreg: null,
   /** @type {boolean} a escolha de artigos veio do rascunho, não da sugestão */ artigosDoRascunho: false,
   /** @type {boolean} a tela está sendo montada — não gravar rascunho ainda */ abrindo: false,
@@ -236,14 +238,18 @@ async function novaVistoria() {
   document.getElementById('nv-data').value = dataHojeLocal()
   document.getElementById('nv-hora').value = horaAgoraLocal()
   syncDataHora()
-  document.getElementById('nv-situacao').value = 'irregular'
+  // "Regular" e o estado de quem ainda nao constatou nada — e e o desfecho da
+  // maioria das vistorias. Nascer "Irregular" fazia a tela pedir uma
+  // irregularidade do catalogo para deixar avancar, mesmo numa atualizacao
+  // cadastral ou num auto de constatacao, onde nem se procura irregularidade.
+  document.getElementById('nv-situacao').value = 'regular'
 
   // A posição já capturada no mapa serve de ponto de partida; o botão do
   // passo 1 é o que a atualiza para o lugar onde o fiscal está agora.
   if (state.pos) { vState.gps = { ...state.pos } }
   pintarGps()
 
-  irPasso(1)
+  irPasso('id')
   restaurarRascunho()
   vState.abrindo = false
   await carregarProtocolosCadastrais(f.properties.id)
@@ -259,14 +265,16 @@ function zerarVistoria() {
   vState.itemAberto = null
   vState.artigos = []
   vState.artigosMarcados = new Set()
-  vState.obra = { alvara: '', fase: '' }
+  vState.finalidade = 'obras'
+  vState.obra = { alvara: '', fase: '', projeto: '', uso: '' }
   vState.gps = null
-  vState.passo = 1
-  vState.visitados = 1
+  vState.passo = 'id'
+  vState.visitados = 0
 
   const põe = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v } }
   põe('nv-obs', ''); põe('nv-area', ''); põe('nv-area-metodo', '')
   põe('nv-acomp-nome', ''); põe('nv-acomp-qual', ''); põe('nv-alvara-numero', '')
+  põe('nv-ano', '')
   põe('nv-exig-texto', ''); põe('nv-exig-prazo', '')
   document.getElementById('nv-alvara-num-campo').hidden = true
   document.getElementById('nv-rascunho').hidden = true
@@ -276,7 +284,7 @@ function zerarVistoria() {
     c.checked = false
     c.closest('.chk-item')?.classList.remove('marcado')
   })
-  pintarOpcoes(); renderRelatorio()
+  pintarOpcoes(); pintarFinalidade(); renderRelatorio()
   document.getElementById('nv-artigos').innerHTML =
     '<div class="leg">Marque as irregularidades para ver os artigos que as enquadram.</div>'
 }
@@ -294,11 +302,13 @@ function fecharVistoria() {
  * @param {number} d -1 ou +1
  */
 function passo(d) {
-  const alvo = vState.passo + d
-  if (alvo < 1 || alvo > PASSOS) { return }
+  const lista = passosDaVistoria()
+  const i = lista.findIndex(x => x.k === vState.passo)
+  const alvo = lista[i + d]
+  if (!alvo) { return }
   // Só barra ao AVANÇAR: voltar para conferir nunca pode ser impedido.
   if (d > 0 && !passoCompleto(vState.passo)) { return }
-  irPasso(alvo)
+  irPasso(alvo.k)
 }
 
 /**
@@ -306,53 +316,139 @@ function passo(d) {
  * interrogatório, e o que de fato não pode faltar é conferido na gravação.
  * @param {number} n
  */
-/** Quantos passos a tela tem. Era 5; "Constatações" e "Fotos" viraram um. */
-const PASSOS = 4
+/**
+ * As finalidades e o que cada uma pergunta.
+ *
+ * Espelha Vistoria::FINALIDADES no servidor — e o espelho é conferido por
+ * prova, porque duas listas que se separam em silêncio é como um campo passa
+ * a ser oferecido aqui e ignorado lá.
+ */
+const FINALIDADES = {
+  obras:         { passo: 'A obra',        campos: ['alvara', 'area', 'fase'] },
+  cadastral:     { passo: 'O imóvel',      campos: ['area', 'uso', 'ano'] },
+  habite_se:     { passo: 'A conclusão',   campos: ['alvara', 'area', 'projeto', 'fase'] },
+  regularizacao: { passo: 'A construção',  campos: ['alvara', 'area', 'ano', 'uso', 'projeto'] },
+  constatacao:   { passo: null,            campos: [] },
+}
 
-function passoCompleto(n) {
-  if (n === 1 && !document.getElementById('nv-datahora').value) {
+/**
+ * Os passos da finalidade corrente, por CHAVE e não por número.
+ *
+ * O auto de constatação não tem passo de medição: são três passos, e o
+ * "Relatório" é o segundo. Numerar os passos no código faria essa variação
+ * virar aritmética espalhada por toda parte.
+ *
+ * @returns {Array<{k:string, rotulo:string}>}
+ */
+function passosDaVistoria() {
+  const f = FINALIDADES[vState.finalidade] || FINALIDADES.obras
+  const lista = [{ k: 'id', rotulo: 'Identificação' }]
+  if (f.passo) { lista.push({ k: 'obra', rotulo: f.passo }) }
+  lista.push({ k: 'rel', rotulo: 'Relatório' })
+  lista.push({ k: 'rev', rotulo: 'Revisão' })
+  return lista
+}
+
+/**
+ * O que impede de avançar. Deliberadamente pouco: o formulário não pode virar
+ * interrogatório, e o que de fato não pode faltar é conferido na gravação.
+ *
+ * @param {string} k chave do passo
+ */
+function passoCompleto(k) {
+  if (k === 'id' && !document.getElementById('nv-datahora').value) {
     toast('Informe data e hora da vistoria', 'err'); return false
   }
-  if (n === 2) {
+  if (k === 'obra') {
     const area = document.getElementById('nv-area').value
     if (area && !document.getElementById('nv-area-metodo').value) {
       toast('Diga como a área foi obtida', 'err'); return false
     }
   }
-  if (n === 3 && document.getElementById('nv-situacao').value === 'irregular'
+  if (k === 'rel' && document.getElementById('nv-situacao').value === 'irregular'
       && !document.querySelectorAll('#nv-checklist input:checked').length) {
     toast('Marque ao menos uma irregularidade', 'err'); return false
   }
   return true
 }
 
-/** @param {number} n passo de 1 a 5 */
-function irPasso(n) {
-  vState.passo = n
-  vState.visitados = Math.max(vState.visitados, n)
+/** @param {string} k chave do passo: 'id', 'obra', 'rel' ou 'rev' */
+function irPasso(k) {
+  const lista = passosDaVistoria()
+  if (!lista.some(x => x.k === k)) { k = lista[0].k }   // o passo sumiu com a finalidade
 
-  document.querySelectorAll('#nv-passos .vs-passo').forEach(b => {
-    const i = Number(b.dataset.passo)
-    b.classList.toggle('at', i === n)
-    b.classList.toggle('feito', i < vState.visitados && i !== n)
-    // Em tela estreita a barra rola, e os passos 4 e 5 ficam fora de vista: o
-    // passo atual tem de se trazer para dentro, ou o fiscal perde a única
-    // referência de onde está.
-    if (i === n) { b.scrollIntoView({ block: 'nearest', inline: 'center' }) }
-  })
+  vState.passo = k
+  const i = lista.findIndex(x => x.k === k)
+  vState.visitados = Math.max(vState.visitados, i)
+
+  pintarBarraDePassos()
   document.querySelectorAll('.vs-painel').forEach(p => {
-    p.classList.toggle('at', p.id === 'nv-p' + n)
+    p.classList.toggle('at', p.dataset.passo === k)
   })
 
-  document.getElementById('nv-voltar').hidden = n === 1
-  document.getElementById('nv-avancar').hidden = n === PASSOS
-  document.getElementById('nv-gravar').hidden = n !== PASSOS
+  document.getElementById('nv-voltar').hidden = i === 0
+  document.getElementById('nv-avancar').hidden = i === lista.length - 1
+  document.getElementById('nv-gravar').hidden = i !== lista.length - 1
   const corpo = document.querySelector('.vs-corpo')
   if (corpo) { corpo.scrollTop = 0 }
 
-  if (n === 3) { sugerirArtigos() }
-  if (n === PASSOS) { renderRevisao() }
+  if (k === 'rel') { sugerirArtigos() }
+  if (k === 'rev') { renderRevisao() }
   salvarRascunho()
+}
+
+/** A barra do topo — montada, e não fixa, porque os passos variam. */
+function pintarBarraDePassos() {
+  const barra = document.getElementById('nv-passos')
+  if (!barra) { return }
+  const lista = passosDaVistoria()
+
+  barra.innerHTML = lista.map((p, i) => {
+    const at = p.k === vState.passo
+    const feito = i < vState.visitados && !at
+    return `<button type="button" class="vs-passo${at ? ' at' : ''}${feito ? ' feito' : ''}"
+              data-passo="${p.k}" onclick="irPasso('${p.k}')">
+              <span class="n">${i + 1}</span>${esc(p.rotulo)}</button>`
+  }).join('')
+
+  // Em tela estreita a barra rola: o passo atual tem de se trazer para dentro,
+  // ou o fiscal perde a única referência de onde está.
+  barra.querySelector('.vs-passo.at')?.scrollIntoView({ block: 'nearest', inline: 'center' })
+}
+
+/**
+ * A escolha que decide o resto da tela.
+ *
+ * Trocar a finalidade REFAZ os passos na hora — inclusive fazendo o segundo
+ * desaparecer, no auto de constatação. O que já foi digitado nos campos que
+ * somem continua na tela (só escondido) e é descartado na gravação pelo
+ * servidor, que é quem tem a palavra final sobre o que pertence a quê.
+ *
+ * @param {string} valor
+ */
+function escolherFinalidade(valor) {
+  if (!FINALIDADES[valor]) { return }
+  vState.finalidade = valor
+  pintarFinalidade()
+
+  // Se o passo em que se está deixou de existir, cai no relatório — que é o
+  // passo que toda finalidade tem.
+  const lista = passosDaVistoria()
+  irPasso(lista.some(x => x.k === vState.passo) ? vState.passo : 'rel')
+  salvarRascunho()
+}
+
+/** Pinta a escolha e mostra só os blocos que a finalidade pede. */
+function pintarFinalidade() {
+  const f = FINALIDADES[vState.finalidade] || FINALIDADES.obras
+
+  document.querySelectorAll('#nv-finalidade .vs-op').forEach(b =>
+    b.classList.toggle('at', b.dataset.valor === vState.finalidade))
+
+  document.querySelectorAll('#nv-p-obra [data-bloco]').forEach(bloco => {
+    bloco.hidden = !f.campos.includes(bloco.dataset.bloco)
+  })
+  pintarBarraDePassos()
 }
 
 /**
@@ -364,8 +460,8 @@ function irPasso(n) {
  */
 function vistoriaRapida() {
   if (!passoCompleto(1)) { return }
-  vState.visitados = PASSOS
-  irPasso(3)
+  vState.visitados = passosDaVistoria().length - 1
+  irPasso('rel')
   // A foto entra pelo mesmo botão do relatório — o atalho só pula o que não
   // se preenche numa ronda de rotina, e não inventa um segundo caminho.
   setTimeout(() => escolherArquivoDeFoto(), 60)
@@ -431,11 +527,25 @@ function escolherFase(v) {
   pintarOpcoes(); salvarRascunho()
 }
 
+/** @param {string} v */
+function escolherProjeto(v) {
+  vState.obra.projeto = vState.obra.projeto === v ? '' : v
+  pintarOpcoes(); salvarRascunho()
+}
+
+/** @param {string} v */
+function escolherUso(v) {
+  vState.obra.uso = vState.obra.uso === v ? '' : v
+  pintarOpcoes(); salvarRascunho()
+}
+
 function pintarOpcoes() {
   const marca = (id, valor) => document.querySelectorAll('#' + id + ' .vs-op')
     .forEach(b => b.classList.toggle('at', b.dataset.valor === valor))
   marca('nv-alvara', vState.obra.alvara)
   marca('nv-fase', vState.obra.fase)
+  marca('nv-projeto', vState.obra.projeto)
+  marca('nv-uso', vState.obra.uso)
 }
 
 /**
@@ -969,7 +1079,13 @@ function renderRevisao() {
   const rotOp = (id, v) =>
     document.querySelector(`#${id} .vs-op[data-valor="${v}"]`)?.textContent.trim() ?? ''
 
+  const rotuloFinalidade = document.querySelector('#nv-finalidade .vs-op.at .t')?.textContent.trim()
+  const campos = (FINALIDADES[vState.finalidade] || FINALIDADES.obras).campos
+
   const linhas = [
+    // A finalidade abre a leitura do ato: ela é o que explica por que as
+    // linhas seguintes são estas e não outras.
+    ['Finalidade', esc(rotuloFinalidade || 'Fiscalização de obras')],
     ['Imóvel', esc(document.getElementById('nv-lote').textContent)],
     ['Data e hora', esc((document.getElementById('nv-datahora').value || '').replace('T', ' às '))],
     ['Situação', esc(sit.options[sit.selectedIndex].text)],
@@ -979,17 +1095,26 @@ function renderRevisao() {
     ['Acompanhante', acomp
       ? esc(acomp) + (qual.value ? ' — ' + esc(qual.options[qual.selectedIndex].text) : '')
       : falta('ninguém identificado')],
-    ['Alvará', vState.obra.alvara
+    ...(campos.includes('alvara') ? [['Alvará', vState.obra.alvara
       ? esc(rotOp('nv-alvara', vState.obra.alvara))
         + (vState.obra.alvara === 'possui' && document.getElementById('nv-alvara-numero').value
            ? ' nº ' + esc(document.getElementById('nv-alvara-numero').value) : '')
-      : falta('não informado')],
+      : falta('não informado')]] : []),
     // A área é a linha que mais importa nesta tela: sem ela, multa por metro
     // quadrado sai como "não calculada" — ver Artigo::calcularMulta().
-    ['Área aferida', area
+    ...(campos.includes('area') ? [['Área aferida', area
       ? esc(area) + ' m²' + (metodo.value ? ' (' + esc(metodo.options[metodo.selectedIndex].text.toLowerCase()) + ')' : '')
-      : falta('não medida — multa por m² não será calculada')],
-    ['Fase da obra', vState.obra.fase ? esc(rotOp('nv-fase', vState.obra.fase)) : falta('não informada')],
+      : falta('não medida — multa por m² não será calculada')]] : []),
+    ...(campos.includes('fase') ? [['Fase da obra',
+      vState.obra.fase ? esc(rotOp('nv-fase', vState.obra.fase)) : falta('não informada')]] : []),
+    ...(campos.includes('projeto') ? [['Projeto aprovado',
+      vState.obra.projeto ? esc(rotOp('nv-projeto', vState.obra.projeto)) : falta('não verificado')]] : []),
+    ...(campos.includes('uso') ? [['Uso constatado',
+      vState.obra.uso ? esc(rotOp('nv-uso', vState.obra.uso)) : falta('não informado')]] : []),
+    ...(campos.includes('ano') ? [['Época da construção',
+      document.getElementById('nv-ano').value
+        ? 'por volta de ' + esc(document.getElementById('nv-ano').value)
+        : falta('não estimada')]] : []),
     ['Relatório', vState.relatorio.length
       ? '<ol>' + vState.relatorio.map(it => {
           const t = TIPOS_ITEM[it.tipo]?.rotulo ?? it.tipo
@@ -1056,8 +1181,9 @@ function salvarRascunho() {
         data: v('nv-data'), hora: v('nv-hora'), situacao: v('nv-situacao'),
         obs: v('nv-obs'), area: v('nv-area'), metodo: v('nv-area-metodo'),
         acompNome: v('nv-acomp-nome'), acompQual: v('nv-acomp-qual'),
-        alvaraNumero: v('nv-alvara-numero'),
+        alvaraNumero: v('nv-alvara-numero'), ano: v('nv-ano'),
       },
+      finalidade: vState.finalidade,
       obra: vState.obra,
       gps: vState.gps,
       // As FOTOS não cabem no armazenamento do navegador, então o rascunho
@@ -1083,10 +1209,11 @@ function restaurarRascunho() {
   põe('nv-data', c.data); põe('nv-hora', c.hora); põe('nv-situacao', c.situacao)
   põe('nv-obs', c.obs); põe('nv-area', c.area); põe('nv-area-metodo', c.metodo)
   põe('nv-acomp-nome', c.acompNome); põe('nv-acomp-qual', c.acompQual)
-  põe('nv-alvara-numero', c.alvaraNumero)
+  põe('nv-alvara-numero', c.alvaraNumero); põe('nv-ano', c.ano)
   syncDataHora()
 
-  vState.obra = d.obra ?? { alvara: '', fase: '' }
+  vState.finalidade = FINALIDADES[d.finalidade] ? d.finalidade : 'obras'
+  vState.obra = d.obra ?? { alvara: '', fase: '', projeto: '', uso: '' }
   vState.gps = d.gps ?? vState.gps
   vState.relatorio = d.relatorio ?? []
   vState.artigosMarcados = new Set(d.artigos ?? [])
@@ -1095,13 +1222,13 @@ function restaurarRascunho() {
   vState.rascunhoIrreg = d.irregularidades?.length ? d.irregularidades : null
   document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
 
-  pintarOpcoes(); pintarGps(); renderRelatorio()
+  pintarOpcoes(); pintarFinalidade(); pintarGps(); renderRelatorio()
   // O aviso é honesto sobre o que NÃO voltou: foto não cabe no armazenamento
   // do navegador, e deixar isso implícito faria o fiscal gravar sem as fotos.
   const av = document.getElementById('nv-rascunho')
   av.hidden = false
   av.textContent = 'Rascunho recuperado — as fotos precisam ser refeitas'
-  irPasso(d.passo ?? 1)
+  irPasso(d.passo ?? 'id')
 }
 
 function limparRascunho() {
@@ -1118,15 +1245,15 @@ function gravarVistoria() {
   const situacao = document.getElementById('nv-situacao').value
 
   if (!document.getElementById('nv-datahora').value) {
-    irPasso(1); toast('Informe data e hora da vistoria', 'err'); return
+    irPasso('id'); toast('Informe data e hora da vistoria', 'err'); return
   }
   if (situacao === 'irregular' && !marcadas.length) {
-    irPasso(3); toast('Marque ao menos uma irregularidade', 'err'); return
+    irPasso('rel'); toast('Marque ao menos uma irregularidade', 'err'); return
   }
   // A mesma regra do servidor, dita antes de o fiscal perder o envio: área sem
   // método é número que não se sustenta em defesa.
   if (document.getElementById('nv-area').value && !document.getElementById('nv-area-metodo').value) {
-    irPasso(2); toast('Diga como a área foi obtida', 'err'); return
+    irPasso('obra'); toast('Diga como a área foi obtida', 'err'); return
   }
 
   const resumo = marcadas.length
@@ -1134,7 +1261,7 @@ function gravarVistoria() {
     : 'sem irregularidades'
 
   confirmarAcao({
-    titulo: 'Gravar vistoria',
+    titulo: 'Gravar ' + (document.querySelector('#nv-finalidade .vs-op.at .t')?.textContent.trim().toLowerCase() || 'vistoria'),
     mensagem: `Registrar vistoria do lote ${vState.lote.numero_lote}, quadra `
             + `${vState.lote.quadra}, com ${resumo} e ${vState.relatorio.length} item(ns) no relatório?`,
     textoBtn: 'Gravar',
@@ -1148,6 +1275,9 @@ async function enviarVistoria(marcadas) {
   const campo = id => document.getElementById(id)?.value ?? ''
   const fd = new FormData()
   fd.append('data_hora', campo('nv-datahora'))
+  // O servidor lê a finalidade ANTES de decidir o que gravar: o que não
+  // pertence a ela é descartado lá, e não aqui — ver Vistoria::colunasForaDa.
+  fd.append('finalidade', vState.finalidade)
   fd.append('situacao', campo('nv-situacao'))
   fd.append('observacoes', campo('nv-obs'))
   // O vínculo com o protocolo é o que, mais tarde, libera o ato cadastral.
@@ -1164,6 +1294,9 @@ async function enviarVistoria(marcadas) {
   opcional('area_construida_aferida_m2', campo('nv-area'))
   opcional('area_metodo', campo('nv-area-metodo'))
   opcional('fase_obra', vState.obra.fase)
+  opcional('conforme_projeto', vState.obra.projeto)
+  opcional('uso_constatado', vState.obra.uso)
+  opcional('ano_construcao_estimado', campo('nv-ano'))
 
   // ── o relatório, na ordem montada ──
   //

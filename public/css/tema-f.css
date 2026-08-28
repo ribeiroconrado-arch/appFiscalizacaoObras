@@ -1865,3 +1865,21 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .vsi-palco-acoes{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .vsi-palco-acoes .leg{flex:1;min-width:0;margin:0}
+
+/* Finalidade: uma escolha por linha, com a explicação embaixo do nome.
+   São cinco opções que decidem a tela inteira — reconhecer a certa importa
+   mais aqui do que economizar altura, e o nome sozinho ("Habite-se",
+   "Constatação") não diz a quem nunca usou. */
+.vs-finalidades{flex-direction:column;gap:6px}
+.vs-op-larga{width:100%;text-align:left;border-radius:var(--r);padding:9px 12px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:52px}
+.vs-op-larga .t{font-size:13px;font-weight:700;line-height:1.25}
+.vs-op-larga .o{font-size:11px;font-weight:500;color:var(--tx3);line-height:1.35}
+.vs-op-larga.at .o{color:var(--gd);opacity:.85}
+/* A escolhida tem de se distinguir do item sob o cursor. Entre cinco opções
+   que decidem a tela inteira, "qual está valendo?" não pode depender de
+   comparar tons de verde: entram a barra na lateral e o ✓. */
+.vs-op-larga{position:relative;padding-right:34px}
+.vs-op-larga.at{box-shadow:inset 3px 0 0 var(--gd)}
+.vs-op-larga.at::after{content:'✓';position:absolute;right:12px;top:50%;
+  transform:translateY(-50%);font-size:14px;font-weight:800;color:var(--gd)}

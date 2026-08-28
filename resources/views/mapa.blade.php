@@ -975,22 +975,17 @@
 
       {{-- Barra de passos: mostra onde se está e o que falta. Clicável para
            voltar, porque conferir o que já foi preenchido é gesto legítimo. --}}
-      <div class="vs-passos" id="nv-passos">
-        <button type="button" class="vs-passo at" data-passo="1" onclick="irPasso(1)">
-          <span class="n">1</span>Identificação</button>
-        <button type="button" class="vs-passo" data-passo="2" onclick="irPasso(2)">
-          <span class="n">2</span>A obra</button>
-        <button type="button" class="vs-passo" data-passo="3" onclick="irPasso(3)">
-          <span class="n">3</span>Relatório</button>
-        <button type="button" class="vs-passo" data-passo="4" onclick="irPasso(4)">
-          <span class="n">4</span>Revisão</button>
-      </div>
+      {{-- Barra de passos montada pelo JavaScript: quantos passos existem, e
+           como se chama o segundo, dependem da FINALIDADE. Um auto de
+           constatação não tem passo de medição nenhum — ver
+           Vistoria::FINALIDADES, que é a fonte dessa regra dos dois lados. --}}
+      <div class="vs-passos" id="nv-passos"></div>
     </div>
 
     <div class="vs-corpo">
 
     {{-- ── 1 · IDENTIFICAÇÃO ── --}}
-    <div class="vs-painel at" id="nv-p1">
+    <div class="vs-painel at" id="nv-p-id" data-passo="id">
       {{-- Data + hora como UM campo visual, dois inputs nativos por baixo.
            Nunca datetime-local: mistura os dois no formato do SO. --}}
       <div class="data-hora-combo">
@@ -1007,6 +1002,20 @@
         </div>
       </div>
       <input type="hidden" id="nv-datahora">
+
+      {{-- A finalidade vem ANTES de tudo: ela decide quais passos existem e o
+           que cada um pergunta. Escolhê-la depois obrigaria a refazer o que já
+           tivesse sido preenchido. --}}
+      <div class="sec-title">Para que é esta vistoria</div>
+      <div class="vs-opcoes vs-finalidades" id="nv-finalidade">
+        @foreach (\App\Models\Vistoria::FINALIDADES as $valor => $f)
+          <button type="button" class="vs-op vs-op-larga" data-valor="{{ $valor }}"
+                  onclick="escolherFinalidade('{{ $valor }}')">
+            <span class="t">{{ $f['rotulo'] }}</span>
+            <span class="o">{{ $f['obs'] }}</span>
+          </button>
+        @endforeach
+      </div>
 
       <div class="field" style="margin-top:9px">
         <label for="nv-situacao">Situação constatada</label>
@@ -1062,7 +1071,11 @@
     </div>
 
     {{-- ── 2 · A OBRA ── --}}
-    <div class="vs-painel" id="nv-p2">
+    {{-- Os blocos são todos escritos aqui e MOSTRADOS conforme a finalidade
+         (data-bloco). Montar a marcação por finalidade daria cinco cópias
+         quase iguais para manter em dia. --}}
+    <div class="vs-painel" id="nv-p-obra" data-passo="obra">
+      <div data-bloco="alvara">
       <div class="sec-title">Alvará</div>
       <div class="vs-opcoes" id="nv-alvara">
         @foreach (\App\Models\Vistoria::ALVARA as $valor => $rotulo)
@@ -1074,7 +1087,9 @@
         <label for="nv-alvara-numero">Número do alvará</label>
         <input type="text" id="nv-alvara-numero" class="mono" maxlength="40">
       </div>
+      </div>{{-- /alvara --}}
 
+      <div data-bloco="area">
       <div class="sec-title">Área construída aferida</div>
       {{-- O método vai IMPRESSO junto do número. Perito que contesta multa por
            metro quadrado contesta a medição, e "estimativa visual" precisa
@@ -1097,7 +1112,9 @@
       </div>
       <div class="cad-nota" style="margin-top:8px">É esta área que calcula a multa
         por metro quadrado no auto de infração.</div>
+      </div>{{-- /area --}}
 
+      <div data-bloco="fase">
       <div class="sec-title">Fase da obra</div>
       <div class="vs-opcoes" id="nv-fase">
         @foreach (\App\Models\Vistoria::FASES_OBRA as $valor => $rotulo)
@@ -1105,6 +1122,41 @@
                   onclick="escolherFase('{{ $valor }}')">{{ $rotulo }}</button>
         @endforeach
       </div>
+      </div>{{-- /fase --}}
+
+      {{-- Habite-se e regularização: o construído bate com o aprovado? --}}
+      <div data-bloco="projeto">
+      <div class="sec-title">Conformidade com o projeto</div>
+      <div class="vs-opcoes" id="nv-projeto">
+        @foreach (\App\Models\Vistoria::CONFORMIDADES as $valor => $rotulo)
+          <button type="button" class="vs-op" data-valor="{{ $valor }}"
+                  onclick="escolherProjeto('{{ $valor }}')">{{ $rotulo }}</button>
+        @endforeach
+      </div>
+      </div>{{-- /projeto --}}
+
+      {{-- O uso REAL, que a atualização cadastral vai a campo conferir e que
+           costuma divergir do declarado no cadastro. --}}
+      <div data-bloco="uso">
+      <div class="sec-title">Uso constatado</div>
+      <div class="vs-opcoes" id="nv-uso">
+        @foreach (\App\Models\Vistoria::USOS as $valor => $rotulo)
+          <button type="button" class="vs-op" data-valor="{{ $valor }}"
+                  onclick="escolherUso('{{ $valor }}')">{{ $rotulo }}</button>
+        @endforeach
+      </div>
+      </div>{{-- /uso --}}
+
+      <div data-bloco="ano">
+      <div class="sec-title">Época da construção</div>
+      <div class="field">
+        <label for="nv-ano">Ano aproximado</label>
+        {{-- Ano, e não data: ninguém sabe o dia, e um campo de data pediria
+             uma precisão que não existe. --}}
+        <input type="number" id="nv-ano" class="mono" inputmode="numeric"
+               min="1900" max="{{ date('Y') + 1 }}" placeholder="{{ date('Y') - 10 }}">
+      </div>
+      </div>{{-- /ano --}}
     </div>
 
     {{-- ── 3 · RELATÓRIO ──
@@ -1120,7 +1172,7 @@
          tipos de linha que uma vistoria produz. A ordem é conteúdo: a foto
          depois do artigo que ela ilustra diz o que a mesma foto no fim de uma
          pilha de fotos não diz. --}}
-    <div class="vs-painel" id="nv-p3">
+    <div class="vs-painel" id="nv-p-rel" data-passo="rel">
       <div class="sec-title-row">
         <div class="sec-title">Relatório da vistoria</div>
         <button type="button" class="btn primary sm sec-title-acao" onclick="menuItemRelatorio(event)">
@@ -1161,7 +1213,7 @@
     </div>
 
     {{-- ── 4 · REVISÃO ── --}}
-    <div class="vs-painel" id="nv-p4">
+    <div class="vs-painel" id="nv-p-rev" data-passo="rev">
       <div class="leg">Confira antes de gravar. A vistoria é ato: depois de
         gravada, ela fundamenta notificação, auto e embargo.</div>
       <div id="nv-revisao"></div>

@@ -26,8 +26,88 @@ class Vistoria extends Model
             'longitude' => 'float',
             'accuracy'  => 'float',
             'area_construida_aferida_m2' => 'float',
+            'ano_construcao_estimado'    => 'integer',
         ];
     }
+
+    /**
+     * A FINALIDADE decide o que a vistoria pergunta.
+     *
+     * Este mapa é a fonte única dessa regra: a tela monta os passos a partir
+     * dele, e a gravação descarta o que não pertence à finalidade escolhida.
+     * Duas listas separadas — uma no JavaScript, outra no controller — é como
+     * um campo passa a ser oferecido na tela e ignorado no servidor (ou o
+     * contrário), e ninguém descobre até faltar dado numa peça.
+     *
+     * `campos` diz quais blocos o segundo passo mostra. Finalidade sem campo
+     * nenhum não tem segundo passo: o auto de constatação registra o que se
+     * vê, e não mede nada — inventar um passo vazio para ele seria manter a
+     * forma da fiscalização de obra onde ela não faz sentido.
+     */
+    public const FINALIDADES = [
+        'obras' => [
+            'rotulo' => 'Fiscalização de obras',
+            'obs'    => 'Obra em andamento: alvará, área e fase.',
+            'passo'  => 'A obra',
+            'campos' => ['alvara', 'area', 'fase'],
+        ],
+        'cadastral' => [
+            'rotulo' => 'Atualização cadastral',
+            'obs'    => 'Conferir em campo os dados do imóvel no cadastro.',
+            'passo'  => 'O imóvel',
+            'campos' => ['area', 'uso', 'ano'],
+        ],
+        'habite_se' => [
+            'rotulo' => 'Habite-se',
+            'obs'    => 'Obra concluída: confere com o projeto aprovado?',
+            'passo'  => 'A conclusão',
+            'campos' => ['alvara', 'area', 'projeto', 'fase'],
+        ],
+        'regularizacao' => [
+            'rotulo' => 'Regularização de imóvel pronto',
+            'obs'    => 'Construção que já existe, sem alvará.',
+            'passo'  => 'A construção',
+            'campos' => ['alvara', 'area', 'ano', 'uso', 'projeto'],
+        ],
+        'constatacao' => [
+            'rotulo' => 'Auto de constatação',
+            'obs'    => 'Só registrar o que se vê. Sem medição.',
+            'passo'  => null,
+            'campos' => [],
+        ],
+    ];
+
+    /** Cada bloco do segundo passo e as colunas que ele preenche. */
+    public const CAMPOS_POR_BLOCO = [
+        'alvara'  => ['alvara_situacao', 'alvara_numero'],
+        'area'    => ['area_construida_aferida_m2', 'area_metodo'],
+        'fase'    => ['fase_obra'],
+        'projeto' => ['conforme_projeto'],
+        'ano'     => ['ano_construcao_estimado'],
+        'uso'     => ['uso_constatado'],
+    ];
+
+    /**
+     * "Sem projeto" é resposta legítima, e diferente de "não confere": é
+     * justamente o caso da regularização de imóvel pronto.
+     */
+    public const CONFORMIDADES = [
+        'sim'            => 'Confere com o projeto',
+        'nao'            => 'Diverge do projeto',
+        'sem_projeto'    => 'Não há projeto aprovado',
+        'nao_verificado' => 'Não verificado',
+    ];
+
+    /** O uso REAL constatado, que costuma divergir do declarado no cadastro. */
+    public const USOS = [
+        'residencial'   => 'Residencial',
+        'comercial'     => 'Comercial',
+        'industrial'    => 'Industrial',
+        'misto'         => 'Misto',
+        'institucional' => 'Institucional',
+        'religioso'     => 'Religioso',
+        'vago'          => 'Terreno vago',
+    ];
 
     /**
      * Como a área foi obtida. Vai IMPRESSO junto do número, sempre.
@@ -149,6 +229,42 @@ class Vistoria extends Model
     public function fachada(): ?Evidencia
     {
         return $this->evidencias()->where('fachada', true)->first();
+    }
+
+    /** Os blocos que o segundo passo mostra nesta finalidade. */
+    public function camposDaFinalidade(): array
+    {
+        return self::FINALIDADES[$this->finalidade]['campos'] ?? [];
+    }
+
+    /**
+     * As colunas que NÃO pertencem a esta finalidade.
+     *
+     * Usada na gravação para zerar o que veio sobrando. Campo fora da
+     * finalidade é dado que ninguém conferiu em campo — e num processo
+     * administrativo, dado não conferido que parece conferido é pior do que
+     * campo vazio.
+     *
+     * @param string $finalidade
+     * @return array<int, string>
+     */
+    public static function colunasForaDa(string $finalidade): array
+    {
+        $blocos = self::FINALIDADES[$finalidade]['campos'] ?? [];
+        $fora = [];
+
+        foreach (self::CAMPOS_POR_BLOCO as $bloco => $colunas) {
+            if (! in_array($bloco, $blocos, true)) {
+                $fora = array_merge($fora, $colunas);
+            }
+        }
+
+        return $fora;
+    }
+
+    public function finalidadeRotulo(): string
+    {
+        return self::FINALIDADES[$this->finalidade]['rotulo'] ?? 'Vistoria';
     }
 
     /** "88,00 m² (medida com trena)" — o número nunca anda sem o método. */
