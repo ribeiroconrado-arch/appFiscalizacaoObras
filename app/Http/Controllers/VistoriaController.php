@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Artigo;
 use App\Models\Documento;
 use App\Models\Obra;
 use App\Models\Evidencia;
@@ -228,6 +229,52 @@ class VistoriaController extends Controller
     }
 
     /**
+     * GET /api/artigos-sugeridos?irregularidades=1,2,3
+     *
+     * Os artigos que enquadram as irregularidades marcadas — a mesma consulta
+     * de LavraturaService::artigosSugeridos(), mas por IDS e não por vistoria,
+     * porque aqui a vistoria ainda não existe: o fiscal está diante da obra,
+     * marcando o checklist, e é esse o momento de conferir o enquadramento —
+     * com os fatos à vista, e não semanas depois, na mesa.
+     */
+    public function artigosSugeridos(Request $request): JsonResponse
+    {
+        $ids = array_filter(array_map(
+            'intval',
+            explode(',', (string) $request->query('irregularidades'))
+        ));
+
+        if (! $ids) {
+            return response()->json(['artigos' => [], 'sem_artigo' => []]);
+        }
+
+        $artigos = Artigo::query()->ativos()
+            ->with('legislacao:id,numero,nome')
+            ->whereHas('irregularidades', fn ($q) => $q->whereIn('irregularidades.id', $ids))
+            ->get();
+
+        // As irregularidades que NENHUM artigo enquadra. Escondê-las faria a
+        // tela mentir por omissão: o fiscal veria três artigos e concluiria
+        // que as cinco marcações estão fundamentadas. Hoje são 18 no catálogo.
+        $cobertas = DB::table('artigo_irregularidade')
+            ->whereIn('irregularidade_id', $ids)
+            ->distinct()->pluck('irregularidade_id')->all();
+
+        return response()->json([
+            'artigos' => $artigos->map(fn ($a) => [
+                'id'      => $a->id,
+                'numero'  => $a->numero,
+                'conduta' => $a->conduta,
+                'base'    => Artigo::BASES_MULTA[$a->base_multa] ?? null,
+                'por_m2'  => $a->base_multa === 'area_construida',
+                'lei'     => $a->legislacao?->numero,
+            ]),
+            'sem_artigo' => Irregularidade::whereIn('id', array_diff($ids, $cobertas))
+                ->pluck('descricao'),
+        ]);
+    }
+
+    /**
      * POST /api/lotes/{lote}/vistorias
      *
      * Grava a vistoria, as irregularidades marcadas e as fotos, tudo numa
@@ -254,6 +301,29 @@ class VistoriaController extends Controller
             'evidencias.*'       => ['file', 'max:' . self::MAX_KB, 'mimetypes:' . implode(',', self::MIMES)],
             'titulos'            => ['array'],
             'titulos.*'          => ['nullable', 'string', 'max:160'],
+            // A legenda da foto, por índice, pareada com titulos[]. A coluna
+            // existia no banco desde a primeira migração e nunca fora usada —
+            // foto sem legenda é prova que depende de alguém para explicá-la.
+            'descricoes'         => ['array'],
+            'descricoes.*'       => ['nullable', 'string', 'max:1000'],
+            // Índice da foto que responde "como está o imóvel hoje".
+            'fachada'            => ['nullable', 'integer', 'min:0'],
+
+            // ── a obra ──
+            'acompanhante_nome'         => ['nullable', 'string', 'max:160'],
+            'acompanhante_qualificacao' => ['nullable', Rule::in(array_keys(Vistoria::QUALIFICACOES))],
+            'alvara_situacao'    => ['nullable', Rule::in(array_keys(Vistoria::ALVARA))],
+            'alvara_numero'      => ['nullable', 'string', 'max:40'],
+            'area_construida_aferida_m2' => ['nullable', 'numeric', 'min:0', 'max:999999'],
+            'area_metodo'        => ['nullable', Rule::in(array_keys(Vistoria::METODOS_AREA))],
+            'fase_obra'          => ['nullable', Rule::in(array_keys(Vistoria::FASES_OBRA))],
+
+            // ── constatações ──
+            'artigos'            => ['array'],
+            'artigos.*'          => ['integer', 'exists:artigos,id'],
+            'exigencias'         => ['array', 'max:30'],
+            'exigencias.*.texto' => ['required', 'string', 'max:500'],
+            'exigencias.*.prazo_dias' => ['nullable', 'integer', 'min:1', 'max:3650'],
             // Protocolo de desmembramento/unificacao que esta vistoria atende.
             // E o vinculo que, mais tarde, libera o ato cadastral — ver
             // App\Services\SucessaoDeLotes::atoDaVistoria().
@@ -262,7 +332,17 @@ class VistoriaController extends Controller
             'data_hora.date_format' => 'Informe data e hora da vistoria.',
             'evidencias.*.max'      => 'Cada arquivo deve ter no máximo 12 MB.',
             'evidencias.*.mimetypes' => 'Envie apenas imagens ou PDF.',
+            'exigencias.*.texto.required' => 'Exigência sem texto não pode ser gravada.',
         ]);
+
+        // Área medida sem dizer COMO é número que não se sustenta em defesa. E
+        // método sem área é campo órfão. Os dois andam juntos ou nenhum anda.
+        if (! empty($d['area_construida_aferida_m2']) && empty($d['area_metodo'])) {
+            return response()->json([
+                'message' => 'Informe como a área foi obtida (trena, estimativa, projeto ou croqui).',
+                'errors'  => ['area_metodo' => ['Escolha o método.']],
+            ], 422);
+        }
 
         // Uma vistoria irregular sem nenhuma irregularidade marcada é um
         // registro que não sustenta documento nenhum depois. Barrar aqui evita
@@ -286,10 +366,34 @@ class VistoriaController extends Controller
                 'latitude'    => $d['latitude'] ?? null,
                 'longitude'   => $d['longitude'] ?? null,
                 'accuracy'    => $d['accuracy'] ?? null,
+
+                'acompanhante_nome'         => $d['acompanhante_nome'] ?? null,
+                'acompanhante_qualificacao' => $d['acompanhante_qualificacao'] ?? null,
+                'alvara_situacao'    => $d['alvara_situacao'] ?? null,
+                'alvara_numero'      => $d['alvara_numero'] ?? null,
+                'area_construida_aferida_m2' => $d['area_construida_aferida_m2'] ?? null,
+                'area_metodo'        => $d['area_metodo'] ?? null,
+                'fase_obra'          => $d['fase_obra'] ?? null,
             ]);
 
             if (! empty($d['irregularidades'])) {
                 $v->irregularidades()->sync($d['irregularidades']);
+            }
+
+            // Enquadramento constatado em campo. Ver a relação `artigos()` em
+            // Vistoria para por que ele não divide tabela com o do documento.
+            if (! empty($d['artigos'])) {
+                $v->artigos()->sync($d['artigos']);
+            }
+
+            // A ORDEM é a que o fiscal escreveu: ela é a sequência em que as
+            // providências devem ser tomadas, e a notificação imprime assim.
+            foreach ($d['exigencias'] ?? [] as $i => $e) {
+                $v->exigencias()->create([
+                    'ordem'      => $i,
+                    'texto'      => trim($e['texto']),
+                    'prazo_dias' => $e['prazo_dias'] ?? null,
+                ]);
             }
 
             // Amarra a vistoria ao protocolo que ela atende.
@@ -318,6 +422,10 @@ class VistoriaController extends Controller
                     'mime'          => $arquivo->getMimeType(),
                     'tamanho'       => $arquivo->getSize(),
                     'titulo'        => $d['titulos'][$i] ?? ('Evidência ' . ($i + 1)),
+                    'descricao'     => $d['descricoes'][$i] ?? null,
+                    // Uma fachada por vistoria: é a resposta a "como está o
+                    // imóvel", e duas respostas não respondem nada.
+                    'fachada'       => isset($d['fachada']) && (int) $d['fachada'] === $i,
                     'latitude'      => $d['latitude'] ?? null,
                     'longitude'     => $d['longitude'] ?? null,
                     'data_hora'     => str_replace('T', ' ', $d['data_hora']) . ':00',
@@ -331,8 +439,12 @@ class VistoriaController extends Controller
         return response()->json([
             'message'  => 'Vistoria registrada.',
             'vistoria' => [
-                'id'        => $vistoria->id,
-                'data_hora' => $vistoria->data_hora?->format('d/m/Y H:i'),
+                'id'          => $vistoria->id,
+                'data_hora'   => $vistoria->data_hora?->format('d/m/Y H:i'),
+                'area'        => $vistoria->areaAferidaRotulo(),
+                'exigencias'  => $vistoria->exigencias()->count(),
+                'artigos'     => $vistoria->artigos()->count(),
+                'evidencias'  => $vistoria->evidencias()->count(),
             ],
         ], 201);
     }

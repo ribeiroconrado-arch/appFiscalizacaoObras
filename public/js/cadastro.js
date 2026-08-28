@@ -104,24 +104,161 @@ function repintarLote(id) {
 
 // ── PAINEL ───────────────────────────────────────────────────
 
-function pintarPainelCadastro() {
-  const cont = document.getElementById('cad-corpo')
-  if (!cont) return
+// ── MODO DE TRABALHO ─────────────────────────────────────────
+//
+// A correção cadastral tem duas naturezas misturadas: um gesto no MAPA (marcar
+// lotes, desenhar cantos) e um preenchimento de FORMULÁRIO (qual quadra, qual
+// número, conferir a prévia). Antes as duas moravam na mesma coluna de 262px
+// ao lado do mapa — e aí nenhuma ficava boa: o gesto disputava espaço com o
+// mapa, e o formulário ficava espremido.
+//
+// Agora cada uma tem o seu lugar: o mapa inteiro para o gesto, com uma barra
+// fina no topo dizendo o passo, e uma janela para os dados. A janela pode ser
+// fechada sem perder nada — o que foi marcado ou desenhado continua no mapa, e
+// a barra oferece reabrir.
 
-  const btn = document.getElementById('cad-modo')
-  if (btn) {
-    btn.textContent = selState.ativa ? 'Parar de selecionar' : 'Selecionar lotes'
-    btn.classList.toggle('at', selState.ativa)
+/** @type {'quadra'|'desenho'|'coordenadas'|null} */
+let cadModo = null
+
+/**
+ * Entra num modo de correção. Um de cada vez, sempre: marcar e desenhar
+ * disputam o mesmo clique no mapa, e oferecer os dois ao mesmo tempo produz
+ * exatamente o erro que a confirmação depois tenta consertar.
+ *
+ * @param {'quadra'|'desenho'|'coordenadas'} modo
+ */
+function modoCadastral(modo) {
+  sairModoCadastral(true)
+  cadModo = modo
+
+  if (modo === 'quadra') {
+    ligarSelecao('quadra')
+  } else if (modo === 'desenho') {
+    iniciarDesenhoDeLote()
+  } else if (modo === 'coordenadas') {
+    document.getElementById('coo-caixa').hidden = false
+    abrirModalCad()
   }
 
-  const n = selState.ids.size
-  cont.hidden = !selState.ativa
+  pintarPainelCadastro()
+}
 
-  // Em ato cadastral o painel muda de assunto: não é mais "corrigir quadra",
-  // é executar a unificação daquele protocolo. Trocar o texto e o botão evita
-  // que a pessoa preencha a quadra achando que é isso que vai acontecer.
-  // O desmembramento tem painel proprio (desm-caixa); o de correcao de quadra
-  // sai de cena para nao oferecer dois assuntos ao mesmo tempo.
+/** Sai do modo e limpa o que estava em curso. @param {boolean} [silencioso] */
+function sairModoCadastral(silencioso) {
+  if (selState.ativa) { desligarSelecao() }
+  limparSelecaoCadastral()
+  if (typeof cancelarDesenho === 'function') { cancelarDesenho() }
+  desenhoPendente = null
+  limparPreviaCoordenadas()
+
+  const coo = document.getElementById('coo-caixa')
+  if (coo) { coo.hidden = true }
+  const txt = document.getElementById('coo-texto')
+  if (txt && !silencioso) { txt.value = '' }
+  const res = document.getElementById('coo-resultado')
+  if (res) { res.innerHTML = '' }
+
+  cadModo = null
+  if (!silencioso) {
+    fModalBtn('m-cad')
+    pintarPainelCadastro()
+  }
+}
+
+/** Abre a janela de dados no painel do modo corrente. */
+function abrirModalCad() {
+  const quadra = cadModo === 'quadra'
+  document.getElementById('cadp-quadra').hidden = !quadra
+  document.getElementById('cadp-desenho').hidden = quadra
+  document.getElementById('cad-modal-titulo').textContent =
+    quadra ? 'Quadra dos lotes marcados'
+      : cadModo === 'coordenadas' ? 'Lote por coordenadas' : 'Dados do lote desenhado'
+  openModal('m-cad')
+  pintarPainelCadastro()
+}
+
+/** Fecha a janela SEM desfazer nada: a barra continua com o trabalho em curso. */
+function fecharModalCad() {
+  fModalBtn('m-cad')
+  pintarPainelCadastro()
+}
+
+/**
+ * A barra sobre o mapa: em que passo se está, e o que fazer a seguir.
+ *
+ * Ela é a única coisa que fica na frente do mapa durante o trabalho — por isso
+ * diz o passo em uma linha, e não repete o formulário.
+ */
+function pintarBarraCadastral() {
+  const barra = document.getElementById('cad-barra')
+  if (!barra) { return }
+
+  barra.hidden = !cadModo
+  if (!cadModo) { return }
+
+  const n = selState.ids.size
+  const emAto = atoState.tipo === 'unificacao'
+  const desenhando = typeof estaDesenhando === 'function' && estaDesenhando()
+
+  const modo = document.getElementById('cad-barra-modo')
+  const passo = document.getElementById('cad-barra-passo')
+  const ok = document.getElementById('cad-barra-ok')
+  const extra = document.getElementById('cad-barra-extra')
+
+  ok.hidden = true
+  extra.hidden = true
+
+  if (cadModo === 'quadra') {
+    modo.textContent = emAto ? 'Unificação' : 'Corrigir quadra'
+    passo.textContent = n === 0
+      ? 'Toque nos lotes do mapa para marcá-los.'
+      : `${n} lote(s) marcado(s).`
+    if (n > 0) {
+      ok.hidden = false
+      ok.textContent = emAto ? 'Conferir unificação' : 'Informar a quadra'
+      ok.onclick = abrirModalCad
+      extra.hidden = false
+      extra.textContent = 'Limpar marcação'
+      extra.onclick = limparSelecaoCadastral
+    }
+  } else if (cadModo === 'desenho') {
+    modo.textContent = 'Desenhar lote'
+    passo.textContent = desenhando
+      ? 'Toque nos cantos do lote. Duplo toque fecha.'
+      : desenhoPendente ? 'Desenho pronto.' : 'Toque no mapa para começar.'
+    if (desenhoPendente) {
+      ok.hidden = false
+      ok.textContent = 'Informar os dados'
+      ok.onclick = abrirModalCad
+    }
+  } else if (cadModo === 'coordenadas') {
+    modo.textContent = 'Lote por coordenadas'
+    passo.textContent = desenhoPendente
+      ? 'Polígono lido do memorial, desenhado no mapa.'
+      : 'Cole o memorial na janela.'
+    ok.hidden = false
+    ok.textContent = desenhoPendente ? 'Informar os dados' : 'Abrir a janela'
+    ok.onclick = abrirModalCad
+  }
+}
+
+/**
+ * Mantém a janela e a barra coerentes com o estado.
+ *
+ * Continua se chamando `pintarPainelCadastro` porque é chamada de vários
+ * pontos (seleção, desenho, atos cadastrais); o que mudou foi ONDE ela pinta.
+ */
+function pintarPainelCadastro() {
+  pintarBarraCadastral()
+
+  const cont = document.getElementById('cadp-quadra')
+  if (!cont) { return }
+
+  const n = selState.ids.size
+
+  // Em ato cadastral o assunto é outro: não é corrigir quadra, é executar a
+  // unificação daquele protocolo. Trocar o texto e o botão evita que a pessoa
+  // preencha a quadra achando que é isso que vai acontecer.
   const emDesm = atoState.tipo === 'desmembramento'
   const grupo = document.getElementById('cad-geral')
   if (grupo) { grupo.hidden = emDesm }
@@ -129,17 +266,17 @@ function pintarPainelCadastro() {
   const emAto = atoState.tipo === 'unificacao'
   const cabecalho = document.getElementById('cad-ato')
   if (cabecalho) {
-    cabecalho.hidden = ! emAto
+    cabecalho.hidden = !emAto
     if (emAto) {
-      cabecalho.innerHTML = `<div class="cad-nota">Unificando pelo protocolo. `
-        + `Toque nos lotes; eles precisam se encostar e ser da mesma quadra.</div>`
+      cabecalho.innerHTML = '<div class="cad-nota">Unificando pelo protocolo. '
+        + 'Toque nos lotes; eles precisam se encostar e ser da mesma quadra.</div>'
     }
   }
 
   const contagem = document.getElementById('cad-contagem')
   if (contagem) {
     contagem.textContent = n === 0
-      ? 'Toque nos lotes do mapa para marcá-los.'
+      ? 'Nenhum lote marcado ainda — toque neles no mapa.'
       : `${n} lote(s) marcado(s).`
   }
 
@@ -150,23 +287,12 @@ function pintarPainelCadastro() {
   document.getElementById('cad-btn-limpar').setAttribute('onclick',
     emAto ? 'cancelarAtoCadastral()' : 'limparSelecaoCadastral()')
   document.getElementById('cad-btn-limpar').textContent = emAto ? 'Cancelar ato' : 'Limpar'
-  document.getElementById('cad-previa').innerHTML = ''
 
   // ── bloco de desenho ──
-  const desenhando = estaDesenhando()
-  document.getElementById('des-desenhando').hidden = ! desenhando
-  document.getElementById('des-dados').hidden = ! desenhoPendente
-  if (! desenhoPendente) { document.getElementById('des-previa').innerHTML = '' }
-
-  const btnDes = document.getElementById('des-iniciar')
-  if (btnDes) {
-    btnDes.textContent = desenhoPendente ? 'Desenhar de novo' : 'Desenhar lote faltante'
-    btnDes.classList.toggle('at', desenhando)
-    // Selecionar e desenhar disputam o mesmo clique no mapa: um de cada vez.
-    btnDes.disabled = selState.ativa
-  }
-  const btnSel = document.getElementById('cad-modo')
-  if (btnSel) { btnSel.disabled = desenhando || !! desenhoPendente }
+  const desenhando = typeof estaDesenhando === 'function' && estaDesenhando()
+  document.getElementById('des-desenhando').hidden = !desenhando
+  document.getElementById('des-dados').hidden = !desenhoPendente
+  if (!desenhoPendente) { document.getElementById('des-previa').innerHTML = '' }
 }
 
 /**
@@ -608,18 +734,17 @@ function iniciarDesenhoDeLote() {
 /** Camada da prévia. Fica fora do mapaState porque é efêmera. */
 let previaCoordenadas = null
 
+/**
+ * Abre a caixa do memorial. Chamada por modoCadastral('coordenadas'); mantida
+ * separada porque o foco no campo só faz sentido depois de a janela aparecer.
+ */
 function abrirCoordenadas() {
-  if (selState.ativa) { desligarSelecao() }
-  if (estaDesenhando()) { largarDesenho() }
-
   document.getElementById('coo-caixa').hidden = false
-  document.getElementById('coo-abrir').hidden = true
   document.getElementById('coo-texto').focus()
 }
 
+/** Limpa o memorial e a prévia, sem sair do modo. */
 function largarCoordenadas() {
-  document.getElementById('coo-caixa').hidden = true
-  document.getElementById('coo-abrir').hidden = false
   document.getElementById('coo-resultado').innerHTML = ''
   document.getElementById('coo-texto').value = ''
   limparPreviaCoordenadas()

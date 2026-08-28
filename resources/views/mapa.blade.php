@@ -333,91 +333,22 @@
            de um desmembramento seriam três assuntos ao mesmo tempo. --}}
       <div id="desm-caixa" hidden></div>
 
+      {{-- LANÇADOR, e não formulário.
+           Antes tudo morava aqui: campo de quadra, dados do lote, caixa de
+           coordenadas, prévias. Numa coluna de 262px, ao lado do mapa onde o
+           trabalho de fato acontece, isso obrigava a ler de lado, encolhia o
+           mapa e escondia o passo seguinte. Agora aqui só se ESCOLHE o que
+           fazer; o que é feito no mapa fica no mapa (barra de estado no topo)
+           e o que é formulário vai para o modal. --}}
       <div id="cad-geral">
-      <button type="button" class="btn sm" id="cad-modo" style="width:100%;margin-bottom:6px"
-              onclick="alternarModoSelecao()">Selecionar lotes</button>
-
-      <div id="cad-corpo" hidden>
-        {{-- Quando a seleção está a serviço de um ato cadastral, o painel muda
-             de assunto: não é mais corrigir quadra, é executar a unificação
-             daquele protocolo. --}}
-        <div id="cad-ato" hidden></div>
-        <div class="leg" id="cad-contagem">Toque nos lotes do mapa para marcá-los.</div>
-
-        <div id="cad-acoes" hidden>
-          <div class="field" style="margin:8px 0 6px" id="cad-quadra-campo">
-            <label for="cad-quadra">Quadra a gravar</label>
-            <input type="text" id="cad-quadra" class="mono" inputmode="numeric" maxlength="20"
-                   placeholder="24">
-          </div>
-          <div class="seg" style="margin:0">
-            <button type="button" id="cad-btn-limpar" onclick="limparSelecaoCadastral()">Limpar</button>
-            <button type="button" id="cad-btn-conferir" onclick="conferirQuadraSelecao()">Conferir</button>
-          </div>
-          <div id="cad-previa"></div>
-        </div>
-      </div>
-
-      {{-- DESENHAR LOTE FALTANTE.
-           O extrator suprime lote em silêncio quando o DWG não coopera; até
-           agora o único conserto era corrigir o desenho e reimportar o bairro
-           inteiro, o que só quem opera o QGIS consegue fazer. --}}
-      <hr class="cad-risco">
-      <button type="button" class="btn sm" id="des-iniciar" style="width:100%"
-              onclick="iniciarDesenhoDeLote()">Desenhar lote faltante</button>
-
-      {{-- POR COORDENADAS — a terceira via.
-           O lote vem descrito no memorial da matrícula, vértice a vértice, em
-           graus/minutos/segundos. Digitar isso no mapa a dedo perderia a
-           precisão que o memorial tem: cada décimo de segundo vale ~3 m, e
-           acertar isso clicando é impossível. --}}
-      <button type="button" class="btn sm" id="coo-abrir" style="width:100%;margin-top:6px"
-              onclick="abrirCoordenadas()">Lote por coordenadas</button>
-
-      <div id="coo-caixa" hidden>
-        <div class="leg" style="margin-top:6px">
-          Um vértice por linha, como vem no memorial. Exemplo:<br>
-          <span class="mono" style="font-size:10.5px">V1 15°31'03,7"S 54°18'39,9"W</span>
-        </div>
-        <textarea id="coo-texto" rows="6" spellcheck="false"
-                  style="width:100%;margin:6px 0;font-family:var(--mono, monospace);font-size:11.5px"
-                  placeholder="15°31'03,7&quot;S 54°18'39,9&quot;W&#10;15°31'03,7&quot;S 54°18'39,5&quot;W&#10;15°31'04,4&quot;S 54°18'39,5&quot;W"></textarea>
-        <div class="seg" style="margin:0">
-          <button type="button" onclick="largarCoordenadas()">Cancelar</button>
-          <button type="button" onclick="lerCoordenadas()">Ler coordenadas</button>
-        </div>
-        <div id="coo-resultado"></div>
-      </div>
-
-      <div id="des-desenhando" hidden>
-        <div class="leg" id="des-contagem">Toque nos cantos do lote. Duplo toque fecha.</div>
-        <div class="seg" style="margin:6px 0 0">
-          <button type="button" onclick="desfazerVertice()">Desfazer canto</button>
-          <button type="button" onclick="largarDesenho()">Cancelar</button>
-        </div>
-      </div>
-
-      <div id="des-dados" hidden>
-        <div class="field" style="margin:8px 0 6px">
-          <label for="des-bairro">Bairro</label>
-          <input type="text" id="des-bairro" maxlength="120" placeholder="Jardim Europa IV">
-        </div>
-        <div class="g2" style="margin-bottom:6px">
-          <div class="field" style="margin:0">
-            <label for="des-quadra">Quadra</label>
-            <input type="text" id="des-quadra" class="mono" inputmode="numeric" maxlength="20" placeholder="05">
-          </div>
-          <div class="field" style="margin:0">
-            <label for="des-lote">Lote</label>
-            <input type="text" id="des-lote" class="mono" maxlength="20" placeholder="1">
-          </div>
-        </div>
-        <div class="seg" style="margin:0">
-          <button type="button" onclick="largarDesenho()">Descartar</button>
-          <button type="button" onclick="conferirDesenho()">Conferir</button>
-        </div>
-        <div id="des-previa"></div>
-      </div>
+        <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('quadra')">
+          Corrigir quadra de vários lotes</button>
+        <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('desenho')">
+          Desenhar lote faltante</button>
+        <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('coordenadas')">
+          Lote por coordenadas</button>
+        <div class="cad-dica">O trabalho acontece no mapa; os dados são pedidos
+          depois, numa janela.</div>
       </div>{{-- /cad-geral --}}
     </div>
   </div>
@@ -1010,95 +941,245 @@
 </div>
 
 {{-- NOVA VISTORIA (Etapa 5) --}}
+{{-- ══════════════════════════════════════════════
+     VISTORIA DE OBRA (#m-vistoria) — CINCO PASSOS
+
+     Um assunto por vez, e não uma coluna longa. O fiscal usa esta tela de pé,
+     no sol, num celular: rolagem infinita ali é o que faz alguém desistir de
+     registrar e "anotar depois" — que na prática é não registrar.
+
+     O ATALHO existe pelo mesmo motivo. A ronda de rotina é a maioria absoluta
+     das vistorias, e obrigá-la a atravessar cinco passos custaria mais do que
+     a informação que os passos coletam.
+     ══════════════════════════════════════════════ --}}
 <div class="modal-bg" id="m-vistoria" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-x" onclick="fModalBtn('m-vistoria')">&#10005;</button>
-    <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/>
-      </svg>
-      Nova vistoria
-    </h3>
-    <div class="sub" id="nv-lote">—</div>
+  <div class="modal modal-flex" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharVistoria()">&#10005;</button>
 
-    <div class="sec-title">Identificação</div>
+    <div class="vs-head">
+      <h3 class="fi-cabeca">
+        <span class="cab-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/>
+          </svg>
+        </span>
+        <span>Vistoria</span>
+      </h3>
+      <div class="sub" id="nv-lote">—</div>
+      {{-- Linha própria, e não um selo ao lado do título: o texto varia de
+           tamanho ("refaça as fotos") e, na largura de um celular, ia parar
+           debaixo do botão de fechar. --}}
+      <div class="vs-aviso" id="nv-rascunho" hidden>Rascunho recuperado</div>
 
-    {{-- Data + hora como UM campo visual, dois inputs nativos por baixo.
-         Nunca datetime-local: mistura os dois no formato do SO. --}}
-    <div class="data-hora-combo">
-      <span class="rot">Data e hora</span>
-      <div class="campos">
-        <label class="date-ov">
-          <input type="date" id="nv-data" onchange="syncDataHora()"
-                 onfocus="preencherDataHojeSeVazio(this)">
-          <span class="date-ov-txt vazio">dd/mm/aaaa</span>
-        </label>
-        <span class="sep"></span>
-        <input type="time" id="nv-hora" onchange="syncDataHora()"
-               onfocus="preencherHoraAgoraSeVazio(this)">
+      {{-- Barra de passos: mostra onde se está e o que falta. Clicável para
+           voltar, porque conferir o que já foi preenchido é gesto legítimo. --}}
+      <div class="vs-passos" id="nv-passos">
+        <button type="button" class="vs-passo at" data-passo="1" onclick="irPasso(1)">
+          <span class="n">1</span>Identificação</button>
+        <button type="button" class="vs-passo" data-passo="2" onclick="irPasso(2)">
+          <span class="n">2</span>A obra</button>
+        <button type="button" class="vs-passo" data-passo="3" onclick="irPasso(3)">
+          <span class="n">3</span>Constatações</button>
+        <button type="button" class="vs-passo" data-passo="4" onclick="irPasso(4)">
+          <span class="n">4</span>Fotos</button>
+        <button type="button" class="vs-passo" data-passo="5" onclick="irPasso(5)">
+          <span class="n">5</span>Revisão</button>
       </div>
     </div>
-    <input type="hidden" id="nv-datahora">
 
-    <div class="field" style="margin-top:9px">
-      <label for="nv-situacao">Situação constatada</label>
-      <select id="nv-situacao">
-        @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
-          <option value="{{ $valor }}">{{ $rotulo }}</option>
+    <div class="vs-corpo">
+
+    {{-- ── 1 · IDENTIFICAÇÃO ── --}}
+    <div class="vs-painel at" id="nv-p1">
+      {{-- Data + hora como UM campo visual, dois inputs nativos por baixo.
+           Nunca datetime-local: mistura os dois no formato do SO. --}}
+      <div class="data-hora-combo">
+        <span class="rot">Data e hora</span>
+        <div class="campos">
+          <label class="date-ov">
+            <input type="date" id="nv-data" onchange="syncDataHora()"
+                   onfocus="preencherDataHojeSeVazio(this)">
+            <span class="date-ov-txt vazio">dd/mm/aaaa</span>
+          </label>
+          <span class="sep"></span>
+          <input type="time" id="nv-hora" onchange="syncDataHora()"
+                 onfocus="preencherHoraAgoraSeVazio(this)">
+        </div>
+      </div>
+      <input type="hidden" id="nv-datahora">
+
+      <div class="field" style="margin-top:9px">
+        <label for="nv-situacao">Situação constatada</label>
+        <select id="nv-situacao">
+          @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
+            <option value="{{ $valor }}">{{ $rotulo }}</option>
+          @endforeach
+        </select>
+      </div>
+
+      {{-- A posição é capturada AQUI, e não só aproveitada do mapa: a vistoria
+           acontece em frente ao imóvel, e é essa coordenada que vale como
+           prova de que o fiscal esteve lá. --}}
+      <div class="vs-gps">
+        <div>
+          <div class="fi-rot">Coordenada da vistoria</div>
+          <div class="fi-val mono" id="nv-gps">não capturada</div>
+        </div>
+        <button type="button" class="btn sm out-green" id="nv-gps-btn"
+                onclick="capturarGpsVistoria()">Capturar</button>
+      </div>
+
+      <div class="sec-title">Quem acompanhou</div>
+      <div class="g2">
+        <div class="field" style="margin:0">
+          <label for="nv-acomp-nome">Nome</label>
+          <input type="text" id="nv-acomp-nome" maxlength="160" placeholder="Quem recebeu o fiscal">
+        </div>
+        <div class="field" style="margin:0">
+          <label for="nv-acomp-qual">Qualificação</label>
+          <select id="nv-acomp-qual">
+            <option value="">—</option>
+            @foreach (\App\Models\Vistoria::QUALIFICACOES as $valor => $rotulo)
+              <option value="{{ $valor }}">{{ $rotulo }}</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
+
+      {{-- Só aparece quando o imóvel tem protocolo de desmembramento ou
+           unificação deferido e ainda sem vistoria. É o vínculo que, mais
+           tarde, libera o ato cadastral. --}}
+      <div id="nv-protocolo-caixa" hidden>
+        <div class="sec-title">Processo atendido</div>
+        <div class="field">
+          <label for="nv-protocolo">Esta vistoria atende ao protocolo</label>
+          <select id="nv-protocolo"><option value="">— nenhum —</option></select>
+        </div>
+      </div>
+
+      <button type="button" class="btn sm vs-atalho" onclick="vistoriaRapida()">
+        Vistoria rápida — só situação e foto</button>
+    </div>
+
+    {{-- ── 2 · A OBRA ── --}}
+    <div class="vs-painel" id="nv-p2">
+      <div class="sec-title">Alvará</div>
+      <div class="vs-opcoes" id="nv-alvara">
+        @foreach (\App\Models\Vistoria::ALVARA as $valor => $rotulo)
+          <button type="button" class="vs-op" data-valor="{{ $valor }}"
+                  onclick="escolherAlvara('{{ $valor }}')">{{ $rotulo }}</button>
         @endforeach
-      </select>
-    </div>
+      </div>
+      <div class="field" id="nv-alvara-num-campo" hidden style="margin-top:8px">
+        <label for="nv-alvara-numero">Número do alvará</label>
+        <input type="text" id="nv-alvara-numero" class="mono" maxlength="40">
+      </div>
 
-    <div class="field" style="display:none">
-      <label>Coordenada capturada</label>
-      <div class="valor" id="nv-gps" style="font-size:12.5px">—</div>
-    </div>
+      <div class="sec-title">Área construída aferida</div>
+      {{-- O método vai IMPRESSO junto do número. Perito que contesta multa por
+           metro quadrado contesta a medição, e "estimativa visual" precisa
+           aparecer como o que é — ver Vistoria::METODOS_AREA. --}}
+      <div class="g2">
+        <div class="field" style="margin:0">
+          <label for="nv-area">Área (m²)</label>
+          <input type="number" id="nv-area" class="mono" inputmode="decimal"
+                 min="0" max="999999" step="0.01" placeholder="88,02">
+        </div>
+        <div class="field" style="margin:0">
+          <label for="nv-area-metodo">Como foi obtida</label>
+          <select id="nv-area-metodo">
+            <option value="">—</option>
+            @foreach (\App\Models\Vistoria::METODOS_AREA as $valor => $rotulo)
+              <option value="{{ $valor }}">{{ $rotulo }}</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
+      <div class="cad-nota" style="margin-top:8px">É esta área que calcula a multa
+        por metro quadrado no auto de infração.</div>
 
-    {{-- Só aparece quando o imóvel tem protocolo de desmembramento ou
-         unificação deferido e ainda sem vistoria. Numa vistoria de rotina —
-         a esmagadora maioria — perguntar "atende a qual protocolo?" é ruído.
-         É o vínculo que, mais tarde, libera o ato cadastral. --}}
-    <div id="nv-protocolo-caixa" hidden>
-      <div class="sec-title">Processo atendido</div>
-      <div class="field">
-        <label for="nv-protocolo">Esta vistoria atende ao protocolo</label>
-        <select id="nv-protocolo"><option value="">— nenhum —</option></select>
+      <div class="sec-title">Fase da obra</div>
+      <div class="vs-opcoes" id="nv-fase">
+        @foreach (\App\Models\Vistoria::FASES_OBRA as $valor => $rotulo)
+          <button type="button" class="vs-op" data-valor="{{ $valor }}"
+                  onclick="escolherFase('{{ $valor }}')">{{ $rotulo }}</button>
+        @endforeach
       </div>
     </div>
 
-    <div class="sec-title">Irregularidades constatadas</div>
-    <div class="checklist" id="nv-checklist"></div>
+    {{-- ── 3 · CONSTATAÇÕES ── --}}
+    <div class="vs-painel" id="nv-p3">
+      <div class="sec-title">Irregularidades constatadas</div>
+      <div class="checklist" id="nv-checklist"></div>
 
-    <div class="sec-title">Observações</div>
-    <div class="field">
-      <label for="nv-obs">Descrição livre</label>
-      <textarea id="nv-obs" rows="3" maxlength="5000"
-                style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
-                placeholder="O que foi constatado em campo"></textarea>
+      {{-- A fundamentação vem sugerida pelas irregularidades marcadas
+           (LavraturaService::artigosSugeridos) e é conferida em campo, onde os
+           fatos estão à vista — não semanas depois, na mesa. --}}
+      <div class="sec-title">Artigos de lei</div>
+      <div id="nv-artigos"><div class="leg">Marque as irregularidades para ver
+        os artigos que as enquadram.</div></div>
+
+      {{-- Exigências como ITENS: é esta lista que a notificação imprime. Em
+           texto corrido, alguém teria de reler e reinterpretar depois. --}}
+      <div class="sec-title">Exigências</div>
+      <div class="vs-nova-exig">
+        <input type="text" id="nv-exig-texto" maxlength="500"
+               placeholder="O que o administrado deve fazer"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addExigencia()}">
+        <input type="number" id="nv-exig-prazo" class="mono" min="1" max="3650"
+               placeholder="dias" title="Prazo em dias (opcional)">
+        <button type="button" class="btn sm primary" onclick="addExigencia()">+</button>
+      </div>
+      <div id="nv-exigencias"></div>
+
+      <div class="sec-title">Observações</div>
+      <div class="field">
+        <label for="nv-obs">Descrição livre</label>
+        <textarea id="nv-obs" rows="3" maxlength="5000"
+                  style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
+                  placeholder="O que foi constatado em campo"></textarea>
+      </div>
     </div>
 
-    <div class="sec-title-row">
-      <div class="sec-title">Evidências</div>
-      <label class="btn out-green sm sec-title-acao" style="cursor:pointer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-          <circle cx="12" cy="13" r="4"/>
-        </svg>
-        Foto
-        {{-- `capture="environment"` abre a câmera traseira direto no celular;
-             no desktop o mesmo input vira seletor de arquivo. --}}
-        <input type="file" accept="image/*,application/pdf" multiple capture="environment"
-               style="display:none" onchange="anexarArquivos(this)">
-      </label>
+    {{-- ── 4 · FOTOS ── --}}
+    <div class="vs-painel" id="nv-p4">
+      <div class="sec-title-row">
+        <div class="sec-title">Fotos da vistoria</div>
+        <label class="btn out-green sm sec-title-acao" style="cursor:pointer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Adicionar
+          {{-- `capture="environment"` abre a câmera traseira direto no celular;
+               no desktop o mesmo input vira seletor de arquivo. --}}
+          <input type="file" accept="image/*,application/pdf" multiple capture="environment"
+                 style="display:none" onchange="anexarArquivos(this)">
+        </label>
+      </div>
+      <div class="leg">Descreva cada foto. Legenda é o que transforma a imagem em
+        prova que se sustenta sozinha, meses depois.</div>
+      <div class="anexos" id="nv-anexos"></div>
     </div>
-    <div class="anexos" id="nv-anexos"></div>
 
-    <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-vistoria')">Cancelar</button>
-      <button class="btn primary" onclick="gravarVistoria()">Gravar vistoria</button>
+    {{-- ── 5 · REVISÃO ── --}}
+    <div class="vs-painel" id="nv-p5">
+      <div class="leg">Confira antes de gravar. A vistoria é ato: depois de
+        gravada, ela fundamenta notificação, auto e embargo.</div>
+      <div id="nv-revisao"></div>
+    </div>
+
+    </div>{{-- /vs-corpo --}}
+
+    <div class="btn-row vs-rodape">
+      <button class="btn" id="nv-voltar" onclick="passo(-1)">Voltar</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fecharVistoria()">Cancelar</button>
+      <button class="btn primary" id="nv-avancar" onclick="passo(1)">Avançar</button>
+      <button class="btn primary" id="nv-gravar" onclick="gravarVistoria()" hidden>Gravar vistoria</button>
     </div>
   </div>
 </div>
@@ -1366,6 +1447,113 @@
 
      `aria-hidden` na marca e `aria-live` no texto: para quem usa leitor de
      tela, o que informa é a frase, não o desenho. --}}
+{{-- ══════ CORREÇÃO CADASTRAL — BARRA DE MODO ══════
+     Fica sobre o mapa, fina, dizendo o passo em que se está e quantos lotes já
+     foram marcados. É o que substitui o painel lateral durante o trabalho: o
+     gesto acontece no mapa, e o mapa continua inteiro à vista. --}}
+<div class="cad-barra" id="cad-barra" hidden>
+  <span class="cad-barra-modo" id="cad-barra-modo">Corrigir quadra</span>
+  <span class="cad-barra-passo" id="cad-barra-passo">Toque nos lotes do mapa.</span>
+  <div class="cad-barra-acoes">
+    <button type="button" class="btn sm" id="cad-barra-extra" hidden></button>
+    <button type="button" class="btn sm primary" id="cad-barra-ok" hidden></button>
+    <button type="button" class="btn sm" onclick="sairModoCadastral()">Sair</button>
+  </div>
+</div>
+
+{{-- ══════ CORREÇÃO CADASTRAL — JANELA DE DADOS ══════
+     Só o que é digitação e conferência. A janela pode ser fechada sem perder o
+     trabalho: o que foi marcado ou desenhado continua no mapa, e a barra
+     oferece reabrir. --}}
+<div class="modal-bg" id="m-cad" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharModalCad()">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2.5" y="2.5" width="8" height="8" rx="1.4"/>
+          <rect x="2.5" y="13.5" width="8" height="8" rx="1.4"/>
+          <rect x="13.5" y="13.5" width="8" height="8" rx="1.4"/>
+          <path d="M21.2 2.8a1.9 1.9 0 0 1 0 2.7l-6 6-3 .8.8-3 6-6a1.9 1.9 0 0 1 2.2-.5z"/>
+        </svg>
+      </span>
+      <span id="cad-modal-titulo">Correção cadastral</span>
+    </h3>
+
+    {{-- QUADRA EM MASSA --}}
+    <div class="cad-painel" id="cadp-quadra">
+      <div id="cad-ato" hidden></div>
+      <div class="leg" id="cad-contagem">Toque nos lotes do mapa para marcá-los.</div>
+      <div id="cad-acoes" hidden>
+        <div class="field" style="margin:10px 0 6px" id="cad-quadra-campo">
+          <label for="cad-quadra">Quadra a gravar</label>
+          <input type="text" id="cad-quadra" class="mono" inputmode="numeric" maxlength="20"
+                 placeholder="24">
+        </div>
+        <div class="seg" style="margin:0">
+          <button type="button" id="cad-btn-limpar" onclick="limparSelecaoCadastral()">Limpar</button>
+          <button type="button" id="cad-btn-conferir" onclick="conferirQuadraSelecao()">Conferir</button>
+        </div>
+        <div id="cad-previa"></div>
+      </div>
+    </div>
+
+    {{-- DESENHO / COORDENADAS — os dois terminam no mesmo formulário, porque
+         o que muda é como a geometria foi obtida, não o que se pede depois. --}}
+    <div class="cad-painel" id="cadp-desenho" hidden>
+      <div id="coo-caixa" hidden>
+        <div class="leg">
+          Um vértice por linha, como vem no memorial. Exemplo:<br>
+          <span class="mono" style="font-size:10.5px">V1 15°31'03,7"S 54°18'39,9"W</span>
+        </div>
+        <textarea id="coo-texto" rows="7" spellcheck="false"
+                  style="width:100%;margin:6px 0;font-family:'JetBrains Mono',monospace;font-size:11.5px"
+                  placeholder="15°31'03,7&quot;S 54°18'39,9&quot;W&#10;15°31'03,7&quot;S 54°18'39,5&quot;W&#10;15°31'04,4&quot;S 54°18'39,5&quot;W"></textarea>
+        <div class="seg" style="margin:0">
+          <button type="button" onclick="largarCoordenadas()">Limpar</button>
+          <button type="button" onclick="lerCoordenadas()">Ler coordenadas</button>
+        </div>
+        <div id="coo-resultado"></div>
+      </div>
+
+      <div id="des-desenhando" hidden>
+        <div class="leg" id="des-contagem">Toque nos cantos do lote. Duplo toque fecha.</div>
+        <div class="seg" style="margin:6px 0 0">
+          <button type="button" onclick="desfazerVertice()">Desfazer canto</button>
+          <button type="button" onclick="largarDesenho()">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="des-dados" hidden>
+        <div class="field" style="margin:10px 0 6px">
+          <label for="des-bairro">Bairro</label>
+          <input type="text" id="des-bairro" maxlength="120" placeholder="Jardim Europa IV">
+        </div>
+        <div class="g2" style="margin-bottom:6px">
+          <div class="field" style="margin:0">
+            <label for="des-quadra">Quadra</label>
+            <input type="text" id="des-quadra" class="mono" inputmode="numeric" maxlength="20" placeholder="05">
+          </div>
+          <div class="field" style="margin:0">
+            <label for="des-lote">Lote</label>
+            <input type="text" id="des-lote" class="mono" maxlength="20" placeholder="1">
+          </div>
+        </div>
+        <div class="seg" style="margin:0">
+          <button type="button" onclick="largarDesenho()">Descartar</button>
+          <button type="button" onclick="conferirDesenho()">Conferir</button>
+        </div>
+        <div id="des-previa"></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="fecharModalCad()">Ver no mapa</button>
+    </div>
+  </div>
+</div>
+
 <div class="tela-carregando" id="tela-carregando">
   <div class="carregando-marca" aria-hidden="true">
     <img class="marca-face" src="@assetv('img/logo-128.png')" alt="">

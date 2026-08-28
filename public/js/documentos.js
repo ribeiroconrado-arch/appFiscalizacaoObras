@@ -277,6 +277,11 @@ async function sugerirDaUltimaVistoria(loteId) {
     const r = await fetch(`/api/vistorias/${ultima.id}/sugestao`, { headers: { Accept: 'application/json' } })
     const s = await r.json()
 
+    // A área e as exigências vêm ANTES do aviso de artigo faltando: mesmo sem
+    // fundamentação cadastrada, elas são o que a vistoria apurou, e perdê-las
+    // por causa de um `return` seria jogar fora o trabalho de campo.
+    aproveitarDaVistoria(s)
+
     if (s.aviso) { caixa.innerHTML = `<div class="aviso-legal">${esc(s.aviso)}</div>`; return }
 
     fdState.artigos = s.artigos.map(a => a.id)
@@ -284,13 +289,38 @@ async function sugerirDaUltimaVistoria(loteId) {
       document.getElementById('nd-lei').value = s.artigos[0].legislacao_id
       trocarLeiDoc()
     }
+    const areaDita = s.vistoria?.area_rotulo
+      ? ` Área aferida: <b>${esc(s.vistoria.area_rotulo)}</b>.` : ''
     caixa.innerHTML = `<div style="font-size:12.5px;color:var(--tx2);padding:9px 12px;
         background:var(--gl);border:1.5px solid var(--gm);border-radius:var(--r)">
         Vistoria de <b>${esc(ultima.data_hora)}</b> · ${s.irregularidades.length} irregularidade(s).
-        <b>${s.artigos.length} artigo(s)</b> sugeridos automaticamente.</div>`
+        <b>${s.artigos.length} artigo(s)</b> sugeridos automaticamente.${areaDita}</div>`
   } catch (e) {
     console.error(e)
     caixa.innerHTML = '<div class="lista-vazia">Não foi possível buscar a sugestão de artigos.</div>'
+  }
+}
+
+/**
+ * Leva ao documento o que a vistoria já apurou: a área e as exigências.
+ *
+ * Só preenche campo VAZIO. O que o fiscal digitou na peça é decisão dele sobre
+ * a peça, e não pode ser sobrescrito por um dado de origem — nem quando o dado
+ * de origem é o mais recente.
+ *
+ * @param {Object} s resposta de /api/vistorias/{id}/sugestao
+ */
+function aproveitarDaVistoria(s) {
+  const area = document.getElementById('nd-area-construida')
+  if (area && !area.value && s.vistoria?.area_construida_m2) {
+    area.value = Number(s.vistoria.area_construida_m2).toFixed(2)
+    recalcularMultaDoc()
+  }
+
+  const desc = document.getElementById('nd-descricao')
+  if (desc && !desc.value.trim() && s.exigencias?.length) {
+    desc.value = 'Fica o administrado NOTIFICADO a:\n'
+      + s.exigencias.map((e, i) => `${i + 1}. ${e.rotulo}`).join('\n')
   }
 }
 

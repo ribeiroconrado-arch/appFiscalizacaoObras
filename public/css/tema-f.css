@@ -1601,3 +1601,173 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    coisas diferentes numa fiscalização, e o rótulo sozinho não diz qual é. */
 .fi-midia-data{color:var(--tx3);font-weight:600;text-transform:none;
   letter-spacing:0;margin-left:4px}
+
+/* ══════════════════════════════════════════════════════════════
+   CORREÇÃO CADASTRAL — BARRA DE MODO
+   ══════════════════════════════════════════════════════════════ */
+
+/* Fina, no alto do mapa, dizendo o passo. É a única coisa que fica na frente
+   do mapa durante o trabalho — o resto (campos, prévia, confirmação) mora na
+   janela, que pode ser fechada e reaberta sem perder o que já foi feito.
+
+   Antes tudo isso vivia na coluna lateral de 262px: o gesto disputava espaço
+   com o mapa e o formulário ficava espremido. Separando por natureza, cada um
+   ganha o lugar certo. */
+.cad-barra{
+  position:fixed;top:66px;left:50%;transform:translateX(-50%);z-index:890;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;
+  /* `max-content` para a barra crescer até caber o conteúdo em UMA linha. Sem
+     isso, a largura por ajuste automático parava em 590px e a barra quebrava em
+     duas linhas mesmo sobrando espaço na tela — o teto continua sendo a largura
+     útil, então em tela estreita ela quebra de verdade, que é o certo. */
+  width:max-content;
+  max-width:min(860px, calc(100vw - 24px));
+  padding:8px 10px 8px 14px;border-radius:999px;
+  background:var(--sur);border:1.5px solid var(--gm);
+  box-shadow:0 8px 24px rgba(22,33,28,.18);
+}
+.cad-barra-modo{
+  font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--gd);background:var(--gl);padding:4px 9px;border-radius:999px;flex-shrink:0;
+}
+.cad-barra-passo{font-size:12.5px;color:var(--tx);font-weight:600;min-width:0}
+.cad-barra-acoes{display:flex;gap:6px;flex-shrink:0}
+.cad-barra .btn.sm{padding:6px 11px}
+
+/* No celular a barra vira bloco: em pílula ela empurraria os botões para fora
+   da tela justamente onde a tela é menor. */
+@media(max-width:620px){
+  .cad-barra{border-radius:14px;left:12px;right:12px;transform:none;max-width:none;
+    justify-content:flex-start}
+}
+
+/* Lançador: três escolhas, uma por linha, e nada mais. */
+.cad-lanca{width:100%;justify-content:flex-start;margin-bottom:6px;text-align:left}
+
+/* ══════════════════════════════════════════════
+   VISTORIA DE OBRA — cinco passos
+   Mesma arquitetura do formulário de documento (cabeça fixa, corpo rolável,
+   rodapé fixo, altura travada), porque o problema é o mesmo: o rodapé não pode
+   mudar de lugar quando o conteúdo muda. Aqui isso pesa mais — quem usa está
+   de pé, no sol, com uma mão só.
+   ══════════════════════════════════════════════ */
+#m-vistoria .modal{max-width:640px}
+.vs-head{flex-shrink:0;padding:16px 52px 0 18px;border-bottom:1.5px solid var(--bord)}
+.vs-head .sub{font-size:12px;color:var(--tx2);margin:2px 0 10px}
+
+/* Barra de passos. Cada passo é alvo de toque de 44px de altura — mínimo do
+   dedo, não do mouse. Rola na horizontal em tela estreita em vez de espremer
+   os rótulos até virarem ilegíveis. */
+.vs-passos{display:flex;gap:2px;background:var(--bg);border-radius:var(--r) var(--r) 0 0;
+  padding:3px;overflow-x:auto}
+.vs-passo{flex:1 1 0;min-width:88px;min-height:44px;display:flex;align-items:center;
+  justify-content:center;gap:6px;padding:8px 6px;border:none;border-radius:6px;
+  background:transparent;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;
+  font-weight:600;color:var(--tx3);white-space:nowrap;transition:background .15s,color .15s}
+.vs-passo .n{display:inline-flex;align-items:center;justify-content:center;
+  width:19px;height:19px;border-radius:999px;background:var(--blt);color:var(--tx3);
+  font-size:10.5px;font-weight:800;flex-shrink:0}
+.vs-passo.at{background:var(--sur);color:var(--gd);box-shadow:var(--sh)}
+.vs-passo.at .n{background:var(--gd);color:#fff}
+/* Passo já visitado marca com ✓ no lugar do número: o que ficou para trás
+   informa "conferido", e não "faltando". */
+.vs-passo.feito .n{background:var(--g);color:#fff;font-size:0}
+.vs-passo.feito .n::after{content:'✓';font-size:11px}
+
+.vs-corpo{flex:1;min-height:0;overflow-y:auto;padding:14px 18px}
+.vs-painel{display:none}
+.vs-painel.at{display:block}
+
+.btn-row.vs-rodape{flex-shrink:0;margin:0;padding:12px 18px;gap:8px;
+  justify-content:flex-start;align-items:center;
+  border-top:1.5px solid var(--bord);background:var(--sur)}
+.btn-row.vs-rodape [hidden]{display:none !important}
+
+/* Coordenada da vistoria: dado e ação lado a lado, porque capturar a posição é
+   uma decisão sobre aquele dado, e não um comando solto na tela. */
+.vs-gps{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px 11px;
+  border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur)}
+.vs-gps>div:first-child{flex:1;min-width:0}
+.vs-gps .fi-val{font-size:12px;word-break:break-all}
+
+/* Escolha única em botões, não em <select>: alvará e fase têm poucas opções e
+   todas precisam estar à vista. Abrir uma lista suspensa para escolher entre
+   três custa dois toques a mais e esconde o que existe. */
+.vs-opcoes{display:flex;flex-wrap:wrap;gap:7px}
+.vs-op{min-height:40px;padding:9px 13px;border:1.5px solid var(--f-bord);border-radius:999px;
+  background:var(--sur);color:var(--tx);cursor:pointer;font-family:'Inter',sans-serif;
+  font-size:12.5px;font-weight:600;transition:all .13s}
+.vs-op:hover{border-color:var(--f-bord-foco)}
+.vs-op.at{border-color:var(--f-bord-foco);background:var(--gl);color:var(--gd);font-weight:700}
+
+/* Linha de nova exigência: texto largo, prazo estreito, "+" fixo. */
+.vs-nova-exig{display:flex;gap:7px;margin-bottom:8px}
+.vs-nova-exig input{flex:1;min-width:0;font-size:13.5px;padding:9px 12px;
+  border:1.5px solid var(--f-bord);border-radius:var(--r);background:var(--sur);
+  color:var(--tx);font-family:inherit;outline:none}
+.vs-nova-exig input:focus{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.vs-nova-exig input[type=number]{flex:0 0 76px}
+.vs-nova-exig .btn{flex-shrink:0;min-width:42px;justify-content:center}
+
+.vs-exig{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;margin-bottom:6px;
+  border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur)}
+.vs-exig .num{flex-shrink:0;width:20px;height:20px;border-radius:999px;background:var(--blt);
+  color:var(--tx2);font-size:10.5px;font-weight:800;display:flex;align-items:center;
+  justify-content:center;margin-top:1px}
+.vs-exig .txt{flex:1;min-width:0;font-size:13px;line-height:1.4;color:var(--tx)}
+.vs-exig .prazo{display:block;font-size:10.5px;font-weight:700;color:var(--tx3);margin-top:2px}
+
+/* Artigo sugerido: o número em mono (é código, e se compara na vertical), a
+   conduta em texto, e a base da multa dita como ela será calculada. */
+.vs-artigo{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;margin-bottom:6px;
+  border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur);cursor:pointer;
+  transition:all .13s}
+.vs-artigo:hover{border-color:var(--gm)}
+.vs-artigo.marcado{border-color:var(--f-bord-foco);background:var(--gl)}
+.vs-artigo input{width:16px;height:16px;accent-color:var(--f-bord-foco);margin-top:2px;flex-shrink:0}
+.vs-artigo .num{font-family:'JetBrains Mono','Courier New',monospace;font-weight:600;
+  font-size:12px;color:var(--gd)}
+.vs-artigo .cond{font-size:12.5px;line-height:1.35;color:var(--tx);margin-top:1px}
+.vs-artigo .base{font-size:10.5px;color:var(--tx3);font-weight:700;margin-top:2px}
+
+/* Legenda da foto sob a miniatura: a linha do anexo passa a ter duas alturas
+   de campo, então a grade de três colunas vira duas linhas. */
+.anexo-item.com-desc{grid-template-columns:46px 1fr auto}
+.anexo-item .d{width:100%;border:none;background:none;font-family:inherit;font-size:11.5px;
+  color:var(--tx2);outline:none;margin-top:2px}
+.anexo-item .d::placeholder{color:var(--tx3)}
+.anexo-fach{display:inline-flex;align-items:center;gap:5px;margin-top:3px;cursor:pointer;
+  font-size:10.5px;font-weight:700;color:var(--tx3)}
+.anexo-fach input{width:14px;height:14px;accent-color:var(--f-bord-foco)}
+.anexo-item.e-fachada{border-color:var(--f-bord-foco)}
+.anexo-item.e-fachada .anexo-fach{color:var(--gd)}
+
+/* Atalho: separado do resto por uma linha, porque é uma saída do fluxo e não
+   mais um campo dele. */
+.vs-atalho{width:100%;margin-top:16px;padding-top:0;justify-content:center}
+
+/* Revisão: o ato como ele será gravado, em linhas de rótulo e valor. */
+.vs-rev-linha{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--bord)}
+.vs-rev-linha:last-child{border-bottom:none}
+.vs-rev-rot{flex:0 0 132px;font-size:10.5px;font-weight:700;color:var(--tx3);
+  text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+.vs-rev-val{flex:1;min-width:0;font-size:13px;color:var(--tx);line-height:1.45}
+.vs-rev-val .falta{color:var(--tx3);font-style:italic}
+.vs-rev-val ol{margin:0;padding-left:16px}
+.vs-rev-val li{margin:2px 0}
+
+/* Legenda de apoio, fora do painel de controles onde `.leg` já vivia. */
+.vs-corpo .leg{font-size:11px;color:var(--tx2);line-height:1.5;margin:2px 0 8px}
+
+/* Alvos de dedo, e não de mouse. O `.btn.sm` do sistema tem 31px — cabe numa
+   lista de escritório, não numa mão só, de pé, ao sol. Estes quatro são as
+   ações que a tela de vistoria executa EM CAMPO, e só eles crescem: mudar o
+   `.btn.sm` inteiro mexeria em telas onde 31px nunca atrapalhou. */
+#m-vistoria #nv-gps-btn,
+#m-vistoria .vs-atalho,
+#m-vistoria .sec-title-acao,
+.vs-nova-exig input,
+.vs-nova-exig .btn{min-height:44px}
+.vs-aviso{margin:0 0 8px;padding:6px 9px;border-radius:var(--r);font-size:11px;
+  font-weight:700;color:var(--gold-dk);background:var(--gold-lt,#FDF3E0);
+  border:1px solid var(--gold,#E8A33D);line-height:1.35}

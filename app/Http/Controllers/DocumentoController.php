@@ -135,7 +135,19 @@ class DocumentoController extends Controller
                 'id'        => $vistoria->id,
                 'data_hora' => $vistoria->data_hora?->format('d/m/Y H:i'),
                 'lote_id'   => $vistoria->lote_id,
+                // A área medida em campo é o número que fecha a conta da multa
+                // por metro quadrado. Sem ela aqui, Artigo::calcularMulta()
+                // devolve "Área não informada" e o auto sai sem valor — que
+                // era exatamente o que acontecia antes desta linha existir.
+                'area_construida_m2' => $vistoria->area_construida_aferida_m2,
+                'area_rotulo'        => $vistoria->areaAferidaRotulo(),
             ],
+            // As providências já escritas em campo, na ordem em que o fiscal as
+            // ditou. A peça nasce com a lista pronta, em vez de alguém
+            // reescrevê-la de memória dias depois.
+            'exigencias' => $vistoria->exigencias->map(fn ($e) => [
+                'texto' => $e->texto, 'prazo_dias' => $e->prazo_dias, 'rotulo' => $e->rotulo(),
+            ]),
             'irregularidades' => $vistoria->irregularidades()->get(['irregularidades.id', 'codigo', 'descricao']),
             'artigos' => $artigos->map(fn ($a) => [
                 'id' => $a->id, 'numero' => $a->numero, 'rotulo' => $a->rotulo(),

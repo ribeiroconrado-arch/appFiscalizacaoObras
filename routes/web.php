@@ -71,6 +71,8 @@ Route::middleware('auth')->group(function () {
 
         // Fiscalização
         Route::get('/irregularidades', [VistoriaController::class, 'catalogo']);
+        // O enquadramento conferido em CAMPO, antes de a vistoria existir.
+        Route::get('/artigos-sugeridos', [VistoriaController::class, 'artigosSugeridos']);
         // Quadra vazia e uma pendencia de importacao, nao um defeito eterno:
         // o extrator prefere deixar em branco a chutar. Estas duas rotas sao
         // como se corrige — de uma vez, o quarteirao inteiro.

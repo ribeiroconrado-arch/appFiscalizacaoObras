@@ -16,7 +16,7 @@ class Evidencia extends Model
 
     protected function casts(): array
     {
-        return ['data_hora' => 'datetime'];
+        return ['data_hora' => 'datetime', 'fachada' => 'boolean'];
     }
 
     public function vistoria(): BelongsTo { return $this->belongsTo(Vistoria::class); }
