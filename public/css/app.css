@@ -31,6 +31,18 @@
   --shl:0 6px 28px rgba(0,50,10,.11);
 }
 *{box-sizing:border-box;margin:0;padding:0}
+
+/* O atributo `hidden` tem de VENCER.
+   A regra do navegador para [hidden] e `display:none` sem peso nenhum, entao
+   qualquer classe que declare display — `.cad-barra{display:flex}`, `.btn`,
+   `.field` — passa por cima dela, e o elemento continua na tela mesmo com o
+   atributo posto. Foi assim que a barra do modo cadastral apareceu em toda a
+   aplicacao: o JS marcava `barra.hidden = true` e o CSS a mostrava assim mesmo
+   (ate entao ela ficava escondida ATRAS do sub-cabecalho, e ninguem via).
+   Como o codigo inteiro usa `.hidden = true/false` para mostrar e esconder,
+   esta linha vale mais do que remendar caso a caso — ha tres remendos desses
+   no tema, todos anteriores a este comentario. */
+[hidden]{display:none !important}
 html,body{height:100%}
 body{
   font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
