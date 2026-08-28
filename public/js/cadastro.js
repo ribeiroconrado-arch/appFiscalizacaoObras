@@ -131,6 +131,12 @@ function modoCadastral(modo) {
   sairModoCadastral(true)
   cadModo = modo
 
+  // O lancador recolhe assim que a escolha e feita. Ele e um menu: cumprida a
+  // funcao, fica por cima do mapa — que e justamente onde o trabalho comeca a
+  // acontecer —, e no caso das coordenadas ficaria por cima da propria janela
+  // que ele acabou de abrir.
+  if (typeof fecharPaineisMapa === 'function') { fecharPaineisMapa() }
+
   if (modo === 'quadra') {
     ligarSelecao('quadra')
   } else if (modo === 'desenho') {
@@ -173,6 +179,10 @@ function abrirModalCad() {
   document.getElementById('cad-modal-titulo').textContent =
     quadra ? 'Quadra dos lotes marcados'
       : cadModo === 'coordenadas' ? 'Lote por coordenadas' : 'Dados do lote desenhado'
+  // Tambem aqui, e nao so na escolha do modo: a janela pode ser aberta bem
+  // depois, pela barra ("Informar a quadra", "Concluir desenho"), e ate la o
+  // usuario pode ter reaberto o lancador.
+  if (typeof fecharPaineisMapa === 'function') { fecharPaineisMapa() }
   openModal('m-cad')
   pintarPainelCadastro()
 }
