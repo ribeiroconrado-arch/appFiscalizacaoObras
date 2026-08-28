@@ -1614,14 +1614,20 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    com o mapa e o formulário ficava espremido. Separando por natureza, cada um
    ganha o lugar certo. */
 .cad-barra{
-  position:fixed;top:66px;left:50%;transform:translateX(-50%);z-index:890;
+  /* 156px: uma linha ABAIXO do chip de contagem (118px), que por sua vez ficou
+     abaixo do sub-cabecalho (68 a 110px). A barra nasceu com top:66px, copiado
+     do chip ANTES do sub-cabecalho existir — e passou a cair em cima dele.
+     Quem mexer nesta altura confira as tres faixas juntas. */
+  position:fixed;top:156px;left:50%;transform:translateX(-50%);z-index:890;
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;
   /* `max-content` para a barra crescer até caber o conteúdo em UMA linha. Sem
      isso, a largura por ajuste automático parava em 590px e a barra quebrava em
      duas linhas mesmo sobrando espaço na tela — o teto continua sendo a largura
      útil, então em tela estreita ela quebra de verdade, que é o certo. */
   width:max-content;
-  max-width:min(860px, calc(100vw - 24px));
+  /* A coluna de ferramentas do Leaflet ocupa a direita (34px mais margem): a
+     barra para antes dela, em vez de passar por baixo. */
+  max-width:min(860px, calc(100vw - 120px));
   padding:8px 10px 8px 14px;border-radius:999px;
   background:var(--sur);border:1.5px solid var(--gm);
   box-shadow:0 8px 24px rgba(22,33,28,.18);
@@ -1637,8 +1643,11 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* No celular a barra vira bloco: em pílula ela empurraria os botões para fora
    da tela justamente onde a tela é menor. */
 @media(max-width:620px){
-  .cad-barra{border-radius:14px;left:12px;right:12px;transform:none;max-width:none;
-    justify-content:flex-start}
+  /* `width:auto` e obrigatorio aqui: com `width:max-content` herdado, a caixa
+     se dimensiona pelo conteudo e o `right` e ignorado — a barra chegava a
+     818px de largura numa tela de 390 e os botoes saiam pela direita. */
+  .cad-barra{border-radius:14px;left:12px;right:60px;width:auto;transform:none;
+    max-width:none;justify-content:flex-start}
 }
 
 /* Lançador: três escolhas, uma por linha, e nada mais. */

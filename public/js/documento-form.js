@@ -60,7 +60,14 @@ async function novoDocumento(ev) {
     // Traço antes do primeiro auto: acima ficam os atos que AVISAM, abaixo os
     // que SANCIONAM. Ver o comentário em OBS_TIPO_DOC.
     separar: t.valor === 'auto_embargo',
-    acao: () => escolherTipoDoc(t.valor),
+    // "Vistoria" nao e uma peca a redigir: e o ATO de campo, com checklist,
+    // area aferida e fotos — e e dele que as outras quatro nascem. Mandar este
+    // item para o formulario de documento, como os demais, deixou a tela de
+    // vistoria inalcancavel a partir da ficha desde 7d9c0a3, quando o botao
+    // "Nova vistoria" foi absorvido por este menu.
+    acao: t.valor === 'vistoria'
+      ? () => novaVistoria()
+      : () => escolherTipoDoc(t.valor),
   })))
 }
 
