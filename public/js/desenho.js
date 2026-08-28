@@ -75,6 +75,9 @@ function iniciarDesenho(opcoes) {
   if (!mapa.getPane('desenho')) {
     mapa.createPane('desenho').style.zIndex = 650
   }
+  // O painel volta a RECEBER cliques enquanto se desenha. Ele fica surdo o
+  // resto do tempo — ver _limpar() e o porque disso.
+  mapa.getPane('desenho').style.pointerEvents = ''
   desenhoState.captura = L.rectangle(
     [[-90, -180], [90, 180]],
     { pane: 'desenho', interactive: true, stroke: false, fillOpacity: 0, className: 'desenho-captura' }
@@ -276,6 +279,20 @@ function _limpar() {
     desenhoState.marcadores.forEach(m => mapa.removeLayer(m))
     mapa.off('mousemove', _aoMover)
     mapa.doubleClickZoom.enable()
+
+    // O PAINEL FICA SURDO ao sair do desenho.
+    //
+    // Remover as camadas nao basta: para desenhar dentro do painel proprio, o
+    // Leaflet cria ali um <canvas> que cobre o mapa inteiro e vive acima dos
+    // lotes (z-index 650 contra 400). Ele nao e removido junto com as camadas
+    // — e, vazio, continuava interceptando todo clique e devolvendo nada.
+    //
+    // Era isto que travava a correcao cadastral: depois de desenhar um lote,
+    // voltar para "corrigir quadra" nao marcava mais nada, porque o toque
+    // nunca chegava ao lote. Nao ha efeito visual: o painel segue pintando o
+    // que precisa pintar; so deixa de disputar o clique quando nao ha desenho.
+    const painel = mapa.getPane('desenho')
+    if (painel) { painel.style.pointerEvents = 'none' }
   }
 
   Object.assign(desenhoState, {
