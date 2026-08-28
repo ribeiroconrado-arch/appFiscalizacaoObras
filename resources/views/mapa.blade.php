@@ -1539,12 +1539,11 @@
     <div style="flex:1"></div>
 
     <div class="df-opcoes" id="fd-opcoes-wrap" hidden>
-      <button type="button" class="btn opcoes" id="fd-btn-opcoes" onclick="alternarOpcoesDoc(event, 'fd-menu')">
+      <button type="button" class="btn opcoes" id="fd-btn-opcoes" onclick="abrirOpcoesDoc(event)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
         Opções
       </button>
-      <div class="df-menu df-menu-cima" id="fd-menu"></div>
     </div>
 
     <button class="btn" id="fd-sair-edicao" onclick="sairEdicaoDoc()" hidden>Sair</button>

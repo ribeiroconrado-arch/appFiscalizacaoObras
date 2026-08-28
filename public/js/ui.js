@@ -333,7 +333,10 @@ function abrirMenuNovo(origem, opcoes) {
 
     const b = document.createElement('button')
     b.type = 'button'
-    b.className = 'menu-novo-op'
+    // `perigo` marca o item que desfaz alguma coisa. Ele fica no mesmo menu,
+    // e não num canto à parte, porque é ali que a pessoa procura — o que muda
+    // é a cor, que faz o dedo hesitar meio segundo antes de acertar o alvo.
+    b.className = 'menu-novo-op' + (o.perigo ? ' perigo' : '')
     b.innerHTML = (o.icone ? `<span class="menu-novo-ico">${o.icone}</span>` : '')
       + `<span class="menu-novo-txt"><span class="menu-novo-nome">${esc(o.rotulo)}</span>`
       + (o.obs ? `<span class="menu-novo-obs">${esc(o.obs)}</span>` : '')

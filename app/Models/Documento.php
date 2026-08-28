@@ -95,7 +95,11 @@ class Documento extends Model
         // Imprimir é o piso: qualquer documento visível pode ser impresso, em
         // qualquer estado. Rascunho sai com marca d'água, anulado também —
         // recusar a impressão de um anulado impediria juntá-lo ao processo.
-        $opcoes = ['pdf', 'imprimir_a4', 'imprimir_termica'];
+        // 'imprimir_a4' saiu: era o MESMO layout do 'pdf', por outro motor —
+        // duas linhas no menu para a mesma escolha de quem lê. A rota de
+        // impressão em A4 continua de pé (é a mesma da bobina), só deixou de
+        // ser oferecida como se fosse outra coisa.
+        $opcoes = ['pdf', 'imprimir_termica'];
 
         $autor = $this->agente_id === $u->id;
 

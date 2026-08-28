@@ -88,7 +88,7 @@ function renderOs(ordens) {
 
   alvo.innerHTML = ordens.map(o => {
     const tags = `<span class="badge ${esc(o.situacao.classe)}">${esc(o.situacao.texto)}</span>`
-      + (o.prioridade === 'alta' ? '<span class="badge bd-cr">Alta</span>' : '')
+      + (o.prioridade === 'alta' ? '<span class="badge bd-er">Alta</span>' : '')
 
     // Os designados são o dado que responde "isto é comigo?" — a pergunta que
     // faz o fiscal abrir a tela. Por isso ficam na primeira linha do corpo.

@@ -95,11 +95,11 @@ function renderDocumentos() {
             ${tags}
             <div class="df-opcoes card-opcoes">
               <button type="button" class="card-opcoes-btn" title="Opções"
-                      onclick="alternarOpcoesDoc(event, 'menu-card-${d.id}')">
+                      onclick="abrirOpcoesDoc(event, ${d.id})">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
               </button>
-              <div class="df-menu" id="menu-card-${d.id}"></div>
+
             </div>
           </div>
         </div>
@@ -112,7 +112,6 @@ function renderDocumentos() {
   // Os menus são montados depois do innerHTML: cada um depende das opções
   // que o servidor liberou para aquele documento.
   for (const d of dState.lista) {
-    montarMenuOpcoes(d.opcoes || [], 'menu-card-' + d.id, d.id)
   }
 }
 
@@ -345,7 +344,9 @@ async function abrirDocumento(id) {
     // cartão da lista.
     dFicha.doc = doc
     await abrirFormDoc({ documento: doc })
-    montarMenuOpcoes(doc.opcoes || [], 'fd-menu')
+    // O menu da ficha nasce no clique, como o do cartão: guardar as opções
+    // basta, e o desenho vem do mesmo lugar dos demais menus do sistema.
+    dFicha.opcoes = doc.opcoes || []
   } catch (e) {
     console.error(e)
     toast('Não foi possível abrir o documento', 'err')
@@ -366,62 +367,99 @@ async function abrirDocumento(id) {
  *
  * @type {Array<[string, string, boolean]>}
  */
-const OPCOES_DOC = [
-  ['pdf',              'Gerar PDF',                 false],
-  ['imprimir_a4',      'Imprimir em A4',            false],
-  ['imprimir_termica', 'Imprimir em bobina 80mm',   false],
-  ['lavrar',           'Lavrar documento',          false],
-  ['anular',           'Anular documento',          true],
-  ['excluir',          'Excluir rascunho',          true],
-]
+/**
+ * O catálogo do menu de opções: rótulo, para que serve, e o ícone.
+ *
+ * "Gerar PDF" e "Imprimir em A4" eram duas linhas para a mesma coisa — o mesmo
+ * layout, por dois motores diferentes (o gerador de PDF e a página que se
+ * manda para a impressora). Quem lê o menu não escolhe motor: escolhe papel.
+ * Ficou uma linha só, servida pelo PDF, que é arquivo de verdade e por isso
+ * também se anexa ao processo. A bobina de 80mm continua à parte porque é
+ * OUTRO papel — e é o único caminho para ela, já que o gerador de PDF não
+ * trabalha com página de altura variável.
+ */
+const OPCOES_DOC = {
+  pdf: {
+    rotulo: 'Imprimir em A4',
+    obs: 'Abre o PDF pronto para imprimir ou anexar ao processo.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>`,
+  },
+  imprimir_termica: {
+    rotulo: 'Imprimir em bobina 80mm',
+    obs: 'A via que se entrega em campo, na impressora portátil.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="6" rx="1"/><path d="M4 8h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1"/><path d="M7 14h10v8H7z"/></svg>`,
+  },
+  lavrar: {
+    rotulo: 'Lavrar documento',
+    obs: 'Dá número e data. Depois disso a peça não se edita mais.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`,
+  },
+  anular: {
+    rotulo: 'Anular documento',
+    obs: 'A peça continua no processo, marcada como sem efeito.',
+    perigo: true,
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>`,
+  },
+  excluir: {
+    rotulo: 'Excluir rascunho',
+    obs: 'Some de vez. Só vale antes de lavrar.',
+    perigo: true,
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>`,
+  },
+}
+
+/** A ordem do menu: primeiro o que produz papel, depois o que muda o estado. */
+const ORDEM_OPCOES_DOC = ['pdf', 'imprimir_termica', 'lavrar', 'anular', 'excluir']
 
 /**
- * Itens do menu, a partir do que o SERVIDOR liberou.
+ * Abre o menu de opções do documento — o MESMO menu do botão "Novo documento".
  *
- * A visibilidade é por classe `.open`, e não pelo atributo `hidden`: o menu é
- * um flex container, e `display:flex` na classe vence o `display:none` que o
- * `hidden` traz do navegador — foi assim que ele passou a nascer aberto.
+ * Eram dois menus com desenho diferente na mesma tela: um com ícone e uma
+ * linha explicando cada peça, outro com uma lista de texto puro. A pessoa que
+ * acabou de aprender um tinha de aprender o outro logo em seguida.
  *
- * @param {string[]} liberadas
- * @param {string} [alvo] id do elemento de menu (o da ficha, por padrão)
- * @param {number} [id] documento, quando o menu é o de um cartão da lista
+ * `id` nulo é o menu da FICHA, que lê as opções de `dFicha`. Com id, o menu
+ * sai de um cartão da lista e as opções vêm do documento carregado ali — e
+ * não embutidas no atributo `onclick`: JSON dentro de atributo HTML termina no
+ * primeiro aspas duplas, e a lista chegava vazia sem erro nenhum para avisar.
+ *
+ * @param {MouseEvent} ev
+ * @param {number|null} [id] documento, quando o menu sai de um cartão da lista
  */
-function montarMenuOpcoes(liberadas, alvo = 'df-menu', id = null) {
-  const menu = document.getElementById(alvo)
-  if (!menu) return
-  const chamada = c => (id === null ? `acaoDoc('${c}')` : `acaoDocDaLista(event, ${id}, '${c}')`)
-  menu.innerHTML = OPCOES_DOC
-    .filter(([chave]) => liberadas.includes(chave))
-    .map(([chave, rotulo, perigo]) =>
-      `<button type="button" class="df-item${perigo ? ' perigo' : ''}" onclick="${chamada(chave)}">${esc(rotulo)}</button>`)
-    .join('')
-  menu.classList.remove('open')
-}
+function abrirOpcoesDoc(ev, id = null) {
+  const liberadas = id === null
+    ? (dFicha.opcoes || [])
+    : (dState.lista.find(d => d.id === id)?.opcoes || [])
 
-/** Fecha todos os menus abertos — só um por vez faz sentido. */
-function fecharMenusOpcoes() {
-  document.querySelectorAll('.df-menu.open').forEach(m => m.classList.remove('open'))
-}
+  const itens = ORDEM_OPCOES_DOC
+    .filter(chave => liberadas.includes(chave) && OPCOES_DOC[chave])
+    .map((chave, i, lista) => {
+      const o = OPCOES_DOC[chave]
+      return {
+        rotulo: o.rotulo,
+        obs: o.obs,
+        icone: o.icone,
+        perigo: o.perigo,
+        // Traço antes do primeiro item destrutivo: acima está o que produz
+        // uma via, abaixo o que mexe no estado da peça.
+        separar: o.perigo && !OPCOES_DOC[lista[i - 1]]?.perigo,
+        acao: () => (id === null ? acaoDoc(chave) : acaoDocDaLista(id, chave)),
+      }
+    })
 
-/** @param {MouseEvent} e @param {string} [alvo] */
-function alternarOpcoesDoc(e, alvo = 'df-menu') {
-  e.stopPropagation()
-  const menu = document.getElementById(alvo)
-  const jaAberto = menu.classList.contains('open')
-  fecharMenusOpcoes()
-  if (!jaAberto) menu.classList.add('open')
+  if (!itens.length) { toast('Nada a fazer com este documento', 'aviso'); return }
+  abrirMenuNovo(ev, itens)
 }
-
-/** Clique em qualquer outro lugar fecha o menu — comportamento esperado de menu. */
-document.addEventListener('click', fecharMenusOpcoes)
 
 /** @param {string} chave */
 function acaoDoc(chave) {
-  fecharMenusOpcoes()
-
   switch (chave) {
     case 'pdf':              return pedirAnexos('pdf')
-    case 'imprimir_a4':      return pedirAnexos('a4')
     case 'imprimir_termica': return pedirAnexos('termica')
     case 'lavrar':           return lavrarDaFicha()
     case 'anular':           return abrirAnulacaoDoc()
@@ -439,9 +477,7 @@ function acaoDoc(chave) {
  *
  * @param {MouseEvent} e @param {number} id @param {string} chave
  */
-async function acaoDocDaLista(e, id, chave) {
-  e.stopPropagation()
-  fecharMenusOpcoes()
+async function acaoDocDaLista(id, chave) {
   try {
     const r = await fetch('/api/documentos/' + id, { headers: { Accept: 'application/json' } })
     if (!r.ok) throw new Error('HTTP ' + r.status)

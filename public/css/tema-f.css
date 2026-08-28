@@ -1953,3 +1953,9 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Quem já deu ciência aparece com a data ao lado do nome: é o que distingue
    "foi designado" de "ficou sabendo". */
 .os-ciente{font-size:10.5px;font-weight:700;color:var(--g)}
+
+/* Item destrutivo dentro do menu de opções: fica no mesmo lugar onde a pessoa
+   procura, e a cor é o que faz o dedo hesitar meio segundo antes do alvo. */
+.menu-novo-op.perigo .menu-novo-nome{color:var(--red)}
+.menu-novo-op.perigo .menu-novo-ico{background:#FDECEC;color:var(--red)}
+.menu-novo-op.perigo:hover{background:#FDECEC}

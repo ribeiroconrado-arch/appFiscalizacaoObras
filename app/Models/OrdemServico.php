@@ -157,7 +157,7 @@ class OrdemServico extends Model
         // situação gravada. Guardá-la exigiria alguém correndo o banco todo
         // dia para virar o estado — e um dia esse alguém falha.
         if ($this->vencida()) {
-            return ['texto' => 'Prazo vencido', 'classe' => 'bd-cr'];
+            return ['texto' => 'Prazo vencido', 'classe' => 'bd-er'];
         }
 
         return self::SITUACOES[$this->situacao] ?? ['texto' => $this->situacao, 'classe' => 'bd-in'];
