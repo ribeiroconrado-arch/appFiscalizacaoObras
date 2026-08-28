@@ -67,6 +67,12 @@ class User extends Authenticatable
      * não — a permissão acrescenta poder a quem já opera, nunca cria acesso do
      * nada.
      */
+    /** As ordens de serviço em que este usuário foi designado. */
+    public function ordensServico(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(OrdemServico::class, 'os_fiscais')->withTimestamps();
+    }
+
     public function podeCurarCadastro(): bool
     {
         return $this->canEdit() && (bool) $this->curador_cadastral;

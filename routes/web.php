@@ -10,6 +10,7 @@ use App\Http\Controllers\MapaController;
 use App\Http\Controllers\PainelController;
 use App\Http\Controllers\ParametroController;
 use App\Http\Controllers\PerfilController;
+use App\Http\Controllers\OrdemServicoController;
 use App\Http\Controllers\ProtocoloController;
 use App\Http\Controllers\VistoriaController;
 use App\Http\Controllers\QuarteiraoController;
@@ -136,6 +137,15 @@ Route::middleware('auth')->group(function () {
         Route::delete('/legislacao/{legislacao}', [LegislacaoController::class, 'excluirLei']);
 
         // Protocolos — vistorias solicitadas pelo contribuinte
+        // Ordens de servico: a coordenacao determina, o fiscal cumpre. As
+        // rotas fixas vem antes da curinga {ordem}, senao "fiscais" seria lido
+        // como id de uma ordem.
+        Route::get('/os/fiscais', [OrdemServicoController::class, 'fiscais']);
+        Route::get('/os', [OrdemServicoController::class, 'index']);
+        Route::post('/os', [OrdemServicoController::class, 'store']);
+        Route::get('/os/{ordem}', [OrdemServicoController::class, 'show']);
+        Route::post('/os/{ordem}/situacao', [OrdemServicoController::class, 'situacao']);
+
         Route::get('/protocolos', [ProtocoloController::class, 'index']);
         Route::post('/protocolos', [ProtocoloController::class, 'store']);
         Route::patch('/protocolos/{protocolo}', [ProtocoloController::class, 'update']);

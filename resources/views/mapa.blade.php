@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="@assetv('css/app.css')">
 {{-- Tema em camada separada: o design ainda está em avaliação (seis
      variantes). Trocar de proposta é trocar esta linha, não refazer o CSS. --}}
@@ -504,6 +504,17 @@
      Requerimentos do contribuinte. Sem dashboard, por decisão de projeto: a
      aba existe para trabalhar a fila, e o painel já resume os números. --}}
 <section class="tela" id="t-protocolos">
+  {{-- A aba se chama "Protocolo & OS" desde sempre, mas só tinha protocolo.
+       Protocolo é o que CHEGA de fora; ordem de serviço é o que a coordenação
+       determina para dentro. Moram na mesma tela porque é a mesma pergunta —
+       "o que há para fazer?" —, e se separam em abas porque as respostas têm
+       dono diferente. --}}
+  <div class="sub-abas" id="po-abas">
+    <button class="at" data-po="protocolos" onclick="abaProtocoloOs('protocolos')">Protocolos</button>
+    <button data-po="os" onclick="abaProtocoloOs('os')">Ordens de serviço</button>
+  </div>
+
+  <div class="po-painel at" id="po-protocolos">
   <div class="topo-lista">
     <div class="sec-simples">Protocolos <span class="cont" id="cont-proto">0</span></div>
     @if (auth()->user()->canEdit())
@@ -543,6 +554,53 @@
   </div>
 
   <div id="lista-protocolos"></div>
+  </div>{{-- /po-protocolos --}}
+
+  {{-- ══════ ORDENS DE SERVIÇO ══════ --}}
+  <div class="po-painel" id="po-os">
+    <div class="topo-lista">
+      <div class="sec-simples">Ordens de serviço <span class="cont" id="cont-os">0</span></div>
+      {{-- Emitir é da coordenação. Esconder o botão de quem não pode não é a
+           segurança — quem autoriza é OrdemServicoController::store —, é não
+           oferecer o que vai ser recusado. --}}
+      @if (auth()->user()->isAdmin())
+        <button class="btn primary sm" onclick="novaOs()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Nova OS
+        </button>
+      @else
+        <button class="btn sm" disabled title="Só a coordenação emite ordem de serviço">Nova OS</button>
+      @endif
+    </div>
+
+    <div class="linha-filtro">
+      <select onchange="filtrarOs('situacao', this.value)">
+        <option value="">Todas as situações</option>
+        @foreach (\App\Models\OrdemServico::SITUACOES as $valor => $sit)
+          <option value="{{ $valor }}">{{ $sit['texto'] }}</option>
+        @endforeach
+      </select>
+      {{-- O padrão vem do servidor: coordenação abre em "todas" para ver o que
+           distribuiu; o fiscal abre em "minhas" para ver o que lhe cabe. --}}
+      <select id="os-escopo" onchange="filtrarOs('agente', this.value)">
+        <option value="eu">Minhas ordens</option>
+        <option value="todas">Todas</option>
+      </select>
+    </div>
+    <div class="linha-filtro">
+      <input type="text" placeholder="Buscar nº ou objeto…"
+             oninput="filtrarOs('busca', this.value)">
+      <select onchange="filtrarOs('natureza', this.value)">
+        <option value="">Toda natureza</option>
+        @foreach (\App\Models\OrdemServico::NATUREZAS as $valor => $rotulo)
+          <option value="{{ $valor }}">{{ $rotulo }}</option>
+        @endforeach
+      </select>
+    </div>
+
+    <div id="lista-os"></div>
+  </div>{{-- /po-os --}}
 </section>
 
 {{-- ══════ PARÂMETROS DO SISTEMA — modal (só administrador) ══════ --}}
@@ -1677,16 +1735,153 @@
 
 <div id="toast"></div>
 
+{{-- ══════ NOVA ORDEM DE SERVIÇO ══════
+     A ordem responde quatro coisas, e o formulário segue essa ordem: o QUE se
+     determina, a QUEM, QUANDO, e com que peso. --}}
+<div class="modal-bg" id="m-os-nova" onclick="fModal()">
+  <div class="modal modal-flex" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fModalBtn('m-os-nova')">&#10005;</button>
+    <div class="vs-head">
+      <h3 class="fi-cabeca">
+        <span class="cab-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
+            <rect x="9" y="2" width="6" height="4" rx="1"/>
+            <path d="M9 13l2 2 4-4"/>
+          </svg>
+        </span>
+        <span>Nova ordem de serviço</span>
+      </h3>
+      <div class="sub">O número é dado na emissão, pelo sistema.</div>
+    </div>
+
+    <div class="vs-corpo">
+      <div class="sec-title">O que se determina</div>
+      <div class="field">
+        <label for="os-objeto">Objeto</label>
+        <input type="text" id="os-objeto" maxlength="200"
+               placeholder="Ex.: ronda de fiscalização no Jardim Europa IV">
+      </div>
+      <div class="field">
+        <label for="os-descricao">Detalhamento</label>
+        <textarea id="os-descricao" rows="3" maxlength="5000"
+                  style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
+                  placeholder="O que deve ser feito, onde, e o que se espera de retorno"></textarea>
+      </div>
+
+      {{-- Contínuo x específico não é rótulo: muda o que significa "concluída".
+           A específica termina quando é cumprida; a contínua, quando o período
+           acaba ou a coordenação encerra. --}}
+      <div class="vs-opcoes" id="os-natureza">
+        @foreach (\App\Models\OrdemServico::NATUREZAS as $valor => $rotulo)
+          <button type="button" class="vs-op" data-valor="{{ $valor }}"
+                  onclick="escolherNatureza('{{ $valor }}')">{{ $rotulo }}</button>
+        @endforeach
+      </div>
+
+      <div class="sec-title">A quem</div>
+      <div class="leg">Mais de um fiscal na mesma ordem é o caso comum numa operação.</div>
+      <div class="checklist" id="os-fiscais"></div>
+
+      <div class="sec-title">Quando</div>
+      <div class="vs-opcoes" id="os-regime">
+        @foreach (\App\Models\OrdemServico::REGIMES as $valor => $rotulo)
+          <button type="button" class="vs-op" data-valor="{{ $valor }}"
+                  onclick="escolherRegime('{{ $valor }}')">{{ $rotulo }}</button>
+        @endforeach
+      </div>
+
+      {{-- PERÍODO: uma janela contínua. --}}
+      <div id="os-periodo" style="margin-top:9px">
+        <div class="g2">
+          <div class="field" style="margin:0">
+            <label for="os-inicio">Início</label>
+            <input type="date" id="os-inicio">
+          </div>
+          <div class="field" style="margin:0">
+            <label for="os-fim">Fim</label>
+            <input type="date" id="os-fim">
+          </div>
+        </div>
+        <div class="cad-nota" style="margin-top:8px">Serviço contínuo pode ficar sem
+          data de fim — e aí ele vale até a coordenação encerrar.</div>
+      </div>
+
+      {{-- DIAS MARCADOS: uma agenda, com horário por dia. --}}
+      <div id="os-dias" hidden style="margin-top:9px">
+        <div class="vs-nova-exig">
+          <input type="date" id="os-dia-data" title="Dia">
+          <input type="time" id="os-dia-ini" title="Começa">
+          <input type="time" id="os-dia-fim" title="Termina">
+          <button type="button" class="btn sm primary" onclick="addJornada()">+</button>
+        </div>
+        <div class="leg">O horário é opcional: "dia 12" sem hora é ordem legítima,
+          e diferente de "dia 12 o dia inteiro".</div>
+        <div id="os-jornadas"></div>
+      </div>
+
+      <div class="sec-title">Prioridade</div>
+      <div class="vs-opcoes" id="os-prioridade">
+        @foreach (\App\Models\OrdemServico::PRIORIDADES as $valor => $rotulo)
+          <button type="button" class="vs-op" data-valor="{{ $valor }}"
+                  onclick="escolherPrioridade('{{ $valor }}')">{{ $rotulo }}</button>
+        @endforeach
+      </div>
+    </div>
+
+    <div class="btn-row vs-rodape">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-os-nova')">Cancelar</button>
+      <button class="btn primary" onclick="emitirOs()">Emitir ordem</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ FICHA DA ORDEM DE SERVIÇO ══════ --}}
+<div class="modal-bg" id="m-os" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fModalBtn('m-os')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
+          <rect x="9" y="2" width="6" height="4" rx="1"/>
+          <path d="M9 13l2 2 4-4"/>
+        </svg>
+      </span>
+      <span>Ordem de serviço</span>
+      <span id="osf-numero" class="mono">—</span>
+      <span class="badge" id="osf-situacao">—</span>
+    </h3>
+    <div class="sub" id="osf-objeto">—</div>
+
+    <div class="sec-title">A determinação</div>
+    <div id="osf-corpo"></div>
+
+    <div id="osf-tramitacao"></div>
+  </div>
+</div>
+
 {{-- FICHA DO PROTOCOLO --}}
 <div class="modal-bg" id="m-proto" onclick="fModal()">
   <div class="modal" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fModalBtn('m-proto')">&#10005;</button>
-    <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
-        <rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 12h8M8 16h5"/></svg>
-      Protocolo <span id="pf-numero" class="mono">—</span>
+    {{-- Mesmo cabeçalho das demais fichas do sistema: selo com o ícone,
+         nome da peça, e o número em monoespaçada ao lado. Era um <h3> solto
+         com o SVG inline, e por isso o ícone vinha sem o selo e o título com
+         outro peso — a mesma tela, com duas caras. --}}
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
+          <rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 12h8M8 16h5"/>
+        </svg>
+      </span>
+      <span>Protocolo</span>
+      <span id="pf-numero" class="mono">—</span>
     </h3>
     <div class="sub" id="pf-tipo">—</div>
 
@@ -2157,6 +2352,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/documentos.js')"></script>
 <script src="@assetv('js/documento-form.js')"></script>
 <script src="@assetv('js/protocolos.js')"></script>
+<script src="@assetv('js/os.js')"></script>
 <script src="@assetv('js/perfil.js')"></script>
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
