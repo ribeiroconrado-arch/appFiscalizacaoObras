@@ -11,8 +11,20 @@ const vState = {
   /** @type {Object|null} lote sendo vistoriado */ lote: null,
   /** @type {Array<Object>} catálogo de irregularidades (cache da sessão) */ catalogo: [],
   /** @type {Array<{arquivo:File, titulo:string, descricao:string, url:string}>} */ anexos: [],
-  /** @type {number|null} índice da foto marcada como fachada */ fachada: null,
-  /** @type {Array<{texto:string, prazo:number|null}>} */ exigencias: [],
+  /**
+   * O relatório, na ordem em que o fiscal montou.
+   *
+   * Uma lista só para os quatro tipos de linha, e não quatro listas paralelas:
+   * a ORDEM entre tipos diferentes é a informação — a foto logo depois do
+   * artigo que ela ilustra conta algo que a mesma foto no fim de uma pilha
+   * não conta. Quatro listas separadas não teriam onde guardar isso.
+   *
+   * @type {Array<{tipo:'foto'|'citacao'|'parecer'|'exigencia', texto:string,
+   *               anexo?:number, artigo_id?:number, prazo?:number|null,
+   *               fachada?:boolean, marcacoes?:Array<{n:number,x:number,y:number}>}>}
+   */
+  relatorio: [],
+  /** @type {number|null} índice do item aberto na janela de edição */ itemAberto: null,
   /** @type {Array<Object>} artigos sugeridos pelas irregularidades marcadas */ artigos: [],
   /** @type {Set<number>} artigos confirmados pelo fiscal */ artigosMarcados: new Set(),
   /** @type {{alvara:string, fase:string}} escolhas em botão */
@@ -243,8 +255,8 @@ async function novaVistoria() {
 function zerarVistoria() {
   vState.anexos.forEach(a => a.url && URL.revokeObjectURL(a.url))
   vState.anexos = []
-  vState.fachada = null
-  vState.exigencias = []
+  vState.relatorio = []
+  vState.itemAberto = null
   vState.artigos = []
   vState.artigosMarcados = new Set()
   vState.obra = { alvara: '', fase: '' }
@@ -264,7 +276,7 @@ function zerarVistoria() {
     c.checked = false
     c.closest('.chk-item')?.classList.remove('marcado')
   })
-  pintarOpcoes(); renderExigencias(); renderAnexos()
+  pintarOpcoes(); renderRelatorio()
   document.getElementById('nv-artigos').innerHTML =
     '<div class="leg">Marque as irregularidades para ver os artigos que as enquadram.</div>'
 }
@@ -283,7 +295,7 @@ function fecharVistoria() {
  */
 function passo(d) {
   const alvo = vState.passo + d
-  if (alvo < 1 || alvo > 5) { return }
+  if (alvo < 1 || alvo > PASSOS) { return }
   // Só barra ao AVANÇAR: voltar para conferir nunca pode ser impedido.
   if (d > 0 && !passoCompleto(vState.passo)) { return }
   irPasso(alvo)
@@ -294,6 +306,9 @@ function passo(d) {
  * interrogatório, e o que de fato não pode faltar é conferido na gravação.
  * @param {number} n
  */
+/** Quantos passos a tela tem. Era 5; "Constatações" e "Fotos" viraram um. */
+const PASSOS = 4
+
 function passoCompleto(n) {
   if (n === 1 && !document.getElementById('nv-datahora').value) {
     toast('Informe data e hora da vistoria', 'err'); return false
@@ -330,13 +345,13 @@ function irPasso(n) {
   })
 
   document.getElementById('nv-voltar').hidden = n === 1
-  document.getElementById('nv-avancar').hidden = n === 5
-  document.getElementById('nv-gravar').hidden = n !== 5
+  document.getElementById('nv-avancar').hidden = n === PASSOS
+  document.getElementById('nv-gravar').hidden = n !== PASSOS
   const corpo = document.querySelector('.vs-corpo')
   if (corpo) { corpo.scrollTop = 0 }
 
   if (n === 3) { sugerirArtigos() }
-  if (n === 5) { renderRevisao() }
+  if (n === PASSOS) { renderRevisao() }
   salvarRascunho()
 }
 
@@ -349,9 +364,12 @@ function irPasso(n) {
  */
 function vistoriaRapida() {
   if (!passoCompleto(1)) { return }
-  vState.visitados = 5
-  irPasso(4)
-  toast('Vistoria rápida: anexe a foto e grave')
+  vState.visitados = PASSOS
+  irPasso(3)
+  // A foto entra pelo mesmo botão do relatório — o atalho só pula o que não
+  // se preenche numa ronda de rotina, e não inventa um segundo caminho.
+  setTimeout(() => escolherArquivoDeFoto(), 60)
+  toast('Vistoria rápida: a foto e pronto')
 }
 
 // ── PASSO 1: A POSIÇÃO ───────────────────────────────────────
@@ -583,50 +601,6 @@ function alternarArtigo(id, marcado) {
   salvarRascunho()
 }
 
-// ── PASSO 3: EXIGÊNCIAS ──────────────────────────────────────
-
-/**
- * Acrescenta uma providência à lista.
- *
- * É lista, e não parágrafo, porque é assim que ela é usada depois: a
- * notificação imprime item a item, cada prazo conta da ciência, e o retorno da
- * fiscalização confere um por um.
- */
-function addExigencia() {
-  const cTexto = document.getElementById('nv-exig-texto')
-  const cPrazo = document.getElementById('nv-exig-prazo')
-  const texto = cTexto.value.trim()
-  if (!texto) { toast('Escreva a exigência', 'err'); cTexto.focus(); return }
-  if (vState.exigencias.length >= 30) { toast('Limite de 30 exigências', 'err'); return }
-
-  vState.exigencias.push({ texto, prazo: cPrazo.value ? Number(cPrazo.value) : null })
-  cTexto.value = ''; cPrazo.value = ''
-  cTexto.focus()   // a próxima costuma vir logo atrás
-  renderExigencias(); salvarRascunho()
-}
-
-/** @param {number} i */
-function removerExigencia(i) {
-  vState.exigencias.splice(i, 1)
-  renderExigencias(); salvarRascunho()
-}
-
-function renderExigencias() {
-  const alvo = document.getElementById('nv-exigencias')
-  if (!alvo) { return }
-  if (!vState.exigencias.length) {
-    alvo.innerHTML = '<div class="leg">Nenhuma exigência. Vistoria regular costuma não ter.</div>'
-    return
-  }
-  alvo.innerHTML = vState.exigencias.map((e, i) => `
-    <div class="vs-exig">
-      <span class="num">${i + 1}</span>
-      <span class="txt">${esc(e.texto)}
-        ${e.prazo ? `<span class="prazo">Prazo de ${e.prazo} dias</span>` : ''}</span>
-      <button type="button" class="btn danger sm" onclick="removerExigencia(${i})">Excluir</button>
-    </div>`).join('')
-}
-
 /** Mantém o campo escondido com o valor combinado aaaa-mm-ddThh:mm. */
 function syncDataHora() {
   const d = document.getElementById('nv-data').value
@@ -635,10 +609,85 @@ function syncDataHora() {
   atualizarDisplayData(document.getElementById('nv-data'))
 }
 
-// ── PASSO 4: FOTOS ───────────────────────────────────────────
+// ── PASSO 3: O RELATÓRIO ─────────────────────────────────────
+//
+// Quatro tipos de linha, uma lista só, um botão só. A ordem entre elas é
+// conteúdo: a foto logo depois do artigo que ela ilustra conta algo que a
+// mesma foto no fim de uma pilha de fotos não conta.
 
-/** Handler do input de arquivo. @param {HTMLInputElement} input */
+/** O que o botão "Adicionar" oferece, e para que serve cada um. */
+const TIPOS_ITEM = {
+  foto: {
+    rotulo: 'Foto',
+    obs: 'Uma imagem com legenda — e marcas apontando o que ela mostra.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+  },
+  citacao: {
+    rotulo: 'Artigo com observação',
+    obs: 'O que se constatou em relação ao dispositivo. Vira FATO na peça.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
+  },
+  parecer: {
+    rotulo: 'Parecer sobre um artigo',
+    obs: 'A sua conclusão sobre ele. Vira FUNDAMENTAÇÃO.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>`,
+  },
+  exigencia: {
+    rotulo: 'Exigência',
+    obs: 'O que o administrado deve fazer, com prazo. A notificação imprime.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
+  },
+}
+
+/** @param {Event} ev */
+function menuItemRelatorio(ev) {
+  abrirMenuNovo(ev.currentTarget, Object.entries(TIPOS_ITEM).map(([tipo, t]) => ({
+    rotulo: t.rotulo,
+    obs: t.obs,
+    icone: t.icone,
+    // Traço antes da exigência: acima está o que se CONSTATOU, abaixo o que se
+    // COBRA. São naturezas diferentes dentro do mesmo relatório.
+    separar: tipo === 'exigencia',
+    acao: () => novoItemRelatorio(tipo),
+  })))
+}
+
+/** @param {'foto'|'citacao'|'parecer'|'exigencia'} tipo */
+function novoItemRelatorio(tipo) {
+  if (tipo === 'foto') { escolherArquivoDeFoto(); return }
+
+  if ((tipo === 'citacao' || tipo === 'parecer') && !vState.artigos.length) {
+    // Sem artigo carregado não há o que citar. Buscar agora é melhor do que
+    // abrir uma janela com um seletor vazio.
+    sugerirArtigos().then(() => abrirItemRelatorio(criarItem(tipo)))
+    return
+  }
+  abrirItemRelatorio(criarItem(tipo))
+}
+
+/** @param {string} tipo @returns {number} índice do item criado */
+function criarItem(tipo) {
+  vState.relatorio.push({ tipo, texto: '', artigo_id: null, prazo: null })
+  return vState.relatorio.length - 1
+}
+
+/** Abre o seletor de arquivo do relatório — o mesmo para o atalho rápido. */
+function escolherArquivoDeFoto() {
+  document.getElementById('nv-arquivo')?.click()
+}
+
+/**
+ * Handler do input de arquivo: cada arquivo entra como um ITEM do relatório,
+ * no fim da lista, e a janela abre no primeiro para pedir a legenda.
+ *
+ * @param {HTMLInputElement} input
+ */
 function anexarArquivos(input) {
+  const primeiro = vState.relatorio.length
   for (const arquivo of input.files) {
     vState.anexos.push({
       arquivo,
@@ -646,77 +695,257 @@ function anexarArquivos(input) {
       descricao: '',
       url: arquivo.type.startsWith('image/') ? URL.createObjectURL(arquivo) : null,
     })
-  }
-  // Primeira foto de imagem vira a fachada por padrão: é quase sempre a que o
-  // fiscal tira primeiro, e uma marca errada custa um toque para corrigir —
-  // enquanto marca nenhuma faz a ficha voltar a mostrar foto qualquer.
-  if (vState.fachada === null) {
-    const i = vState.anexos.findIndex(a => a.url)
-    if (i >= 0) { vState.fachada = i }
+    vState.relatorio.push({
+      tipo: 'foto', texto: '', anexo: vState.anexos.length - 1,
+      fachada: false, marcacoes: [],
+    })
   }
   input.value = ''   // permite reanexar o mesmo arquivo depois de remover
-  renderAnexos(); salvarRascunho()
+
+  // A primeira foto de imagem vira a fachada por padrão: é quase sempre a que
+  // o fiscal tira primeiro, e uma marca errada custa um toque para corrigir —
+  // enquanto marca nenhuma faz a ficha voltar a mostrar foto qualquer.
+  if (!vState.relatorio.some(i => i.fachada)) {
+    const f = vState.relatorio.find(i => i.tipo === 'foto' && vState.anexos[i.anexo]?.url)
+    if (f) { f.fachada = true }
+  }
+
+  renderRelatorio(); salvarRascunho()
+  if (vState.relatorio[primeiro]) { abrirItemRelatorio(primeiro) }
 }
 
-function renderAnexos() {
-  const alvo = document.getElementById('nv-anexos')
+/** A lista, na ordem montada. Cada linha é só o resumo; o texto mora na janela. */
+function renderRelatorio() {
+  const alvo = document.getElementById('nv-relatorio')
   if (!alvo) { return }
-  if (!vState.anexos.length) {
-    alvo.innerHTML = '<div class="vazio-msg">Nenhuma foto anexada.</div>'
+
+  if (!vState.relatorio.length) {
+    alvo.innerHTML = '<div class="vazio-msg">Nada no relatório ainda. '
+                   + 'Vistoria regular costuma ter uma foto e uma linha de parecer.</div>'
     return
   }
-  alvo.innerHTML = vState.anexos.map((a, i) => `
-    <div class="anexo-item com-desc${vState.fachada === i ? ' e-fachada' : ''}">
-      <div class="anexo-thumb">
-        ${a.url ? `<img src="${a.url}" alt="">` : '<div class="pdf">PDF</div>'}
-      </div>
-      <div class="anexo-info">
-        <input class="t" style="width:100%;border:none;background:none;font-family:inherit"
-               value="${esc(a.titulo)}" maxlength="160"
-               oninput="vState.anexos[${i}].titulo = this.value"
-               aria-label="Título da evidência">
-        <input class="d" value="${esc(a.descricao)}" maxlength="1000"
-               placeholder="Descreva o que a foto mostra"
-               oninput="vState.anexos[${i}].descricao = this.value"
-               aria-label="Descrição da evidência">
-        <div class="s">${(a.arquivo.size / 1024 / 1024).toFixed(1)} MB</div>
-        ${a.url ? `<label class="anexo-fach">
-          <input type="checkbox" ${vState.fachada === i ? 'checked' : ''}
-                 onchange="marcarFachada(${i}, this.checked)">Fachada</label>` : ''}
-      </div>
-      <button type="button" class="btn danger sm" onclick="removerAnexo(${i})">Excluir</button>
-    </div>`).join('')
+
+  alvo.innerHTML = vState.relatorio.map((item, i) => {
+    const t = TIPOS_ITEM[item.tipo] || TIPOS_ITEM.citacao
+    const anexo = item.tipo === 'foto' ? vState.anexos[item.anexo] : null
+    const artigo = item.artigo_id ? vState.artigos.find(a => a.id === item.artigo_id) : null
+
+    const capa = anexo
+      ? `<div class="rel-thumb">${anexo.url ? `<img src="${anexo.url}" alt="">` : '<div class="pdf">PDF</div>'}
+           ${(item.marcacoes || []).length ? `<span class="rel-marcas">${item.marcacoes.length}</span>` : ''}</div>`
+      : `<div class="rel-ico rel-ico-${esc(item.tipo)}">${t.icone}</div>`
+
+    const titulo = item.tipo === 'foto'
+      ? esc(anexo?.titulo || 'Foto')
+      : artigo ? esc(artigo.numero) : t.rotulo
+
+    const falta = !item.texto.trim()
+      || ((item.tipo === 'citacao' || item.tipo === 'parecer') && !item.artigo_id)
+
+    return `
+      <div class="rel-item${falta ? ' rel-falta' : ''}" onclick="abrirItemRelatorio(${i})">
+        ${capa}
+        <div class="rel-corpo">
+          <div class="rel-topo">
+            <span class="rel-tipo">${esc(t.rotulo)}</span>
+            ${item.fachada ? '<span class="badge bd-ok">Fachada</span>' : ''}
+            ${item.prazo ? `<span class="badge bd-al">${item.prazo} dias</span>` : ''}
+          </div>
+          <div class="rel-tit">${titulo}</div>
+          <div class="rel-txt">${item.texto.trim() ? esc(item.texto) : '<i>sem texto — toque para escrever</i>'}</div>
+        </div>
+        <div class="rel-mover">
+          <button type="button" class="rel-seta" title="Subir"
+                  onclick="event.stopPropagation();moverItem(${i},-1)"${i === 0 ? ' disabled' : ''}>&#9650;</button>
+          <button type="button" class="rel-seta" title="Descer"
+                  onclick="event.stopPropagation();moverItem(${i},1)"${i === vState.relatorio.length - 1 ? ' disabled' : ''}>&#9660;</button>
+        </div>
+      </div>`
+  }).join('')
+}
+
+/** Sobe ou desce um item — é assim que a sequência do relatório se ajusta. */
+function moverItem(i, d) {
+  const j = i + d
+  if (j < 0 || j >= vState.relatorio.length) { return }
+  const [item] = vState.relatorio.splice(i, 1)
+  // `splice` fora do intervalo devolve lista vazia, e reinserir `undefined`
+  // deixaria um buraco na lista que so estoura na proxima pintura — longe
+  // daqui, com a mensagem errada. Melhor nao mexer.
+  if (!item) { renderRelatorio(); return }
+  vState.relatorio.splice(j, 0, item)
+  renderRelatorio(); salvarRascunho()
+}
+
+// ── A JANELA DE UM ITEM ──────────────────────────────────────
+
+/** @param {number} i */
+function abrirItemRelatorio(i) {
+  const item = vState.relatorio[i]
+  if (!item) { return }
+  vState.itemAberto = i
+
+  const t = TIPOS_ITEM[item.tipo]
+  document.getElementById('vsi-titulo').textContent = t.rotulo
+  document.getElementById('vsi-foto').hidden = item.tipo !== 'foto'
+  document.getElementById('vsi-artigo').hidden = item.tipo !== 'citacao' && item.tipo !== 'parecer'
+  document.getElementById('vsi-exigencia').hidden = item.tipo !== 'exigencia'
+
+  document.getElementById('vsi-texto').value = item.texto || ''
+  document.getElementById('vsi-texto-rot').textContent =
+    item.tipo === 'foto' ? 'O que a foto mostra'
+      : item.tipo === 'parecer' ? 'Parecer'
+      : item.tipo === 'exigencia' ? 'O que deve ser feito'
+      : 'O que foi constatado'
+
+  if (item.tipo === 'foto') {
+    const anexo = vState.anexos[item.anexo]
+    document.getElementById('vsi-titulo-foto').value = anexo?.titulo || ''
+    document.getElementById('vsi-fachada').checked = !!item.fachada
+    const img = document.getElementById('vsi-img')
+    img.src = anexo?.url || ''
+    img.hidden = !anexo?.url
+    document.getElementById('vsi-dica').textContent = anexo?.url
+      ? 'Toque na foto para apontar o que descreve.'
+      : 'Arquivo PDF — sem marcação.'
+    pintarPinos()
+  }
+
+  if (item.tipo === 'citacao' || item.tipo === 'parecer') {
+    preencherSeletorDeArtigos(item.artigo_id)
+  }
+
+  if (item.tipo === 'exigencia') {
+    document.getElementById('vsi-prazo').value = item.prazo ?? ''
+  }
+
+  openModal('m-vs-item')
 }
 
 /**
- * Uma fachada por vistoria: ela responde "como está o imóvel hoje", e duas
- * respostas não respondem nada. É a foto que a ficha do imóvel passa a mostrar.
+ * O seletor de artigos da janela.
  *
- * @param {number} i @param {boolean} marcado
+ * Lista os sugeridos pelas irregularidades marcadas — e, quando não há
+ * nenhuma marcada, diz isso em vez de mostrar um seletor vazio, que pareceria
+ * defeito.
+ *
+ * @param {number|null} escolhido
  */
-function marcarFachada(i, marcado) {
-  vState.fachada = marcado ? i : null
-  renderAnexos(); salvarRascunho()
+function preencherSeletorDeArtigos(escolhido) {
+  const sel = document.getElementById('vsi-artigo-id')
+  const nota = document.getElementById('vsi-artigo-nota')
+
+  sel.innerHTML = '<option value="">— escolha o artigo —</option>'
+    + vState.artigos.map(a =>
+        `<option value="${a.id}">${esc(a.numero)}${a.conduta ? ' — ' + esc(a.conduta.slice(0, 70)) : ''}</option>`).join('')
+  if (escolhido) { sel.value = String(escolhido) }
+
+  nota.hidden = vState.artigos.length > 0
+  nota.textContent = 'Nenhum artigo sugerido ainda. Marque as irregularidades do '
+                   + 'catálogo, no fim da tela, para o sistema oferecer os dispositivos.'
 }
 
-/** Exclusão SEMPRE pergunta antes — regra sem exceção. @param {number} i */
-function removerAnexo(i) {
-  const a = vState.anexos[i]
+function salvarItemRelatorio() {
+  const i = vState.itemAberto
+  const item = vState.relatorio[i]
+  if (!item) { return }
+
+  item.texto = document.getElementById('vsi-texto').value.trim()
+
+  if (item.tipo === 'foto') {
+    const anexo = vState.anexos[item.anexo]
+    if (anexo) { anexo.titulo = document.getElementById('vsi-titulo-foto').value.trim() || anexo.titulo }
+    const fachada = document.getElementById('vsi-fachada').checked
+    // Uma fachada por vistoria: ela responde "como está o imóvel hoje", e duas
+    // respostas não respondem nada.
+    if (fachada) { vState.relatorio.forEach(x => { x.fachada = false }) }
+    item.fachada = fachada
+  }
+
+  if (item.tipo === 'citacao' || item.tipo === 'parecer') {
+    const id = document.getElementById('vsi-artigo-id').value
+    if (!id) { toast('Escolha o artigo', 'err'); return }
+    item.artigo_id = Number(id)
+  }
+
+  if (item.tipo === 'exigencia') {
+    if (!item.texto) { toast('Escreva a exigência', 'err'); return }
+    const p = document.getElementById('vsi-prazo').value
+    item.prazo = p ? Number(p) : null
+  }
+
+  fModalBtn('m-vs-item')
+  renderRelatorio(); salvarRascunho()
+}
+
+/** Exclusão SEMPRE pergunta antes — regra sem exceção. */
+function excluirItemRelatorio() {
+  const i = vState.itemAberto
+  const item = vState.relatorio[i]
+  if (!item) { return }
+
   confirmarAcao({
-    titulo: 'Remover evidência',
-    mensagem: `Remover "${a.titulo}" desta vistoria?`,
+    titulo: 'Remover do relatório',
+    mensagem: 'Remover este item da vistoria?',
     textoBtn: 'Remover',
     perigo: true,
     onConfirm: () => {
-      if (a.url) URL.revokeObjectURL(a.url)
-      vState.anexos.splice(i, 1)
-      // O índice da fachada é posicional: removida uma foto anterior a ela, a
-      // marca escorregaria para a foto errada em silêncio.
-      if (vState.fachada === i) { vState.fachada = null }
-      else if (vState.fachada !== null && vState.fachada > i) { vState.fachada-- }
-      renderAnexos(); salvarRascunho()
+      if (item.tipo === 'foto') {
+        const anexo = vState.anexos[item.anexo]
+        if (anexo?.url) { URL.revokeObjectURL(anexo.url) }
+        // O anexo NÃO sai do array: os índices dos outros itens apontam para
+        // posições dele. Marcar como removido e filtrar no envio custa um
+        // campo; reindexar custaria um bug silencioso na foto errada.
+        if (anexo) { anexo.removido = true }
+      }
+      vState.relatorio.splice(i, 1)
+      fModalBtn('m-vs-item')
+      renderRelatorio(); salvarRascunho()
     },
   })
+}
+
+// ── MARCAÇÕES SOBRE A FOTO ───────────────────────────────────
+//
+// Um toque crava um número na imagem. A legenda pode então dizer "1" e "2" em
+// vez de "no canto superior direito, mais ou menos no meio" — que é o tipo de
+// descrição que ninguém consegue conferir meses depois.
+//
+// As coordenadas são RELATIVAS (0 a 1): a mesma foto aparece em tamanhos
+// diferentes na janela, na lista e na ficha, e pixel absoluto sairia do lugar.
+
+/** @param {MouseEvent} ev */
+function marcarNaFoto(ev) {
+  const item = vState.relatorio[vState.itemAberto]
+  if (!item || item.tipo !== 'foto') { return }
+  const img = document.getElementById('vsi-img')
+  if (img.hidden) { return }
+
+  const r = img.getBoundingClientRect()
+  const x = (ev.clientX - r.left) / r.width
+  const y = (ev.clientY - r.top) / r.height
+  if (x < 0 || x > 1 || y < 0 || y > 1) { return }
+
+  item.marcacoes = item.marcacoes || []
+  if (item.marcacoes.length >= 20) { toast('Limite de 20 marcas na foto', 'aviso'); return }
+  item.marcacoes.push({ n: item.marcacoes.length + 1, x: +x.toFixed(4), y: +y.toFixed(4) })
+  pintarPinos()
+}
+
+function limparMarcacoes() {
+  const item = vState.relatorio[vState.itemAberto]
+  if (!item) { return }
+  item.marcacoes = []
+  pintarPinos()
+}
+
+function pintarPinos() {
+  const item = vState.relatorio[vState.itemAberto]
+  const alvo = document.getElementById('vsi-pinos')
+  if (!alvo || !item) { return }
+  alvo.innerHTML = (item.marcacoes || []).map(m =>
+    `<span class="vsi-pino" style="left:${(m.x * 100).toFixed(2)}%;top:${(m.y * 100).toFixed(2)}%">${m.n}</span>`
+  ).join('')
 }
 
 // ── PASSO 5: REVISÃO ─────────────────────────────────────────
@@ -761,6 +990,19 @@ function renderRevisao() {
       ? esc(area) + ' m²' + (metodo.value ? ' (' + esc(metodo.options[metodo.selectedIndex].text.toLowerCase()) + ')' : '')
       : falta('não medida — multa por m² não será calculada')],
     ['Fase da obra', vState.obra.fase ? esc(rotOp('nv-fase', vState.obra.fase)) : falta('não informada')],
+    ['Relatório', vState.relatorio.length
+      ? '<ol>' + vState.relatorio.map(it => {
+          const t = TIPOS_ITEM[it.tipo]?.rotulo ?? it.tipo
+          const art = it.artigo_id ? vState.artigos.find(a => a.id === it.artigo_id) : null
+          const capa = it.tipo === 'foto' ? esc(vState.anexos[it.anexo]?.titulo || 'Foto') : esc(art?.numero || '')
+          const marcas = (it.marcacoes || []).length
+          return '<li><b>' + esc(t) + '</b>' + (capa ? ' · ' + capa : '')
+               + (it.prazo ? ' <b>— ' + it.prazo + ' dias</b>' : '')
+               + (marcas ? ' <i>(' + marcas + ' marca' + (marcas > 1 ? 's' : '') + ' na foto)</i>' : '')
+               + (it.texto.trim() ? '<br>' + esc(it.texto) : ' ' + falta('sem texto'))
+               + '</li>'
+        }).join('') + '</ol>'
+      : falta('vazio')],
     ['Irregularidades', marcadas.length
       ? '<ol>' + marcadas.map(c =>
           '<li>' + esc(c.closest('.chk-item').querySelector('.desc').firstChild.textContent.trim()) + '</li>').join('') + '</ol>'
@@ -769,15 +1011,13 @@ function renderRevisao() {
       ? esc(vState.artigos.filter(a => vState.artigosMarcados.has(a.id))
             .map(a => a.numero).join(', '))
       : falta('nenhum')],
-    ['Exigências', vState.exigencias.length
-      ? '<ol>' + vState.exigencias.map(e =>
-          '<li>' + esc(e.texto) + (e.prazo ? ` <b>— ${e.prazo} dias</b>` : '') + '</li>').join('') + '</ol>'
-      : falta('nenhuma')],
-    ['Fotos', vState.anexos.length
-      ? `${vState.anexos.length} anexada(s)`
-        + (vState.fachada !== null ? ', uma marcada como fachada' : ', ' + falta('sem fachada marcada'))
-        + (vState.anexos.some(a => !a.descricao.trim()) ? '<br>' + falta('há foto sem descrição') : '')
-      : falta('nenhuma')],
+    ['Fotos', (() => {
+      const fotos = vState.relatorio.filter(i => i.tipo === 'foto')
+      if (!fotos.length) { return falta('nenhuma') }
+      return `${fotos.length} no relatório`
+        + (fotos.some(f => f.fachada) ? ', uma marcada como fachada' : ', ' + falta('sem fachada marcada'))
+        + (fotos.some(f => !f.texto.trim()) ? '<br>' + falta('há foto sem descrição') : '')
+    })()],
     ['Observações', obs ? esc(obs) : falta('nenhuma')],
   ]
 
@@ -800,7 +1040,7 @@ const RASCUNHO = 'vistoria-rascunho'
 function temConteudo() {
   return !!(document.getElementById('nv-obs').value.trim()
     || document.getElementById('nv-area').value
-    || vState.exigencias.length || vState.anexos.length
+    || vState.relatorio.length
     || document.querySelectorAll('#nv-checklist input:checked').length)
 }
 
@@ -820,7 +1060,10 @@ function salvarRascunho() {
       },
       obra: vState.obra,
       gps: vState.gps,
-      exigencias: vState.exigencias,
+      // As FOTOS não cabem no armazenamento do navegador, então o rascunho
+      // guarda os itens sem elas — e o aviso da retomada diz isso com todas as
+      // letras, em vez de deixar o fiscal gravar achando que estão lá.
+      relatorio: vState.relatorio.filter(i => i.tipo !== 'foto'),
       artigos: [...vState.artigosMarcados],
       irregularidades: [...document.querySelectorAll('#nv-checklist input:checked')].map(c => c.value),
     }))
@@ -845,19 +1088,19 @@ function restaurarRascunho() {
 
   vState.obra = d.obra ?? { alvara: '', fase: '' }
   vState.gps = d.gps ?? vState.gps
-  vState.exigencias = d.exigencias ?? []
+  vState.relatorio = d.relatorio ?? []
   vState.artigosMarcados = new Set(d.artigos ?? [])
   vState.artigosDoRascunho = vState.artigosMarcados.size > 0
   // null, e não lista vazia: é ele que destranca sugerirArtigos() acima.
   vState.rascunhoIrreg = d.irregularidades?.length ? d.irregularidades : null
   document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
 
-  pintarOpcoes(); pintarGps(); renderExigencias()
+  pintarOpcoes(); pintarGps(); renderRelatorio()
   // O aviso é honesto sobre o que NÃO voltou: foto não cabe no armazenamento
   // do navegador, e deixar isso implícito faria o fiscal gravar sem as fotos.
   const av = document.getElementById('nv-rascunho')
   av.hidden = false
-  av.textContent = vState.anexos.length ? 'Rascunho recuperado' : 'Rascunho recuperado — refaça as fotos'
+  av.textContent = 'Rascunho recuperado — as fotos precisam ser refeitas'
   irPasso(d.passo ?? 1)
 }
 
@@ -893,7 +1136,7 @@ function gravarVistoria() {
   confirmarAcao({
     titulo: 'Gravar vistoria',
     mensagem: `Registrar vistoria do lote ${vState.lote.numero_lote}, quadra `
-            + `${vState.lote.quadra}, com ${resumo} e ${vState.anexos.length} evidência(s)?`,
+            + `${vState.lote.quadra}, com ${resumo} e ${vState.relatorio.length} item(ns) no relatório?`,
     textoBtn: 'Gravar',
     onConfirm: () => enviarVistoria(marcadas),
   })
@@ -922,11 +1165,27 @@ async function enviarVistoria(marcadas) {
   opcional('area_metodo', campo('nv-area-metodo'))
   opcional('fase_obra', vState.obra.fase)
 
-  // ── o enquadramento e as providências ──
+  // ── o relatório, na ordem montada ──
+  //
+  // A posição de CADA item vai junto, e é a mesma sequência para fotos e
+  // artigos: no servidor as duas coisas moram em tabelas diferentes, e sem a
+  // ordem explícita elas voltariam agrupadas por tipo — perdendo justamente o
+  // que o fiscal quis dizer ao intercalar.
   vState.artigosMarcados.forEach(id => fd.append('artigos[]', id))
-  vState.exigencias.forEach((e, i) => {
-    fd.append(`exigencias[${i}][texto]`, e.texto)
-    if (e.prazo) { fd.append(`exigencias[${i}][prazo_dias]`, e.prazo) }
+
+  let nExig = 0, nArt = 0
+  vState.relatorio.forEach((item, ordem) => {
+    if (item.tipo === 'exigencia') {
+      fd.append(`exigencias[${nExig}][texto]`, item.texto)
+      if (item.prazo) { fd.append(`exigencias[${nExig}][prazo_dias]`, item.prazo) }
+      nExig++
+    } else if (item.tipo === 'citacao' || item.tipo === 'parecer') {
+      fd.append(`itens_artigo[${nArt}][artigo_id]`, item.artigo_id)
+      fd.append(`itens_artigo[${nArt}][tipo]`, item.tipo)
+      fd.append(`itens_artigo[${nArt}][observacao]`, item.texto || '')
+      fd.append(`itens_artigo[${nArt}][ordem]`, ordem)
+      nArt++
+    }
   })
 
   if (vState.gps) {
@@ -934,12 +1193,24 @@ async function enviarVistoria(marcadas) {
     fd.append('longitude', vState.gps.lon)
     fd.append('accuracy', vState.gps.prec)
   }
-  vState.anexos.forEach((a, i) => {
-    fd.append('evidencias[]', a.arquivo)
-    fd.append(`titulos[${i}]`, a.titulo)
-    fd.append(`descricoes[${i}]`, a.descricao ?? '')
+  // As fotos vão na ordem do relatório, e o índice enviado é o da REMESSA —
+  // não o do array de anexos, que guarda buracos de itens removidos.
+  let nFoto = 0
+  vState.relatorio.forEach((item, ordem) => {
+    if (item.tipo !== 'foto') { return }
+    const anexo = vState.anexos[item.anexo]
+    if (!anexo || anexo.removido) { return }
+
+    fd.append('evidencias[]', anexo.arquivo)
+    fd.append(`titulos[${nFoto}]`, anexo.titulo)
+    fd.append(`descricoes[${nFoto}]`, item.texto ?? '')
+    fd.append(`ordens[${nFoto}]`, ordem)
+    if ((item.marcacoes || []).length) {
+      fd.append(`marcacoes[${nFoto}]`, JSON.stringify(item.marcacoes))
+    }
+    if (item.fachada) { fd.append('fachada', nFoto) }
+    nFoto++
   })
-  if (vState.fachada !== null) { fd.append('fachada', vState.fachada) }
 
   try {
     const r = await fetch(`/api/lotes/${vState.lote.id}/vistorias`, {

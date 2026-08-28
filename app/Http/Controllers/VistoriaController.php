@@ -10,6 +10,7 @@ use App\Models\Irregularidade;
 use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
+use App\Models\VistoriaArtigo;
 use App\Services\SucessaoDeLotes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -220,6 +221,35 @@ class VistoriaController extends Controller
         return $a . $m . $d . str_replace(':', '', $partes[1] ?? '0000');
     }
 
+    /**
+     * Lê as marcações de uma foto, vindas como texto JSON no multipart.
+     *
+     * Só passa o que tem forma de marcação: número e um par (x, y) dentro do
+     * quadro. Coordenada fora de 0..1 apontaria para fora da imagem, e uma
+     * marcação que aponta para lugar nenhum é pior do que marcação nenhuma.
+     *
+     * @return array<int, array{n:int, x:float, y:float}>|null
+     */
+    private static function marcacoesDe(?string $bruto): ?array
+    {
+        if (! $bruto) { return null; }
+
+        $lidas = json_decode($bruto, true);
+        if (! is_array($lidas)) { return null; }
+
+        $boas = [];
+        foreach ($lidas as $m) {
+            if (! isset($m['x'], $m['y'])) { continue; }
+            $x = (float) $m['x'];
+            $y = (float) $m['y'];
+            if ($x < 0 || $x > 1 || $y < 0 || $y > 1) { continue; }
+            $boas[] = ['n' => (int) ($m['n'] ?? count($boas) + 1),
+                       'x' => round($x, 4), 'y' => round($y, 4)];
+        }
+
+        return $boas ?: null;
+    }
+
     /** GET /api/irregularidades — catálogo para montar o checklist. */
     public function catalogo(): JsonResponse
     {
@@ -308,6 +338,13 @@ class VistoriaController extends Controller
             'descricoes.*'       => ['nullable', 'string', 'max:1000'],
             // Índice da foto que responde "como está o imóvel hoje".
             'fachada'            => ['nullable', 'integer', 'min:0'],
+            // Posição da foto no RELATÓRIO — a sequência é compartilhada com
+            // os itens de lei, e é ela que dá sentido de leitura ao conjunto.
+            'ordens'             => ['array'],
+            'ordens.*'           => ['nullable', 'integer', 'min:0', 'max:200'],
+            // Marcações sobre a imagem, em JSON: [{n, x, y}] com x e y de 0 a 1.
+            'marcacoes'          => ['array'],
+            'marcacoes.*'        => ['nullable', 'string', 'max:4000'],
 
             // ── a obra ──
             'acompanhante_nome'         => ['nullable', 'string', 'max:160'],
@@ -318,9 +355,17 @@ class VistoriaController extends Controller
             'area_metodo'        => ['nullable', Rule::in(array_keys(Vistoria::METODOS_AREA))],
             'fase_obra'          => ['nullable', Rule::in(array_keys(Vistoria::FASES_OBRA))],
 
-            // ── constatações ──
+            // ── o relatório ──
+            // `artigos[]` continua sendo o CONJUNTO de dispositivos que a
+            // vistoria envolve — é o que a lavratura consulta. Os itens
+            // abaixo são o TEXTO que o fiscal escreveu sobre cada um.
             'artigos'            => ['array'],
             'artigos.*'          => ['integer', 'exists:artigos,id'],
+            'itens_artigo'                => ['array', 'max:50'],
+            'itens_artigo.*.artigo_id'    => ['required', 'integer', 'exists:artigos,id'],
+            'itens_artigo.*.tipo'         => ['required', Rule::in(array_keys(VistoriaArtigo::TIPOS))],
+            'itens_artigo.*.observacao'   => ['nullable', 'string', 'max:2000'],
+            'itens_artigo.*.ordem'        => ['nullable', 'integer', 'min:0', 'max:200'],
             'exigencias'         => ['array', 'max:30'],
             'exigencias.*.texto' => ['required', 'string', 'max:500'],
             'exigencias.*.prazo_dias' => ['nullable', 'integer', 'min:1', 'max:3650'],
@@ -382,7 +427,21 @@ class VistoriaController extends Controller
 
             // Enquadramento constatado em campo. Ver a relação `artigos()` em
             // Vistoria para por que ele não divide tabela com o do documento.
-            if (! empty($d['artigos'])) {
+            //
+            // Quando vêm ITENS de relatório, são eles que mandam: cada linha
+            // guarda o próprio texto e a própria posição. `artigos[]` sozinho
+            // continua aceito — é o caminho de quem só marca o dispositivo,
+            // sem escrever nada sobre ele.
+            if (! empty($d['itens_artigo'])) {
+                foreach ($d['itens_artigo'] as $i => $item) {
+                    $v->itensDeArtigo()->create([
+                        'artigo_id'  => $item['artigo_id'],
+                        'tipo'       => $item['tipo'],
+                        'observacao' => isset($item['observacao']) ? trim($item['observacao']) : null,
+                        'ordem'      => $item['ordem'] ?? $i,
+                    ]);
+                }
+            } elseif (! empty($d['artigos'])) {
                 $v->artigos()->sync($d['artigos']);
             }
 
@@ -426,6 +485,11 @@ class VistoriaController extends Controller
                     // Uma fachada por vistoria: é a resposta a "como está o
                     // imóvel", e duas respostas não respondem nada.
                     'fachada'       => isset($d['fachada']) && (int) $d['fachada'] === $i,
+                    'ordem'         => $d['ordens'][$i] ?? $i,
+                    // Chega como JSON de texto porque o envio é multipart —
+                    // decodificado aqui, e descartado em silêncio se vier
+                    // corrompido: marcação perdida não pode custar a foto.
+                    'marcacoes'     => self::marcacoesDe($d['marcacoes'][$i] ?? null),
                     'latitude'      => $d['latitude'] ?? null,
                     'longitude'     => $d['longitude'] ?? null,
                     'data_hora'     => str_replace('T', ' ', $d['data_hora']) . ':00',
@@ -443,7 +507,7 @@ class VistoriaController extends Controller
                 'data_hora'   => $vistoria->data_hora?->format('d/m/Y H:i'),
                 'area'        => $vistoria->areaAferidaRotulo(),
                 'exigencias'  => $vistoria->exigencias()->count(),
-                'artigos'     => $vistoria->artigos()->count(),
+                'artigos'     => $vistoria->itensDeArtigo()->count() ?: $vistoria->artigos()->count(),
                 'evidencias'  => $vistoria->evidencias()->count(),
             ],
         ], 201);

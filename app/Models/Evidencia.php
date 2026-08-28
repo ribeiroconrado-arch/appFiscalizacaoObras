@@ -16,7 +16,15 @@ class Evidencia extends Model
 
     protected function casts(): array
     {
-        return ['data_hora' => 'datetime', 'fachada' => 'boolean'];
+        return [
+            'data_hora' => 'datetime',
+            'fachada'   => 'boolean',
+            'ordem'     => 'integer',
+            // Cada marcação é {x, y} entre 0 e 1, mais o número que aparece
+            // sobre a foto. Relativo, porque a mesma imagem é exibida em
+            // tamanhos diferentes — pixel absoluto sairia do lugar.
+            'marcacoes' => 'array',
+        ];
     }
 
     public function vistoria(): BelongsTo { return $this->belongsTo(Vistoria::class); }

@@ -82,7 +82,11 @@ class Vistoria extends Model
     public function lote(): BelongsTo          { return $this->belongsTo(Lote::class); }
     public function obra(): BelongsTo          { return $this->belongsTo(Obra::class); }
     public function fiscal(): BelongsTo        { return $this->belongsTo(User::class, 'fiscal_id'); }
-    public function evidencias(): HasMany      { return $this->hasMany(Evidencia::class); }
+    /** As fotos, na ordem do relatório — e não na de chegada ao servidor. */
+    public function evidencias(): HasMany
+    {
+        return $this->hasMany(Evidencia::class)->orderBy('ordem')->orderBy('id');
+    }
 
     /** As providências exigidas, na ordem em que o fiscal as escreveu. */
     public function exigencias(): HasMany
@@ -100,6 +104,45 @@ class Vistoria extends Model
     public function artigos(): BelongsToMany
     {
         return $this->belongsToMany(Artigo::class, 'vistoria_artigos');
+    }
+
+    /**
+     * Os itens de lei do relatório — citações e pareceres, na ordem escrita.
+     *
+     * Convive com `artigos()` acima de propósito: aquela responde "quais
+     * dispositivos esta vistoria envolve?", que é o que a lavratura pergunta;
+     * esta responde "o que o fiscal escreveu sobre cada um?", que é o que o
+     * relatório mostra. Uma é conjunto, a outra é texto.
+     */
+    public function itensDeArtigo(): HasMany
+    {
+        return $this->hasMany(VistoriaArtigo::class)->orderBy('ordem')->orderBy('id');
+    }
+
+    /**
+     * O relatório inteiro em UMA sequência: fotos e itens de lei intercalados,
+     * na ordem em que o fiscal montou.
+     *
+     * A ordem é o conteúdo. Uma foto depois do artigo que ela ilustra diz algo
+     * que a mesma foto no fim de uma lista de fotos não diz.
+     *
+     * @return \Illuminate\Support\Collection<int, array>
+     */
+    public function relatorio()
+    {
+        $fotos = $this->evidencias->map(fn (Evidencia $e) => [
+            'tipo' => 'foto', 'ordem' => (int) $e->ordem, 'id' => $e->id,
+            'titulo' => $e->titulo, 'texto' => $e->descricao,
+            'fachada' => (bool) $e->fachada, 'marcacoes' => $e->marcacoes ?? [],
+        ]);
+
+        $leis = $this->itensDeArtigo->map(fn (VistoriaArtigo $i) => [
+            'tipo' => $i->tipo, 'ordem' => (int) $i->ordem, 'id' => $i->id,
+            'artigo_id' => $i->artigo_id, 'titulo' => $i->artigo?->numero,
+            'texto' => $i->observacao,
+        ]);
+
+        return $fotos->concat($leis)->sortBy(['ordem', 'tipo'])->values();
     }
 
     /** A foto que responde "como está o imóvel hoje". */

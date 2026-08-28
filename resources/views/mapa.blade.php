@@ -981,11 +981,9 @@
         <button type="button" class="vs-passo" data-passo="2" onclick="irPasso(2)">
           <span class="n">2</span>A obra</button>
         <button type="button" class="vs-passo" data-passo="3" onclick="irPasso(3)">
-          <span class="n">3</span>Constatações</button>
+          <span class="n">3</span>Relatório</button>
         <button type="button" class="vs-passo" data-passo="4" onclick="irPasso(4)">
-          <span class="n">4</span>Fotos</button>
-        <button type="button" class="vs-passo" data-passo="5" onclick="irPasso(5)">
-          <span class="n">5</span>Revisão</button>
+          <span class="n">4</span>Revisão</button>
       </div>
     </div>
 
@@ -1109,64 +1107,61 @@
       </div>
     </div>
 
-    {{-- ── 3 · CONSTATAÇÕES ── --}}
+    {{-- ── 3 · RELATÓRIO ──
+         Uma lista só, montada na ordem em que o fiscal escreve.
+
+         Antes eram dois passos, "Constatações" e "Fotos". O problema não era
+         de arrumação: a maioria das vistorias NÃO constata irregularidade
+         nenhuma, e uma tela chamada Constatações, com um checklist de
+         irregularidades à frente das fotos, fazia o registro do trabalho
+         regular parecer desvio do caminho — quando é o caso comum.
+
+         Aqui há um botão só, "Adicionar ao relatório", e ele oferece os quatro
+         tipos de linha que uma vistoria produz. A ordem é conteúdo: a foto
+         depois do artigo que ela ilustra diz o que a mesma foto no fim de uma
+         pilha de fotos não diz. --}}
     <div class="vs-painel" id="nv-p3">
-      <div class="sec-title">Irregularidades constatadas</div>
-      <div class="checklist" id="nv-checklist"></div>
-
-      {{-- A fundamentação vem sugerida pelas irregularidades marcadas
-           (LavraturaService::artigosSugeridos) e é conferida em campo, onde os
-           fatos estão à vista — não semanas depois, na mesa. --}}
-      <div class="sec-title">Artigos de lei</div>
-      <div id="nv-artigos"><div class="leg">Marque as irregularidades para ver
-        os artigos que as enquadram.</div></div>
-
-      {{-- Exigências como ITENS: é esta lista que a notificação imprime. Em
-           texto corrido, alguém teria de reler e reinterpretar depois. --}}
-      <div class="sec-title">Exigências</div>
-      <div class="vs-nova-exig">
-        <input type="text" id="nv-exig-texto" maxlength="500"
-               placeholder="O que o administrado deve fazer"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addExigencia()}">
-        <input type="number" id="nv-exig-prazo" class="mono" min="1" max="3650"
-               placeholder="dias" title="Prazo em dias (opcional)">
-        <button type="button" class="btn sm primary" onclick="addExigencia()">+</button>
+      <div class="sec-title-row">
+        <div class="sec-title">Relatório da vistoria</div>
+        <button type="button" class="btn primary sm sec-title-acao" onclick="menuItemRelatorio(event)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Adicionar</button>
       </div>
-      <div id="nv-exigencias"></div>
+      <div class="leg">Foto com descrição, artigo citado, parecer ou exigência —
+        na ordem em que você quiser contar.</div>
+      <div id="nv-relatorio"></div>
+      {{-- Fora do menu de propósito: é o mesmo input para o item "Foto" e para
+           o atalho da vistoria rápida. `capture="environment"` abre a câmera
+           traseira direto no celular; no desktop vira seletor de arquivo. --}}
+      <input type="file" id="nv-arquivo" accept="image/*,application/pdf" multiple
+             capture="environment" style="display:none" onchange="anexarArquivos(this)">
 
-      <div class="sec-title">Observações</div>
+      {{-- O checklist fica ABAIXO do relatório e recolhido: ele é a máquina do
+           enquadramento (é dele que saem os artigos sugeridos), mas não é o
+           assunto da maioria das vistorias. --}}
+      <details class="vs-dobra" id="nv-dobra-irreg">
+        <summary>
+          <span>Irregularidades do catálogo</span>
+          <span class="vs-dobra-conta" id="nv-irreg-conta"></span>
+        </summary>
+        <div class="leg">Marcar aqui sugere os artigos que enquadram cada uma —
+          e é o que o auto de infração vai usar.</div>
+        <div class="checklist" id="nv-checklist"></div>
+        <div id="nv-artigos"></div>
+      </details>
+
+      <div class="sec-title">Observações gerais</div>
       <div class="field">
         <label for="nv-obs">Descrição livre</label>
         <textarea id="nv-obs" rows="3" maxlength="5000"
                   style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
-                  placeholder="O que foi constatado em campo"></textarea>
+                  placeholder="O que não coube nos itens acima"></textarea>
       </div>
     </div>
 
-    {{-- ── 4 · FOTOS ── --}}
+    {{-- ── 4 · REVISÃO ── --}}
     <div class="vs-painel" id="nv-p4">
-      <div class="sec-title-row">
-        <div class="sec-title">Fotos da vistoria</div>
-        <label class="btn out-green sm sec-title-acao" style="cursor:pointer">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-          Adicionar
-          {{-- `capture="environment"` abre a câmera traseira direto no celular;
-               no desktop o mesmo input vira seletor de arquivo. --}}
-          <input type="file" accept="image/*,application/pdf" multiple capture="environment"
-                 style="display:none" onchange="anexarArquivos(this)">
-        </label>
-      </div>
-      <div class="leg">Descreva cada foto. Legenda é o que transforma a imagem em
-        prova que se sustenta sozinha, meses depois.</div>
-      <div class="anexos" id="nv-anexos"></div>
-    </div>
-
-    {{-- ── 5 · REVISÃO ── --}}
-    <div class="vs-painel" id="nv-p5">
       <div class="leg">Confira antes de gravar. A vistoria é ato: depois de
         gravada, ela fundamenta notificação, auto e embargo.</div>
       <div id="nv-revisao"></div>
@@ -1180,6 +1175,71 @@
       <button class="btn" onclick="fecharVistoria()">Cancelar</button>
       <button class="btn primary" id="nv-avancar" onclick="passo(1)">Avançar</button>
       <button class="btn primary" id="nv-gravar" onclick="gravarVistoria()" hidden>Gravar vistoria</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ ITEM DO RELATÓRIO DE VISTORIA ══════
+     Uma janela pequena por item, e não campos soltos crescendo na lista: o
+     que se escreve num item é texto de peça, e merece o espaço de um
+     formulário. A lista fica legível porque cada linha é só o resumo. --}}
+<div class="modal-bg" id="m-vs-item" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <button class="modal-x" onclick="fModalBtn('m-vs-item')">&#10005;</button>
+    <h3 class="fi-cabeca"><span id="vsi-titulo">Item do relatório</span></h3>
+
+    {{-- FOTO --}}
+    <div id="vsi-foto" hidden>
+      {{-- A foto com as marcações por cima: tocar na imagem crava um número,
+           e a descrição pode então dizer "1" e "2" em vez de "no canto
+           superior direito, mais ou menos no meio". --}}
+      <div class="vsi-palco" id="vsi-palco" onclick="marcarNaFoto(event)">
+        <img id="vsi-img" alt="">
+        <div class="vsi-pinos" id="vsi-pinos"></div>
+      </div>
+      <div class="vsi-palco-acoes">
+        <span class="leg" id="vsi-dica">Toque na foto para apontar o que descreve.</span>
+        <button type="button" class="btn sm" onclick="limparMarcacoes()">Limpar marcas</button>
+      </div>
+      <div class="field">
+        <label for="vsi-titulo-foto">Título</label>
+        <input type="text" id="vsi-titulo-foto" maxlength="160">
+      </div>
+      <label class="chk-item" id="vsi-fachada-linha">
+        <input type="checkbox" id="vsi-fachada">
+        <span class="desc">É a fachada do imóvel<br>
+          <span class="cod">É esta que a ficha do imóvel passa a mostrar</span></span>
+      </label>
+    </div>
+
+    {{-- ARTIGO / PARECER --}}
+    <div id="vsi-artigo" hidden>
+      <div class="field">
+        <label for="vsi-artigo-id">Artigo</label>
+        <select id="vsi-artigo-id"></select>
+      </div>
+      <div class="cad-nota" id="vsi-artigo-nota"></div>
+    </div>
+
+    {{-- EXIGÊNCIA --}}
+    <div id="vsi-exigencia" hidden>
+      <div class="field">
+        <label for="vsi-prazo">Prazo em dias (opcional)</label>
+        <input type="number" id="vsi-prazo" class="mono" min="1" max="3650" placeholder="15">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="vsi-texto" id="vsi-texto-rot">Descrição</label>
+      <textarea id="vsi-texto" rows="4" maxlength="2000"
+                style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn danger" id="vsi-excluir" onclick="excluirItemRelatorio()">Excluir</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-vs-item')">Cancelar</button>
+      <button class="btn primary" onclick="salvarItemRelatorio()">Guardar</button>
     </div>
   </div>
 </div>
