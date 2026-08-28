@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Assinatura;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -60,7 +61,7 @@ class PerfilController extends Controller
     }
 
     /** POST /api/perfil/assinatura — data URL de PNG vinda do canvas. */
-    public function salvarAssinatura(Request $r): JsonResponse
+    public function salvarAssinatura(Request $r, Assinatura $assinatura): JsonResponse
     {
         $d = $r->validate([
             // ~1 MB de data URL é folgado para um traço de canvas e ainda
@@ -71,7 +72,11 @@ class PerfilController extends Controller
             'assinatura.regex' => 'Formato de assinatura inválido.',
         ]);
 
-        $r->user()->update(['assinatura' => $d['assinatura']]);
+        // Aparada até o traço ANTES de guardar: o canvas tem a largura da tela
+        // e a pessoa assina num pedaço dele, e é essa margem vazia que faz a
+        // rubrica sair minúscula no meio do campo de assinatura do papel.
+        // Corrigir na origem vale para tudo que exiba a assinatura depois.
+        $r->user()->update(['assinatura' => $assinatura->aparar($d['assinatura'])]);
 
         return response()->json(['message' => 'Assinatura gravada.']);
     }

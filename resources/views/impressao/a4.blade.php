@@ -90,8 +90,11 @@
   /* ── Assinaturas ── */
   table.assina { width: 100%; border-collapse: collapse; margin: 4px 0 12px; page-break-inside: avoid; }
   table.assina td { width: 50%; text-align: center; vertical-align: bottom; padding: 0 22px; border: 0; }
-  .assina-img { max-height: 48px; max-width: 100%; }
-  .assina-vazio { height: 48px; }
+  /* O traço vem aparado do banco (App\Services\Assinatura): a altura da
+     imagem é a altura da assinatura, sem a margem vazia do canvas. Por isso o
+     limite pode subir — antes, esticar só esticava o vazio em volta. */
+  .assina-img { max-height: 62px; max-width: 100%; width: auto; }
+  .assina-vazio { height: 62px; }
   .assina-linha { border-top: 1px solid #111; padding-top: 3px; margin-top: 3px; font-size: 8.5px; }
 
   /* ── Anexos ── */

@@ -1959,3 +1959,8 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .menu-novo-op.perigo .menu-novo-nome{color:var(--red)}
 .menu-novo-op.perigo .menu-novo-ico{background:#FDECEC;color:var(--red)}
 .menu-novo-op.perigo:hover{background:#FDECEC}
+
+
+/* A assinatura guardada aparece no tamanho do TRAÇO: ela vem aparada do
+   servidor, então esticar a moldura estica a rubrica, e não o vazio. */
+#pf-assinatura-atual img{max-height:120px;max-width:100%;width:auto;display:block}

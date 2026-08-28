@@ -68,13 +68,24 @@
      Uma linha por fiscal, cada uma com o seu campo de assinatura: a ordem
      pode ser dada a três e recebida por dois, e o papel tem de mostrar isso. */
   .ciencia { width: 100%; border-collapse: collapse; }
+  /* 78px: espaço para a assinatura respirar SEM ficar boiando. O traço vem
+     aparado do banco (App\Services\Assinatura), então a altura da imagem é a
+     do traço — o campo pode ser justo, porque não há mais margem invisível
+     empurrando a rubrica para o meio de um retângulo grande. */
   .ciencia td { border: 1px solid #bbb; padding: 6px 5px 3px; vertical-align: bottom;
-                width: 50%; height: 62px; }
+                width: 50%; height: 78px; }
   .ciencia .nome { font-size: 9.5px; font-weight: bold; }
   .ciencia .papel { font-size: 8px; color: #666; text-transform: uppercase; letter-spacing: .04em; }
-  .ciencia .linha { border-top: 1px solid #111; margin-top: 20px; padding-top: 2px;
+  .ciencia .linha { border-top: 1px solid #111; padding-top: 2px;
                     font-size: 8px; color: #666; }
-  .ciencia img.assina { max-height: 34px; max-width: 190px; display: block; margin-bottom: -2px; }
+  /* Sem `margin-top` fixo na linha: era ele que segurava a assinatura no alto
+     e deixava o vão. A imagem ocupa a altura e a linha vem logo abaixo dela.
+     `width:auto` mantém a proporção do traço em qualquer um dos dois limites. */
+  .ciencia img.assina { max-height: 52px; max-width: 100%; width: auto;
+                        display: block; margin: 0 auto -1px; }
+  /* Quem ainda não assinou: o vão que a assinatura ocuparia, para as duas
+     colunas fecharem na mesma altura. */
+  .ciencia .vao { height: 42px; }
   .ciencia .quando { font-size: 8px; color: #444; }
 
   .rodape { margin-top: 10px; border-top: 1px solid #bbb; padding-top: 4px;
@@ -207,6 +218,8 @@
                 <td>
                   @if ($f->pivot->assinatura)
                     <img class="assina" src="{{ $f->pivot->assinatura }}" alt="">
+                  @else
+                    <div class="vao"></div>
                   @endif
                   <div class="linha">
                     <span class="nome">{{ $f->name }}</span>
@@ -248,6 +261,8 @@
                    por que ele estava ali. --}}
               @if ($os->assinatura_emitente)
                 <img class="assina" src="{{ $os->assinatura_emitente }}" alt="">
+              @else
+                <div class="vao"></div>
               @endif
               <div class="linha">
                 <span class="nome">{{ $os->emitente?->name ?? '—' }}</span>
