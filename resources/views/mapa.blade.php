@@ -1310,6 +1310,10 @@
     <div class="btn-row vs-rodape">
       <button class="btn" id="nv-voltar" onclick="passo(-1)">Voltar</button>
       <div style="flex:1"></div>
+      {{-- O ÚNICO caminho que guarda rascunho. A tela não guarda mais nada por
+           conta: gravar é decisão de quem escreve, e o botão fica ao lado de
+           onde se sai, que é quando a decisão aparece. --}}
+      <button class="btn" onclick="guardarRascunho()" title="Guarda o que está na tela neste aparelho, para continuar depois">Salvar rascunho</button>
       <button class="btn" onclick="fecharVistoria()">Cancelar</button>
       <button class="btn primary" id="nv-avancar" onclick="passo(1)">Avançar</button>
       <button class="btn primary" id="nv-gravar" onclick="gravarVistoria()" hidden>Gravar vistoria</button>

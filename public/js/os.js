@@ -189,7 +189,13 @@ function cartoesOs() {
             <span class="proto-badge">${esc(o.numero)}</span>
             <span class="notif-card-tipo">${esc(o.natureza)}</span>
           </div>
-          <div class="mc-acoes">${tags}</div>
+          <div class="mc-acoes">
+            ${tags}
+            <div class="card-opcoes">
+              <button type="button" class="card-opcoes-btn" title="Opções"
+                      onclick="abrirOpcoesOs(event, ${o.id})">${ICO_TRES_PONTOS}</button>
+            </div>
+          </div>
         </div>
         <div class="os-obj">${esc(o.objeto)}</div>
         <div class="notif-card-linhas">

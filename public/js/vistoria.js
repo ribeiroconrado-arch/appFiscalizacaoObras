@@ -317,9 +317,34 @@ function zerarVistoria() {
     '<div class="leg">Marque as irregularidades para ver os artigos que as enquadram.</div>'
 }
 
-/** Fecha guardando o que foi digitado — ver salvarRascunho(). */
+/**
+ * Fecha a vistoria. NÃO grava rascunho por conta.
+ *
+ * Guardava sozinho ao sair, e o efeito era o oposto do prometido: o fiscal
+ * fechava a tela achando que descartava, e a visita seguinte no mesmo imóvel
+ * nascia com o texto da anterior. Gravar é decisão de quem escreve — o botão
+ * "Salvar rascunho" está no rodapé, ao lado de onde se sai.
+ *
+ * O aviso é o mesmo do formulário de documento: sair com trabalho na tela
+ * pergunta antes, e diz onde está o botão que guarda.
+ */
 function fecharVistoria() {
-  if (temConteudo()) { salvarRascunho() } else { limparRascunho() }
+  if (temConteudo()) {
+    confirmarAcao({
+      titulo: 'Sair da vistoria',
+      mensagem: 'O que está na tela não foi gravado e será perdido. '
+        + 'Para guardar e continuar depois, use "Salvar rascunho" antes de sair.',
+      textoBtn: 'Sair sem gravar',
+      perigo: true,
+      onConfirm: () => sairDaVistoria(),
+    })
+    return
+  }
+  sairDaVistoria()
+}
+
+/** O fechamento em si, depois de resolvido o que fazer com o que está na tela. */
+function sairDaVistoria() {
   fModalBtn('m-vistoria')
   // Quem abriu a vistoria de dentro da ficha volta para o imóvel — e não para
   // o mapa, onde teria de procurar o lote de novo.
@@ -520,7 +545,6 @@ function irPasso(k) {
 
   if (k === 'rel') { sugerirArtigos() }
   if (k === 'rev') { renderRevisao() }
-  salvarRascunho()
 }
 
 /** A barra do topo — montada, e não fixa, porque os passos variam. */
@@ -561,7 +585,6 @@ function escolherFinalidade(valor) {
   // passo que toda finalidade tem.
   const lista = passosDaVistoria()
   irPasso(lista.some(x => x.k === vState.passo) ? vState.passo : 'rel')
-  salvarRascunho()
 }
 
 /** Pinta a escolha e mostra só os blocos que a finalidade pede. */
@@ -612,7 +635,6 @@ function capturarGpsVistoria() {
       }
       pintarGps()
       btn.disabled = false
-      salvarRascunho()
     },
     err => {
       btn.disabled = false
@@ -644,25 +666,25 @@ function escolherAlvara(v) {
   // O número só faz sentido quando há alvará: campo aberto para quem respondeu
   // "não possui" é convite a preencher o que não existe.
   document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
-  pintarOpcoes(); salvarRascunho()
+  pintarOpcoes()
 }
 
 /** @param {string} v */
 function escolherFase(v) {
   vState.obra.fase = vState.obra.fase === v ? '' : v
-  pintarOpcoes(); salvarRascunho()
+  pintarOpcoes()
 }
 
 /** @param {string} v */
 function escolherProjeto(v) {
   vState.obra.projeto = vState.obra.projeto === v ? '' : v
-  pintarOpcoes(); salvarRascunho()
+  pintarOpcoes()
 }
 
 /** @param {string} v */
 function escolherUso(v) {
   vState.obra.uso = vState.obra.uso === v ? '' : v
-  pintarOpcoes(); salvarRascunho()
+  pintarOpcoes()
 }
 
 function pintarOpcoes() {
@@ -834,7 +856,6 @@ function renderArtigos(semArtigo) {
 function alternarArtigo(id, marcado) {
   marcado ? vState.artigosMarcados.add(id) : vState.artigosMarcados.delete(id)
   renderArtigos([])
-  salvarRascunho()
 }
 
 /** Mantém o campo escondido com o valor combinado aaaa-mm-ddThh:mm. */
@@ -946,7 +967,7 @@ function anexarArquivos(input) {
     if (f) { f.fachada = true }
   }
 
-  renderRelatorio(); salvarRascunho()
+  renderRelatorio()
   if (vState.relatorio[primeiro]) { abrirItemRelatorio(primeiro) }
 }
 
@@ -1010,7 +1031,7 @@ function moverItem(i, d) {
   // daqui, com a mensagem errada. Melhor nao mexer.
   if (!item) { renderRelatorio(); return }
   vState.relatorio.splice(j, 0, item)
-  renderRelatorio(); salvarRascunho()
+  renderRelatorio()
 }
 
 // ── A JANELA DE UM ITEM ──────────────────────────────────────
@@ -1111,7 +1132,7 @@ function salvarItemRelatorio() {
   }
 
   fModalBtn('m-vs-item')
-  renderRelatorio(); salvarRascunho()
+  renderRelatorio()
 }
 
 /** Exclusão SEMPRE pergunta antes — regra sem exceção. */
@@ -1136,7 +1157,7 @@ function excluirItemRelatorio() {
       }
       vState.relatorio.splice(i, 1)
       fModalBtn('m-vs-item')
-      renderRelatorio(); salvarRascunho()
+      renderRelatorio()
     },
   })
 }
@@ -1386,6 +1407,25 @@ function retomarRascunho() {
   const av = document.getElementById('nv-rascunho')
   av.hidden = false
   av.textContent = 'Rascunho recuperado — as fotos precisam ser refeitas'
+}
+
+/**
+ * Guarda o rascunho AGORA, porque alguém pediu.
+ *
+ * É o único caminho que grava: nenhuma tecla, nenhuma troca de passo e nenhum
+ * fechamento de janela guarda nada sozinho. O aviso na tela confirma que
+ * guardou — sem ele o botão seria um clique no escuro.
+ */
+function guardarRascunho() {
+  if (!temConteudo()) { toast('Não há nada para guardar ainda', 'aviso'); return }
+
+  salvarRascunho()
+  vState.rascunhoPendente = null
+
+  const av = document.getElementById('nv-rascunho')
+  av.hidden = false
+  av.textContent = 'Rascunho guardado neste aparelho — as fotos não vão junto'
+  toast('Rascunho guardado')
 }
 
 /** Recusa a oferta: some da tela e do aparelho. */

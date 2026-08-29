@@ -165,7 +165,13 @@ function cartoesProtocolos() {
             <span class="notif-card-tipo">${esc(p.tipo_rotulo)}</span>
             <span class="notif-card-data">${esc(p.data ?? '—')}</span>
           </div>
-          <div class="mc-acoes">${tags}</div>
+          <div class="mc-acoes">
+            ${tags}
+            <div class="card-opcoes">
+              <button type="button" class="card-opcoes-btn" title="Opções"
+                      onclick="abrirOpcoesProto(event, ${p.id})">${ICO_TRES_PONTOS}</button>
+            </div>
+          </div>
         </div>
         <div class="notif-card-linhas">
           ${linhas.map(([r, v]) => `<div><span class="notif-card-rot">${r}</span>${v}</div>`).join('')}
