@@ -33,6 +33,14 @@
   --tx:#4A423C; --tx2:#6A5C52; --tx3:#9B8B7F;
   --chumbo:#37413F;
 
+  /* A MESMA largura para as janelas que carregam trabalho: ficha do imóvel,
+     vistoria e as peças (auto de infração, auto de embargo, notificação — que
+     saem todas do mesmo formulário). Eram três medidas — 620, 640 e 820 — e
+     quem passava de uma para a outra via a janela mudar de tamanho no meio do
+     caminho, como se tivesse trocado de sistema.
+     672px = os 640 da vistoria mais 5%, a pedido. */
+  --modal-trabalho:672px;
+
   --red:#C2352B; --rlt:#FCECEA;
   --warn:#B45309; --wlt:#FDF3E3;
   --blue:#1D4ED8; --blt2:#EAF0FE;
@@ -680,7 +688,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    lados (o `margin:auto` do .modal mantém a centralização vertical). A
    linha do tempo é o que pedia espaço: com a altura antiga, dois eventos
    já obrigavam a rolar. */
-#m-ficha .modal{min-height:min(78vh, 820px);max-width:620px}
+#m-ficha .modal{min-height:min(78vh, 820px);max-width:var(--modal-trabalho)}
 #m-ficha .sub-abas{margin:12px 0 10px}
 
 .fi-painel{display:none}
@@ -1151,7 +1159,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .modal.modal-flex{
   display:flex;flex-direction:column;
   height:min(90vh, 760px);max-height:calc(100vh - 28px);
-  max-width:820px;padding:0;overflow:hidden;
+  max-width:var(--modal-trabalho);padding:0;overflow:hidden;
 }
 
 /* padding-right maior reserva o espaço do × (position:absolute), para ele não
@@ -1706,7 +1714,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    mudar de lugar quando o conteúdo muda. Aqui isso pesa mais — quem usa está
    de pé, no sol, com uma mão só.
    ══════════════════════════════════════════════ */
-#m-vistoria .modal{max-width:640px}
+#m-vistoria .modal{max-width:var(--modal-trabalho)}
 .vs-head{flex-shrink:0;padding:16px 52px 0 18px;border-bottom:1.5px solid var(--bord)}
 .vs-head .sub{font-size:12px;color:var(--tx2);margin:2px 0 10px}
 

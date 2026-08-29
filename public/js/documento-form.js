@@ -51,6 +51,12 @@ async function novoDocumento(ev) {
   // evento está sendo despachado e já é `null` quando o await volta.
   const botao = ev.currentTarget
 
+  // O MESMO botão existe na ficha do imóvel e na tela de Documentos. Quem
+  // abriu de dentro da ficha volta para ela ao fechar; quem abriu da lista,
+  // não. Ler o ancestral é mais barato — e mais difícil de esquecer — do que
+  // um segundo parâmetro que cada chamada teria de passar certo.
+  const daFicha = !!botao?.closest?.('#m-ficha')
+
   const o = await carregarOpcoes()
 
   abrirMenuNovo(botao, o.tipos.map(t => ({
@@ -65,9 +71,10 @@ async function novoDocumento(ev) {
     // item para o formulario de documento, como os demais, deixou a tela de
     // vistoria inalcancavel a partir da ficha desde 7d9c0a3, quando o botao
     // "Nova vistoria" foi absorvido por este menu.
-    acao: t.valor === 'vistoria'
-      ? () => novaVistoria()
-      : () => escolherTipoDoc(t.valor),
+    acao: () => {
+      if (daFicha) { lembrarFichaDeOrigem() }
+      return t.valor === 'vistoria' ? novaVistoria() : escolherTipoDoc(t.valor)
+    },
   })))
 }
 
@@ -533,25 +540,35 @@ function lavrarDocumento() {
       if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
       toast(d.message)
       fModalBtn('m-doc')
-      irPara('documentos')
-      carregarDocumentos()
+      // Quem lavrou de dentro da ficha volta para o imóvel, com o documento
+      // já na linha do tempo. Quem lavrou da lista continua na lista, que é
+      // de onde veio.
+      if (! voltarAFicha()) {
+        irPara('documentos')
+        carregarDocumentos()
+      }
     },
   })
 }
 
-/** Fecha, avisando se houver edição em curso. */
+/**
+ * Fecha, avisando se houver edição em curso — e volta para a ficha do imóvel
+ * quando foi de lá que a peça nasceu.
+ */
 function fecharFormDoc() {
+  const sair = () => { fModalBtn('m-doc'); voltarAFicha() }
+
   if (fdState.estado === 'novo' || fdState.editando) {
     confirmarAcao({
       titulo: 'Descartar alterações',
       mensagem: 'O que foi digitado e não gravado será perdido.',
       textoBtn: 'Descartar',
       perigo: true,
-      onConfirm: () => fModalBtn('m-doc'),
+      onConfirm: sair,
     })
     return
   }
-  fModalBtn('m-doc')
+  sair()
 }
 
 // ── RESUMO ───────────────────────────────────────────────────

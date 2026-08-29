@@ -293,6 +293,9 @@ function zerarVistoria() {
 function fecharVistoria() {
   if (temConteudo()) { salvarRascunho() } else { limparRascunho() }
   fModalBtn('m-vistoria')
+  // Quem abriu a vistoria de dentro da ficha volta para o imóvel — e não para
+  // o mapa, onde teria de procurar o lote de novo.
+  voltarAFicha()
 }
 
 // ── PASSOS ───────────────────────────────────────────────────
@@ -1376,8 +1379,10 @@ async function enviarVistoria(marcadas) {
     toast(d.vistoria?.area ? 'Vistoria registrada · ' + d.vistoria.area : 'Vistoria registrada')
 
     // Reabre a ficha já com o histórico atualizado — o fiscal confere o que
-    // acabou de gravar sem ter que procurar o lote de novo.
-    if (state.selecionado) abrirFicha(state.selecionado)
+    // acabou de gravar sem ter que procurar o lote de novo. `voltarAFicha`
+    // usa a ficha de ORIGEM quando há uma; sem ela, o lote selecionado serve,
+    // que é o caso de quem chegou pela tela de protocolos.
+    if (! voltarAFicha() && state.selecionado) { abrirFicha(state.selecionado) }
   } catch (e) {
     console.error(e)
     toast(e.message || 'Falha ao gravar a vistoria', 'err')

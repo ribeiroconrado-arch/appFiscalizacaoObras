@@ -182,6 +182,13 @@ function abrirFicha(feicao) {
   const p = feicao.properties
   state.selecionado = feicao
 
+  // Chegar a uma ficha zera a memória de volta: ou se acabou de voltar para
+  // ela, ou se abriu outra — e nos dois casos a origem anterior não vale
+  // mais. Sem isto, um caminho de saída que eu não tenha previsto deixaria a
+  // memória presa, e a PRÓXIMA janela aberta pela lista devolveria alguém a
+  // uma ficha de onde nunca saiu.
+  fichaDeOrigem = null
+
   // O título é fixo — "Ficha Imóvel". A inscrição saiu dele e desceu para a
   // faixa de campos: no cabeçalho ela competia com o nome da tela, e quem
   // abre a ficha já sabe qual imóvel abriu.
@@ -307,6 +314,52 @@ function formatarDataHoraCurta(iso) {
   const dd = n => String(n).padStart(2, '0')
   return `${dd(d.getDate())}/${dd(d.getMonth() + 1)}/${dd(d.getFullYear() % 100)}`
        + ` - ${dd(d.getHours())}:${dd(d.getMinutes())}`
+}
+
+// ── DE ONDE A JANELA FOI ABERTA ──────────────────────────────
+//
+// Vistoria e documento podem ser abertos de dois lugares: da lista do módulo
+// (Documentos, Protocolo & OS) ou de dentro da ficha do imóvel. Fechados, os
+// dois caíam no mesmo lugar — a lista —, e quem tinha vindo da ficha era
+// devolvido a um lugar onde não estava. Pior: perdia o imóvel que estava
+// examinando e tinha de procurá-lo de novo no mapa.
+//
+// Guardar a ficha de origem custa uma variável e resolve os dois casos: ao
+// fechar, ao gravar, ao lavrar ou ao cancelar, volta-se para o imóvel — e a
+// ficha se reabre buscando o histórico, então o que acabou de ser feito já
+// aparece nele.
+
+/** @type {Object|null} a feição do lote de cuja ficha a janela saiu */
+let fichaDeOrigem = null
+
+/** Marca que a próxima janela nasceu da ficha do imóvel aberta agora. */
+function lembrarFichaDeOrigem() {
+  fichaDeOrigem = state.selecionado ?? null
+}
+
+/**
+ * Volta para a ficha de onde se veio, se houve uma.
+ *
+ * A memória é consumida: uma volta só. Sem isso, fechar a ficha e abrir um
+ * documento pela lista devolveria à ficha antiga — que é o mesmo defeito, do
+ * outro lado.
+ *
+ * @returns {boolean} se voltou
+ */
+function voltarAFicha() {
+  if (!fichaDeOrigem) { return false }
+
+  const f = fichaDeOrigem
+  fichaDeOrigem = null
+  // `abrirFicha` recarrega o histórico: a vistoria ou o documento que acabou
+  // de ser gravado já aparece na linha do tempo do imóvel.
+  abrirFicha(f)
+  return true
+}
+
+/** Esquece a origem — para quem sai por um caminho que não volta à ficha. */
+function esquecerFichaDeOrigem() {
+  fichaDeOrigem = null
 }
 
 /** Abre a ficha a partir do que a API devolveu (sem geometria). @param {Object} lote */
@@ -559,6 +612,9 @@ document.addEventListener('DOMContentLoaded', bootstrap)
  * @param {'painel'|'mapa'|'documentos'|'protocolos'} destino
  */
 function irPara(destino) {
+  // Trocar de módulo abandona o contexto do imóvel: não há para onde voltar.
+  fichaDeOrigem = null
+
   document.querySelectorAll('.tela').forEach(t => t.classList.remove('at'))
   document.getElementById('t-' + destino).classList.add('at')
 
