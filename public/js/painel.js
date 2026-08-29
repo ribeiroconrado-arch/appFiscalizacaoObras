@@ -22,6 +22,9 @@ async function carregarPainel() {
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
     renderPainel(d)
+    // Os avisos vêm de outra rota (a do sino) e por isso são pedidos aqui:
+    // o painel não os recalcula, só os mostra num segundo lugar.
+    carregarNotificacoes()
     pState.carregado = true
   } catch (e) {
     console.error(e)
@@ -68,10 +71,15 @@ function renderPainel(d) {
   // Avatar + título + frase + data. O autor entra como "por você" quando é o
   // próprio usuário: repetir o nome dele em toda linha da lista não informa
   // nada, e é o caso mais comum de quem está olhando o painel.
+  //
+  // O avatar usa `.par-av`, a MESMA classe da lista de usuários — não uma
+  // cópia com os mesmos valores, que voltaria a divergir na primeira vez que
+  // alguém mexesse numa das duas. Antes a mesma servidora aparecia como
+  // quadrado verde numa tela e círculo cinza na outra.
   document.getElementById('pn-recentes').innerHTML = d.recentes.length
     ? d.recentes.map(r => `
         <div class="fd" title="${esc(r.hora)}">
-          <div class="av ${r.eu ? 'eu' : ''}">${esc(r.eu ? 'EU' : r.iniciais)}</div>
+          <div class="par-av">${esc(inicialDe(r.usuario))}</div>
           <div class="c">
             <div class="a">${esc(r.titulo)}</div>
             <div class="b">${esc(r.detalhe)} ${r.eu
@@ -92,6 +100,18 @@ function renderPainel(d) {
     sel.innerHTML = '<option value="">Todos os bairros</option>' +
       d.bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')
   }
+}
+
+/**
+ * A inicial do nome, como na lista de usuários (parametros.js).
+ *
+ * Uma letra, e não duas: é o que a tela de usuários mostra, e o pedido era que
+ * os dois avatares fossem iguais.
+ *
+ * @param {string} nome
+ */
+function inicialDe(nome) {
+  return (nome || '?').trim().charAt(0).toUpperCase()
 }
 
 /**
@@ -134,9 +154,12 @@ async function carregarNotificacoes() {
     chip.textContent = d.total
     chip.style.display = d.total ? '' : 'none'
 
-    document.getElementById('lista-notificacoes').innerHTML = d.total
+    // O MESMO HTML nos dois destinos: o modal do sino e o bloco do painel.
+    // Dois desenhos para o mesmo aviso divergiriam no primeiro ajuste — e são
+    // literalmente a mesma lista, vinda da mesma rota.
+    const html = d.total
       ? d.notificacoes.map(n => `
-          <div class="notif" ${n.aba ? `onclick="fModalBtn('m-notif');irPara('${n.aba}')"` : ''}>
+          <div class="notif"${n.aba ? ` onclick="fModalBtn('m-notif');irPara('${n.aba}')"` : ''}>
             <div class="ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                    stroke-linecap="round" stroke-linejoin="round">
@@ -149,6 +172,16 @@ async function carregarNotificacoes() {
             </div>
           </div>`).join('')
       : '<div class="lista-vazia">Nenhum aviso no momento.</div>'
+
+    document.getElementById('lista-notificacoes').innerHTML = html
+
+    // O bloco do painel só existe quando a tela está montada; o sino existe
+    // sempre. Por isso o segundo destino é opcional, e não obrigatório.
+    const noPainel = document.getElementById('pn-avisos')
+    if (noPainel) {
+      noPainel.innerHTML = html
+      document.getElementById('pn-avisos-n').textContent = d.total
+    }
   } catch (e) {
     console.error(e)
   }

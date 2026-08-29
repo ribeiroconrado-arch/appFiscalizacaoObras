@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Documento;
 use App\Models\Irregularidade;
+use App\Models\OrdemServico;
+use App\Models\Protocolo;
 use App\Models\Vistoria;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -121,7 +123,76 @@ class PainelController extends Controller
             ];
         }
 
-        // 3. Irregularidades sem enquadramento legal — bloqueiam a lavratura
+        // 3. Ordens de serviço designadas a mim e ainda sem ciência.
+        //
+        // A OS nasceu depois deste painel e não aparecia em lugar nenhum aqui.
+        // Sem ciência, ela é o caso mais claro de pendência: alguém determinou
+        // um serviço e o sistema ainda não sabe se o fiscal ficou sabendo.
+        $semCiencia = OrdemServico::query()
+            ->whereIn('situacao', ['aberta', 'em_andamento'])
+            ->whereHas('fiscais', fn ($f) => $f
+                ->where('users.id', $uid)
+                ->whereNull('os_fiscais.ciencia_em'))
+            ->orderByDesc('id')->get();
+
+        foreach ($semCiencia as $os) {
+            $itens[] = [
+                'titulo'  => 'OS ' . $os->numero,
+                'detalhe' => $os->objeto,
+                'tag'     => ['texto' => 'Assinar ciência', 'classe' => 'bd-al'],
+                'aba'     => 'protocolos',
+            ];
+        }
+
+        // 4. Minhas ordens em curso com o prazo já vencido.
+        //
+        // `vencida()` é leitura do relógio sobre a situação gravada — a mesma
+        // regra que pinta o selo na lista de OS, e não uma segunda contagem
+        // escrita aqui.
+        $vencidas = OrdemServico::query()
+            ->whereIn('situacao', ['aberta', 'em_andamento'])
+            ->whereHas('fiscais', fn ($f) => $f->where('users.id', $uid))
+            ->with('jornadas')
+            ->get()
+            ->filter(fn (OrdemServico $os) => $os->vencida());
+
+        foreach ($vencidas as $os) {
+            $itens[] = [
+                'titulo'  => 'OS ' . $os->numero,
+                'detalhe' => $os->objeto . ' · ' . $os->quandoRotulo(),
+                'tag'     => $os->situacaoTag(),
+                'aba'     => 'protocolos',
+            ];
+        }
+
+        // 5. Protocolos sob minha responsabilidade com prazo apertado.
+        //
+        // `situacaoPrazo()` devolve null quando o protocolo já foi decidido ou
+        // não tem prazo — e é ela quem decide o que é apertado, para o painel
+        // e a lista dizerem a mesma coisa.
+        $meusProtocolos = Protocolo::query()
+            ->where('responsavel_id', $uid)
+            ->whereNotNull('prazo_resposta')
+            ->with('lote:id,bairro,quadra,numero_lote')
+            ->get();
+
+        foreach ($meusProtocolos as $proto) {
+            $prazo = $proto->situacaoPrazo();
+            // Só o que aperta: "Prazo até 12/09" é informação, não pendência.
+            if (! $prazo || $prazo[1] === 'bd-ok') { continue; }
+
+            [$txt, $cls] = $prazo;
+            $itens[] = [
+                'titulo'  => 'Protocolo ' . $proto->numero,
+                'detalhe' => trim(($proto->requerente_nome ?? 'Sem requerente')
+                    . ' · Quadra ' . ($proto->lote?->quadra ?? '—')
+                    . ' · Lote ' . ($proto->lote?->numero_lote ?? '—')),
+                'tag'     => ['texto' => $txt, 'classe' => $cls],
+                'aba'     => 'protocolos',
+            ];
+        }
+
+        // 6. Irregularidades sem enquadramento legal — bloqueiam a lavratura
         $semArtigo = Irregularidade::ativas()->whereDoesntHave('artigos')->count();
         if ($semArtigo > 0) {
             $itens[] = [

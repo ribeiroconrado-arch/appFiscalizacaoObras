@@ -370,8 +370,31 @@ body.login-bg{
 #t-mapa{position:fixed;top:68px;left:0;right:0;bottom:0}
 #t-mapa #map{position:absolute;inset:0}
 
+/* O painel é uma pilha de FAIXAS, não uma grade de colunas.
+   A grade antiga punha estatística e pendência lado a lado com o mesmo peso, e
+   no celular jogava a atividade recente para o fim da página. Empilhado, a
+   ordem da tela é a ordem da pergunta: o que precisa de mim, o que mudou, e só
+   então quantos foram. */
 .painel-grid{display:flex;flex-direction:column;gap:14px}
 .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+/* `.at` no seletor e obrigatorio: por ID, `#t-painel` vence o `display:none`
+   de `.tela` e o painel passaria a aparecer POR CIMA das outras abas. */
+#t-painel.at{display:flex;flex-direction:column;gap:14px}
+
+/* Duas colunas quando cabem, uma quando não cabem. 900px é onde duas colunas
+   de lista ainda leem sem quebrar cada linha em duas — medido, não escolhido. */
+.painel-duo{display:flex;flex-direction:column;gap:14px}
+.painel-duo > *{min-width:0}
+@media(min-width:900px){
+  .painel-duo{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+}
+
+/* O dashboard é um agrupamento, não um cartão: os cartões estão dentro dele.
+   Uma moldura aqui criaria caixa dentro de caixa. */
+.painel-dash{display:flex;flex-direction:column;gap:12px;
+  border-top:1.5px solid var(--bord);padding-top:16px;margin-top:2px}
+.dash-tit{display:flex;align-items:center;gap:10px}
+.dash-tit .sec-simples{margin:0}
 .bloco{background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--rl);
   padding:14px;box-shadow:var(--sh)}
 
@@ -413,12 +436,11 @@ body.login-bg{
   align-items:flex-start}
 .feed .fd:last-child{border-bottom:none;padding-bottom:0}
 .feed .fd:first-child{padding-top:0}
-.fd .av{width:34px;height:34px;border-radius:50%;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:.02em;
-  background:var(--blt);color:var(--tx2);border:1px solid var(--bord)}
-/* O próprio usuário sai em destaque: é dele a maior parte das linhas. */
-.fd .av.eu{background:var(--gl);color:var(--gd);border-color:var(--gm)}
+/* O avatar do feed é `.par-av`, a MESMA classe da lista de usuários — a regra
+   mora lá e não é copiada para cá, senão as duas voltam a divergir na próxima
+   vez que alguém mexer numa delas. Era um círculo cinza de 34px com duas
+   iniciais aqui, e um quadrado verde de 38px com uma inicial lá: a mesma
+   servidora com duas caras. */
 .fd .c{flex:1;min-width:0}
 .fd .a{font-size:13px;line-height:1.35;color:var(--chumbo);font-weight:700}
 .fd .b{font-size:12px;line-height:1.4;color:var(--tx2);margin-top:2px}
@@ -573,8 +595,8 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   /* Três colunas: o painel cabe inteiro numa tela grande. A densidade
      compacta só no desktop é o que faz caber — sem dedo mirando, o alvo de
      44 px deixa de ser requisito e o espaço vertical vale mais. */
-  .painel-grid{display:grid;grid-template-columns:minmax(280px,1fr) minmax(320px,1.15fr) minmax(300px,1fr);
-    gap:16px;align-items:start}
+  /* A grade de três colunas saiu: o painel virou faixas, e quem divide em
+     duas colunas agora é `.painel-duo`, onde a divisão faz sentido. */
   .item{padding:8px 11px;margin-bottom:6px}
   .item .ic{width:30px;height:30px}
   .item .t{font-size:13.5px}
@@ -1975,3 +1997,81 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* A assinatura guardada aparece no tamanho do TRAÇO: ela vem aparada do
    servidor, então esticar a moldura estica a rubrica, e não o vazio. */
 #pf-assinatura-atual img{max-height:120px;max-width:100%;width:auto;display:block}
+
+/* ══════════════════════════════════════════════
+   LISTA DE DOCUMENTOS
+   O cartão em três níveis: identificação, quem e onde, e o rodapé de
+   conferência. Antes eram quatro linhas de rótulo e valor com o mesmo peso, e
+   o número da peça — por onde ela é citada, cobrada e procurada — tinha o
+   mesmo destaque que o nome da lei.
+   ══════════════════════════════════════════════ */
+
+/* A barra lateral repete o status em FORMA, e não só em cor: numa lista de
+   vinte, o selo sozinho obriga a ler um por um para achar o rascunho. */
+.doc-card{border-left:3px solid var(--bord);padding-left:11px}
+.doc-card.st-rascunho{border-left-color:var(--gold)}
+.doc-card.st-lavrado{border-left-color:var(--g)}
+.doc-card.st-atendido{border-left-color:var(--gd)}
+.doc-card.st-anulado,.doc-card.st-cancelado{border-left-color:var(--red)}
+
+.doc-card-topo{display:flex;align-items:flex-start;gap:11px}
+/* O mesmo ícone do menu "Novo documento" (ICO_TIPO_DOC): quem escolheu a peça
+   ali reconhece a mesma marca aqui, sem ter de ler o tipo. */
+.doc-ico{width:34px;height:34px;border-radius:10px;flex-shrink:0;display:flex;
+  align-items:center;justify-content:center;background:var(--gl);color:var(--gd)}
+.doc-ico svg{width:17px;height:17px}
+.doc-ident{flex:1;min-width:0}
+.doc-l1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
+.doc-tipo{font-family:'Manrope',sans-serif;font-weight:700;font-size:13.5px;color:var(--gd)}
+/* Autuado acima do imóvel: depois do número, é o que se procura numa lista. */
+.doc-autuado{font-size:14px;font-weight:600;color:var(--chumbo);line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-imovel{font-size:12px;color:var(--tx2);line-height:1.35;margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Rodapé leve: informação de conferência, que só se lê depois de achar. */
+.doc-rodape{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;
+  margin-top:10px;padding-top:9px;border-top:1px solid var(--blt);
+  font-size:11.5px;color:var(--tx3)}
+.doc-lei{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-art{flex-shrink:0;font-weight:600;color:var(--tx2)}
+.doc-data{flex-shrink:0}
+
+@media(max-width:560px){
+  /* Os selos descem para baixo do texto: ao lado, espremem o autuado a duas
+     palavras e a lista deixa de ser varrível. */
+  .doc-card-topo{flex-wrap:wrap}
+  .doc-card-topo .mc-acoes{width:100%;padding-left:45px}
+}
+
+/* ── BUSCA À VISTA, FILTRO GUARDADO ── */
+.filtro-barra{display:flex;gap:8px;margin-bottom:9px;align-items:stretch}
+.filtro-busca{flex:1;min-width:0;display:flex;align-items:center;gap:8px;
+  border:1.5px solid var(--f-bord);border-radius:var(--r);background:var(--sur);
+  padding:0 12px;transition:border-color .13s,box-shadow .13s}
+.filtro-busca:focus-within{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.filtro-busca svg{width:16px;height:16px;color:var(--tx3);flex-shrink:0}
+.filtro-busca input{flex:1;min-width:0;border:none;background:none;outline:none;
+  font-family:inherit;font-size:13.5px;color:var(--tx);padding:10px 0}
+.filtro-barra .btn{flex-shrink:0;gap:7px}
+/* Quantos filtros estão valendo, no próprio botão que os guarda. */
+.filtro-cont{min-width:18px;height:18px;padding:0 5px;border-radius:999px;
+  background:var(--gd);color:#fff;font-size:10.5px;font-weight:800;
+  display:inline-flex;align-items:center;justify-content:center}
+
+/* As etiquetas do que está filtrando. Existem porque o filtro saiu da vista:
+   sem elas, a lista pode parecer vazia sem que ninguém lembre por quê. */
+.filtro-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.filtro-chips:empty{display:none}
+.chip-filtro{display:inline-flex;align-items:center;gap:6px;padding:5px 9px 5px 10px;
+  border:1.5px solid var(--gm);border-radius:999px;background:var(--gl);
+  font-family:'Inter',sans-serif;font-size:11.5px;font-weight:600;color:var(--gd);
+  cursor:pointer;transition:background .13s}
+.chip-filtro:hover{background:#DCEFE3}
+.chip-rot{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--tx3)}
+.chip-x{font-size:9px;opacity:.7}
+.chip-limpar{border:none;background:none;cursor:pointer;padding:5px 6px;
+  font-family:'Inter',sans-serif;font-size:11.5px;font-weight:600;color:var(--tx3);
+  text-decoration:underline;text-underline-offset:2px}
+.chip-limpar:hover{color:var(--red)}

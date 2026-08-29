@@ -123,37 +123,67 @@
 
 {{-- ══════ ABA: PAINEL ══════ --}}
 <section class="tela at" id="t-painel">
-  <div class="linha-filtro">
-    <select onchange="filtrarPainel('dias', this.value)">
-      <option value="30">Últimos 30 dias</option>
-      <option value="7">Últimos 7 dias</option>
-      <option value="90">Últimos 90 dias</option>
-      <option value="365">Este ano</option>
-    </select>
-    <select id="pn-bairro" onchange="filtrarPainel('bairro', this.value)">
-      <option value="">Todos os bairros</option>
-    </select>
-    <select onchange="filtrarPainel('agente', this.value)">
-      <option value="todos">Todos os agentes</option>
-      <option value="eu">Meus registros</option>
-    </select>
-  </div>
+  {{-- ORDEM DA TELA = ORDEM DA PERGUNTA.
+       Quem abre o sistema de manhã não quer saber quantos autos saíram nos
+       últimos 30 dias: quer saber o que precisa dele hoje. Por isso o trabalho
+       vem primeiro e o número depois — e os filtros descem junto com o que
+       eles filtram, porque avisos, pendências e atividade NÃO são filtrados
+       por período, bairro ou agente. Deixá-los no topo dava a entender o
+       contrário. --}}
 
-  {{-- Ordem das colunas = ordem de leitura no celular, onde a grade vira uma
-       coluna só. Pendência vem antes de estatística: o painel existe para
-       responder "o que precisa de mim?", não para exibir gráfico. --}}
-  <div class="painel-grid">
-    <div class="col">
-      <div class="metricas" id="pn-metricas"></div>
-      <div class="bloco">
-        <div class="sec-simples">Precisa de atenção <span class="cont" id="pn-atencao-n">0</span></div>
-        {{-- Inclui os documentos com prazo vencendo ou vencido do próprio
-             agente — é aqui que a pendência de documento aparece. --}}
-        <div id="pn-atencao"></div>
-      </div>
+  {{-- FAIXA 1 — as duas listas de AÇÃO, lado a lado.
+       Ficam juntas porque se comparam: uma é o que o sistema avisa, a outra é
+       o que ele cobra. Em tela estreita empilham nesta mesma ordem. --}}
+  <div class="painel-duo">
+    <div class="bloco">
+      <div class="sec-simples">Avisos <span class="cont" id="pn-avisos-n">0</span></div>
+      {{-- A mesma lista do sino, e da mesma rota: duas fontes para o mesmo
+           aviso divergiriam no primeiro ajuste de regra. --}}
+      <div id="pn-avisos"></div>
     </div>
 
-    <div class="col">
+    <div class="bloco">
+      <div class="sec-simples">Precisa de você <span class="cont" id="pn-atencao-n">0</span></div>
+      {{-- Prazos de documento, ordens de serviço designadas a mim e
+           protocolos sob minha responsabilidade — ver PainelController::atencao. --}}
+      <div id="pn-atencao"></div>
+    </div>
+  </div>
+
+  {{-- FAIXA 2 — a linha do tempo, em largura cheia: ela se lê de corrida, e
+       não item a item, então ganha com a largura que as listas não precisam. --}}
+  <div class="bloco">
+    <div class="sec-simples">Atividade recente</div>
+    {{-- Alimentada pela tabela de auditoria — a mesma trilha que responde
+         "quem fez o quê" no processo administrativo, não um log paralelo. --}}
+    <div class="feed" id="pn-recentes"></div>
+  </div>
+
+  {{-- FAIXA 3 — o dashboard, com os filtros que valem só para ele. --}}
+  <div class="painel-dash">
+    <div class="dash-tit">
+      <span class="sec-simples">Números do período</span>
+    </div>
+
+    <div class="linha-filtro">
+      <select onchange="filtrarPainel('dias', this.value)">
+        <option value="30">Últimos 30 dias</option>
+        <option value="7">Últimos 7 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="365">Este ano</option>
+      </select>
+      <select id="pn-bairro" onchange="filtrarPainel('bairro', this.value)">
+        <option value="">Todos os bairros</option>
+      </select>
+      <select onchange="filtrarPainel('agente', this.value)">
+        <option value="todos">Todos os agentes</option>
+        <option value="eu">Meus registros</option>
+      </select>
+    </div>
+
+    <div class="metricas" id="pn-metricas"></div>
+
+    <div class="painel-duo">
       <div class="bloco">
         <div class="sec-simples">Documentos por tipo</div>
         <div id="pn-por-tipo"></div>
@@ -161,15 +191,6 @@
       <div class="bloco">
         <div class="sec-simples">Irregularidades frequentes</div>
         <div id="pn-irregs"></div>
-      </div>
-    </div>
-
-    <div class="col">
-      <div class="bloco">
-        <div class="sec-simples">Alterações recentes</div>
-        {{-- Alimentado pela tabela de auditoria — a mesma trilha que responde
-             "quem fez o quê" no processo administrativo, não um log paralelo. --}}
-        <div class="feed" id="pn-recentes"></div>
       </div>
     </div>
   </div>
@@ -473,29 +494,26 @@
     @endif
   </div>
 
-  <div class="linha-filtro">
-    <select onchange="filtrarDocumentos('tipo', this.value)">
-      <option value="">Todos os tipos</option>
-      @foreach (\App\Models\Documento::TIPOS as $valor => $t)
-        <option value="{{ $valor }}">{{ $t[0] }}</option>
-      @endforeach
-    </select>
-    <select onchange="filtrarDocumentos('agente', this.value)">
-      <option value="eu">Meus documentos</option>
-      <option value="todos">Todos os agentes</option>
-    </select>
+  {{-- BUSCA À VISTA, FILTRO GUARDADO.
+       Eram quatro controles soltos em duas linhas, ocupando o topo da tela
+       mais usada do sistema para uma combinação que quase ninguém muda. A
+       busca fica; o resto vai para uma janela, e o que estiver aplicado volta
+       como etiqueta — porque filtro escondido é como uma lista parece vazia
+       sem que ninguém lembre por quê. --}}
+  <div class="filtro-barra">
+    <div class="filtro-busca">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <input type="text" id="doc-busca" placeholder="Buscar nº, imóvel ou autuado…"
+             oninput="filtrarDocumentos('busca', this.value)">
+    </div>
+    <button type="button" class="btn opcoes" onclick="abrirFiltrosDoc()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+      Filtros<span class="filtro-cont" id="doc-filtro-n" hidden>0</span>
+    </button>
   </div>
-  <div class="linha-filtro">
-    <input type="text" placeholder="Buscar nº, imóvel ou autuado…"
-           oninput="filtrarDocumentos('busca', this.value)">
-    <select onchange="filtrarDocumentos('status', this.value)">
-      <option value="">Todos os status</option>
-      <option value="rascunho">Rascunho</option>
-      <option value="lavrado">Lavrado</option>
-      <option value="atendido">Atendido</option>
-      <option value="anulado">Anulado</option>
-    </select>
-  </div>
+  <div class="filtro-chips" id="doc-chips"></div>
 
   <div id="lista-documentos"></div>
 </section>
@@ -1861,6 +1879,58 @@
 
     <div id="osf-ciencia"></div>
     <div id="osf-tramitacao"></div>
+  </div>
+</div>
+
+{{-- ══════ FILTROS DA LISTA DE DOCUMENTOS ══════
+     Janela, e não menu: são três escolhas que se combinam, e menu é para
+     escolher uma coisa e sair. --}}
+<div class="modal-bg" id="m-doc-filtros" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <button class="modal-x" onclick="fModalBtn('m-doc-filtros')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+      </span>
+      <span>Filtrar documentos</span>
+    </h3>
+
+    <div class="field">
+      <label for="doc-f-tipo">Tipo de peça</label>
+      <select id="doc-f-tipo">
+        <option value="">Todos os tipos</option>
+        @foreach (\App\Models\Documento::TIPOS as $valor => $t)
+          <option value="{{ $valor }}">{{ $t[0] }}</option>
+        @endforeach
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="doc-f-status">Status</label>
+      <select id="doc-f-status">
+        <option value="">Todos os status</option>
+        <option value="rascunho">Rascunho</option>
+        <option value="lavrado">Lavrado</option>
+        <option value="atendido">Atendido</option>
+        <option value="anulado">Anulado</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="doc-f-agente">Agente</label>
+      <select id="doc-f-agente">
+        <option value="eu">Meus documentos</option>
+        <option value="todos">Todos os agentes</option>
+      </select>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="limparFiltrosDoc()">Limpar</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-doc-filtros')">Cancelar</button>
+      <button class="btn primary" onclick="aplicarFiltrosDoc()">Aplicar</button>
+    </div>
   </div>
 </div>
 

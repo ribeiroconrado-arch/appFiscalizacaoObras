@@ -68,7 +68,11 @@ class DocumentoController extends Controller
                 'tipo_rotulo' => $doc->rotuloTipo(),
                 'numero'      => $doc->numeroFormatado(),
                 'data'        => ($doc->data_lavratura ?? $doc->created_at)?->format('d/m/Y'),
-                'status'      => ['texto' => $stTxt, 'classe' => $stCls],
+                // `valor` além do texto: o cartão da lista pinta a barra
+                // lateral pelo status, e comparar rótulo traduzido para
+                // decidir cor é o tipo de coisa que quebra ao mudar uma
+                // palavra na tela.
+                'status'      => ['valor' => $doc->status, 'texto' => $stTxt, 'classe' => $stCls],
                 'prazo'       => $prazo ? ['texto' => $prazo[0], 'classe' => $prazo[1]] : null,
                 'imovel'      => $doc->lote
                     ? sprintf('Quadra %s · Lote %s — %s', $doc->lote->quadra ?? '—', $doc->lote->numero_lote ?? '—', $doc->lote->bairro)

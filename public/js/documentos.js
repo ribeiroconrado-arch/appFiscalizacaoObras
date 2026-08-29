@@ -52,9 +52,24 @@ async function carregarDocumentos() {
   }
 }
 
+/**
+ * O cartão em TRÊS níveis, no lugar de quatro linhas de peso igual.
+ *
+ * Antes, imóvel, autuado, lei e artigos saíam um sob o outro com o mesmo
+ * rótulo cinza e o mesmo tamanho — e o número da peça, que é por onde ela é
+ * citada, cobrada e procurada, tinha o mesmo destaque que o nome da lei.
+ *
+ *   identificação   ícone do tipo, número, tipo — o que responde "é esta?"
+ *   quem e onde     autuado e imóvel, que é o que se procura em seguida
+ *   rodapé          lei, artigos, valor e data: conferência, não busca
+ *
+ * A barra colorida na lateral repete o status em forma, e não só em cor: numa
+ * lista de vinte, o selo sozinho obriga a ler cada um para achar o rascunho.
+ */
 function renderDocumentos() {
   const alvo = document.getElementById('lista-documentos')
   document.getElementById('cont-doc').textContent = dState.lista.length
+  pintarChipsDoc()
 
   if (!dState.lista.length) {
     alvo.innerHTML = '<div class="lista-vazia">Nenhum documento com esses filtros.</div>'
@@ -67,29 +82,24 @@ function renderDocumentos() {
       d.prazo ? `<span class="badge ${esc(d.prazo.classe)}">${esc(d.prazo.texto)}</span>` : '',
     ].join('')
 
-    const linhas = [
-      ['Imóvel', esc(d.imovel)],
-      ['Autuado', esc(d.autuado)],
-      ['Lei', esc(d.lei)],
-      // Documento sem artigo não sustenta sanção: mostrar isso na lista evita
-      // a descoberta tardia, na hora de lavrar.
-      ['Artigos', d.artigos ? `${d.artigos} artigo(s)` + (d.valor_upf ? ` · ${fmtNum(d.valor_upf)} UPF` : '')
-                            : '<span style="color:var(--red)">sem fundamentação</span>'],
-    ]
+    // Rodapé: o que se confere DEPOIS de achar a peça. Documento sem artigo
+    // não sustenta sanção, e mostrar isso na lista evita a descoberta tardia,
+    // na hora de lavrar.
+    const rodape = d.artigos
+      ? `${d.artigos} artigo(s)` + (d.valor_upf ? ` · ${fmtNum(d.valor_upf)} UPF` : '')
+      : '<span style="color:var(--red)">sem fundamentação</span>'
 
-    // Número primeiro: é por ele que o documento é citado, cobrado e
-    // procurado. Tipo e data vêm depois, como qualificação.
-    //
-    // O ⋮ ao lado das tags é o menu de opções do cartão, como no AppPOSTURAS:
-    // imprimir ou anular direto da lista, sem abrir a ficha para depois
-    // procurar a mesma ação lá dentro.
     return `
-      <div class="mob-card" onclick="abrirDocumento(${d.id})">
-        <div class="mc-top">
-          <div class="notif-card-l1">
-            <span class="proto-badge">${esc(d.numero)}</span>
-            <span class="notif-card-tipo">${esc(d.tipo_rotulo)}</span>
-            <span class="notif-card-data">${esc(d.data)}</span>
+      <div class="mob-card doc-card st-${esc(d.status.valor ?? '')}" onclick="abrirDocumento(${d.id})">
+        <div class="doc-card-topo">
+          <span class="doc-ico">${ICO_TIPO_DOC[d.tipo] || ICO_TIPO_DOC.padrao}</span>
+          <div class="doc-ident">
+            <div class="doc-l1">
+              <span class="proto-badge">${esc(d.numero)}</span>
+              <span class="doc-tipo">${esc(d.tipo_rotulo)}</span>
+            </div>
+            <div class="doc-autuado">${esc(d.autuado)}</div>
+            <div class="doc-imovel">${esc(d.imovel)}</div>
           </div>
           <div class="mc-acoes">
             ${tags}
@@ -99,12 +109,13 @@ function renderDocumentos() {
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
               </button>
-
             </div>
           </div>
         </div>
-        <div class="notif-card-linhas">
-          ${linhas.map(([r, v]) => `<div><span class="notif-card-rot">${r}</span>${v}</div>`).join('')}
+        <div class="doc-rodape">
+          <span class="doc-lei">${esc(d.lei || 'sem legislação')}</span>
+          <span class="doc-art">${rodape}</span>
+          <span class="doc-data">${esc(d.data)}</span>
         </div>
       </div>`
   }).join('')
@@ -113,6 +124,90 @@ function renderDocumentos() {
   // que o servidor liberou para aquele documento.
   for (const d of dState.lista) {
   }
+}
+
+// ── FILTROS ──────────────────────────────────────────────────
+
+/** O que cada filtro se chama na etiqueta, e como se lê o valor escolhido. */
+const ROTULOS_FILTRO = {
+  tipo:   { nome: 'Tipo',   campo: 'doc-f-tipo' },
+  status: { nome: 'Status', campo: 'doc-f-status' },
+  agente: { nome: 'Agente', campo: 'doc-f-agente' },
+}
+
+function abrirFiltrosDoc() {
+  // A janela abre no estado que está valendo, e não em branco: filtro que
+  // esquece o que estava aplicado faz a pessoa reconstruir tudo a cada ajuste.
+  for (const [chave, f] of Object.entries(ROTULOS_FILTRO)) {
+    const el = document.getElementById(f.campo)
+    if (el) { el.value = dState.filtros[chave] ?? '' }
+  }
+  openModal('m-doc-filtros')
+}
+
+function aplicarFiltrosDoc() {
+  for (const [chave, f] of Object.entries(ROTULOS_FILTRO)) {
+    dState.filtros[chave] = document.getElementById(f.campo)?.value ?? ''
+  }
+  fModalBtn('m-doc-filtros')
+  carregarDocumentos()
+}
+
+function limparFiltrosDoc() {
+  for (const chave of Object.keys(ROTULOS_FILTRO)) { dState.filtros[chave] = '' }
+  // "Meus documentos" é o padrão da tela, não a ausência de filtro: limpar
+  // para "todos" mudaria o que o fiscal vê ao abrir, que não é o pedido.
+  dState.filtros.agente = 'eu'
+  fModalBtn('m-doc-filtros')
+  carregarDocumentos()
+}
+
+/** @param {string} chave */
+function removerFiltroDoc(chave) {
+  dState.filtros[chave] = chave === 'agente' ? 'eu' : ''
+  carregarDocumentos()
+}
+
+/**
+ * As etiquetas do que está filtrando.
+ *
+ * Existem porque o filtro saiu da vista: sem elas, a lista pode parecer vazia
+ * sem que ninguém lembre que há um status marcado desde ontem. Cada uma sai
+ * com o ✕ que a desfaz, no lugar onde a pergunta aparece.
+ */
+function pintarChipsDoc() {
+  const alvo = document.getElementById('doc-chips')
+  const cont = document.getElementById('doc-filtro-n')
+  if (!alvo) { return }
+
+  const ativos = Object.entries(ROTULOS_FILTRO)
+    .map(([chave, f]) => {
+      const valor = dState.filtros[chave]
+      // O padrão da tela não é filtro: "Meus documentos" e "todos os tipos"
+      // não merecem etiqueta, senão a faixa nasce cheia e para de informar.
+      if (!valor || (chave === 'agente' && valor === 'eu')) { return null }
+
+      const sel = document.getElementById(f.campo)
+      const texto = [...(sel?.options ?? [])].find(o => o.value === valor)?.text ?? valor
+      return { chave, rotulo: f.nome, texto }
+    })
+    .filter(Boolean)
+
+  if (cont) {
+    cont.hidden = ativos.length === 0
+    cont.textContent = ativos.length
+  }
+
+  alvo.innerHTML = ativos.length
+    ? ativos.map(a => `
+        <button type="button" class="chip-filtro" onclick="removerFiltroDoc('${a.chave}')">
+          <span class="chip-rot">${esc(a.rotulo)}</span>${esc(a.texto)}
+          <span class="chip-x">&#10005;</span>
+        </button>`).join('')
+      + (ativos.length > 1
+          ? `<button type="button" class="chip-limpar" onclick="limparFiltrosDoc()">Limpar tudo</button>`
+          : '')
+    : ''
 }
 
 /** @param {string} campo @param {string} valor */
