@@ -38,8 +38,16 @@
      saem todas do mesmo formulário). Eram três medidas — 620, 640 e 820 — e
      quem passava de uma para a outra via a janela mudar de tamanho no meio do
      caminho, como se tivesse trocado de sistema.
-     672px = os 640 da vistoria mais 5%, a pedido. */
+     672px = os 640 da vistoria mais 5%, a pedido.
+
+     E a ALTURA junto: a pedido, as janelas ficam com as dimensoes da ficha —
+     as duas, e nao so a largura. `min(86vh, 760px)` e o que a ficha ja usa —
+     e nao o `min-height` declarado mais acima no arquivo, que uma regra
+     posterior vencia. A altura real se mede, nao se le.
+     Isto SUBSTITUI o +30% que a vistoria tinha ganhado antes: ela passa a ter
+     o tamanho da ficha, como as demais. */
   --modal-trabalho:672px;
+  --modal-trabalho-alt:min(86vh, 760px);
 
   --red:#C2352B; --rlt:#FCECEA;
   --warn:#B45309; --wlt:#FDF3E3;
@@ -688,7 +696,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    lados (o `margin:auto` do .modal mantém a centralização vertical). A
    linha do tempo é o que pedia espaço: com a altura antiga, dois eventos
    já obrigavam a rolar. */
-#m-ficha .modal{min-height:min(78vh, 820px);max-width:var(--modal-trabalho)}
+#m-ficha .modal{max-width:var(--modal-trabalho)}
 #m-ficha .sub-abas{margin:12px 0 10px}
 
 .fi-painel{display:none}
@@ -1134,10 +1142,16 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    como única área rolante. `min-height:0` no miolo é obrigatório — sem ele o
    item flex se recusa a encolher abaixo do próprio conteúdo e a rolagem
    simplesmente não acontece. */
-#m-perfil .modal,
-#m-ficha .modal{
+#m-perfil .modal{
   display:flex;flex-direction:column;
   height:min(86vh, 760px);
+}
+/* A ficha sai da regra do perfil e passa a ler o token: e ela a MEDIDA das
+   janelas de trabalho, e as tres tem de andar juntas. O perfil nao esta nesse
+   grupo — mudar a medida do trabalho nao pode arrastar a tela de senha. */
+#m-ficha .modal{
+  display:flex;flex-direction:column;
+  height:var(--modal-trabalho-alt);
 }
 #m-perfil .sub-abas,
 #m-ficha .sub-abas{flex-shrink:0}
@@ -1156,9 +1170,13 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    estão os botões do rodapé.
    ══════════════════════════════════════════════ */
 
+/* Altura FIXA (e nao `min-height`, como na ficha): aqui o cabecalho e o rodape
+   sao presos e o corpo rola por dentro, e uma caixa que muda de tamanho a cada
+   aba ou passo faz o botao do rodape se mover debaixo do dedo. O VALOR e o
+   mesmo da ficha — o que muda e so o modo de sustenta-lo. */
 .modal.modal-flex{
   display:flex;flex-direction:column;
-  height:min(90vh, 760px);max-height:calc(100vh - 28px);
+  height:var(--modal-trabalho-alt);max-height:calc(100vh - 28px);
   max-width:var(--modal-trabalho);padding:0;overflow:hidden;
 }
 
@@ -1846,7 +1864,8 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* 30% a mais do que os 760px de `.modal-flex`, a pedido. O teto de viewport
    sobe junto (90vh -> 96vh), senao em tela baixa o pedido nao teria efeito
    nenhum: la quem manda ja era o vh. */
-#m-vistoria .modal{height:min(96vh, 988px)}
+/* A altura propria da vistoria saiu: ela passou a ter a da ficha, como as
+   demais janelas de trabalho — ver `--modal-trabalho-alt`. */
 
 .rel-item{display:grid;grid-template-columns:46px 1fr 26px;gap:10px;align-items:start;
   border:1.5px solid var(--bord);border-radius:var(--r);padding:9px 10px;margin-bottom:7px;
