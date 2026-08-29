@@ -1581,13 +1581,20 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .fi-fixo{
   padding:10px 0 11px;border-bottom:1px solid var(--bord);
 }
-/* A MESMA fonte da linha de baixo, a pedido: o que distingue aquela linha é a
-   monoespaçada dos dados (inscrição e coordenada), e não a Inter dos rótulos.
-   Tamanho e peso ficam como estavam — só a família muda, e as duas linhas
-   passam a ler como um bloco de identificação do cadastro. */
-.fi-fixo .fi-endereco{font-family:'JetBrains Mono','Courier New',monospace;
-  font-size:14px;line-height:1.35;color:var(--chumbo);
-  font-weight:600;margin-bottom:6px}
+/* A linha do endereço no MESMO desenho da de baixo: pares de rótulo e valor,
+   e não uma frase com pontos no meio. Rótulo pequeno em maiúsculas, valor um
+   grau maior — o mesmo contraste de fonte e cor que a linha da inscrição usa,
+   porque as duas respondem à mesma pergunta: de qual imóvel se fala. */
+.fi-fixo .fi-endereco{display:flex;flex-wrap:wrap;align-items:baseline;
+  gap:4px 18px;margin-bottom:7px;line-height:1.3}
+.fi-fixo .fi-endereco > span{display:inline-flex;align-items:baseline;gap:6px;min-width:0}
+/* O valor é maior que o da linha de baixo de propósito: logradouro, quadra e
+   lote são o que se procura primeiro; inscrição e coordenada, só quando se
+   precisa do número exato. */
+.fi-fixo-val{font-size:13.5px;font-weight:600;color:var(--chumbo);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi-fixo .fi-endereco .fi-rot{margin-bottom:0;white-space:nowrap;font-size:9.5px;
+  letter-spacing:.04em}
 .fi-fixo-dados{
   display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;
   font-size:12px;color:var(--chumbo);

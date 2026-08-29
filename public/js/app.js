@@ -263,21 +263,32 @@ function montarInscricao(p) {
 }
 
 /**
- * Endereço em UMA linha, do jeito que se lê num ofício.
+ * Endereço no MESMO desenho da linha de baixo: rótulo e valor, aos pares.
  *
- * Antes eram três linhas empilhadas, e o endereço sozinho gastava um terço da
- * altura útil da ficha. Quadra e lote abreviam porque nesta linha eles são
- * referência de localização, não rótulo de campo — quem precisa deles por
- * extenso lê a inscrição, logo abaixo.
+ * Antes era uma frase corrida com pontos no meio — "logradouro · Qd. 05 · Lt.
+ * 1 · Jardim Europa IV" —, e ela obrigava a ler tudo para achar o lote. Com o
+ * rótulo pequeno em cima do dado, cada informação se acha sozinha, e as duas
+ * linhas passam a ler como um bloco só de identificação do imóvel.
+ *
+ * O ponto separador sai junto: quem separa agora é o rótulo seguinte.
  */
 function montarEndereco(p) {
   const via = [p.logradouro, p.numero_predial].filter(Boolean).join(', ')
+
+  const par = (rot, val, mono) =>
+    `<span><span class="fi-rot">${rot}</span>`
+    + `<span class="${mono ? 'mono ' : ''}fi-fixo-val">${val}</span></span>`
+
   return [
-    via ? esc(via) : '<span style="color:var(--tx3)">logradouro não cadastrado</span>',
-    `Qd. ${esc(p.quadra ?? '—')}`,
-    `Lt. ${esc(p.numero_lote ?? '—')}`,
-    esc(p.bairro || ''),
-  ].filter(Boolean).join(' · ')
+    par('Logradouro', via
+      ? esc(via)
+      : '<span style="color:var(--tx3)">não cadastrado</span>'),
+    // Quadra e lote em monoespaçada, como a inscrição da linha de baixo: são
+    // códigos, e é assim que se comparam dois lotes um sob o outro.
+    par('Quadra', esc(p.quadra ?? '—'), true),
+    par('Lote', esc(p.numero_lote ?? '—'), true),
+    p.bairro ? par('Bairro', esc(p.bairro)) : '',
+  ].filter(Boolean).join('')
 }
 
 /**
