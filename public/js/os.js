@@ -16,6 +16,7 @@
 /** Estado da tela e do formulário. */
 const osState = {
   /** @type {Object} filtros da lista */ filtros: {},
+  /** @type {Array<Object>} a lista como veio do servidor */ lista: [],
   /** @type {Array<{id:number,name:string}>} */ fiscais: [],
   /** @type {Set<number>} designados no formulário */ designados: new Set(),
   /** @type {Array<{data:string, ini:string|null, fim:string|null}>} */ jornadas: [],
@@ -62,7 +63,8 @@ async function carregarOs() {
     if (!osState.filtros.agente && d.escopo) {
       document.getElementById('os-escopo').value = d.escopo
     }
-    renderOs(d.ordens ?? [])
+    osState.lista = d.ordens ?? []
+    renderOs()
   } catch (e) {
     console.error(e)
     alvo.innerHTML = '<div class="lista-vazia">Não foi possível carregar as ordens.</div>'
@@ -76,17 +78,96 @@ async function carregarOs() {
  * para o mesmo tipo de conteúdo obrigam quem usa a reaprender onde olhar a
  * cada aba — e é a mesma pergunta nas duas: número, estado, e é comigo?
  *
- * @param {Array<Object>} ordens
+ * No computador vira tabela: ver quem está designado em dez ordens é uma
+ * varredura de coluna, e não dez cartões lidos um a um.
  */
-function renderOs(ordens) {
+function renderOs() {
   const alvo = document.getElementById('lista-os')
+  const ordens = osState.lista
 
   if (!ordens.length) {
     alvo.innerHTML = '<div class="lista-vazia">Nenhuma ordem de serviço por aqui.</div>'
     return
   }
 
-  alvo.innerHTML = ordens.map(o => {
+  alvo.innerHTML = ehTelaLarga() ? tabelaOs() : cartoesOs()
+}
+
+/** @returns {string} a lista em tabela, no computador */
+function tabelaOs() {
+  const linhas = osState.lista.map(o => {
+    const semFiscal = !o.fiscais.length
+
+    return `
+      <tr class="${o.prioridade === 'alta' ? 'st-alta' : ''}" onclick="abrirOs(${o.id})">
+        <td>
+          <span class="tl-num"><span class="proto-badge">${esc(o.numero)}</span></span>
+          <span class="tl-sub">${esc(o.natureza)}</span>
+        </td>
+        <td class="tl-forte" title="${esc(o.objeto)}">${esc(o.objeto)}</td>
+        <td class="${semFiscal ? 'tl-falta' : 'tl-fraco'}"
+            title="${esc(o.fiscais.join(', '))}">
+          ${semFiscal ? 'ninguém designado' : esc(o.fiscais.join(', '))}
+        </td>
+        <td class="tl-fraco tl-quebra">${esc(o.quando)}</td>
+        <td class="tl-fraco">${esc(o.emitente ?? '—')}</td>
+        <td>
+          <span class="tl-tags">
+            <span class="badge ${esc(o.situacao.classe)}">${esc(o.situacao.texto)}</span>
+            ${o.prioridade === 'alta' ? '<span class="badge bd-er">Alta</span>' : ''}
+          </span>
+        </td>
+        <td class="tl-acao">
+          <button type="button" class="card-opcoes-btn" title="Opções"
+                  onclick="abrirOpcoesOs(event, ${o.id})">${ICO_TRES_PONTOS}</button>
+        </td>
+      </tr>`
+  }).join('')
+
+  return `
+    <div class="tabela-wrap">
+      <table class="tabela-lista tl-os">
+        <thead><tr>
+          <th>Ordem</th><th>Objeto</th><th>Designados</th>
+          <th>Quando</th><th>Emitida por</th><th>Situação</th><th class="tl-acao"></th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>`
+}
+
+/**
+ * O MENU DA LINHA.
+ *
+ * Abrir e imprimir, e só. Assinar ciência fica na ficha de propósito: quem
+ * decide se a assinatura cabe é o servidor — se sou designado, se já assinei,
+ * se assino como emitente —, e a lista não recebe nada disso. Oferecer o botão
+ * aqui seria adivinhar, e adivinhar em assinatura é o pior lugar para errar.
+ *
+ * @param {Event} ev @param {number} id
+ */
+function abrirOpcoesOs(ev, id) {
+  abrirMenuNovo(ev, [
+    {
+      rotulo: 'Abrir a ordem',
+      obs: 'A ficha, com jornadas, ciência e andamento.',
+      icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`,
+      acao: () => abrirOs(id),
+    },
+    {
+      rotulo: 'Imprimir em A4',
+      obs: 'A via de papel, para assinar em campo ou juntar ao processo.',
+      icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>`,
+      acao: () => imprimirOs(id),
+    },
+  ])
+}
+
+/** @returns {string} a mesma lista em cartões, no celular */
+function cartoesOs() {
+  return osState.lista.map(o => {
     const tags = `<span class="badge ${esc(o.situacao.classe)}">${esc(o.situacao.texto)}</span>`
       + (o.prioridade === 'alta' ? '<span class="badge bd-er">Alta</span>' : '')
 

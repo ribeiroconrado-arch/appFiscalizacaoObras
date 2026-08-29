@@ -182,12 +182,12 @@
 .sec-simples .cont{background:var(--gl);color:var(--gd);border-radius:999px;padding:2px 9px;
   font-size:10px;letter-spacing:0}
 .linha-filtro{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap}
-.linha-filtro input,.linha-filtro select{font-size:13px;padding:8px 10px;
+.linha-filtro input,.linha-filtro select,.doc-filtro-larga select{font-size:13px;padding:8px 10px;
   border:1.5px solid var(--f-bord);border-radius:var(--r);background:#fff;
   color:var(--chumbo);outline:none}
 .linha-filtro input{flex:2;min-width:150px}
-.linha-filtro select{flex:1;min-width:130px;cursor:pointer}
-.linha-filtro input:focus,.linha-filtro select:focus{border-color:var(--f-bord-foco);
+.linha-filtro select,.doc-filtro-larga select{flex:1;min-width:130px;cursor:pointer}
+.linha-filtro input:focus,.linha-filtro select:focus,.doc-filtro-larga select:focus{border-color:var(--f-bord-foco);
   box-shadow:0 0 0 3px var(--f-anel)}
 .lista-vazia{font-size:12.5px;color:var(--tx3);text-align:center;padding:22px 10px;
   border:1.5px dashed var(--bord);border-radius:var(--rl)}
@@ -337,7 +337,7 @@ h1,h2,h3,h4,.modal h3,.notif-card-tipo,.item .t,.field .valor,.hist-data,
    uma ABA, e o peso das abas vem do bloco de abas (700, como as de documento).
    Esta regra é posterior na folha e, com a mesma especificidade, vencia — as
    abas da ficha ficavam um grau mais leves que as do documento. */
-.btn,.linha-filtro select,.linha-filtro input,.modal-x,
+.btn,.linha-filtro select,.linha-filtro input,.doc-filtro-larga select,.modal-x,
 .badge{font-family:'Inter',sans-serif;font-weight:600}
 
 /* Dado técnico — JetBrains Mono 500: número de documento, coordenada, chave.
@@ -2102,3 +2102,125 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   font-family:'Inter',sans-serif;font-size:11.5px;font-weight:600;color:var(--tx3);
   text-decoration:underline;text-underline-offset:2px}
 .chip-limpar:hover{color:var(--red)}
+
+/* ══════════════════════════════════════════════════════════════
+   LISTAS EM TABELA — só no computador
+   ══════════════════════════════════════════════════════════════
+   Documentos, protocolos e ordens de serviço são a mesma pergunta em três
+   tabelas: uma fila de itens comparáveis entre si. No celular, cartão — é o
+   único formato que cabe em 390px sem virar rolagem horizontal. No monitor,
+   o cartão desperdiça: cada item ocupa quatro linhas de altura para dizer o
+   que caberia numa, e nada fica alinhado entre um item e o seguinte, então
+   comparar dez exige ler dez.
+
+   A tabela devolve o alinhamento: a coluna "Situação" lida de cima a baixo
+   responde numa varredura o que o cartão só responde item a item.
+
+   Quem escolhe é o JS (`ehTelaLarga`), não o CSS: são duas marcações
+   diferentes, e não a mesma marcação com outra roupa. Manter o cartão intacto
+   custa um segundo desenhador por lista e não arrisca o que já está bom. */
+
+.tabela-wrap{
+  border:1.5px solid var(--bord);border-radius:12px;background:var(--sur);
+  overflow:hidden;overflow-x:auto}
+
+.tabela-lista{width:100%;border-collapse:collapse;table-layout:fixed;
+  font-family:'Inter',sans-serif;font-size:12.5px;color:var(--tx)}
+
+.tabela-lista thead th{
+  background:var(--blt);color:var(--f-rot);
+  font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  text-align:left;padding:9px 10px;border-bottom:1.5px solid var(--bord);
+  white-space:nowrap}
+
+.tabela-lista tbody td{
+  padding:9px 10px;border-bottom:1px solid var(--bord);vertical-align:middle;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tabela-lista tbody tr:last-child td{border-bottom:0}
+.tabela-lista tbody tr{cursor:pointer;transition:background .12s}
+.tabela-lista tbody tr:hover{background:var(--gl)}
+
+/* A barra de status na primeira célula, e não só o selo colorido na última:
+   numa lista de vinte, o selo sozinho obriga a ler cada linha para achar o
+   rascunho. É a mesma barra do cartão — a lista muda de forma, não de código
+   de cores. */
+.tabela-lista tbody td:first-child{border-left:3px solid transparent}
+.tabela-lista tbody tr.st-rascunho td:first-child{border-left-color:var(--gold)}
+.tabela-lista tbody tr.st-lavrado  td:first-child{border-left-color:var(--g)}
+.tabela-lista tbody tr.st-atendido td:first-child{border-left-color:#2E7D32}
+.tabela-lista tbody tr.st-anulado  td:first-child{border-left-color:var(--red)}
+
+/* A célula de identificação: número em cima, qualificação embaixo. É a única
+   que quebra em duas linhas — o número é por onde a peça é citada e procurada,
+   e o tipo é o que confirma que é ela. */
+.tl-num{display:flex;align-items:center;gap:7px;min-width:0}
+.tl-num .proto-badge{flex-shrink:0}
+.tl-sub{display:block;color:var(--tx3);font-size:10.5px;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis}
+.tl-forte{font-weight:700;color:var(--tx)}
+.tl-fraco{color:var(--tx2)}
+.tl-falta{color:var(--red)}
+/* A ÚNICA coluna que quebra em vez de cortar. Nome de empresa cortado se
+   resolve com a dica do título; "03/09/2026, 08:00–" não se resolve com nada —
+   hora pela metade é dado errado, e o período é o que a ordem determina. */
+.tabela-lista td.tl-quebra{white-space:normal;line-height:1.35}
+.tl-num-svg{width:15px;height:15px;flex-shrink:0;color:var(--gd)}
+.tl-num-svg svg{width:100%;height:100%;display:block}
+
+/* Selos: sem quebrar a linha e sem esticar a altura da célula. */
+.tl-tags{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.tl-tags .badge{margin:0}
+
+.tabela-lista td.tl-acao,.tabela-lista th.tl-acao{width:46px;padding:4px;
+  text-align:center;overflow:visible}
+.tl-acao .card-opcoes-btn{margin:0 auto}
+
+/* ── AS COLUNAS DE CADA LISTA ──
+   `table-layout:fixed` com largura declarada: sem isso o navegador redistribui
+   as colunas a cada carga, conforme o conteúdo, e a tabela "dança" entre uma
+   busca e a seguinte — que é justamente o alinhamento que se veio buscar. */
+.tl-doc  th:nth-child(1){width:17%} .tl-doc  th:nth-child(2){width:20%}
+.tl-doc  th:nth-child(3){width:19%} .tl-doc  th:nth-child(4){width:17%}
+.tl-doc  th:nth-child(5){width:11%} .tl-doc  th:nth-child(6){width:16%}
+
+.tl-prot th:nth-child(1){width:17%} .tl-prot th:nth-child(2){width:20%}
+.tl-prot th:nth-child(3){width:21%} .tl-prot th:nth-child(4){width:16%}
+.tl-prot th:nth-child(5){width:10%} .tl-prot th:nth-child(6){width:16%}
+
+.tl-os   th:nth-child(1){width:15%} .tl-os   th:nth-child(2){width:22%}
+.tl-os   th:nth-child(3){width:18%} .tl-os   th:nth-child(4){width:18%}
+.tl-os   th:nth-child(5){width:12%} .tl-os   th:nth-child(6){width:15%}
+
+/* ── FILTROS À VISTA NO COMPUTADOR ──
+   No celular o filtro se esconde atrás de um botão porque a tela é curta e a
+   lista é o que importa. No monitor sobra largura, e filtro escondido tem um
+   custo conhecido: a lista parece vazia sem que ninguém lembre por quê.
+   Acima de 1000px os controles voltam para uma linha só, à vista. */
+.filtros-lista{display:contents}
+.doc-filtro-larga{display:none}
+@media(min-width:1000px){
+  .filtros-lista{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  /* As duas linhas do celular deixam de ser linhas: os quatro controles
+     passam a ser itens da mesma faixa. */
+  .filtros-lista .linha-filtro{display:contents}
+  .filtros-lista select,.filtros-lista input{flex:1 1 180px;min-width:150px}
+
+  .doc-filtro-larga{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .doc-filtro-larga select{flex:1 1 180px;min-width:150px}
+  /* Com os seletores à vista, o botão e as etiquetas não têm mais o que
+     informar — o próprio seletor mostra o que está valendo. */
+  #t-documentos .filtro-barra .btn.opcoes,#doc-chips{display:none}
+
+  /* A COLUNA DE LEITURA CRESCE — só nestas duas telas.
+     900px é a medida do resto do sistema, e é a certa para texto corrido e
+     para cartão. Sete colunas dentro dela cortam a data no meio: medido, a
+     célula pedia 88px e recebia 82. As listas são tabela de conferência, não
+     leitura — aqui a largura trabalha a favor. O limite continua existindo
+     para a linha não virar uma faixa de um metro num monitor grande. */
+  #t-documentos,#t-protocolos{max-width:1400px}
+}
+
+/* Cada lista marca na barra lateral o SEU risco: no protocolo, ficar sem dono
+   enquanto o prazo do município corre; na ordem de serviço, a prioridade alta. */
+.tabela-lista tbody tr.st-sem-dono td:first-child{border-left-color:var(--red)}
+.tabela-lista tbody tr.st-alta     td:first-child{border-left-color:var(--gold)}

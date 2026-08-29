@@ -47,7 +47,101 @@ function renderProtocolos() {
     return
   }
 
-  alvo.innerHTML = protoState.lista.map(p => {
+  alvo.innerHTML = ehTelaLarga() ? tabelaProtocolos() : cartoesProtocolos()
+}
+
+/**
+ * A FILA EM TABELA, no computador.
+ *
+ * A coluna que justifica a tabela aqui é "Responsável": lida de cima a baixo,
+ * ela mostra de uma vez quantos protocolos estão sem dono — que é o risco do
+ * módulo, porque o prazo corre contra a administração enquanto ninguém assume.
+ *
+ * @returns {string}
+ */
+function tabelaProtocolos() {
+  const linhas = protoState.lista.map(p => {
+    const semDono = p.responsavel === 'Não distribuído'
+
+    return `
+      <tr class="${semDono ? 'st-sem-dono' : ''}" onclick="abrirProtocolo(${p.id})">
+        <td>
+          <span class="tl-num"><span class="proto-badge">${esc(p.numero)}</span></span>
+          <span class="tl-sub">${esc(p.tipo_rotulo)}</span>
+        </td>
+        <td class="tl-forte" title="${esc(p.requerente)}">${esc(p.requerente)}</td>
+        <td class="tl-fraco" title="${esc(p.imovel)}">${esc(p.imovel)}</td>
+        <td class="${semDono ? 'tl-falta' : 'tl-fraco'}">
+          ${semDono ? 'não distribuído' : esc(p.responsavel)}
+        </td>
+        <td class="tl-fraco">${esc(p.data ?? '—')}</td>
+        <td>
+          <span class="tl-tags">
+            <span class="badge ${esc(p.situacao.classe)}">${esc(p.situacao.texto)}</span>
+            ${p.prazo ? `<span class="badge ${esc(p.prazo.classe)}">${esc(p.prazo.texto)}</span>` : ''}
+          </span>
+        </td>
+        <td class="tl-acao">
+          <button type="button" class="card-opcoes-btn" title="Opções"
+                  onclick="abrirOpcoesProto(event, ${p.id})">${ICO_TRES_PONTOS}</button>
+        </td>
+      </tr>`
+  }).join('')
+
+  return `
+    <div class="tabela-wrap">
+      <table class="tabela-lista tl-prot">
+        <thead><tr>
+          <th>Protocolo</th><th>Requerente</th><th>Imóvel</th>
+          <th>Responsável</th><th>Entrada</th><th>Situação</th><th class="tl-acao"></th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>`
+}
+
+/**
+ * O MENU DA LINHA.
+ *
+ * Só o que já existe e já é permitido: abrir a ficha, e assumir quando o
+ * protocolo está sem dono. Distribuir para terceiros continua não existindo em
+ * lugar nenhum do sistema, e um menu não é o lugar de inventar competência.
+ *
+ * @param {Event} ev @param {number} id
+ */
+function abrirOpcoesProto(ev, id) {
+  const p = protoState.lista.find(x => x.id === id)
+  if (!p) { return }
+
+  const itens = [{
+    rotulo: 'Abrir o protocolo',
+    obs: 'A ficha, com histórico e parecer.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`,
+    acao: () => abrirProtocolo(id),
+  }]
+
+  if (p.responsavel === 'Não distribuído' && window.PODE_EDITAR) {
+    itens.push({
+      rotulo: 'Assumir o protocolo',
+      obs: 'Passa a constar como seu, e o prazo passa a ser cobrado de você.',
+      icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+      acao: () => confirmarAcao({
+        titulo: 'Assumir o protocolo',
+        mensagem: `O protocolo ${p.numero} passa a constar como seu.`,
+        textoBtn: 'Assumir',
+        onConfirm: () => salvarProtocolo({ responsavel_id: window.USUARIO_ID }, id),
+      }),
+    })
+  }
+
+  abrirMenuNovo(ev, itens)
+}
+
+/** @returns {string} a mesma fila em cartões, no celular */
+function cartoesProtocolos() {
+  return protoState.lista.map(p => {
     const tags = [
       `<span class="badge ${esc(p.situacao.classe)}">${esc(p.situacao.texto)}</span>`,
       p.prazo ? `<span class="badge ${esc(p.prazo.classe)}">${esc(p.prazo.texto)}</span>` : '',
@@ -174,11 +268,15 @@ async function concluirProtocolo() {
   await salvarProtocolo({ situacao, parecer: parecer || null })
 }
 
-/** @param {Object} dados */
-async function salvarProtocolo(dados) {
-  if (!protoState.atual) return
+/**
+ * @param {Object} dados
+ * @param {number|undefined} id o protocolo a gravar; por omissão, o da ficha
+ *   aberta — o menu da lista grava sem abrir ficha nenhuma.
+ */
+async function salvarProtocolo(dados, id = protoState.atual?.id) {
+  if (!id) return
   try {
-    const r = await fetch('/api/protocolos/' + protoState.atual.id, {
+    const r = await fetch('/api/protocolos/' + id, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

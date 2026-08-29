@@ -447,3 +447,28 @@ function sessaoExpirou() {
     return resposta
   }
 })()
+
+// ── TABELA OU CARTÃO ─────────────────────────────────────────
+//
+// As três listas do sistema — documentos, protocolos e ordens de serviço —
+// mudam de FORMA conforme a tela: cartão no celular, tabela no computador.
+// A escolha mora aqui, num lugar só, porque o ponto de quebra tem de ser o
+// mesmo nas três: duas listas trocando de forma em larguras diferentes é o
+// tipo de incoerência que ninguém reporta e todo mundo sente.
+//
+// 1000px é onde sete colunas ainda leem sem cortar palavra no meio — medido
+// no navegador, não escolhido no escuro.
+
+const TELA_LARGA = window.matchMedia('(min-width: 1000px)')
+
+/** @returns {boolean} se a lista cabe em tabela */
+function ehTelaLarga() { return TELA_LARGA.matches }
+
+// Girar o tablet ou arrastar a borda da janela atravessa o ponto de quebra
+// com a lista já na tela. Sem isto ela ficaria na forma antiga até a próxima
+// busca — e o filtro do computador ficaria escondido numa tela larga.
+TELA_LARGA.addEventListener('change', () => {
+  if (typeof dState !== 'undefined' && dState.lista?.length) { renderDocumentos() }
+  if (typeof protoState !== 'undefined' && protoState.lista?.length) { renderProtocolos() }
+  if (typeof osState !== 'undefined' && osState.lista?.length) { renderOs() }
+})

@@ -76,7 +76,69 @@ function renderDocumentos() {
     return
   }
 
-  alvo.innerHTML = dState.lista.map(d => {
+  alvo.innerHTML = ehTelaLarga() ? tabelaDocumentos() : cartoesDocumentos()
+}
+
+/**
+ * A LISTA EM TABELA, no computador.
+ *
+ * O que muda em relação ao cartão não é a roupa, é o alinhamento: "Situação"
+ * lida de cima a baixo responde numa varredura o que o cartão só responde item
+ * a item. O conteúdo é o mesmo — e o menu ⋮ é o mesmo `abrirOpcoesDoc`, com as
+ * opções que o servidor liberou para aquela peça.
+ *
+ * @returns {string}
+ */
+function tabelaDocumentos() {
+  const linhas = dState.lista.map(d => {
+    const fund = d.artigos
+      ? `${d.artigos} artigo(s)` + (d.valor_upf ? ` · ${fmtNum(d.valor_upf)} UPF` : '')
+      : '<span class="tl-falta">sem fundamentação</span>'
+
+    return `
+      <tr class="st-${esc(d.status.valor ?? '')}" onclick="abrirDocumento(${d.id})">
+        <td>
+          <span class="tl-num">
+            <span class="tl-num-svg">${ICO_TIPO_DOC[d.tipo] || ICO_TIPO_DOC.padrao}</span>
+            <span class="proto-badge">${esc(d.numero)}</span>
+          </span>
+          <span class="tl-sub">${esc(d.tipo_rotulo)}</span>
+        </td>
+        <td class="tl-forte" title="${esc(d.autuado)}">${esc(d.autuado)}</td>
+        <td class="tl-fraco" title="${esc(d.imovel)}">${esc(d.imovel)}</td>
+        <td class="tl-fraco">
+          ${fund}
+          <span class="tl-sub">${esc(d.lei || 'sem legislação')}</span>
+        </td>
+        <td class="tl-fraco">${esc(d.data)}</td>
+        <td>
+          <span class="tl-tags">
+            <span class="badge ${esc(d.status.classe)}">${esc(d.status.texto)}</span>
+            ${d.prazo ? `<span class="badge ${esc(d.prazo.classe)}">${esc(d.prazo.texto)}</span>` : ''}
+          </span>
+        </td>
+        <td class="tl-acao">
+          <button type="button" class="card-opcoes-btn" title="Opções"
+                  onclick="abrirOpcoesDoc(event, ${d.id})">${ICO_TRES_PONTOS}</button>
+        </td>
+      </tr>`
+  }).join('')
+
+  return `
+    <div class="tabela-wrap">
+      <table class="tabela-lista tl-doc">
+        <thead><tr>
+          <th>Documento</th><th>Autuado</th><th>Imóvel</th>
+          <th>Fundamentação</th><th>Data</th><th>Situação</th><th class="tl-acao"></th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>`
+}
+
+/** @returns {string} a mesma lista em cartões, no celular */
+function cartoesDocumentos() {
+  return dState.lista.map(d => {
     const tags = [
       `<span class="badge ${esc(d.status.classe)}">${esc(d.status.texto)}</span>`,
       d.prazo ? `<span class="badge ${esc(d.prazo.classe)}">${esc(d.prazo.texto)}</span>` : '',
@@ -119,11 +181,6 @@ function renderDocumentos() {
         </div>
       </div>`
   }).join('')
-
-  // Os menus são montados depois do innerHTML: cada um depende das opções
-  // que o servidor liberou para aquele documento.
-  for (const d of dState.lista) {
-  }
 }
 
 // ── FILTROS ──────────────────────────────────────────────────
@@ -176,6 +233,8 @@ function removerFiltroDoc(chave) {
  * com o ✕ que a desfaz, no lugar onde a pergunta aparece.
  */
 function pintarChipsDoc() {
+  espelharFiltrosDoc()
+
   const alvo = document.getElementById('doc-chips')
   const cont = document.getElementById('doc-filtro-n')
   if (!alvo) { return }
@@ -208,6 +267,40 @@ function pintarChipsDoc() {
           ? `<button type="button" class="chip-limpar" onclick="limparFiltrosDoc()">Limpar tudo</button>`
           : '')
     : ''
+}
+
+/**
+ * OS MESMOS FILTROS, À VISTA NO COMPUTADOR.
+ *
+ * Os seletores são CLONADOS dos da janela, e não escritos uma segunda vez no
+ * Blade: as opções de tipo vêm de `Documento::TIPOS`, e duas listas escritas à
+ * mão divergem no dia em que alguém acrescentar um tipo e lembrar de um lugar
+ * só. O que vale continua sendo `dState.filtros` — os dois conjuntos de
+ * seletores são vistas dele.
+ */
+function montarFiltroLargoDoc() {
+  const faixa = document.getElementById('doc-filtro-larga')
+  if (!faixa || faixa.dataset.pronta) { return }
+
+  for (const chave of Object.keys(ROTULOS_FILTRO)) {
+    const origem = document.getElementById(ROTULOS_FILTRO[chave].campo)
+    if (!origem) { continue }
+
+    const copia = origem.cloneNode(true)
+    copia.id = 'doc-w-' + chave
+    copia.onchange = () => filtrarDocumentos(chave, copia.value)
+    faixa.appendChild(copia)
+  }
+  faixa.dataset.pronta = '1'
+}
+
+/** Põe os seletores largos no estado que está valendo. */
+function espelharFiltrosDoc() {
+  montarFiltroLargoDoc()
+  for (const chave of Object.keys(ROTULOS_FILTRO)) {
+    const el = document.getElementById('doc-w-' + chave)
+    if (el) { el.value = dState.filtros[chave] ?? '' }
+  }
 }
 
 /** @param {string} campo @param {string} valor */
@@ -473,6 +566,10 @@ async function abrirDocumento(id) {
  * OUTRO papel — e é o único caminho para ela, já que o gerador de PDF não
  * trabalha com página de altura variável.
  */
+/** O ⋮ das linhas e dos cartões, desenhado num lugar só. */
+const ICO_TRES_PONTOS = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+  stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>`
+
 const OPCOES_DOC = {
   pdf: {
     rotulo: 'Imprimir em A4',

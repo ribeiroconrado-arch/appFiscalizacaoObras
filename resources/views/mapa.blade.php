@@ -514,6 +514,10 @@
     </button>
   </div>
   <div class="filtro-chips" id="doc-chips"></div>
+  {{-- No computador os mesmos seletores voltam para cá, à vista. Nascem
+       clonados dos da janela (`montarFiltroLargoDoc`), para as opções de tipo
+       não serem escritas duas vezes e divergirem depois. --}}
+  <div class="doc-filtro-larga" id="doc-filtro-larga"></div>
 
   <div id="lista-documentos"></div>
 </section>
@@ -545,6 +549,9 @@
     @endif
   </div>
 
+  {{-- No celular continuam duas linhas de dois controles; acima de 1000px o
+       invólucro vira faixa e os quatro ficam lado a lado. --}}
+  <div class="filtros-lista">
   <div class="linha-filtro">
     <select onchange="filtrarProtocolos('tipo', this.value)">
       <option value="">Todos os tipos</option>
@@ -570,6 +577,7 @@
       @endforeach
     </select>
   </div>
+  </div>{{-- /filtros-lista --}}
 
   <div id="lista-protocolos"></div>
   </div>{{-- /po-protocolos --}}
@@ -592,6 +600,7 @@
       @endif
     </div>
 
+    <div class="filtros-lista">
     <div class="linha-filtro">
       <select onchange="filtrarOs('situacao', this.value)">
         <option value="">Todas as situações</option>
@@ -616,6 +625,7 @@
         @endforeach
       </select>
     </div>
+    </div>{{-- /filtros-lista --}}
 
     <div id="lista-os"></div>
   </div>{{-- /po-os --}}
@@ -2387,6 +2397,9 @@
 @endphp
 <script>
 window.USUARIO_ID = {{ auth()->id() }}
+// Quem só consulta não vê "Assumir" no menu da linha. A regra que vale
+// continua no ProtocoloController; isto é para não oferecer o que seria recusado.
+window.PODE_EDITAR = {{ Js::from(auth()->user()->canEdit()) }}
 window.USUARIO_NOME = {{ Js::from(auth()->user()->name) }}
 {{-- A tela usa isto so para ESCONDER o que o usuario nao pode fazer. Quem
      autoriza de verdade e o servidor, em QuarteiraoController::aplicar(). --}}
