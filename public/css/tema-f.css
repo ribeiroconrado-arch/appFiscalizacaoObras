@@ -143,9 +143,22 @@
 .abas{position:fixed;left:50%;right:auto;transform:translateX(-50%);z-index:950;
   width:min(560px, calc(100% - 24px));
   bottom:calc(10px + env(safe-area-inset-bottom));
-  background:var(--sur);border:1px solid var(--bord);border-radius:999px;
+  /* 90% de opacidade, a pedido — no FUNDO, e não no elemento.
+     `opacity:.9` na barra desbotaria junto os ícones, os rótulos e a pílula da
+     aba ativa, e o que se quer é ver um pouco do mapa por baixo, não um menu
+     apagado. O borrão atrás é o que mantém o texto legível quando o que passa
+     embaixo é um mapa cheio de linhas: sem ele, 10% de transparência já basta
+     para o rótulo brigar com o desenho do lote. */
+  background:color-mix(in srgb, var(--sur) 90%, transparent);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid var(--bord);border-radius:999px;
   box-shadow:0 8px 26px rgba(74,66,60,.17), 0 2px 6px rgba(74,66,60,.08);
   display:flex;align-items:stretch;padding:6px;gap:3px}
+/* Navegador sem `color-mix` fica com a barra opaca de antes: perder a
+   transparência é aceitável, ficar sem fundo nenhum não é. */
+@supports not (background:color-mix(in srgb, white 90%, transparent)){
+  .abas{background:var(--sur)}
+}
 .aba{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:2px;padding:7px 3px;border:none;background:none;cursor:pointer;
   border-radius:999px;font-size:10px;line-height:1.15;color:var(--chumbo);
