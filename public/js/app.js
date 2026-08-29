@@ -280,13 +280,19 @@ function montarEndereco(p) {
     + `<span class="${mono ? 'mono ' : ''}fi-fixo-val">${val}</span></span>`
 
   return [
-    par('Logradouro', via
-      ? esc(via)
-      : '<span style="color:var(--tx3)">não cadastrado</span>'),
-    // Quadra e lote em monoespaçada, como a inscrição da linha de baixo: são
-    // códigos, e é assim que se comparam dois lotes um sob o outro.
-    par('Quadra', esc(p.quadra ?? '—'), true),
-    par('Lote', esc(p.numero_lote ?? '—'), true),
+    // O logradouro vem SEM rótulo: "Rua Antônio João" já se anuncia como
+    // logradouro pelo próprio tipo, e escrever "LOGRADOURO" antes seria
+    // dizer duas vezes a mesma coisa. Sem cadastro, o texto muda para dizer
+    // o que falta — é aí que um rótulo faria falta, e ele vira a própria
+    // frase.
+    via
+      ? `<span class="fi-fixo-val fi-via">${esc(via)}</span>`
+      : '<span class="fi-fixo-val fi-via fi-via-vazio">logradouro não cadastrado</span>',
+    // Quadra e lote abreviados, e em monoespaçada como a inscrição da linha
+    // de baixo: são códigos, e é assim que se comparam dois lotes um sob o
+    // outro.
+    par('Qd.', esc(p.quadra ?? '—'), true),
+    par('Lt.', esc(p.numero_lote ?? '—'), true),
     p.bairro ? par('Bairro', esc(p.bairro)) : '',
   ].filter(Boolean).join('')
 }

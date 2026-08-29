@@ -1595,6 +1595,10 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fi-fixo .fi-endereco .fi-rot{margin-bottom:0;white-space:nowrap;font-size:9.5px;
   letter-spacing:.04em}
+/* O logradouro abre a linha sem rótulo, e por isso precisa se distinguir do
+   que vem depois: é o nome do lugar, e os outros são referências dele. */
+.fi-via{max-width:100%}
+.fi-via-vazio{color:var(--tx3);font-weight:500}
 .fi-fixo-dados{
   display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;
   font-size:12px;color:var(--chumbo);
