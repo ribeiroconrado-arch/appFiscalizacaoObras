@@ -386,3 +386,64 @@ function fecharMenuNovo() {
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') fecharMenuNovo()
 })
+
+// ── SESSÃO EXPIRADA ──────────────────────────────────────────
+//
+// A sessão dura duas horas. Quando ela cai, o servidor passa a responder 401
+// a tudo, e cada tela falhava do seu jeito: o histórico do imóvel mostrava
+// "Error: HTTP 401" no console, a lista de documentos escrevia "não foi
+// possível carregar", e o mapa simplesmente não trazia lote nenhum. Nenhuma
+// dizia a única coisa que importa — que é preciso entrar de novo.
+//
+// Sete lugares já tratavam 419 (token vencido) copiando as mesmas três linhas.
+// Nenhum tratava 401. Em vez de escrever a oitava cópia, o tratamento passa a
+// morar aqui, uma vez, valendo para toda chamada que qualquer módulo fizer —
+// inclusive as que ainda serão escritas.
+
+/** Para não disparar dez vezes quando dez chamadas caem juntas. */
+let _sessaoCaiu = false
+
+/**
+ * Leva de volta ao login, dizendo por quê.
+ *
+ * `/entrar` e não `location.reload()`: recarregar a página do mapa devolve o
+ * redirecionamento do servidor e chega ao mesmo lugar, mas passa antes por
+ * uma tela que pisca. Ir direto é mais honesto com o que está acontecendo.
+ */
+function sessaoExpirou() {
+  if (_sessaoCaiu) { return }
+  _sessaoCaiu = true
+
+  toast('Sessão expirada. Entre novamente.', 'err')
+  setTimeout(() => { location.href = '/entrar' }, 1600)
+}
+
+/**
+ * Envelope em volta do `fetch` do navegador.
+ *
+ * Não engole a resposta: devolve-a como veio, para o tratamento de erro de
+ * cada chamada continuar valendo. Só acrescenta o que faltava — perceber que
+ * a sessão caiu e agir uma vez só.
+ */
+;(() => {
+  const original = window.fetch
+
+  window.fetch = async (entrada, opcoes) => {
+    const resposta = await original(entrada, opcoes)
+
+    // Só o que é DESTE servidor: uma chamada a serviço de terceiro que
+    // responda 401 não diz nada sobre a nossa sessão.
+    const url = new URL(
+      typeof entrada === 'string' ? entrada : (entrada?.url ?? ''),
+      location.origin
+    )
+    const nossa = url.origin === location.origin
+
+    if (nossa && (resposta.status === 401 || resposta.status === 419)
+        && ! location.pathname.startsWith('/entrar')) {
+      sessaoExpirou()
+    }
+
+    return resposta
+  }
+})()
