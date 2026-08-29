@@ -42,26 +42,7 @@
      layout do auto. */
   table.pagina > thead > tr > td, table.pagina > tbody > tr > td { padding: 0; border: 0; }
 
-  .cab { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-  .cab td { vertical-align: middle; padding: 0; border: 0; }
-  .cab .brasao-cel { width: 52px; }
-  .cab img.brasao { width: 46px; height: auto; }
-  .cab .doc-titulo { font-size: 15px; font-weight: bold; letter-spacing: .03em; }
-  .cab .num-cel { text-align: right; white-space: nowrap; }
-  .cab .num-lbl { display: block; font-size: 7.5px; color: #666; letter-spacing: .1em; }
-  .cab .num-val { font-size: 14px; font-weight: bold; }
-  .cab-regua { border-bottom: 1.5px solid #111; margin: 3px 0 4px; height: 0; }
-  .cab .orgao { font-size: 9.5px; font-weight: bold; }
-  .cab .depto, .cab .end { font-size: 8.5px; color: #444; }
-  .cab .selo { text-align: right; font-size: 9px; font-weight: bold; line-height: 1.1;
-               border-left: 1.5px solid #111; padding-left: 8px; width: 92px; }
-
-  /* ── Faixa do topo (só na primeira página, por isso fica no tbody) ── */
-  .topo { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-  .topo td { border: 1px solid #bbb; padding: 3px 5px; vertical-align: top; }
-  .topo .lbl { display: block; font-size: 7.5px; color: #666; text-transform: uppercase;
-               letter-spacing: .04em; }
-  .topo .val { font-size: 10px; font-weight: bold; }
+@include('impressao._cabecalho-css')
 
   /* ── Seções ── */
   .sec { margin-bottom: 9px; }
@@ -132,36 +113,7 @@
 <table class="pagina">
   <thead>
     <tr><td>
-      <table class="cab">
-        <tr>
-          @if ($brasao)
-            <td class="brasao-cel" rowspan="2"><img class="brasao" src="{{ $brasao }}" alt=""></td>
-          @endif
-          <td class="doc-titulo">{{ $titulo }}</td>
-          <td class="num-cel">
-            <span class="num-lbl">NÚMERO</span>
-            <span class="num-val">{{ $v->numeroFormatado() }}</span>
-          </td>
-        </tr>
-        <tr>
-          <td colspan="2">
-            <div class="cab-regua"></div>
-            <table style="width:100%;border-collapse:collapse">
-              <tr>
-                <td style="border:0;padding:0">
-                  <div class="orgao">{{ $orgao['secretaria'] }}</div>
-                  <div class="depto">{{ $orgao['nome'] }}@if($orgao['departamento']) – {{ $orgao['departamento'] }}@endif</div>
-                  <div class="depto">{{ $orgao['divisao'] }}</div>
-                  <div class="end">{{ collect([$orgao['endereco'], $orgao['telefone'], $orgao['municipio']])->filter()->implode(' – ') }}</div>
-                </td>
-                @if ($orgao['selo'])
-                  <td class="selo">{{ $orgao['selo'] }}</td>
-                @endif
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
+      @include('impressao._cabecalho', ['numero' => $v->numeroFormatado()])
     </td></tr>
   </thead>
 
@@ -172,15 +124,14 @@
            página, por isso fica no tbody. --}}
       <table class="topo">
         <tr>
-          <td colspan="2"><span class="lbl">Imóvel</span><span class="val">{{ $imovel }}</span></td>
-          <td><span class="lbl">Finalidade</span><span class="val">{{ $v->finalidadeRotulo() }}</span></td>
-        </tr>
-        <tr>
-          <td><span class="lbl">Data e hora</span><span class="val">{{ $v->data_hora?->format('d/m/Y H:i') ?? '—' }}</span></td>
-          <td><span class="lbl">Fiscal</span><span class="val">{{ $v->fiscal?->name ?? '—' }}</span></td>
-          <td><span class="lbl">Matrícula</span><span class="val">{{ $v->fiscal?->matricula ?? '—' }}</span></td>
+          <td><span class="topo-lbl">Exercício</span><span class="topo-val">{{ $v->exercicio ?? '—' }}</span></td>
+          <td><span class="topo-lbl">Matrícula do fiscal</span><span class="topo-val">{{ $v->fiscal?->matricula ?? '—' }}</span></td>
+          <td><span class="topo-lbl">Imóvel</span><span class="topo-val">{{ $imovel }}</span></td>
+          <td><span class="topo-lbl">Finalidade</span><span class="topo-val">{{ $v->finalidadeRotulo() }}</span></td>
+          <td><span class="topo-lbl">Data/hora da vistoria</span><span class="topo-val">{{ $v->data_hora?->format('d/m/y H:i') ?? '—' }}</span></td>
         </tr>
       </table>
+      <div class="topo-regua"></div>
 
       {{-- 1 — O que foi constatado --}}
       <div class="sec">

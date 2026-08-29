@@ -35,25 +35,7 @@
      campos de assinatura: o CSS estava escrito, e nunca chegava a valer. */
   table.pagina > thead > tr > td, table.pagina > tbody > tr > td { padding: 0; border: 0; }
 
-  .cab { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-  .cab td { vertical-align: middle; padding: 0; border: 0; }
-  .cab .brasao-cel { width: 52px; }
-  .cab img.brasao { width: 46px; height: auto; }
-  .cab .doc-titulo { font-size: 15px; font-weight: bold; letter-spacing: .03em; }
-  .cab .num-cel { text-align: right; white-space: nowrap; }
-  .cab .num-lbl { display: block; font-size: 7.5px; color: #666; letter-spacing: .1em; }
-  .cab .num-val { font-size: 14px; font-weight: bold; }
-  .cab-regua { border-bottom: 1.5px solid #111; margin: 3px 0 4px; height: 0; }
-  .cab .orgao { font-size: 9.5px; font-weight: bold; }
-  .cab .depto, .cab .end { font-size: 8.5px; color: #444; }
-  .cab .selo { text-align: right; font-size: 9px; font-weight: bold; line-height: 1.1;
-               border-left: 1.5px solid #111; padding-left: 8px; width: 92px; }
-
-  .topo { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-  .topo td { border: 1px solid #bbb; padding: 3px 5px; vertical-align: top; }
-  .topo .lbl { display: block; font-size: 7.5px; color: #666; text-transform: uppercase;
-               letter-spacing: .04em; }
-  .topo .val { font-size: 10px; font-weight: bold; }
+@include('impressao._cabecalho-css')
 
   .sec { margin-bottom: 9px; }
   .sec-tit { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em;
@@ -122,36 +104,7 @@
 <table class="pagina">
   <thead>
     <tr><td>
-      <table class="cab">
-        <tr>
-          @if ($brasao)
-            <td class="brasao-cel" rowspan="2"><img class="brasao" src="{{ $brasao }}" alt=""></td>
-          @endif
-          <td class="doc-titulo">ORDEM DE SERVIÇO</td>
-          <td class="num-cel">
-            <span class="num-lbl">Nº</span>
-            <span class="num-val">{{ $os->numero }}</span>
-          </td>
-        </tr>
-        <tr>
-          <td colspan="2">
-            <table style="width:100%;border-collapse:collapse">
-              <tr>
-                <td>
-                  <div class="orgao">{{ $orgao['secretaria'] }}</div>
-                  <div class="depto">{{ $orgao['nome'] }}@if($orgao['departamento']) – {{ $orgao['departamento'] }}@endif</div>
-                  <div class="depto">{{ $orgao['divisao'] }}</div>
-                  <div class="end">{{ collect([$orgao['endereco'], $orgao['telefone'], $orgao['municipio']])->filter()->implode(' – ') }}</div>
-                </td>
-                @if ($orgao['selo'])
-                  <td class="selo">{{ $orgao['selo'] }}</td>
-                @endif
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-      <div class="cab-regua"></div>
+      @include('impressao._cabecalho', ['titulo' => 'ORDEM DE SERVIÇO', 'numero' => $os->numero])
     </td></tr>
   </thead>
 
@@ -160,16 +113,19 @@
 
       <table class="topo">
         <tr>
-          <td><span class="lbl">Emitida em</span>
-              <span class="val">{{ $os->created_at?->format('d/m/Y H:i') }}</span></td>
-          <td><span class="lbl">Natureza</span>
-              <span class="val">{{ \App\Models\OrdemServico::NATUREZAS[$os->natureza] ?? '—' }}</span></td>
-          <td><span class="lbl">Prioridade</span>
-              <span class="val">{{ \App\Models\OrdemServico::PRIORIDADES[$os->prioridade] ?? '—' }}</span></td>
-          <td><span class="lbl">Situação</span>
-              <span class="val">{{ $os->situacaoTag()['texto'] }}</span></td>
+          <td><span class="topo-lbl">Exercício</span>
+              <span class="topo-val">{{ $os->ano ?? '—' }}</span></td>
+          <td><span class="topo-lbl">Emitida em</span>
+              <span class="topo-val">{{ $os->created_at?->format('d/m/y H:i') }}</span></td>
+          <td><span class="topo-lbl">Natureza</span>
+              <span class="topo-val">{{ \App\Models\OrdemServico::NATUREZAS[$os->natureza] ?? '—' }}</span></td>
+          <td><span class="topo-lbl">Prioridade</span>
+              <span class="topo-val">{{ \App\Models\OrdemServico::PRIORIDADES[$os->prioridade] ?? '—' }}</span></td>
+          <td><span class="topo-lbl">Situação</span>
+              <span class="topo-val">{{ $os->situacaoTag()['texto'] }}</span></td>
         </tr>
       </table>
+      <div class="topo-regua"></div>
 
       <div class="sec">
         <div class="sec-tit">{{ $sec('Objeto') }}</div>
