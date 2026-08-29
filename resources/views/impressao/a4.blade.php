@@ -42,7 +42,12 @@
 
   /* ── Cabeçalho institucional (repete em toda página) ── */
   table.pagina { width: 100%; border-collapse: collapse; }
-  table.pagina > thead td, table.pagina > tbody td { padding: 0; border: 0; }
+  /* O `>` até o `td` é obrigatório: sem ele, "qualquer td dentro do invólucro"
+     alcança as células de TODAS as tabelas aninhadas — e, por ter mais
+     elementos no seletor, vence as regras próprias delas. Era o que zerava, em
+     silêncio, a moldura e o respiro da faixa do topo, da tabela de dias e dos
+     campos de assinatura: o CSS estava escrito, e nunca chegava a valer. */
+  table.pagina > thead > tr > td, table.pagina > tbody > tr > td { padding: 0; border: 0; }
 
   .cab { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
   .cab td { vertical-align: middle; padding: 0; border: 0; }
@@ -89,7 +94,11 @@
 
   /* ── Assinaturas ── */
   table.assina { width: 100%; border-collapse: collapse; margin: 4px 0 12px; page-break-inside: avoid; }
-  table.assina td { width: 50%; text-align: center; vertical-align: bottom; padding: 0 22px; border: 0; }
+  /* `padding-top` afasta uma fila de assinaturas da anterior — sem ele, o
+     nome de quem assina em cima encosta na linha de quem assina embaixo. */
+  table.assina td { width: 50%; text-align: center; vertical-align: bottom;
+                    padding: 18px 22px 2px; border: 0; }
+  table.assina tr:first-child td { padding-top: 2px; }
   /* O traço vem aparado do banco (App\Services\Assinatura): a altura da
      imagem é a altura da assinatura, sem a margem vazia do canvas. Por isso o
      limite pode subir — antes, esticar só esticava o vazio em volta. */

@@ -28,7 +28,12 @@
          line-height: 1.45; margin: 0; }
 
   table.pagina { width: 100%; border-collapse: collapse; }
-  table.pagina > thead td, table.pagina > tbody td { padding: 0; border: 0; }
+  /* O `>` até o `td` é obrigatório: sem ele, "qualquer td dentro do invólucro"
+     alcança as células de TODAS as tabelas aninhadas — e, por ter mais
+     elementos no seletor, vence as regras próprias delas. Era o que zerava, em
+     silêncio, a moldura e o respiro da faixa do topo, da tabela de dias e dos
+     campos de assinatura: o CSS estava escrito, e nunca chegava a valer. */
+  table.pagina > thead > tr > td, table.pagina > tbody > tr > td { padding: 0; border: 0; }
 
   .cab { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
   .cab td { vertical-align: middle; padding: 0; border: 0; }
@@ -67,17 +72,31 @@
   /* ── Ciência dos designados ──
      Uma linha por fiscal, cada uma com o seu campo de assinatura: a ordem
      pode ser dada a três e recebida por dois, e o papel tem de mostrar isso. */
-  .ciencia { width: 100%; border-collapse: collapse; }
-  /* 78px: espaço para a assinatura respirar SEM ficar boiando. O traço vem
-     aparado do banco (App\Services\Assinatura), então a altura da imagem é a
-     do traço — o campo pode ser justo, porque não há mais margem invisível
-     empurrando a rubrica para o meio de um retângulo grande. */
-  .ciencia td { border: 1px solid #bbb; padding: 6px 5px 3px; vertical-align: bottom;
-                width: 50%; height: 78px; }
+  .ciencia { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  /* O espaço entre as assinaturas vem do PADDING das células, e não de borda
+     nem de `border-spacing`: o dompdf desenha padding sem discutir, e é o que
+     separa uma linha de assinatura da seguinte. Sem isso as linhas ficavam
+     encostadas — o nome de um assinante colado na linha do outro, que num
+     documento de duas ou três assinaturas parece uma coisa só.
+
+     Sem borda na célula, também: o retângulo em volta competia com a linha
+     preta da assinatura, que é a única marca que precisa ser vista ali.
+
+     A altura pode ser justa porque o traço vem aparado do banco
+     (App\Services\Assinatura) — não há mais margem invisível empurrando a
+     rubrica para o meio de um retângulo grande. */
+  .ciencia td { border: 0; padding: 20px 28px 4px; vertical-align: bottom;
+                text-align: center; width: 50%; height: 70px; }
+  /* A primeira linha não precisa do respiro de cima: quem a separa é o título
+     da seção, logo acima. */
+  .ciencia tr:first-child td { padding-top: 6px; }
   .ciencia .nome { font-size: 9.5px; font-weight: bold; }
   .ciencia .papel { font-size: 8px; color: #666; text-transform: uppercase; letter-spacing: .04em; }
+  /* A linha centrada e sem encostar na margem, como a do auto de infração
+     (a4.blade.php): assinatura é bloco, e bloco que vai de ponta a ponta da
+     folha some no meio do resto. */
   .ciencia .linha { border-top: 1px solid #111; padding-top: 2px;
-                    font-size: 8px; color: #666; }
+                    font-size: 8px; color: #666; text-align: center; }
   /* Sem `margin-top` fixo na linha: era ele que segurava a assinatura no alto
      e deixava o vão. A imagem ocupa a altura e a linha vem logo abaixo dela.
      `width:auto` mantém a proporção do traço em qualquer um dos dois limites. */
