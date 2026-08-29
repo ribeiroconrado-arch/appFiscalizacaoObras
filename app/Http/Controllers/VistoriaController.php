@@ -65,6 +65,106 @@ class VistoriaController extends Controller
         return response()->json(['protocolos' => $protocolos]);
     }
 
+    /**
+     * UMA vistoria, para leitura.
+     *
+     * Existia só o formulário de criar: depois de gravada, a vistoria virava
+     * uma linha na linha do tempo e mais nada — as fotos, o relatório e o que
+     * o fiscal escreveu sobre cada artigo não tinham como ser revistos. Num
+     * processo administrativo isso é o oposto do que se espera: o ato tem de
+     * poder ser reaberto e conferido, inclusive por quem não o praticou.
+     *
+     * O que sai daqui é O QUE FOI CONSTATADO, na ordem em que foi escrito —
+     * `relatorio()` já intercala fotos e itens de lei como o fiscal montou.
+     */
+    public function mostrar(Vistoria $vistoria): JsonResponse
+    {
+        $vistoria->load([
+            'fiscal:id,name', 'lote:id,bairro,quadra,numero_lote,inscricao',
+            'evidencias', 'itensDeArtigo.artigo', 'exigencias',
+            'irregularidades:id,codigo,descricao,gravidade', 'artigos',
+        ]);
+
+        // As fotos entram no relatório pela URL do arquivo — a mesma rota
+        // protegida que a ficha usa, e não um caminho de disco.
+        $fotos = $vistoria->evidencias->keyBy('id');
+
+        $relatorio = $vistoria->relatorio()->map(function (array $i) use ($fotos) {
+            if ($i['tipo'] === 'foto' && ($e = $fotos->get($i['id']))) {
+                $i['url'] = route('evidencia.arquivo', $e);
+            }
+
+            return $i;
+        })->all();
+
+        return response()->json(['vistoria' => [
+            'id'          => $vistoria->id,
+            'quando'      => $vistoria->data_hora?->format('d/m/Y H:i'),
+            'finalidade'  => $vistoria->finalidadeRotulo(),
+            'situacao'    => [
+                'texto'  => $vistoria->situacaoRotulo(),
+                'classe' => $vistoria->situacaoBadge(),
+            ],
+            'fiscal'      => $vistoria->fiscal?->name,
+            'imovel'      => $vistoria->lote
+                ? trim("Qd. {$vistoria->lote->quadra} Lt. {$vistoria->lote->numero_lote} — {$vistoria->lote->bairro}")
+                : null,
+            'observacoes' => $vistoria->observacoes,
+            'acompanhante' => $vistoria->acompanhante_nome ? [
+                'nome'  => $vistoria->acompanhante_nome,
+                'qual'  => Vistoria::QUALIFICACOES[$vistoria->acompanhante_qualificacao] ?? null,
+            ] : null,
+            // Só os blocos desta finalidade: numa atualização cadastral não se
+            // pergunta fase de obra, e mostrar o campo vazio faria parecer que
+            // alguém olhou e não achou.
+            'obra'        => $this->obraDaVistoria($vistoria),
+            'gps'         => $vistoria->latitude ? [
+                'lat'  => (float) $vistoria->latitude,
+                'lon'  => (float) $vistoria->longitude,
+                'prec' => $vistoria->accuracy,
+            ] : null,
+            'irregularidades' => $vistoria->irregularidades->map(fn ($i) => [
+                'codigo' => $i->codigo, 'descricao' => $i->descricao, 'gravidade' => $i->gravidade,
+            ])->all(),
+            'artigos'     => $vistoria->artigos->map(fn ($a) => [
+                'numero' => $a->numero, 'texto' => $a->texto ?? null,
+            ])->all(),
+            'exigencias'  => $vistoria->exigencias->map(fn ($e) => [
+                'texto' => $e->texto, 'prazo' => $e->prazo_dias,
+            ])->all(),
+            'relatorio'   => $relatorio,
+        ]]);
+    }
+
+    /** Os campos de obra que pertencem à finalidade desta vistoria. */
+    private function obraDaVistoria(Vistoria $v): array
+    {
+        $blocos = $v->camposDaFinalidade();
+        $dados = [];
+
+        if (in_array('alvara', $blocos, true)) {
+            $dados['Alvará'] = (Vistoria::ALVARA[$v->alvara_situacao] ?? null)
+                . ($v->alvara_numero ? " nº {$v->alvara_numero}" : '');
+        }
+        if (in_array('area', $blocos, true)) {
+            $dados['Área aferida'] = $v->areaAferidaRotulo();
+        }
+        if (in_array('obra', $blocos, true)) {
+            $dados['Fase da obra'] = Vistoria::FASES_OBRA[$v->fase_obra] ?? null;
+            $dados['Conforme o projeto'] = Vistoria::CONFORMIDADES[$v->conforme_projeto] ?? null;
+        }
+        if (in_array('uso', $blocos, true)) {
+            $dados['Uso constatado'] = Vistoria::USOS[$v->uso_constatado] ?? null;
+        }
+        if (in_array('idade', $blocos, true)) {
+            $dados['Ano estimado'] = $v->ano_construcao_estimado;
+        }
+
+        // Campo vazio sai fora: a lista mostra o que foi constatado, e uma
+        // linha com travessão só ocupa espaço dizendo que ninguém respondeu.
+        return array_filter($dados, fn ($x) => $x !== null && $x !== '');
+    }
+
     public function historico(Lote $lote): JsonResponse
     {
         $vistorias = $lote->vistorias()
@@ -97,6 +197,9 @@ class VistoriaController extends Controller
         foreach ($vistorias as $v) {
             $eventos[] = [
                 'tipo'    => 'vistoria',
+                // O id abre o registro: cada marco da linha do tempo leva ao
+                // ato que o produziu, e sem ele o clique nao teria destino.
+                'id'      => $v['id'],
                 // O ato de desmembramento precisa saber QUAL lote dividir, e a
                 // linha do tempo e a unica coisa que a tela tem em maos ali.
                 'lote_id' => $lote->id,
@@ -114,6 +217,7 @@ class VistoriaController extends Controller
             [$sTxt, $sCls] = $d->statusBadge();
             $eventos[] = [
                 'tipo'    => 'documento',
+                'id'      => $d->id,
                 'quando'  => ($d->data_lavratura ?? $d->created_at)?->format('d/m/Y H:i'),
                 'titulo'  => $d->numeroFormatado() . ' — ' . $d->rotuloTipo(),
                 'detalhe' => $d->autuado_nome ? 'Autuado: ' . $d->autuado_nome : null,
@@ -127,6 +231,7 @@ class VistoriaController extends Controller
             [$sTxt, $sCls] = $p->situacaoBadge();
             $eventos[] = [
                 'tipo'    => 'protocolo',
+                'id'      => $p->id,
                 'quando'  => $p->protocolado_em?->format('d/m/Y'),
                 'titulo'  => $p->numero . ' — ' . $p->rotuloTipo(),
                 'detalhe' => $p->requerente_nome ? 'Requerente: ' . $p->requerente_nome : null,

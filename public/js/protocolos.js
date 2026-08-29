@@ -183,9 +183,32 @@ function filtrarProtocolos(campo, valor) {
 // ── FICHA ────────────────────────────────────────────────────
 
 /** @param {number} id */
-function abrirProtocolo(id) {
-  const p = protoState.lista.find(x => x.id === id)
-  if (!p) return
+/**
+ * Abre a ficha do protocolo.
+ *
+ * A lista da aba é o caminho comum, mas não é o único: o protocolo também
+ * aparece na linha do tempo do imóvel, e de lá `protoState.lista` está vazia.
+ * Antes a função saía calada nesse caso — o clique não fazia nada e não havia
+ * o que investigar. Agora, quando o protocolo não está em mãos, busca-se no
+ * servidor.
+ *
+ * @param {number} id
+ */
+async function abrirProtocolo(id) {
+  let p = protoState.lista.find(x => x.id === id)
+
+  if (!p) {
+    try {
+      const r = await fetch('/api/protocolos/' + id, { headers: { Accept: 'application/json' } })
+      if (!r.ok) { throw new Error('HTTP ' + r.status) }
+      p = (await r.json()).protocolo
+    } catch (e) {
+      console.error(e)
+      toast('Não foi possível abrir o protocolo', 'err')
+      return
+    }
+  }
+
   protoState.atual = p
 
   document.getElementById('pf-numero').textContent = p.numero

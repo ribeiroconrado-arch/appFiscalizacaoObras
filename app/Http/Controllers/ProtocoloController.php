@@ -16,6 +16,61 @@ class ProtocoloController extends Controller
      * chega sem dono e alguém precisa distribuí-lo. Abrir filtrado por
      * "meus" esconderia justamente o que ainda não foi atribuído a ninguém.
      */
+    /**
+     * UM protocolo.
+     *
+     * A ficha do protocolo era montada só com o que a LISTA já tinha em mãos,
+     * e por isso só abria de dentro da aba Protocolos. Clicando no marco da
+     * linha do tempo do imóvel — onde o protocolo também aparece — a tela não
+     * fazia nada: a lista estava vazia e a função saía calada.
+     */
+    public function mostrar(Protocolo $protocolo): JsonResponse
+    {
+        $protocolo->load(['lote:id,bairro,quadra,numero_lote', 'responsavel:id,name']);
+
+        return response()->json(['protocolo' => $this->emFormato($protocolo)]);
+    }
+
+    /**
+     * O protocolo como a tela o consome — um lugar só.
+     *
+     * Lista e ficha liam o mesmo protocolo por caminhos diferentes; bastava
+     * alguém acrescentar um campo em um deles para as duas telas passarem a
+     * mostrar coisas diferentes do mesmo processo.
+     *
+     * @return array<string, mixed>
+     */
+    private function emFormato(Protocolo $p): array
+    {
+        [$sTxt, $sCls] = $p->situacaoBadge();
+        $prazo = $p->situacaoPrazo();
+
+        return [
+            'id'          => $p->id,
+            'numero'      => $p->numero,
+            'tipo'        => $p->tipo,
+            'tipo_rotulo' => $p->rotuloTipo(),
+            'data'        => $p->protocolado_em?->format('d/m/Y'),
+            'situacao'    => ['texto' => $sTxt, 'classe' => $sCls],
+            'prazo'       => $prazo ? ['texto' => $prazo[0], 'classe' => $prazo[1]] : null,
+            'requerente'  => $p->requerente_nome,
+            'imovel'      => $p->lote
+                ? sprintf('Quadra %s · Lote %s — %s', $p->lote->quadra ?? '—', $p->lote->numero_lote ?? '—', $p->lote->bairro)
+                : 'Não vinculado a lote',
+            'responsavel' => $p->responsavel?->name ?? 'Não distribuído',
+            'objeto'      => $p->objeto,
+            'lote_id'     => $p->lote_id,
+            // Este protocolo está esperando a vistoria que vai fundamentar
+            // o ato cadastral? É o que faz aparecer o botão "Registrar
+            // vistoria" — o caminho de quem parte da tela de protocolos.
+            'espera_vistoria' => in_array($p->tipo, ['desmembramento', 'unificacao'], true)
+                && $p->situacao === 'deferido'
+                && $p->vistoria_id === null
+                && $p->lote_id !== null,
+            'vistoria_id' => $p->vistoria_id,
+        ];
+    }
+
     public function index(Request $request): JsonResponse
     {
         $d = $request->validate([
@@ -50,35 +105,7 @@ class ProtocoloController extends Controller
             });
         }
 
-        $itens = $q->limit(300)->get()->map(function (Protocolo $p) {
-            [$sTxt, $sCls] = $p->situacaoBadge();
-            $prazo = $p->situacaoPrazo();
-
-            return [
-                'id'          => $p->id,
-                'numero'      => $p->numero,
-                'tipo'        => $p->tipo,
-                'tipo_rotulo' => $p->rotuloTipo(),
-                'data'        => $p->protocolado_em?->format('d/m/Y'),
-                'situacao'    => ['texto' => $sTxt, 'classe' => $sCls],
-                'prazo'       => $prazo ? ['texto' => $prazo[0], 'classe' => $prazo[1]] : null,
-                'requerente'  => $p->requerente_nome,
-                'imovel'      => $p->lote
-                    ? sprintf('Quadra %s · Lote %s — %s', $p->lote->quadra ?? '—', $p->lote->numero_lote ?? '—', $p->lote->bairro)
-                    : 'Não vinculado a lote',
-                'responsavel' => $p->responsavel?->name ?? 'Não distribuído',
-                'objeto'      => $p->objeto,
-                'lote_id'     => $p->lote_id,
-                // Este protocolo está esperando a vistoria que vai fundamentar
-                // o ato cadastral? É o que faz aparecer o botão "Registrar
-                // vistoria" — o caminho de quem parte da tela de protocolos.
-                'espera_vistoria' => in_array($p->tipo, ['desmembramento', 'unificacao'], true)
-                    && $p->situacao === 'deferido'
-                    && $p->vistoria_id === null
-                    && $p->lote_id !== null,
-                'vistoria_id' => $p->vistoria_id,
-            ];
-        });
+        $itens = $q->limit(300)->get()->map(fn (Protocolo $p) => $this->emFormato($p));
 
         return response()->json([
             'protocolos' => $itens,

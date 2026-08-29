@@ -211,14 +211,22 @@ function abrirFicha(feicao) {
 
   document.getElementById('fi-area').textContent = fmtNum(p.area_gis_m2) + ' m²'
 
-  const c = centroide(feicao.geometry)
+  // SEM GEOMETRIA A FICHA AINDA ABRE.
+  //
+  // `abrirFichaPorLote` entrega `geometry: null` de propósito quando o lote
+  // está fora do trecho de mapa já carregado, e é assim que chega o imóvel
+  // resolvido pelo GPS. Chamar `centroide` nisso estourava, e a ficha não
+  // abria — justamente no caminho de campo: o fiscal em pé no lote, tocando
+  // "usar minha localização". Sem o desenho não há centro para calcular, mas
+  // tudo o mais da ficha existe; o travessão diz que a coordenada não veio.
+  const c = feicao.geometry ? centroide(feicao.geometry) : null
   document.getElementById('fi-coord').textContent =
-    `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}`
+    c ? `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}` : '—'
 
   subFicha('dados')
 
   const linhaDist = document.getElementById('fi-linha-dist')
-  if (state.pos) {
+  if (state.pos && c) {
     const d = distanciaM(state.pos.lat, state.pos.lon, c.lat, c.lon)
     document.getElementById('fi-dist').textContent = `${Math.round(d)} m de você`
     linhaDist.style.display = ''

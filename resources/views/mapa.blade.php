@@ -1892,8 +1892,42 @@
   </div>
 </div>
 
-{{-- ══════ FILTROS DA LISTA DE DOCUMENTOS ══════
-     Janela, e não menu: são três escolhas que se combinam, e menu é para
+{{-- ══════ VISTORIA GRAVADA — leitura ══════
+     A vistoria tinha formulário de criar e mais nada: depois de gravada virava
+     uma linha na linha do tempo, e as fotos, o relatório e o que o fiscal
+     escreveu sobre cada artigo não podiam mais ser vistos. Num processo o ato
+     precisa poder ser reaberto e conferido, inclusive por quem não o praticou.
+     A janela é só de leitura: corrigir vistoria gravada seria outro assunto —
+     e um que exige trilha de alteração, não um campo editável. --}}
+<div class="modal-bg" id="m-vistoria-ver" onclick="fModal()">
+  <div class="modal modal-flex" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharVistoriaVer()">&#10005;</button>
+
+    <div class="doc-head">
+      <div class="doc-head-top">
+        <span class="cab-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+        </span>
+        <span class="doc-head-doc" id="vv-finalidade">Vistoria</span>
+        <span id="vv-situacao" class="badge bd-in">—</span>
+      </div>
+      <div class="doc-head-meta">
+        <div><span class="doc-head-lbl">Quando</span> <span id="vv-quando">—</span></div>
+        <div><span class="doc-head-lbl">Fiscal</span> <span id="vv-fiscal">—</span></div>
+        <div><span class="doc-head-lbl">Imóvel</span> <span id="vv-imovel">—</span></div>
+      </div>
+    </div>
+
+    <div class="doc-body" id="vv-corpo"></div>
+
+    <div class="doc-foot">
+      <button class="btn" onclick="fecharVistoriaVer()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ FILTROS DA LISTA DE DOCUMENTOS ══════     Janela, e não menu: são três escolhas que se combinam, e menu é para
      escolher uma coisa e sair. --}}
 <div class="modal-bg" id="m-doc-filtros" onclick="fModal()">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">

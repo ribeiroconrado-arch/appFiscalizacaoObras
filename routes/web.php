@@ -108,6 +108,7 @@ Route::middleware('auth')->group(function () {
         // procede no papel, a vistoria diz que o papel bate com o chao.
         Route::get('/lotes/{lote}/protocolos-cadastrais', [VistoriaController::class, 'protocolosCadastrais']);
         Route::get('/lotes/{lote}/historico', [VistoriaController::class, 'historico']);
+        Route::get('/vistorias/{vistoria}', [VistoriaController::class, 'mostrar']);
         Route::post('/lotes/{lote}/vistorias', [VistoriaController::class, 'store']);
         Route::delete('/evidencias/{evidencia}', [VistoriaController::class, 'excluirEvidencia']);
 
@@ -149,6 +150,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/protocolos', [ProtocoloController::class, 'index']);
         Route::post('/protocolos', [ProtocoloController::class, 'store']);
+        Route::get('/protocolos/{protocolo}', [ProtocoloController::class, 'mostrar']);
         Route::patch('/protocolos/{protocolo}', [ProtocoloController::class, 'update']);
 
         // Meu perfil — qualquer usuário autenticado, só sobre si mesmo

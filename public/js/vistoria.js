@@ -37,6 +37,7 @@ const vState = {
   /** @type {Array<string>|null} marcas do rascunho à espera do catálogo */ rascunhoIrreg: null,
   /** @type {boolean} a escolha de artigos veio do rascunho, não da sugestão */ artigosDoRascunho: false,
   /** @type {boolean} a tela está sendo montada — não gravar rascunho ainda */ abrindo: false,
+  /** @type {Object|null} rascunho oferecido e ainda não aceito nem recusado */ rascunhoPendente: null,
   /**
    * Protocolo de desmembramento/unificação que esta vistoria vai atender.
    *
@@ -134,6 +135,20 @@ function renderFachada(f) {
   if (!img) { fig.appendChild(alvo) }
 }
 
+/**
+ * Que janela cada marco abre.
+ *
+ * As três já existiam para documento e protocolo; a da vistoria nasceu com
+ * isto — ver `verVistoria`. O nome da função vai para o HTML, então o mapa é
+ * também a lista do que é clicável: tipo sem entrada aqui fica sem clique, em
+ * vez de abrir um erro no console.
+ */
+const ABRE_EVENTO = {
+  vistoria:  'verVistoria',
+  documento: 'abrirDocumento',
+  protocolo: 'abrirProtocolo',
+}
+
 /** Ícone de cada tipo de evento da linha do tempo. */
 const ICO_EVENTO = {
   vistoria: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/>',
@@ -165,8 +180,18 @@ function renderHistorico(eventos) {
       ? `<div class="lt-itens">${e.itens.map(i => '• ' + esc(i)).join('<br>')}</div>` : ''
     const obs = e.obs ? `<div class="lt-obs">${esc(e.obs)}</div>` : ''
     const det = e.detalhe ? `<div class="lt-det">${esc(e.detalhe)}</div>` : ''
+    // CADA MARCO LEVA AO ATO QUE O PRODUZIU.
+    //
+    // A linha do tempo dizia o que aconteceu e parava aí: para ver o auto
+    // citado era preciso fechar a ficha, ir à aba Documentos e procurar o
+    // número na lista — três passos para chegar a algo que já estava na tela.
+    const abre = ABRE_EVENTO[e.tipo]
+    const clique = (abre && e.id)
+      ? ` onclick="${abre}(${e.id})" role="button" tabindex="0"`
+      : ''
+
     return `
-      <div class="lt-item lt-${esc(e.tipo)}">
+      <div class="lt-item lt-${esc(e.tipo)}${clique ? ' lt-abre' : ''}"${clique}>
         <div class="lt-marca">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round">${ICO_EVENTO[e.tipo] || ''}</svg>
@@ -210,7 +235,9 @@ function _atoCadastral(e) {
 
   return `<div class="lt-ato">
     <span>${proto} — deferido e vistoriado.</span>
-    <button class="btn sm primary" onclick="iniciarAtoCadastral(${a.protocolo.id}, '${esc(a.tipo)}', ${e.lote_id ?? 'null'})">
+    <!-- O marco inteiro abre a vistoria; este botão faz outra coisa, e o
+         clique não pode subir até ele. -->
+    <button class="btn sm primary" onclick="event.stopPropagation();iniciarAtoCadastral(${a.protocolo.id}, '${esc(a.tipo)}', ${e.lote_id ?? 'null'})">
       ${rotulo}</button></div>`
 }
 
@@ -250,7 +277,7 @@ async function novaVistoria() {
   pintarGps()
 
   irPasso('id')
-  restaurarRascunho()
+  oferecerRascunho()
   vState.abrindo = false
   await carregarProtocolosCadastrais(f.properties.id)
   await carregarCatalogo()
@@ -270,6 +297,7 @@ function zerarVistoria() {
   vState.gps = null
   vState.passo = 'id'
   vState.visitados = 0
+  vState.rascunhoPendente = null
 
   const põe = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v } }
   põe('nv-obs', ''); põe('nv-area', ''); põe('nv-area-metodo', '')
@@ -296,6 +324,101 @@ function fecharVistoria() {
   // Quem abriu a vistoria de dentro da ficha volta para o imóvel — e não para
   // o mapa, onde teria de procurar o lote de novo.
   voltarAFicha()
+}
+
+// ── VISTORIA GRAVADA: LEITURA ────────────────────────────────
+
+/**
+ * Abre uma vistoria já gravada, só para ler.
+ *
+ * A ficha do imóvel volta depois de fechar — é de lá que se chega aqui, e
+ * devolver o fiscal ao mapa o obrigaria a procurar o lote de novo.
+ *
+ * @param {number} id
+ */
+async function verVistoria(id) {
+  try {
+    const r = await fetch('/api/vistorias/' + id, { headers: { Accept: 'application/json' } })
+    if (!r.ok) { throw new Error('HTTP ' + r.status) }
+    const { vistoria: v } = await r.json()
+
+    document.getElementById('vv-finalidade').textContent = v.finalidade
+    document.getElementById('vv-quando').textContent = v.quando ?? '—'
+    document.getElementById('vv-fiscal').textContent = v.fiscal ?? '—'
+    document.getElementById('vv-imovel').textContent = v.imovel ?? '—'
+    const sit = document.getElementById('vv-situacao')
+    sit.className = 'badge ' + (v.situacao.classe ?? 'bd-in')
+    sit.textContent = v.situacao.texto
+
+    document.getElementById('vv-corpo').innerHTML = corpoDaVistoria(v)
+    // A ficha fica ABERTA por baixo: fechar esta janela devolve o imóvel sem
+    // uma segunda ida ao servidor.
+    openModal('m-vistoria-ver')
+  } catch (e) {
+    console.error(e)
+    toast('Não foi possível abrir a vistoria', 'err')
+  }
+}
+
+function fecharVistoriaVer() { fModalBtn('m-vistoria-ver') }
+
+/** @param {Object} v @returns {string} */
+function corpoDaVistoria(v) {
+  const secao = (titulo, conteudo) =>
+    conteudo ? `<div class="vv-secao"><h4>${esc(titulo)}</h4>${conteudo}</div>` : ''
+
+  const linhas = pares => pares.length
+    ? `<div class="vv-pares">${pares.map(([r, val]) =>
+        `<div><span class="vv-rot">${esc(r)}</span><span>${esc(val)}</span></div>`).join('')}</div>`
+    : ''
+
+  const constatado = linhas(Object.entries(v.obra ?? {}))
+
+  const acomp = v.acompanhante
+    ? linhas([['Acompanhou', v.acompanhante.nome
+        + (v.acompanhante.qual ? ` (${v.acompanhante.qual})` : '')]])
+    : ''
+
+  const irreg = v.irregularidades.length
+    ? `<ul class="vv-lista">${v.irregularidades.map(i =>
+        `<li><b>${esc(i.codigo)}</b> ${esc(i.descricao)}
+         <span class="vv-grav vv-${esc(i.gravidade)}">${esc(i.gravidade)}</span></li>`).join('')}</ul>`
+    : ''
+
+  const exig = v.exigencias.length
+    ? `<ul class="vv-lista">${v.exigencias.map(e =>
+        `<li>${esc(e.texto)}${e.prazo ? ` <span class="vv-prazo">prazo de ${e.prazo} dias</span>` : ''}</li>`)
+        .join('')}</ul>`
+    : ''
+
+  // O RELATÓRIO NA ORDEM EM QUE FOI ESCRITO. A ordem é conteúdo: uma foto
+  // depois do artigo que ela ilustra diz o que a mesma foto no fim de uma
+  // lista de fotos não diz — por isso não se agrupa por tipo aqui.
+  const relatorio = v.relatorio.length
+    ? v.relatorio.map(i => i.tipo === 'foto'
+        ? `<figure class="vv-foto">
+             <img src="${esc(i.url ?? '')}" alt="${esc(i.titulo || 'Foto da vistoria')}" loading="lazy">
+             ${i.texto ? `<figcaption>${esc(i.texto)}</figcaption>` : ''}
+           </figure>`
+        : `<div class="vv-artigo">
+             <span class="vv-artigo-tipo">${i.tipo === 'parecer' ? 'Parecer' : 'Citação'}</span>
+             <b>${esc(i.titulo ?? '—')}</b>
+             ${i.texto ? `<p>${esc(i.texto)}</p>` : ''}
+           </div>`).join('')
+    : ''
+
+  const obs = v.observacoes ? `<p class="vv-obs">${esc(v.observacoes)}</p>` : ''
+
+  const corpo = secao('Identificação', acomp)
+    + secao('O que foi constatado', constatado)
+    + secao('Irregularidades', irreg)
+    + secao('Relatório', relatorio)
+    + secao('Exigências', exig)
+    + secao('Observações', obs)
+
+  // Uma vistoria pode ser toda "nada a apontar" — e nesse caso a janela tem de
+  // dizer isso, e não abrir vazia como se tivesse falhado ao carregar.
+  return corpo || '<div class="lista-vazia">Vistoria sem apontamentos registrados.</div>'
 }
 
 // ── PASSOS ───────────────────────────────────────────────────
@@ -1201,12 +1324,79 @@ function salvarRascunho() {
   }
 }
 
-/** Só retoma rascunho DO MESMO LOTE — o de outro imóvel seria contaminação. */
-function restaurarRascunho() {
+/**
+ * O rascunho guardado deste imóvel, se houver.
+ * Só o DO MESMO LOTE — o de outro imóvel seria contaminação.
+ *
+ * @returns {Object|null}
+ */
+function lerRascunho() {
   let d
-  try { d = JSON.parse(localStorage.getItem(RASCUNHO) || 'null') } catch (e) { return }
-  if (!d || d.lote !== vState.lote.id) { return }
+  try { d = JSON.parse(localStorage.getItem(RASCUNHO) || 'null') } catch (e) { return null }
+  return (d && d.lote === vState.lote.id) ? d : null
+}
 
+/**
+ * OFERECE o rascunho — não o aplica.
+ *
+ * Antes ele voltava sozinho, e uma vistoria nova nascia com o texto da
+ * anterior dentro. Quem abre "nova vistoria" está pedindo uma folha em branco;
+ * receber o conteúdo de outra visita é, na melhor hipótese, um susto, e na
+ * pior um ato assinado com o que se viu em outro dia.
+ *
+ * A rede de segurança continua inteira — bateria acabando, navegador fechado
+ * sem querer —, só que agora ela é um botão em vez de um efeito. E a cópia
+ * fica em memória: a partir do primeiro toque a tela já grava rascunho por
+ * cima do armazenamento, e sem isto a oferta morreria antes de ser aceita.
+ */
+function oferecerRascunho() {
+  const av = document.getElementById('nv-rascunho')
+  const d = lerRascunho()
+  vState.rascunhoPendente = d
+
+  if (!d) { av.hidden = true; return }
+
+  const quando = d.quando ? new Date(d.quando) : null
+  const rotulo = quando
+    ? `${String(quando.getDate()).padStart(2, '0')}/${String(quando.getMonth() + 1).padStart(2, '0')}`
+      + ` às ${String(quando.getHours()).padStart(2, '0')}:${String(quando.getMinutes()).padStart(2, '0')}`
+    : 'anterior'
+
+  av.hidden = false
+  av.innerHTML = `
+    <span>Há um rascunho deste imóvel de ${esc(rotulo)} — as fotos não voltam.</span>
+    <span class="vs-aviso-acoes">
+      <button type="button" class="btn sm" onclick="retomarRascunho()">Retomar</button>
+      <button type="button" class="btn sm" onclick="descartarRascunho()">Começar em branco</button>
+    </span>`
+}
+
+/** Aceita a oferta: o rascunho entra na tela. */
+function retomarRascunho() {
+  const d = vState.rascunhoPendente
+  if (!d) { return }
+
+  vState.rascunhoPendente = null
+  aplicarRascunho(d)
+  // O catálogo já chegou (a oferta só existe com a tela montada), então as
+  // marcas do checklist se aplicam agora — em `renderChecklist`, que é quem
+  // sabe fazê-lo e é o mesmo caminho de quando o catálogo chega depois.
+  renderChecklist()
+
+  const av = document.getElementById('nv-rascunho')
+  av.hidden = false
+  av.textContent = 'Rascunho recuperado — as fotos precisam ser refeitas'
+}
+
+/** Recusa a oferta: some da tela e do aparelho. */
+function descartarRascunho() {
+  vState.rascunhoPendente = null
+  limparRascunho()
+  document.getElementById('nv-rascunho').hidden = true
+}
+
+/** Põe na tela o que o rascunho guardou. @param {Object} d */
+function aplicarRascunho(d) {
   const põe = (id, valor) => { const e = document.getElementById(id); if (e && valor) { e.value = valor } }
   const c = d.campos ?? {}
   põe('nv-data', c.data); põe('nv-hora', c.hora); põe('nv-situacao', c.situacao)
@@ -1226,11 +1416,6 @@ function restaurarRascunho() {
   document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
 
   pintarOpcoes(); pintarFinalidade(); pintarGps(); renderRelatorio()
-  // O aviso é honesto sobre o que NÃO voltou: foto não cabe no armazenamento
-  // do navegador, e deixar isso implícito faria o fiscal gravar sem as fotos.
-  const av = document.getElementById('nv-rascunho')
-  av.hidden = false
-  av.textContent = 'Rascunho recuperado — as fotos precisam ser refeitas'
   irPasso(d.passo ?? 'id')
 }
 
