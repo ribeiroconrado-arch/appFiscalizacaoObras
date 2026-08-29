@@ -427,8 +427,13 @@
            inteira o tempo todo se ficassem expostos. --}}
       <button type="button" class="bs-mais" id="bs-mais" onclick="alternarFiltrosAvancados()"
               title="Mais filtros" aria-expanded="false">
+        {{-- O MESMO funil do botão "Filtros" da lista de documentos. Aqui era
+             um hambúrguer — três linhas iguais —, que no resto do mundo quer
+             dizer "menu", não "filtrar". Duas telas do mesmo sistema pedindo a
+             mesma coisa com desenhos diferentes obrigam a reaprender o ícone a
+             cada aba. --}}
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+             stroke-width="2" stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
       </button>
     </div>
 
