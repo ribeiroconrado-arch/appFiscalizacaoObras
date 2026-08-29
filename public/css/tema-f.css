@@ -2274,3 +2274,39 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vv-artigo p{margin:3px 0 0;color:var(--tx2);line-height:1.5}
 
 .vv-obs{margin:0;font-size:12.5px;line-height:1.55;color:var(--tx2);white-space:pre-wrap}
+
+/* ══════════════════════════════════════════════
+   JANELA DE TRABALHO — protocolo e ordem de serviço
+   ══════════════════════════════════════════════
+   As mesmas dimensões da vistoria e da ficha, a pedido. Estas duas eram as
+   últimas com tamanho próprio: passar da ficha do imóvel para a do protocolo
+   fazia a caixa encolher no meio do caminho, como se fosse outro sistema.
+
+   A receita é a da ficha: coluna com cabeçalho preso, miolo rolando e ações
+   embaixo. `min-height:0` no miolo é obrigatório — sem ele o item flex se
+   recusa a encolher abaixo do próprio conteúdo e a rolagem não acontece. */
+.modal.modal-trab{
+  display:flex;flex-direction:column;
+  max-width:var(--modal-trabalho);
+  height:var(--modal-trabalho-alt);max-height:calc(100vh - 28px);
+  overflow:hidden;
+}
+.modal-trab > .fi-cabeca,.modal-trab > .sub{flex-shrink:0}
+.modal-trab .mt-corpo{flex:1;min-height:0;overflow-y:auto;
+  /* respiro para a barra de rolagem não encostar no texto */
+  padding-right:2px}
+.modal-trab > .btn-row{flex-shrink:0;margin:12px 0 0;padding-top:12px;
+  border-top:1.5px solid var(--bord)}
+
+/* A vistoria entrou na lista de documentos, e traz situações próprias: a barra
+   lateral precisa conhecê-las, senão a linha de vistoria fica sem a marca que
+   todas as outras têm. Verde é o desfecho da maioria; vermelho é o que gera
+   trabalho depois. */
+.tabela-lista tbody tr.st-regular   td:first-child,
+.doc-card.st-regular{border-left-color:#2E7D32}
+.tabela-lista tbody tr.st-irregular td:first-child,
+.doc-card.st-irregular{border-left-color:var(--red)}
+.tabela-lista tbody tr.st-em_acompanhamento td:first-child,
+.doc-card.st-em_acompanhamento{border-left-color:var(--gold)}
+.tabela-lista tbody tr.st-nao_localizado td:first-child,
+.doc-card.st-nao_localizado{border-left-color:var(--tx3)}

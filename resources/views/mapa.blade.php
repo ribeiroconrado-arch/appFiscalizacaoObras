@@ -1867,7 +1867,7 @@
 
 {{-- ══════ FICHA DA ORDEM DE SERVIÇO ══════ --}}
 <div class="modal-bg" id="m-os" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()">
+  <div class="modal modal-trab" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fModalBtn('m-os')">&#10005;</button>
     <h3 class="fi-cabeca">
       <span class="cab-ico">
@@ -1884,11 +1884,13 @@
     </h3>
     <div class="sub" id="osf-objeto">—</div>
 
-    <div class="sec-title">A determinação</div>
-    <div id="osf-corpo"></div>
+    <div class="mt-corpo">
+      <div class="sec-title">A determinação</div>
+      <div id="osf-corpo"></div>
 
-    <div id="osf-ciencia"></div>
-    <div id="osf-tramitacao"></div>
+      <div id="osf-ciencia"></div>
+      <div id="osf-tramitacao"></div>
+    </div>
   </div>
 </div>
 
@@ -1943,10 +1945,14 @@
     <div class="field">
       <label for="doc-f-tipo">Tipo de peça</label>
       <select id="doc-f-tipo">
-        <option value="">Todos os tipos</option>
+        <option value="">Tudo — peças e vistorias</option>
         @foreach (\App\Models\Documento::TIPOS as $valor => $t)
           <option value="{{ $valor }}">{{ $t[0] }}</option>
         @endforeach
+        {{-- Não é um tipo de documento: é o recorte que mostra só os atos de
+             campo. Fica no mesmo seletor porque, para quem usa, os dois estão
+             na mesma lista e o filtro é um só. --}}
+        <option value="vistoria">Vistorias</option>
       </select>
     </div>
 
@@ -1980,7 +1986,10 @@
 
 {{-- FICHA DO PROTOCOLO --}}
 <div class="modal-bg" id="m-proto" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()">
+  {{-- `modal-trab`: a MESMA janela das telas de trabalho (ficha, vistoria,
+       peças). Passar de uma para a outra e ver a caixa mudar de tamanho no meio
+       do caminho parece troca de sistema. --}}
+  <div class="modal modal-trab" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fModalBtn('m-proto')">&#10005;</button>
     {{-- Mesmo cabeçalho das demais fichas do sistema: selo com o ícone,
          nome da peça, e o número em monoespaçada ao lado. Era um <h3> solto
@@ -1999,6 +2008,7 @@
     </h3>
     <div class="sub" id="pf-tipo">—</div>
 
+    <div class="mt-corpo">
     <div class="sec-title">Dados do requerimento</div>
     <div id="pf-corpo"></div>
     {{-- Só em protocolo de desmembramento/unificação já deferido e ainda sem
@@ -2022,6 +2032,12 @@
         <label for="pf-parecer">Parecer do setor</label>
         <textarea id="pf-parecer" rows="4" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical" placeholder="Fundamentação da decisão…"></textarea>
       </div>
+    @endif
+    </div>{{-- /mt-corpo --}}
+
+    @if (auth()->user()->canEdit())
+      {{-- Os botões saem da área que rola e ficam presos embaixo: numa janela
+           alta, ação no meio do vazio parece que a tela quebrou. --}}
       <div class="btn-row">
         <button class="btn" onclick="assumirProtocolo()">Assumir</button>
         <button class="btn primary" onclick="concluirProtocolo()">Salvar tramitação</button>

@@ -53,6 +53,66 @@ async function carregarDocumentos() {
 }
 
 /**
+ * A LISTA MISTURA PEÇAS E VISTORIAS, e cada linha abre a sua janela.
+ *
+ * As duas respondem à mesma pergunta — "o que foi feito neste imóvel?" — e
+ * viviam em telas separadas, obrigando a procurar duas vezes. O que não se faz
+ * é tratá-las como iguais: vistoria não tem autuado nem prazo de defesa, e as
+ * colunas saem com travessão em vez de um valor inventado para preencher.
+ *
+ * @param {Object} d @returns {string} o onclick da linha
+ */
+/**
+ * O enquadramento da linha.
+ *
+ * "Sem fundamentação" em vermelho é defeito de PEÇA: auto sem artigo não
+ * sustenta sanção, e descobrir isso na hora de lavrar é tarde. Numa vistoria o
+ * mesmo vazio é normal — a maioria delas não constata irregularidade nenhuma —,
+ * e pintá-lo de vermelho ensinaria o fiscal a ignorar o alerta justamente onde
+ * ele importa.
+ *
+ * @param {Object} d @returns {string}
+ */
+function fundamentacaoDe(d) {
+  if (d.artigos) {
+    return `${d.artigos} artigo(s)` + (d.valor_upf ? ` · ${fmtNum(d.valor_upf)} UPF` : '')
+  }
+  return d.registro === 'vistoria'
+    ? '<span class="tl-fraco">sem artigo citado</span>'
+    : '<span class="tl-falta">sem fundamentação</span>'
+}
+
+function aberturaDe(d) {
+  return d.registro === 'vistoria' ? `verVistoria(${d.id})` : `abrirDocumento(${d.id})`
+}
+
+/** @param {Object} d @returns {string} o onclick do ⋮ */
+function menuDe(d) {
+  return d.registro === 'vistoria'
+    ? `abrirOpcoesVistoria(event, ${d.id})`
+    : `abrirOpcoesDoc(event, ${d.id})`
+}
+
+/**
+ * O menu da linha de vistoria.
+ *
+ * Uma opção só, e é a honesta: vistoria gravada se lê, não se altera. Corrigir
+ * uma exigiria trilha de alteração — quem mudou, quando e o quê —, porque ela
+ * já fundamentou o que veio depois. Anular ou reimprimir são coisas de peça.
+ *
+ * @param {Event} ev @param {number} id
+ */
+function abrirOpcoesVistoria(ev, id) {
+  abrirMenuNovo(ev, [{
+    rotulo: 'Abrir a vistoria',
+    obs: 'O relatório como foi escrito, com fotos e artigos.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>`,
+    acao: () => verVistoria(id),
+  }])
+}
+
+/**
  * O cartão em TRÊS níveis, no lugar de quatro linhas de peso igual.
  *
  * Antes, imóvel, autuado, lei e artigos saíam um sob o outro com o mesmo
@@ -91,24 +151,27 @@ function renderDocumentos() {
  */
 function tabelaDocumentos() {
   const linhas = dState.lista.map(d => {
-    const fund = d.artigos
-      ? `${d.artigos} artigo(s)` + (d.valor_upf ? ` · ${fmtNum(d.valor_upf)} UPF` : '')
-      : '<span class="tl-falta">sem fundamentação</span>'
+    const fund = fundamentacaoDe(d)
 
+    // SEM ÍCONE NA TABELA, a pedido. Ele faz falta no cartão, onde cada item é
+    // um bloco solto e o desenho é o que diz de que peça se trata antes de ler.
+    // Numa tabela a coluna já diz isso, e o ícone repetido vinte vezes na
+    // margem só some com o espaço do número.
     return `
-      <tr class="st-${esc(d.status.valor ?? '')}" onclick="abrirDocumento(${d.id})">
+      <tr class="st-${esc(d.status.valor ?? '')}" onclick="${esc(aberturaDe(d))}">
         <td>
-          <span class="tl-num">
-            <span class="tl-num-svg">${ICO_TIPO_DOC[d.tipo] || ICO_TIPO_DOC.padrao}</span>
-            <span class="proto-badge">${esc(d.numero)}</span>
-          </span>
+          <span class="tl-num">${d.numero
+            ? `<span class="proto-badge">${esc(d.numero)}</span>`
+            : `<span class="tl-forte">Vistoria</span>`}</span>
           <span class="tl-sub">${esc(d.tipo_rotulo)}</span>
         </td>
         <td class="tl-forte" title="${esc(d.autuado)}">${esc(d.autuado)}</td>
         <td class="tl-fraco" title="${esc(d.imovel)}">${esc(d.imovel)}</td>
         <td class="tl-fraco">
           ${fund}
-          <span class="tl-sub">${esc(d.lei || 'sem legislação')}</span>
+          ${d.lei && d.lei !== '—'
+            ? `<span class="tl-sub">${esc(d.lei)}</span>`
+            : (d.registro === 'vistoria' ? '' : '<span class="tl-sub">sem legislação</span>')}
         </td>
         <td class="tl-fraco">${esc(d.data)}</td>
         <td>
@@ -119,7 +182,7 @@ function tabelaDocumentos() {
         </td>
         <td class="tl-acao">
           <button type="button" class="card-opcoes-btn" title="Opções"
-                  onclick="abrirOpcoesDoc(event, ${d.id})">${ICO_TRES_PONTOS}</button>
+                  onclick="${esc(menuDe(d))}">${ICO_TRES_PONTOS}</button>
         </td>
       </tr>`
   }).join('')
@@ -144,30 +207,26 @@ function cartoesDocumentos() {
       d.prazo ? `<span class="badge ${esc(d.prazo.classe)}">${esc(d.prazo.texto)}</span>` : '',
     ].join('')
 
-    // Rodapé: o que se confere DEPOIS de achar a peça. Documento sem artigo
-    // não sustenta sanção, e mostrar isso na lista evita a descoberta tardia,
-    // na hora de lavrar.
-    const rodape = d.artigos
-      ? `${d.artigos} artigo(s)` + (d.valor_upf ? ` · ${fmtNum(d.valor_upf)} UPF` : '')
-      : '<span style="color:var(--red)">sem fundamentação</span>'
+    const rodape = fundamentacaoDe(d)
 
     return `
-      <div class="mob-card doc-card st-${esc(d.status.valor ?? '')}" onclick="abrirDocumento(${d.id})">
+      <div class="mob-card doc-card st-${esc(d.status.valor ?? '')}" onclick="${esc(aberturaDe(d))}">
         <div class="doc-card-topo">
           <span class="doc-ico">${ICO_TIPO_DOC[d.tipo] || ICO_TIPO_DOC.padrao}</span>
           <div class="doc-ident">
             <div class="doc-l1">
-              <span class="proto-badge">${esc(d.numero)}</span>
+              ${d.numero ? `<span class="proto-badge">${esc(d.numero)}</span>` : ''}
               <span class="doc-tipo">${esc(d.tipo_rotulo)}</span>
             </div>
-            <div class="doc-autuado">${esc(d.autuado)}</div>
+            ${d.autuado && d.autuado !== '—'
+              ? `<div class="doc-autuado">${esc(d.autuado)}</div>` : ''}
             <div class="doc-imovel">${esc(d.imovel)}</div>
           </div>
           <div class="mc-acoes">
             ${tags}
             <div class="df-opcoes card-opcoes">
               <button type="button" class="card-opcoes-btn" title="Opções"
-                      onclick="abrirOpcoesDoc(event, ${d.id})">
+                      onclick="${esc(menuDe(d))}">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
               </button>
@@ -175,7 +234,9 @@ function cartoesDocumentos() {
           </div>
         </div>
         <div class="doc-rodape">
-          <span class="doc-lei">${esc(d.lei || 'sem legislação')}</span>
+          ${d.lei && d.lei !== '—'
+            ? `<span class="doc-lei">${esc(d.lei)}</span>`
+            : (d.registro === 'vistoria' ? '' : '<span class="doc-lei">sem legislação</span>')}
           <span class="doc-art">${rodape}</span>
           <span class="doc-data">${esc(d.data)}</span>
         </div>

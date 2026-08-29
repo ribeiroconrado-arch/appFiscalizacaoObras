@@ -30,7 +30,10 @@ class DocumentoController extends Controller
     public function index(Request $request): JsonResponse
     {
         $d = $request->validate([
-            'tipo'   => ['nullable', Rule::in(array_keys(Documento::TIPOS))],
+            // "vistoria" não é um tipo de documento — é o recorte que mostra
+            // só os atos de campo. Entra aqui porque, para quem usa, os dois
+            // estão na mesma lista e o filtro é um só.
+            'tipo'   => ['nullable', Rule::in([...array_keys(Documento::TIPOS), 'vistoria'])],
             'status' => ['nullable', Rule::in(['rascunho', 'lavrado', 'atendido', 'anulado', 'cancelado'])],
             'agente' => ['nullable', 'in:eu,todos'],
             'busca'  => ['nullable', 'string', 'max:80'],
@@ -41,7 +44,7 @@ class DocumentoController extends Controller
             ->withCount('artigos')
             ->latest('created_at');
 
-        if (! empty($d['tipo']))   { $q->where('tipo', $d['tipo']); }
+        if (! empty($d['tipo']) && $d['tipo'] !== 'vistoria') { $q->where('tipo', $d['tipo']); }
         if (! empty($d['status'])) { $q->where('status', $d['status']); }
         if (($d['agente'] ?? 'eu') === 'eu') { $q->where('agente_id', $request->user()->id); }
 
@@ -58,7 +61,14 @@ class DocumentoController extends Controller
 
         $usuario = $request->user();
 
-        $itens = $q->limit(300)->get()->map(function (Documento $doc) use ($usuario) {
+        // Filtro de TIPO específico de documento, ou de STATUS de documento,
+        // exclui os documentos? Não: exclui as VISTORIAS. "Lavrado" e
+        // "anulado" são estados de peça, e vistoria não os tem — mostrá-la sob
+        // esse filtro seria dizer que ela está num estado que não existe.
+        $soVistorias = ($d['tipo'] ?? '') === 'vistoria';
+        $documentos = $soVistorias ? collect() : $q->limit(300)->get();
+
+        $itens = $documentos->map(function (Documento $doc) use ($usuario) {
             [$stTxt, $stCls] = $doc->statusBadge();
             $prazo = $doc->situacaoPrazo();
 
@@ -84,10 +94,82 @@ class DocumentoController extends Controller
                 // O cartão da lista também tem menu de opções, como no
                 // AppPOSTURAS: imprimir ou anular sem precisar abrir a ficha.
                 'opcoes'      => $doc->opcoesPara($usuario),
+                // De que registro esta linha veio. A lista mistura peças e
+                // atos de campo, e a tela precisa saber qual janela abrir.
+                'registro'    => 'documento',
+                '_ordem'      => ($doc->data_lavratura ?? $doc->created_at)?->format('Y-m-d H:i:s') ?? '',
             ];
         });
 
+        $itens = $itens
+            ->concat(empty($d['status']) ? $this->vistoriasNaLista($request, $d) : collect())
+            // Uma ordem só para os dois: quem abre a lista quer a última coisa
+            // que aconteceu no topo, seja ela auto ou vistoria.
+            ->sortByDesc('_ordem')
+            ->values()
+            ->map(function (array $i) { unset($i['_ordem']); return $i; });
+
         return response()->json(['documentos' => $itens, 'total' => $itens->count()]);
+    }
+
+    /**
+     * As VISTORIAS na lista de documentos, no mesmo formato de linha.
+     *
+     * Elas aparecem ao lado das peças porque é a mesma pergunta — "o que foi
+     * feito neste imóvel?" — e separá-las em duas telas obrigava a procurar
+     * duas vezes. O que não se faz é forçá-las no molde da peça: vistoria não
+     * tem AUTUADO (ninguém é autuado por uma visita) nem PRAZO de defesa, e
+     * inventar um valor para preencher a coluna seria pior que o travessão.
+     *
+     * @param  array<string, mixed> $d filtros já validados
+     * @return \Illuminate\Support\Collection<int, array>
+     */
+    private function vistoriasNaLista(Request $request, array $d)
+    {
+        $tipo = $d['tipo'] ?? '';
+        if ($tipo !== '' && $tipo !== 'vistoria') { return collect(); }
+
+        $q = Vistoria::query()
+            ->with(['lote:id,bairro,quadra,numero_lote', 'fiscal:id,name'])
+            ->withCount('artigos')
+            ->latest('data_hora');
+
+        if (($d['agente'] ?? 'eu') === 'eu') { $q->where('fiscal_id', $request->user()->id); }
+
+        if ($texto = $d['busca'] ?? null) {
+            $q->whereHas('lote', fn ($l) => $l
+                ->where('quadra', 'like', "%{$texto}%")
+                ->orWhere('numero_lote', 'like', "%{$texto}%")
+                ->orWhere('bairro', 'like', "%{$texto}%"));
+        }
+
+        return $q->limit(300)->get()->map(fn (Vistoria $v) => [
+            'id'          => $v->id,
+            'registro'    => 'vistoria',
+            'tipo'        => 'vistoria',
+            'tipo_rotulo' => $v->finalidadeRotulo(),
+            // Vistoria não é numerada no sistema: o que a identifica na lista é
+            // a finalidade e a data. Mostrar o id interno como se fosse número
+            // de peça faria parecer que existe uma numeração que não existe.
+            'numero'      => null,
+            'data'        => $v->data_hora?->format('d/m/Y'),
+            'status'      => [
+                'valor'  => $v->situacao,
+                'texto'  => $v->situacaoRotulo(),
+                'classe' => $v->situacaoBadge(),
+            ],
+            'prazo'       => null,
+            'imovel'      => $v->lote
+                ? sprintf('Quadra %s · Lote %s — %s', $v->lote->quadra ?? '—', $v->lote->numero_lote ?? '—', $v->lote->bairro)
+                : '—',
+            'autuado'     => '—',
+            'lei'         => '—',
+            'artigos'     => $v->artigos_count,
+            'valor_upf'   => null,
+            'fiscal'      => $v->fiscal?->name,
+            'opcoes'      => [],
+            '_ordem'      => $v->data_hora?->format('Y-m-d H:i:s') ?? '',
+        ]);
     }
 
     /** GET /api/documentos/opcoes — dados para montar o formulário. */
