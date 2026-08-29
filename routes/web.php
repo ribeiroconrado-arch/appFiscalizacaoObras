@@ -176,6 +176,13 @@ Route::middleware('auth')->group(function () {
     // Fora do prefixo /api: é download de arquivo, não JSON.
     Route::get('/evidencias/{evidencia}/arquivo', [VistoriaController::class, 'arquivo'])
         ->name('evidencia.arquivo');
+
+    // O relatório de vistoria em papel, nos dois destinos do documento: a
+    // janela de impressão do navegador e o PDF do dompdf.
+    Route::get('/vistorias/{vistoria}/impressao', [VistoriaController::class, 'impressao'])
+        ->name('vistoria.impressao');
+    Route::get('/vistorias/{vistoria}/pdf', [VistoriaController::class, 'pdf'])
+        ->name('vistoria.pdf');
     Route::get('/documentos/{documento}/pdf', [DocumentoController::class, 'pdf'])
         ->name('documento.pdf');
     // Página HTML que se imprime sozinha — é o caminho da bobina 80mm, que o

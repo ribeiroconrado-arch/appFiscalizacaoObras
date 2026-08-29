@@ -521,8 +521,30 @@ async function sugerirDaUltimaVistoria(loteId) {
     const ultima = dados.vistorias?.[0]
     if (!ultima) { caixa.innerHTML = '<div class="lista-vazia">Sem vistoria neste imóvel — o documento nascerá sem vínculo.</div>'; return }
 
-    fdState.vistoriaId = ultima.id
-    const r = await fetch(`/api/vistorias/${ultima.id}/sugestao`, { headers: { Accept: 'application/json' } })
+    await sugerirDaVistoria(ultima.id)
+  } catch (e) {
+    console.error(e)
+    caixa.innerHTML = '<div class="lista-vazia">Não foi possível buscar a sugestão de artigos.</div>'
+  }
+}
+
+/**
+ * A SUGESTÃO DE UMA VISTORIA ESCOLHIDA — e o vínculo com ela.
+ *
+ * Era o miolo de `sugerirDaUltimaVistoria`, que só sabia trabalhar com a
+ * última vistoria do imóvel. Separado, serve também a quem vem DA vistoria:
+ * gravou uma constatação irregular e pediu o auto ali mesmo.
+ *
+ * @param {number} vistoriaId
+ */
+async function sugerirDaVistoria(vistoriaId) {
+  const caixa = document.getElementById('nd-sugestao')
+  caixa.innerHTML = ''
+  if (!vistoriaId) { return }
+
+  try {
+    fdState.vistoriaId = vistoriaId
+    const r = await fetch(`/api/vistorias/${vistoriaId}/sugestao`, { headers: { Accept: 'application/json' } })
     const s = await r.json()
 
     // A área e as exigências vêm ANTES do aviso de artigo faltando: mesmo sem
@@ -530,7 +552,15 @@ async function sugerirDaUltimaVistoria(loteId) {
     // por causa de um `return` seria jogar fora o trabalho de campo.
     aproveitarDaVistoria(s)
 
-    if (s.aviso) { caixa.innerHTML = `<div class="aviso-legal">${esc(s.aviso)}</div>`; return }
+    // O NÚMERO DA VISTORIA À VISTA. Sem ele, um vínculo errado — a peça presa
+    // à visita de outro dia — só apareceria muito depois, na defesa.
+    const de = [s.vistoria?.numero, s.vistoria?.data_hora].filter(Boolean).join(', de ')
+
+    if (s.aviso) {
+      caixa.innerHTML = `<div class="aviso-legal">${esc(s.aviso)}</div>`
+      if (de) { caixa.innerHTML += `<div class="nd-vinculo">Vinculado à ${esc(de)}</div>` }
+      return
+    }
 
     fdState.artigos = s.artigos.map(a => a.id)
     if (s.artigos[0]?.legislacao_id) {
@@ -539,9 +569,8 @@ async function sugerirDaUltimaVistoria(loteId) {
     }
     const areaDita = s.vistoria?.area_rotulo
       ? ` Área aferida: <b>${esc(s.vistoria.area_rotulo)}</b>.` : ''
-    caixa.innerHTML = `<div style="font-size:12.5px;color:var(--tx2);padding:9px 12px;
-        background:var(--gl);border:1.5px solid var(--gm);border-radius:var(--r)">
-        Vistoria de <b>${esc(ultima.data_hora)}</b> · ${s.irregularidades.length} irregularidade(s).
+    caixa.innerHTML = `<div class="nd-vinculo-ok">
+        Vinculado à <b>${esc(de || 'vistoria')}</b> · ${s.irregularidades.length} irregularidade(s).
         <b>${s.artigos.length} artigo(s)</b> sugeridos automaticamente.${areaDita}</div>`
   } catch (e) {
     console.error(e)

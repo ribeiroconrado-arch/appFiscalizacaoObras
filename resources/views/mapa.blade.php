@@ -1903,8 +1903,37 @@
   </div>
 </div>
 
-{{-- ══════ VISTORIA GRAVADA — leitura ══════
-     A vistoria tinha formulário de criar e mais nada: depois de gravada virava
+{{-- ══════ O ATO QUE NASCE DA VISTORIA ══════
+     Aparece logo depois de gravar uma vistoria IRREGULAR, no único momento em
+     que o fiscal ainda está com a obra na cabeça. Antes o caminho terminava na
+     gravação: o painel cobrava "vistorias irregulares sem documento" e não
+     havia por onde fechar. Vistoria regular não abre esta janela — nada
+     aconteceu, e está certo. --}}
+<div class="modal-bg" id="m-vist-ato" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <button class="modal-x" onclick="fModalBtn('m-vist-ato')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+      </span>
+      <span id="vato-titulo">Vistoria registrada</span>
+    </h3>
+    <div class="sub">A constatação é de irregularidade. A peça nasce vinculada a esta
+      vistoria, com os artigos, a área aferida e as exigências que você registrou em campo.</div>
+
+    <div class="vato-lista" id="vato-lista"></div>
+
+    <div class="btn-row">
+      <div style="flex:1"></div>
+      {{-- "Agora não" e não "Cancelar": não há nada a cancelar — a vistoria já
+           está gravada. O que se adia é o ato. --}}
+      <button class="btn" onclick="fModalBtn('m-vist-ato')">Agora não</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ VISTORIA GRAVADA — leitura ══════     A vistoria tinha formulário de criar e mais nada: depois de gravada virava
      uma linha na linha do tempo, e as fotos, o relatório e o que o fiscal
      escreveu sobre cada artigo não podiam mais ser vistos. Num processo o ato
      precisa poder ser reaberto e conferido, inclusive por quem não o praticou.
@@ -1921,6 +1950,10 @@
                stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
         </span>
         <span class="doc-head-doc" id="vv-finalidade">Vistoria</span>
+        <span class="doc-head-num-wrap">
+          <span class="doc-head-lbl">Nº</span>
+          <span id="vv-numero" class="proto-badge doc-head-num">—</span>
+        </span>
         <span id="vv-situacao" class="badge bd-in">—</span>
       </div>
       <div class="doc-head-meta">
@@ -1934,6 +1967,13 @@
 
     <div class="doc-foot">
       <button class="btn" onclick="fecharVistoriaVer()">Fechar</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="imprimirVistoria()">Imprimir</button>
+      {{-- O caminho de quem volta ao caso dias depois. A peça nasce presa a
+           ESTA vistoria, e não à última do imóvel. --}}
+      @if (auth()->user()->podeLavrarDocumento())
+        <button class="btn primary" onclick="documentoDaVistoria(event)">Gerar documento</button>
+      @endif
     </div>
   </div>
 </div>

@@ -2323,3 +2323,61 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .doc-card.st-em_acompanhamento{border-left-color:var(--gold)}
 .tabela-lista tbody tr.st-nao_localizado td:first-child,
 .doc-card.st-nao_localizado{border-left-color:var(--tx3)}
+
+/* ══════════════════════════════════════════════
+   O ATO QUE NASCE DA VISTORIA
+   ══════════════════════════════════════════════ */
+
+/* As peças na janela da oferta. Mesmo desenho do menu "Novo documento" — ícone
+   no selo, nome e a frase que diz para que serve —, mas em linha cheia: aqui
+   não é um menu de canto, é a pergunta principal da tela. */
+.vato-lista{display:flex;flex-direction:column;gap:6px;margin:12px 0 4px}
+.vato-op{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;
+  padding:10px 12px;border:1.5px solid var(--bord);border-radius:var(--r);
+  background:var(--sur);cursor:pointer;transition:border-color .13s,background .13s}
+.vato-op:hover{border-color:var(--gm);background:var(--gl)}
+/* O traço separa o que AVISA do que SANCIONA — a mesma divisão do menu. */
+.vato-op.vato-sep{margin-top:8px;border-top-width:1.5px}
+.vato-ico{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--gl);
+  color:var(--gd);display:flex;align-items:center;justify-content:center}
+.vato-ico svg{width:16px;height:16px}
+.vato-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.vato-nome{font-family:'Manrope',sans-serif;font-size:13.5px;font-weight:700;color:var(--tx)}
+.vato-obs{font-size:11.5px;color:var(--tx2);line-height:1.35}
+
+/* ── o relatório na tela ── */
+
+/* O vazio DITO: sai do peso do dado apurado sem sair da página. Num processo,
+   "não informado" e "não perguntado" são coisas diferentes. */
+.vv-vazio{color:var(--tx3);font-style:italic}
+
+/* Anexo que não é imagem — PDF de laudo, projeto ou alvará. Antes ia para
+   dentro de um <img> e virava retângulo quebrado. */
+.vv-arquivo{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;
+  padding:10px 12px;border:1.5px dashed var(--bord);border-radius:var(--r);
+  text-decoration:none;color:inherit;transition:border-color .13s,background .13s}
+.vv-arquivo:hover{border-color:var(--gm);background:var(--gl)}
+.vv-arquivo-ico{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--blt);
+  color:var(--gd);display:flex;align-items:center;justify-content:center}
+.vv-arquivo-ico svg{width:16px;height:16px}
+.vv-arquivo-txt{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:12.5px}
+.vv-arquivo-obs{color:var(--tx2)}
+.vv-arquivo-abrir{font-size:11px;color:var(--gd);font-weight:700}
+
+/* As peças geradas: cada uma abre a sua ficha. */
+.vv-docs{display:flex;flex-direction:column;gap:6px}
+.vv-doc{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  padding:8px 10px;border:1.5px solid var(--bord);border-radius:var(--r);
+  background:var(--sur);cursor:pointer;font-size:12.5px;
+  transition:border-color .13s,background .13s}
+.vv-doc:hover{border-color:var(--gm);background:var(--gl)}
+.vv-doc-tipo{font-weight:700;color:var(--tx)}
+.vv-doc-meta{margin-left:auto;color:var(--tx3);font-size:11.5px;white-space:nowrap}
+
+/* ── o vínculo do formulário de documento ── */
+
+/* Diz A QUAL vistoria a peça se prendeu. Sem isso, um vínculo errado — a peça
+   presa à visita de outro dia — só apareceria na defesa. */
+.nd-vinculo-ok{font-size:12.5px;color:var(--tx2);padding:9px 12px;
+  background:var(--gl);border:1.5px solid var(--gm);border-radius:var(--r)}
+.nd-vinculo{margin-top:6px;font-size:12px;color:var(--tx2)}

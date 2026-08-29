@@ -38,6 +38,8 @@ const vState = {
   /** @type {boolean} a escolha de artigos veio do rascunho, não da sugestão */ artigosDoRascunho: false,
   /** @type {boolean} a tela está sendo montada — não gravar rascunho ainda */ abrindo: false,
   /** @type {Object|null} rascunho oferecido e ainda não aceito nem recusado */ rascunhoPendente: null,
+  /** @type {Object|null} a vistoria aberta na janela de leitura */ lendo: null,
+  /** @type {Array<Object>} as peças oferecidas depois de gravar */ opcoesAto: [],
   /**
    * Protocolo de desmembramento/unificação que esta vistoria vai atender.
    *
@@ -367,6 +369,10 @@ async function verVistoria(id) {
     if (!r.ok) { throw new Error('HTTP ' + r.status) }
     const { vistoria: v } = await r.json()
 
+    // Guardada para o rodapé: gerar documento e imprimir agem sobre ela.
+    vState.lendo = v
+
+    document.getElementById('vv-numero').textContent = v.numero ?? '—'
     document.getElementById('vv-finalidade').textContent = v.finalidade
     document.getElementById('vv-quando').textContent = v.quando ?? '—'
     document.getElementById('vv-fiscal').textContent = v.fiscal ?? '—'
@@ -387,22 +393,137 @@ async function verVistoria(id) {
 
 function fecharVistoriaVer() { fModalBtn('m-vistoria-ver') }
 
-/** @param {Object} v @returns {string} */
+/** Abre o relatório em A4 na janela de impressão. @see VistoriaImpressao */
+function imprimirVistoria() {
+  if (!vState.lendo) { return }
+  // Aba nova, e não fetch: é uma página que se manda para a impressora.
+  window.open('/vistorias/' + vState.lendo.id + '/impressao', '_blank')
+}
+
+/** O botão do rodapé da janela de leitura. @param {Event} ev */
+function documentoDaVistoria(ev) {
+  if (!vState.lendo) { return }
+  menuDocumentoDaVistoria(ev, vState.lendo)
+}
+
+/**
+ * AS PEÇAS QUE PODEM NASCER DESTA VISTORIA.
+ *
+ * Sempre as mesmas do botão "Novo documento" — mesmos ícones, mesmas
+ * descrições, mesma ordem (os que AVISAM acima, os que SANCIONAM abaixo).
+ * Montar a lista num lugar só é o que impede as duas telas de divergirem no
+ * dia em que um tipo novo entrar.
+ *
+ * @param {Object} v a vistoria de origem
+ * @returns {Promise<Array<Object>>}
+ */
+async function opcoesDeAto(v) {
+  const o = await carregarOpcoes()
+
+  return o.tipos.filter(t => t.valor !== 'vistoria').map(t => ({
+    valor: t.valor,
+    rotulo: t.rotulo,
+    obs: OBS_TIPO_DOC[t.valor] || '',
+    icone: ICO_TIPO_DOC[t.valor] || ICO_TIPO_DOC.padrao,
+    separar: t.valor === 'auto_embargo',
+    acao: () => {
+      fModalBtn('m-vist-ato')
+      fModalBtn('m-vistoria-ver')
+      // A PEÇA NASCE PRESA A ESTA VISTORIA — e não à última do imóvel, que é
+      // o que o formulário adivinha quando ninguém diz de onde veio.
+      return abrirFormDoc({
+        lote: state.selecionado?.properties || null,
+        tipoInicial: t.valor,
+        vistoria: v.id,
+      })
+    },
+  }))
+}
+
+/**
+ * A pergunta que fecha o ciclo, logo depois de gravar uma vistoria irregular.
+ *
+ * Janela própria, e não menu suspenso: a tela da vistoria acabou de fechar e
+ * não há botão para ancorar um menu. Também não é a caixa de confirmação
+ * genérica, que tem uma ação só — aqui são quatro peças diferentes, e escolher
+ * qual É a decisão.
+ *
+ * @param {Object} v a vistoria recém-gravada (id, numero)
+ */
+async function oferecerDocumentoDaVistoria(v) {
+  const alvo = document.getElementById('vato-lista')
+  if (!alvo) { return }
+
+  document.getElementById('vato-titulo').textContent = (v.numero || 'Vistoria') + ' registrada'
+
+  const opcoes = await opcoesDeAto(v)
+  vState.opcoesAto = opcoes
+
+  alvo.innerHTML = opcoes.map((o, i) => `
+    <button type="button" class="vato-op${o.separar ? ' vato-sep' : ''}" onclick="escolherAto(${i})">
+      <span class="vato-ico">${o.icone}</span>
+      <span class="vato-txt">
+        <span class="vato-nome">${esc(o.rotulo)}</span>
+        ${o.obs ? `<span class="vato-obs">${esc(o.obs)}</span>` : ''}
+      </span>
+    </button>`).join('')
+
+  openModal('m-vist-ato')
+}
+
+/** @param {number} i o índice da peça escolhida na janela da oferta */
+function escolherAto(i) {
+  vState.opcoesAto?.[i]?.acao()
+}
+
+/**
+ * O mesmo caminho, a partir da janela da vistoria gravada — aqui há botão para
+ * ancorar, então é o menu suspenso de sempre.
+ *
+ * @param {Event|Element} origem @param {Object} v
+ */
+async function menuDocumentoDaVistoria(origem, v) {
+  abrirMenuNovo(origem, await opcoesDeAto(v))
+}
+
+/**
+ * O RELATÓRIO DA VISTORIA na tela — o mesmo conteúdo do papel.
+ *
+ * O VAZIO É DITO, e não escondido. Antes só apareciam as seções preenchidas, e
+ * uma vistoria regular abria quase em branco, parecendo falha de carregamento.
+ * Pior: num processo, "não informado" e "não perguntado" são coisas
+ * diferentes — só entram os campos que ESTA finalidade pergunta, e os que
+ * ficaram em branco dizem a consequência (a área é o caso que importa: sem
+ * ela, a multa por metro quadrado não é calculada).
+ *
+ * @param {Object} v @returns {string}
+ */
 function corpoDaVistoria(v) {
   const secao = (titulo, conteudo) =>
     conteudo ? `<div class="vv-secao"><h4>${esc(titulo)}</h4>${conteudo}</div>` : ''
 
-  const linhas = pares => pares.length
-    ? `<div class="vv-pares">${pares.map(([r, val]) =>
-        `<div><span class="vv-rot">${esc(r)}</span><span>${esc(val)}</span></div>`).join('')}</div>`
+  // Par com valor OU com a frase do vazio — em itálico e cinza, para sair do
+  // peso do dado apurado sem sair da página.
+  const pares = linhas => linhas.length
+    ? `<div class="vv-pares">${linhas.map(([rot, val, falta]) =>
+        `<div><span class="vv-rot">${esc(rot)}</span>` +
+        (val ? `<span>${esc(val)}</span>` : `<span class="vv-vazio">${esc(falta)}</span>`) +
+        '</div>').join('')}</div>`
     : ''
 
-  const constatado = linhas(Object.entries(v.obra ?? {}))
-
+  // ── 1 · o que foi constatado ──
   const acomp = v.acompanhante
-    ? linhas([['Acompanhou', v.acompanhante.nome
-        + (v.acompanhante.qual ? ` (${v.acompanhante.qual})` : '')]])
-    : ''
+    ? v.acompanhante.nome + (v.acompanhante.qual ? ` — ${v.acompanhante.qual}` : '')
+    : null
+
+  const constatado = pares([
+    ['Situação', v.situacao.texto, 'não informada'],
+    ['Acompanhante', acomp, 'ninguém identificado no local'],
+    ['Coordenada', v.gps ? `${v.gps.lat.toFixed(6)}, ${v.gps.lon.toFixed(6)}` : null, 'não capturada'],
+    // `obra` já vem do servidor filtrado pela finalidade, com null no que
+    // ficou em branco — a tela não repete essa regra, só a exibe.
+    ...Object.entries(v.obra ?? {}).map(([rot, val]) => [rot, val, FALTA_VISTORIA[rot] ?? 'não informado']),
+  ])
 
   const irreg = v.irregularidades.length
     ? `<ul class="vv-lista">${v.irregularidades.map(i =>
@@ -416,34 +537,83 @@ function corpoDaVistoria(v) {
         .join('')}</ul>`
     : ''
 
-  // O RELATÓRIO NA ORDEM EM QUE FOI ESCRITO. A ordem é conteúdo: uma foto
-  // depois do artigo que ela ilustra diz o que a mesma foto no fim de uma
-  // lista de fotos não diz — por isso não se agrupa por tipo aqui.
+  // ── 3 · o relatório NA ORDEM EM QUE FOI ESCRITO ──
+  //
+  // A ordem é conteúdo: uma foto depois do artigo que ela ilustra diz o que a
+  // mesma foto no fim de uma lista de fotos não diz. Por isso não se agrupa
+  // por tipo aqui.
   const relatorio = v.relatorio.length
-    ? v.relatorio.map(i => i.tipo === 'foto'
-        ? `<figure class="vv-foto">
-             <img src="${esc(i.url ?? '')}" alt="${esc(i.titulo || 'Foto da vistoria')}" loading="lazy">
-             ${i.texto ? `<figcaption>${esc(i.texto)}</figcaption>` : ''}
-           </figure>`
-        : `<div class="vv-artigo">
-             <span class="vv-artigo-tipo">${i.tipo === 'parecer' ? 'Parecer' : 'Citação'}</span>
-             <b>${esc(i.titulo ?? '—')}</b>
-             ${i.texto ? `<p>${esc(i.texto)}</p>` : ''}
-           </div>`).join('')
-    : ''
+    ? v.relatorio.map(i => i.tipo === 'foto' ? itemAnexo(i) : `
+        <div class="vv-artigo">
+          <span class="vv-artigo-tipo">${i.tipo === 'parecer' ? 'Parecer do fiscal' : 'Dispositivo citado'}</span>
+          <b>${esc(i.titulo ?? '—')}</b>
+          ${i.texto ? `<p>${esc(i.texto)}</p>` : ''}
+        </div>`).join('')
+    : '<div class="vv-vazio">nada registrado no relatório</div>'
+
+  // ── 6 · o que a constatação virou ──
+  const docs = (v.documentos ?? []).length
+    ? `<div class="vv-docs">${v.documentos.map(d => `
+        <button type="button" class="vv-doc" onclick="abrirDocumento(${d.id})">
+          <span class="proto-badge">${esc(d.numero)}</span>
+          <span class="vv-doc-tipo">${esc(d.tipo)}</span>
+          <span class="vv-doc-meta">${esc(d.data ?? '')} · ${esc(d.status)}</span>
+        </button>`).join('')}</div>`
+    : `<div class="vv-vazio">nenhum documento emitido a partir desta vistoria${
+        v.situacao.valor === 'irregular'
+          ? ' — a constatação é de irregularidade e o ato ainda não foi lavrado' : ''}</div>`
 
   const obs = v.observacoes ? `<p class="vv-obs">${esc(v.observacoes)}</p>` : ''
 
-  const corpo = secao('Identificação', acomp)
-    + secao('O que foi constatado', constatado)
+  return secao('O que foi constatado', constatado)
     + secao('Irregularidades', irreg)
     + secao('Relatório', relatorio)
     + secao('Exigências', exig)
     + secao('Observações', obs)
+    + secao('Documentos emitidos', docs)
+}
 
-  // Uma vistoria pode ser toda "nada a apontar" — e nesse caso a janela tem de
-  // dizer isso, e não abrir vazia como se tivesse falhado ao carregar.
-  return corpo || '<div class="lista-vazia">Vistoria sem apontamentos registrados.</div>'
+/** A frase do vazio de cada campo de obra — a mesma da aba Revisão. */
+const FALTA_VISTORIA = {
+  'Alvará': 'não verificado',
+  'Área aferida': 'não medida — multa por m² não será calculada',
+  'Fase da obra': 'não informada',
+  'Conforme o projeto': 'não verificado',
+  'Uso constatado': 'não informado',
+  'Época da construção': 'não estimada',
+}
+
+/**
+ * O anexo do relatório: foto se dá para exibir, cartão de arquivo se não dá.
+ *
+ * O sistema aceita PDF de propósito — laudo, projeto, alvará —, e a tela
+ * mandava todos para dentro de um `<img>`: o PDF virava um retângulo quebrado
+ * com o título ao lado. Quem decide é `imagem`, que vem do mime real do
+ * arquivo, e não o tipo do item de relatório (onde "foto" quer dizer "anexo").
+ *
+ * @param {Object} i @returns {string}
+ */
+function itemAnexo(i) {
+  if (i.imagem) {
+    return `
+      <figure class="vv-foto">
+        <img src="${esc(i.url ?? '')}" alt="${esc(i.titulo || 'Foto da vistoria')}" loading="lazy">
+        ${i.texto ? `<figcaption>${esc(i.texto)}</figcaption>` : ''}
+      </figure>`
+  }
+
+  return `
+    <a class="vv-arquivo" href="${esc(i.url ?? '#')}" target="_blank" rel="noopener">
+      <span class="vv-arquivo-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      </span>
+      <span class="vv-arquivo-txt">
+        <b>${esc(i.titulo || i.arquivo_nome || 'Documento anexado')}</b>
+        ${i.texto ? `<span class="vv-arquivo-obs">${esc(i.texto)}</span>` : ''}
+        <span class="vv-arquivo-abrir">abrir em outra aba</span>
+      </span>
+    </a>`
 }
 
 // ── PASSOS ───────────────────────────────────────────────────
@@ -1608,6 +1778,18 @@ async function enviarVistoria(marcadas) {
     // usa a ficha de ORIGEM quando há uma; sem ela, o lote selecionado serve,
     // que é o caso de quem chegou pela tela de protocolos.
     if (! voltarAFicha() && state.selecionado) { abrirFicha(state.selecionado) }
+
+    // CONSTATOU IRREGULARIDADE? O ATO VEM AGORA.
+    //
+    // Era aqui que o caminho do fiscal terminava: gravava a constatação, a
+    // tela voltava para a ficha e o assunto morria. O painel até cobrava
+    // ("vistorias irregulares sem documento"), mas não havia por onde fechar.
+    // A pergunta aparece no único momento em que o fiscal ainda está com a
+    // obra na cabeça — e a peça nasce presa A ESTA vistoria, não à última do
+    // imóvel. Vistoria regular não pergunta nada: nada aconteceu, e está certo.
+    if (d.vistoria?.situacao === 'irregular' && d.vistoria?.id) {
+      oferecerDocumentoDaVistoria(d.vistoria)
+    }
   } catch (e) {
     console.error(e)
     toast(e.message || 'Falha ao gravar a vistoria', 'err')

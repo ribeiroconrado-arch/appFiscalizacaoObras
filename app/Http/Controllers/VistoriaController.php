@@ -11,7 +11,11 @@ use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
 use App\Models\VistoriaArtigo;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Response;
+use App\Services\LavraturaService;
 use App\Services\SucessaoDeLotes;
+use App\Services\VistoriaImpressao;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,6 +70,31 @@ class VistoriaController extends Controller
     }
 
     /**
+     * O relatório na janela de impressão do navegador.
+     *
+     * Mesma dupla do documento: esta rota serve HTML (imagens pela rota
+     * autenticada) e a de baixo serve PDF (imagens embutidas em base64).
+     */
+    public function impressao(Vistoria $vistoria, VistoriaImpressao $impressao): Response
+    {
+        $dados = $impressao->montar($vistoria, paraPdf: false);
+
+        return response()->view('impressao.vistoria', $dados + ['navegador' => true]);
+    }
+
+    /** O mesmo relatório em PDF, para anexar ao processo. */
+    public function pdf(Vistoria $vistoria, VistoriaImpressao $impressao): Response
+    {
+        $dados = $impressao->montar($vistoria, paraPdf: true);
+
+        $pdf = Pdf::loadView('impressao.vistoria', $dados + ['navegador' => false])->setPaper('a4');
+
+        // O nome do arquivo não aceita "/" — e numeroFormatado() tem um
+        // ("VIS 2026/0001"), por ser o formato natural de citar a vistoria.
+        return $pdf->stream(str_replace('/', '-', $vistoria->numeroFormatado()) . '.pdf');
+    }
+
+    /**
      * UMA vistoria, para leitura.
      *
      * Existia só o formulário de criar: depois de gravada, a vistoria virava
@@ -83,12 +112,16 @@ class VistoriaController extends Controller
             'fiscal:id,name', 'lote:id,bairro,quadra,numero_lote,inscricao',
             'evidencias', 'itensDeArtigo.artigo', 'exigencias',
             'irregularidades:id,codigo,descricao,gravidade', 'artigos',
+            'documentos:id,vistoria_id,tipo,numero,exercicio,status,data_lavratura',
         ]);
 
         // As fotos entram no relatório pela URL do arquivo — a mesma rota
         // protegida que a ficha usa, e não um caminho de disco.
         $fotos = $vistoria->evidencias->keyBy('id');
 
+        // A URL vale para IMAGEM e para PDF: no primeiro caso a tela exibe, no
+        // segundo oferece para abrir. O que decide é `imagem`, e não o tipo do
+        // item — ver `Vistoria::relatorio()`.
         $relatorio = $vistoria->relatorio()->map(function (array $i) use ($fotos) {
             if ($i['tipo'] === 'foto' && ($e = $fotos->get($i['id']))) {
                 $i['url'] = route('evidencia.arquivo', $e);
@@ -99,6 +132,7 @@ class VistoriaController extends Controller
 
         return response()->json(['vistoria' => [
             'id'          => $vistoria->id,
+            'numero'      => $vistoria->numeroFormatado(),
             'quando'      => $vistoria->data_hora?->format('d/m/Y H:i'),
             'finalidade'  => $vistoria->finalidadeRotulo(),
             'situacao'    => [
@@ -133,6 +167,16 @@ class VistoriaController extends Controller
                 'texto' => $e->texto, 'prazo' => $e->prazo_dias,
             ])->all(),
             'relatorio'   => $relatorio,
+            // O que esta constatação virou. É a pergunta de quem reabre o caso
+            // meses depois — e a resposta "nada ainda" também importa: é ela
+            // que o painel cobra como "vistoria irregular sem documento".
+            'documentos'  => $vistoria->documentos->map(fn (Documento $d) => [
+                'id'     => $d->id,
+                'numero' => $d->numeroFormatado(),
+                'tipo'   => $d->rotuloTipo(),
+                'data'   => ($d->data_lavratura ?? $d->created_at)?->format('d/m/Y'),
+                'status' => $d->statusBadge()[0],
+            ])->all(),
         ]]);
     }
 
@@ -143,10 +187,15 @@ class VistoriaController extends Controller
         $dados = [];
 
         if (in_array('alvara', $blocos, true)) {
-            $dados['Alvará'] = (Vistoria::ALVARA[$v->alvara_situacao] ?? null)
-                . ($v->alvara_numero ? " nº {$v->alvara_numero}" : '');
+            $rotulo = Vistoria::ALVARA[$v->alvara_situacao] ?? null;
+            $dados['Alvará'] = $rotulo
+                ? $rotulo . ($v->alvara_numero ? " nº {$v->alvara_numero}" : '')
+                : null;
         }
         if (in_array('area', $blocos, true)) {
+            // A frase que falta importa mais que as outras: sem área medida a
+            // multa por metro quadrado não é calculada, e quem lê o relatório
+            // precisa saber disso antes de contar com o valor.
             $dados['Área aferida'] = $v->areaAferidaRotulo();
         }
         if (in_array('obra', $blocos, true)) {
@@ -157,12 +206,23 @@ class VistoriaController extends Controller
             $dados['Uso constatado'] = Vistoria::USOS[$v->uso_constatado] ?? null;
         }
         if (in_array('idade', $blocos, true)) {
-            $dados['Ano estimado'] = $v->ano_construcao_estimado;
+            $dados['Época da construção'] = $v->ano_construcao_estimado
+                ? 'por volta de ' . $v->ano_construcao_estimado
+                : null;
         }
 
-        // Campo vazio sai fora: a lista mostra o que foi constatado, e uma
-        // linha com travessão só ocupa espaço dizendo que ninguém respondeu.
-        return array_filter($dados, fn ($x) => $x !== null && $x !== '');
+        // O VAZIO É DITO, e não escondido.
+        //
+        // Antes a linha sumia, e uma vistoria pouco preenchida abria quase em
+        // branco — parecendo falha de carregamento. Pior: num processo, "não
+        // informado" e "não perguntado" são coisas diferentes, e esconder a
+        // linha apagava essa diferença. Só aparecem os campos DESTA finalidade;
+        // os que ela não pergunta continuam fora, porque aí ninguém deveria
+        // mesmo ter respondido.
+        return array_map(
+            fn ($x) => ($x === null || $x === '') ? null : $x,
+            $dados
+        );
     }
 
     public function historico(Lote $lote): JsonResponse
@@ -173,6 +233,7 @@ class VistoriaController extends Controller
             ->get()
             ->map(fn (Vistoria $v) => [
                 'id'               => $v->id,
+                'numero'           => $v->numeroFormatado(),
                 // O que a tela precisa para oferecer (ou explicar) o ato
                 // cadastral: unificar ou desmembrar a partir DESTA vistoria.
                 'ato_cadastral'    => app(SucessaoDeLotes::class)->atoDaVistoria($v),
@@ -204,7 +265,7 @@ class VistoriaController extends Controller
                 // linha do tempo e a unica coisa que a tela tem em maos ali.
                 'lote_id' => $lote->id,
                 'quando'  => $v['data_hora'],
-                'titulo'  => 'Vistoria — ' . $v['situacao_rotulo'],
+                'titulo'  => $v['numero'] . ' — ' . $v['situacao_rotulo'],
                 'detalhe' => $v['fiscal'] ? 'Fiscal: ' . $v['fiscal'] : null,
                 'badge'   => ['texto' => $v['situacao_rotulo'], 'classe' => $v['situacao_badge']],
                 'ato_cadastral' => $v['ato_cadastral'],
@@ -516,9 +577,18 @@ class VistoriaController extends Controller
         }
 
         $vistoria = DB::transaction(function () use ($request, $lote, $u, $d, $finalidade) {
+            // O número nasce COM a vistoria, e não numa etapa depois: ela não
+            // tem "lavrar" — nasce valendo, e é por ele que o relatório será
+            // citado. A série é a mesma máquina dos autos, travada em
+            // transação (estamos dentro de uma).
+            ['numero' => $numero, 'exercicio' => $exercicio] =
+                LavraturaService::proximoNumero('vistoria');
+
             $v = Vistoria::create([
                 'lote_id'     => $lote->id,
                 'fiscal_id'   => $u->id,
+                'exercicio'   => $exercicio,
+                'numero'      => $numero,
                 // Gravado como string local "ingênua" (aaaa-mm-ddThh:mm), sem
                 // conversão de fuso — ver comentário na migration.
                 'data_hora'   => str_replace('T', ' ', $d['data_hora']) . ':00',
@@ -633,6 +703,8 @@ class VistoriaController extends Controller
             'message'  => 'Vistoria registrada.',
             'vistoria' => [
                 'id'          => $vistoria->id,
+                'numero'      => $vistoria->numeroFormatado(),
+                'situacao'    => $vistoria->situacao,
                 'data_hora'   => $vistoria->data_hora?->format('d/m/Y H:i'),
                 'finalidade'  => $vistoria->finalidadeRotulo(),
                 'area'        => $vistoria->areaAferidaRotulo(),

@@ -160,6 +160,33 @@ class Vistoria extends Model
     ];
 
     public function lote(): BelongsTo          { return $this->belongsTo(Lote::class); }
+
+    /**
+     * As peças que ESTA vistoria fundamentou.
+     *
+     * Existia só o lado de lá (`Documento::vistoria()`), e por isso a vistoria
+     * não sabia o que tinha gerado — o relatório não podia dizer se a
+     * constatação virou ato, que é a pergunta que se faz ao reabrir o caso.
+     */
+    public function documentos(): HasMany
+    {
+        return $this->hasMany(Documento::class)->orderBy('id');
+    }
+
+    /**
+     * "VIS 2026/0001" — como a vistoria é citada em processo.
+     *
+     * As gravadas antes de a série existir foram numeradas na migração; o
+     * travessão fica para o caso de alguma escapar, e não para o dia a dia.
+     */
+    public function numeroFormatado(): string
+    {
+        if (! $this->numero) {
+            return 'Sem número';
+        }
+
+        return sprintf('VIS %d/%04d', $this->exercicio, $this->numero);
+    }
     public function obra(): BelongsTo          { return $this->belongsTo(Obra::class); }
     public function fiscal(): BelongsTo        { return $this->belongsTo(User::class, 'fiscal_id'); }
     /** As fotos, na ordem do relatório — e não na de chegada ao servidor. */
@@ -210,10 +237,16 @@ class Vistoria extends Model
      */
     public function relatorio()
     {
+        // `tipo` aqui é a espécie de ITEM do relatório — "foto" quer dizer
+        // "anexo", e não "imagem". O sistema aceita PDF de propósito (laudo,
+        // projeto, alvará), e quem só olhava este campo acabava mandando um PDF
+        // para dentro de um <img>. `imagem` é o que responde se dá para exibir.
         $fotos = $this->evidencias->map(fn (Evidencia $e) => [
             'tipo' => 'foto', 'ordem' => (int) $e->ordem, 'id' => $e->id,
             'titulo' => $e->titulo, 'texto' => $e->descricao,
             'fachada' => (bool) $e->fachada, 'marcacoes' => $e->marcacoes ?? [],
+            'imagem' => str_starts_with((string) $e->mime, 'image/'),
+            'mime' => $e->mime, 'arquivo_nome' => $e->nome_original,
         ]);
 
         $leis = $this->itensDeArtigo->map(fn (VistoriaArtigo $i) => [

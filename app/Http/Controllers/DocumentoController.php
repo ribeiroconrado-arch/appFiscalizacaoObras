@@ -148,10 +148,7 @@ class DocumentoController extends Controller
             'registro'    => 'vistoria',
             'tipo'        => 'vistoria',
             'tipo_rotulo' => $v->finalidadeRotulo(),
-            // Vistoria não é numerada no sistema: o que a identifica na lista é
-            // a finalidade e a data. Mostrar o id interno como se fosse número
-            // de peça faria parecer que existe uma numeração que não existe.
-            'numero'      => null,
+            'numero'      => $v->numeroFormatado(),
             'data'        => $v->data_hora?->format('d/m/Y'),
             'status'      => [
                 'valor'  => $v->situacao,
@@ -219,6 +216,10 @@ class DocumentoController extends Controller
         return response()->json([
             'vistoria' => [
                 'id'        => $vistoria->id,
+                // O número vai para a tela do formulário: é ele que deixa o
+                // fiscal ver A QUAL vistoria a peça se prendeu, antes de
+                // gravar. Vínculo errado descoberto na defesa é tarde demais.
+                'numero'    => $vistoria->numeroFormatado(),
                 'data_hora' => $vistoria->data_hora?->format('d/m/Y H:i'),
                 'lote_id'   => $vistoria->lote_id,
                 // A área medida em campo é o número que fecha a conta da multa

@@ -128,7 +128,18 @@ async function escolherTipoDoc(tipo) {
  *
  * @param {{lote?:Object, documento?:Object}} opts
  */
-async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null } = {}) {
+/**
+ * @param {Object}      [o.lote]         imóvel da peça
+ * @param {Object}      [o.documento]    peça existente, para abrir em leitura
+ * @param {string}      [o.tipoInicial]  tipo já escolhido no menu
+ * @param {number|null} [o.vistoria]     A VISTORIA DE ORIGEM.
+ *
+ *   Com ela, a peça nasce presa àquela vistoria. Sem ela, vale o comportamento
+ *   de sempre: a última vistoria do imóvel. A diferença importa numa obra
+ *   visitada duas vezes no mês — o auto sairia amarrado à visita errada, e
+ *   ninguém perceberia, porque a tela não dizia a qual vistoria se prendeu.
+ */
+async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null, vistoria = null } = {}) {
   const o = await carregarOpcoes()
 
   fdState.editando = false
@@ -179,7 +190,13 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null 
   // documento com o que tem em campo e amarra o lote depois, pela aba Imóvel
   // (ver DocumentoController::storeSemLote). Sem imóvel não há última vistoria
   // a consultar, e a função já trata o id ausente limpando a caixa.
-  if (!documento) await sugerirDaUltimaVistoria(fdState.lote?.id ?? null)
+  if (documento) { return }
+
+  if (vistoria) {
+    await sugerirDaVistoria(vistoria)
+  } else {
+    await sugerirDaUltimaVistoria(fdState.lote?.id ?? null)
+  }
 }
 
 /** Campos em branco, com os padrões de um documento novo. */
