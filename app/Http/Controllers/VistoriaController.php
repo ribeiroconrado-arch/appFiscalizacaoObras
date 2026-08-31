@@ -11,6 +11,7 @@ use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
 use App\Models\VistoriaArtigo;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use App\Services\LavraturaService;
@@ -18,7 +19,6 @@ use App\Services\SucessaoDeLotes;
 use App\Services\VistoriaImpressao;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -110,6 +110,7 @@ class VistoriaController extends Controller
     {
         $vistoria->load([
             'fiscal:id,name', 'lote:id,bairro,quadra,numero_lote,inscricao',
+            'itens.irregularidades', 'itens.artigos.artigo', 'itens.exigencias', 'itens.evidencias',
             'evidencias', 'itensDeArtigo.artigo', 'exigencias',
             'irregularidades:id,codigo,descricao,gravidade', 'artigos',
             'documentos:id,vistoria_id,tipo,numero,exercicio,status,data_lavratura',
@@ -120,14 +121,18 @@ class VistoriaController extends Controller
         $fotos = $vistoria->evidencias->keyBy('id');
 
         // A URL vale para IMAGEM e para PDF: no primeiro caso a tela exibe, no
-        // segundo oferece para abrir. O que decide é `imagem`, e não o tipo do
-        // item — ver `Vistoria::relatorio()`.
-        $relatorio = $vistoria->relatorio()->map(function (array $i) use ($fotos) {
-            if ($i['tipo'] === 'foto' && ($e = $fotos->get($i['id']))) {
-                $i['url'] = route('evidencia.arquivo', $e);
-            }
+        // segundo oferece para abrir. Quem decide é `imagem`, que vem do mime
+        // real do arquivo — ver `Vistoria::relatorioEmItens()`.
+        $relatorio = $vistoria->relatorioEmItens()->map(function (array $item) use ($fotos) {
+            $item['fotos'] = array_map(function (array $f) use ($fotos) {
+                if ($e = $fotos->get($f['id'])) {
+                    $f['url'] = route('evidencia.arquivo', $e);
+                }
 
-            return $i;
+                return $f;
+            }, $item['fotos']);
+
+            return $item;
         })->all();
 
         return response()->json(['vistoria' => [
@@ -534,14 +539,25 @@ class VistoriaController extends Controller
             // abaixo são o TEXTO que o fiscal escreveu sobre cada um.
             'artigos'            => ['array'],
             'artigos.*'          => ['integer', 'exists:artigos,id'],
-            'itens_artigo'                => ['array', 'max:50'],
-            'itens_artigo.*.artigo_id'    => ['required', 'integer', 'exists:artigos,id'],
-            'itens_artigo.*.tipo'         => ['required', Rule::in(array_keys(VistoriaArtigo::TIPOS))],
-            'itens_artigo.*.observacao'   => ['nullable', 'string', 'max:2000'],
-            'itens_artigo.*.ordem'        => ['nullable', 'integer', 'min:0', 'max:200'],
-            'exigencias'         => ['array', 'max:30'],
-            'exigencias.*.texto' => ['required', 'string', 'max:500'],
-            'exigencias.*.prazo_dias' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            // ── O RELATÓRIO EM ITENS ──
+            //
+            // Cada item é um grupo: irregularidades, texto livre, artigos,
+            // exigências e fotos. As FOTOS não vêm aninhadas aqui — arquivo
+            // sobe na remessa achatada `evidencias[]`, que é como upload
+            // funciona; o item aponta para elas pelo índice.
+            'itens'                          => ['array', 'max:60'],
+            'itens.*.texto'                  => ['nullable', 'string', 'max:5000'],
+            'itens.*.irregularidades'        => ['array'],
+            'itens.*.irregularidades.*'      => ['integer', 'exists:irregularidades,id'],
+            'itens.*.artigos'                => ['array', 'max:50'],
+            'itens.*.artigos.*.artigo_id'    => ['required', 'integer', 'exists:artigos,id'],
+            'itens.*.artigos.*.tipo'         => ['required', Rule::in(array_keys(VistoriaArtigo::TIPOS))],
+            'itens.*.artigos.*.observacao'   => ['nullable', 'string', 'max:2000'],
+            'itens.*.exigencias'             => ['array', 'max:30'],
+            'itens.*.exigencias.*.texto'     => ['required', 'string', 'max:500'],
+            'itens.*.exigencias.*.prazo_dias' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'itens.*.fotos'                  => ['array'],
+            'itens.*.fotos.*'                => ['integer', 'min:0', 'max:200'],
             // Protocolo de desmembramento/unificacao que esta vistoria atende.
             // E o vinculo que, mais tarde, libera o ato cadastral — ver
             // App\Services\SucessaoDeLotes::atoDaVistoria().
@@ -569,7 +585,33 @@ class VistoriaController extends Controller
         // Uma vistoria irregular sem nenhuma irregularidade marcada é um
         // registro que não sustenta documento nenhum depois. Barrar aqui evita
         // descobrir isso na hora de lavrar a notificação.
-        if ($d['situacao'] === 'irregular' && empty($d['irregularidades'])) {
+        // A vistoria "tem" as irregularidades de todos os itens somadas. Era um
+        // checklist único; agora cada uma pertence ao item onde foi constatada,
+        // e a soma é o que a regra da situação e a sugestão de artigos leem.
+        $irregularidades = collect($d['itens'] ?? [])
+            ->flatMap(fn ($i) => $i['irregularidades'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        // O índice único de `vistoria_irregularidades` é (vistoria, irregularidade):
+        // a mesma não pode ser constatada em dois itens. Dito aqui, com o nome do
+        // que repetiu, em vez de estourar como violação de chave lá embaixo.
+        $repetidas = $irregularidades->duplicates();
+        if ($repetidas->isNotEmpty()) {
+            $nomes = Irregularidade::whereIn('id', $repetidas->unique())->pluck('descricao')->implode('; ');
+
+            return response()->json([
+                'message' => 'A mesma irregularidade está em mais de um item: ' . $nomes
+                    . '. Cada uma pertence a um item só — o que se repete em vários '
+                    . 'pontos da obra é o texto e a foto, não o enquadramento.',
+                'errors'  => ['itens' => ['Irregularidade repetida entre itens.']],
+            ], 422);
+        }
+
+        $irregularidades = $irregularidades->unique()->values()->all();
+        $d['irregularidades'] = $irregularidades;
+
+        if ($d['situacao'] === 'irregular' && empty($irregularidades)) {
             return response()->json([
                 'message' => 'Marque ao menos uma irregularidade para uma vistoria irregular.',
                 'errors'  => ['irregularidades' => ['Selecione ao menos uma.']],
@@ -624,34 +666,73 @@ class VistoriaController extends Controller
                 $v->irregularidades()->sync($d['irregularidades']);
             }
 
+            // ── OS ITENS DO RELATÓRIO ──
+            //
+            // A ordem entre itens é a que o fiscal montou — é a sequência em
+            // que ele percorreu a obra, e o relatório impresso a segue.
+            // A ordem DENTRO do item é fixa e não se escolhe (ver VistoriaItem).
+            $itensCriados = [];
+
+            foreach ($d['itens'] ?? [] as $n => $bloco) {
+                $item = $v->itens()->create([
+                    'ordem' => $n,
+                    'texto' => isset($bloco['texto']) ? (trim($bloco['texto']) ?: null) : null,
+                ]);
+                $itensCriados[$n] = $item;
+
+                // A linha da irregularidade carrega os DOIS vínculos: a vistoria
+                // (que já existia, e é o que a lavratura lê) e o item onde ela
+                // foi constatada. Por isso é escrita aqui, e não por `attach`
+                // do lado do item — ele sozinho não conhece a vistoria.
+                foreach ($bloco['irregularidades'] ?? [] as $irregId) {
+                    DB::table('vistoria_irregularidades')
+                        ->where('vistoria_id', $v->id)
+                        ->where('irregularidade_id', $irregId)
+                        ->update(['item_id' => $item->id]);
+                }
+
+                foreach ($bloco['artigos'] ?? [] as $j => $art) {
+                    $item->artigos()->create([
+                        'vistoria_id' => $v->id,
+                        'artigo_id'   => $art['artigo_id'],
+                        'tipo'        => $art['tipo'],
+                        'observacao'  => isset($art['observacao']) ? (trim($art['observacao']) ?: null) : null,
+                        'ordem'       => $j,
+                    ]);
+                }
+
+                foreach ($bloco['exigencias'] ?? [] as $j => $ex) {
+                    $item->exigencias()->create([
+                        'vistoria_id' => $v->id,
+                        'ordem'       => $j,
+                        'texto'       => trim($ex['texto']),
+                        'prazo_dias'  => $ex['prazo_dias'] ?? null,
+                    ]);
+                }
+            }
+
+            // De qual item é cada arquivo da remessa. O upload é achatado —
+            // `evidencias[]` — e o item aponta pelo índice; este mapa faz o
+            // caminho de volta na hora de gravar cada evidência.
+            $itemDaFoto = [];
+            foreach ($d['itens'] ?? [] as $n => $bloco) {
+                foreach ($bloco['fotos'] ?? [] as $indice) {
+                    $itemDaFoto[(int) $indice] = $itensCriados[$n]->id ?? null;
+                }
+            }
+
             // Enquadramento constatado em campo. Ver a relação `artigos()` em
             // Vistoria para por que ele não divide tabela com o do documento.
             //
-            // Quando vêm ITENS de relatório, são eles que mandam: cada linha
-            // guarda o próprio texto e a própria posição. `artigos[]` sozinho
-            // continua aceito — é o caminho de quem só marca o dispositivo,
-            // sem escrever nada sobre ele.
-            if (! empty($d['itens_artigo'])) {
-                foreach ($d['itens_artigo'] as $i => $item) {
-                    $v->itensDeArtigo()->create([
-                        'artigo_id'  => $item['artigo_id'],
-                        'tipo'       => $item['tipo'],
-                        'observacao' => isset($item['observacao']) ? trim($item['observacao']) : null,
-                        'ordem'      => $item['ordem'] ?? $i,
-                    ]);
-                }
-            } elseif (! empty($d['artigos'])) {
+            // Os artigos e as exigências agora nascem DENTRO do item, no laço
+            // acima — cada um já com o texto que o fiscal escreveu sobre ele e
+            // com a posição do grupo a que pertence.
+            //
+            // `artigos[]` continua aceito para quem só marca o dispositivo sem
+            // escrever nada: é o que a sugestão automática devolve, e ele
+            // alimenta a relação que a LAVRATURA lê.
+            if (! empty($d['artigos'])) {
                 $v->artigos()->sync($d['artigos']);
-            }
-
-            // A ORDEM é a que o fiscal escreveu: ela é a sequência em que as
-            // providências devem ser tomadas, e a notificação imprime assim.
-            foreach ($d['exigencias'] ?? [] as $i => $e) {
-                $v->exigencias()->create([
-                    'ordem'      => $i,
-                    'texto'      => trim($e['texto']),
-                    'prazo_dias' => $e['prazo_dias'] ?? null,
-                ]);
             }
 
             // Amarra a vistoria ao protocolo que ela atende.
@@ -668,12 +749,16 @@ class VistoriaController extends Controller
                     ->update(['vistoria_id' => $v->id]);
             }
 
+            // `item_id` vem do mapa montado acima: o arquivo sobe achatado e o
+            // item o reivindica pelo índice da remessa. Sem dono, a foto ainda
+            // é gravada — prova não se descarta por falta de grupo.
             foreach ($request->file('evidencias', []) as $i => $arquivo) {
                 // Disco privado: foto de fiscalização mostra propriedade
                 // privada e identifica pessoas.
                 $caminho = $arquivo->store("evidencias/{$v->id}", 'private');
                 Evidencia::create([
                     'vistoria_id'   => $v->id,
+                    'item_id'       => $itemDaFoto[$i] ?? null,
                     'tipo'          => str_starts_with($arquivo->getMimeType(), 'image/') ? 'foto' : 'documento',
                     'arquivo'       => $caminho,
                     'nome_original' => $arquivo->getClientOriginalName(),

@@ -28,8 +28,9 @@ class VistoriaImpressao
     public function montar(Vistoria $v, bool $paraPdf = false): array
     {
         $v->loadMissing([
-            'lote', 'fiscal', 'evidencias', 'itensDeArtigo.artigo',
-            'exigencias', 'irregularidades', 'documentos',
+            'lote', 'fiscal', 'documentos', 'irregularidades',
+            'itens.irregularidades', 'itens.artigos.artigo',
+            'itens.exigencias', 'itens.evidencias',
         ]);
 
         return [
@@ -148,20 +149,21 @@ class VistoriaImpressao
      */
     private function relatorio(Vistoria $v, bool $paraPdf): array
     {
-        $porId = $v->evidencias->keyBy('id');
+        $porId = $v->itens->flatMap->evidencias->keyBy('id');
 
-        return $v->relatorio()->map(function (array $i) use ($porId, $paraPdf) {
-            if ($i['tipo'] !== 'foto') {
-                return $i;
-            }
+        return $v->relatorioEmItens()->map(function (array $item) use ($porId, $paraPdf) {
+            $item['fotos'] = array_map(function (array $f) use ($porId, $paraPdf) {
+                $e = $porId->get($f['id']);
+                // O sistema aceita PDF de propósito (laudo, projeto, alvará).
+                // Ele não se imprime junto, mas PRECISA constar: um anexo que
+                // existe no processo e some do papel é peça que ninguém sabe
+                // que existe.
+                $f['src'] = ($e && $f['imagem']) ? $this->fonteImagem($e, $paraPdf) : null;
 
-            $e = $porId->get($i['id']);
-            // O sistema aceita PDF de propósito (laudo, projeto, alvará). Ele
-            // não se imprime junto, mas PRECISA constar: um anexo que existe no
-            // processo e some do papel é peça que ninguém sabe que existe.
-            $i['src'] = ($e && $i['imagem']) ? $this->fonteImagem($e, $paraPdf) : null;
+                return $f;
+            }, $item['fotos']);
 
-            return $i;
+            return $item;
         })->all();
     }
 

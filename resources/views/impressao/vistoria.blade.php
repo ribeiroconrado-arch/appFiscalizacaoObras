@@ -67,7 +67,14 @@
   table.itens td.grav { white-space: nowrap; width: 66px; text-transform: uppercase;
                         font-size: 8px; letter-spacing: .04em; }
 
-  /* ── O relatório, na ordem escrita ── */
+  /* ── O relatório: cada item é um bloco que NÃO se parte entre páginas —
+     as irregularidades numa folha e as fotos na outra desmontariam o
+     raciocínio que o item existe para juntar. ── */
+  .rel-item-papel { page-break-inside: avoid; margin-bottom: 12px;
+                    padding-left: 8px; border-left: 2px solid #bbb; }
+  .rel-item-num { font-size: 8px; font-weight: bold; text-transform: uppercase;
+                  letter-spacing: .06em; color: #666; margin-bottom: 4px; }
+
   .item { page-break-inside: avoid; margin-bottom: 10px; }
   .item img { max-width: 100%; max-height: 300px; border: 1px solid #ccc; }
   .item-tit { font-size: 9.5px; font-weight: bold; margin-top: 3px; }
@@ -152,81 +159,92 @@
         </table>
       </div>
 
-      {{-- 2 — Irregularidades --}}
-      @if ($v->irregularidades->count())
-        <div class="sec">
-          <div class="sec-tit">{{ $sec('Irregularidades constatadas') }}</div>
-          <table class="itens">
-            <thead>
-              <tr><th>Código</th><th>Descrição</th><th>Gravidade</th></tr>
-            </thead>
-            <tbody>
-              @foreach ($v->irregularidades as $i)
-                <tr>
-                  <td class="cod">{{ $i->codigo }}</td>
-                  <td>{{ $i->descricao }}</td>
-                  <td class="grav">{{ $i->gravidade }}</td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      @endif
+      {{-- 2 — O RELATÓRIO, EM ITENS
+           Cada item é um bloco de raciocínio, e dentro dele a ordem é fixa:
+           irregularidades, texto, artigos, exigências, fotos — o fato, a
+           narrativa, a lei, a providência e a prova. Só a ordem ENTRE itens foi
+           escolhida, e é a sequência em que a obra foi percorrida.
 
-      {{-- 3 — O relatório, na ordem em que foi escrito --}}
+           As irregularidades e as exigências não têm mais seção própria: elas
+           pertencem ao item onde foram constatadas, e tirá-las de lá para uma
+           lista no fim desmontaria o raciocínio que o item existe para juntar. --}}
       @if (count($relatorio))
         <div class="sec">
           <div class="sec-tit">{{ $sec('Relatório') }}</div>
-          @foreach ($relatorio as $i)
-            <div class="item">
-              @if ($i['tipo'] === 'foto')
-                @if ($i['src'])
-                  <img src="{{ $i['src'] }}" alt="">
-                  <div class="item-tit">{{ $i['titulo'] ?: 'Fotografia' }}</div>
-                  @if ($i['texto'])
-                    <div class="item-obs">{{ $i['texto'] }}</div>
-                  @endif
-                @else
-                  {{-- Sem imagem para estampar: ou é PDF, ou o arquivo sumiu do
-                       disco. Nos dois casos o anexo consta. --}}
-                  <div class="item-arq">
-                    <b>Anexo:</b> {{ $i['titulo'] ?: ($i['arquivo_nome'] ?: 'arquivo') }}
-                    @if (! $i['imagem']) (documento anexado ao processo) @endif
-                    @if ($i['texto']) — {{ $i['texto'] }} @endif
-                  </div>
-                @endif
-              @else
-                <div class="item-lei">
-                  <span class="rot">{{ $i['tipo'] === 'parecer' ? 'Parecer do fiscal' : 'Dispositivo citado' }}</span>
-                  <div class="item-tit">{{ $i['titulo'] ?? '—' }}</div>
-                  @if ($i['texto'])
-                    <div class="item-obs">{{ $i['texto'] }}</div>
+
+          @foreach ($relatorio as $n => $item)
+            <div class="rel-item-papel">
+              <div class="rel-item-num">Item {{ $n + 1 }}</div>
+
+              @if (count($item['irregularidades']))
+                <table class="itens">
+                  <thead>
+                    <tr><th>Código</th><th>Irregularidade constatada</th><th>Gravidade</th></tr>
+                  </thead>
+                  <tbody>
+                    @foreach ($item['irregularidades'] as $i)
+                      <tr>
+                        <td class="cod">{{ $i['codigo'] }}</td>
+                        <td>{{ $i['descricao'] }}</td>
+                        <td class="grav">{{ $i['gravidade'] }}</td>
+                      </tr>
+                    @endforeach
+                  </tbody>
+                </table>
+              @endif
+
+              @if ($item['texto'])
+                <p>{{ $item['texto'] }}</p>
+              @endif
+
+              @foreach ($item['artigos'] as $a)
+                <div class="item item-lei">
+                  <span class="rot">{{ $a['tipo'] === 'parecer' ? 'Parecer do fiscal' : 'Dispositivo citado' }}</span>
+                  <div class="item-tit">{{ $a['numero'] ?? '—' }}</div>
+                  @if ($a['texto'])
+                    <div class="item-obs">{{ $a['texto'] }}</div>
                   @endif
                 </div>
+              @endforeach
+
+              @if (count($item['exigencias']))
+                <table class="itens">
+                  <tbody>
+                    @foreach ($item['exigencias'] as $e)
+                      <tr>
+                        <td>{{ $e['texto'] }}</td>
+                        <td class="grav">{{ $e['prazo'] ? $e['prazo'] . ' dias' : '—' }}</td>
+                      </tr>
+                    @endforeach
+                  </tbody>
+                </table>
               @endif
+
+              @foreach ($item['fotos'] as $f)
+                <div class="item">
+                  @if ($f['src'])
+                    <img src="{{ $f['src'] }}" alt="">
+                    @if ($f['texto'])
+                      <div class="item-obs">{{ $f['texto'] }}</div>
+                    @endif
+                  @else
+                    {{-- Sem imagem para estampar: ou é PDF, ou o arquivo sumiu
+                         do disco. Nos dois casos o anexo consta. --}}
+                    <div class="item-arq">
+                      <b>Anexo:</b> {{ $f['titulo'] ?: ($f['arquivo_nome'] ?: 'arquivo') }}
+                      @if (! $f['imagem']) (documento anexado ao processo) @endif
+                      @if ($f['texto']) — {{ $f['texto'] }} @endif
+                    </div>
+                  @endif
+                </div>
+              @endforeach
             </div>
           @endforeach
         </div>
       @endif
 
-      {{-- 4 — Exigências --}}
-      @if ($v->exigencias->count())
-        <div class="sec">
-          <div class="sec-tit">{{ $sec('Exigências') }}</div>
-          <table class="itens">
-            <tbody>
-              @foreach ($v->exigencias as $e)
-                <tr>
-                  <td>{{ $e->texto }}</td>
-                  <td class="grav">{{ $e->prazo_dias ? $e->prazo_dias . ' dias' : '—' }}</td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      @endif
 
-      {{-- 5 — Observações --}}
+      {{-- 3 — Observações gerais da vistoria (fora dos itens) --}}
       @if ($v->observacoes)
         <div class="sec">
           <div class="sec-tit">{{ $sec('Observações') }}</div>
@@ -234,7 +252,7 @@
         </div>
       @endif
 
-      {{-- 6 — O que esta constatação gerou --}}
+      {{-- 4 — O que esta constatação gerou --}}
       @if (count($documentos))
         <div class="sec">
           <div class="sec-tit">{{ $sec('Documentos emitidos a partir desta vistoria') }}</div>

@@ -226,12 +226,64 @@ class Vistoria extends Model
         return $this->hasMany(VistoriaArtigo::class)->orderBy('ordem')->orderBy('id');
     }
 
+    /** Os itens do relatório, na ordem em que o fiscal os montou. */
+    public function itens(): HasMany
+    {
+        return $this->hasMany(VistoriaItem::class)->orderBy('ordem')->orderBy('id');
+    }
+
+    /**
+     * O RELATÓRIO EM GRUPOS.
+     *
+     * Cada item é um bloco de raciocínio — a irregularidade, o que o fiscal
+     * escreveu, os artigos, o que se exige e as fotos que provam —, e dentro
+     * dele a ordem é fixa: fato, narrativa, lei, providência, prova. Só a ordem
+     * ENTRE itens é escolhida, e é a sequência em que a obra foi percorrida.
+     *
+     * Quem consome isto (tela de leitura e relatório em A4) não decide nada
+     * sobre ordem: recebe pronto, e por isso os dois saem iguais.
+     *
+     * @return \Illuminate\Support\Collection<int, array>
+     */
+    public function relatorioEmItens()
+    {
+        return $this->itens->map(fn (VistoriaItem $i) => [
+            'id'    => $i->id,
+            'ordem' => $i->ordem,
+            'texto' => $i->texto,
+
+            'irregularidades' => $i->irregularidades->map(fn ($r) => [
+                'codigo' => $r->codigo, 'descricao' => $r->descricao, 'gravidade' => $r->gravidade,
+            ])->all(),
+
+            'artigos' => $i->artigos->map(fn (VistoriaArtigo $a) => [
+                'id' => $a->id, 'artigo_id' => $a->artigo_id,
+                'numero' => $a->artigo?->numero, 'tipo' => $a->tipo,
+                'texto' => $a->observacao,
+            ])->all(),
+
+            'exigencias' => $i->exigencias->map(fn (VistoriaExigencia $e) => [
+                'texto' => $e->texto, 'prazo' => $e->prazo_dias,
+            ])->all(),
+
+            // `imagem` responde se dá para EXIBIR: o sistema aceita PDF de
+            // propósito (laudo, projeto, alvará), e quem olhasse só o tipo do
+            // anexo mandaria um PDF para dentro de um <img>.
+            'fotos' => $i->evidencias->map(fn (Evidencia $e) => [
+                'id' => $e->id, 'titulo' => $e->titulo, 'texto' => $e->descricao,
+                'fachada' => (bool) $e->fachada, 'marcacoes' => $e->marcacoes ?? [],
+                'imagem' => str_starts_with((string) $e->mime, 'image/'),
+                'mime' => $e->mime, 'arquivo_nome' => $e->nome_original,
+            ])->all(),
+        ]);
+    }
+
     /**
      * O relatório inteiro em UMA sequência: fotos e itens de lei intercalados,
      * na ordem em que o fiscal montou.
      *
-     * A ordem é o conteúdo. Uma foto depois do artigo que ela ilustra diz algo
-     * que a mesma foto no fim de uma lista de fotos não diz.
+     * MANTIDO para o que ainda lê a forma plana. A forma nova é
+     * `relatorioEmItens()`, e é ela que a tela e o papel usam.
      *
      * @return \Illuminate\Support\Collection<int, array>
      */

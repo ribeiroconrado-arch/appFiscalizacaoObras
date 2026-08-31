@@ -26,7 +26,7 @@ const vState = {
   relatorio: [],
   /** @type {number|null} índice do item aberto na janela de edição */ itemAberto: null,
   /** @type {Array<Object>} artigos sugeridos pelas irregularidades marcadas */ artigos: [],
-  /** @type {Set<number>} artigos confirmados pelo fiscal */ artigosMarcados: new Set(),
+  /** @type {Array<string>} irregularidades que nenhum artigo enquadra */ semArtigo: [],
   /** @type {string} para que serve esta vistoria — decide os passos */
   finalidade: 'obras',
   /** @type {{alvara:string, fase:string, projeto:string, uso:string}} escolhas em botão */
@@ -34,8 +34,6 @@ const vState = {
   /** @type {{lat:number, lon:number, prec:number}|null} posição da vistoria */ gps: null,
   /** @type {string} chave do passo visível */ passo: 'id',
   /** @type {number} índice do passo mais avançado — é o que marca ✓ na barra */ visitados: 0,
-  /** @type {Array<string>|null} marcas do rascunho à espera do catálogo */ rascunhoIrreg: null,
-  /** @type {boolean} a escolha de artigos veio do rascunho, não da sugestão */ artigosDoRascunho: false,
   /** @type {boolean} a tela está sendo montada — não gravar rascunho ainda */ abrindo: false,
   /** @type {Object|null} rascunho oferecido e ainda não aceito nem recusado */ rascunhoPendente: null,
   /** @type {Object|null} a vistoria aberta na janela de leitura */ lendo: null,
@@ -293,7 +291,7 @@ function zerarVistoria() {
   vState.relatorio = []
   vState.itemAberto = null
   vState.artigos = []
-  vState.artigosMarcados = new Set()
+  vState.semArtigo = []
   vState.finalidade = 'obras'
   vState.obra = { alvara: '', fase: '', projeto: '', uso: '' }
   vState.gps = null
@@ -308,15 +306,9 @@ function zerarVistoria() {
   põe('nv-exig-texto', ''); põe('nv-exig-prazo', '')
   document.getElementById('nv-alvara-num-campo').hidden = true
   document.getElementById('nv-rascunho').hidden = true
-  // O checklist é DOM que sobrevive ao fechamento do modal: sem desmarcá-lo,
-  // a vistoria seguinte nasceria com as irregularidades da anterior.
-  document.querySelectorAll('#nv-checklist input:checked').forEach(c => {
-    c.checked = false
-    c.closest('.chk-item')?.classList.remove('marcado')
-  })
+  // As irregularidades vivem DENTRO dos itens agora: zerar `relatorio` já as
+  // leva junto, e não sobra checklist de tela para desmarcar à mão.
   pintarOpcoes(); pintarFinalidade(); renderRelatorio()
-  document.getElementById('nv-artigos').innerHTML =
-    '<div class="leg">Marque as irregularidades para ver os artigos que as enquadram.</div>'
 }
 
 /**
@@ -525,30 +517,44 @@ function corpoDaVistoria(v) {
     ...Object.entries(v.obra ?? {}).map(([rot, val]) => [rot, val, FALTA_VISTORIA[rot] ?? 'não informado']),
   ])
 
-  const irreg = v.irregularidades.length
-    ? `<ul class="vv-lista">${v.irregularidades.map(i =>
-        `<li><b>${esc(i.codigo)}</b> ${esc(i.descricao)}
-         <span class="vv-grav vv-${esc(i.gravidade)}">${esc(i.gravidade)}</span></li>`).join('')}</ul>`
-    : ''
-
-  const exig = v.exigencias.length
-    ? `<ul class="vv-lista">${v.exigencias.map(e =>
-        `<li>${esc(e.texto)}${e.prazo ? ` <span class="vv-prazo">prazo de ${e.prazo} dias</span>` : ''}</li>`)
-        .join('')}</ul>`
-    : ''
-
-  // ── 3 · o relatório NA ORDEM EM QUE FOI ESCRITO ──
+  // ── O RELATÓRIO EM GRUPOS ──
   //
-  // A ordem é conteúdo: uma foto depois do artigo que ela ilustra diz o que a
-  // mesma foto no fim de uma lista de fotos não diz. Por isso não se agrupa
-  // por tipo aqui.
+  // Cada item é um bloco de raciocínio, e dentro dele a ordem é fixa:
+  // irregularidades, texto, artigos, exigências, fotos — o fato, a narrativa, a
+  // lei, a providência e a prova. Só a ordem ENTRE itens foi escolhida, e é a
+  // sequência em que a obra foi percorrida.
   const relatorio = v.relatorio.length
-    ? v.relatorio.map(i => i.tipo === 'foto' ? itemAnexo(i) : `
-        <div class="vv-artigo">
-          <span class="vv-artigo-tipo">${i.tipo === 'parecer' ? 'Parecer do fiscal' : 'Dispositivo citado'}</span>
-          <b>${esc(i.titulo ?? '—')}</b>
-          ${i.texto ? `<p>${esc(i.texto)}</p>` : ''}
-        </div>`).join('')
+    ? v.relatorio.map((it, n) => {
+        const partes = []
+
+        if (it.irregularidades.length) {
+          partes.push(`<ul class="vv-lista">${it.irregularidades.map(i =>
+            `<li><b>${esc(i.codigo)}</b> ${esc(i.descricao)}
+             <span class="vv-grav vv-${esc(i.gravidade)}">${esc(i.gravidade)}</span></li>`).join('')}</ul>`)
+        }
+
+        if (it.texto) { partes.push(`<p class="vv-obs">${esc(it.texto)}</p>`) }
+
+        it.artigos.forEach(a => partes.push(`
+          <div class="vv-artigo">
+            <span class="vv-artigo-tipo">${a.tipo === 'parecer' ? 'Parecer do fiscal' : 'Dispositivo citado'}</span>
+            <b>${esc(a.numero ?? '—')}</b>
+            ${a.texto ? `<p>${esc(a.texto)}</p>` : ''}
+          </div>`))
+
+        if (it.exigencias.length) {
+          partes.push(`<ul class="vv-lista">${it.exigencias.map(e =>
+            `<li>${esc(e.texto)}${e.prazo ? ` <span class="vv-prazo">prazo de ${e.prazo} dias</span>` : ''}</li>`)
+            .join('')}</ul>`)
+        }
+
+        it.fotos.forEach(f => partes.push(itemAnexo(f)))
+
+        return `<div class="vv-item">
+          <div class="vv-item-num">Item ${n + 1}</div>
+          ${partes.join('')}
+        </div>`
+      }).join('')
     : '<div class="vv-vazio">nada registrado no relatório</div>'
 
   // ── 6 · o que a constatação virou ──
@@ -566,9 +572,7 @@ function corpoDaVistoria(v) {
   const obs = v.observacoes ? `<p class="vv-obs">${esc(v.observacoes)}</p>` : ''
 
   return secao('O que foi constatado', constatado)
-    + secao('Irregularidades', irreg)
     + secao('Relatório', relatorio)
-    + secao('Exigências', exig)
     + secao('Observações', obs)
     + secao('Documentos emitidos', docs)
 }
@@ -687,7 +691,7 @@ function passoCompleto(k) {
     }
   }
   if (k === 'rel' && document.getElementById('nv-situacao').value === 'irregular'
-      && !document.querySelectorAll('#nv-checklist input:checked').length) {
+      && !irregularidadesDaVistoria().length) {
     toast('Marque ao menos uma irregularidade', 'err'); return false
   }
   return true
@@ -923,25 +927,25 @@ async function carregarCatalogo() {
   renderChecklist()
 }
 
+/**
+ * O catálogo de irregularidades vive DENTRO da janela do item.
+ *
+ * Era uma lista única da vistoria, num passo à parte. Com o item virando grupo,
+ * a irregularidade passou a pertencer ao ponto da obra onde foi constatada —
+ * então esta função só repinta a janela aberta, se houver uma.
+ */
 function renderChecklist() {
-  const alvo = document.getElementById('nv-checklist')
-  alvo.innerHTML = vState.catalogo.map(i => `
-    <label class="chk-item" onclick="setTimeout(()=>{this.classList.toggle('marcado', this.querySelector('input').checked);sugerirArtigos()},0)">
-      <input type="checkbox" name="irregularidades[]" value="${i.id}">
-      <span class="desc">${esc(i.descricao)}<br><span class="cod">${esc(i.codigo)} · ${esc(i.gravidade)}</span></span>
-    </label>`).join('')
+  if (vState.itemAberto !== null) { renderIrregularidadesDoItem() }
 
   // O catálogo só chega do servidor DEPOIS de o rascunho ser lido, e por isso
   // as marcas são reaplicadas aqui — não em restaurarRascunho, onde ainda não
   // existiam caixas para marcar.
-  if (vState.rascunhoIrreg?.length) {
-    vState.rascunhoIrreg.forEach(id => {
-      const c = alvo.querySelector(`input[value="${id}"]`)
-      if (c) { c.checked = true; c.closest('.chk-item').classList.add('marcado') }
-    })
-    vState.rascunhoIrreg = null
-    sugerirArtigos()
-  }
+  // O CHECKLIST DEIXOU DE SER DOM DA TELA, e com isso caiu todo o mecanismo
+  // do `rascunhoIrreg`: ele existia porque as marcas do rascunho chegavam
+  // antes das caixas e precisavam esperar o catálogo. Agora a irregularidade
+  // é DADO dentro do item — voltar do rascunho é devolver a lista, e a janela
+  // do item pinta o que estiver nela.
+  sugerirArtigos()
 }
 
 // ── PASSO 3: ARTIGOS DE LEI ──────────────────────────────────
@@ -954,19 +958,16 @@ function renderChecklist() {
  * pode ainda medir, fotografar ou perguntar; na mesa, não pode mais.
  */
 async function sugerirArtigos() {
-  const alvo = document.getElementById('nv-artigos')
-  if (!alvo) { return }
+  // O bloco `#nv-artigos` saiu da tela: quem mostra os artigos agora é o
+  // seletor da janela do item, e a sugestão só alimenta a lista dele.
 
-  // Enquanto o rascunho tem marcas à espera do catálogo, o checklist na tela
-  // ainda está vazio — e concluir daí que "nada foi marcado" apagaria a
-  // escolha de artigos que o rascunho acabou de trazer.
-  if (vState.rascunhoIrreg) { return }
 
-  const ids = [...document.querySelectorAll('#nv-checklist input:checked')].map(c => c.value)
+  // A SOMA DOS ITENS, e não um checklist de tela: cada irregularidade pertence
+  // a um item, e o enquadramento é da vistoria inteira.
+  const ids = irregularidadesDaVistoria()
   if (!ids.length) {
     vState.artigos = []
-    vState.artigosMarcados = new Set()
-    alvo.innerHTML = '<div class="leg">Marque as irregularidades para ver os artigos que as enquadram.</div>'
+    if (vState.itemAberto !== null) { preencherSeletorDeArtigos() }
     return
   }
 
@@ -976,56 +977,45 @@ async function sugerirArtigos() {
     if (!r.ok) { throw new Error('HTTP ' + r.status) }
     const d = await r.json()
 
-    // Sugerido é sugerido: artigo NOVO na lista já vem marcado, e o fiscal
-    // desmarca o que não couber. Só os novos — remarcar o que ele acabou de
-    // desmarcar (ou o que veio do rascunho) desfaria a decisão dele a cada
-    // clique no checklist.
-    const jaVistos = new Set(vState.artigos.map(x => x.id))
+    // A sugestão OFERECE, e não escolhe: os artigos entram no seletor da
+    // janela do item, e é o fiscal quem cita o que couber. Antes ela marcava
+    // sozinha uma lista paralela, que podia discordar do que ele escreveu.
     vState.artigos = d.artigos ?? []
-    if (vState.artigosDoRascunho) { vState.artigosDoRascunho = false }
-    else { vState.artigos.forEach(x => { if (!jaVistos.has(x.id)) { vState.artigosMarcados.add(x.id) } }) }
     renderArtigos(d.sem_artigo ?? [])
   } catch (e) {
     console.error(e)
-    alvo.innerHTML = '<div class="leg">Não foi possível buscar os artigos agora. '
-                   + 'A vistoria pode ser gravada assim mesmo.</div>'
+    toast('Não foi possível buscar os artigos agora. A vistoria grava assim mesmo.', 'aviso')
   }
 }
 
-/** @param {Array<string>} semArtigo irregularidades que nenhum artigo enquadra */
+/**
+ * O que a sugestão devolveu, guardado para o seletor da janela do item.
+ *
+ * A LISTA DE MARCAR ARTIGOS SAIU. Ela existia quando o relatório era plano: o
+ * fiscal marcava os dispositivos da vistoria num lugar e escrevia sobre eles em
+ * outro, e as duas listas podiam discordar. Agora o artigo é citado DENTRO do
+ * item, com o texto ao lado — e os artigos da vistoria são a soma do que os
+ * itens citaram. Uma verdade só.
+ *
+ * @param {Array<string>} semArtigo irregularidades que nenhum artigo enquadra
+ */
 function renderArtigos(semArtigo) {
-  const alvo = document.getElementById('nv-artigos')
+  // Dizer o que NÃO está fundamentado é o ponto: em silêncio, o fiscal veria
+  // três artigos sugeridos e concluiria que as cinco marcações estão cobertas.
+  vState.semArtigo = semArtigo ?? []
 
-  // Dizer o que NÃO está fundamentado é o ponto: escondido, o fiscal veria
-  // três artigos e concluiria que as cinco marcações estão cobertas.
-  const aviso = semArtigo.length
-    ? `<div class="cad-nota">Sem artigo cadastrado: ${semArtigo.map(esc).join('; ')}.
-        A vistoria grava, mas a peça vai precisar do enquadramento.</div>`
-    : ''
-
-  if (!vState.artigos.length) {
-    alvo.innerHTML = aviso || '<div class="leg">Nenhum artigo enquadra o que foi marcado.</div>'
-    return
+  if (vState.semArtigo.length) {
+    toast('Sem artigo cadastrado para: ' + vState.semArtigo.join('; ')
+      + '. A vistoria grava, mas a peça vai precisar do enquadramento.', 'aviso')
   }
 
-  alvo.innerHTML = vState.artigos.map(a => {
-    const m = vState.artigosMarcados.has(a.id)
-    // "Por m² construído" avisa, ali mesmo, que a área do passo 2 é o que vai
-    // fechar a conta da multa.
-    const base = a.base ? `<div class="base">${esc(a.base)}${a.lei ? ' · ' + esc(a.lei) : ''}</div>` : ''
-    return `<label class="vs-artigo${m ? ' marcado' : ''}">
-      <input type="checkbox" ${m ? 'checked' : ''} onchange="alternarArtigo(${a.id}, this.checked)">
-      <span style="flex:1;min-width:0">
-        <span class="num">${esc(a.numero)}</span>
-        <span class="cond">${esc(a.conduta ?? '')}</span>${base}
-      </span></label>`
-  }).join('') + aviso
+  // O seletor do item se refaz com a lista nova, se a janela estiver aberta.
+  if (vState.itemAberto !== null) { preencherSeletorDeArtigos() }
 }
 
-/** @param {number} id @param {boolean} marcado */
-function alternarArtigo(id, marcado) {
-  marcado ? vState.artigosMarcados.add(id) : vState.artigosMarcados.delete(id)
-  renderArtigos([])
+/** Os artigos citados na vistoria — a soma do que os itens citaram. */
+function artigosDaVistoria() {
+  return [...new Set(vState.relatorio.flatMap(i => i.artigos.map(a => a.artigo_id)))]
 }
 
 /** Mantém o campo escondido com o valor combinado aaaa-mm-ddThh:mm. */
@@ -1036,300 +1026,516 @@ function syncDataHora() {
   atualizarDisplayData(document.getElementById('nv-data'))
 }
 
-// ── PASSO 3: O RELATÓRIO ─────────────────────────────────────
+// ══════════════════════════════════════════════
+// O RELATÓRIO EM ITENS
 //
-// Quatro tipos de linha, uma lista só, um botão só. A ordem entre elas é
-// conteúdo: a foto logo depois do artigo que ela ilustra conta algo que a
-// mesma foto no fim de uma pilha de fotos não conta.
+// Cada item é um GRUPO, e não uma linha. Em campo o que se constata não vem
+// separado: "muro sem recuo" é uma irregularidade, mais o que o fiscal escreveu
+// sobre ela, mais os artigos que a enquadram, mais as fotos que a provam. Eram
+// quatro linhas soltas, que precisavam ser lidas juntas e podiam ser
+// reordenadas em separado — desmontando o raciocínio.
+//
+// A ordem ENTRE itens é escolhida (é a sequência em que a obra foi percorrida).
+// A ordem DENTRO do item é fixa e não se escolhe:
+//
+//   1 irregularidades   o que a lei chama de infração
+//   2 texto livre       o que se viu, com as palavras do fiscal
+//   3 artigos           o enquadramento
+//   4 exigências        o que se cobra, com prazo
+//   5 fotos             a prova
+//
+// É a ordem do raciocínio de uma peça. Deixá-la à escolha faria cada relatório
+// sair diferente, e quem lê vinte por semana perde o hábito de leitura.
+// ══════════════════════════════════════════════
 
-/** O que o botão "Adicionar" oferece, e para que serve cada um. */
-const TIPOS_ITEM = {
-  foto: {
-    rotulo: 'Foto',
-    obs: 'Uma imagem com legenda — e marcas apontando o que ela mostra.',
-    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-      stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
-  },
-  citacao: {
-    rotulo: 'Artigo com observação',
-    obs: 'O que se constatou em relação ao dispositivo. Vira FATO na peça.',
-    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-      stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
-  },
-  parecer: {
-    rotulo: 'Parecer sobre um artigo',
-    obs: 'A sua conclusão sobre ele. Vira FUNDAMENTAÇÃO.',
-    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-      stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>`,
-  },
-  exigencia: {
-    rotulo: 'Exigência',
-    obs: 'O que o administrado deve fazer, com prazo. A notificação imprime.',
-    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-      stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
-  },
+/** Um item vazio — a folha em branco de um grupo. */
+function itemVazio() {
+  return { texto: '', irregularidades: [], artigos: [], exigencias: [], fotos: [] }
 }
 
-/** @param {Event} ev */
-function menuItemRelatorio(ev) {
-  abrirMenuNovo(ev.currentTarget, Object.entries(TIPOS_ITEM).map(([tipo, t]) => ({
-    rotulo: t.rotulo,
-    obs: t.obs,
-    icone: t.icone,
-    // Traço antes da exigência: acima está o que se CONSTATOU, abaixo o que se
-    // COBRA. São naturezas diferentes dentro do mesmo relatório.
-    separar: tipo === 'exigencia',
-    acao: () => novoItemRelatorio(tipo),
-  })))
+/** Acrescenta um item e abre a janela dele: ninguém quer um grupo vazio na lista. */
+function novoItemRelatorio() {
+  vState.relatorio.push(itemVazio())
+  renderRelatorio()
+  abrirItemRelatorio(vState.relatorio.length - 1)
 }
 
-/** @param {'foto'|'citacao'|'parecer'|'exigencia'} tipo */
-function novoItemRelatorio(tipo) {
-  if (tipo === 'foto') { escolherArquivoDeFoto(); return }
-
-  if ((tipo === 'citacao' || tipo === 'parecer') && !vState.artigos.length) {
-    // Sem artigo carregado não há o que citar. Buscar agora é melhor do que
-    // abrir uma janela com um seletor vazio.
-    sugerirArtigos().then(() => abrirItemRelatorio(criarItem(tipo)))
-    return
-  }
-  abrirItemRelatorio(criarItem(tipo))
+/** @param {Object} item @returns {boolean} */
+function itemVazioDeConteudo(item) {
+  return !item.texto?.trim()
+    && !item.irregularidades.length && !item.artigos.length
+    && !item.exigencias.length && !item.fotos.length
 }
 
-/** @param {string} tipo @returns {number} índice do item criado */
-function criarItem(tipo) {
-  vState.relatorio.push({ tipo, texto: '', artigo_id: null, prazo: null })
-  return vState.relatorio.length - 1
-}
-
-/** Abre o seletor de arquivo do relatório — o mesmo para o atalho rápido. */
-function escolherArquivoDeFoto() {
-  document.getElementById('nv-arquivo')?.click()
-}
+// ── A LISTA ──────────────────────────────────────────────────
 
 /**
- * Handler do input de arquivo: cada arquivo entra como um ITEM do relatório,
- * no fim da lista, e a janela abre no primeiro para pedir a legenda.
+ * Cada item é um cartão com o resumo dos seus blocos.
  *
- * @param {HTMLInputElement} input
+ * O resumo diz o que TEM dentro, e não o conteúdo: o texto inteiro mora na
+ * janela do item, porque é texto de peça e merece o espaço de um formulário.
+ * Aqui o que importa é reconhecer o grupo e poder movê-lo.
  */
-function anexarArquivos(input) {
-  const primeiro = vState.relatorio.length
-  for (const arquivo of input.files) {
-    vState.anexos.push({
-      arquivo,
-      titulo: arquivo.name.replace(/\.[^.]+$/, '').slice(0, 160),
-      descricao: '',
-      url: arquivo.type.startsWith('image/') ? URL.createObjectURL(arquivo) : null,
-    })
-    vState.relatorio.push({
-      tipo: 'foto', texto: '', anexo: vState.anexos.length - 1,
-      fachada: false, marcacoes: [],
-    })
-  }
-  input.value = ''   // permite reanexar o mesmo arquivo depois de remover
-
-  // A primeira foto de imagem vira a fachada por padrão: é quase sempre a que
-  // o fiscal tira primeiro, e uma marca errada custa um toque para corrigir —
-  // enquanto marca nenhuma faz a ficha voltar a mostrar foto qualquer.
-  if (!vState.relatorio.some(i => i.fachada)) {
-    const f = vState.relatorio.find(i => i.tipo === 'foto' && vState.anexos[i.anexo]?.url)
-    if (f) { f.fachada = true }
-  }
-
-  renderRelatorio()
-  if (vState.relatorio[primeiro]) { abrirItemRelatorio(primeiro) }
-}
-
-/** A lista, na ordem montada. Cada linha é só o resumo; o texto mora na janela. */
 function renderRelatorio() {
   const alvo = document.getElementById('nv-relatorio')
   if (!alvo) { return }
 
   if (!vState.relatorio.length) {
-    alvo.innerHTML = '<div class="vazio-msg">Nada no relatório ainda. '
-                   + 'Vistoria regular costuma ter uma foto e uma linha de parecer.</div>'
+    alvo.innerHTML = '<div class="leg">Nenhum item ainda. Cada item é um ponto da obra: '
+      + 'a irregularidade, o que você viu, os artigos, o que exige e as fotos.</div>'
     return
   }
 
   alvo.innerHTML = vState.relatorio.map((item, i) => {
-    const t = TIPOS_ITEM[item.tipo] || TIPOS_ITEM.citacao
-    const anexo = item.tipo === 'foto' ? vState.anexos[item.anexo] : null
-    const artigo = item.artigo_id ? vState.artigos.find(a => a.id === item.artigo_id) : null
+    const selos = []
+    if (item.irregularidades.length) { selos.push(`${item.irregularidades.length} irregularidade(s)`) }
+    if (item.artigos.length)         { selos.push(`${item.artigos.length} artigo(s)`) }
+    if (item.exigencias.length)      { selos.push(`${item.exigencias.length} exigência(s)`) }
+    if (item.fotos.length)           { selos.push(`${item.fotos.length} foto(s)`) }
 
-    const capa = anexo
-      ? `<div class="rel-thumb">${anexo.url ? `<img src="${anexo.url}" alt="">` : '<div class="pdf">PDF</div>'}
-           ${(item.marcacoes || []).length ? `<span class="rel-marcas">${item.marcacoes.length}</span>` : ''}</div>`
-      : `<div class="rel-ico rel-ico-${esc(item.tipo)}">${t.icone}</div>`
+    // A primeira foto do item vira a miniatura: é o que faz reconhecer o ponto
+    // da obra de relance, sem abrir.
+    const capa = item.fotos.find(f => vState.anexos[f.anexo]?.url && !vState.anexos[f.anexo]?.removido)
+    const mini = capa
+      ? `<img class="rel-mini" src="${esc(vState.anexos[capa.anexo].url)}" alt="">`
+      : `<span class="rel-num">${i + 1}</span>`
 
-    const titulo = item.tipo === 'foto'
-      ? esc(anexo?.titulo || 'Foto')
-      : artigo ? esc(artigo.numero) : t.rotulo
-
-    const falta = !item.texto.trim()
-      || ((item.tipo === 'citacao' || item.tipo === 'parecer') && !item.artigo_id)
+    const resumo = item.texto?.trim()
+      ? esc(item.texto.trim().slice(0, 120)) + (item.texto.trim().length > 120 ? '…' : '')
+      : '<span class="rel-sem">sem texto</span>'
 
     return `
-      <div class="rel-item${falta ? ' rel-falta' : ''}" onclick="abrirItemRelatorio(${i})">
-        ${capa}
+      <div class="rel-item${itemVazioDeConteudo(item) ? ' rel-falta' : ''}"
+           onclick="abrirItemRelatorio(${i})">
+        <div class="rel-capa">${mini}</div>
         <div class="rel-corpo">
-          <div class="rel-topo">
-            <span class="rel-tipo">${esc(t.rotulo)}</span>
-            ${item.fachada ? '<span class="badge bd-ok">Fachada</span>' : ''}
-            ${item.prazo ? `<span class="badge bd-al">${item.prazo} dias</span>` : ''}
-          </div>
-          <div class="rel-tit">${titulo}</div>
-          <div class="rel-txt">${item.texto.trim() ? esc(item.texto) : '<i>sem texto — toque para escrever</i>'}</div>
+          <div class="rel-tit">Item ${i + 1}</div>
+          <div class="rel-txt">${resumo}</div>
+          ${selos.length ? `<div class="rel-selos">${selos.map(s => `<span>${esc(s)}</span>`).join('')}</div>` : ''}
         </div>
-        <div class="rel-mover">
-          <button type="button" class="rel-seta" title="Subir"
-                  onclick="event.stopPropagation();moverItem(${i},-1)"${i === 0 ? ' disabled' : ''}>&#9650;</button>
-          <button type="button" class="rel-seta" title="Descer"
-                  onclick="event.stopPropagation();moverItem(${i},1)"${i === vState.relatorio.length - 1 ? ' disabled' : ''}>&#9660;</button>
+        <div class="rel-setas" onclick="event.stopPropagation()">
+          <button type="button" onclick="moverItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}
+                  title="Subir">&#9650;</button>
+          <button type="button" onclick="moverItem(${i}, 1)"
+                  ${i === vState.relatorio.length - 1 ? 'disabled' : ''} title="Descer">&#9660;</button>
         </div>
       </div>`
   }).join('')
 }
 
-/** Sobe ou desce um item — é assim que a sequência do relatório se ajusta. */
+/** @param {number} i @param {number} d -1 sobe, 1 desce */
 function moverItem(i, d) {
   const j = i + d
   if (j < 0 || j >= vState.relatorio.length) { return }
+
   const [item] = vState.relatorio.splice(i, 1)
-  // `splice` fora do intervalo devolve lista vazia, e reinserir `undefined`
-  // deixaria um buraco na lista que so estoura na proxima pintura — longe
-  // daqui, com a mensagem errada. Melhor nao mexer.
-  if (!item) { renderRelatorio(); return }
   vState.relatorio.splice(j, 0, item)
   renderRelatorio()
 }
 
-// ── A JANELA DE UM ITEM ──────────────────────────────────────
+// ── A JANELA DO ITEM ─────────────────────────────────────────
+//
+// Os cinco blocos numa janela só, na mesma ordem em que sairão no relatório.
+// Editar em cinco telas separadas quebraria justamente o que o item existe para
+// juntar.
 
 /** @param {number} i */
 function abrirItemRelatorio(i) {
   const item = vState.relatorio[i]
   if (!item) { return }
+
   vState.itemAberto = i
+  document.getElementById('vsi-titulo').textContent = `Item ${i + 1} do relatório`
+  document.getElementById('vsi-texto').value = item.texto ?? ''
 
-  const t = TIPOS_ITEM[item.tipo]
-  document.getElementById('vsi-titulo').textContent = t.rotulo
-  document.getElementById('vsi-foto').hidden = item.tipo !== 'foto'
-  document.getElementById('vsi-artigo').hidden = item.tipo !== 'citacao' && item.tipo !== 'parecer'
-  document.getElementById('vsi-exigencia').hidden = item.tipo !== 'exigencia'
-
-  document.getElementById('vsi-texto').value = item.texto || ''
-  document.getElementById('vsi-texto-rot').textContent =
-    item.tipo === 'foto' ? 'O que a foto mostra'
-      : item.tipo === 'parecer' ? 'Parecer'
-      : item.tipo === 'exigencia' ? 'O que deve ser feito'
-      : 'O que foi constatado'
-
-  if (item.tipo === 'foto') {
-    const anexo = vState.anexos[item.anexo]
-    document.getElementById('vsi-titulo-foto').value = anexo?.titulo || ''
-    document.getElementById('vsi-fachada').checked = !!item.fachada
-    const img = document.getElementById('vsi-img')
-    img.src = anexo?.url || ''
-    img.hidden = !anexo?.url
-    document.getElementById('vsi-dica').textContent = anexo?.url
-      ? 'Toque na foto para apontar o que descreve.'
-      : 'Arquivo PDF — sem marcação.'
-    pintarPinos()
-  }
-
-  if (item.tipo === 'citacao' || item.tipo === 'parecer') {
-    preencherSeletorDeArtigos(item.artigo_id)
-  }
-
-  if (item.tipo === 'exigencia') {
-    document.getElementById('vsi-prazo').value = item.prazo ?? ''
-  }
+  renderIrregularidadesDoItem()
+  renderArtigosDoItem()
+  renderExigenciasDoItem()
+  renderFotosDoItem()
 
   openModal('m-vs-item')
 }
 
-/**
- * O seletor de artigos da janela.
- *
- * Lista os sugeridos pelas irregularidades marcadas — e, quando não há
- * nenhuma marcada, diz isso em vez de mostrar um seletor vazio, que pareceria
- * defeito.
- *
- * @param {number|null} escolhido
- */
-function preencherSeletorDeArtigos(escolhido) {
-  const sel = document.getElementById('vsi-artigo-id')
-  const nota = document.getElementById('vsi-artigo-nota')
-
-  sel.innerHTML = '<option value="">— escolha o artigo —</option>'
-    + vState.artigos.map(a =>
-        `<option value="${a.id}">${esc(a.numero)}${a.conduta ? ' — ' + esc(a.conduta.slice(0, 70)) : ''}</option>`).join('')
-  if (escolhido) { sel.value = String(escolhido) }
-
-  nota.hidden = vState.artigos.length > 0
-  nota.textContent = 'Nenhum artigo sugerido ainda. Marque as irregularidades do '
-                   + 'catálogo, no fim da tela, para o sistema oferecer os dispositivos.'
+/** O item aberto agora, ou null. */
+function itemAtual() {
+  return vState.relatorio[vState.itemAberto] ?? null
 }
 
-function salvarItemRelatorio() {
-  const i = vState.itemAberto
-  const item = vState.relatorio[i]
+// ── bloco 1: irregularidades ──
+
+/**
+ * O catálogo, com o que já foi usado em OUTRO item bloqueado.
+ *
+ * O banco tem índice único (vistoria, irregularidade): a mesma não pode ser
+ * constatada em dois itens. Dizer isso aqui, com o número do item que a usa,
+ * evita o pedido recusado depois de todo o trabalho — o que se repete em vários
+ * pontos da obra é o texto e a foto, não o enquadramento.
+ */
+function renderIrregularidadesDoItem() {
+  const alvo = document.getElementById('vsi-irreg')
+  const item = itemAtual()
+  if (!alvo || !item) { return }
+
+  // De quem é cada irregularidade já escolhida em outro item.
+  const dono = new Map()
+  vState.relatorio.forEach((it, n) => {
+    if (n === vState.itemAberto) { return }
+    it.irregularidades.forEach(id => dono.set(id, n + 1))
+  })
+
+  alvo.innerHTML = vState.catalogo.map(irr => {
+    const marcado = item.irregularidades.includes(irr.id)
+    const usadaEm = dono.get(irr.id)
+
+    return `
+      <label class="chk-item${marcado ? ' marcado' : ''}${usadaEm ? ' chk-bloq' : ''}">
+        <input type="checkbox" value="${irr.id}" ${marcado ? 'checked' : ''}
+               ${usadaEm ? 'disabled' : ''} onchange="alternarIrregularidadeDoItem(${irr.id}, this.checked)">
+        <span class="desc">${esc(irr.descricao)}<br>
+          <span class="cod">${esc(irr.codigo)} · ${esc(irr.gravidade)}${
+            usadaEm ? ` · já usada no item ${usadaEm}` : ''}</span>
+        </span>
+      </label>`
+  }).join('')
+
+  document.getElementById('vsi-irreg-conta').textContent =
+    item.irregularidades.length ? `${item.irregularidades.length} marcada(s)` : ''
+}
+
+/** @param {number} id @param {boolean} marcado */
+function alternarIrregularidadeDoItem(id, marcado) {
+  const item = itemAtual()
   if (!item) { return }
 
-  item.texto = document.getElementById('vsi-texto').value.trim()
+  item.irregularidades = marcado
+    ? [...new Set([...item.irregularidades, id])]
+    : item.irregularidades.filter(x => x !== id)
 
-  if (item.tipo === 'foto') {
-    const anexo = vState.anexos[item.anexo]
-    if (anexo) { anexo.titulo = document.getElementById('vsi-titulo-foto').value.trim() || anexo.titulo }
-    const fachada = document.getElementById('vsi-fachada').checked
-    // Uma fachada por vistoria: ela responde "como está o imóvel hoje", e duas
-    // respostas não respondem nada.
-    if (fachada) { vState.relatorio.forEach(x => { x.fachada = false }) }
-    item.fachada = fachada
+  renderIrregularidadesDoItem()
+  // A sugestão de artigos lê a SOMA dos itens: marcar aqui muda o que ela
+  // oferece no item inteiro.
+  sugerirArtigos()
+}
+
+// ── bloco 3: artigos ──
+
+function renderArtigosDoItem() {
+  const alvo = document.getElementById('vsi-artigos')
+  const item = itemAtual()
+  if (!alvo || !item) { return }
+
+  alvo.innerHTML = item.artigos.length
+    ? item.artigos.map((a, j) => `
+        <div class="vsi-linha">
+          <div class="vsi-linha-corpo">
+            <div class="vsi-linha-tit">${esc(nomeDoArtigo(a.artigo_id))}
+              <span class="vsi-linha-tipo">${a.tipo === 'parecer' ? 'parecer' : 'citação'}</span>
+            </div>
+            ${a.texto ? `<div class="vsi-linha-txt">${esc(a.texto)}</div>` : ''}
+          </div>
+          <button type="button" class="vsi-x" onclick="removerArtigoDoItem(${j})"
+                  title="Remover">&#10005;</button>
+        </div>`).join('')
+    : '<div class="leg">Nenhum artigo citado neste item.</div>'
+
+  preencherSeletorDeArtigos()
+}
+
+/** @param {number} id @returns {string} */
+function nomeDoArtigo(id) {
+  const a = vState.artigos.find(x => x.id === id)
+  return a ? (a.rotulo || a.numero) : 'Artigo'
+}
+
+function adicionarArtigoAoItem() {
+  const item = itemAtual()
+  const sel = document.getElementById('vsi-artigo-id')
+  const id = Number(sel.value)
+  if (!item || !id) { toast('Escolha o artigo', 'err'); return }
+
+  if (item.artigos.some(a => a.artigo_id === id)) {
+    toast('Este artigo já está no item', 'aviso'); return
   }
 
-  if (item.tipo === 'citacao' || item.tipo === 'parecer') {
-    const id = document.getElementById('vsi-artigo-id').value
-    if (!id) { toast('Escolha o artigo', 'err'); return }
-    item.artigo_id = Number(id)
-  }
+  item.artigos.push({
+    artigo_id: id,
+    tipo: document.getElementById('vsi-artigo-tipo').value,
+    texto: document.getElementById('vsi-artigo-obs').value.trim() || null,
+  })
+  document.getElementById('vsi-artigo-obs').value = ''
+  renderArtigosDoItem()
+}
 
-  if (item.tipo === 'exigencia') {
-    if (!item.texto) { toast('Escreva a exigência', 'err'); return }
-    const p = document.getElementById('vsi-prazo').value
-    item.prazo = p ? Number(p) : null
-  }
+/** @param {number} j */
+function removerArtigoDoItem(j) {
+  const item = itemAtual()
+  if (!item) { return }
+  item.artigos.splice(j, 1)
+  renderArtigosDoItem()
+}
 
-  fModalBtn('m-vs-item')
+/** O seletor traz os artigos sugeridos pelas irregularidades da vistoria. */
+function preencherSeletorDeArtigos() {
+  const sel = document.getElementById('vsi-artigo-id')
+  if (!sel) { return }
+
+  const antes = sel.value
+  sel.innerHTML = '<option value="">— escolha o artigo —</option>'
+    + vState.artigos.map(a => `<option value="${a.id}">${esc(a.rotulo || a.numero)}</option>`).join('')
+  sel.value = antes
+
+  document.getElementById('vsi-artigo-nota').textContent = vState.artigos.length
+    ? ''
+    : 'Marque irregularidades para ver os artigos que as enquadram.'
+}
+
+// ── bloco 4: exigências ──
+
+function renderExigenciasDoItem() {
+  const alvo = document.getElementById('vsi-exigencias')
+  const item = itemAtual()
+  if (!alvo || !item) { return }
+
+  alvo.innerHTML = item.exigencias.length
+    ? item.exigencias.map((e, j) => `
+        <div class="vsi-linha">
+          <div class="vsi-linha-corpo">
+            <div class="vsi-linha-txt">${esc(e.texto)}</div>
+            ${e.prazo ? `<div class="vsi-linha-tipo">prazo de ${e.prazo} dias</div>` : ''}
+          </div>
+          <button type="button" class="vsi-x" onclick="removerExigenciaDoItem(${j})"
+                  title="Remover">&#10005;</button>
+        </div>`).join('')
+    : '<div class="leg">Nenhuma exigência neste item.</div>'
+}
+
+function adicionarExigenciaAoItem() {
+  const item = itemAtual()
+  const texto = document.getElementById('vsi-exig-texto').value.trim()
+  if (!item) { return }
+  if (!texto) { toast('Escreva a providência exigida', 'err'); return }
+
+  const prazo = Number(document.getElementById('vsi-exig-prazo').value) || null
+  item.exigencias.push({ texto, prazo })
+
+  document.getElementById('vsi-exig-texto').value = ''
+  document.getElementById('vsi-exig-prazo').value = ''
+  renderExigenciasDoItem()
+}
+
+/** @param {number} j */
+function removerExigenciaDoItem(j) {
+  const item = itemAtual()
+  if (!item) { return }
+  item.exigencias.splice(j, 1)
+  renderExigenciasDoItem()
+}
+
+// ── bloco 5: fotos ──
+
+/**
+ * As fotos do item, com a legenda e as marcações de cada uma.
+ *
+ * A marcação (o pino numerado sobre a imagem) continua sendo POR FOTO: é ela
+ * que deixa a legenda dizer "1" e "2" em vez de "no canto superior direito".
+ */
+function renderFotosDoItem() {
+  const alvo = document.getElementById('vsi-fotos')
+  const item = itemAtual()
+  if (!alvo || !item) { return }
+
+  const vivas = item.fotos.filter(f => !vState.anexos[f.anexo]?.removido)
+
+  alvo.innerHTML = vivas.length
+    ? vivas.map(f => {
+        const j = item.fotos.indexOf(f)
+        const anexo = vState.anexos[f.anexo] ?? {}
+        const ehImagem = !!anexo.url
+
+        return `
+          <div class="vsi-foto">
+            ${ehImagem
+              ? `<div class="vsi-palco" onclick="marcarNaFoto(event, ${j})">
+                   <img src="${esc(anexo.url)}" alt="">
+                   <div class="vsi-pinos">${(f.marcacoes || []).map((m, k) =>
+                     `<span class="vsi-pino" style="left:${m.x * 100}%;top:${m.y * 100}%">${k + 1}</span>`).join('')}</div>
+                 </div>`
+              : `<div class="vsi-arquivo">${esc(anexo.titulo || 'Documento anexado')}</div>`}
+            <div class="field">
+              <label>Legenda</label>
+              <textarea rows="2" oninput="vState.relatorio[${vState.itemAberto}].fotos[${j}].texto = this.value"
+                        placeholder="O que esta foto mostra">${esc(f.texto ?? '')}</textarea>
+            </div>
+            <div class="vsi-foto-acoes">
+              <label class="chk-item chk-linha">
+                <input type="checkbox" ${f.fachada ? 'checked' : ''}
+                       onchange="marcarFachada(${j}, this.checked)">
+                <span class="desc">É a fachada do imóvel</span>
+              </label>
+              ${ehImagem ? `<button type="button" class="btn sm" onclick="limparMarcacoes(${j})">Limpar marcas</button>` : ''}
+              <button type="button" class="btn sm perigo" onclick="removerFotoDoItem(${j})">Remover</button>
+            </div>
+          </div>`
+      }).join('')
+    : '<div class="leg">Nenhuma foto neste item.</div>'
+}
+
+/** @param {number} j @param {boolean} marcado */
+function marcarFachada(j, marcado) {
+  const item = itemAtual()
+  if (!item) { return }
+
+  // A fachada é UMA na vistoria inteira: é a foto que responde "como está o
+  // imóvel hoje", e duas respostas para isso não fazem sentido.
+  if (marcado) {
+    vState.relatorio.forEach(it => it.fotos.forEach(f => { f.fachada = false }))
+  }
+  item.fotos[j].fachada = marcado
+  renderFotosDoItem()
+}
+
+/** @param {number} j */
+function removerFotoDoItem(j) {
+  const item = itemAtual()
+  if (!item) { return }
+
+  const anexo = vState.anexos[item.fotos[j].anexo]
+  if (anexo) { anexo.removido = true }
+  item.fotos.splice(j, 1)
+  renderFotosDoItem()
   renderRelatorio()
 }
 
-/** Exclusão SEMPRE pergunta antes — regra sem exceção. */
+// ── fechar a janela ──
+
+function salvarItemRelatorio() {
+  const item = itemAtual()
+  if (item) { item.texto = document.getElementById('vsi-texto').value.trim() }
+
+  if (item && itemVazioDeConteudo(item)) {
+    toast('O item está vazio — escreva algo, marque uma irregularidade ou anexe uma foto.', 'err')
+    return
+  }
+
+  fModalBtn('m-vs-item')
+  vState.itemAberto = null
+  renderRelatorio()
+}
+
+/**
+ * Fecha sem gravar o texto digitado.
+ *
+ * Os outros blocos já foram para o estado quando foram acrescentados — botão
+ * "adicionar" é gravação. O texto livre é o único que fica no campo até o fim,
+ * e é ele que se perde aqui; o aviso diz isso.
+ */
+function fecharItemRelatorio() {
+  const item = itemAtual()
+
+  if (item && itemVazioDeConteudo(item) && !document.getElementById('vsi-texto').value.trim()) {
+    // Item que nasceu agora e não recebeu nada não deve ficar na lista.
+    vState.relatorio.splice(vState.itemAberto, 1)
+  }
+
+  fModalBtn('m-vs-item')
+  vState.itemAberto = null
+  renderRelatorio()
+}
+
 function excluirItemRelatorio() {
   const i = vState.itemAberto
-  const item = vState.relatorio[i]
-  if (!item) { return }
+  if (i === null || !vState.relatorio[i]) { return }
 
   confirmarAcao({
-    titulo: 'Remover do relatório',
-    mensagem: 'Remover este item da vistoria?',
-    textoBtn: 'Remover',
+    titulo: 'Excluir item',
+    mensagem: 'O item sai do relatório com tudo que está nele — irregularidades, '
+      + 'texto, artigos, exigências e fotos.',
+    textoBtn: 'Excluir',
     perigo: true,
     onConfirm: () => {
-      if (item.tipo === 'foto') {
-        const anexo = vState.anexos[item.anexo]
-        if (anexo?.url) { URL.revokeObjectURL(anexo.url) }
-        // O anexo NÃO sai do array: os índices dos outros itens apontam para
-        // posições dele. Marcar como removido e filtrar no envio custa um
-        // campo; reindexar custaria um bug silencioso na foto errada.
+      // As fotos do item somem junto: elas eram a prova DELE.
+      vState.relatorio[i].fotos.forEach(f => {
+        const anexo = vState.anexos[f.anexo]
         if (anexo) { anexo.removido = true }
-      }
+      })
       vState.relatorio.splice(i, 1)
       fModalBtn('m-vs-item')
+      vState.itemAberto = null
       renderRelatorio()
     },
   })
+}
+/** Todas as irregularidades marcadas na vistoria, de todos os itens. */
+function irregularidadesDaVistoria() {
+  return [...new Set(vState.relatorio.flatMap(i => i.irregularidades))]
+}
+
+/**
+ * Abre o seletor de arquivo.
+ *
+ * A foto entra SEMPRE num item: se nenhum está aberto — é o caso da vistoria
+ * rápida, que pula direto para a foto —, um item nasce para recebê-la. Foto
+ * solta não existe mais no relatório.
+ */
+function escolherArquivoDeFoto() {
+  if (vState.itemAberto === null) {
+    vState.relatorio.push(itemVazio())
+    vState.itemAberto = vState.relatorio.length - 1
+    renderRelatorio()
+  }
+  document.getElementById('nv-arquivo').click()
+}
+
+/**
+ * Recebe os arquivos escolhidos e pendura no item aberto.
+ *
+ * O anexo vai para `vState.anexos` (a remessa achatada, que é como o upload
+ * funciona) e o item guarda só o ÍNDICE dele — é esse índice que o servidor usa
+ * para saber de qual grupo é cada arquivo.
+ *
+ * @param {HTMLInputElement} input
+ */
+function anexarArquivos(input) {
+  const item = itemAtual()
+  if (!item) { input.value = ''; return }
+
+  for (const arquivo of input.files) {
+    // A URL local é só para exibir enquanto a vistoria não foi gravada; ela é
+    // revogada em `zerarVistoria` para não vazar memória.
+    const ehImagem = arquivo.type.startsWith('image/')
+
+    vState.anexos.push({
+      arquivo,
+      titulo: arquivo.name,
+      url: ehImagem ? URL.createObjectURL(arquivo) : null,
+      removido: false,
+    })
+
+    item.fotos.push({
+      anexo: vState.anexos.length - 1,
+      texto: '',
+      fachada: false,
+      marcacoes: [],
+    })
+  }
+
+  input.value = ''   // permite reanexar o mesmo arquivo depois de remover
+
+  // A primeira imagem da vistoria vira a fachada: é quase sempre a que
+  // responde "como está o imóvel hoje", e marcar à mão toda vez é atrito.
+  const jaTemFachada = vState.relatorio.some(i => i.fotos.some(f => f.fachada))
+  if (!jaTemFachada) {
+    const primeira = item.fotos.find(f => vState.anexos[f.anexo]?.url)
+    if (primeira) { primeira.fachada = true }
+  }
+
+  renderFotosDoItem()
+  renderRelatorio()
+
+  // Chamada pela vistoria rápida, quando a janela ainda não está aberta.
+  if (!document.getElementById('m-vs-item').classList.contains('open')) {
+    abrirItemRelatorio(vState.itemAberto)
+  }
 }
 
 // ── MARCAÇÕES SOBRE A FOTO ───────────────────────────────────
@@ -1341,38 +1547,40 @@ function excluirItemRelatorio() {
 // As coordenadas são RELATIVAS (0 a 1): a mesma foto aparece em tamanhos
 // diferentes na janela, na lista e na ficha, e pixel absoluto sairia do lugar.
 
-/** @param {MouseEvent} ev */
-function marcarNaFoto(ev) {
-  const item = vState.relatorio[vState.itemAberto]
-  if (!item || item.tipo !== 'foto') { return }
-  const img = document.getElementById('vsi-img')
-  if (img.hidden) { return }
+/**
+ * Um toque crava um número NA FOTO daquele índice do item.
+ *
+ * O índice é obrigatório agora: o item tem várias fotos, e antes havia uma só
+ * — a função lia `vState.itemAberto` e pronto. Sem ele, a marca cairia sempre
+ * na primeira.
+ *
+ * @param {MouseEvent} ev @param {number} j índice da foto dentro do item
+ */
+function marcarNaFoto(ev, j) {
+  const foto = itemAtual()?.fotos?.[j]
+  if (!foto) { return }
+
+  const img = ev.currentTarget.querySelector('img')
+  if (!img) { return }
 
   const r = img.getBoundingClientRect()
   const x = (ev.clientX - r.left) / r.width
   const y = (ev.clientY - r.top) / r.height
   if (x < 0 || x > 1 || y < 0 || y > 1) { return }
 
-  item.marcacoes = item.marcacoes || []
-  if (item.marcacoes.length >= 20) { toast('Limite de 20 marcas na foto', 'aviso'); return }
-  item.marcacoes.push({ n: item.marcacoes.length + 1, x: +x.toFixed(4), y: +y.toFixed(4) })
-  pintarPinos()
+  foto.marcacoes = foto.marcacoes || []
+  if (foto.marcacoes.length >= 20) { toast('Limite de 20 marcas na foto', 'aviso'); return }
+
+  foto.marcacoes.push({ n: foto.marcacoes.length + 1, x: +x.toFixed(4), y: +y.toFixed(4) })
+  renderFotosDoItem()
 }
 
-function limparMarcacoes() {
-  const item = vState.relatorio[vState.itemAberto]
-  if (!item) { return }
-  item.marcacoes = []
-  pintarPinos()
-}
-
-function pintarPinos() {
-  const item = vState.relatorio[vState.itemAberto]
-  const alvo = document.getElementById('vsi-pinos')
-  if (!alvo || !item) { return }
-  alvo.innerHTML = (item.marcacoes || []).map(m =>
-    `<span class="vsi-pino" style="left:${(m.x * 100).toFixed(2)}%;top:${(m.y * 100).toFixed(2)}%">${m.n}</span>`
-  ).join('')
+/** @param {number} j */
+function limparMarcacoes(j) {
+  const foto = itemAtual()?.fotos?.[j]
+  if (!foto) { return }
+  foto.marcacoes = []
+  renderFotosDoItem()
 }
 
 // ── PASSO 5: REVISÃO ─────────────────────────────────────────
@@ -1384,7 +1592,9 @@ function pintarPinos() {
  * formulário: é daqui que saem notificação, auto de infração e embargo.
  */
 function renderRevisao() {
-  const marcadas = [...document.querySelectorAll('#nv-checklist input:checked')]
+  const marcadas = irregularidadesDaVistoria()
+    .map(id => vState.catalogo.find(c => c.id === id))
+    .filter(Boolean)
   const sit = document.getElementById('nv-situacao')
   const area = document.getElementById('nv-area').value
   const metodo = document.getElementById('nv-area-metodo')
@@ -1432,33 +1642,44 @@ function renderRevisao() {
       document.getElementById('nv-ano').value
         ? 'por volta de ' + esc(document.getElementById('nv-ano').value)
         : falta('não estimada')]] : []),
+    // O relatório sai como sairá no papel: item a item, e dentro de cada um a
+    // ordem fixa — irregularidades, texto, artigos, exigências, fotos.
     ['Relatório', vState.relatorio.length
       ? '<ol>' + vState.relatorio.map(it => {
-          const t = TIPOS_ITEM[it.tipo]?.rotulo ?? it.tipo
-          const art = it.artigo_id ? vState.artigos.find(a => a.id === it.artigo_id) : null
-          const capa = it.tipo === 'foto' ? esc(vState.anexos[it.anexo]?.titulo || 'Foto') : esc(art?.numero || '')
-          const marcas = (it.marcacoes || []).length
-          return '<li><b>' + esc(t) + '</b>' + (capa ? ' · ' + capa : '')
-               + (it.prazo ? ' <b>— ' + it.prazo + ' dias</b>' : '')
-               + (marcas ? ' <i>(' + marcas + ' marca' + (marcas > 1 ? 's' : '') + ' na foto)</i>' : '')
-               + (it.texto.trim() ? '<br>' + esc(it.texto) : ' ' + falta('sem texto'))
-               + '</li>'
+          const partes = []
+          if (it.irregularidades.length) {
+            partes.push(it.irregularidades
+              .map(id => esc(vState.catalogo.find(c => c.id === id)?.descricao ?? '—')).join('; '))
+          }
+          if (it.texto?.trim()) { partes.push(esc(it.texto.trim())) }
+          if (it.artigos.length) {
+            partes.push('<b>' + it.artigos.map(a => esc(nomeDoArtigo(a.artigo_id))).join(', ') + '</b>')
+          }
+          it.exigencias.forEach(e => {
+            partes.push(esc(e.texto) + (e.prazo ? ' <b>— ' + e.prazo + ' dias</b>' : ''))
+          })
+          const fotos = it.fotos.filter(f => !vState.anexos[f.anexo]?.removido)
+          if (fotos.length) {
+            const marcas = fotos.reduce((s, f) => s + (f.marcacoes?.length ?? 0), 0)
+            partes.push(fotos.length + ' foto(s)' + (marcas ? ` <i>(${marcas} marca(s))</i>` : ''))
+          }
+
+          return '<li>' + (partes.length ? partes.join('<br>') : falta('item vazio')) + '</li>'
         }).join('') + '</ol>'
       : falta('vazio')],
     ['Irregularidades', marcadas.length
-      ? '<ol>' + marcadas.map(c =>
-          '<li>' + esc(c.closest('.chk-item').querySelector('.desc').firstChild.textContent.trim()) + '</li>').join('') + '</ol>'
+      ? '<ol>' + marcadas.map(c => '<li>' + esc(c.descricao) + '</li>').join('') + '</ol>'
       : falta('nenhuma')],
-    ['Artigos citados', vState.artigosMarcados.size
-      ? esc(vState.artigos.filter(a => vState.artigosMarcados.has(a.id))
-            .map(a => a.numero).join(', '))
+    ['Artigos citados', artigosDaVistoria().length
+      ? esc(artigosDaVistoria().map(id => nomeDoArtigo(id)).join(', '))
       : falta('nenhum')],
     ['Fotos', (() => {
-      const fotos = vState.relatorio.filter(i => i.tipo === 'foto')
+      const fotos = vState.relatorio.flatMap(i => i.fotos)
+        .filter(f => !vState.anexos[f.anexo]?.removido)
       if (!fotos.length) { return falta('nenhuma') }
       return `${fotos.length} no relatório`
         + (fotos.some(f => f.fachada) ? ', uma marcada como fachada' : ', ' + falta('sem fachada marcada'))
-        + (fotos.some(f => !f.texto.trim()) ? '<br>' + falta('há foto sem descrição') : '')
+        + (fotos.some(f => !f.texto?.trim()) ? '<br>' + falta('há foto sem legenda') : '')
     })()],
     ['Observações', obs ? esc(obs) : falta('nenhuma')],
   ]
@@ -1482,8 +1703,7 @@ const RASCUNHO = 'vistoria-rascunho'
 function temConteudo() {
   return !!(document.getElementById('nv-obs').value.trim()
     || document.getElementById('nv-area').value
-    || vState.relatorio.length
-    || document.querySelectorAll('#nv-checklist input:checked').length)
+    || vState.relatorio.length)
 }
 
 function salvarRascunho() {
@@ -1503,12 +1723,10 @@ function salvarRascunho() {
       finalidade: vState.finalidade,
       obra: vState.obra,
       gps: vState.gps,
-      // As FOTOS não cabem no armazenamento do navegador, então o rascunho
-      // guarda os itens sem elas — e o aviso da retomada diz isso com todas as
+      // As FOTOS não cabem no armazenamento do navegador. O rascunho guarda os
+      // itens com tudo menos elas — e o aviso da retomada diz isso com todas as
       // letras, em vez de deixar o fiscal gravar achando que estão lá.
-      relatorio: vState.relatorio.filter(i => i.tipo !== 'foto'),
-      artigos: [...vState.artigosMarcados],
-      irregularidades: [...document.querySelectorAll('#nv-checklist input:checked')].map(c => c.value),
+      relatorio: vState.relatorio.map(i => ({ ...i, fotos: [] })),
     }))
   } catch (e) {
     console.error(e)   // cota cheia ou modo privado: o formulário segue igual
@@ -1618,11 +1836,11 @@ function aplicarRascunho(d) {
   vState.finalidade = FINALIDADES[d.finalidade] ? d.finalidade : 'obras'
   vState.obra = d.obra ?? { alvara: '', fase: '', projeto: '', uso: '' }
   vState.gps = d.gps ?? vState.gps
-  vState.relatorio = d.relatorio ?? []
-  vState.artigosMarcados = new Set(d.artigos ?? [])
-  vState.artigosDoRascunho = vState.artigosMarcados.size > 0
-  // null, e não lista vazia: é ele que destranca sugerirArtigos() acima.
-  vState.rascunhoIrreg = d.irregularidades?.length ? d.irregularidades : null
+  // Os itens voltam inteiros, menos as FOTOS — que não cabem no armazenamento
+  // do navegador. `fotos: []` é garantido aqui e não confiado ao que foi
+  // gravado: rascunho de uma versão antiga não pode trazer índices de anexo
+  // que não existem mais nesta sessão.
+  vState.relatorio = (d.relatorio ?? []).map(i => ({ ...itemVazio(), ...i, fotos: [] }))
   document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
 
   pintarOpcoes(); pintarFinalidade(); pintarGps(); renderRelatorio()
@@ -1639,7 +1857,7 @@ function limparRascunho() {
 function gravarVistoria() {
   if (vState.enviando) return
 
-  const marcadas = [...document.querySelectorAll('#nv-checklist input:checked')]
+  const marcadas = irregularidadesDaVistoria()
   const situacao = document.getElementById('nv-situacao').value
 
   if (!document.getElementById('nv-datahora').value) {
@@ -1663,12 +1881,12 @@ function gravarVistoria() {
     mensagem: `Registrar vistoria do lote ${vState.lote.numero_lote}, quadra `
             + `${vState.lote.quadra}, com ${resumo} e ${vState.relatorio.length} item(ns) no relatório?`,
     textoBtn: 'Gravar',
-    onConfirm: () => enviarVistoria(marcadas),
+    onConfirm: () => enviarVistoria(),
   })
 }
 
 /** @param {Array<HTMLInputElement>} marcadas */
-async function enviarVistoria(marcadas) {
+async function enviarVistoria() {
   vState.enviando = true
   const campo = id => document.getElementById(id)?.value ?? ''
   const fd = new FormData()
@@ -1681,7 +1899,9 @@ async function enviarVistoria(marcadas) {
   // O vínculo com o protocolo é o que, mais tarde, libera o ato cadastral.
   const proto = document.getElementById('nv-protocolo')?.value
   if (proto) { fd.append('protocolo_id', proto) }
-  marcadas.forEach(c => fd.append('irregularidades[]', c.value))
+  // `irregularidades[]` NÃO vai mais no topo: cada uma pertence ao item onde
+  // foi constatada, e o servidor deriva a lista da vistoria somando os itens.
+  // Mandar as duas coisas abriria espaço para elas discordarem.
 
   // ── quem acompanhou e o que se viu da obra ──
   const opcional = (nome, valor) => { if (valor) { fd.append(nome, valor) } }
@@ -1696,27 +1916,50 @@ async function enviarVistoria(marcadas) {
   opcional('uso_constatado', vState.obra.uso)
   opcional('ano_construcao_estimado', campo('nv-ano'))
 
-  // ── o relatório, na ordem montada ──
+  // ── O RELATÓRIO EM ITENS ──
   //
-  // A posição de CADA item vai junto, e é a mesma sequência para fotos e
-  // artigos: no servidor as duas coisas moram em tabelas diferentes, e sem a
-  // ordem explícita elas voltariam agrupadas por tipo — perdendo justamente o
-  // que o fiscal quis dizer ao intercalar.
-  vState.artigosMarcados.forEach(id => fd.append('artigos[]', id))
+  // Cada item vai como um grupo, na ordem em que o fiscal os montou. As FOTOS
+  // não vão aninhadas: arquivo sobe na remessa achatada `evidencias[]`, que é
+  // como upload funciona, e o item as reivindica pelo ÍNDICE DA REMESSA —
+  // não pelo índice em `vState.anexos`, que guarda buracos de fotos removidas.
+  //
+  // Os artigos da vistoria são a SOMA do que os itens citaram: é a relação que
+  // a lavratura lê, e derivá-la evita duas listas que podem discordar.
+  artigosDaVistoria().forEach(id => fd.append('artigos[]', id))
 
-  let nExig = 0, nArt = 0
-  vState.relatorio.forEach((item, ordem) => {
-    if (item.tipo === 'exigencia') {
-      fd.append(`exigencias[${nExig}][texto]`, item.texto)
-      if (item.prazo) { fd.append(`exigencias[${nExig}][prazo_dias]`, item.prazo) }
-      nExig++
-    } else if (item.tipo === 'citacao' || item.tipo === 'parecer') {
-      fd.append(`itens_artigo[${nArt}][artigo_id]`, item.artigo_id)
-      fd.append(`itens_artigo[${nArt}][tipo]`, item.tipo)
-      fd.append(`itens_artigo[${nArt}][observacao]`, item.texto || '')
-      fd.append(`itens_artigo[${nArt}][ordem]`, ordem)
-      nArt++
-    }
+  let nFoto = 0
+  vState.relatorio.forEach((item, n) => {
+    if (item.texto?.trim()) { fd.append(`itens[${n}][texto]`, item.texto.trim()) }
+
+    item.irregularidades.forEach(id => fd.append(`itens[${n}][irregularidades][]`, id))
+
+    item.artigos.forEach((a, j) => {
+      fd.append(`itens[${n}][artigos][${j}][artigo_id]`, a.artigo_id)
+      fd.append(`itens[${n}][artigos][${j}][tipo]`, a.tipo)
+      fd.append(`itens[${n}][artigos][${j}][observacao]`, a.texto ?? '')
+    })
+
+    item.exigencias.forEach((e, j) => {
+      fd.append(`itens[${n}][exigencias][${j}][texto]`, e.texto)
+      if (e.prazo) { fd.append(`itens[${n}][exigencias][${j}][prazo_dias]`, e.prazo) }
+    })
+
+    item.fotos.forEach(f => {
+      const anexo = vState.anexos[f.anexo]
+      if (!anexo || anexo.removido) { return }
+
+      fd.append('evidencias[]', anexo.arquivo)
+      fd.append(`titulos[${nFoto}]`, anexo.titulo)
+      fd.append(`descricoes[${nFoto}]`, f.texto ?? '')
+      fd.append(`ordens[${nFoto}]`, nFoto)
+      if ((f.marcacoes || []).length) {
+        fd.append(`marcacoes[${nFoto}]`, JSON.stringify(f.marcacoes))
+      }
+      if (f.fachada) { fd.append('fachada', nFoto) }
+
+      fd.append(`itens[${n}][fotos][]`, nFoto)
+      nFoto++
+    })
   })
 
   if (vState.gps) {
@@ -1724,24 +1967,6 @@ async function enviarVistoria(marcadas) {
     fd.append('longitude', vState.gps.lon)
     fd.append('accuracy', vState.gps.prec)
   }
-  // As fotos vão na ordem do relatório, e o índice enviado é o da REMESSA —
-  // não o do array de anexos, que guarda buracos de itens removidos.
-  let nFoto = 0
-  vState.relatorio.forEach((item, ordem) => {
-    if (item.tipo !== 'foto') { return }
-    const anexo = vState.anexos[item.anexo]
-    if (!anexo || anexo.removido) { return }
-
-    fd.append('evidencias[]', anexo.arquivo)
-    fd.append(`titulos[${nFoto}]`, anexo.titulo)
-    fd.append(`descricoes[${nFoto}]`, item.texto ?? '')
-    fd.append(`ordens[${nFoto}]`, ordem)
-    if ((item.marcacoes || []).length) {
-      fd.append(`marcacoes[${nFoto}]`, JSON.stringify(item.marcacoes))
-    }
-    if (item.fachada) { fd.append('fachada', nFoto) }
-    nFoto++
-  })
 
   try {
     const r = await fetch(`/api/lotes/${vState.lote.id}/vistorias`, {

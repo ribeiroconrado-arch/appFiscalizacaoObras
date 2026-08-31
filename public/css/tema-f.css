@@ -2417,3 +2417,69 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    também diz qual é o caminho comum. */
 .balao-apagar{margin-top:6px;color:var(--red);border-color:var(--rlt);background:var(--rlt)}
 .balao-apagar:hover{border-color:var(--red)}
+
+/* ══════════════════════════════════════════════
+   O RELATÓRIO EM ITENS
+   ══════════════════════════════════════════════ */
+
+/* A capa do item: a primeira foto, ou o número quando não há foto. É o que faz
+   reconhecer o ponto da obra de relance, sem abrir o item. */
+.rel-capa{width:46px;height:46px;border-radius:7px;overflow:hidden;background:var(--blt);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rel-mini{width:100%;height:100%;object-fit:cover;display:block}
+.rel-num{font-family:'Manrope',sans-serif;font-size:15px;font-weight:800;color:var(--tx3)}
+.rel-tit{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--tx3);margin-bottom:2px}
+.rel-txt{font-size:12.5px;color:var(--tx);line-height:1.4;word-break:break-word}
+.rel-sem{color:var(--tx3);font-style:italic}
+
+/* O que o item TEM dentro, sem repetir o conteúdo: o texto inteiro mora na
+   janela, porque é texto de peça e merece o espaço de um formulário. */
+.rel-selos{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.rel-selos span{font-size:10.5px;color:var(--tx2);background:var(--blt);
+  border-radius:20px;padding:2px 8px}
+
+/* As setas movem o GRUPO inteiro — é ele que é a unidade de raciocínio. */
+.rel-setas{display:flex;flex-direction:column;gap:2px}
+.rel-setas button{border:1px solid var(--bord);background:var(--sur);border-radius:6px;
+  width:26px;height:21px;font-size:9px;color:var(--tx2);cursor:pointer;line-height:1}
+.rel-setas button:hover:not(:disabled){border-color:var(--gm);color:var(--gd)}
+.rel-setas button:disabled{opacity:.3;cursor:default}
+
+/* ── a janela do item: cinco blocos na ordem do papel ── */
+.vsi-bloco{padding-bottom:14px;margin-bottom:14px;border-bottom:1.5px solid var(--bord)}
+.vsi-bloco:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+
+/* O formulário de acrescentar fica recuado e em fundo próprio: separa o que
+   JÁ está no item do que se está prestes a pôr. */
+.vsi-add{background:var(--blt);border-radius:var(--r);padding:10px 12px;margin-top:8px}
+.vsi-add .field{margin-bottom:8px}
+
+.vsi-linha{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:6px;
+  border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur)}
+.vsi-linha-corpo{flex:1;min-width:0}
+.vsi-linha-tit{font-size:13px;font-weight:700;color:var(--tx)}
+.vsi-linha-tipo{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--tx3);margin-left:6px}
+.vsi-linha-txt{font-size:12.5px;color:var(--tx2);line-height:1.45;word-break:break-word}
+.vsi-x{border:0;background:none;color:var(--tx3);font-size:13px;cursor:pointer;
+  padding:2px 4px;line-height:1;flex-shrink:0}
+.vsi-x:hover{color:var(--red)}
+
+/* Irregularidade já usada em outro item: o banco não aceita a mesma duas
+   vezes, e dizer isso aqui evita o pedido recusado depois do trabalho todo. */
+.chk-item.chk-bloq{opacity:.5;cursor:not-allowed}
+.chk-item.chk-linha{border:0;padding:0;background:none}
+
+/* ── as fotos dentro do item ── */
+.vsi-foto{border:1.5px solid var(--bord);border-radius:var(--r);padding:10px;margin-bottom:10px}
+.vsi-foto .vsi-palco{margin-bottom:8px}
+.vsi-arquivo{background:var(--blt);border-radius:var(--r);padding:10px 12px;
+  font-size:12.5px;color:var(--tx2);margin-bottom:8px}
+.vsi-foto-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.vsi-foto-acoes .btn.perigo{color:var(--red);border-color:var(--rlt);background:var(--rlt)}
+
+/* ── o item na janela de leitura ── */
+.vv-item{border-left:3px solid var(--gm);padding-left:11px;margin-bottom:16px}
+.vv-item-num{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--tx3);margin-bottom:6px}

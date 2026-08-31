@@ -1280,12 +1280,12 @@
     <div class="vs-painel" id="nv-p-rel" data-passo="rel">
       <div class="sec-title-row">
         <div class="sec-title">Relatório da vistoria</div>
-        <button type="button" class="btn primary sm sec-title-acao" onclick="menuItemRelatorio(event)">
+        <button type="button" class="btn primary sm sec-title-acao" onclick="novoItemRelatorio()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
           Adicionar</button>
       </div>
-      <div class="leg">Foto com descrição, artigo citado, parecer ou exigência —
+      <div class="leg">Cada item é um ponto da obra, com o que for preciso dentro —
         na ordem em que você quiser contar.</div>
       <div id="nv-relatorio"></div>
       {{-- Fora do menu de propósito: é o mesmo input para o item "Foto" e para
@@ -1294,19 +1294,10 @@
       <input type="file" id="nv-arquivo" accept="image/*,application/pdf" multiple
              capture="environment" style="display:none" onchange="anexarArquivos(this)">
 
-      {{-- O checklist fica ABAIXO do relatório e recolhido: ele é a máquina do
-           enquadramento (é dele que saem os artigos sugeridos), mas não é o
-           assunto da maioria das vistorias. --}}
-      <details class="vs-dobra" id="nv-dobra-irreg">
-        <summary>
-          <span>Irregularidades do catálogo</span>
-          <span class="vs-dobra-conta" id="nv-irreg-conta"></span>
-        </summary>
-        <div class="leg">Marcar aqui sugere os artigos que enquadram cada uma —
-          e é o que o auto de infração vai usar.</div>
-        <div class="checklist" id="nv-checklist"></div>
-        <div id="nv-artigos"></div>
-      </details>
+      {{-- O CHECKLIST SAIU DAQUI. Ele era uma lista única da vistoria, num
+           bloco recolhido ao pé da tela; agora a irregularidade pertence ao
+           ITEM onde foi constatada, e é escolhida dentro dele. Os artigos que
+           ela sugere alimentam o seletor da mesma janela. --}}
 
       <div class="sec-title">Observações gerais</div>
       <div class="field">
@@ -1344,62 +1335,115 @@
      Uma janela pequena por item, e não campos soltos crescendo na lista: o
      que se escreve num item é texto de peça, e merece o espaço de um
      formulário. A lista fica legível porque cada linha é só o resumo. --}}
+{{-- ══════ UM ITEM DO RELATÓRIO ══════
+     Os CINCO BLOCOS numa janela só, na mesma ordem em que sairão no papel:
+     irregularidades, texto livre, artigos, exigências e fotos. É a ordem do
+     raciocínio de uma peça — o fato, a narrativa, a lei, a providência e a
+     prova —, e por isso ela é fixa: deixá-la à escolha faria cada relatório
+     sair diferente, e quem lê vinte por semana perde o hábito de leitura.
+
+     Editar em cinco telas separadas quebraria justamente o que o item existe
+     para juntar. --}}
 <div class="modal-bg" id="m-vs-item" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
-    <button class="modal-x" onclick="fModalBtn('m-vs-item')">&#10005;</button>
-    <h3 class="fi-cabeca"><span id="vsi-titulo">Item do relatório</span></h3>
+  <div class="modal modal-flex" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharItemRelatorio()">&#10005;</button>
 
-    {{-- FOTO --}}
-    <div id="vsi-foto" hidden>
-      {{-- A foto com as marcações por cima: tocar na imagem crava um número,
-           e a descrição pode então dizer "1" e "2" em vez de "no canto
-           superior direito, mais ou menos no meio". --}}
-      <div class="vsi-palco" id="vsi-palco" onclick="marcarNaFoto(event)">
-        <img id="vsi-img" alt="">
-        <div class="vsi-pinos" id="vsi-pinos"></div>
-      </div>
-      <div class="vsi-palco-acoes">
-        <span class="leg" id="vsi-dica">Toque na foto para apontar o que descreve.</span>
-        <button type="button" class="btn sm" onclick="limparMarcacoes()">Limpar marcas</button>
-      </div>
-      <div class="field">
-        <label for="vsi-titulo-foto">Título</label>
-        <input type="text" id="vsi-titulo-foto" maxlength="160">
-      </div>
-      <label class="chk-item" id="vsi-fachada-linha">
-        <input type="checkbox" id="vsi-fachada">
-        <span class="desc">É a fachada do imóvel<br>
-          <span class="cod">É esta que a ficha do imóvel passa a mostrar</span></span>
-      </label>
-    </div>
-
-    {{-- ARTIGO / PARECER --}}
-    <div id="vsi-artigo" hidden>
-      <div class="field">
-        <label for="vsi-artigo-id">Artigo</label>
-        <select id="vsi-artigo-id"></select>
-      </div>
-      <div class="cad-nota" id="vsi-artigo-nota"></div>
-    </div>
-
-    {{-- EXIGÊNCIA --}}
-    <div id="vsi-exigencia" hidden>
-      <div class="field">
-        <label for="vsi-prazo">Prazo em dias (opcional)</label>
-        <input type="number" id="vsi-prazo" class="mono" min="1" max="3650" placeholder="15">
+    <div class="doc-head">
+      <div class="doc-head-top">
+        <span class="cab-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        </span>
+        <span class="doc-head-doc" id="vsi-titulo">Item do relatório</span>
       </div>
     </div>
 
-    <div class="field">
-      <label for="vsi-texto" id="vsi-texto-rot">Descrição</label>
-      <textarea id="vsi-texto" rows="4" maxlength="2000"
-                style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
+    <div class="doc-body">
+
+      {{-- 1 — IRREGULARIDADES --}}
+      <div class="vsi-bloco">
+        <div class="sec-title-row">
+          <div class="sec-title">1 · Irregularidades</div>
+          <span class="leg" id="vsi-irreg-conta"></span>
+        </div>
+        <div class="leg">O que a lei chama de infração. É daqui que saem os artigos
+          sugeridos — e é o que o auto de infração vai usar.</div>
+        <div class="checklist" id="vsi-irreg"></div>
+      </div>
+
+      {{-- 2 — TEXTO LIVRE --}}
+      <div class="vsi-bloco">
+        <div class="sec-title">2 · O que você viu</div>
+        <div class="field">
+          <label for="vsi-texto">Descrição</label>
+          <textarea id="vsi-texto" rows="4" maxlength="5000"
+                    placeholder="Com as suas palavras — é este texto que vira o FATO na peça."></textarea>
+        </div>
+      </div>
+
+      {{-- 3 — ARTIGOS --}}
+      <div class="vsi-bloco">
+        <div class="sec-title">3 · Artigos</div>
+        <div id="vsi-artigos"></div>
+        <div class="vsi-add">
+          <div class="field">
+            <label for="vsi-artigo-id">Dispositivo</label>
+            <select id="vsi-artigo-id"></select>
+          </div>
+          <div class="field">
+            <label for="vsi-artigo-tipo">Como entra</label>
+            <select id="vsi-artigo-tipo">
+              {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. A
+                   distinção existe porque as duas coisas ocupam lugares
+                   diferentes no auto. --}}
+              <option value="citacao">Citação — o que se constatou</option>
+              <option value="parecer">Parecer — a sua conclusão</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="vsi-artigo-obs">Observação (opcional)</label>
+            <textarea id="vsi-artigo-obs" rows="2" maxlength="2000"></textarea>
+          </div>
+          <div class="leg" id="vsi-artigo-nota"></div>
+          <button type="button" class="btn sm" onclick="adicionarArtigoAoItem()">Acrescentar artigo</button>
+        </div>
+      </div>
+
+      {{-- 4 — EXIGÊNCIAS --}}
+      <div class="vsi-bloco">
+        <div class="sec-title">4 · Exigências</div>
+        <div class="leg">O que o administrado deve fazer, com prazo. A notificação imprime.</div>
+        <div id="vsi-exigencias"></div>
+        <div class="vsi-add">
+          <div class="field">
+            <label for="vsi-exig-texto">Providência</label>
+            <textarea id="vsi-exig-texto" rows="2" maxlength="500"></textarea>
+          </div>
+          <div class="field">
+            <label for="vsi-exig-prazo">Prazo em dias (opcional)</label>
+            <input type="number" id="vsi-exig-prazo" class="mono" min="1" max="3650" placeholder="15">
+          </div>
+          <button type="button" class="btn sm" onclick="adicionarExigenciaAoItem()">Acrescentar exigência</button>
+        </div>
+      </div>
+
+      {{-- 5 — FOTOS --}}
+      <div class="vsi-bloco">
+        <div class="sec-title-row">
+          <div class="sec-title">5 · Fotos</div>
+          <button type="button" class="btn sm sec-title-acao"
+                  onclick="document.getElementById('nv-arquivo').click()">Anexar</button>
+        </div>
+        <div class="leg">Toque na foto para apontar o que a legenda descreve.</div>
+        <div id="vsi-fotos"></div>
+      </div>
+
     </div>
 
-    <div class="btn-row">
-      <button class="btn danger" id="vsi-excluir" onclick="excluirItemRelatorio()">Excluir</button>
+    <div class="doc-foot">
+      <button class="btn danger" onclick="excluirItemRelatorio()">Excluir item</button>
       <div style="flex:1"></div>
-      <button class="btn" onclick="fModalBtn('m-vs-item')">Cancelar</button>
+      <button class="btn" onclick="fecharItemRelatorio()">Cancelar</button>
       <button class="btn primary" onclick="salvarItemRelatorio()">Guardar</button>
     </div>
   </div>
