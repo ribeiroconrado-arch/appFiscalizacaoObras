@@ -400,9 +400,52 @@ const atoState = { protocoloId: null, tipo: null }
  * @param {'unificacao'|'desmembramento'} tipo
  * @param {number|null} loteId lote de origem, no desmembramento
  */
+/**
+ * A ROTA DO ATO — com protocolo ou direta.
+ *
+ * O caminho normal executa a decisão de um protocolo deferido. O DIRETO existe
+ * porque o mapa vem de um DWG que nem sempre acompanha o cartório: há lote já
+ * unificado ou desmembrado no mundo real e ainda inteiro no desenho. Aí não há
+ * protocolo a esperar — o ato não decide nada, só põe o cadastro em dia.
+ *
+ * Uma função e não quatro URLs escritas à mão: eram quatro pontos montando o
+ * mesmo endereço, e o direto precisaria ser lembrado em todos os quatro.
+ *
+ * @param {'unificacao'|'desmembramento'} ato
+ * @param {boolean} previa
+ * @returns {string}
+ */
+function rotaDoAto(ato, previa = false) {
+  const fim = previa ? '/previa' : ''
+
+  if (atoState.direto) {
+    return ato === 'unificacao'
+      ? `/api/lotes/unificacao-direta${fim}`
+      : `/api/lotes/desmembramento-direto${fim}`
+  }
+
+  return `/api/protocolos/${atoState.protocoloId}/${ato}${fim}`
+}
+
+/**
+ * A justificativa do ato direto, no corpo do pedido.
+ *
+ * Sem protocolo não há decisão a apontar, então a responsabilidade é de quem
+ * executou — e ela fica escrita em `lote_atos.observacao`, ao lado do usuário.
+ *
+ * @returns {Object}
+ */
+function corpoDoAto(extra) {
+  return atoState.direto
+    ? { ...extra, justificativa: atoState.justificativa }
+    : extra
+}
+
 function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
   atoState.protocoloId = protocoloId
   atoState.tipo = tipo
+  // Protocolo nulo = ato direto. Quem chama pela ficha sempre traz um.
+  atoState.direto = !protocoloId
 
   // Fecha a ficha e leva ao mapa: o ato é geométrico, e a escolha acontece
   // sobre o desenho, não numa lista.
@@ -430,6 +473,33 @@ function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
   }, 260)
 }
 
+/**
+ * COMEÇA UM ATO DIRETO — sem protocolo.
+ *
+ * A justificativa é pedida AQUI, no começo, e não no fim: ela é o motivo de o
+ * ato existir sem protocolo, e quem não consegue escrevê-la provavelmente
+ * deveria estar abrindo um. Guardá-la desde já também evita perder o texto se
+ * a conferência apontar impedimento e o operador tiver de refazer o desenho.
+ *
+ * @param {'unificacao'|'desmembramento'} tipo
+ */
+function atoDiretoCadastral(tipo) {
+  const rotulo = tipo === 'unificacao' ? 'Unificação direta' : 'Desmembramento direto'
+
+  pedirTexto({
+    titulo: rotulo,
+    rotulo: 'Por que este ato não tem protocolo?',
+    dica: 'Ex.: lote já unificado na matrícula 12.345 do CRI; o desenho do DWG '
+      + 'não foi atualizado. Fica registrado com o seu nome.',
+    minimo: 10,
+    onOk: texto => {
+      atoState.justificativa = texto
+      // Protocolo nulo é o que marca o ato como direto — ver `rotaDoAto`.
+      iniciarAtoCadastral(null, tipo, state.selecionado?.properties?.id ?? null)
+    },
+  })
+}
+
 /** Larga o ato em andamento sem executá-lo. */
 function cancelarAtoCadastral() {
   atoState.protocoloId = null
@@ -444,8 +514,7 @@ async function conferirUnificacao() {
   const alvo = document.getElementById('cad-previa')
   alvo.innerHTML = '<div class="cad-nota">Conferindo…</div>'
 
-  const d = await postCadastro(`/api/protocolos/${atoState.protocoloId}/unificacao/previa`,
-    { ids: [...selState.ids] })
+  const d = await postCadastro(rotaDoAto('unificacao', true), { ids: [...selState.ids] })
   if (!d) { alvo.innerHTML = ''; return }
 
   if (d.impedimento) {
@@ -480,8 +549,8 @@ async function gravarUnificacao() {
       + 'vistorias, obras e documentos continuam neles.',
     textoBtn: 'Unificar',
     onConfirm: async () => {
-      const d = await postCadastro(`/api/protocolos/${atoState.protocoloId}/unificacao`,
-        { ids: [...selState.ids], numero_lote: numero })
+      const d = await postCadastro(rotaDoAto('unificacao'),
+        corpoDoAto({ ids: [...selState.ids], numero_lote: numero }))
       if (!d) { return }
 
       toast(d.message)
@@ -674,8 +743,7 @@ async function conferirDesmembramento() {
   const alvo = document.getElementById('desm-previa')
   alvo.innerHTML = '<div class="cad-nota">Conferindo…</div>'
 
-  const d = await postCadastro(`/api/protocolos/${atoState.protocoloId}/desmembramento/previa`,
-    _corpoDesmembramento())
+  const d = await postCadastro(rotaDoAto('desmembramento', true), _corpoDesmembramento())
   if (!d) { alvo.innerHTML = ''; return }
 
   if (d.impedimento) {
@@ -706,8 +774,8 @@ async function gravarDesmembramento() {
       + 'obras e documentos continuam nele.',
     textoBtn: 'Desmembrar',
     onConfirm: async () => {
-      const d = await postCadastro(`/api/protocolos/${atoState.protocoloId}/desmembramento`,
-        _corpoDesmembramento())
+      const d = await postCadastro(rotaDoAto('desmembramento'),
+        corpoDoAto(_corpoDesmembramento()))
       if (!d) { return }
 
       toast(d.message)
@@ -943,4 +1011,79 @@ async function postCadastro(url, corpo) {
     return null
   }
   return d
+}
+
+// ── APAGAR LOTE RESIDUAL ─────────────────────────────────────
+//
+// A conversão do DWG deixa sobras: faixas de terra sem quadra, sem número e sem
+// dono, que existem no desenho e não no mundo. Elas poluem a busca, entram em
+// contagem e um dia alguém vai vistoriar uma.
+//
+// NÃO é baixa. Baixa é o que acontece com um lote que existiu e deixou de
+// existir — fica na sucessão, apontando para o sucessor. Resíduo nunca existiu:
+// guardá-lo como "baixado" inventaria um ato que não houve.
+//
+// A senha é pedida porque isto é irreversível e o sistema é usado no celular,
+// em campo, com o dedo. Quem confere a senha é o servidor.
+
+/**
+ * @param {number} id
+ * @param {string} rotulo como o lote se identifica na mensagem
+ */
+function excluirLote(id, rotulo) {
+  document.getElementById('mex-lote').textContent = rotulo || 'este lote'
+  document.getElementById('mex-motivo').value = ''
+  document.getElementById('mex-senha').value = ''
+  document.getElementById('m-excluir-lote').dataset.lote = String(id)
+  openModal('m-excluir-lote')
+}
+
+async function confirmarExclusaoLote() {
+  const caixa = document.getElementById('m-excluir-lote')
+  const id = Number(caixa.dataset.lote)
+  const motivo = document.getElementById('mex-motivo').value.trim()
+  const senha = document.getElementById('mex-senha').value
+
+  if (motivo.length < 10) { toast('Escreva o motivo — ao menos 10 caracteres.', 'err'); return }
+  if (!senha) { toast('Informe sua senha para confirmar.', 'err'); return }
+
+  const btn = document.getElementById('mex-btn')
+  btn.disabled = true
+  try {
+    const r = await fetch('/api/lotes/' + id, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+      },
+      body: JSON.stringify({ senha, motivo }),
+    })
+    const d = await r.json().catch(() => ({}))
+
+    if (!r.ok) { toast(d.message || 'Não foi possível apagar o lote.', 'err'); return }
+
+    toast(d.message)
+    fModalBtn('m-excluir-lote')
+    // A ficha do lote apagado não pode continuar aberta atrás da janela.
+    fModalBtn('m-ficha')
+    state.selecionado = null
+    desenhados.clear()
+    carregarLotesVisiveis()
+  } catch (e) {
+    console.error(e)
+    toast('Falha de rede ao apagar o lote', 'err')
+  } finally {
+    btn.disabled = false
+    // A senha não sobrevive à janela: some da tela assim que o pedido termina.
+    document.getElementById('mex-senha').value = ''
+  }
+}
+
+/** O botão da ficha: monta o rótulo do lote aberto e abre a janela. */
+function excluirLoteDaFicha() {
+  const p = state.selecionado?.properties
+  if (!p?.id) { toast('Nenhum imóvel selecionado', 'err'); return }
+
+  excluirLote(p.id, `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'} — ${p.bairro ?? ''}`.trim())
 }

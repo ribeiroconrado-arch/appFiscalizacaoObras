@@ -472,3 +472,62 @@ TELA_LARGA.addEventListener('change', () => {
   if (typeof protoState !== 'undefined' && protoState.lista?.length) { renderProtocolos() }
   if (typeof osState !== 'undefined' && osState.lista?.length) { renderOs() }
 })
+
+// ── PEDIR UM TEXTO ───────────────────────────────────────────
+//
+// O primo do `confirmarAcao` para quando a confirmação exige MOTIVO escrito, e
+// não só um "sim". Nasceu do ato cadastral direto: sem protocolo a apontar, a
+// responsabilidade é de quem executou, e ela precisa estar escrita.
+//
+// Modal genérico e não um por caso: já são três lugares que pedem justificativa
+// (unificação direta, desmembramento direto, exclusão de lote residual), e três
+// janelas quase iguais divergem na primeira vez que alguém mexer numa delas.
+
+/** @type {Function|null} */
+let _textoOk = null
+
+/**
+ * @param {Object} o
+ * @param {string} o.titulo
+ * @param {string} o.rotulo    o que se pede, acima do campo
+ * @param {string} [o.dica]    exemplo ou consequência, abaixo do campo
+ * @param {number} [o.minimo]  tamanho mínimo aceito
+ * @param {string} [o.textoBtn]
+ * @param {Function} o.onOk    recebe o texto digitado
+ */
+function pedirTexto({ titulo, rotulo, dica = '', minimo = 0, textoBtn = 'Confirmar', onOk }) {
+  document.getElementById('mtx-titulo').textContent = titulo
+  document.getElementById('mtx-rotulo').textContent = rotulo
+  document.getElementById('mtx-dica').textContent = dica
+  document.getElementById('mtx-dica').hidden = !dica
+
+  const campo = document.getElementById('mtx-campo')
+  campo.value = ''
+  campo.dataset.minimo = String(minimo)
+
+  document.getElementById('mtx-btn').textContent = textoBtn
+  _textoOk = onOk
+  openModal('m-texto')
+  // O foco vai para o campo: quem abriu esta janela veio escrever.
+  setTimeout(() => campo.focus(), 120)
+}
+
+/** Handler do OK do modal de texto. */
+async function _mtxConfirmar() {
+  const campo = document.getElementById('mtx-campo')
+  const texto = campo.value.trim()
+  const minimo = Number(campo.dataset.minimo || 0)
+
+  // A checagem é aqui E no servidor. Aqui, para o operador não perder o
+  // trabalho descobrindo o limite depois de um pedido recusado.
+  if (texto.length < minimo) {
+    toast(`Escreva ao menos ${minimo} caracteres.`, 'err')
+    campo.focus()
+    return
+  }
+
+  const acao = _textoOk
+  _textoOk = null
+  fModalBtn('m-texto')
+  if (acao) { await acao(texto) }
+}

@@ -368,6 +368,20 @@
           Desenhar lote faltante</button>
         <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('coordenadas')">
           Lote por coordenadas</button>
+
+        @if (auth()->user()->podeCurarCadastro())
+          {{-- ATOS DIRETOS — o desenho em dia com o que já aconteceu.
+               Separados dos de cima por um traço porque são de outra natureza:
+               os três primeiros CORRIGEM o desenho; estes dois executam um ato
+               que normalmente viria de protocolo deferido. Só o curador do
+               cadastro os vê, e cada um pede justificativa escrita. --}}
+          <div class="cad-sep">Sem protocolo — só curadoria</div>
+          <button type="button" class="btn sm cad-lanca" onclick="atoDiretoCadastral('unificacao')">
+            Unificar lotes direto</button>
+          <button type="button" class="btn sm cad-lanca" onclick="atoDiretoCadastral('desmembramento')">
+            Desmembrar lote direto</button>
+        @endif
+
         <div class="cad-dica">O trabalho acontece no mapa; os dados são pedidos
           depois, numa janela.</div>
       </div>{{-- /cad-geral --}}
@@ -1016,6 +1030,13 @@
 
     <div class="btn-row">
       <button class="btn" onclick="fModalBtn('m-ficha')">Fechar</button>
+      @if (auth()->user()->podeCurarCadastro())
+        {{-- Fica na ficha, e não no mapa: apagar exige LER o imóvel antes —
+             área, bairro, histórico —, e é isso que a ficha põe na frente. Só o
+             curador do cadastro vê o botão; a regra real está no controller. --}}
+        <button class="btn danger sm" onclick="excluirLoteDaFicha()"
+                title="Apagar do desenho — só para resíduo da conversão">Apagar lote</button>
+      @endif
       @if (auth()->user()->canEdit())
         {{-- As mesmas peças do botão da tela de Documentos, e não só vistoria:
              estando na ficha, o fiscal já sabe sobre qual imóvel vai lavrar —
@@ -1664,6 +1685,75 @@
     <button type="button" class="btn sm" id="cad-barra-extra" hidden></button>
     <button type="button" class="btn sm primary" id="cad-barra-ok" hidden></button>
     <button type="button" class="btn sm" onclick="sairModoCadastral()">Sair</button>
+  </div>
+</div>
+
+{{-- ══════ PEDIR UM TEXTO ══════
+     O primo do modal de confirmação para quando a confirmação exige MOTIVO
+     escrito. Genérico de propósito: já são três lugares que pedem justificativa
+     (unificação direta, desmembramento direto e exclusão de resíduo), e três
+     janelas quase iguais divergem na primeira vez que alguém mexer numa. --}}
+<div class="modal-bg" id="m-texto" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <button class="modal-x" onclick="fModalBtn('m-texto')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      </span>
+      <span id="mtx-titulo">Justificativa</span>
+    </h3>
+
+    <div class="field">
+      <label for="mtx-campo" id="mtx-rotulo">Motivo</label>
+      <textarea id="mtx-campo" rows="4"></textarea>
+    </div>
+    <div class="leg" id="mtx-dica" hidden></div>
+
+    <div class="btn-row">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-texto')">Cancelar</button>
+      <button class="btn primary" id="mtx-btn" onclick="_mtxConfirmar()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ APAGAR LOTE RESIDUAL ══════
+     Pede SENHA além do motivo. Não é excesso: a ação é irreversível e o sistema
+     é usado no celular, em campo, com o dedo — um toque errado não pode apagar
+     um lote. Quem confere a senha é o servidor; a tela só a transporta e a
+     esquece em seguida. --}}
+<div class="modal-bg" id="m-excluir-lote" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <button class="modal-x" onclick="fModalBtn('m-excluir-lote')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico cab-ico-perigo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+      </span>
+      <span>Apagar lote do desenho</span>
+    </h3>
+    <div class="sub">Apagar <b id="mex-lote">este lote</b> não tem volta. Use só para
+      resíduo da conversão do desenho — faixa sem quadra, sem número e sem dono.
+      Lote que deixou de existir de verdade se resolve por desmembramento ou
+      unificação, que guardam a sucessão.</div>
+
+    <div class="field">
+      <label for="mex-motivo">Por que este lote é resíduo?</label>
+      <textarea id="mex-motivo" rows="3"
+                placeholder="Ex.: sobra da conversão do DWG; faixa sem lote correspondente em campo."></textarea>
+    </div>
+
+    <div class="field">
+      <label for="mex-senha">Sua senha</label>
+      <input type="password" id="mex-senha" autocomplete="current-password">
+    </div>
+
+    <div class="btn-row">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-excluir-lote')">Cancelar</button>
+      <button class="btn danger" id="mex-btn" onclick="confirmarExclusaoLote()">Apagar</button>
+    </div>
   </div>
 </div>
 

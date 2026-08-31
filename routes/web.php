@@ -89,6 +89,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/lotes/quadra-em-massa/previa', [CadastroLoteController::class, 'previaQuadra']);
         Route::post('/lotes/quadra-em-massa', [CadastroLoteController::class, 'aplicarQuadra']);
 
+        // ATOS DIRETOS — o cadastro em dia com o que o DWG não acompanhou.
+        // Sem protocolo, porque não há nada a decidir: só o curador do cadastro
+        // executa, e cada ato guarda a justificativa e quem assinou.
+        Route::post('/lotes/unificacao-direta/previa', [CadastroLoteController::class, 'previaUnificacaoDireta']);
+        Route::post('/lotes/unificacao-direta', [CadastroLoteController::class, 'unificarDireto']);
+        Route::post('/lotes/desmembramento-direto/previa', [CadastroLoteController::class, 'previaDesmembramentoDireto']);
+        Route::post('/lotes/desmembramento-direto', [CadastroLoteController::class, 'desmembrarDireto']);
+
+        // Apagar resíduo do desenho. Pede a senha no corpo — ver o método.
+        Route::delete('/lotes/{lote}', [CadastroLoteController::class, 'excluir']);
+
         // Desenhar lote que a importacao nao trouxe. O extrator suprime lote em
         // silencio quando o desenho do DWG nao coopera — foi assim que a Quadra
         // 05 do Jardim Europa, um lote unico de 12.008 m2, simplesmente nao veio.

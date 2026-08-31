@@ -71,9 +71,9 @@ class UnificacaoDeLotes
     /**
      * @param  list<int>  $ids
      */
-    public function impedimento(?Protocolo $protocolo, array $ids, ?string $numeroLote): ?string
+    public function impedimento(?Protocolo $protocolo, array $ids, ?string $numeroLote, bool $direto = false): ?string
     {
-        if ($erro = $this->sucessao->impedimentoDoProtocolo($protocolo, 'unificacao')) {
+        if ($erro = $this->sucessao->impedimentoDoProtocolo($protocolo, 'unificacao', $direto)) {
             return $erro;
         }
 
@@ -184,13 +184,13 @@ class UnificacaoDeLotes
      *
      * @param  list<int>  $ids
      */
-    public function aplicar(Protocolo $protocolo, array $ids, string $numeroLote, ?int $desmembramento = null): Lote
+    public function aplicar(?Protocolo $protocolo, array $ids, string $numeroLote, ?int $desmembramento = null, ?string $justificativa = null): Lote
     {
         $lotes = $this->lotes($ids);
         $primeiro = $lotes->first();
         $u = $this->lotes->uniao($ids);
 
-        return DB::transaction(function () use ($protocolo, $ids, $numeroLote, $desmembramento, $primeiro, $u) {
+        return DB::transaction(function () use ($protocolo, $ids, $numeroLote, $desmembramento, $primeiro, $u, $justificativa) {
             // A baixa vem ANTES da criação: o índice único só ignora quem já
             // está baixado, e o número do lote novo costuma ser o de um dos
             // antigos. Fora de uma transação isto seria uma janela de
@@ -202,7 +202,9 @@ class UnificacaoDeLotes
                 'desmembramento' => $desmembramento ?? 0,
                 'chave'          => $primeiro->bairro . '|' . $primeiro->quadra . '|' . $numeroLote,
                 'area_gis_m2'    => round($u['area_m2'], 2),
-                'fonte'          => 'Unificação — protocolo ' . $protocolo->numero,
+                'fonte'          => $protocolo
+                    ? 'Unificação — protocolo ' . $protocolo->numero
+                    : 'Unificação direta — sem protocolo',
                 'origem'         => 'unificacao',
                 'situacao'       => 'ativo',
             ];
@@ -215,7 +217,7 @@ class UnificacaoDeLotes
             $novo = Lote::find($id);
             $novo->registrarAuditoria('unificou', null, $atributos);
 
-            $this->sucessao->registrar('unificacao', $ids, [$id], $protocolo);
+            $this->sucessao->registrar('unificacao', $ids, [$id], $protocolo, null, $justificativa);
 
             return $novo;
         });

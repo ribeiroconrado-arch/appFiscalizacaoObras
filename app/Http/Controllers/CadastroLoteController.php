@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Documento;
 use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
@@ -10,6 +11,8 @@ use App\Services\DesmembramentoDeLote;
 use App\Services\QuadraDeLotesSelecionados;
 use App\Services\UnificacaoDeLotes;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -293,6 +296,213 @@ class CadastroLoteController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * ATOS DIRETOS — sem protocolo.
+     *
+     * O mapa vem de um DWG que nem sempre acompanha o cartório: há lote já
+     * unificado ou desmembrado no mundo real e ainda inteiro no desenho. Não há
+     * protocolo a esperar, porque não há nada a decidir — o ato só põe o
+     * cadastro em dia com o que já aconteceu.
+     *
+     * Por isso o portão aqui é OUTRO: não é a vistoria (não se vai a campo para
+     * conferir um ato já consumado em cartório), é a CURADORIA do cadastro. E o
+     * ato exige justificativa escrita, que fica em `lote_atos.observacao` junto
+     * com quem executou: sem protocolo, a responsabilidade é de quem assinou, e
+     * ela precisa estar nomeada.
+     */
+    public function previaUnificacaoDireta(Request $request, UnificacaoDeLotes $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        $d = $request->validate([
+            'ids'         => ['required', 'array', 'min:2'],
+            'ids.*'       => ['integer', 'exists:lotes,id'],
+            'numero_lote' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $retrato = $svc->retrato($d['ids']);
+        $numero = $d['numero_lote'] ?? $retrato['sugestao_lote'];
+
+        return response()->json([
+            'impedimento' => $svc->impedimento(null, $d['ids'], $numero, direto: true),
+            'avisos'      => $svc->avisos($d['ids']),
+            'retrato'     => $retrato,
+        ]);
+    }
+
+    /** POST /api/lotes/unificacao-direta — executa sem protocolo. */
+    public function unificarDireto(Request $request, UnificacaoDeLotes $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        $d = $request->validate([
+            'ids'           => ['required', 'array', 'min:2'],
+            'ids.*'         => ['integer', 'exists:lotes,id'],
+            'numero_lote'   => ['required', 'string', 'max:20'],
+            'justificativa' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        if ($impedimento = $svc->impedimento(null, $d['ids'], $d['numero_lote'], direto: true)) {
+            return response()->json(['message' => $impedimento], 422);
+        }
+
+        $novo = $svc->aplicar(null, $d['ids'], $d['numero_lote'], null, $d['justificativa']);
+
+        return response()->json([
+            'id'      => $novo->id,
+            'chave'   => $novo->chave,
+            'message' => sprintf('%d lotes unificados no lote %s da quadra %s, com %s m². '
+                . 'Ato direto, sem protocolo.',
+                count($d['ids']), $novo->numero_lote, $novo->quadra,
+                number_format((float) $novo->area_gis_m2, 2, ',', '.')),
+        ], 201);
+    }
+
+    /** POST /api/lotes/desmembramento-direto/previa */
+    public function previaDesmembramentoDireto(Request $request, DesmembramentoDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        $d = $this->validarDesmembramento($request);
+        $pai = Lote::findOrFail($d['lote_id']);
+
+        return response()->json([
+            'impedimento' => $svc->impedimento(null, $pai, $d['partes'], $d['derivar_ultima'], direto: true),
+            'avisos'      => $svc->avisos($pai, $d['partes'], $d['derivar_ultima']),
+            'retrato'     => $svc->retrato($pai, $d['partes'], $d['derivar_ultima']),
+        ]);
+    }
+
+    /** POST /api/lotes/desmembramento-direto — executa sem protocolo. */
+    public function desmembrarDireto(Request $request, DesmembramentoDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        $d = $this->validarDesmembramento($request);
+        $justificativa = $request->validate([
+            'justificativa' => ['required', 'string', 'min:10', 'max:500'],
+        ])['justificativa'];
+
+        $pai = Lote::findOrFail($d['lote_id']);
+
+        if ($impedimento = $svc->impedimento(null, $pai, $d['partes'], $d['derivar_ultima'], direto: true)) {
+            return response()->json(['message' => $impedimento], 422);
+        }
+
+        $novos = $svc->aplicar(null, $pai, $d['partes'], $d['derivar_ultima'],
+                               $d['modo'] ?? 'poligonos', $justificativa);
+
+        return response()->json([
+            'lotes'   => array_map(fn ($l) => [
+                'id' => $l->id, 'numero_lote' => $l->numero_lote, 'area' => $l->area_gis_m2,
+            ], $novos),
+            'message' => sprintf('Lote %s desmembrado em %s. Ato direto, sem protocolo.',
+                $pai->numero_lote, implode(', ', array_map(fn ($l) => $l->numero_lote, $novos))),
+        ], 201);
+    }
+
+    /**
+     * DELETE /api/lotes/{lote} — apaga um lote RESIDUAL do desenho.
+     *
+     * Não é baixa: baixa é o que acontece com um lote que EXISTIU e deixou de
+     * existir, e fica na sucessão para quem consultar anos depois. Aqui o lote
+     * nunca existiu — é sobra da conversão do DWG, uma faixa de terra sem
+     * quadra, sem número e sem dono. Guardá-la como "baixada" sujaria a
+     * sucessão com um ato que não houve.
+     *
+     * Três travas, e nenhuma é de tela:
+     *   1. curadoria do cadastro;
+     *   2. a SENHA de quem está apagando, conferida aqui — um toque errado num
+     *      celular em campo não pode apagar um lote;
+     *   3. o lote não pode ter nada preso a ele. Lote com vistoria, peça,
+     *      protocolo ou ato de sucessão não é resíduo: é história, e apagá-lo
+     *      deixaria registros órfãos apontando para o vazio.
+     */
+    public function excluir(Request $request, Lote $lote): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        $d = $request->validate([
+            'senha'  => ['required', 'string'],
+            'motivo' => ['required', 'string', 'min:10', 'max:300'],
+        ]);
+
+        if (! Hash::check($d['senha'], $request->user()->password)) {
+            return response()->json([
+                'message' => 'Senha incorreta. O lote não foi apagado.',
+            ], 422);
+        }
+
+        if ($preso = $this->oQuePrende($lote)) {
+            return response()->json([
+                'message' => 'Este lote não é resíduo: ' . $preso
+                    . ' Lote com história não se apaga — se ele deixou de existir, '
+                    . 'o caminho é o desmembramento ou a unificação.',
+            ], 422);
+        }
+
+        $identificacao = trim(sprintf('Quadra %s, Lote %s — %s',
+            $lote->quadra ?: '—', $lote->numero_lote ?: '—', $lote->bairro ?: '—'));
+
+        // Pelo Eloquent, para a exclusão deixar a linha na trilha de auditoria
+        // (ver App\Models\Concerns\RegistraAuditoria).
+        $lote->delete();
+
+        return response()->json([
+            'message' => sprintf('Lote apagado do desenho: %s. Motivo: %s',
+                $identificacao, $d['motivo']),
+        ]);
+    }
+
+    /**
+     * O que impede apagar este lote, em uma frase — ou null.
+     *
+     * Conta tudo antes de responder, em vez de parar no primeiro achado: quem
+     * está limpando resíduo quer saber de uma vez o que há ali, e não descobrir
+     * um impedimento por tentativa.
+     */
+    private function oQuePrende(Lote $lote): ?string
+    {
+        $presos = [];
+
+        if ($n = Vistoria::where('lote_id', $lote->id)->count()) {
+            $presos[] = $n . ' vistoria(s)';
+        }
+        if ($n = Documento::where('lote_id', $lote->id)->count()) {
+            $presos[] = $n . ' documento(s)';
+        }
+        if ($n = Protocolo::where('lote_id', $lote->id)->count()) {
+            $presos[] = $n . ' protocolo(s)';
+        }
+        if ($n = DB::table('lote_ato_lotes')->where('lote_id', $lote->id)->count()) {
+            $presos[] = $n . ' ato(s) de sucessão';
+        }
+
+        return $presos ? 'há ' . implode(', ', $presos) . ' ligados a ele.' : null;
+    }
+
+    /** O portão dos atos que dispensam protocolo. */
+    private function recusarSemCuradoria(Request $request): ?JsonResponse
+    {
+        if ($request->user()?->podeCurarCadastro()) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => 'Só o curador do cadastro pode alterar o desenho sem protocolo.',
+        ], 403);
     }
 
     private function recusarSemEdicao(Request $request): ?JsonResponse

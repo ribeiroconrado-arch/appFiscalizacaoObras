@@ -156,8 +156,24 @@ class SucessaoDeLotes
      *                lote_atos.protocolo_id; esta prova existe para a mensagem
      *                ser legível em vez de uma violação de chave.
      */
-    public function impedimentoDoProtocolo(?Protocolo $protocolo, string $tipoAto): ?string
+    public function impedimentoDoProtocolo(?Protocolo $protocolo, string $tipoAto, bool $direto = false): ?string
     {
+        // ATO DIRETO — sem protocolo, e de propósito.
+        //
+        // O caminho normal é o de cima: o contribuinte requer, o setor defere,
+        // o fiscal vai a campo, e só então o desenho muda. Mas o mapa vem de um
+        // DWG que nem sempre acompanha o cartório: há lotes já unificados ou
+        // desmembrados no mundo real e inteiros no desenho. Aí não há
+        // protocolo a esperar — o ato não DECIDE nada, apenas põe o mapa em dia
+        // com o que já aconteceu.
+        //
+        // Quem pode é o curador do cadastro, e o ato fica registrado com o
+        // usuário e a justificativa em `lote_atos`: sem protocolo, a
+        // responsabilidade é de quem executou, e por isso ela é nomeada.
+        if ($direto) {
+            return null;
+        }
+
         if (! $protocolo) {
             return 'Desmembramento e unificação só acontecem a partir de um protocolo.';
         }

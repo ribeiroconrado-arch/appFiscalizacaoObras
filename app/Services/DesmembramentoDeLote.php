@@ -103,9 +103,9 @@ class DesmembramentoDeLote
      *
      * @param  list<array<string,mixed>>  $partes
      */
-    public function impedimento(?Protocolo $protocolo, Lote $pai, array $partes, bool $derivarUltima = true): ?string
+    public function impedimento(?Protocolo $protocolo, Lote $pai, array $partes, bool $derivarUltima = true, bool $direto = false): ?string
     {
-        if ($erro = $this->sucessao->impedimentoDoProtocolo($protocolo, 'desmembramento')) {
+        if ($erro = $this->sucessao->impedimentoDoProtocolo($protocolo, 'desmembramento', $direto)) {
             return $erro;
         }
 
@@ -238,15 +238,16 @@ class DesmembramentoDeLote
      * @return list<Lote>
      */
     public function aplicar(
-        Protocolo $protocolo,
+        ?Protocolo $protocolo,
         Lote $pai,
         array $partes,
         bool $derivarUltima = true,
         ?string $modo = null,
+        ?string $justificativa = null,
     ): array {
         $medidas = $this->medir($pai, $partes, $derivarUltima);
 
-        return DB::transaction(function () use ($protocolo, $pai, $medidas, $modo) {
+        return DB::transaction(function () use ($protocolo, $pai, $medidas, $modo, $justificativa) {
             // A baixa vem ANTES da criação: o índice único de identificação só
             // ignora quem já está baixado, e uma das partes pode legitimamente
             // herdar o número do pai.
@@ -262,7 +263,9 @@ class DesmembramentoDeLote
                     'chave'          => $pai->bairro . '|' . $pai->quadra . '|' . $p['numero_lote'],
                     // Área pelo BANCO, para ficar na mesma régua dos lotes importados.
                     'area_gis_m2'    => round($this->lotes->areaDoGeoJson($p['geojson']), 2),
-                    'fonte'          => 'Desmembramento — protocolo ' . $protocolo->numero,
+                    'fonte'          => $protocolo
+                        ? 'Desmembramento — protocolo ' . $protocolo->numero
+                        : 'Desmembramento direto — sem protocolo',
                     'origem'         => 'desmembramento',
                     'situacao'       => 'ativo',
                 ];
@@ -277,7 +280,7 @@ class DesmembramentoDeLote
 
             $this->sucessao->registrar(
                 'desmembramento', [$pai->id], array_map(fn ($l) => $l->id, $criados),
-                $protocolo, $modo
+                $protocolo, $modo, $justificativa
             );
 
             return $criados;

@@ -2381,3 +2381,22 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .nd-vinculo-ok{font-size:12.5px;color:var(--tx2);padding:9px 12px;
   background:var(--gl);border:1.5px solid var(--gm);border-radius:var(--r)}
 .nd-vinculo{margin-top:6px;font-size:12px;color:var(--tx2)}
+
+/* Separador do lançador cadastral: os atos DIRETOS são de outra natureza que os
+   três de cima — aqueles corrigem o desenho, estes executam um ato que
+   normalmente viria de protocolo deferido. O traço com rótulo diz isso sem
+   gastar uma frase. */
+.cad-sep{display:flex;align-items:center;gap:8px;margin:10px 0 6px;
+  font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--tx3)}
+.cad-sep::after{content:"";flex:1;height:1px;background:var(--bord)}
+
+/* O selo do cabeçalho em vermelho, para a janela que apaga. */
+.cab-ico-perigo{background:var(--rlt) !important;color:var(--red) !important}
+
+/* TEXTAREA DENTRO DE .field OCUPA A LARGURA, como o input ao lado.
+   Sem isto ele fica com o tamanho padrão do navegador (uns 164px num campo de
+   418px) — quem escreve um motivo vê três palavras por linha. As janelas
+   antigas resolviam com `style="width:100%"` escrito à mão em cada uma; a
+   regra faz valer para as que vierem, e o estilo inline continua vencendo onde
+   já existe. */
+.field textarea{width:100%;box-sizing:border-box}
