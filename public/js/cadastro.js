@@ -286,19 +286,35 @@ function pintarPainelCadastro() {
   if (cabecalho) {
     cabecalho.hidden = !emAto
     if (emAto) {
-      cabecalho.innerHTML = '<div class="cad-nota">Unificando pelo protocolo. '
-        + 'Toque nos lotes; eles precisam se encostar e ser da mesma quadra.</div>'
+      // A frase muda com a ORIGEM do ato: falar em protocolo num ato direto
+      // mandaria o fiscal procurar um processo que não existe.
+      cabecalho.innerHTML = atoState.direto
+        ? '<div class="cad-nota"><b>Unificação direta</b>, sem protocolo. '
+          + 'Toque em DOIS ou mais lotes; eles precisam se encostar e ser da mesma quadra.</div>'
+        : '<div class="cad-nota">Unificando pelo protocolo. '
+          + 'Toque nos lotes; eles precisam se encostar e ser da mesma quadra.</div>'
     }
   }
 
+  // O QUE FALTA PARA PODER SEGUIR, dito em número: a unificação precisa de dois,
+  // e "1 lote marcado" sem mais nada deixava o fiscal esperando um botão que
+  // não ia aparecer.
   const contagem = document.getElementById('cad-contagem')
   if (contagem) {
-    contagem.textContent = n === 0
-      ? 'Nenhum lote marcado ainda — toque neles no mapa.'
-      : `${n} lote(s) marcado(s).`
+    if (n === 0) {
+      contagem.textContent = emAto
+        ? 'Nenhum lote marcado — toque em dois ou mais no mapa.'
+        : 'Nenhum lote marcado ainda — toque neles no mapa.'
+    } else if (emAto && n === 1) {
+      contagem.textContent = '1 lote marcado — falta ao menos mais um para unificar.'
+    } else {
+      contagem.textContent = `${n} lote(s) marcado(s).`
+    }
   }
 
-  document.getElementById('cad-acoes').hidden = n === 0
+  // Em unificação o mínimo é DOIS: com um só, o botão de conferir levaria a uma
+  // recusa do servidor dizendo exatamente isto.
+  document.getElementById('cad-acoes').hidden = emAto ? n < 2 : n === 0
   document.getElementById('cad-quadra-campo').hidden = emAto
   document.getElementById('cad-btn-conferir').setAttribute('onclick',
     emAto ? 'conferirUnificacao()' : 'conferirQuadraSelecao()')
@@ -486,6 +502,19 @@ function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
 function atoDiretoCadastral(tipo) {
   const rotulo = tipo === 'unificacao' ? 'Unificação direta' : 'Desmembramento direto'
 
+  // CADA ATO PEDE UMA COISA DIFERENTE, e é melhor dizer isso antes de o fiscal
+  // escrever a justificativa do que depois:
+  //
+  //   unificação      DOIS ou mais lotes, que se encostam — eles viram um
+  //   desmembramento  UM lote, que vai ser dividido em partes desenhadas
+  //
+  // O desmembramento parava aqui em silêncio: sem lote selecionado, começava
+  // com `loteId: null` e só falhava lá na frente, depois de desenhar tudo.
+  if (tipo === 'desmembramento' && !state.selecionado?.properties?.id) {
+    toast('Toque primeiro no lote que será desmembrado.', 'err')
+    return
+  }
+
   pedirTexto({
     titulo: rotulo,
     rotulo: 'Por que este ato não tem protocolo?',
@@ -498,6 +527,24 @@ function atoDiretoCadastral(tipo) {
       iniciarAtoCadastral(null, tipo, state.selecionado?.properties?.id ?? null)
     },
   })
+}
+
+/**
+ * Apagar resíduo a partir do painel do mapa.
+ *
+ * O balão do lote também oferece isso; aqui é o mesmo caminho para quem já está
+ * com o painel de correção aberto. Nos dois casos o lote é o que está
+ * SELECIONADO — apagar é sobre um lote específico, e o mapa é onde ele se
+ * escolhe.
+ */
+function apagarLoteDoPainel() {
+  const p = state.selecionado?.properties
+  if (!p?.id) {
+    toast('Toque primeiro no lote que quer apagar.', 'err')
+    return
+  }
+
+  excluirLote(p.id, `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'} — ${p.bairro ?? ''}`.trim())
 }
 
 /** Larga o ato em andamento sem executá-lo. */

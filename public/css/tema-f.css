@@ -2483,3 +2483,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vv-item{border-left:3px solid var(--gm);padding-left:11px;margin-bottom:16px}
 .vv-item-num{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
   color:var(--tx3);margin-bottom:6px}
+
+/* O lançador cadastral passa a dizer O QUE PRECISA ANTES, em duas linhas: o
+   nome do ato e a exigência dele. As três são diferentes — dois lotes, um lote,
+   um lote sem história — e descobrir isso na recusa é tarde. */
+.cad-lanca{flex-direction:column;align-items:flex-start;gap:2px;padding-top:8px;padding-bottom:8px}
+.cad-lanca-obs{font-size:11px;font-weight:400;color:var(--tx2);line-height:1.35;
+  white-space:normal;text-align:left}
+/* Apagar não tem volta: a cor diz isso no menu, antes do clique. */
+.cad-lanca-perigo{color:var(--red)}
+.cad-lanca-perigo:hover{border-color:var(--red);background:var(--rlt)}
+.cad-lanca-perigo .cad-lanca-obs{color:var(--tx2)}

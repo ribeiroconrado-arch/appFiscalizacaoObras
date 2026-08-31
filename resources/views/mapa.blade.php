@@ -372,14 +372,31 @@
         @if (auth()->user()->podeCurarCadastro())
           {{-- ATOS DIRETOS — o desenho em dia com o que já aconteceu.
                Separados dos de cima por um traço porque são de outra natureza:
-               os três primeiros CORRIGEM o desenho; estes dois executam um ato
-               que normalmente viria de protocolo deferido. Só o curador do
-               cadastro os vê, e cada um pede justificativa escrita. --}}
+               os três primeiros CORRIGEM o desenho; estes executam um ato que
+               normalmente viria de protocolo deferido, ou apagam um resíduo. Só
+               o curador do cadastro os vê.
+
+               Cada um diz O QUE PRECISA ANTES, porque as três exigências são
+               diferentes e descobrir isso na recusa é tarde:
+                 unificar     dois ou mais lotes, que se encostam
+                 desmembrar   um lote, que será dividido em partes desenhadas
+                 apagar       um lote, sem nada preso a ele --}}
           <div class="cad-sep">Sem protocolo — só curadoria</div>
+
           <button type="button" class="btn sm cad-lanca" onclick="atoDiretoCadastral('unificacao')">
-            Unificar lotes direto</button>
+            Unificar lotes direto
+            <span class="cad-lanca-obs">Toque em 2 ou mais lotes vizinhos; eles viram um.</span>
+          </button>
+
           <button type="button" class="btn sm cad-lanca" onclick="atoDiretoCadastral('desmembramento')">
-            Desmembrar lote direto</button>
+            Desmembrar lote direto
+            <span class="cad-lanca-obs">Selecione 1 lote no mapa e desenhe as partes.</span>
+          </button>
+
+          <button type="button" class="btn sm cad-lanca cad-lanca-perigo" onclick="apagarLoteDoPainel()">
+            Apagar lote residual
+            <span class="cad-lanca-obs">Selecione 1 lote. Só para sobra da conversão do desenho.</span>
+          </button>
         @endif
 
         <div class="cad-dica">O trabalho acontece no mapa; os dados são pedidos
