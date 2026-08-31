@@ -139,6 +139,8 @@ function modoCadastral(modo) {
 
   if (modo === 'quadra') {
     ligarSelecao('quadra')
+  } else if (modo === 'apagar') {
+    ligarSelecao('apagar')
   } else if (modo === 'desenho') {
     iniciarDesenhoDeLote()
   } else if (modo === 'coordenadas') {
@@ -226,7 +228,20 @@ function pintarBarraCadastral() {
   ok.hidden = true
   extra.hidden = true
 
-  if (cadModo === 'quadra') {
+  if (cadModo === 'apagar') {
+    modo.textContent = 'Apagar resíduo'
+    passo.textContent = n === 0
+      ? 'Toque nos lotes a apagar. Vários de uma vez, se for o caso.'
+      : `${n} lote(s) marcado(s) para apagar.`
+    if (n > 0) {
+      ok.hidden = false
+      ok.textContent = n === 1 ? 'Apagar 1 lote' : `Apagar ${n} lotes`
+      ok.onclick = abrirExclusaoSelecionados
+      extra.hidden = false
+      extra.textContent = 'Limpar marcação'
+      extra.onclick = limparSelecaoCadastral
+    }
+  } else if (cadModo === 'quadra') {
     modo.textContent = emAto ? 'Unificação' : 'Corrigir quadra'
     passo.textContent = n === 0
       ? 'Toque nos lotes do mapa para marcá-los.'
@@ -530,21 +545,36 @@ function atoDiretoCadastral(tipo) {
 }
 
 /**
- * Apagar resíduo a partir do painel do mapa.
+ * Apagar resíduo: marcar no mapa e apagar o conjunto.
  *
- * O balão do lote também oferece isso; aqui é o mesmo caminho para quem já está
- * com o painel de correção aberto. Nos dois casos o lote é o que está
- * SELECIONADO — apagar é sobre um lote específico, e o mapa é onde ele se
- * escolhe.
+ * Resíduo raramente vem sozinho — a conversão do DWG deixa faixas em série, ao
+ * longo de uma divisa inteira. Apagar de um em um seria repetir senha e motivo
+ * a cada faixa. Aqui se marca à vontade e se apaga o conjunto, com uma senha e
+ * um motivo para todos.
  */
 function apagarLoteDoPainel() {
-  const p = state.selecionado?.properties
-  if (!p?.id) {
-    toast('Toque primeiro no lote que quer apagar.', 'err')
-    return
-  }
+  modoCadastral('apagar')
+  toast('Toque nos lotes a apagar.', 'aviso')
+}
 
-  excluirLote(p.id, `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'} — ${p.bairro ?? ''}`.trim())
+/** Abre a janela da exclusão com o que está marcado no mapa. */
+function abrirExclusaoSelecionados() {
+  const ids = [...selState.ids]
+  if (!ids.length) { toast('Nenhum lote marcado', 'err'); return }
+
+  const rotulo = ids.length === 1
+    ? rotuloDoLote(ids[0])
+    : `${ids.length} lotes marcados`
+
+  excluirLote(ids, rotulo)
+}
+
+/** @param {number} id @returns {string} */
+function rotuloDoLote(id) {
+  const p = state.lotes.get(id)?.properties
+  return p
+    ? `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'} — ${p.bairro ?? ''}`.trim()
+    : 'o lote marcado'
 }
 
 /** Larga o ato em andamento sem executá-lo. */
@@ -1074,52 +1104,58 @@ async function postCadastro(url, corpo) {
 // em campo, com o dedo. Quem confere a senha é o servidor.
 
 /**
- * @param {number} id
- * @param {string} rotulo como o lote se identifica na mensagem
+ * @param {number|Array<number>} ids um lote ou o conjunto marcado no mapa
+ * @param {string} rotulo como o conjunto se identifica na mensagem
  */
-function excluirLote(id, rotulo) {
+function excluirLote(ids, rotulo) {
+  const lista = Array.isArray(ids) ? ids : [ids]
+
   document.getElementById('mex-lote').textContent = rotulo || 'este lote'
   document.getElementById('mex-motivo').value = ''
   document.getElementById('mex-senha').value = ''
-  document.getElementById('m-excluir-lote').dataset.lote = String(id)
+  document.getElementById('m-excluir-lote').dataset.lotes = JSON.stringify(lista)
   openModal('m-excluir-lote')
 }
 
 async function confirmarExclusaoLote() {
   const caixa = document.getElementById('m-excluir-lote')
-  const id = Number(caixa.dataset.lote)
+  const ids = JSON.parse(caixa.dataset.lotes || '[]')
   const motivo = document.getElementById('mex-motivo').value.trim()
   const senha = document.getElementById('mex-senha').value
 
+  if (!ids.length) { toast('Nenhum lote marcado', 'err'); return }
   if (motivo.length < 10) { toast('Escreva o motivo — ao menos 10 caracteres.', 'err'); return }
   if (!senha) { toast('Informe sua senha para confirmar.', 'err'); return }
 
   const btn = document.getElementById('mex-btn')
   btn.disabled = true
   try {
-    const r = await fetch('/api/lotes/' + id, {
-      method: 'DELETE',
+    // POST e não DELETE: o pedido leva senha e motivo no corpo, e corpo em
+    // DELETE é aceito pela norma mas mal suportado por proxies e clientes.
+    const r = await fetch('/api/lotes/excluir', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
       },
-      body: JSON.stringify({ senha, motivo }),
+      body: JSON.stringify({ ids, senha, motivo }),
     })
     const d = await r.json().catch(() => ({}))
 
-    if (!r.ok) { toast(d.message || 'Não foi possível apagar o lote.', 'err'); return }
+    if (!r.ok) { toast(d.message || 'Não foi possível apagar.', 'err'); return }
 
     toast(d.message)
     fModalBtn('m-excluir-lote')
-    // A ficha do lote apagado não pode continuar aberta atrás da janela.
+    // A ficha de um lote apagado não pode continuar aberta atrás da janela.
     fModalBtn('m-ficha')
     state.selecionado = null
+    sairModoCadastral(true)
     desenhados.clear()
     carregarLotesVisiveis()
   } catch (e) {
     console.error(e)
-    toast('Falha de rede ao apagar o lote', 'err')
+    toast('Falha de rede ao apagar', 'err')
   } finally {
     btn.disabled = false
     // A senha não sobrevive à janela: some da tela assim que o pedido termina.

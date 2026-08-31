@@ -2411,12 +2411,6 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 }
 .field textarea::placeholder{color:var(--tx3)}
 
-/* O "Apagar lote" do balão do mapa: mesma forma do botão de cima, cor de
-   perigo. Fica ABAIXO do "Ver ficha completa" e não ao lado — num balão de
-   260px dois botões lado a lado ficam com o texto quebrado, e a ordem vertical
-   também diz qual é o caminho comum. */
-.balao-apagar{margin-top:6px;color:var(--red);border-color:var(--rlt);background:var(--rlt)}
-.balao-apagar:hover{border-color:var(--red)}
 
 /* ══════════════════════════════════════════════
    O RELATÓRIO EM ITENS

@@ -1790,7 +1790,11 @@
     <div class="sub">Apagar <b id="mex-lote">este lote</b> não tem volta. Use só para
       resíduo da conversão do desenho — faixa sem quadra, sem número e sem dono.
       Lote que deixou de existir de verdade se resolve por desmembramento ou
-      unificação, que guardam a sucessão.</div>
+      unificação, que guardam a sucessão.
+      {{-- Tudo ou nada: se algum dos marcados tiver vistoria, peça ou protocolo,
+           o lote inteiro é recusado com o nome dele. Apagar parte da seleção em
+           silêncio deixaria o fiscal sem saber o que sobrou. --}}
+      Se algum dos marcados tiver história, nada é apagado e o sistema diz qual é.</div>
 
     <div class="field">
       <label for="mex-motivo">Por que este lote é resíduo?</label>

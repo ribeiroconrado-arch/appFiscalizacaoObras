@@ -97,8 +97,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/lotes/desmembramento-direto/previa', [CadastroLoteController::class, 'previaDesmembramentoDireto']);
         Route::post('/lotes/desmembramento-direto', [CadastroLoteController::class, 'desmembrarDireto']);
 
-        // Apagar resíduo do desenho. Pede a senha no corpo — ver o método.
-        Route::delete('/lotes/{lote}', [CadastroLoteController::class, 'excluir']);
+        // Apagar resíduo do desenho — um ou VÁRIOS de uma vez, marcados no
+        // mapa. Pede a senha no corpo, e por isso não é DELETE /lotes/{id}:
+        // corpo em DELETE é aceito mas mal suportado por proxies e clientes.
+        Route::post('/lotes/excluir', [CadastroLoteController::class, 'excluir']);
 
         // Desenhar lote que a importacao nao trouxe. O extrator suprime lote em
         // silencio quando o desenho do DWG nao coopera — foi assim que a Quadra

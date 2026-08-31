@@ -428,42 +428,74 @@ class CadastroLoteController extends Controller
      *      protocolo ou ato de sucessão não é resíduo: é história, e apagá-lo
      *      deixaria registros órfãos apontando para o vazio.
      */
-    public function excluir(Request $request, Lote $lote): JsonResponse
+    public function excluir(Request $request): JsonResponse
     {
         if ($erro = $this->recusarSemCuradoria($request)) {
             return $erro;
         }
 
         $d = $request->validate([
+            'ids'    => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*'  => ['integer', 'exists:lotes,id'],
             'senha'  => ['required', 'string'],
             'motivo' => ['required', 'string', 'min:10', 'max:300'],
         ]);
 
         if (! Hash::check($d['senha'], $request->user()->password)) {
             return response()->json([
-                'message' => 'Senha incorreta. O lote não foi apagado.',
+                'message' => 'Senha incorreta. Nenhum lote foi apagado.',
             ], 422);
         }
 
-        if ($preso = $this->oQuePrende($lote)) {
+        $lotes = Lote::whereIn('id', $d['ids'])->get();
+
+        // TUDO OU NADA.
+        //
+        // Apagar três e deixar dois para trás, em silêncio, deixaria o fiscal
+        // sem saber o que aconteceu com quais — e a operação não tem volta.
+        // Recusar o lote inteiro e NOMEAR o que prende cada um é o que ele pode
+        // resolver: tira aqueles da seleção e repete.
+        $impedidos = [];
+        foreach ($lotes as $lote) {
+            if ($preso = $this->oQuePrende($lote)) {
+                $impedidos[] = $this->identificar($lote) . ' (' . $preso . ')';
+            }
+        }
+
+        if ($impedidos) {
             return response()->json([
-                'message' => 'Este lote não é resíduo: ' . $preso
-                    . ' Lote com história não se apaga — se ele deixou de existir, '
-                    . 'o caminho é o desmembramento ou a unificação.',
+                'message' => 'Nada foi apagado. Estes lotes não são resíduo: '
+                    . implode('; ', $impedidos)
+                    . ' Lote com história não se apaga — se ele deixou de existir, o '
+                    . 'caminho é o desmembramento ou a unificação. Tire-os da seleção '
+                    . 'e repita.',
             ], 422);
         }
 
-        $identificacao = trim(sprintf('Quadra %s, Lote %s — %s',
-            $lote->quadra ?: '—', $lote->numero_lote ?: '—', $lote->bairro ?: '—'));
-
-        // Pelo Eloquent, para a exclusão deixar a linha na trilha de auditoria
-        // (ver App\Models\Concerns\RegistraAuditoria).
-        $lote->delete();
+        // Pelo Eloquent e um a um, para cada exclusão deixar a sua linha na
+        // trilha de auditoria (ver App\Models\Concerns\RegistraAuditoria) — um
+        // `delete()` em massa apagaria os lotes sem deixar quem, quando e qual.
+        $apagados = [];
+        DB::transaction(function () use ($lotes, &$apagados) {
+            foreach ($lotes as $lote) {
+                $apagados[] = $this->identificar($lote);
+                $lote->delete();
+            }
+        });
 
         return response()->json([
-            'message' => sprintf('Lote apagado do desenho: %s. Motivo: %s',
-                $identificacao, $d['motivo']),
+            'message' => count($apagados) === 1
+                ? sprintf('Lote apagado do desenho: %s. Motivo: %s', $apagados[0], $d['motivo'])
+                : sprintf('%d lotes apagados do desenho. Motivo: %s', count($apagados), $d['motivo']),
+            'apagados' => $apagados,
         ]);
+    }
+
+    /** Como o lote se identifica numa mensagem. */
+    private function identificar(Lote $lote): string
+    {
+        return trim(sprintf('Quadra %s, Lote %s — %s',
+            $lote->quadra ?: '—', $lote->numero_lote ?: '—', $lote->bairro ?: '—'));
     }
 
     /**
