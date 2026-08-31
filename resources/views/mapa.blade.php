@@ -1030,13 +1030,6 @@
 
     <div class="btn-row">
       <button class="btn" onclick="fModalBtn('m-ficha')">Fechar</button>
-      @if (auth()->user()->podeCurarCadastro())
-        {{-- Fica na ficha, e não no mapa: apagar exige LER o imóvel antes —
-             área, bairro, histórico —, e é isso que a ficha põe na frente. Só o
-             curador do cadastro vê o botão; a regra real está no controller. --}}
-        <button class="btn danger sm" onclick="excluirLoteDaFicha()"
-                title="Apagar do desenho — só para resíduo da conversão">Apagar lote</button>
-      @endif
       @if (auth()->user()->canEdit())
         {{-- As mesmas peças do botão da tela de Documentos, e não só vistoria:
              estando na ficha, o fiscal já sabe sobre qual imóvel vai lavrar —
@@ -1727,7 +1720,7 @@
   <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
     <button class="modal-x" onclick="fModalBtn('m-excluir-lote')">&#10005;</button>
     <h3 class="fi-cabeca">
-      <span class="cab-ico cab-ico-perigo">
+      <span class="cab-ico">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
       </span>
@@ -2589,6 +2582,9 @@ window.USUARIO_ID = {{ auth()->id() }}
 // Quem só consulta não vê "Assumir" no menu da linha. A regra que vale
 // continua no ProtocoloController; isto é para não oferecer o que seria recusado.
 window.PODE_EDITAR = {{ Js::from(auth()->user()->canEdit()) }}
+// O balão do mapa é montado em JavaScript, então o privilégio de curadoria
+// precisa chegar até lá. A regra real está no CadastroLoteController.
+window.PODE_CURAR_CADASTRO = {{ Js::from(auth()->user()->podeCurarCadastro()) }}
 window.USUARIO_NOME = {{ Js::from(auth()->user()->name) }}
 {{-- A tela usa isto so para ESCONDER o que o usuario nao pode fazer. Quem
      autoriza de verdade e o servidor, em QuarteiraoController::aplicar(). --}}

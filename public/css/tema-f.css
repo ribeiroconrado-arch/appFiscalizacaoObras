@@ -2390,13 +2390,30 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--tx3)}
 .cad-sep::after{content:"";flex:1;height:1px;background:var(--bord)}
 
-/* O selo do cabeçalho em vermelho, para a janela que apaga. */
-.cab-ico-perigo{background:var(--rlt) !important;color:var(--red) !important}
 
-/* TEXTAREA DENTRO DE .field OCUPA A LARGURA, como o input ao lado.
-   Sem isto ele fica com o tamanho padrão do navegador (uns 164px num campo de
-   418px) — quem escreve um motivo vê três palavras por linha. As janelas
-   antigas resolviam com `style="width:100%"` escrito à mão em cada uma; a
-   regra faz valer para as que vierem, e o estilo inline continua vencendo onde
-   já existe. */
-.field textarea{width:100%;box-sizing:border-box}
+/* TEXTAREA DENTRO DE .field — o campo é a moldura, o textarea não tem nenhuma.
+   
+   O `.field` já desenha a caixa arredondada; um textarea com a borda padrão do
+   navegador dentro dele vira o "quadrado de linha preta por dentro" — o mesmo
+   defeito já corrigido nos campos de parecer e observação. Lá a solução foi
+   escrita à mão em cada janela (`style="width:100%;border:none;…"`); aqui vira
+   REGRA, para as próximas nascerem certas em vez de dependerem de alguém
+   lembrar do estilo inline.
+   
+   A largura vem junto pelo mesmo motivo: sem ela o campo fica com o tamanho
+   padrão do navegador (uns 164px num campo de 418) e quem escreve um motivo vê
+   três palavras por linha. */
+.field textarea{
+  width:100%;box-sizing:border-box;
+  border:none;background:none;outline:none;
+  font-family:inherit;font-size:14px;color:var(--chumbo);
+  resize:vertical;
+}
+.field textarea::placeholder{color:var(--tx3)}
+
+/* O "Apagar lote" do balão do mapa: mesma forma do botão de cima, cor de
+   perigo. Fica ABAIXO do "Ver ficha completa" e não ao lado — num balão de
+   260px dois botões lado a lado ficam com o texto quebrado, e a ordem vertical
+   também diz qual é o caminho comum. */
+.balao-apagar{margin-top:6px;color:var(--red);border-color:var(--rlt);background:var(--rlt)}
+.balao-apagar:hover{border-color:var(--red)}

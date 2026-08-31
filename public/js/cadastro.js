@@ -1080,10 +1080,3 @@ async function confirmarExclusaoLote() {
   }
 }
 
-/** O botão da ficha: monta o rótulo do lote aberto e abre a janela. */
-function excluirLoteDaFicha() {
-  const p = state.selecionado?.properties
-  if (!p?.id) { toast('Nenhum imóvel selecionado', 'err'); return }
-
-  excluirLote(p.id, `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'} — ${p.bairro ?? ''}`.trim())
-}

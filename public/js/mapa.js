@@ -730,6 +730,9 @@ function abrirBalao(feicao, camada) {
       ${p.inscricao ? `<div class="balao-chip">${esc(p.inscricao)}</div>` : ''}
       <div class="balao-area">${area}</div>
       <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Ver ficha completa</button>
+      ${window.PODE_CURAR_CADASTRO ? `
+        <button class="btn sm balao-btn balao-apagar" onclick="apagarLoteDoBalao()"
+                title="Apagar do desenho — só para resíduo da conversão">Apagar lote</button>` : ''}
     </div>`
 
   camada.bindPopup(html, {
@@ -741,6 +744,24 @@ function abrirBalao(feicao, camada) {
 function abrirFichaDoBalao() {
   mapaState.obj?.closePopup()
   if (state.selecionado) abrirFicha(state.selecionado)
+}
+
+/**
+ * Apagar resíduo direto do mapa.
+ *
+ * É AQUI que o resíduo se reconhece: a sobra da conversão do DWG se vê pelo
+ * desenho — uma faixa torta, sem quadra e sem número, sobre a mata. Obrigar a
+ * abrir a ficha para apagá-la seria pedir para ler dados que ela não tem.
+ *
+ * O balão fecha antes: a janela vai cobrir o mapa, e um balão aberto por baixo
+ * dela fica preso quando a lista de lotes se refaz.
+ */
+function apagarLoteDoBalao() {
+  const p = state.selecionado?.properties
+  if (!p?.id) { toast('Nenhum lote selecionado', 'err'); return }
+
+  mapaState.obj?.closePopup()
+  excluirLote(p.id, `Quadra ${p.quadra ?? '—'} · Lote ${p.numero_lote ?? '—'} — ${p.bairro ?? ''}`.trim())
 }
 
 /**
