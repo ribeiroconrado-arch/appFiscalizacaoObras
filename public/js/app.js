@@ -85,6 +85,31 @@ async function carregarLotesVisiveis() {
 /** Ids já desenhados no mapa, para não duplicar polígono ao arrastar de volta. */
 const desenhados = new Set()
 
+/**
+ * Apaga do mapa TODOS os lotes desenhados, e não só a lista de ids.
+ *
+ * `desenhados.clear()` sozinho não removia camada nenhuma: ele só dizia "pode
+ * desenhar de novo". Depois de um desmembramento ou de uma unificação, o lote
+ * de ORIGEM continuava pintado por cima dos sucessores até alguém recarregar a
+ * página — um imóvel que o sistema já tinha baixado seguia clicável no mapa, e
+ * abria a ficha de um lote que não existe mais.
+ *
+ * Por isso limpar é remover as camadas, esvaziar os índices e recarregar do
+ * servidor — que é quem sabe quais lotes ainda estão ativos.
+ */
+function limparLotesDoMapa() {
+  const mapa = mapaState.obj
+  if (mapa) {
+    mapaState.camadas.forEach(c => mapa.removeLayer(c))
+  }
+  mapaState.camadas.length = 0
+  mapaState.porId.clear()
+  state.lotes.clear()
+  desenhados.clear()
+  // A seleção apontava para um lote que acabou de sair da tela.
+  state.selecionado = null
+}
+
 /** @param {Array<Object>} feicoes */
 function acrescentarLotes(feicoes) {
   const novas = feicoes.filter(f => !desenhados.has(f.properties.id))
@@ -251,8 +276,12 @@ function subFicha(nome) {
   })
 
   // O cadastro imobiliário é buscado ao ABRIR a aba, não junto da ficha: o
-  // mapa carrega até 3.000 lotes de uma vez.
+  // mapa carrega até 3.000 lotes de uma vez. As edificações seguem a mesma
+  // regra e pelo mesmo motivo — são geometria, e geometria é cara.
   if (nome === 'cadastro') { carregarBci(state.selecionado?.properties?.id) }
+  if (nome === 'croquis') {
+    carregarEdificacoes(state.selecionado?.properties?.id).then(renderCroquis)
+  }
 }
 
 /**

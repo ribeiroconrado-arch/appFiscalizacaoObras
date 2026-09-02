@@ -369,6 +369,14 @@
         <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('coordenadas')">
           Lote por coordenadas</button>
 
+        {{-- A edificação não é um "modo cadastral": ela não mexe na divisa do
+             lote, não pede quadra nem número, e o desenho termina numa única
+             pergunta. Por isso chama direto, sem passar por `modoCadastral`. --}}
+        <button type="button" class="btn sm cad-lanca" onclick="desenharEdificacao()">
+          Desenhar edificação
+          <span class="cad-lanca-obs">Selecione 1 lote e contorne a construção dentro dele.</span>
+        </button>
+
         @if (auth()->user()->podeCurarCadastro())
           {{-- ATOS DIRETOS — o desenho em dia com o que já aconteceu.
                Separados dos de cima por um traço porque são de outra natureza:
@@ -497,6 +505,13 @@
           <span class="desc">Com documento pendente</span></label>
         <label class="chk-item"><input type="checkbox" id="bs-sem-vistoria" onchange="marcarPrecedencia()">
           <span class="desc">Projeto aprovado sem vistoria</span></label>
+        {{-- O IMÓVEL QUE DEIXOU DE EXISTIR.
+             Unificação e desmembramento não apagam o lote de origem: ele fica
+             baixado, com os documentos e vistorias dele pendurados. Some do
+             mapa, some da consulta — e era só por aqui que se podia chegar de
+             volta a um processo que corre contra um lote já desmembrado. --}}
+        <label class="chk-item"><input type="checkbox" id="bs-baixados">
+          <span class="desc">Incluir imóveis baixados (unificados/desmembrados)</span></label>
       </div>
     </div>
 
@@ -686,6 +701,7 @@
     <button data-sub="legislacao" onclick="subParametros('legislacao')">Legislação</button>
     <button data-sub="upf" onclick="subParametros('upf')">UPF</button>
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
+    <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
 
@@ -839,6 +855,31 @@
       </div>
       <div id="lista-feriados"></div>
     </div>
+  </div>
+
+  {{-- BAIRROS — cadastro direto na linha, como a UPF: são três campos curtos,
+       e abrir uma janela para digitar um código e um nome custa mais do que o
+       dado vale. --}}
+  <div class="par-painel" id="par-bairros">
+    <div class="sec-simples">Bairros do município <span class="cont" id="cont-bairros">0</span></div>
+    <p class="aviso-legal">
+      <b>Três nomes, de propósito.</b> O <b>código</b> e o <b>nome do cadastro</b>
+      são os da prefeitura. O <b>nome no desenho</b> é como o bairro aparece no
+      DWG convertido — é ele que amarra os lotes ao código, e fica vazio
+      enquanto aquele bairro não tiver sido levantado.
+    </p>
+    <div class="cad-row">
+      <input type="number" id="novo-bairro-codigo" placeholder="Código" min="1" style="max-width:110px">
+      <input type="text" id="novo-bairro-nome" placeholder="Nome no cadastro (JARDIM EUROPA IV)">
+      <input type="text" id="novo-bairro-gis" placeholder="Nome no desenho (opcional)"
+             onkeydown="if(event.key==='Enter')salvarBairro()">
+      <button class="btn primary sm" onclick="salvarBairro()">+ Novo bairro</button>
+    </div>
+    <div class="cad-row">
+      <input type="search" id="filtro-bairros" placeholder="Procurar por código ou nome"
+             oninput="renderBairros()" style="flex:1">
+    </div>
+    <div id="lista-bairros"></div>
   </div>
 
   {{-- ÓRGÃO --}}
@@ -1221,6 +1262,12 @@
           <label for="nv-area">Área (m²)</label>
           <input type="number" id="nv-area" class="mono" inputmode="decimal"
                  min="0" max="999999" step="0.01" placeholder="88,02">
+          {{-- O QUE ESTÁ DESENHADO, ao lado do que foi medido.
+               Não preenche o campo sozinho: o número que vai para a multa é o
+               que o fiscal aferiu com trena, e um valor que aparece pronto é
+               um valor que ninguém confere. Aqui ele é oferecido, e quem
+               decide usá-lo assume isso com um toque. --}}
+          <div class="cad-dica" id="nv-area-desenhada" hidden></div>
         </div>
         <div class="field" style="margin:0">
           <label for="nv-area-metodo">Como foi obtida</label>
@@ -1835,6 +1882,15 @@
       <span id="cad-modal-titulo">Correção cadastral</span>
     </h3>
 
+    {{-- O CORPO É MÓVEL.
+         Em tela grande ele sai daqui e vai para a mesa lateral (#cad-mesa),
+         onde fica ao lado do mapa em vez de por cima dele. É movido, e não
+         duplicado: dois formulários com os mesmos ids seriam dois campos
+         disputando cada `getElementById`, e o que a tela lê deixaria de ser o
+         que o operador digitou. --}}
+    <div id="cad-modal-corpo">
+    <div id="cad-corpo">
+
     {{-- QUADRA EM MASSA --}}
     <div class="cad-painel" id="cadp-quadra">
       <div id="cad-ato" hidden></div>
@@ -1873,6 +1929,40 @@
 
       <div id="des-desenhando" hidden>
         <div class="leg" id="des-contagem">Toque nos cantos do lote. Duplo toque fecha.</div>
+
+        {{-- A MESA DE MEDIDAS.
+             Desenhar lote não é trabalho de campo: é trabalho de mesa, com a
+             matrícula ao lado. Estes dois controles são o que traz a matrícula
+             para dentro do desenho — a trava dá o esquadro, e o lado digitado
+             dá a medida exata. Sem eles o polígono sai de onde o dedo clicou. --}}
+        <div class="des-trava-linha">
+          <button type="button" class="btn sm at" id="des-trava" aria-pressed="true"
+                  onclick="alternarTravaAngulo()"
+                  title="Trava o lado em múltiplos de 45°. Segure Shift para soltar num canto.">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 4v16h16"/><path d="M4 12h8v8"/>
+            </svg>
+            Ângulo 90°
+          </button>
+          <span class="des-trava-obs">Shift solta num canto só.</span>
+        </div>
+
+        <div class="cad-row des-medir">
+          <input type="number" id="des-metros" step="0.01" min="0" placeholder="Metros"
+                 inputmode="decimal" onkeydown="if(event.key==='Enter')cravarLadoDaTela()">
+          <select id="des-direcao" onchange="pintarDirecaoDoLado()">
+            <option value="dir">Vira à direita</option>
+            <option value="esq">Vira à esquerda</option>
+            <option value="reta">Segue reto</option>
+            <option value="azimute">Azimute</option>
+          </select>
+          <input type="number" id="des-azimute" step="0.1" min="0" max="360" placeholder="Az °"
+                 hidden style="max-width:88px"
+                 onkeydown="if(event.key==='Enter')cravarLadoDaTela()">
+          <button type="button" class="btn primary sm" onclick="cravarLadoDaTela()">Cravar lado</button>
+        </div>
+
         <div class="seg" style="margin:6px 0 0">
           <button type="button" onclick="desfazerVertice()">Desfazer canto</button>
           <button type="button" onclick="largarDesenho()">Cancelar</button>
@@ -1880,9 +1970,14 @@
       </div>
 
       <div id="des-dados" hidden>
+        {{-- BAIRRO ESCOLHIDO, não digitado.
+             Texto livre é a razão de o mesmo bairro estar hoje grafado de mais
+             de um jeito na base — e bairro grafado diferente é lote que não se
+             acha na consulta. A lista vem do cadastro da prefeitura
+             (Parâmetros › Bairros). --}}
         <div class="field" style="margin:10px 0 6px">
           <label for="des-bairro">Bairro</label>
-          <input type="text" id="des-bairro" maxlength="120" placeholder="Jardim Europa IV">
+          <select id="des-bairro"><option value="">— escolha —</option></select>
         </div>
         <div class="g2" style="margin-bottom:6px">
           <div class="field" style="margin:0">
@@ -1894,6 +1989,46 @@
             <input type="text" id="des-lote" class="mono" maxlength="20" placeholder="1">
           </div>
         </div>
+
+        {{-- AS MEDIDAS DA MATRÍCULA.
+             Digitadas, e não deduzidas do desenho: o que o registro diz é fato
+             jurídico, e o desenho é aferição. O quadro logo abaixo confronta
+             as duas e aponta a diferença — sem impedir a gravação, porque
+             campo obrigatório que atrapalha vira número inventado. --}}
+        <div class="sec-simples" style="margin:12px 0 2px">Medidas da matrícula
+          <span class="cont" id="des-conf-selo" hidden>—</span></div>
+        <div class="cad-dica" style="margin-bottom:6px">
+          Opcional. Preencha o que a matrícula trouxer; o desenho confere.</div>
+        <div class="g2" style="margin-bottom:6px">
+          <div class="field" style="margin:0">
+            <label for="des-frente">Frente (m)</label>
+            <input type="number" id="des-frente" class="mono" step="0.01" min="0"
+                   inputmode="decimal" oninput="conferirMedidas()">
+          </div>
+          <div class="field" style="margin:0">
+            <label for="des-fundos">Fundos (m)</label>
+            <input type="number" id="des-fundos" class="mono" step="0.01" min="0"
+                   inputmode="decimal" oninput="conferirMedidas()">
+          </div>
+        </div>
+        <div class="g2" style="margin-bottom:6px">
+          <div class="field" style="margin:0">
+            <label for="des-lado-dir">Lado direito (m)</label>
+            <input type="number" id="des-lado-dir" class="mono" step="0.01" min="0"
+                   inputmode="decimal" oninput="conferirMedidas()">
+          </div>
+          <div class="field" style="margin:0">
+            <label for="des-lado-esq">Lado esquerdo (m)</label>
+            <input type="number" id="des-lado-esq" class="mono" step="0.01" min="0"
+                   inputmode="decimal" oninput="conferirMedidas()">
+          </div>
+        </div>
+        <div class="field" style="margin:0 0 6px">
+          <label for="des-area-mat">Área da matrícula (m²)</label>
+          <input type="number" id="des-area-mat" class="mono" step="0.01" min="0"
+                 inputmode="decimal" oninput="conferirMedidas()">
+        </div>
+        <div id="des-conferencia"></div>
         <div class="seg" style="margin:0">
           <button type="button" onclick="largarDesenho()">Descartar</button>
           <button type="button" onclick="conferirDesenho()">Conferir</button>
@@ -1902,11 +2037,64 @@
       </div>
     </div>
 
+    </div>{{-- /cad-corpo --}}
+    </div>{{-- /cad-modal-corpo --}}
+
     <div class="btn-row">
       <button class="btn" onclick="fecharModalCad()">Ver no mapa</button>
     </div>
   </div>
 </div>
+
+{{-- ══════ MESA DE EDIÇÃO CADASTRAL (tela grande) ══════
+
+     Desenhar lote é trabalho de mesa, não de campo: acontece no monitor, com a
+     matrícula do lado. Num painel de 262px flutuando sobre o mapa — que é o que
+     cabe no celular — o operador lia de lado, o mapa encolhia e o passo
+     seguinte ficava escondido atrás da própria janela onde ele trabalhava.
+
+     Acima de 1000px (o mesmo ponto de quebra das listas em tabela) o lançador e
+     o formulário saem de cima do mapa e vêm para esta coluna fixa à esquerda: as
+     ferramentas em cima, o que a ferramenta ativa precisa logo abaixo, e o mapa
+     inteiro livre à direita. Abaixo de 1000px nada disto existe e tudo volta
+     para o painel flutuante — que é o que cabe na mão. --}}
+<aside class="cad-mesa" id="cad-mesa" hidden aria-label="Edição cadastral">
+  <div class="cad-mesa-topo">
+    <span class="cad-mesa-tit" id="cad-mesa-titulo">Edição cadastral</span>
+    <button class="cad-mesa-x" onclick="fecharMesaCadastral()"
+            title="Fechar a mesa" aria-label="Fechar a mesa">&#10005;</button>
+  </div>
+  <div class="cad-mesa-rolo">
+    <div id="mesa-lanca"></div>
+    <div id="mesa-props"></div>
+  </div>
+</aside>
+
+{{-- ══════ MESA DE DESMEMBRAMENTO ══════
+
+     Tela própria porque o assunto é outro: aqui não se corrige o mapa, divide-se
+     um lote. O alvo fica realçado e com as medidas de cada lado à vista; os
+     vizinhos ficam apagados e sem clique — referência, não material de trabalho.
+
+     Não há "desenhar as partes à mão": só o corte por linha, que preserva o
+     contorno externo do lote. Um ato que divide não pode mudar a divisa com o
+     vizinho, e o desenho livre permitia exatamente isso. --}}
+{{-- O contorno de um imóvel BAIXADO fica por cima do mapa até alguém tirá-lo.
+     Sem este botão, sair dele exigiria recarregar a página — e um traço cinza
+     que não sai vira ruído em cima do trabalho seguinte. --}}
+<button type="button" class="btn sm baixado-sair" id="btn-tirar-baixado" hidden
+        onclick="tirarBaixadoDoMapa()">Tirar o contorno antigo do mapa</button>
+
+<aside class="desm-mesa" id="desm-mesa" hidden aria-label="Desmembramento">
+  <div class="cad-mesa-topo">
+    <span class="cad-mesa-tit">Desmembrar lote</span>
+    <button type="button" class="btn sm at" id="desm-sat" aria-pressed="true"
+            onclick="alternarSateliteDesm()" title="Liga e desliga a imagem aérea">Satélite</button>
+    <button class="cad-mesa-x" onclick="sairMesaDesmembramento()"
+            title="Sair da mesa" aria-label="Sair da mesa">&#10005;</button>
+  </div>
+  <div class="cad-mesa-rolo" id="desm-mesa-corpo"></div>
+</aside>
 
 <div class="tela-carregando" id="tela-carregando">
   <div class="carregando-marca" aria-hidden="true">
@@ -2679,6 +2867,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/coordenadas.js')"></script>
 <script src="@assetv('js/corte.js')"></script>
 <script src="@assetv('js/cadastro.js')"></script>
+<script src="@assetv('js/edificacoes.js')"></script>
+<script src="@assetv('js/desmembramento.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>
 <script src="@assetv('js/painel.js')"></script>
 <script src="@assetv('js/busca.js')"></script>

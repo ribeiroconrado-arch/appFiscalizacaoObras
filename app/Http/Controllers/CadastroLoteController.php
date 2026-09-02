@@ -250,10 +250,32 @@ class CadastroLoteController extends Controller
             'derivar_ultima' => ['nullable', 'boolean'],
             'modo'           => ['nullable', 'string', 'max:20'],
             'partes'         => ['required', 'array', 'min:1', 'max:20'],
-            // O conteudo de cada parte nao se valida aqui: quem sabe recusar um
-            // contorno que vaza, ou partes que nao cobrem o lote, e o servico —
-            // e com mensagem que ensina, nao com "partes.0.geometry invalido".
+            // O conteudo GEOMÉTRICO de cada parte nao se valida aqui: quem sabe
+            // recusar um contorno que vaza, ou partes que nao cobrem o lote, e o
+            // servico — e com mensagem que ensina, nao com "partes.0.geometry
+            // invalido".
             'partes.*.geometry' => ['required', 'array'],
+
+            // OS DEMAIS CAMPOS DA PARTE PRECISAM ESTAR LISTADOS.
+            //
+            // `validate()` devolve só o que foi validado, e isso vale dentro de
+            // cada item do array: com apenas `partes.*.geometry` declarado, o
+            // que chegava ao serviço era a geometria e MAIS NADA — cada lote
+            // novo nascia com `numero_lote` nulo, e o desmembramento produzia
+            // partes sem número. É o mesmo defeito que derrubava o desenho de
+            // lote, aqui em silêncio, porque nada estourava.
+            'partes.*.numero_lote'            => ['nullable', 'string', 'max:20'],
+            'partes.*.desmembramento'         => ['nullable', 'integer', 'min:0', 'max:999'],
+            'partes.*.numero_lote_derivada'   => ['nullable', 'string', 'max:20'],
+            'partes.*.desmembramento_derivada' => ['nullable', 'integer', 'min:0', 'max:999'],
+
+            // As medidas da matrícula de cada parte (Etapa 2). Opcionais: no
+            // desmembramento o registro costuma vir depois do ato.
+            'partes.*.frente_m'          => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'partes.*.fundos_m'          => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'partes.*.lado_direito_m'    => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'partes.*.lado_esquerdo_m'   => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'partes.*.area_matricula_m2' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
         ]);
 
         $d['derivar_ultima'] = $d['derivar_ultima'] ?? true;
@@ -562,6 +584,28 @@ class CadastroLoteController extends Controller
             // contorno que se cruza, ou pequeno demais, é o serviço — e com
             // mensagem que ensina, não com "geometry.coordinates.0 inválido".
             'geometry.type' => ['required', 'string'],
+            // `coordinates` PRECISA estar listado, mesmo sem regra de conteúdo.
+            //
+            // `validate()` devolve só o que foi validado, e isso vale dentro do
+            // array: declarando `geometry.type` e não `geometry.coordinates`, o
+            // que chegava ao serviço era {"type":"Polygon"} — sem um único
+            // ponto. O MySQL então recusava com "Missing required member
+            // 'coordinates'" e a tela mostrava apenas "Server Error", num
+            // desenho que o operador tinha acabado de fazer certo.
+            'geometry.coordinates' => ['required', 'array'],
+
+            // AS MEDIDAS DA MATRÍCULA. Todas opcionais: lote convertido do DWG
+            // não tem nenhuma, e exigi-las aqui faria o operador preencher com
+            // o que o desenho mediu — o que transformaria a conferência entre
+            // as duas num espelho.
+            //
+            // O teto de 100.000 não é zelo: é para pegar o ponto decimal no
+            // lugar errado, que é o erro de digitação de medida.
+            'frente_m'          => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'fundos_m'          => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'lado_direito_m'    => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'lado_esquerdo_m'   => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'area_matricula_m2' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
         ]);
 
         $d['quadra'] = app(QuadraDeLotesSelecionados::class)->normalizar($d['quadra']);

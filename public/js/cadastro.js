@@ -148,6 +148,14 @@ function modoCadastral(modo) {
     abrirModalCad()
   }
 
+  // EM TELA GRANDE A MESA ABRE JUNTO, e não ao fim do trabalho.
+  //
+  // Em tela pequena a janela de dados só aparece no fim, porque enquanto se
+  // desenha ela cobriria o mapa. Na mesa não cobre nada — e é justamente
+  // durante o desenho que os controles importam: a trava de esquadro e o lado
+  // digitado não servem para nada depois que o polígono já está fechado.
+  if (ehMesaCadastral()) { abrirModalCad() }
+
   pintarPainelCadastro()
 }
 
@@ -169,10 +177,93 @@ function sairModoCadastral(silencioso) {
   cadModo = null
   if (!silencioso) {
     fModalBtn('m-cad')
+    const mesa = document.getElementById('cad-mesa')
+    if (mesa) { mesa.hidden = true; document.body.classList.remove('com-mesa') }
     pintarPainelCadastro()
   }
 }
 
+// ── A MESA DE EDIÇÃO (tela grande) ───────────────────────────
+//
+// Acima de 1000px o lançador e o formulário SAEM de cima do mapa e vão para uma
+// coluna fixa à esquerda. Não há segunda cópia do formulário: os mesmos
+// elementos são MOVIDOS de um lugar para o outro. Duplicar a marcação criaria
+// dois campos com o mesmo id, e `getElementById` passaria a devolver um dos
+// dois sem aviso — o que a tela lê deixaria de ser o que o operador digitou,
+// e o erro só apareceria no lote gravado errado.
+
+/** A mesa é para tela de mesa. No celular, nada disto existe. */
+function ehMesaCadastral() {
+  return typeof ehTelaLarga === 'function' && ehTelaLarga()
+}
+
+/**
+ * Põe cada peça no lugar que a largura da tela pede.
+ *
+ * Idempotente de propósito: `appendChild` de um nó que já está ali não faz
+ * nada, então pode ser chamada em toda troca de modo, em todo redimensionamento
+ * e na abertura — sem precisar saber onde as peças estavam antes.
+ *
+ * @param {boolean} [abrir] abre ou fecha a mesa; omitido, mantém como está
+ */
+function montarMesaCadastral(abrir) {
+  const mesa = document.getElementById('cad-mesa')
+  const geral = document.getElementById('cad-geral')
+  const corpo = document.getElementById('cad-corpo')
+  if (!mesa || !corpo) { return }
+
+  if (ehMesaCadastral()) {
+    if (geral) { document.getElementById('mesa-lanca').appendChild(geral) }
+    document.getElementById('mesa-props').appendChild(corpo)
+    if (abrir !== undefined) { mesa.hidden = !abrir }
+    // A janela não tem mais corpo nenhum: se ficasse aberta, seria um retângulo
+    // vazio por cima da mesa onde o trabalho está acontecendo.
+    if (!mesa.hidden) { fModalBtn('m-cad') }
+  } else {
+    // De volta ao painel flutuante, na ordem original: `#desm-caixa` vem antes
+    // do lançador, e o corpo volta para dentro da janela.
+    const flutuante = document.querySelector('#grupo-cadastro .ctrl-corpo')
+    if (geral && flutuante) { flutuante.appendChild(geral) }
+    document.getElementById('cad-modal-corpo')?.appendChild(corpo)
+    mesa.hidden = true
+  }
+
+  document.body.classList.toggle('com-mesa', ehMesaCadastral() && !mesa.hidden)
+}
+
+/** Abre a mesa e escreve nela o assunto do momento. */
+function abrirMesaCadastral(titulo) {
+  montarMesaCadastral(true)
+  const t = document.getElementById('cad-mesa-titulo')
+  if (t && titulo) { t.textContent = titulo }
+}
+
+/**
+ * Fecha a mesa SEM desfazer nada.
+ *
+ * O que foi marcado ou desenhado continua no mapa, e a barra de estado no topo
+ * oferece reabrir — mesma regra da janela em tela pequena. Fechar a mesa é
+ * querer ver o mapa inteiro, não desistir do trabalho.
+ */
+function fecharMesaCadastral() {
+  const mesa = document.getElementById('cad-mesa')
+  if (!mesa) { return }
+  mesa.hidden = true
+  document.body.classList.remove('com-mesa')
+  pintarPainelCadastro()
+}
+
+// A tela pode mudar de tamanho com trabalho em curso — janela redimensionada,
+// tablet girado. Sem isto, o formulário ficaria numa mesa invisível (ou numa
+// janela que a largura já não usa), e o operador perderia de vista o que
+// estava preenchendo.
+// `TELA_LARGA` vem de ui.js, que é o primeiro script da página — não há guarda
+// de `typeof` aqui de propósito: `typeof` sobre um `const` ainda não avaliado
+// LANÇA, em vez de devolver "undefined", e a guarda seria um conforto falso
+// que esconderia uma troca de ordem dos scripts em vez de denunciá-la.
+TELA_LARGA.addEventListener('change', () => {
+  montarMesaCadastral((cadModo || atoState.tipo) ? ehMesaCadastral() : false)
+})
 /** Abre a janela de dados no painel do modo corrente. */
 function abrirModalCad() {
   const quadra = cadModo === 'quadra'
@@ -185,14 +276,23 @@ function abrirModalCad() {
   // depois, pela barra ("Informar a quadra", "Concluir desenho"), e ate la o
   // usuario pode ter reaberto o lancador.
   if (typeof fecharPaineisMapa === 'function') { fecharPaineisMapa() }
-  openModal('m-cad')
+
+  // EM TELA GRANDE NÃO HÁ JANELA. O mesmo formulário aparece na mesa lateral,
+  // ao lado do mapa — que é onde o trabalho está acontecendo. Abrir um modal
+  // por cima do mapa para digitar a quadra de lotes que estão no mapa é
+  // esconder a resposta atrás da pergunta.
+  if (ehMesaCadastral()) {
+    abrirMesaCadastral(document.getElementById('cad-modal-titulo').textContent)
+  } else {
+    openModal('m-cad')
+  }
   pintarPainelCadastro()
 }
 
 /** Fecha a janela SEM desfazer nada: a barra continua com o trabalho em curso. */
 function fecharModalCad() {
   fModalBtn('m-cad')
-  pintarPainelCadastro()
+  fecharMesaCadastral()
 }
 
 /**
@@ -540,6 +640,10 @@ function atoDiretoCadastral(tipo) {
       atoState.justificativa = texto
       // Protocolo nulo é o que marca o ato como direto — ver `rotaDoAto`.
       iniciarAtoCadastral(null, tipo, state.selecionado?.properties?.id ?? null)
+      // O desmembramento tem tela própria: o lote alvo ocupa o mapa e os
+      // vizinhos viram referência. A unificação não precisa — ali o trabalho é
+      // tocar em lotes espalhados, que é justamente o que a mesa esconderia.
+      if (tipo === 'desmembramento') { abrirMesaDesmembramento() }
     },
   })
 }
@@ -632,7 +736,7 @@ async function gravarUnificacao() {
 
       toast(d.message)
       cancelarAtoCadastral()
-      desenhados.clear()
+      limparLotesDoMapa()
       carregarLotesVisiveis()
     },
   })
@@ -712,10 +816,12 @@ function cortarLote() {
       desmState.modo = 'corte'
       toast('Lote cortado em duas partes. Informe o numero de cada uma.')
       pintarDesmembramento()
+      pintarMesaDesmembramento()
     },
-    onCancelar: pintarDesmembramento,
+    onCancelar: () => { pintarDesmembramento(); pintarMesaDesmembramento() },
   })
   pintarDesmembramento()
+  pintarMesaDesmembramento()
 }
 
 /** @param {number} i */
@@ -725,6 +831,7 @@ function removerParte(i) {
 }
 
 function largarDesmembramento() {
+  if (typeof sairMesaDesmembramento === 'function') { sairMesaDesmembramento() }
   desmState.loteId = null
   desmState.partes = []
   desmState.derivar = true
@@ -743,7 +850,12 @@ function pintarDesmembramento() {
   const cx = document.getElementById('desm-caixa')
   if (!cx) { return }
 
-  const emAto = atoState.tipo === 'desmembramento'
+  // A MESA TOMA O LUGAR DESTE PAINEL.
+  //
+  // Os dois falam do mesmo desmembramento, e mostrá-los juntos daria dois
+  // lugares para digitar o número da mesma parte — com dois valores possíveis
+  // para o que o servidor recebe.
+  const emAto = atoState.tipo === 'desmembramento' && !(typeof desmMesa !== 'undefined' && desmMesa.ativa)
   cx.hidden = !emAto
   if (!emAto) { return }
 
@@ -794,6 +906,13 @@ function _corpoDesmembramento() {
     geometry: p.geometry,
     numero_lote: (p.numero_lote || '').trim(),
     desmembramento: p.desmembramento ? Number(p.desmembramento) : null,
+    // As medidas da matrícula, quando a mesa de desmembramento as pediu.
+    // Vazio vira null e não zero: zero é uma medida, ausência não é.
+    frente_m: _num(p.frente_m),
+    fundos_m: _num(p.fundos_m),
+    lado_direito_m: _num(p.lado_direito_m),
+    lado_esquerdo_m: _num(p.lado_esquerdo_m),
+    area_matricula_m2: _num(p.area_matricula_m2),
   }))
 
   // O número da parte derivada viaja junto da ÚLTIMA desenhada: ela é a única
@@ -812,6 +931,13 @@ function _corpoDesmembramento() {
     modo: desmState.modo || 'poligonos',
     partes,
   }
+}
+
+/** @param {string|number|null|undefined} v @returns {number|null} */
+function _num(v) {
+  if (v === null || v === undefined || String(v).trim() === '') { return null }
+  const n = Number(String(v).replace(',', '.'))
+  return Number.isFinite(n) && n > 0 ? n : null
 }
 
 async function conferirDesmembramento() {
@@ -857,7 +983,7 @@ async function gravarDesmembramento() {
 
       toast(d.message)
       largarDesmembramento()
-      desenhados.clear()
+      limparLotesDoMapa()
       carregarLotesVisiveis()
     },
   })
@@ -878,12 +1004,9 @@ function iniciarDesenhoDeLote() {
     onConcluir: g => {
       desenhoPendente = g
       pintarPainelCadastro()
-      // O bairro sugerido é o do lote selecionado, quando há um: quem desenha
-      // acabou de olhar a vizinhança, e redigitar o bairro é atrito puro.
       const f = state.selecionado
-      if (f && !document.getElementById('des-bairro').value) {
-        document.getElementById('des-bairro').value = f.bairro || f.properties?.bairro || ''
-      }
+      popularBairrosDoDesenho(f?.bairro || f?.properties?.bairro || '')
+      conferirMedidas()
       document.getElementById('des-quadra')?.focus()
     },
     onCancelar: () => { desenhoPendente = null; pintarPainelCadastro() },
@@ -982,6 +1105,187 @@ function aoDesenharVertice(n) {
   if (acoes) { acoes.hidden = !estaDesenhando() }
 }
 
+// ── BAIRROS E MEDIDAS DO LOTE ────────────────────────────────
+
+/** @type {Array<{codigo:string|null,nome:string,valor:string}>|null} */
+let bairrosDoCadastro = null
+
+/**
+ * Enche o combobox de bairro com os bairros CADASTRADOS.
+ *
+ * Não é o mesmo endpoint do filtro de busca: lá só interessam bairros que já
+ * têm lote, porque oferecer no filtro um bairro sem resultado é oferecer
+ * trabalho perdido. Aqui o lote ainda vai existir — e pode ser o primeiro do
+ * bairro dele.
+ *
+ * @param {string} [selecionado] valor a deixar escolhido
+ */
+async function popularBairrosDoDesenho(selecionado) {
+  const sel = document.getElementById('des-bairro')
+  if (!sel) { return }
+
+  if (!bairrosDoCadastro) {
+    try {
+      const r = await fetch('/api/bairros', { headers: { Accept: 'application/json' } })
+      bairrosDoCadastro = (await r.json()).bairros
+    } catch (e) {
+      console.error(e)
+      toast('Não foi possível carregar os bairros', 'err')
+      return
+    }
+  }
+
+  sel.innerHTML = '<option value="">— escolha —</option>'
+    + bairrosDoCadastro.map(b => `<option value="${esc(b.valor)}">`
+      + `${b.codigo ? esc(b.codigo) + ' · ' : ''}${esc(b.nome)}</option>`).join('')
+
+  // O bairro do lote vizinho vem escolhido: quem desenha acabou de olhar a
+  // quadra ao lado, e reescolher na lista de 125 é atrito puro. Só entra se o
+  // nome existir na lista — senão o campo ficaria com um valor que o servidor
+  // recusa, sem dizer por quê.
+  if (selecionado && bairrosDoCadastro.some(b => b.valor === selecionado)) {
+    sel.value = selecionado
+  }
+}
+
+/** @param {string} id @returns {number|null} */
+function numeroDoCampo(id) {
+  const v = String(document.getElementById(id)?.value ?? '').replace(',', '.').trim()
+  if (v === '') { return null }
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** As medidas digitadas, prontas para ir ao servidor. */
+function medidasDigitadas() {
+  return {
+    frente_m: numeroDoCampo('des-frente'),
+    fundos_m: numeroDoCampo('des-fundos'),
+    lado_direito_m: numeroDoCampo('des-lado-dir'),
+    lado_esquerdo_m: numeroDoCampo('des-lado-esq'),
+    area_matricula_m2: numeroDoCampo('des-area-mat'),
+  }
+}
+
+/** Acima disto a diferença entre matrícula e desenho é apontada. */
+const DIVERGENCIA_LIMITE = 5
+
+/**
+ * Confronta o que foi digitado com o que o desenho mede.
+ *
+ * AVISA E NÃO IMPEDE, de propósito. A divergência é informação — pode ser
+ * avanço sobre a via, erro do DWG, desmembramento não averbado — e é o fiscal
+ * quem sabe qual. Bloquear a gravação faria ele arredondar o número digitado
+ * até a tela parar de reclamar, que é como um campo obrigatório vira dado
+ * inventado.
+ */
+function conferirMedidas() {
+  const alvo = document.getElementById('des-conferencia')
+  const selo = document.getElementById('des-conf-selo')
+  if (!alvo) { return }
+
+  const g = desenhoPendente
+  const m = medidasDigitadas()
+  const linhas = []
+  let divergiu = false
+
+  // A área do desenho: se o polígono já está fechado, mede-se ele; senão não
+  // há com o que comparar ainda.
+  const areaDesenho = g ? areaDoAnel(g) : null
+
+  if (m.area_matricula_m2 && areaDesenho) {
+    const dif = (areaDesenho / m.area_matricula_m2 - 1) * 100
+    const fora = Math.abs(dif) > DIVERGENCIA_LIMITE
+    divergiu = divergiu || fora
+    linhas.push(`<div class="cad-nota${fora ? ' cad-aviso' : ''}">`
+      + `Matrícula <b>${fmtNum(m.area_matricula_m2)} m²</b> · `
+      + `desenho <b>${fmtNum(areaDesenho)} m²</b> · `
+      + `<b>${dif > 0 ? '+' : ''}${dif.toFixed(1).replace('.', ',')}%</b>`
+      + (fora ? ' — confira se o desenho não pegou a calçada ou faltou pedaço.' : '')
+      + '</div>')
+  }
+
+  // O perímetro digitado dá uma área aproximada (fórmula do trapézio: média
+  // das frentes vezes média dos lados). Não é a área do lote — só serve para
+  // pegar o erro grosseiro de digitação, um "3" que virou "30".
+  if (m.frente_m && m.fundos_m && m.lado_direito_m && m.lado_esquerdo_m) {
+    const aprox = ((m.frente_m + m.fundos_m) / 2) * ((m.lado_direito_m + m.lado_esquerdo_m) / 2)
+    const base = m.area_matricula_m2 || areaDesenho
+    if (base) {
+      const dif = (aprox / base - 1) * 100
+      const fora = Math.abs(dif) > 15
+      divergiu = divergiu || fora
+      if (fora) {
+        linhas.push('<div class="cad-nota cad-aviso">Os quatro lados dariam cerca de '
+          + `<b>${fmtNum(aprox)} m²</b>, contra ${fmtNum(base)} m². Confira as medidas.</div>`)
+      }
+    }
+  }
+
+  alvo.innerHTML = linhas.join('')
+  if (selo) {
+    const preenchidos = Object.values(m).filter(v => v !== null).length
+    selo.hidden = preenchidos === 0
+    selo.textContent = divergiu ? 'confira' : `${preenchidos}/5`
+    selo.classList.toggle('selo-aviso', divergiu)
+  }
+}
+
+/**
+ * Área de um polígono GeoJSON, em m².
+ *
+ * Usa o mesmo plano local do desenho (desenho.js), e não o haversine: medir o
+ * mesmo lote com duas réguas produz divergência de meio por cento que ninguém
+ * consegue explicar depois.
+ *
+ * @param {{coordinates:Array}} g
+ */
+function areaDoAnel(g) {
+  const anel = g?.coordinates?.[0]
+  if (!anel || anel.length < 4) { return null }
+
+  const p = planoLocal(anel[0][1], anel[0][0])
+  const xy = anel.slice(0, -1).map(c => [
+    (c[0] - p.lonRef) * p.porGrauLon,
+    (c[1] - p.latRef) * p.porGrauLat,
+  ])
+  let s = 0
+  for (let i = 0, n = xy.length; i < n; i++) {
+    const j = (i + 1) % n
+    s += xy[i][0] * xy[j][1] - xy[j][0] * xy[i][1]
+  }
+  return Math.abs(s) / 2
+}
+/**
+ * Crava um lado com a medida digitada.
+ *
+ * A direção é dita em relação ao lado ANTERIOR ("vira à direita", "segue
+ * reto"), e não em rumo geográfico, porque é assim que a matrícula descreve o
+ * perímetro: "frente 12,00 m; daí, à direita, 30,00 m". Quem quiser o rumo
+ * tem o azimute.
+ */
+function cravarLadoDaTela() {
+  const m = Number(String(document.getElementById('des-metros').value).replace(',', '.'))
+  const dir = document.getElementById('des-direcao').value
+  const az = Number(String(document.getElementById('des-azimute').value).replace(',', '.'))
+
+  if (!cravarLado(m, dir, Number.isFinite(az) && document.getElementById('des-azimute').value !== '' ? az : NaN)) {
+    return
+  }
+
+  // A medida some, a direção fica: os lados de um lote são medidas diferentes
+  // na mesma volta, e reescolher "vira à direita" a cada lado seria repetir o
+  // óbvio quatro vezes.
+  document.getElementById('des-metros').value = ''
+  document.getElementById('des-metros').focus()
+}
+
+/** O campo de azimute só aparece quando é ele que decide a direção. */
+function pintarDirecaoDoLado() {
+  const az = document.getElementById('des-azimute')
+  if (az) { az.hidden = document.getElementById('des-direcao').value !== 'azimute' }
+}
+
 function largarDesenho() {
   desenhoPendente = null
   cancelarDesenho()
@@ -1009,10 +1313,22 @@ async function conferirDesenho() {
   const avisos = d.avisos.map(a => `<div class="cad-nota cad-aviso">${esc(a)}</div>`).join('')
   const encosta = r.vizinhos.filter(v => v.area_comum === 0).length
 
+  // A divergência vem do SERVIDOR, e não da conta que a tela já fez enquanto o
+  // operador digitava: é este número que fica ao lado do botão de gravar, e
+  // conferência que só existe no navegador não é conferência.
+  const dv = r.divergencia
+  const divergencia = dv === null || dv === undefined ? '' :
+    `<div class="cad-nota${Math.abs(dv) > 5 ? ' cad-aviso' : ''}">
+      Matrícula × desenho: <b>${dv > 0 ? '+' : ''}${String(dv).replace('.', ',')}%</b>.
+      ${Math.abs(dv) > 5
+        ? 'A diferença é grande — o lote é gravado assim mesmo, e as duas medidas ficam registradas.'
+        : 'As duas medidas batem.'}</div>`
+
   alvo.innerHTML = `
     <div class="cad-nota">Lote de <b>${fmtNum(r.area_m2)} m²</b> com ${r.vertices} canto(s),
       em ${esc(r.bairro)} · quadra ${esc(r.quadra)} · lote ${esc(r.lote)}.
       ${encosta ? `Encosta em ${encosta} lote(s) vizinho(s).` : ''}</div>
+    ${divergencia}
     ${avisos}
     <button class="btn primary" onclick="gravarDesenho()">Criar lote</button>`
 }
@@ -1038,7 +1354,7 @@ async function gravarDesenho() {
       document.getElementById('des-lote').value = ''
       // O lote novo só existe no servidor: forçar a recarga do bbox é o que o
       // traz para o mapa sem o usuário ter de arrastar a tela.
-      desenhados.clear()
+      limparLotesDoMapa()
       carregarLotesVisiveis()
     },
   })
@@ -1056,7 +1372,10 @@ function _corpoDesenho() {
   if (!quadra) { exigirCampo('des-quadra', 'Informe a quadra.'); return null }
   if (!lote)   { exigirCampo('des-lote', 'Informe o número do lote.'); return null }
 
-  return { bairro, quadra, numero_lote: lote, geometry: desenhoPendente }
+  return {
+    bairro, quadra, numero_lote: lote, geometry: desenhoPendente,
+    ...medidasDigitadas(),
+  }
 }
 
 /**
@@ -1151,7 +1470,7 @@ async function confirmarExclusaoLote() {
     fModalBtn('m-ficha')
     state.selecionado = null
     sairModoCadastral(true)
-    desenhados.clear()
+    limparLotesDoMapa()
     carregarLotesVisiveis()
   } catch (e) {
     console.error(e)

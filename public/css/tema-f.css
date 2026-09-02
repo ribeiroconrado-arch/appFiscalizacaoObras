@@ -281,6 +281,12 @@
 .par-linha .principal span{font-size:11.5px;color:var(--tx3)}
 .par-linha .acao-x{background:none;border:none;color:var(--tx3);cursor:pointer;padding:4px;flex-shrink:0}
 .par-linha .acao-x:hover{color:var(--red)}
+/* Bairros: o clique abre a EDIÇÃO na linha de cadastro do topo, e por isso
+   ele fica só no bloco de texto — a linha inteira clicável engoliria o
+   botão de excluir, que é vizinho e não perdoa. */
+.par-linha .principal.clicavel{cursor:pointer}
+.par-linha .principal.clicavel:hover b{color:var(--gd)}
+.par-linha.at{border-color:var(--g);background:var(--gl)}
 
 .par-secao{margin-bottom:18px}
 .par-secao-tit{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -2488,3 +2494,134 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .cad-lanca-perigo{color:var(--red)}
 .cad-lanca-perigo:hover{border-color:var(--red);background:var(--rlt)}
 .cad-lanca-perigo .cad-lanca-obs{color:var(--tx2)}
+
+/* ── MEDIDAS SOBRE O DESENHO ──
+   Rótulo sem caixa e sem sombra pesada: ele fica em cima do lote e do satélite,
+   e uma etiqueta opaca a cada lado esconderia justamente a divisa que se está
+   conferindo. O contorno branco no texto é o que o mantém legível sobre
+   telhado escuro e sobre asfalto claro, sem tapar nada.
+   `transform` centraliza o rótulo no ponto: o divIcon do Leaflet ancora pelo
+   canto superior esquerdo, e sem isto toda medida sairia deslocada para a
+   direita e para baixo do meio do lado. */
+.des-medida, .des-area{background:none;border:none;pointer-events:none;overflow:visible}
+/* O deslocamento vive no <span> de dentro, e não no marcador: o Leaflet
+   reescreve o `transform` do marcador a cada movimento do mapa, e qualquer
+   ajuste posto ali é apagado no primeiro arrasto. */
+.des-medida .des-rot, .des-area .des-rot{
+  position:absolute; white-space:nowrap; display:block;
+  font-family:'JetBrains Mono', ui-monospace, monospace; font-weight:700;
+  transform:translate(-50%, -50%);
+  /* Contorno branco em vez de caixa: a etiqueta fica em cima da divisa que se
+     está conferindo, e um retângulo opaco esconderia exatamente isso.
+     `text-shadow` e não só `-webkit-text-stroke` porque o stroke engorda o
+     traço e, sozinho, some em navegador que não o implementa. */
+  text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff;
+}
+.des-medida .des-rot{font-size:11.5px; color:var(--gxd)}
+.des-medida-viva .des-rot{color:var(--red)}
+.des-area .des-rot{font-size:13px; color:var(--chumbo)}
+
+/* Trava de ângulo: botão de estado, não de ação — por isso ele fica marcado
+   enquanto está ligado, como as abas. */
+.des-trava-linha{display:flex;align-items:center;gap:8px;margin:8px 0 6px;flex-wrap:wrap}
+.des-trava-obs{font-size:10.5px;color:var(--tx3);line-height:1.3}
+#des-trava svg{width:15px;height:15px}
+#des-trava.at{background:var(--gl);border-color:var(--gm);color:var(--gxd)}
+.des-medir{gap:6px}
+.des-medir #des-metros{max-width:104px}
+/* O contador de medidas preenchidas vira alerta quando as duas áreas
+   discordam — é o mesmo selo, com a cor dizendo o que mudou. */
+.cont.selo-aviso{background:var(--alt,#FEF3C7);color:#92400E;border-color:#FCD34D}
+
+/* ── A MESA DE EDIÇÃO CADASTRAL ──
+   Só existe acima de 1000px: é uma coluna, e coluna ao lado de mapa em tela de
+   celular deixa os dois inutilizáveis. Abaixo disso continua valendo o painel
+   flutuante, que é o desenho original.
+   `position:fixed` e não `absolute` porque ela acompanha a janela, não o mapa —
+   o mapa rola e arrasta por baixo dela. */
+.cad-mesa{display:none}
+@media (min-width:1000px){
+  .cad-mesa{
+    display:flex; flex-direction:column; position:fixed; z-index:900;
+    /* 120px é logo abaixo do sub-cabeçalho (que termina em 110px): com 82px a
+       barra do brasão passava por cima do título da mesa. */
+    left:12px; top:120px; bottom:78px; width:326px;
+    background:rgba(255,255,255,.97); border:1.5px solid var(--bord);
+    border-radius:var(--rl); box-shadow:0 10px 32px rgba(0,0,0,.14);
+  }
+  .cad-mesa[hidden]{display:none}
+  /* Com a mesa aberta o ícone do lançador não tem o que lançar: ele abriria um
+     segundo menu com os mesmos botões que já estão à vista. */
+  body.com-mesa #grupo-cadastro{display:none}
+}
+.cad-mesa-topo{display:flex;align-items:center;gap:8px;padding:10px 12px;
+  border-bottom:1.5px solid var(--blt);flex-shrink:0}
+.cad-mesa-tit{flex:1;min-width:0;font-size:10.5px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.08em;color:var(--gxd);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cad-mesa-x{background:none;border:none;color:var(--tx3);cursor:pointer;
+  font-size:15px;line-height:1;padding:2px 4px}
+.cad-mesa-x:hover{color:var(--red)}
+.cad-mesa-rolo{flex:1;min-height:0;overflow-y:auto;padding:12px}
+/* O separador entre as ferramentas e o que a ferramenta pede: sem ele os dois
+   blocos viram uma lista só, e não se sabe onde termina a escolha e onde
+   começa o trabalho. */
+.cad-mesa #mesa-props:not(:empty){margin-top:12px;padding-top:12px;
+  border-top:1.5px solid var(--blt)}
+
+/* A mesa de desmembramento herda a caixa da mesa cadastral: é o mesmo objeto
+   na tela, com outro assunto dentro. */
+.desm-mesa{display:none}
+@media (min-width:1000px){
+  .desm-mesa{
+    display:flex; flex-direction:column; position:fixed; z-index:901;
+    left:12px; top:120px; bottom:78px; width:340px;
+    background:rgba(255,255,255,.97); border:1.5px solid var(--bord);
+    border-radius:var(--rl); box-shadow:0 10px 32px rgba(0,0,0,.14);
+  }
+  .desm-mesa[hidden]{display:none}
+}
+/* Em tela pequena a mesa vira uma folha por baixo do rodapé: desmembrar no
+   celular é raro, mas ficar sem saída nenhuma seria pior do que uma tela
+   apertada. */
+@media (max-width:999px){
+  .desm-mesa:not([hidden]){display:flex;flex-direction:column;position:fixed;
+    z-index:901;left:8px;right:8px;bottom:70px;max-height:52vh;
+    background:rgba(255,255,255,.98);border:1.5px solid var(--bord);
+    border-radius:var(--rl);box-shadow:0 -6px 24px rgba(0,0,0,.16)}
+}
+#desm-sat{flex-shrink:0}
+#desm-sat.at{background:var(--gl);border-color:var(--gm);color:var(--gxd)}
+
+/* A VIZINHANÇA VIRA REFERÊNCIA.
+   Apagar os outros lotes e tirar o clique deles é o que faz a tela dizer, sem
+   texto, que ali só um lote está em jogo. O alvo é redesenhado por cima, no
+   painel do desenho, com traço cheio. */
+/* Os lotes vivem no painel de sobreposição padrão do Leaflet; o realce do alvo
+   e as medidas vivem no painel `desenho`, que é outro — por isso apagar um
+   não apaga o outro. */
+#map.desm-foco .leaflet-overlay-pane path{opacity:.25}
+/* O realce e as medidas do alvo vivem no painel `desmfoco`, criado pela mesa —
+   e por isso escapam do apagamento acima. */
+#map.desm-foco .leaflet-desmfoco-pane{opacity:1}
+#map.desm-foco .leaflet-overlay-pane{pointer-events:none}
+#map.desm-foco .leaflet-marker-pane{opacity:.35}
+#map.sem-satelite .tile-satelite{display:none}
+
+.desm-bloco{border:1.5px solid var(--bord);border-radius:var(--rl);
+  padding:10px 12px;margin-bottom:8px;background:var(--sur)}
+.desm-bloco-tit{display:flex;align-items:center;gap:8px;margin-bottom:8px;
+  font-size:12.5px;font-weight:700;color:var(--chumbo)}
+
+/* Selo do imóvel baixado. Cinza e não vermelho: não é erro nem alerta — é um
+   imóvel que cumpriu seu ciclo e virou outros. O que ele precisa é ser
+   inconfundível com um imóvel vivo na mesma tabela. */
+.bs-selo-baixado{display:inline-block;padding:1px 7px;border-radius:999px;
+  background:var(--blt);border:1px solid var(--bord);color:var(--tx3);
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+
+/* Fica em cima do mapa, centralizado no alto — no mesmo lugar da barra de
+   estado do cadastro, porque diz a mesma coisa: há algo em curso na tela. */
+.baixado-sair{position:fixed;z-index:902;top:122px;left:50%;transform:translateX(-50%);
+  background:var(--sur);box-shadow:0 4px 16px rgba(0,0,0,.16)}
+.baixado-sair[hidden]{display:none}

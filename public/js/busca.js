@@ -35,8 +35,9 @@ function limparBusca() {
   for (const id of ['bs-bairro', 'bs-quadra', 'bs-lote', 'bs-inscricao', 'bs-bci-de', 'bs-bci-ate', 'bs-vistoria']) {
     document.getElementById(id).value = ''
   }
-  for (const id of ['bs-embargo', 'bs-pendente', 'bs-sem-vistoria']) {
-    document.getElementById(id).checked = false
+  for (const id of ['bs-embargo', 'bs-pendente', 'bs-sem-vistoria', 'bs-baixados']) {
+    const e = document.getElementById(id)
+    if (e) { e.checked = false }
   }
   document.getElementById('busca-resultado').innerHTML = ''
   bState.resultado = []
@@ -117,6 +118,11 @@ async function executarBusca() {
     if (document.getElementById('bs-sem-vistoria').checked) p.set('obra_sem_vistoria', '1')
   }
 
+  // Fora do bloco acima de propósito: incluir baixados não é um filtro de
+  // busca, é uma ampliação do universo consultado — vale inclusive quando se
+  // procura por inscrição, que é justamente como se acha um lote extinto.
+  if (document.getElementById('bs-baixados')?.checked) { p.set('incluir_baixados', '1') }
+
   if (![...p.keys()].length) {
     exigirCampo('bs-inscricao', 'Informe ao menos um filtro para buscar.')
     return
@@ -156,6 +162,9 @@ function renderTabelaBusca(d) {
       <td class="bs-d">${i.area ? fmtNum(i.area) + ' m²' : '—'}</td>
       <td class="bs-c">${i.documentos || '—'}</td>
       <td class="bs-c">${i.vistorias || '—'}</td>
+      <td class="bs-c">${i.situacao === 'baixado'
+        ? `<span class="bs-selo-baixado" title="Baixado em ${esc(i.baixado_em || '—')}">baixado</span>`
+        : ''}</td>
     </tr>`).join('')
 
   document.getElementById('busca-resultado').innerHTML = `
@@ -169,6 +178,7 @@ function renderTabelaBusca(d) {
           <tr>
             <th>Inscrição</th><th>Bairro</th><th class="bs-c">Q</th><th class="bs-c">Lt</th>
             <th class="bs-d">Área</th><th class="bs-c">Doc.</th><th class="bs-c">Vist.</th>
+            <th class="bs-c"></th>
           </tr>
         </thead>
         <tbody>${linhas}</tbody>
@@ -218,12 +228,28 @@ function renderFichaImovel(d) {
 
   // O botão do mapa é o ÚNICO ponto desta tela que aciona o serviço pago —
   // por isso é uma escolha explícita do usuário, nunca um efeito da busca.
+  // Um imóvel BAIXADO não está mais na camada do mapa — ele foi unificado ou
+  // desmembrado. Levar até a coordenada mostraria os sucessores desenhados por
+  // cima e nada mais; por isso o botão dele é outro: desenha o contorno antigo
+  // sozinho, tracejado, sobre o loteamento de hoje.
+  const baixado = d.situacao === 'baixado'
   const noMapa = d.lat && d.lon
-    ? `<button class="btn" onclick="verImovelNoMapa(${d.lat}, ${d.lon})">Ver no mapa</button>`
+    ? (baixado
+      ? `<button class="btn" onclick="verBaixadoNoMapa(${d.id}, ${d.lat}, ${d.lon})">
+           Ver o contorno antigo no mapa</button>`
+      : `<button class="btn" onclick="verImovelNoMapa(${d.lat}, ${d.lon})">Ver no mapa</button>`)
+    : ''
+
+  const selo = baixado
+    ? `<div class="cad-nota cad-aviso" style="margin-bottom:10px">
+         <b>Imóvel baixado</b>${d.baixado_em ? ' em ' + esc(d.baixado_em) : ''}. Ele deixou de
+         existir como lote — foi unificado ou desmembrado —, mas os documentos e
+         vistorias abaixo continuam sendo dele.</div>`
     : ''
 
   document.getElementById('busca-resultado').innerHTML = `
     <div class="bs-ficha">
+      ${selo}
       <div class="bs-ficha-topo">
         <div>
           <h3 class="mono">${esc(d.inscricao || montarInscricao({ bairro: d.bairro, quadra: d.quadra, numero_lote: d.lote }))}</h3>
@@ -358,4 +384,60 @@ async function aplicarQuadraQuarteirao(id) {
 function verImovelNoMapa(lat, lon) {
   irPara('mapa')
   setTimeout(() => mapaState.obj?.setView([lat, lon], 19), 220)
+}
+
+/** @type {L.GeoJSON|null} o contorno do baixado que está sendo mostrado */
+let baixadoNoMapa = null
+
+/**
+ * Desenha SÓ o lote baixado, tracejado, por cima do loteamento atual.
+ *
+ * A camada geral continua sem baixados: religá-los ali traria o loteamento
+ * antigo inteiro sobreposto ao novo, e não haveria como saber qual das duas
+ * divisas é a que vale. Aqui é um contorno de cada vez, pedido, e que sai da
+ * tela no próximo pedido ou no toque em "tirar do mapa".
+ *
+ * @param {number} id @param {number} lat @param {number} lon
+ */
+async function verBaixadoNoMapa(id, lat, lon) {
+  irPara('mapa')
+  await new Promise(r => setTimeout(r, 260))
+
+  const mapa = mapaState.obj
+  if (!mapa) { toast('Abra o mapa primeiro.', 'err'); return }
+
+  try {
+    const r = await fetch('/api/imoveis/' + id + '/geometria', { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    if (!r.ok || !d.geometry) { toast(d.message || 'Este imóvel não tem desenho.', 'err'); return }
+
+    tirarBaixadoDoMapa()
+
+    if (!mapa.getPane('baixados')) {
+      const p = mapa.createPane('baixados')
+      p.style.zIndex = 645
+      p.style.pointerEvents = 'none'
+    }
+
+    baixadoNoMapa = L.geoJSON(d.geometry, {
+      pane: 'baixados',
+      interactive: false,
+      style: { color: '#6B7280', weight: 2.5, opacity: .95, dashArray: '7,6', fillOpacity: .07 },
+    }).addTo(mapa)
+
+    mapa.setView([lat, lon], 19)
+    toast('Contorno antigo em cinza tracejado. Toque em "tirar do mapa" para limpar.', 'aviso')
+
+    const btn = document.getElementById('btn-tirar-baixado')
+    if (btn) { btn.hidden = false }
+  } catch (e) {
+    console.error(e)
+    toast('Falha ao buscar o desenho do imóvel baixado', 'err')
+  }
+}
+
+function tirarBaixadoDoMapa() {
+  if (baixadoNoMapa) { mapaState.obj?.removeLayer(baixadoNoMapa); baixadoNoMapa = null }
+  const btn = document.getElementById('btn-tirar-baixado')
+  if (btn) { btn.hidden = true }
 }

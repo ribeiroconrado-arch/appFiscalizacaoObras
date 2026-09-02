@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BuscaController;
 use App\Http\Controllers\CadastroImobiliarioController;
 use App\Http\Controllers\CadastroLoteController;
+use App\Http\Controllers\EdificacaoController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\LegislacaoController;
 use App\Http\Controllers\MapaController;
@@ -55,15 +56,31 @@ Route::middleware('auth')->group(function () {
 
         // Busca de imóveis sem abrir o mapa — a camada de satélite é paga por
         // requisição, e consulta de balcão não precisa de imagem aérea.
+        // DOIS ENDPOINTS DE BAIRRO, de propósito.
+        //
+        // `/imoveis/bairros` é FILTRO DE BUSCA: devolve os bairros que têm
+        // lote no desenho, porque oferecer no filtro um bairro que não vai
+        // trazer nenhum resultado é oferecer trabalho perdido.
+        //
+        // `/bairros` é CADASTRO: devolve os bairros do município, todos os
+        // que a prefeitura reconhece, porque é ali que se escolhe o bairro de
+        // um lote NOVO — e lote novo pode ser o primeiro do bairro dele.
         Route::get('/imoveis/bairros', [BuscaController::class, 'bairros']);
+        Route::get('/bairros', [BuscaController::class, 'bairrosDoMunicipio']);
         Route::get('/imoveis/busca', [BuscaController::class, 'buscar']);
         Route::get('/imoveis/pins', [BuscaController::class, 'pins']);
         // Depois das rotas fixas: registrada antes, a curinga engoliria
         // "bairros" e "busca" como se fossem id de lote.
         Route::get('/imoveis/{lote}', [BuscaController::class, 'ficha']);
         // Cadastro imobiliário: só quando a aba é aberta, nunca junto do mapa.
+        // O contorno de um imóvel, sob demanda — ver BuscaController::geometria.
+        Route::get('/imoveis/{lote}/geometria', [BuscaController::class, 'geometria']);
         Route::get('/imoveis/{lote}/bci', [CadastroImobiliarioController::class, 'mostrar']);
         Route::post('/imoveis/{lote}/bci/atualizar', [CadastroImobiliarioController::class, 'atualizar']);
+        // Edificações desenhadas dentro do lote — o croqui e a área construída.
+        Route::get('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'listar']);
+        Route::post('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'criar']);
+        Route::delete('/edificacoes/{edificacao}', [EdificacaoController::class, 'excluir']);
 
         Route::get('/mapa/lotes', [MapaController::class, 'lotes']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
@@ -184,6 +201,8 @@ Route::middleware('auth')->group(function () {
         Route::delete('/parametros/upf/{upf}', [ParametroController::class, 'excluirUpf']);
         Route::post('/parametros/feriados', [ParametroController::class, 'salvarFeriado']);
         Route::delete('/parametros/feriados/{feriado}', [ParametroController::class, 'excluirFeriado']);
+        Route::post('/parametros/bairros', [ParametroController::class, 'salvarBairro']);
+        Route::delete('/parametros/bairros/{bairro}', [ParametroController::class, 'excluirBairro']);
     });
 
     // Fora do prefixo /api: é download de arquivo, não JSON.

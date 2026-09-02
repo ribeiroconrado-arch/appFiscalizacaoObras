@@ -19,9 +19,11 @@ const parState = {
   irregularidades: [],
   upfs: [],
   feriados: [],
+  bairros: [],
   geral: [],
   /** id da lei aberta no detalhe */   leiAberta: null,
   /** ano aberto na lista de feriados */ anoAberto: null,
+  /** id do bairro em edição na linha de cadastro */ bairroEditando: null,
 }
 
 function abrirParametros() {
@@ -43,11 +45,13 @@ async function carregarParametros() {
     parState.usuarios = d.usuarios
     parState.upfs = d.upfs
     parState.feriados = d.feriados
+    parState.bairros = d.bairros
     parState.geral = d.geral
     parState.carregado = true
     renderUsuarios()
     renderUpfs()
     renderAnosFeriados()
+    renderBairros()
     renderGeral()
     renderBrasao()
     await recarregarLegislacao()
@@ -644,6 +648,114 @@ function primeiroErroPar(d) {
   return Array.isArray(e) ? e[0] : 'Não foi possível concluir a operação'
 }
 
+// ── BAIRROS ──────────────────────────────────────────────────
+//
+// A lista tem 125 linhas — é a única do painel que não cabe na tela —, por isso
+// tem campo de procura e o cadastro fica fixo no topo, e não no fim.
+//
+// Alterar reaproveita a MESMA linha de cadastro: tocar num bairro traz os
+// valores dele para cima, e o botão troca de "Novo bairro" para "Salvar". Um
+// modal para três campos curtos seria uma janela para conferir o que já está
+// visível dois centímetros acima.
+
+/** @returns {Array<Object>} os bairros que passam pelo campo de procura. */
+function bairrosFiltrados() {
+  const q = (document.getElementById('filtro-bairros')?.value || '').trim().toLowerCase()
+  if (!q) return parState.bairros
+  return parState.bairros.filter(b =>
+    String(b.codigo).includes(q)
+    || (b.nome_cadastro || '').toLowerCase().includes(q)
+    || (b.nome_gis || '').toLowerCase().includes(q))
+}
+
+function renderBairros() {
+  const todos = parState.bairros
+  const lista = bairrosFiltrados()
+  document.getElementById('cont-bairros').textContent =
+    lista.length === todos.length ? todos.length : `${lista.length}/${todos.length}`
+
+  document.getElementById('lista-bairros').innerHTML = lista.map(b => `
+    <div class="par-linha${b.id === parState.bairroEditando ? ' at' : ''}">
+      <div class="principal clicavel" onclick="editarBairro(${b.id})">
+        <b>${esc(b.codigo)} · ${esc(b.nome_cadastro || b.nome_gis || '(sem nome)')}</b>
+        <span>${b.nome_gis
+          ? 'No desenho: ' + esc(b.nome_gis) + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
+          : 'Ainda sem desenho convertido'}</span>
+      </div>
+      <button class="acao-x" onclick="excluirBairro(${b.id})" title="Excluir">${ICO_LIXO}</button>
+    </div>`).join('')
+    || '<div class="lista-vazia">Nenhum bairro encontrado.</div>'
+}
+
+/** Traz o bairro para a linha de cadastro. @param {number} id */
+function editarBairro(id) {
+  const b = parState.bairros.find(x => x.id === id)
+  if (!b) return
+
+  parState.bairroEditando = id
+  document.getElementById('novo-bairro-codigo').value = b.codigo ?? ''
+  document.getElementById('novo-bairro-nome').value = b.nome_cadastro ?? ''
+  document.getElementById('novo-bairro-gis').value = b.nome_gis ?? ''
+  pintarBotaoBairro()
+  renderBairros()
+  document.getElementById('novo-bairro-nome').focus()
+}
+
+function cancelarEdicaoBairro() {
+  parState.bairroEditando = null
+  ;['codigo', 'nome', 'gis'].forEach(c => { document.getElementById('novo-bairro-' + c).value = '' })
+  pintarBotaoBairro()
+  renderBairros()
+}
+
+/** O botão diz o que vai acontecer, e some o "cancelar" quando não há edição. */
+function pintarBotaoBairro() {
+  const editando = parState.bairroEditando !== null
+  const btn = document.querySelector('#par-bairros .cad-row .btn.primary')
+  if (btn) btn.textContent = editando ? 'Salvar alteração' : '+ Novo bairro'
+
+  let cancelar = document.getElementById('btn-cancelar-bairro')
+  if (editando && !cancelar) {
+    cancelar = document.createElement('button')
+    cancelar.id = 'btn-cancelar-bairro'
+    cancelar.className = 'btn sm'
+    cancelar.textContent = 'Cancelar'
+    cancelar.onclick = cancelarEdicaoBairro
+    btn?.after(cancelar)
+  } else if (!editando && cancelar) {
+    cancelar.remove()
+  }
+}
+
+async function salvarBairro() {
+  const codigo = document.getElementById('novo-bairro-codigo').value.trim()
+  const nome = document.getElementById('novo-bairro-nome').value.trim()
+  if (!codigo || !nome) { toast('Informe o código e o nome do bairro', 'err'); return }
+
+  const d = await postParametro('/api/parametros/bairros', {
+    id: parState.bairroEditando,
+    codigo,
+    nome_cadastro: nome,
+    // Vazio vira nulo no servidor: bairro sem desenho convertido não tem nome
+    // de GIS, e string vazia colidiria com a próxima no índice único.
+    nome_gis: document.getElementById('novo-bairro-gis').value.trim() || null,
+  }, null, carregarParametros)
+
+  if (d) cancelarEdicaoBairro()
+}
+
+/** @param {number} id */
+function excluirBairro(id) {
+  const b = parState.bairros.find(x => x.id === id)
+  confirmarAcao({
+    titulo: 'Excluir bairro',
+    mensagem: b?.lotes
+      ? `${b.lotes} lote(s) estão neste bairro — o sistema vai recusar. Tentar mesmo assim?`
+      : 'O bairro sai da lista de escolha no cadastro de lote. Excluir?',
+    perigo: true,
+    onConfirm: () => excluirParametro('/api/parametros/bairros/' + id),
+  })
+}
 // ── BRASÃO DO MUNICÍPIO ──────────────────────────────────────
 // O sistema não traz brasão embutido. É esta tela que o torna replicável:
 // instalar a mesma aplicação em outra prefeitura passa a ser trocar dois

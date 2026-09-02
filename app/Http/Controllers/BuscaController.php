@@ -46,12 +46,19 @@ class BuscaController extends Controller
             'obra_sem_vistoria' => ['nullable', 'boolean'],
             // Campo único da busca do mapa
             'termo'         => ['nullable', 'string', 'max:120'],
+            'incluir_baixados' => ['nullable', 'boolean'],
         ]);
 
         // Lote baixado (unificado ou desmembrado) nao e mais um imovel que
         // existe: fica na base para o historico, mas nao se busca nem se marca
         // no mapa. A ficha dele continua abrindo — ver ficha().
-        $q = Lote::query()->ativos();
+        //
+        // O FILTRO É O CAMINHO DE VOLTA. Desligado por padrão, porque a
+        // consulta de balcão pergunta pelo imóvel que existe hoje; ligado,
+        // acha o lote que foi unificado ou desmembrado e leva à história dele.
+        // Sem ele, um imóvel com processo em curso desaparecia do sistema no
+        // instante em que o ato cadastral era executado.
+        $q = empty($d['incluir_baixados']) ? Lote::query()->ativos() : Lote::query();
         $usou = $this->aplicarFiltros($q, $d);
 
         if (! $usou) {
@@ -83,6 +90,11 @@ class BuscaController extends Controller
                 'area'       => $l->area_gis_m2,
                 'documentos' => (int) ($docs[$l->id] ?? 0),
                 'vistorias'  => (int) ($vist[$l->id] ?? 0),
+                // A situação viaja SEMPRE, mesmo sem o filtro: sem ela, a linha
+                // de um baixado seria idêntica à de um imóvel vivo, e alguém
+                // acabaria lavrando peça contra um lote que não existe mais.
+                'situacao'   => $l->situacao,
+                'baixado_em' => $l->baixado_em?->format('d/m/Y'),
             ])->values(),
             'total'    => $lotes->count(),
             'truncado' => $truncado,
@@ -202,6 +214,34 @@ class BuscaController extends Controller
     }
 
     /**
+     * GET /api/imoveis/{lote}/geometria — o contorno de UM imóvel.
+     *
+     * Existe por causa do lote BAIXADO: ele não está na camada do mapa (o
+     * repositório filtra `situacao = 'ativo'`) e não voltaria a estar sem
+     * trazer junto o loteamento antigo inteiro, sobreposto ao atual. Aqui se
+     * pede um contorno de cada vez, para desenhar por cima e tracejado.
+     *
+     * Serve a qualquer lote e não só ao baixado: a regra de quem aparece na
+     * camada é do mapa, não desta consulta — e uma exceção escrita aqui seria
+     * uma segunda regra para manter em dia.
+     */
+    public function geometria(Lote $lote): JsonResponse
+    {
+        $geojson = DB::scalar('SELECT ST_AsGeoJSON(geom) FROM lotes WHERE id = ?', [$lote->id]);
+
+        if (! $geojson) {
+            return response()->json(['message' => 'Este imóvel não tem desenho no cadastro.'], 404);
+        }
+
+        return response()->json([
+            'id'         => $lote->id,
+            'situacao'   => $lote->situacao,
+            'baixado_em' => $lote->baixado_em?->format('d/m/Y'),
+            'geometry'   => json_decode($geojson),
+        ]);
+    }
+
+    /**
      * GET /api/imoveis/bairros — para o filtro, sem digitação livre.
      *
      * Sem o Eloquent de propósito: o escopo global `sem_geometria` do model
@@ -217,6 +257,50 @@ class BuscaController extends Controller
                 ->whereNotNull('bairro')->where('bairro', '<>', '')
                 ->distinct()->orderBy('bairro')
                 ->pluck('bairro'),
+        ]);
+    }
+
+    /**
+     * GET /api/bairros — os bairros DO MUNICÍPIO, para cadastrar lote.
+     *
+     * Diferente de `bairros()` acima, que lista só os que já têm lote: aqui o
+     * lote ainda vai existir, e ele pode ser o primeiro do bairro dele. Um
+     * combobox que só oferecesse bairro já usado obrigaria a digitar o nome à
+     * mão justamente no caso novo — que é como o mesmo bairro acabou grafado
+     * de três jeitos até hoje.
+     *
+     * Enquanto `cadastro_bairros` estiver vazia, cai no que os lotes têm: a
+     * lista da prefeitura chega por carga, e até lá um combobox vazio travaria
+     * o cadastro de lote inteiro.
+     *
+     * `nome` é o que se mostra e `valor` é o que se grava em `lotes.bairro` —
+     * são textos diferentes quando o desenho escreve o bairro de outro jeito,
+     * e é o de GIS que os lotes existentes já usam.
+     */
+    public function bairrosDoMunicipio(): JsonResponse
+    {
+        $cadastrados = DB::table('cadastro_bairros')
+            ->orderByRaw('CAST(codigo AS UNSIGNED)')
+            ->get(['codigo', 'nome_cadastro', 'nome_gis']);
+
+        if ($cadastrados->isNotEmpty()) {
+            return response()->json([
+                'fonte'   => 'cadastro',
+                'bairros' => $cadastrados->map(fn ($b) => [
+                    'codigo' => $b->codigo,
+                    'nome'   => $b->nome_cadastro ?: $b->nome_gis,
+                    'valor'  => $b->nome_gis ?: $b->nome_cadastro,
+                ])->values(),
+            ]);
+        }
+
+        return response()->json([
+            'fonte'   => 'desenho',
+            'bairros' => DB::table('lotes')
+                ->whereNotNull('bairro')->where('bairro', '<>', '')
+                ->distinct()->orderBy('bairro')->pluck('bairro')
+                ->map(fn ($n) => ['codigo' => null, 'nome' => $n, 'valor' => $n])
+                ->values(),
         ]);
     }
 

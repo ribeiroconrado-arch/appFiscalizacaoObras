@@ -277,6 +277,18 @@ function igualarAoControleDeCamadas() {
  * @param {string} idGrupo grupo a alternar
  */
 function alternarPainelMapa(idGrupo) {
+  // O grupo cadastral tem casa própria em tela grande: a mesa lateral. O ícone
+  // continua sendo a porta, mas o que ele abre é a coluna, não o popover — que
+  // ali seria um segundo menu com exatamente os mesmos botões.
+  if (idGrupo === 'grupo-cadastro' && typeof ehMesaCadastral === 'function' && ehMesaCadastral()) {
+    const mesa = document.getElementById('cad-mesa')
+    if (mesa) {
+      fecharPaineisMapa()
+      if (mesa.hidden) { abrirMesaCadastral('Edição cadastral') } else { fecharMesaCadastral() }
+      return
+    }
+  }
+
   const grupo = document.getElementById(idGrupo)
   if (!grupo) return
   const abrindo = !grupo.classList.contains('aberto')

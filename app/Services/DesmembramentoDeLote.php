@@ -268,6 +268,16 @@ class DesmembramentoDeLote
                         : 'Desmembramento direto — sem protocolo',
                     'origem'         => 'desmembramento',
                     'situacao'       => 'ativo',
+
+                    // As medidas da matrícula da parte, quando informadas. A
+                    // parte DERIVADA (o resto) não tem nenhuma: ela não foi
+                    // desenhada nem descrita, e inventar medida para ela seria
+                    // escrever no cadastro um número que ninguém mediu.
+                    'frente_m'          => $p['frente_m'] ?? null,
+                    'fundos_m'          => $p['fundos_m'] ?? null,
+                    'lado_direito_m'    => $p['lado_direito_m'] ?? null,
+                    'lado_esquerdo_m'   => $p['lado_esquerdo_m'] ?? null,
+                    'area_matricula_m2' => $p['area_matricula_m2'] ?? null,
                 ];
 
                 $id = $this->lotes->criarComGeometria($atributos, $p['geojson']);
@@ -324,6 +334,17 @@ class DesmembramentoDeLote
                 'geojson'        => json_encode($p['geometry']),
                 'anel'           => $anel,
                 'derivada'       => false,
+
+                // As medidas da matrícula viajam junto até a gravação. Este
+                // array é remontado campo a campo, e não copiado: o que não
+                // estiver listado aqui simplesmente não chega em `aplicar` —
+                // foi assim que as dimensões digitadas na mesa sumiram sem
+                // erro nenhum, na primeira vez.
+                'frente_m'          => $p['frente_m'] ?? null,
+                'fundos_m'          => $p['fundos_m'] ?? null,
+                'lado_direito_m'    => $p['lado_direito_m'] ?? null,
+                'lado_esquerdo_m'   => $p['lado_esquerdo_m'] ?? null,
+                'area_matricula_m2' => $p['area_matricula_m2'] ?? null,
             ];
         }
 

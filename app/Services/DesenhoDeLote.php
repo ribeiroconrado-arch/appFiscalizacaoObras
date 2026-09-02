@@ -50,7 +50,30 @@ class DesenhoDeLote
             'quadra'    => $d['quadra'],
             'lote'      => $d['numero_lote'],
             'vizinhos'  => $this->vizinhos($geojson, $d['bairro']),
+            'divergencia' => $this->divergencia($d, $area),
         ];
+    }
+
+    /**
+     * Quanto o desenho difere da área da matrícula, em %.
+     *
+     * A tela já mostra isso enquanto se digita; aqui a conta é refeita porque
+     * conferência que só existe no navegador não é conferência — e porque é
+     * este número que vai para a prévia que o operador lê antes de gravar.
+     *
+     * Null quando não há área de matrícula: sem os dois lados não há
+     * divergência, e devolver zero diria que eles batem.
+     *
+     * @param  array<string,mixed>  $d
+     */
+    private function divergencia(array $d, float $areaDesenho): ?float
+    {
+        $mat = $d['area_matricula_m2'] ?? null;
+        if (! $mat || $mat <= 0) {
+            return null;
+        }
+
+        return round(($areaDesenho / (float) $mat - 1) * 100, 2);
     }
 
     /**
@@ -202,6 +225,18 @@ class DesenhoDeLote
                 'chave'       => $d['bairro'] . '|' . $d['quadra'] . '|' . $d['numero_lote'],
                 'inscricao_imobiliaria' => $d['inscricao_imobiliaria'] ?? null,
                 'area_gis_m2' => round($area, 2),
+
+                // AS MEDIDAS DA MATRÍCULA entram como vieram, sem conferência
+                // que barre. A área do registro NÃO substitui `area_gis_m2`:
+                // a multa por m² continua saindo do desenho, que é o que o
+                // sistema pode aferir. Guardar as duas é o que permite,
+                // depois, saber que elas discordam.
+                'frente_m'          => $d['frente_m'] ?? null,
+                'fundos_m'          => $d['fundos_m'] ?? null,
+                'lado_direito_m'    => $d['lado_direito_m'] ?? null,
+                'lado_esquerdo_m'   => $d['lado_esquerdo_m'] ?? null,
+                'area_matricula_m2' => $d['area_matricula_m2'] ?? null,
+
                 'fonte'       => 'Desenho manual — ' . $usuarioNome,
                 'origem'      => 'desenho',
                 'situacao'    => 'ativo',

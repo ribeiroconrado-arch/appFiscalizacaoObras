@@ -20,6 +20,15 @@ const desenhoState = {
   /** @type {L.Rectangle|null} */ captura: null,
   /** @type {L.CircleMarker[]} */ marcadores: [],
   snap: true,
+  /** Travar cada lado em múltiplo de 45° do lado anterior. Shift solta. */
+  travaAngulo: true,
+  /** Shift pressionado agora: solta a trava sem desligá-la. */
+  shiftSolto: false,
+  /** Plano local em metros, fixado no primeiro vértice — ver `_plano`. */
+  plano: null,
+  /** @type {L.Marker[]} rótulos de medida dos lados */ rotulos: [],
+  /** @type {L.Marker|null} */ rotuloArea: null,
+  /** @type {L.Marker|null} medida do lado em traçado */ rotuloElastico: null,
   onConcluir: null,
   onCancelar: null,
   /** Instante e ponto do último clique — a guarda contra o duplo clique. */
@@ -57,10 +66,18 @@ function iniciarDesenho(opcoes) {
     modo: opcoes.modo || 'poligono',
     snap: opcoes.snap !== false,
     vertices: [],
+    // O plano nasce nulo e é fixado no primeiro vértice — ver `_plano`.
+    plano: null,
+    // A trava vem LIGADA no polígono e desligada na linha: lote de loteamento
+    // é retangular, e a linha de corte do desmembramento quase nunca é
+    // perpendicular a coisa nenhuma. `travaAngulo` na chamada manda em ambos.
+    travaAngulo: opcoes.travaAngulo ?? (opcoes.modo !== 'linha'),
+    shiftSolto: false,
     onConcluir: opcoes.onConcluir,
     onCancelar: opcoes.onCancelar || null,
     ultimoClique: { t: 0, x: 0, y: 0 },
   })
+  _pintarTrava()
 
   // O duplo clique fecharia o desenho E aproximaria o mapa. Desligar aqui e
   // religar no fim é mais previsível do que tentar cancelar o zoom depois.
@@ -162,7 +179,15 @@ function _aoClicar(ev) {
   }
   desenhoState.ultimoClique = { t: agora, x: p.x, y: p.y }
 
-  const ll = desenhoState.snap ? _encaixar(ev.latlng) : ev.latlng
+  // A ORDEM IMPORTA: o encaixe no vizinho vence a trava de ângulo.
+  //
+  // Os dois querem mover o mesmo ponto. Se a trava viesse depois, ela empurraria
+  // o canto para fora do vértice do vizinho e devolveria a fresta que o encaixe
+  // existe para eliminar — uma divisa com 4 cm de sobra vale menos do que um
+  // ângulo com 0,3° de erro. Havendo vizinho no raio, ele manda.
+  const encaixado = desenhoState.snap ? _encaixar(ev.latlng) : ev.latlng
+  const ll = encaixado === ev.latlng ? _travar(ev.latlng) : encaixado
+
   desenhoState.vertices.push([ll.lng, ll.lat])
   _pintar()
 }
@@ -177,7 +202,8 @@ function _aoMover(ev) {
   if (!desenhoState.ativo || !desenhoState.vertices.length) { return }
 
   const ultimo = desenhoState.vertices[desenhoState.vertices.length - 1]
-  const destino = desenhoState.snap ? _encaixar(ev.latlng) : ev.latlng
+  const encaixado = desenhoState.snap ? _encaixar(ev.latlng) : ev.latlng
+  const destino = encaixado === ev.latlng ? _travar(ev.latlng) : encaixado
   const traco = [[ultimo[1], ultimo[0]], [destino.lat, destino.lng]]
 
   if (desenhoState.elastico) {
@@ -186,6 +212,350 @@ function _aoMover(ev) {
     desenhoState.elastico = L.polyline(traco, {
       pane: 'desenho', color: COR_DESENHO, weight: 2, dashArray: '5,6', opacity: .8, interactive: false,
     }).addTo(mapaState.obj)
+  }
+
+  // A MEDIDA ACOMPANHA O CURSOR.
+  //
+  // É o que torna a trava utilizável: o ângulo já sai certo, e o número
+  // dizendo quantos metros o lado tem enquanto ele cresce é o que permite
+  // parar em 12,00 em vez de parar onde parecia certo.
+  const meio = [(ultimo[1] + destino.lat) / 2, (ultimo[0] + destino.lng) / 2]
+  const texto = fmtMedida(distanciaNoPlano(ultimo, [destino.lng, destino.lat]))
+  if (desenhoState.rotuloElastico) {
+    desenhoState.rotuloElastico.setLatLng(meio)
+    const alvo = desenhoState.rotuloElastico.getElement()?.querySelector('.des-rot')
+    if (alvo) { alvo.textContent = texto }
+  } else {
+    desenhoState.rotuloElastico = _rotulo(meio[0], meio[1], texto, 'des-medida des-medida-viva')
+  }
+}
+
+// ── O PLANO LOCAL EM METROS ──────────────────────────────────
+//
+// Ângulo reto e medida de lado só fazem sentido num plano projetado. Em graus,
+// um lado "de 90°" na tela sai torto no terreno, porque um grau de longitude
+// não vale os mesmos metros que um grau de latitude — em Primavera do Leste, a
+// 15°S, vale 3,5% menos. Errar isso não dá erro nenhum: dá lote torto, que só
+// aparece na conferência da matrícula.
+//
+// É a mesma projeção do servidor (App\Support\GeometriaPlana::projetar), com o
+// raio meridional e o raio da grande normal do WGS84 — e não um raio médio de
+// esfera, que introduz viés sistemático de −0,25% em toda medida.
+
+const GEO_A = 6378137.0
+const GEO_E2 = 0.00669437999014
+
+/** @param {number} latRef @param {number} lonRef */
+function planoLocal(latRef, lonRef) {
+  const sen = Math.sin(latRef * Math.PI / 180)
+  const w = 1 - GEO_E2 * sen * sen
+  const m = GEO_A * (1 - GEO_E2) / (w * Math.sqrt(w))
+  const n = GEO_A / Math.sqrt(w)
+  return {
+    latRef, lonRef,
+    porGrauLat: m * Math.PI / 180,
+    porGrauLon: n * Math.PI / 180 * Math.cos(latRef * Math.PI / 180),
+  }
+}
+
+/**
+ * O plano de trabalho, fixado no PRIMEIRO vértice.
+ *
+ * Não é recalculado a cada ponto de propósito: um plano que se move faria o
+ * mesmo lado medir coisas diferentes conforme a ordem em que foi desenhado. Num
+ * lote de 50 m a diferença é de milímetros; a incoerência não é.
+ */
+function _plano() {
+  if (!desenhoState.plano) {
+    const v = desenhoState.vertices[0]
+    const c = mapaState.obj.getCenter()
+    desenhoState.plano = v ? planoLocal(v[1], v[0]) : planoLocal(c.lat, c.lng)
+  }
+  return desenhoState.plano
+}
+
+/** @param {number} lon @param {number} lat @returns {[number,number]} metros */
+function aoPlano(lon, lat) {
+  const p = _plano()
+  return [(lon - p.lonRef) * p.porGrauLon, (lat - p.latRef) * p.porGrauLat]
+}
+
+/** @param {number} x @param {number} y @returns {[number,number]} [lon, lat] */
+function doPlano(x, y) {
+  const p = _plano()
+  return [p.lonRef + x / p.porGrauLon, p.latRef + y / p.porGrauLat]
+}
+
+// ── TRAVA DE ÂNGULO ──────────────────────────────────────────
+
+/**
+ * Prende o próximo canto num múltiplo de 45° em relação ao lado anterior.
+ *
+ * Quase todo lote de loteamento é retangular, e acertar 90° com o dedo é
+ * impossível: sai 89,4°, e a divisa do fundo fica trinta centímetros fora do
+ * lugar. Com a trava o ângulo sai exato, e a medida continua sendo a que o
+ * operador escolhe.
+ *
+ * GIRA em vez de PROJETAR: o canto acompanha a distância do cursor e só o
+ * ângulo é corrigido. Projetando, afastar o cursor para o lado ENCURTARIA o
+ * lado — o ponto recuaria enquanto a mão avança, que é o contrário do que se
+ * espera de um traço.
+ *
+ * Sem lado anterior (segundo vértice), a referência é o leste: os múltiplos de
+ * 45° passam a ser os rumos cardeais, que é o que serve para começar.
+ *
+ * @param {L.LatLng} alvo @returns {L.LatLng}
+ */
+function _travar(alvo) {
+  const v = desenhoState.vertices
+  if (!desenhoState.travaAngulo || desenhoState.shiftSolto || !v.length) { return alvo }
+
+  const a = aoPlano(v[v.length - 1][0], v[v.length - 1][1])
+  const c = aoPlano(alvo.lng, alvo.lat)
+  const dx = c[0] - a[0]
+  const dy = c[1] - a[1]
+  const dist = Math.hypot(dx, dy)
+  if (dist < 0.05) { return alvo }   // 5 cm: ainda não há direção nenhuma
+
+  let base = 0
+  if (v.length >= 2) {
+    const ant = aoPlano(v[v.length - 2][0], v[v.length - 2][1])
+    base = Math.atan2(a[1] - ant[1], a[0] - ant[0])
+  }
+
+  const passo = Math.PI / 4
+  const travado = base + Math.round((Math.atan2(dy, dx) - base) / passo) * passo
+  const [lon, lat] = doPlano(a[0] + Math.cos(travado) * dist, a[1] + Math.sin(travado) * dist)
+  return L.latLng(lat, lon)
+}
+
+/** Liga e desliga a trava pelo botão. */
+function alternarTravaAngulo() {
+  desenhoState.travaAngulo = !desenhoState.travaAngulo
+  _pintarTrava()
+  toast(desenhoState.travaAngulo
+    ? 'Ângulo travado em 90°/45°. Segure Shift para soltar num canto.'
+    : 'Ângulo livre.', 'aviso')
+}
+
+function _pintarTrava() {
+  const b = document.getElementById('des-trava')
+  if (!b) { return }
+  b.classList.toggle('at', desenhoState.travaAngulo)
+  b.setAttribute('aria-pressed', String(desenhoState.travaAngulo))
+}
+
+// ── LADO POR MEDIDA DIGITADA ─────────────────────────────────
+
+/**
+ * Crava o próximo canto a uma distância exata, na direção pedida.
+ *
+ * É por aqui que a matrícula entra no desenho: "frente 12,00 m, lado direito
+ * 30,00 m" vira duas linhas digitadas, e o polígono sai com a medida do
+ * registro — não com a que o dedo alcançou.
+ *
+ * @param {number} metros
+ * @param {'reta'|'esq'|'dir'|'azimute'} direcao
+ * @param {number} [azimute] graus, 0 = norte, sentido horário
+ * @returns {boolean} se o canto entrou
+ */
+function cravarLado(metros, direcao, azimute) {
+  if (!desenhoState.ativo) { toast('Comece o desenho antes.', 'err'); return false }
+  if (!(metros > 0)) { toast('Informe a medida do lado, em metros.', 'err'); return false }
+
+  const v = desenhoState.vertices
+  if (!v.length) {
+    toast('Toque no primeiro canto; a partir dele a medida tem de onde sair.', 'err')
+    return false
+  }
+
+  const a = aoPlano(v[v.length - 1][0], v[v.length - 1][1])
+
+  // A direção do último lado. Com um único canto marcado não existe "seguir
+  // reto" nem "virar à esquerda" — só o azimute diz para onde ir, e é o que se
+  // exige em vez de escolher um rumo por conta.
+  let base = null
+  if (v.length >= 2) {
+    const ant = aoPlano(v[v.length - 2][0], v[v.length - 2][1])
+    base = Math.atan2(a[1] - ant[1], a[0] - ant[0])
+  }
+
+  let ang
+  if (direcao === 'azimute' || base === null) {
+    if (!Number.isFinite(azimute)) {
+      toast('No primeiro lado não há direção anterior: informe o azimute.', 'err')
+      return false
+    }
+    // Azimute é geográfico (0 = norte, horário); o plano mede do leste, no
+    // sentido anti-horário. Trocar os dois é o erro clássico daqui.
+    ang = (90 - azimute) * Math.PI / 180
+  } else if (direcao === 'reta') {
+    ang = base
+  } else {
+    ang = base + (direcao === 'esq' ? Math.PI / 2 : -Math.PI / 2)
+  }
+
+  const [lon, lat] = doPlano(a[0] + Math.cos(ang) * metros, a[1] + Math.sin(ang) * metros)
+  desenhoState.vertices.push([lon, lat])
+  _pintar()
+  return true
+}
+
+// ── MEDIDAS NA TELA ──────────────────────────────────────────
+
+/**
+ * Distância entre dois cantos, NO PLANO DO DESENHO.
+ *
+ * Não usa `distanciaM` (geo.js) de propósito, e isto foi medido: o haversine
+ * de lá trabalha com raio médio de ESFERA, enquanto o desenho vive no
+ * elipsoide WGS84. Um lado cravado com exatos 25,00 m aparecia rotulado como
+ * "25,12 m" — o operador digitava a medida da matrícula e a tela devolvia
+ * outra, que é o pior defeito possível numa ferramenta de medir.
+ *
+ * `distanciaM` continua certo para o que ele faz (a que distância o fiscal
+ * está do lote). O que não se pode é medir o mesmo lote com duas réguas.
+ *
+ * @param {[number,number]} a @param {[number,number]} b em [lon, lat]
+ */
+function distanciaNoPlano(a, b) {
+  const pa = aoPlano(a[0], a[1])
+  const pb = aoPlano(b[0], b[1])
+  return Math.hypot(pb[0] - pa[0], pb[1] - pa[1])
+}
+
+/** @param {number} m @returns {string} */
+function fmtMedida(m) {
+  return m.toFixed(2).replace('.', ',') + ' m'
+}
+
+/** Área do anel em desenho, em m². Fórmula do cadarço sobre o plano local. */
+function areaDoDesenho() {
+  const v = desenhoState.vertices
+  if (v.length < 3) { return 0 }
+  const p = v.map(c => aoPlano(c[0], c[1]))
+  let s = 0
+  for (let i = 0, n = p.length; i < n; i++) {
+    const j = (i + 1) % n
+    s += p[i][0] * p[j][1] - p[j][0] * p[i][1]
+  }
+  return Math.abs(s) / 2
+}
+
+/**
+ * @param {number} lat @param {number} lon @param {string} texto @param {string} css
+ * @param {[number,number]} [fora] deslocamento em pixels de tela
+ */
+function _rotulo(lat, lon, texto, css, fora) {
+  // ANCORADO PELA BORDA, não pelo centro.
+  //
+  // Deslocar o centro do rótulo alguns pixels para fora não bastava: metade da
+  // etiqueta continuava entrando no lote, e num lote de 12 m de frente os dois
+  // rótulos de lado invadiam o da área no meio. Empurrando 50% da própria
+  // largura MAIS uma folga, o que fica a 8px da divisa é a borda da etiqueta —
+  // e aí ela está inteira do lado de fora, seja qual for o texto.
+  const estilo = fora
+    ? ` style="transform:translate(-50%,-50%) translate(${_empurrar(fora[0])},${_empurrar(fora[1])})"`
+    : ''
+  return L.marker([lat, lon], {
+    pane: 'desenho', interactive: false, keyboard: false,
+    icon: L.divIcon({
+      className: css, iconSize: null,
+      html: `<span class="des-rot"${estilo}>${texto}</span>`,
+    }),
+  }).addTo(mapaState.obj)
+}
+
+/**
+ * Empurra o rótulo do lado para FORA do polígono, em pixels de tela.
+ *
+ * Num lote de 12 m de frente, os rótulos dos dois lados de 25 m e o da área
+ * caíam todos na mesma faixa e saíam sobrepostos — "25,00 300,00 m²5,00 m",
+ * ilegível justamente no formato de lote mais comum do município.
+ *
+ * O deslocamento é em PIXELS e não em metros: em metros, ele encolheria junto
+ * com o lote ao afastar o zoom e as etiquetas voltariam a se encontrar. A
+ * direção na tela não muda com o zoom (o mapa não gira), então basta calculá-la
+ * uma vez, ao pintar.
+ *
+ * @param {[number,number]} a @param {[number,number]} b extremos do lado
+ * @param {[number,number]} centro centroide do polígono, em [lon, lat]
+ * @returns {[number,number]} deslocamento em px
+ */
+function _foraDoLado(a, b, centro) {
+  const pa = aoPlano(a[0], a[1])
+  const pb = aoPlano(b[0], b[1])
+  const pc = aoPlano(centro[0], centro[1])
+
+  // Normal ao lado, no plano.
+  let nx = -(pb[1] - pa[1])
+  let ny = pb[0] - pa[0]
+  const n = Math.hypot(nx, ny) || 1
+  nx /= n; ny /= n
+
+  // Apontando para longe do miolo.
+  const mx = (pa[0] + pb[0]) / 2 - pc[0]
+  const my = (pa[1] + pb[1]) / 2 - pc[1]
+  if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny }
+
+  // Na tela o eixo Y cresce para BAIXO, ao contrário do plano.
+  return [+nx.toFixed(4), +(-ny).toFixed(4)]
+}
+
+/**
+ * Uma componente do empurrão, em CSS.
+ *
+ * `50%` aqui é metade da LARGURA (ou altura) do próprio rótulo — é o que faz a
+ * etiqueta sair inteira do polígono em vez de ficar meio dentro. Componente
+ * nula devolve zero: `calc(0% + 0px)` funcionaria, mas escrever zero é mais
+ * fácil de ler no inspetor quando algo sair do lugar.
+ *
+ * @param {number} c componente do vetor normal, entre −1 e 1
+ */
+function _empurrar(c) {
+  if (Math.abs(c) < 0.02) { return '0px' }
+  const s = c > 0 ? 1 : -1
+  return `calc(${(c * 50).toFixed(1)}% + ${(s * 8).toFixed(0)}px)`
+}
+
+/**
+ * Rótulo em cada lado e a área no meio.
+ *
+ * Sem isto, o único jeito de saber o que se desenhou era gravar e ler a prévia
+ * do servidor — ou seja, descobrir o erro depois de ter feito o lote.
+ */
+function _pintarMedidas() {
+  const mapa = mapaState.obj
+  desenhoState.rotulos.forEach(r => mapa.removeLayer(r))
+  desenhoState.rotulos = []
+  if (desenhoState.rotuloArea) {
+    mapa.removeLayer(desenhoState.rotuloArea)
+    desenhoState.rotuloArea = null
+  }
+
+  const v = desenhoState.vertices
+  if (v.length < 2) { return }
+
+  // O lado de fechamento (do último ao primeiro) só ganha rótulo quando o
+  // polígono de fato fecha: numa linha ele não existe, e com dois pontos seria
+  // o mesmo lado medido duas vezes.
+  const fecha = desenhoState.modo === 'poligono' && v.length >= 3
+  const lados = fecha ? v.length : v.length - 1
+
+  const cx = v.reduce((s, c) => s + c[0], 0) / v.length
+  const cy = v.reduce((s, c) => s + c[1], 0) / v.length
+
+  for (let i = 0; i < lados; i++) {
+    const a = v[i]
+    const b = v[(i + 1) % v.length]
+    desenhoState.rotulos.push(_rotulo(
+      (a[1] + b[1]) / 2, (a[0] + b[0]) / 2,
+      fmtMedida(distanciaNoPlano(a, b)), 'des-medida',
+      _foraDoLado(a, b, [cx, cy])))
+  }
+
+  if (fecha) {
+    desenhoState.rotuloArea = _rotulo(cy, cx,
+      areaDoDesenho().toFixed(2).replace('.', ',') + ' m²', 'des-area')
   }
 }
 
@@ -266,6 +636,8 @@ function _pintar() {
     color: '#fff', fillColor: COR_DESENHO, fillOpacity: 1, interactive: false,
   }).addTo(mapa))
 
+  _pintarMedidas()
+
   if (typeof aoDesenharVertice === 'function') {
     aoDesenharVertice(desenhoState.vertices.length)
   }
@@ -274,9 +646,11 @@ function _pintar() {
 function _limpar() {
   const mapa = mapaState.obj
   if (mapa) {
-    ;[desenhoState.rascunho, desenhoState.previa, desenhoState.elastico, desenhoState.captura]
+    ;[desenhoState.rascunho, desenhoState.previa, desenhoState.elastico,
+      desenhoState.captura, desenhoState.rotuloArea, desenhoState.rotuloElastico]
       .forEach(c => { if (c) mapa.removeLayer(c) })
     desenhoState.marcadores.forEach(m => mapa.removeLayer(m))
+    desenhoState.rotulos.forEach(r => mapa.removeLayer(r))
     mapa.off('mousemove', _aoMover)
     mapa.doubleClickZoom.enable()
 
@@ -298,6 +672,7 @@ function _limpar() {
   Object.assign(desenhoState, {
     ativo: false, modo: null, vertices: [], rascunho: null, previa: null,
     elastico: null, captura: null, marcadores: [], onConcluir: null, onCancelar: null,
+    plano: null, rotulos: [], rotuloArea: null, rotuloElastico: null, shiftSolto: false,
   })
 
   document.getElementById('map')?.classList.remove('desenhando')
@@ -319,4 +694,21 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') { ev.stopPropagation(); cancelarDesenho(); return }
   if (ev.key === 'Enter') { ev.stopPropagation(); concluirDesenho(); return }
   if (ev.key === 'z' && (ev.ctrlKey || ev.metaKey)) { ev.stopPropagation(); desfazerVertice() }
+
+  // Shift SOLTA a trava enquanto está pressionado, e não a desliga.
+  //
+  // O canto fora de esquadro é a exceção — a quina chanfrada, o lote de
+  // esquina —, e exceção não deve custar dois cliques num botão e a lembrança
+  // de religar depois. Quem esquece de religar desenha o resto do lote torto.
+  if (ev.key === 'Shift' && !desenhoState.shiftSolto) {
+    desenhoState.shiftSolto = true
+  }
 }, true)
+
+document.addEventListener('keyup', ev => {
+  if (ev.key === 'Shift') { desenhoState.shiftSolto = false }
+}, true)
+
+// A tecla presa quando a janela perde o foco ficaria presa para sempre: o
+// `keyup` acontece fora da página e nunca chega aqui.
+window.addEventListener('blur', () => { desenhoState.shiftSolto = false })

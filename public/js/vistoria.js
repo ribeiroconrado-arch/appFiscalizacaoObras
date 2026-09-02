@@ -244,6 +244,51 @@ function _atoCadastral(e) {
 // ── FORMULÁRIO ───────────────────────────────────────────────
 
 /** Abre o formulário de nova vistoria para o lote selecionado. */
+/**
+ * Oferece a área construída que está DESENHADA no lote.
+ *
+ * As duas medidas convivem de propósito: o desenho é o que o cadastro sabe, e
+ * a aferição é o que o fiscal mediu hoje. Quando divergem, a divergência é o
+ * assunto da vistoria — e é por isso que o número desenhado nunca entra
+ * sozinho no campo que vai virar multa.
+ *
+ * @param {number} loteId
+ */
+async function oferecerAreaDesenhada(loteId) {
+  const alvo = document.getElementById('nv-area-desenhada')
+  if (!alvo) { return }
+  alvo.hidden = true
+  alvo.innerHTML = ''
+  if (!loteId || typeof carregarEdificacoes !== 'function') { return }
+
+  // Sem pintar: a vistoria é um modal por cima do mapa, e desenhar as
+  // edificações embaixo dele seria trabalho que ninguém vê.
+  const d = await carregarEdificacoes(loteId, false)
+  if (!d || !d.area_construida_m2) { return }
+
+  const n = d.edificacoes.length
+  alvo.hidden = false
+  alvo.innerHTML = `Desenhado no cadastro: <b>${fmtNum(d.area_construida_m2)} m²</b>`
+    + ` em ${n} construção(ões). `
+    + `<button type="button" class="btn sm" onclick="usarAreaDesenhada(${d.area_construida_m2})">`
+    + 'Usar este valor</button>'
+}
+
+/** @param {number} area */
+function usarAreaDesenhada(area) {
+  document.getElementById('nv-area').value = area
+  // O método vai junto, e diz de onde o número veio: perito que contesta multa
+  // por metro quadrado contesta a medição, e "do desenho do cadastro" precisa
+  // aparecer como o que é.
+  // "croqui" é exatamente isto: área calculada pelo desenho, e não medida em
+  // campo (ver Vistoria::METODOS_AREA). Escolhido pelo VALOR e não pelo texto
+  // da opção — rótulo é o que muda quando alguém reescreve a tela.
+  const metodo = document.getElementById('nv-area-metodo')
+  if (metodo && !metodo.value && [...metodo.options].some(o => o.value === 'croqui')) {
+    metodo.value = 'croqui'
+  }
+  toast('Área do desenho copiada. Confira o método de obtenção.', 'aviso')
+}
 async function novaVistoria() {
   const f = state.selecionado
   if (!f) { toast('Selecione um lote no mapa', 'err'); return }
@@ -279,6 +324,10 @@ async function novaVistoria() {
   irPasso('id')
   oferecerRascunho()
   vState.abrindo = false
+  // Sem `await`: a sugestão da área desenhada é conveniência, e a vistoria não
+  // pode esperar por ela para abrir — o fiscal está em campo, muitas vezes com
+  // rede ruim, e a tela tem de subir mesmo que esta consulta demore ou falhe.
+  oferecerAreaDesenhada(f.properties.id)
   await carregarProtocolosCadastrais(f.properties.id)
   await carregarCatalogo()
   openModal('m-vistoria')

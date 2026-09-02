@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CadastroBairro;
 use App\Models\Feriado;
+use App\Models\Lote;
 use App\Models\Parametro;
 use App\Models\Upf;
 use App\Models\User;
@@ -56,6 +58,15 @@ class ParametroController extends Controller
                 'id' => $f->id, 'data' => $f->data->format('Y-m-d'), 'nome' => $f->nome,
                 'tipo' => $f->tipo, 'recorrente' => $f->recorrente,
             ]),
+            // Ordenados pelo CÓDIGO, que é como a lista da prefeitura vem e
+            // como o cadastrador confere: procurar o 47 numa lista alfabética
+            // é procurar duas vezes.
+            'bairros' => CadastroBairro::orderByRaw('CAST(codigo AS UNSIGNED)')->get()
+                ->map(fn (CadastroBairro $b) => [
+                    'id' => $b->id, 'codigo' => $b->codigo,
+                    'nome_cadastro' => $b->nome_cadastro, 'nome_gis' => $b->nome_gis,
+                    'lotes' => $b->lotesEmUso(),
+                ]),
             'perfis' => User::PERFIS,
             'cargos' => User::CARGOS,
             'tipos_feriado' => collect(Feriado::TIPOS)->map(fn ($r, $v) => ['valor' => $v, 'rotulo' => $r])->values(),
@@ -181,6 +192,94 @@ class ParametroController extends Controller
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
         $feriado->delete();
         return response()->json(['message' => 'Feriado removido.']);
+    }
+
+    // ── BAIRROS ──────────────────────────────────────────────────
+
+    /**
+     * POST /api/parametros/bairros — cria ou altera.
+     *
+     * `nome_gis` é o texto que os lotes convertidos do DWG guardam em
+     * `lotes.bairro`, e é por ele que o sistema chega ao código do cadastro.
+     * Fica NULO enquanto o bairro não foi levantado: bairro do município que
+     * ainda não tem desenho existe para ser escolhido, e não tem nome de GIS
+     * nenhum — inventar um faria a ponte casar com o que não devia.
+     */
+    public function salvarBairro(Request $r): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        $d = $r->validate([
+            'id'            => ['nullable', 'exists:cadastro_bairros,id'],
+            'codigo'        => ['required', 'string', 'max:10',
+                Rule::unique('cadastro_bairros', 'codigo')->ignore($r->input('id'))],
+            'nome_cadastro' => ['required', 'string', 'max:160'],
+            'nome_gis'      => ['nullable', 'string', 'max:160',
+                Rule::unique('cadastro_bairros', 'nome_gis')->ignore($r->input('id'))],
+        ], [], [
+            // Sem isto o erro sai como "Este nome gis já está cadastrado", com
+            // o nome da COLUNA no lugar do nome do campo que a pessoa vê.
+            'codigo'        => 'código',
+            'nome_cadastro' => 'nome no cadastro',
+            'nome_gis'      => 'nome no desenho',
+        ]);
+
+        $bairro = CadastroBairro::find($d['id'] ?? null) ?? new CadastroBairro();
+        $anterior = $bairro->nome_gis;
+
+        $bairro->fill([
+            'codigo'        => $d['codigo'],
+            'nome_cadastro' => $d['nome_cadastro'],
+            'nome_gis'      => $d['nome_gis'] ?: null,
+        ])->save();
+
+        // TROCAR O NOME DE GIS DESLIGA OS LOTES.
+        //
+        // Os lotes guardam o TEXTO do bairro, não uma chave — mudar `nome_gis`
+        // em silêncio deixaria N lotes apontando para um nome que não existe
+        // mais em cadastro nenhum, e o código do bairro sumiria da ficha deles
+        // sem ninguém notar. Aqui não se mexe nos lotes: só se diz o que houve.
+        $aviso = null;
+        if ($anterior && $anterior !== $bairro->nome_gis) {
+            $presos = Lote::where('bairro', $anterior)->count();
+            if ($presos > 0) {
+                $aviso = sprintf(
+                    '%d lote(s) continuam gravados como "%s" e deixaram de achar este bairro. '
+                    . 'Corrija o bairro deles ou volte o nome do desenho.',
+                    $presos, $anterior);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Bairro gravado.',
+            'aviso'   => $aviso,
+        ]);
+    }
+
+    /**
+     * DELETE /api/parametros/bairros/{bairro}
+     *
+     * Bairro com lote não se apaga. Não é zelo excessivo: o lote guarda o NOME
+     * do bairro, e não uma chave — apagar a linha não quebraria nada na hora,
+     * e por isso mesmo o estrago só apareceria depois, quando a ficha de um
+     * imóvel daquele bairro deixasse de trazer o código do cadastro.
+     */
+    public function excluirBairro(Request $r, CadastroBairro $bairro): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        if ($presos = $bairro->lotesEmUso()) {
+            return response()->json([
+                'message' => sprintf(
+                    'Não dá para excluir: %d lote(s) do desenho estão neste bairro. '
+                    . 'Mova-os antes, ou apenas corrija o nome aqui.',
+                    $presos),
+            ], 422);
+        }
+
+        $bairro->delete();
+
+        return response()->json(['message' => 'Bairro removido.']);
     }
 
     /**
