@@ -166,7 +166,7 @@
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .aba svg{width:19px;height:19px;color:var(--chumbo)}
 .aba:hover{background:var(--blt)}
-.aba.at{background:var(--gl);color:var(--gd)}
+.aba.at{background:var(--blt);color:var(--tx)}
 .aba.at svg{color:var(--chumbo)}
 
 .tela{display:none}
@@ -240,7 +240,7 @@
 .sub-abas button{flex:1 1 0;min-width:84px;padding:8px 6px;border:none;border-radius:6px;
   background:transparent;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;
   font-weight:700;color:var(--tx3);white-space:nowrap;transition:background .15s,color .15s}
-.sub-abas button.at{background:var(--sur);color:var(--gd);box-shadow:var(--sh)}
+.sub-abas button.at{background:var(--sur);color:var(--tx);box-shadow:var(--sh)}
 /* Altura fixa e rolagem interna: sem isto cada aba esticava o modal ao
    tamanho do próprio conteúdo, e a janela pulava de tamanho a cada troca de
    aba. Com altura travada, todas as abas ocupam o mesmo container. */
@@ -278,7 +278,7 @@
 /* Topo das sub-telas (artigos da lei, feriados do ano) */
 .sub-topo{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .sub-topo .titulo{flex:1;min-width:0;font-family:'Manrope',sans-serif;font-weight:700;
-  font-size:14px;color:var(--gd);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  font-size:14px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Sub-abas internas do detalhe da lei */
 .leg-painel{display:none}
@@ -1149,7 +1149,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .desm-parte{display:flex;align-items:center;gap:5px;margin:4px 0}
 .desm-parte input{min-width:0;flex:1 1 auto;border:1.5px solid var(--f-bord);
   border-radius:var(--r);background:var(--f-fundo);padding:5px 7px;font-size:12px}
-.desm-num{flex:0 0 18px;height:18px;border-radius:50%;background:var(--gd);color:#fff;
+.desm-num{flex:0 0 18px;height:18px;border-radius:50%;background:var(--tx2);color:#fff;
   font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .desm-x{flex:0 0 auto;border:0;background:none;color:var(--tx3);cursor:pointer;font-size:12px;padding:2px 4px}
 .desm-x:hover{color:var(--red)}
@@ -1168,7 +1168,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    ou pintado por quadra parece um mapa comum para quem chegou depois. */
 .ctrl-btn{position:relative}
 .ctrl-selo{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;
-  padding:0 4px;border-radius:999px;background:var(--gd);color:#fff;
+  padding:0 4px;border-radius:999px;background:var(--tx2);color:#fff;
   font-size:9.5px;font-weight:700;line-height:16px;text-align:center;
   box-shadow:0 0 0 2px #fff;font-family:'Inter',sans-serif}
 .ctrl-btn.com-filtro{border-color:var(--gd)}
@@ -1244,7 +1244,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .doc-tab{flex:1;min-width:84px;padding:8px 6px;border:none;border-radius:6px;
   background:transparent;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;
   font-weight:700;color:var(--tx3);white-space:nowrap;transition:background .15s,color .15s}
-.doc-tab.ativa{background:var(--sur);color:var(--gd);box-shadow:var(--sh)}
+.doc-tab.ativa{background:var(--sur);color:var(--tx);box-shadow:var(--sh)}
 
 .doc-body{flex:1;min-height:0;overflow-y:auto;padding:16px 18px}
 .doc-painel{display:none}
@@ -1293,14 +1293,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .rs-brasao{height:46px;width:auto;flex-shrink:0}
 .rs-cab-tit{flex:1;text-align:center}
 .rs-cab-doc{font-family:'Manrope',sans-serif;font-weight:800;font-size:15px;
-  color:var(--gxd);letter-spacing:.02em}
+  color:var(--tx);letter-spacing:.02em}
 .rs-cab-org{font-size:11px;color:var(--tx2);margin-top:1px}
 .rs-cab-meta{font-size:11px;color:var(--tx2);margin-top:4px}
 
 .rs-sec{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;
   text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);
   margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--bord)}
-.rs-num{width:17px;height:17px;border-radius:4px;background:var(--gl);color:var(--gd);
+.rs-num{width:17px;height:17px;border-radius:4px;background:var(--blt);color:var(--tx2);
   font-size:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .rs-linha{font-size:13px;color:var(--tx);padding:4px 0;display:flex;gap:8px}
 .rs-linha > span{color:var(--tx3);min-width:120px;flex-shrink:0}
@@ -1308,7 +1308,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .rs-texto{font-size:12.5px;color:var(--tx);line-height:1.5;text-align:justify;margin:4px 0 0}
 .rs-artigos{display:flex;flex-direction:column;gap:6px;margin-top:4px}
 .rs-artigo{font-size:13px;color:var(--tx);line-height:1.4;text-align:justify}
-.rs-artigo strong{color:var(--gd)}
+.rs-artigo strong{color:var(--tx)}
 .rs-nota{font-size:11px;color:var(--tx3);margin:6px 0 0}
 .rs-assinaturas{display:flex;gap:20px;margin-top:28px}
 .rs-assinaturas > div{flex:1;text-align:center;font-size:11px;color:var(--tx2)}
@@ -1788,8 +1788,8 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vs-passo .n{display:inline-flex;align-items:center;justify-content:center;
   width:19px;height:19px;border-radius:999px;background:var(--blt);color:var(--tx3);
   font-size:10.5px;font-weight:800;flex-shrink:0}
-.vs-passo.at{background:var(--sur);color:var(--gd);box-shadow:var(--sh)}
-.vs-passo.at .n{background:var(--gd);color:#fff}
+.vs-passo.at{background:var(--sur);color:var(--tx);box-shadow:var(--sh)}
+.vs-passo.at .n{background:var(--tx2);color:#fff}
 /* Passo já visitado marca com ✓ no lugar do número: o que ficou para trás
    informa "conferido", e não "faltando". */
 .vs-passo.feito .n{background:var(--g);color:#fff;font-size:0}
@@ -1819,7 +1819,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   background:var(--sur);color:var(--tx);cursor:pointer;font-family:'Inter',sans-serif;
   font-size:12.5px;font-weight:600;transition:all .13s}
 .vs-op:hover{border-color:var(--f-bord-foco)}
-.vs-op.at{border-color:var(--f-bord-foco);background:var(--gl);color:var(--gd);font-weight:700}
+.vs-op.at{border-color:var(--tx3);background:var(--blt);color:var(--tx);font-weight:700}
 
 /* Linha de nova exigência: texto largo, prazo estreito, "+" fixo. */
 .vs-nova-exig{display:flex;gap:7px;margin-bottom:8px}
@@ -1923,11 +1923,11 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Quantas marcas a foto carrega: e o que distingue uma foto anotada de uma
    foto qualquer, e some na miniatura se nao for dito. */
 .rel-marcas{position:absolute;right:2px;bottom:2px;min-width:15px;height:15px;padding:0 3px;
-  border-radius:999px;background:var(--gd);color:#fff;font-size:9px;font-weight:800;
+  border-radius:999px;background:var(--tx2);color:#fff;font-size:9px;font-weight:800;
   display:flex;align-items:center;justify-content:center}
 
 .rel-ico{width:46px;height:46px;border-radius:7px;display:flex;align-items:center;
-  justify-content:center;background:var(--blt);color:var(--gd)}
+  justify-content:center;background:var(--blt);color:var(--tx2)}
 .rel-ico svg{width:20px;height:20px}
 .rel-ico-exigencia{background:var(--gold-lt);color:var(--gold-dk)}
 
@@ -1985,14 +1985,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:52px}
 .vs-op-larga .t{font-size:13px;font-weight:700;line-height:1.25}
 .vs-op-larga .o{font-size:11px;font-weight:500;color:var(--tx3);line-height:1.35}
-.vs-op-larga.at .o{color:var(--gd);opacity:.85}
+.vs-op-larga.at .o{color:var(--tx);opacity:.85}
 /* A escolhida tem de se distinguir do item sob o cursor. Entre cinco opções
    que decidem a tela inteira, "qual está valendo?" não pode depender de
    comparar tons de verde: entram a barra na lateral e o ✓. */
 .vs-op-larga{position:relative;padding-right:34px}
-.vs-op-larga.at{box-shadow:inset 3px 0 0 var(--gd)}
+.vs-op-larga.at{box-shadow:inset 3px 0 0 var(--tx2)}
 .vs-op-larga.at::after{content:'✓';position:absolute;right:12px;top:50%;
-  transform:translateY(-50%);font-size:14px;font-weight:800;color:var(--gd)}
+  transform:translateY(-50%);font-size:14px;font-weight:800;color:var(--tx2)}
 
 /* ══════════════════════════════════════════════
    ORDEM DE SERVIÇO
@@ -2085,7 +2085,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* O mesmo ícone do menu "Novo documento" (ICO_TIPO_DOC): quem escolheu a peça
    ali reconhece a mesma marca aqui, sem ter de ler o tipo. */
 .doc-ico{width:34px;height:34px;border-radius:10px;flex-shrink:0;display:flex;
-  align-items:center;justify-content:center;background:var(--gl);color:var(--gd)}
+  align-items:center;justify-content:center;background:var(--blt);color:var(--tx2)}
 .doc-ico svg{width:17px;height:17px}
 .doc-ident{flex:1;min-width:0}
 .doc-l1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
@@ -2123,7 +2123,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .filtro-barra .btn{flex-shrink:0;gap:7px}
 /* Quantos filtros estão valendo, no próprio botão que os guarda. */
 .filtro-cont{min-width:18px;height:18px;padding:0 5px;border-radius:999px;
-  background:var(--gd);color:#fff;font-size:10.5px;font-weight:800;
+  background:var(--tx2);color:#fff;font-size:10.5px;font-weight:800;
   display:inline-flex;align-items:center;justify-content:center}
 
 /* As etiquetas do que está filtrando. Existem porque o filtro saiu da vista:
@@ -2360,8 +2360,8 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vato-op:hover{border-color:var(--tx3);background:var(--blt)}
 /* O traço separa o que AVISA do que SANCIONA — a mesma divisão do menu. */
 .vato-op.vato-sep{margin-top:8px;border-top-width:1.5px}
-.vato-ico{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--gl);
-  color:var(--gd);display:flex;align-items:center;justify-content:center}
+.vato-ico{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--blt);
+  color:var(--tx2);display:flex;align-items:center;justify-content:center}
 .vato-ico svg{width:16px;height:16px}
 .vato-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
 .vato-nome{font-family:'Manrope',sans-serif;font-size:13.5px;font-weight:700;color:var(--tx)}
@@ -2380,7 +2380,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   text-decoration:none;color:inherit;transition:border-color .13s,background .13s}
 .vv-arquivo:hover{border-color:var(--tx3);background:var(--blt)}
 .vv-arquivo-ico{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--blt);
-  color:var(--gd);display:flex;align-items:center;justify-content:center}
+  color:var(--tx2);display:flex;align-items:center;justify-content:center}
 .vv-arquivo-ico svg{width:16px;height:16px}
 .vv-arquivo-txt{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:12.5px}
 .vv-arquivo-obs{color:var(--tx2)}
@@ -2592,7 +2592,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 }
 .des-medida .des-rot{
   font-size:11.5px; color:var(--tx); cursor:text;
-  background:rgba(255,255,255,.95); border:1.5px solid var(--gm);
+  background:rgba(255,255,255,.95); border:1.5px solid var(--tx3);
   border-radius:6px; padding:2px 7px; box-shadow:0 1px 5px rgba(0,0,0,.16);
   transition:border-color .12s, background .12s, box-shadow .12s;
 }
@@ -2646,7 +2646,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 #vsi-abas button.vsi-tem .vsi-conta{display:inline-flex;align-items:center;
   justify-content:center;min-width:15px;height:15px;padding:0 4px;border-radius:999px;
   background:var(--tx3);color:#fff;font-size:10px;font-weight:800}
-#vsi-abas button.at.vsi-tem .vsi-conta{background:var(--gd)}
+#vsi-abas button.at.vsi-tem .vsi-conta{background:var(--tx2)}
 
 /* ── O CARTÃO DO ITEM ──
    Rótulo à esquerda, o que foi informado à direita. Só os blocos preenchidos
@@ -2718,7 +2718,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .cad-mesa-topo{display:flex;align-items:center;gap:8px;padding:10px 12px;
   border-bottom:1.5px solid var(--blt);flex-shrink:0}
 .cad-mesa-tit{flex:1;min-width:0;font-size:10.5px;font-weight:800;
-  text-transform:uppercase;letter-spacing:.08em;color:var(--gxd);
+  text-transform:uppercase;letter-spacing:.08em;color:var(--tx2);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cad-mesa-x{background:none;border:none;color:var(--tx3);cursor:pointer;
   font-size:15px;line-height:1;padding:2px 4px}
