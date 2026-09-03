@@ -20,10 +20,14 @@ const parState = {
   upfs: [],
   feriados: [],
   bairros: [],
+  /** @type {Array<Object>} o catálogo COMPLETO, com gravidade/base legal/ativo — o
+   *  `irregularidades` (sem prefixo) é o de Legislação, resumo para marcar num artigo. */
+  catalogoIrregularidades: [],
   geral: [],
   /** id da lei aberta no detalhe */   leiAberta: null,
   /** ano aberto na lista de feriados */ anoAberto: null,
   /** id do bairro em edição na linha de cadastro */ bairroEditando: null,
+  /** id da irregularidade em edição na linha de cadastro */ irregularidadeEditando: null,
 }
 
 function abrirParametros() {
@@ -46,14 +50,21 @@ async function carregarParametros() {
     parState.upfs = d.upfs
     parState.feriados = d.feriados
     parState.bairros = d.bairros
+    parState.catalogoIrregularidades = d.irregularidades
     parState.geral = d.geral
     parState.carregado = true
     renderUsuarios()
     renderUpfs()
     renderAnosFeriados()
     renderBairros()
+    renderIrregularidades()
     renderGeral()
     renderBrasao()
+    // Lida por ÚLTIMO, e de propósito: `/api/legislacao` também devolve um
+    // `irregularidades` — outro formato, resumido, para o checklist de "quais
+    // esta lei enquadra" — e escreve em `parState.irregularidades` (sem
+    // prefixo). É uma tecla DIFERENTE da usada aqui (`catalogoIrregularidades`),
+    // então as duas convivem sem uma apagar a outra.
     await recarregarLegislacao()
   } catch (e) {
     console.error(e)
@@ -682,7 +693,7 @@ function renderBairros() {
           ? 'No desenho: ' + esc(b.nome_gis) + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
           : 'Ainda sem desenho convertido'}</span>
       </div>
-      <button class="acao-x" onclick="excluirBairro(${b.id})" title="Excluir">${ICO_LIXO}</button>
+      <button type="button" class="btn sm danger" onclick="excluirBairro(${b.id})">Excluir</button>
     </div>`).join('')
     || '<div class="lista-vazia">Nenhum bairro encontrado.</div>'
 }
@@ -756,6 +767,112 @@ function excluirBairro(id) {
     onConfirm: () => excluirParametro('/api/parametros/bairros/' + id),
   })
 }
+
+// ── IRREGULARIDADES ───────────────────────────────────────────
+//
+// Mesmo desenho do bairro: cadastro rápido fixo no topo, lista embaixo, e
+// tocar numa linha traz ela para cima para editar.
+
+function irregularidadesFiltradas() {
+  const q = (document.getElementById('filtro-irregularidades')?.value || '').trim().toLowerCase()
+  if (!q) { return parState.catalogoIrregularidades }
+  return parState.catalogoIrregularidades.filter(i =>
+    String(i.codigo).toLowerCase().includes(q) || i.descricao.toLowerCase().includes(q))
+}
+
+function renderIrregularidades() {
+  const todos = parState.catalogoIrregularidades
+  const lista = irregularidadesFiltradas()
+  document.getElementById('cont-irregularidades').textContent =
+    lista.length === todos.length ? todos.length : `${lista.length}/${todos.length}`
+
+  document.getElementById('lista-irregularidades').innerHTML = lista.map(i => `
+    <div class="par-linha${i.id === parState.irregularidadeEditando ? ' at' : ''}${i.ativo ? '' : ' par-linha-inativa'}">
+      <div class="principal clicavel" onclick="editarIrregularidade(${i.id})">
+        <b>${esc(i.codigo)} · ${esc(i.descricao)}</b>
+        <span>${esc(i.gravidade)}${i.base_legal ? ' · ' + esc(i.base_legal) : ''}${
+          i.ativo ? '' : ' · desativada'}${i.em_uso ? ` · usada em ${i.em_uso} vistoria(s)` : ''}</span>
+      </div>
+      <button type="button" class="btn sm danger" onclick="excluirIrregularidade(${i.id})">Excluir</button>
+    </div>`).join('')
+    || '<div class="lista-vazia">Nenhuma irregularidade encontrada.</div>'
+}
+
+/** @param {number} id */
+function editarIrregularidade(id) {
+  const i = parState.catalogoIrregularidades.find(x => x.id === id)
+  if (!i) { return }
+
+  parState.irregularidadeEditando = id
+  document.getElementById('irr-codigo').value = i.codigo ?? ''
+  document.getElementById('irr-descricao').value = i.descricao ?? ''
+  document.getElementById('irr-gravidade').value = i.gravidade ?? 'media'
+  document.getElementById('irr-base-legal').value = i.base_legal ?? ''
+  document.getElementById('irr-ordem').value = i.ordem ?? ''
+  document.getElementById('irr-ativo').checked = !!i.ativo
+  pintarBotaoIrregularidade()
+  renderIrregularidades()
+  document.getElementById('irr-descricao').focus()
+}
+
+function cancelarEdicaoIrregularidade() {
+  parState.irregularidadeEditando = null
+  ;['codigo', 'descricao', 'base-legal', 'ordem'].forEach(c => { document.getElementById('irr-' + c).value = '' })
+  document.getElementById('irr-gravidade').value = 'media'
+  document.getElementById('irr-ativo').checked = true
+  pintarBotaoIrregularidade()
+  renderIrregularidades()
+}
+
+function pintarBotaoIrregularidade() {
+  const editando = parState.irregularidadeEditando !== null
+  const btn = document.querySelector('#par-irregularidades .cad-row .btn.primary')
+  if (btn) { btn.textContent = editando ? 'Salvar alteração' : '+ Nova irregularidade' }
+
+  let cancelar = document.getElementById('btn-cancelar-irregularidade')
+  if (editando && !cancelar) {
+    cancelar = document.createElement('button')
+    cancelar.id = 'btn-cancelar-irregularidade'
+    cancelar.className = 'btn sm'
+    cancelar.textContent = 'Cancelar'
+    cancelar.onclick = cancelarEdicaoIrregularidade
+    btn?.after(cancelar)
+  } else if (!editando && cancelar) {
+    cancelar.remove()
+  }
+}
+
+async function salvarIrregularidade() {
+  const codigo = document.getElementById('irr-codigo').value.trim()
+  const descricao = document.getElementById('irr-descricao').value.trim()
+  if (!codigo || !descricao) { toast('Informe o código e a descrição', 'err'); return }
+
+  const d = await postParametro('/api/parametros/irregularidades', {
+    id: parState.irregularidadeEditando,
+    codigo, descricao,
+    gravidade: document.getElementById('irr-gravidade').value,
+    base_legal: document.getElementById('irr-base-legal').value.trim() || null,
+    ordem: document.getElementById('irr-ordem').value || null,
+    ativo: document.getElementById('irr-ativo').checked,
+  }, null, carregarParametros)
+
+  if (d) { cancelarEdicaoIrregularidade() }
+}
+
+/** @param {number} id */
+function excluirIrregularidade(id) {
+  const i = parState.catalogoIrregularidades.find(x => x.id === id)
+  confirmarAcao({
+    titulo: 'Excluir irregularidade',
+    mensagem: i?.em_uso
+      ? `${i.em_uso} vistoria(s) já constataram esta irregularidade — o sistema vai recusar. `
+        + 'Desmarque "Ativa" para tirá-la das próximas sem apagar o histórico.'
+      : 'Ela sai do catálogo que a vistoria oferece. Excluir?',
+    perigo: true,
+    onConfirm: () => excluirParametro('/api/parametros/irregularidades/' + id),
+  })
+}
+
 // ── BRASÃO DO MUNICÍPIO ──────────────────────────────────────
 // O sistema não traz brasão embutido. É esta tela que o torna replicável:
 // instalar a mesma aplicação em outra prefeitura passa a ser trocar dois

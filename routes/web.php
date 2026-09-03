@@ -203,6 +203,8 @@ Route::middleware('auth')->group(function () {
         Route::delete('/parametros/feriados/{feriado}', [ParametroController::class, 'excluirFeriado']);
         Route::post('/parametros/bairros', [ParametroController::class, 'salvarBairro']);
         Route::delete('/parametros/bairros/{bairro}', [ParametroController::class, 'excluirBairro']);
+        Route::post('/parametros/irregularidades', [ParametroController::class, 'salvarIrregularidade']);
+        Route::delete('/parametros/irregularidades/{irregularidade}', [ParametroController::class, 'excluirIrregularidade']);
     });
 
     // Fora do prefixo /api: é download de arquivo, não JSON.

@@ -25,6 +25,7 @@ const vState = {
    */
   relatorio: [],
   /** @type {number|null} índice do item aberto na janela de edição */ itemAberto: null,
+  /** @type {number|null} índice da foto expandida (ver e marcar), só uma por vez */ fotoAberta: null,
   /** @type {Array<Object>} artigos sugeridos pelas irregularidades marcadas */ artigos: [],
   /** @type {Array<string>} irregularidades que nenhum artigo enquadra */ semArtigo: [],
   /** @type {string} para que serve esta vistoria — decide os passos */
@@ -984,7 +985,7 @@ async function carregarCatalogo() {
  * então esta função só repinta a janela aberta, se houver uma.
  */
 function renderChecklist() {
-  if (vState.itemAberto !== null) { preencherSeletorDeIrregularidades() }
+  if (vState.itemAberto !== null) { buscarIrregularidade(document.getElementById('vsi-irreg-busca')?.value ?? '') }
 
   // O catálogo só chega do servidor DEPOIS de o rascunho ser lido, e por isso
   // as marcas são reaplicadas aqui — não em restaurarRascunho, onde ainda não
@@ -1016,7 +1017,7 @@ async function sugerirArtigos() {
   const ids = irregularidadesDaVistoria()
   if (!ids.length) {
     vState.artigos = []
-    if (vState.itemAberto !== null) { preencherSeletorDeArtigos() }
+    if (vState.itemAberto !== null) { buscarArtigo(document.getElementById('vsi-artigo-busca')?.value ?? '') }
     return
   }
 
@@ -1059,7 +1060,7 @@ function renderArtigos(semArtigo) {
   }
 
   // O seletor do item se refaz com a lista nova, se a janela estiver aberta.
-  if (vState.itemAberto !== null) { preencherSeletorDeArtigos() }
+  if (vState.itemAberto !== null) { buscarArtigo(document.getElementById('vsi-artigo-busca')?.value ?? '') }
 }
 
 /** Os artigos citados na vistoria — a soma do que os itens citaram. */
@@ -1096,14 +1097,6 @@ function syncDataHora() {
 // É a ordem do raciocínio de uma peça. Deixá-la à escolha faria cada relatório
 // sair diferente, e quem lê vinte por semana perde o hábito de leitura.
 // ══════════════════════════════════════════════
-
-// Ícone próprio, e não o das lixeiras de outros módulos: aqueles vivem em
-// arquivos carregados só para admin ou para curador, e a vistoria é aberta
-// por qualquer agente.
-const ICO_LIXO_ITEM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
-  <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
-  <path d="M10 11v6M14 11v6"/></svg>`
 
 /** Um item vazio — a folha em branco de um grupo. */
 function itemVazio() {
@@ -1155,8 +1148,7 @@ function renderRelatorio() {
           ${conteudoDoItem(item)}
         </div>
         <div class="rel-acoes" onclick="event.stopPropagation()">
-          <button type="button" class="rel-excluir" onclick="excluirItemDaLista(${i})"
-                  title="Excluir item">${ICO_LIXO_ITEM}</button>
+          <button type="button" class="btn sm danger" onclick="excluirItemDaLista(${i})">Excluir</button>
           <span class="rel-setas">
             <button type="button" onclick="moverItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}
                     title="Subir">&#9650;</button>
@@ -1298,11 +1290,15 @@ function abrirItemRelatorio(i) {
   if (!item) { return }
 
   vState.itemAberto = i
+  vState.fotoAberta = null
   document.getElementById('vsi-titulo').textContent = `Item ${i + 1} do relatório`
   document.getElementById('vsi-texto').value = item.texto ?? ''
+  document.getElementById('vsi-irreg-busca').value = ''
+  document.getElementById('vsi-artigo-busca').value = ''
+  document.getElementById('vsi-artigo-obs').value = ''
+  fecharSugestoes('vsi-irreg-sugestoes')
+  fecharSugestoes('vsi-artigo-sugestoes')
 
-  preencherSeletorDeIrregularidades()
-  preencherSeletorDeArtigos()
   renderFotosDoItem()
   pintarContasDoItem()
 
@@ -1315,6 +1311,17 @@ function abrirItemRelatorio(i) {
 }
 
 /** Os cinco blocos do item, na ordem em que saem no relatório. */
+// Três ícones em círculo, do padrão já usado para anexo (ver/editar/excluir):
+// verde para as duas ações que preservam a foto, vermelho para a que apaga.
+const ICO_OLHO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+  <circle cx="12" cy="12" r="3"/></svg>`
+const ICO_LAPIS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+  <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`
+const ICO_X = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`
+
 const BLOCOS_DO_ITEM = ['irreg', 'texto', 'artigos', 'exigencias', 'fotos']
 
 /** @param {Object} item @returns {string} */
@@ -1385,72 +1392,70 @@ function pintarResumoDoItem() {
   const item = itemAtual()
   if (!alvo || !item) { return }
 
-  const grupos = []
+  const cartoes = []
 
-  if (item.irregularidades.length) {
-    grupos.push(grupoDoResumo('Irregularidades', item.irregularidades.map(id => {
-      const irr = vState.catalogo.find(c => c.id === id)
-      return { texto: irr?.descricao ?? `#${id}`, onclick: `removerIrregularidadeDoItem(${id})` }
-    })))
-  }
+  item.irregularidades.forEach(id => {
+    const irr = vState.catalogo.find(c => c.id === id)
+    cartoes.push(cartaoDoResumo({
+      titulo: irr?.descricao ?? `Irregularidade #${id}`,
+      sub: irr ? `${irr.codigo} · ${irr.gravidade}` : null,
+      desc: irr?.base_legal,
+      onclick: `removerIrregularidadeDoItem(${id})`,
+    }))
+  })
 
   if (item.texto?.trim()) {
-    const t = item.texto.trim()
-    grupos.push(`
-      <div class="vsi-resumo-grupo">
-        <div class="vsi-resumo-rot">Relato</div>
-        <div class="vsi-chip vsi-chip-texto">
-          <span>${esc(t.slice(0, 90))}${t.length > 90 ? '…' : ''}</span>
-          <button type="button" onclick="limparTextoDoItem()" title="Apagar o texto">&#10005;</button>
-        </div>
-      </div>`)
+    cartoes.push(cartaoDoResumo({
+      titulo: 'Relato',
+      desc: item.texto.trim(),
+      onclick: 'limparTextoDoItem()',
+    }))
   }
 
-  if (item.artigos.length) {
-    grupos.push(grupoDoResumo('Artigos', item.artigos.map((a, j) => ({
-      texto: nomeDoArtigo(a.artigo_id) + (a.tipo === 'parecer' ? ' · parecer' : ''),
-      onclick: `removerArtigoDoItem(${j})`,
-    }))))
+  item.artigos.forEach((a, j) => cartoes.push(cartaoDoResumo({
+    titulo: nomeDoArtigo(a.artigo_id),
+    sub: a.tipo === 'parecer' ? 'Parecer — sua conclusão' : 'Citação — o que se constatou',
+    desc: a.texto,
+    onclick: `removerArtigoDoItem(${j})`,
+  })))
+
+  item.exigencias.forEach((e, j) => cartoes.push(cartaoDoResumo({
+    titulo: e.texto,
+    sub: e.prazo ? `Prazo de ${e.prazo} dia(s)` : null,
+    onclick: `removerExigenciaDoItem(${j})`,
+  })))
+
+  const fotosVivas = item.fotos.filter(f => !vState.anexos[f.anexo]?.removido).length
+  if (fotosVivas) {
+    cartoes.push(cartaoDoResumo({
+      titulo: `${fotosVivas} foto(s) anexada(s)`,
+      sub: item.fotos.some(f => f.fachada) ? 'Uma delas é a fachada do imóvel' : null,
+      semRemover: true,
+    }))
   }
 
-  if (item.exigencias.length) {
-    grupos.push(grupoDoResumo('Exigências', item.exigencias.map((e, j) => ({
-      texto: e.texto + (e.prazo ? ` (${e.prazo}d)` : ''),
-      onclick: `removerExigenciaDoItem(${j})`,
-    }))))
-  }
-
-  if (item.fotos.length) {
-    const vivas = item.fotos.filter(f => !vState.anexos[f.anexo]?.removido).length
-    grupos.push(`
-      <div class="vsi-resumo-grupo">
-        <div class="vsi-resumo-rot">Fotos</div>
-        <div class="vsi-chip vsi-chip-info">${vivas} foto(s)</div>
-      </div>`)
-  }
-
-  alvo.innerHTML = grupos.length
-    ? grupos.join('')
-    : '<div class="leg vsi-resumo-vazio">Nada adicionado ainda.</div>'
+  alvo.innerHTML = cartoes.length
+    ? cartoes.join('')
+    : '<div class="leg vsi-resumo-vazio">Nada adicionado ainda — use os campos acima.</div>'
 }
 
 /**
- * Um grupo do resumo: rótulo à esquerda, os chips do que foi adicionado.
+ * Um cartão do resumo: título, subtítulo, descrição e o × que remove — o
+ * mesmo formato de cartão usado para citar artigo no resto do sistema, não
+ * uma etiqueta inventada só para esta janela.
  *
- * @param {string} rotulo
- * @param {Array<{texto:string, onclick:string}>} entradas
+ * @param {{titulo:string, sub?:string|null, desc?:string|null,
+ *          onclick?:string, semRemover?:boolean}} p
  */
-function grupoDoResumo(rotulo, entradas) {
+function cartaoDoResumo({ titulo, sub, desc, onclick, semRemover }) {
   return `
-    <div class="vsi-resumo-grupo">
-      <div class="vsi-resumo-rot">${esc(rotulo)}</div>
-      <div class="vsi-resumo-chips">
-        ${entradas.map(e => `
-          <span class="vsi-chip">
-            ${esc(e.texto)}
-            <button type="button" onclick="${e.onclick}" title="Remover">&#10005;</button>
-          </span>`).join('')}
+    <div class="vsi-cartao">
+      <div class="vsi-cartao-corpo">
+        <b>${esc(titulo)}</b>${sub ? ` <span class="vsi-cartao-sub">${esc(sub)}</span>` : ''}
+        ${desc ? `<p>${esc(desc)}</p>` : ''}
       </div>
+      ${semRemover ? '' : `<button type="button" class="acao-x" onclick="${onclick}"
+        title="Remover">&#10005;</button>`}
     </div>`
 }
 
@@ -1469,18 +1474,23 @@ function itemAtual() {
  * evita o pedido recusado depois de todo o trabalho — o que se repete em vários
  * pontos da obra é o texto e a foto, não o enquadramento.
  */
-/**
- * O combo, com o que já foi usado em OUTRO item excluído das opções.
- *
- * O banco tem índice único (vistoria, irregularidade): a mesma não pode ser
- * constatada em dois itens. Tirá-la do combo evita o pedido recusado depois
- * de todo o trabalho — o que se repete em vários pontos da obra é o texto e
- * a foto, não o enquadramento.
- */
-function preencherSeletorDeIrregularidades() {
-  const sel = document.getElementById('vsi-irreg-id')
+// ── BUSCA-E-ADICIONA, o padrão dos dois combos deste item ──
+//
+// Um `<select>` obriga a rolar um catálogo de 20 ou 30 entradas para achar
+// uma. Aqui digita-se parte do nome, aparecem as que batem, toca-se numa — ou
+// aperta Enter/"+ add" para a primeira da lista. O que já está no item, ou
+// preso a OUTRO item pelo índice único do banco, nem aparece: ele não é uma
+// opção neste momento, então oferecê-la desabilitada só ocupa espaço.
+
+/** @type {Array<Object>} a busca de irregularidade mostrada agora */
+let sugestoesIrreg = []
+/** @type {Array<Object>} a busca de artigo mostrada agora */
+let sugestoesArtigo = []
+
+/** @param {string} texto */
+function buscarIrregularidade(texto) {
   const item = itemAtual()
-  if (!sel || !item) { return }
+  if (!item) { return }
 
   const dono = new Map()
   vState.relatorio.forEach((it, n) => {
@@ -1488,33 +1498,45 @@ function preencherSeletorDeIrregularidades() {
     it.irregularidades.forEach(id => dono.set(id, n + 1))
   })
 
-  const disponiveis = vState.catalogo.filter(irr => !item.irregularidades.includes(irr.id))
+  const q = texto.trim().toLowerCase()
+  const disponiveis = vState.catalogo.filter(irr =>
+    !item.irregularidades.includes(irr.id) && !dono.has(irr.id))
 
-  sel.innerHTML = '<option value="">— escolha a irregularidade —</option>'
-    + disponiveis.map(irr => {
-        const usadaEm = dono.get(irr.id)
-        return `<option value="${irr.id}" ${usadaEm ? 'disabled' : ''}>${esc(irr.descricao)}`
-          + `${usadaEm ? ` (já no item ${usadaEm})` : ''}</option>`
-      }).join('')
+  sugestoesIrreg = q
+    ? disponiveis.filter(irr => irr.descricao.toLowerCase().includes(q)
+        || irr.codigo.toLowerCase().includes(q)).slice(0, 8)
+    : []
+
+  pintarSugestoes('vsi-irreg-sugestoes', sugestoesIrreg,
+    irr => ({ titulo: irr.descricao, sub: `${irr.codigo} · ${irr.gravidade}` }),
+    'selecionarIrregularidade')
 
   document.getElementById('vsi-irreg-nota').textContent = disponiveis.length
     ? 'O que a lei chama de infração. É daqui que saem os artigos sugeridos.'
     : 'Todas as irregularidades do catálogo já estão marcadas em algum item.'
 }
 
-function adicionarIrregularidadeAoItem() {
+/** @param {number} i índice em `sugestoesIrreg` */
+function selecionarIrregularidade(i) {
+  const irr = sugestoesIrreg[i]
+  if (!irr) { return }
   const item = itemAtual()
-  const sel = document.getElementById('vsi-irreg-id')
-  const id = Number(sel.value)
-  if (!item || !id) { toast('Escolha a irregularidade', 'err'); return }
+  if (!item) { return }
 
-  item.irregularidades = [...new Set([...item.irregularidades, id])]
+  item.irregularidades = [...new Set([...item.irregularidades, irr.id])]
 
-  preencherSeletorDeIrregularidades()
+  document.getElementById('vsi-irreg-busca').value = ''
+  buscarIrregularidade('')
   pintarContasDoItem()
   // A sugestão de artigos lê a SOMA dos itens: marcar aqui muda o que ela
   // oferece no item inteiro.
   sugerirArtigos()
+}
+
+/** O botão "+ add" e o Enter: adicionam a primeira sugestão da busca atual. */
+function adicionarIrregularidadeAoItem() {
+  if (!sugestoesIrreg.length) { toast('Digite para buscar a irregularidade', 'err'); return }
+  selecionarIrregularidade(0)
 }
 
 /** @param {number} id */
@@ -1522,9 +1544,37 @@ function removerIrregularidadeDoItem(id) {
   const item = itemAtual()
   if (!item) { return }
   item.irregularidades = item.irregularidades.filter(x => x !== id)
-  preencherSeletorDeIrregularidades()
   pintarContasDoItem()
   sugerirArtigos()
+}
+
+/**
+ * A lista de sugestões, compartilhada pelos dois combos.
+ *
+ * @param {string} idAlvo id do container da lista
+ * @param {Array<Object>} itens
+ * @param {(item:Object)=>{titulo:string,sub?:string}} formatar
+ * @param {string} aoEscolherFn nome da função global que recebe o índice
+ */
+function pintarSugestoes(idAlvo, itens, formatar, aoEscolherFn) {
+  const alvo = document.getElementById(idAlvo)
+  if (!alvo) { return }
+
+  alvo.hidden = itens.length === 0
+  alvo.innerHTML = itens.map((it, i) => {
+    const f = formatar(it)
+    return `<button type="button" class="vsi-sugestao" onclick="${aoEscolherFn}(${i})">
+      <b>${esc(f.titulo)}</b>${f.sub ? `<span>${esc(f.sub)}</span>` : ''}
+    </button>`
+  }).join('')
+}
+
+/** Esconde e esvazia uma lista de sugestões. @param {string} idAlvo */
+function fecharSugestoes(idAlvo) {
+  const alvo = document.getElementById(idAlvo)
+  if (!alvo) { return }
+  alvo.hidden = true
+  alvo.innerHTML = ''
 }
 
 /** Some com o relato do item — a única forma de "remover" um texto livre. */
@@ -1544,23 +1594,48 @@ function nomeDoArtigo(id) {
   return a ? (a.rotulo || a.numero) : 'Artigo'
 }
 
-function adicionarArtigoAoItem() {
+/** @param {string} texto */
+function buscarArtigo(texto) {
   const item = itemAtual()
-  const sel = document.getElementById('vsi-artigo-id')
-  const id = Number(sel.value)
-  if (!item || !id) { toast('Escolha o artigo', 'err'); return }
+  if (!item) { return }
 
-  if (item.artigos.some(a => a.artigo_id === id)) {
-    toast('Este artigo já está no item', 'aviso'); return
-  }
+  const q = texto.trim().toLowerCase()
+  const disponiveis = vState.artigos.filter(a => !item.artigos.some(x => x.artigo_id === a.id))
+
+  sugestoesArtigo = q
+    ? disponiveis.filter(a => (a.rotulo || a.numero || '').toLowerCase().includes(q)).slice(0, 8)
+    : disponiveis.slice(0, 8)
+
+  pintarSugestoes('vsi-artigo-sugestoes', sugestoesArtigo,
+    a => ({ titulo: a.rotulo || a.numero }), 'selecionarArtigo')
+
+  document.getElementById('vsi-artigo-nota').textContent = vState.artigos.length
+    ? ''
+    : 'Marque irregularidades para ver os artigos que as enquadram.'
+}
+
+/** @param {number} i índice em `sugestoesArtigo` */
+function selecionarArtigo(i) {
+  const a = sugestoesArtigo[i]
+  const item = itemAtual()
+  if (!a || !item) { return }
 
   item.artigos.push({
-    artigo_id: id,
+    artigo_id: a.id,
     tipo: document.getElementById('vsi-artigo-tipo').value,
     texto: document.getElementById('vsi-artigo-obs').value.trim() || null,
   })
+
+  document.getElementById('vsi-artigo-busca').value = ''
   document.getElementById('vsi-artigo-obs').value = ''
+  buscarArtigo('')
   pintarContasDoItem()
+}
+
+/** O botão "+ add" e o Enter: acrescentam o primeiro artigo da busca atual. */
+function adicionarArtigoAoItem() {
+  if (!sugestoesArtigo.length) { toast('Digite para buscar o artigo', 'err'); return }
+  selecionarArtigo(0)
 }
 
 /** @param {number} j */
@@ -1569,21 +1644,6 @@ function removerArtigoDoItem(j) {
   if (!item) { return }
   item.artigos.splice(j, 1)
   pintarContasDoItem()
-}
-
-/** O seletor traz os artigos sugeridos pelas irregularidades da vistoria. */
-function preencherSeletorDeArtigos() {
-  const sel = document.getElementById('vsi-artigo-id')
-  if (!sel) { return }
-
-  const antes = sel.value
-  sel.innerHTML = '<option value="">— escolha o artigo —</option>'
-    + vState.artigos.map(a => `<option value="${a.id}">${esc(a.rotulo || a.numero)}</option>`).join('')
-  sel.value = antes
-
-  document.getElementById('vsi-artigo-nota').textContent = vState.artigos.length
-    ? ''
-    : 'Marque irregularidades para ver os artigos que as enquadram.'
 }
 
 // ── bloco 4: exigências ──
@@ -1618,6 +1678,13 @@ function removerExigenciaDoItem(j) {
  * A marcação (o pino numerado sobre a imagem) continua sendo POR FOTO: é ela
  * que deixa a legenda dizer "1" e "2" em vez de "no canto superior direito".
  */
+/**
+ * Cada foto é uma LINHA — miniatura, legenda ao lado, três ícones. Só a foto
+ * que está sendo trabalhada (aberta pelo olho ou pelo lápis) mostra a imagem
+ * grande e o resto dos controles: marcar pino, apagar marcas, fachada. Numa
+ * vistoria com seis fotos, seis imagens grandes empilhadas era a maior parte
+ * da rolagem da janela para chegar a qualquer outra coisa.
+ */
 function renderFotosDoItem() {
   const alvo = document.getElementById('vsi-fotos')
   const item = itemAtual()
@@ -1630,19 +1697,42 @@ function renderFotosDoItem() {
         const j = item.fotos.indexOf(f)
         const anexo = vState.anexos[f.anexo] ?? {}
         const ehImagem = !!anexo.url
+        const aberta = vState.fotoAberta === j
 
-        return `
-          <div class="vsi-foto">
+        const linha = `
+          <div class="par-linha vsi-foto-linha">
+            <div class="rel-capa">${ehImagem
+              ? `<img class="rel-mini" src="${esc(anexo.url)}" alt="">`
+              : `<span class="rel-num">${j + 1}</span>`}</div>
+            <div class="principal">
+              <b>${f.texto?.trim() ? esc(f.texto.trim()) : `Foto ${j + 1}`}</b>
+              <span>${f.fachada ? 'Fachada do imóvel' : (ehImagem ? 'Toque no olho para ver e marcar' : esc(anexo.titulo || 'Documento anexado'))}</span>
+            </div>
+            <div class="vsi-foto-icones">
+              <button type="button" class="ico-circ" onclick="alternarFotoAberta(${j})"
+                      title="${aberta ? 'Fechar' : 'Ver e marcar'}">${ICO_OLHO}</button>
+              <button type="button" class="ico-circ" onclick="alternarFotoAberta(${j}, true)"
+                      title="Editar legenda">${ICO_LAPIS}</button>
+              <button type="button" class="ico-circ ico-circ-perigo" onclick="removerFotoDoItem(${j})"
+                      title="Remover">${ICO_X}</button>
+            </div>
+          </div>`
+
+        if (!aberta) { return linha }
+
+        return linha + `
+          <div class="vsi-foto-expandida">
             ${ehImagem
               ? `<div class="vsi-palco" onclick="marcarNaFoto(event, ${j})">
                    <img src="${esc(anexo.url)}" alt="">
                    <div class="vsi-pinos">${(f.marcacoes || []).map((m, k) =>
                      `<span class="vsi-pino" style="left:${m.x * 100}%;top:${m.y * 100}%">${k + 1}</span>`).join('')}</div>
                  </div>`
-              : `<div class="vsi-arquivo">${esc(anexo.titulo || 'Documento anexado')}</div>`}
-            <div class="field">
+              : ''}
+            <div class="field" style="margin:8px 0 0">
               <label>Legenda</label>
-              <textarea rows="2" oninput="vState.relatorio[${vState.itemAberto}].fotos[${j}].texto = this.value"
+              <textarea rows="2" id="vsi-foto-legenda-${j}"
+                        oninput="vState.relatorio[${vState.itemAberto}].fotos[${j}].texto = this.value; renderFotosDoItem()"
                         placeholder="O que esta foto mostra">${esc(f.texto ?? '')}</textarea>
             </div>
             <div class="vsi-foto-acoes">
@@ -1652,13 +1742,28 @@ function renderFotosDoItem() {
                 <span class="desc">É a fachada do imóvel</span>
               </label>
               ${ehImagem ? `<button type="button" class="btn sm" onclick="limparMarcacoes(${j})">Limpar marcas</button>` : ''}
-              <button type="button" class="btn sm perigo" onclick="removerFotoDoItem(${j})">Remover</button>
             </div>
           </div>`
       }).join('')
     : '<div class="leg">Nenhuma foto neste item.</div>'
 
+  if (vState.fotoAberta !== null) {
+    document.getElementById(`vsi-foto-legenda-${vState.fotoAberta}`)?.focus()
+  }
+
   pintarContasDoItem()
+}
+
+/**
+ * Abre (ou fecha) a foto para ver e marcar. Só uma por vez.
+ * @param {number} j @param {boolean} [focarLegenda]
+ */
+function alternarFotoAberta(j, focarLegenda) {
+  vState.fotoAberta = vState.fotoAberta === j ? null : j
+  renderFotosDoItem()
+  if (focarLegenda && vState.fotoAberta === j) {
+    setTimeout(() => document.getElementById(`vsi-foto-legenda-${j}`)?.focus(), 30)
+  }
 }
 
 /** @param {number} j @param {boolean} marcado */

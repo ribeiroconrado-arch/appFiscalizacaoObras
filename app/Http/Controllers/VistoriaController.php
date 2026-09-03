@@ -425,7 +425,7 @@ class VistoriaController extends Controller
     public function catalogo(): JsonResponse
     {
         return response()->json(
-            Irregularidade::ativas()->get(['id', 'codigo', 'descricao', 'gravidade'])
+            Irregularidade::ativas()->get(['id', 'codigo', 'descricao', 'gravidade', 'base_legal'])
         );
     }
 

@@ -758,6 +758,7 @@
     <button data-sub="legislacao" onclick="subParametros('legislacao')">Legislação</button>
     <button data-sub="upf" onclick="subParametros('upf')">UPF</button>
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
+    <button data-sub="irregularidades" onclick="subParametros('irregularidades')">Irregularidades</button>
     <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
@@ -917,26 +918,63 @@
   {{-- BAIRROS — cadastro direto na linha, como a UPF: são três campos curtos,
        e abrir uma janela para digitar um código e um nome custa mais do que o
        dado vale. --}}
-  <div class="par-painel" id="par-bairros">
-    <div class="sec-simples">Bairros do município <span class="cont" id="cont-bairros">0</span></div>
-    <p class="aviso-legal">
-      <b>Três nomes, de propósito.</b> O <b>código</b> e o <b>nome do cadastro</b>
-      são os da prefeitura. O <b>nome no desenho</b> é como o bairro aparece no
-      DWG convertido — é ele que amarra os lotes ao código, e fica vazio
-      enquanto aquele bairro não tiver sido levantado.
-    </p>
-    <div class="cad-row">
-      <input type="number" id="novo-bairro-codigo" placeholder="Código" min="1" style="max-width:110px">
-      <input type="text" id="novo-bairro-nome" placeholder="Nome no cadastro (JARDIM EUROPA IV)">
-      <input type="text" id="novo-bairro-gis" placeholder="Nome no desenho (opcional)"
-             onkeydown="if(event.key==='Enter')salvarBairro()">
-      <button class="btn primary sm" onclick="salvarBairro()">+ Novo bairro</button>
+  <div class="par-painel par-fixo" id="par-bairros">
+    <div class="par-fixo-topo">
+      <div class="sec-simples">Bairros do município <span class="cont" id="cont-bairros">0</span></div>
+      <p class="aviso-legal">
+        <b>Três nomes, de propósito.</b> O <b>código</b> e o <b>nome do cadastro</b>
+        são os da prefeitura. O <b>nome no desenho</b> é como o bairro aparece no
+        DWG convertido — é ele que amarra os lotes ao código, e fica vazio
+        enquanto aquele bairro não tiver sido levantado.
+      </p>
+      <div class="cad-row">
+        <input type="number" id="novo-bairro-codigo" placeholder="Código" min="1" style="max-width:110px">
+        <input type="text" id="novo-bairro-nome" placeholder="Nome no cadastro (JARDIM EUROPA IV)">
+        <input type="text" id="novo-bairro-gis" placeholder="Nome no desenho (opcional)"
+               onkeydown="if(event.key==='Enter')salvarBairro()">
+        <button class="btn primary sm" onclick="salvarBairro()">+ Novo bairro</button>
+      </div>
+      <div class="cad-row">
+        <input type="search" id="filtro-bairros" placeholder="Procurar por código ou nome"
+               oninput="renderBairros()" style="flex:1">
+      </div>
     </div>
-    <div class="cad-row">
-      <input type="search" id="filtro-bairros" placeholder="Procurar por código ou nome"
-             oninput="renderBairros()" style="flex:1">
+    <div class="par-fixo-lista" id="lista-bairros"></div>
+  </div>
+
+  {{-- IRREGULARIDADES — o catálogo que a vistoria oferece. Excluir é recusado
+       quando alguma vistoria já constatou; desativar (a caixa "Ativa") tira
+       da lista sem apagar o histórico. --}}
+  <div class="par-painel par-fixo" id="par-irregularidades">
+    <div class="par-fixo-topo">
+      <div class="sec-simples">Catálogo de irregularidades <span class="cont" id="cont-irregularidades">0</span></div>
+      <p class="aviso-legal">
+        É o que a lei chama de infração — o que o fiscal marca na vistoria, e
+        de onde saem os artigos sugeridos. Desativada, ela some das próximas
+        vistorias mas continua legível nas já lavradas.
+      </p>
+      <div class="cad-row">
+        <input type="text" id="irr-codigo" class="mono" placeholder="Código" style="max-width:90px">
+        <input type="text" id="irr-descricao" placeholder="Descrição da irregularidade" style="flex:2">
+        <select id="irr-gravidade">
+          <option value="leve">Leve</option>
+          <option value="media" selected>Média</option>
+          <option value="grave">Grave</option>
+        </select>
+      </div>
+      <div class="cad-row">
+        <input type="text" id="irr-base-legal" placeholder="Base legal (opcional)" style="flex:1">
+        <input type="number" id="irr-ordem" class="mono" placeholder="Ordem" min="0" style="max-width:90px">
+        <label class="lembrar" style="margin:0">
+          <input type="checkbox" id="irr-ativo" checked> Ativa</label>
+        <button class="btn primary sm" onclick="salvarIrregularidade()">+ Nova irregularidade</button>
+      </div>
+      <div class="cad-row">
+        <input type="search" id="filtro-irregularidades" placeholder="Procurar por código ou descrição"
+               oninput="renderIrregularidades()" style="flex:1">
+      </div>
     </div>
-    <div id="lista-bairros"></div>
+    <div class="par-fixo-lista" id="lista-irregularidades"></div>
   </div>
 
   {{-- ÓRGÃO --}}
@@ -1517,51 +1555,74 @@
       {{-- 1 — IRREGULARIDADES: um combo, não mais um catálogo inteiro. As já
            marcadas aparecem no resumo, não como caixa marcada aqui. --}}
       <div class="vsi-bloco" data-bloco="irreg">
-        <div class="vsi-add">
-          <div class="vsi-add-linha">
-            <select id="vsi-irreg-id"></select>
-            <button type="button" class="btn sm" onclick="adicionarIrregularidadeAoItem()">Adicionar</button>
+        <div class="vsi-busca">
+          <div class="field" style="flex:1;margin:0">
+            <label for="vsi-irreg-busca">Irregularidade</label>
+            <input type="text" id="vsi-irreg-busca" autocomplete="off"
+                   placeholder="Digite para buscar…"
+                   oninput="buscarIrregularidade(this.value)"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarIrregularidadeAoItem()}">
           </div>
-          <div class="leg" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
-            os artigos sugeridos — e é o que o auto de infração vai usar.</div>
+          <button type="button" class="btn sm" onclick="adicionarIrregularidadeAoItem()">+ add</button>
         </div>
+        <div class="vsi-sugestoes" id="vsi-irreg-sugestoes" hidden></div>
+        <div class="leg" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
+          os artigos sugeridos — e é o que o auto de infração vai usar.</div>
       </div>
 
       {{-- 2 — TEXTO LIVRE --}}
       <div class="vsi-bloco" data-bloco="texto" hidden>
-        <textarea id="vsi-texto" rows="3" maxlength="5000"
-                  placeholder="O que você viu, com as suas palavras — é este texto que vira o FATO na peça."
-                  oninput="pintarContasDoItem()"></textarea>
+        <div class="field" style="margin:0">
+          <label for="vsi-texto">O que você viu</label>
+          <textarea id="vsi-texto" rows="3" maxlength="5000"
+                    placeholder="Com as suas palavras — é este texto que vira o FATO na peça."
+                    oninput="pintarContasDoItem()"></textarea>
+        </div>
       </div>
 
       {{-- 3 — ARTIGOS --}}
       <div class="vsi-bloco" data-bloco="artigos" hidden>
-        <div class="vsi-add">
-          <div class="vsi-add-linha">
-            <select id="vsi-artigo-id"></select>
+        <div class="vsi-busca">
+          <div class="field" style="flex:1;margin:0">
+            <label for="vsi-artigo-busca">Artigo infringido</label>
+            <input type="text" id="vsi-artigo-busca" autocomplete="off"
+                   placeholder="Digite para buscar o artigo…"
+                   oninput="buscarArtigo(this.value)"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+          </div>
+          <button type="button" class="btn sm" onclick="adicionarArtigoAoItem()">+ add</button>
+        </div>
+        <div class="vsi-sugestoes" id="vsi-artigo-sugestoes" hidden></div>
+        <div class="g2" style="margin:8px 0 0">
+          <div class="field" style="margin:0">
+            <label for="vsi-artigo-tipo">Como entra</label>
+            {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
             <select id="vsi-artigo-tipo">
-              {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
               <option value="citacao">Citação</option>
               <option value="parecer">Parecer</option>
             </select>
           </div>
-          <textarea id="vsi-artigo-obs" rows="1" maxlength="2000" placeholder="Observação (opcional)"></textarea>
-          <div class="leg" id="vsi-artigo-nota"></div>
-          <button type="button" class="btn sm" onclick="adicionarArtigoAoItem()">Acrescentar artigo</button>
+          <div class="field" style="margin:0">
+            <label for="vsi-artigo-obs">Observação (opcional)</label>
+            <input type="text" id="vsi-artigo-obs" maxlength="2000">
+          </div>
         </div>
+        <div class="leg" id="vsi-artigo-nota"></div>
       </div>
 
       {{-- 4 — EXIGÊNCIAS --}}
       <div class="vsi-bloco" data-bloco="exigencias" hidden>
-        <div class="vsi-add">
-          <div class="vsi-add-linha">
-            <textarea id="vsi-exig-texto" rows="1" maxlength="500" placeholder="Providência exigida"
-                      style="flex:1"></textarea>
-            <input type="number" id="vsi-exig-prazo" class="mono" min="1" max="3650"
-                   placeholder="Prazo (dias)" style="max-width:110px">
+        <div class="g2">
+          <div class="field" style="margin:0">
+            <label for="vsi-exig-texto">Providência exigida</label>
+            <input type="text" id="vsi-exig-texto" maxlength="500">
           </div>
-          <button type="button" class="btn sm" onclick="adicionarExigenciaAoItem()">Acrescentar exigência</button>
+          <div class="field" style="margin:0;max-width:120px">
+            <label for="vsi-exig-prazo">Prazo (dias)</label>
+            <input type="number" id="vsi-exig-prazo" class="mono" min="1" max="3650">
+          </div>
         </div>
+        <button type="button" class="btn sm" onclick="adicionarExigenciaAoItem()" style="margin-top:8px">+ add</button>
       </div>
 
       {{-- 5 — FOTOS. Mantém lista própria: é a única aba onde o que se

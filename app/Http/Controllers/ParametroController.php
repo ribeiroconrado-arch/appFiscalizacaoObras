@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\CadastroBairro;
 use App\Models\Feriado;
+use App\Models\Irregularidade;
 use App\Models\Lote;
 use App\Models\Parametro;
 use App\Models\Upf;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -66,6 +68,15 @@ class ParametroController extends Controller
                     'id' => $b->id, 'codigo' => $b->codigo,
                     'nome_cadastro' => $b->nome_cadastro, 'nome_gis' => $b->nome_gis,
                     'lotes' => $b->lotesEmUso(),
+                ]),
+            // Ordem de exibição = ordem de trabalho: `ordem` primeiro (para
+            // priorizar as mais comuns), depois alfabético para desempatar.
+            'irregularidades' => Irregularidade::orderBy('ordem')->orderBy('descricao')->get()
+                ->map(fn (Irregularidade $i) => [
+                    'id' => $i->id, 'codigo' => $i->codigo, 'descricao' => $i->descricao,
+                    'gravidade' => $i->gravidade, 'base_legal' => $i->base_legal,
+                    'ordem' => $i->ordem, 'ativo' => $i->ativo,
+                    'em_uso' => DB::table('vistoria_irregularidades')->where('irregularidade_id', $i->id)->count(),
                 ]),
             'perfis' => User::PERFIS,
             'cargos' => User::CARGOS,
@@ -192,6 +203,72 @@ class ParametroController extends Controller
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
         $feriado->delete();
         return response()->json(['message' => 'Feriado removido.']);
+    }
+
+    // ── IRREGULARIDADES ──────────────────────────────────────────
+    //
+    // O catálogo que a vistoria oferece (VistoriaController::catalogo) só
+    // lista as ATIVAS — apagar não é o caminho para tirar uma de circulação,
+    // porque vistoria já lavrada continua apontando para ela e precisa achar
+    // o nome. Desativar, sim; apagar, só quando nenhuma vistoria a usou.
+
+    /** POST /api/parametros/irregularidades */
+    public function salvarIrregularidade(Request $r): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        $d = $r->validate([
+            'id'          => ['nullable', 'exists:irregularidades,id'],
+            'codigo'      => ['required', 'string', 'max:20',
+                Rule::unique('irregularidades', 'codigo')->ignore($r->input('id'))],
+            'descricao'   => ['required', 'string', 'max:200'],
+            'gravidade'   => ['required', Rule::in(['leve', 'media', 'grave'])],
+            'base_legal'  => ['nullable', 'string', 'max:200'],
+            'ordem'       => ['nullable', 'integer', 'min:0', 'max:65535'],
+            'ativo'       => ['nullable', 'boolean'],
+        ], [], [
+            'codigo' => 'código', 'descricao' => 'descrição', 'gravidade' => 'gravidade',
+            'base_legal' => 'base legal',
+        ]);
+
+        Irregularidade::updateOrCreate(['id' => $d['id'] ?? null], [
+            'codigo'     => $d['codigo'],
+            'descricao'  => $d['descricao'],
+            'gravidade'  => $d['gravidade'],
+            'base_legal' => $d['base_legal'] ?? null,
+            'ordem'      => $d['ordem'] ?? 0,
+            'ativo'      => $d['ativo'] ?? true,
+        ]);
+
+        return response()->json(['message' => 'Irregularidade gravada.']);
+    }
+
+    /**
+     * DELETE /api/parametros/irregularidades/{irregularidade}
+     *
+     * Recusa quando alguma vistoria já a usou — apagar apagaria o nome da
+     * infração de um relatório já lavrado. "Desativar" (desmarcar Ativa e
+     * salvar) é o caminho para tirá-la das próximas vistorias sem isso.
+     */
+    public function excluirIrregularidade(Request $r, Irregularidade $irregularidade): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        $usos = DB::table('vistoria_irregularidades')
+            ->where('irregularidade_id', $irregularidade->id)->count();
+
+        if ($usos > 0) {
+            return response()->json([
+                'message' => sprintf(
+                    'Não dá para excluir: %d vistoria(s) já constataram esta irregularidade. '
+                    . 'Desmarque "Ativa" e salve — ela some das próximas vistorias sem apagar o histórico.',
+                    $usos),
+            ], 422);
+        }
+
+        $irregularidade->delete();
+
+        return response()->json(['message' => 'Irregularidade removida.']);
     }
 
     // ── BAIRROS ──────────────────────────────────────────────────

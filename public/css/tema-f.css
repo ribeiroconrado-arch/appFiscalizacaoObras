@@ -250,6 +250,20 @@
    mudar de tamanho ao trocar de aba — que era o motivo de ela ser travada. */
 .par-painel.at{display:block;height:min(72vh, 648px);overflow-y:auto;padding-right:4px}
 
+/* PAINEL FIXO — Bairros e Irregularidades, as duas listas longas do módulo.
+   Aqui NÃO é o painel inteiro que rola: o cadastro rápido e a busca ficam
+   sempre à vista no topo, e só a lista embaixo tem rolagem própria. Sem isto,
+   digitar um bairro novo no fim de uma lista de 125 exigia rolar até o topo
+   para ver o formulário de novo — que nunca tinha saído do lugar, só ficava
+   fora da vista. */
+.par-painel.par-fixo.at{display:flex;flex-direction:column;overflow:hidden;padding-right:0}
+.par-fixo-topo{flex-shrink:0;padding-right:4px}
+.par-fixo-lista{flex:1;min-height:0;overflow-y:auto;padding-right:4px;margin-top:2px}
+
+/* Irregularidade desativada: continua na lista (é histórico), mas com menos
+   peso — não é uma opção viva no catálogo que a vistoria oferece hoje. */
+.par-linha-inativa{opacity:.55}
+
 /* Linha de cadastro rápido (padrão .cad-row do AppPOSTURAS): o que cabe numa
    linha entra sem abrir janela — ano, valor, nome de lei. */
 .cad-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
@@ -272,7 +286,7 @@
 
 /* Linha que leva a um detalhe: ganha a seta e o realce de clique. */
 .par-linha.clicavel{cursor:pointer;transition:border-color .13s,background .13s}
-.par-linha.clicavel:hover{border-color:var(--gm);background:var(--gl)}
+.par-linha.clicavel:hover{border-color:var(--tx3);background:var(--blt)}
 .par-linha .seta{flex-shrink:0;color:var(--tx3);font-size:20px;line-height:1}
 
 /* Linha de dados simples (UPF/feriado): não é ficha, cabe numa linha. */
@@ -287,8 +301,8 @@
    ele fica só no bloco de texto — a linha inteira clicável engoliria o
    botão de excluir, que é vizinho e não perdoa. */
 .par-linha .principal.clicavel{cursor:pointer}
-.par-linha .principal.clicavel:hover b{color:var(--gd)}
-.par-linha.at{border-color:var(--g);background:var(--gl)}
+.par-linha .principal.clicavel:hover b{color:var(--tx)}
+.par-linha.at{border-color:var(--tx3);background:var(--blt)}
 
 .par-secao{margin-bottom:18px}
 .par-secao-tit{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -1050,7 +1064,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Filtro ignorado pela precedência: fica visível mas apagado — some por
    completo e o usuário não entende para onde foi o que digitou. */
 .bs-ignorado{opacity:.42}
-.bs-precedencia{background:var(--gl);border:1px solid var(--gm);border-radius:var(--r);
+.bs-precedencia{background:var(--blt);border:1px solid var(--bord);border-radius:var(--r);
   padding:8px 11px;margin-bottom:10px;font-size:12px;color:var(--tx2);line-height:1.45}
 .bs-precedencia[hidden]{display:none}
 .bs-selo{font-size:11px;color:var(--tx3)}
@@ -1123,7 +1137,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    evita o chamado "por que nao aparece a opcao de unificar?". */
 .lt-ato{display:flex;align-items:center;justify-content:space-between;gap:10px;
   flex-wrap:wrap;margin-top:8px;padding:8px 10px;border-radius:var(--r);
-  background:var(--gl);border:1.5px solid var(--gm);font-size:12px;color:var(--gxd)}
+  background:var(--blt);border:1.5px solid var(--bord);font-size:12px;color:var(--tx2)}
 .lt-ato .btn{flex-shrink:0}
 .lt-ato-travado{display:block;background:var(--blt);border-color:var(--bord);
   color:var(--tx2);line-height:1.45}
@@ -1212,7 +1226,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .doc-head-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 /* O ícone da peça, à esquerda do nome dela: mesma âncora visual da ficha. */
 #fd-icone{margin-right:2px}
-.doc-head-doc{font-family:'Manrope',sans-serif;font-weight:800;font-size:16px;color:var(--gd)}
+.doc-head-doc{font-family:'Manrope',sans-serif;font-weight:800;font-size:16px;color:var(--tx)}
 .doc-head-num-wrap{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .doc-head-num{height:30px;box-sizing:border-box;display:inline-flex;align-items:center;
   font-size:13px;padding:0 12px}
@@ -1310,7 +1324,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .par-sec{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
   text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);
   margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid var(--bord)}
-.par-num{width:19px;height:19px;border-radius:5px;background:var(--gl);color:var(--gd);
+.par-num{width:19px;height:19px;border-radius:5px;background:var(--blt);color:var(--tx2);
   font-size:11px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .par-sec .cont{margin-left:auto}
 
@@ -1393,7 +1407,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .doc-imovel-op{display:block;width:100%;text-align:left;padding:9px 11px;margin-bottom:6px;
   border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur);
   cursor:pointer;font:inherit;font-size:12.5px;color:var(--tx2)}
-.doc-imovel-op:hover{border-color:var(--gd);background:var(--gl)}
+.doc-imovel-op:hover{border-color:var(--tx3);background:var(--blt)}
 .doc-imovel-op b{display:block;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--tx)}
 
 /* ── MENU "NOVO" ANCORADO ──
@@ -1419,7 +1433,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   background:none;border:0;border-radius:11px;
   padding:10px 11px;cursor:pointer;font-family:inherit;color:var(--tx);
   opacity:0;transform:translateY(-6px);animation:menuNovoEntra .18s ease forwards}
-.menu-novo-op:hover{background:var(--gl)}
+.menu-novo-op:hover{background:var(--blt)}
 /* Ícone no tratamento do avatar: mesma família do cabeçalho das telas. */
 .menu-novo-ico{width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;
   justify-content:center;border-radius:10px;color:#fff;
@@ -1732,7 +1746,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 }
 .cad-barra-modo{
   font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
-  color:var(--gd);background:var(--gl);padding:4px 9px;border-radius:999px;flex-shrink:0;
+  color:var(--tx2);background:var(--blt);padding:4px 9px;border-radius:999px;flex-shrink:0;
 }
 .cad-barra-passo{font-size:12.5px;color:var(--tx);font-weight:600;min-width:0}
 .cad-barra-acoes{display:flex;gap:6px;flex-shrink:0}
@@ -1833,7 +1847,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vs-artigo.marcado{border-color:var(--f-bord-foco);background:var(--gl)}
 .vs-artigo input{width:16px;height:16px;accent-color:var(--f-bord-foco);margin-top:2px;flex-shrink:0}
 .vs-artigo .num{font-family:'JetBrains Mono','Courier New',monospace;font-weight:600;
-  font-size:12px;color:var(--gd)}
+  font-size:12px;color:var(--tx)}
 .vs-artigo .cond{font-size:12.5px;line-height:1.35;color:var(--tx);margin-top:1px}
 .vs-artigo .base{font-size:10.5px;color:var(--tx3);font-weight:700;margin-top:2px}
 
@@ -1847,7 +1861,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   font-size:10.5px;font-weight:700;color:var(--tx3)}
 .anexo-fach input{width:14px;height:14px;accent-color:var(--f-bord-foco)}
 .anexo-item.e-fachada{border-color:var(--f-bord-foco)}
-.anexo-item.e-fachada .anexo-fach{color:var(--gd)}
+.anexo-item.e-fachada .anexo-fach{color:var(--tx2)}
 
 /* Atalho: separado do resto por uma linha, porque é uma saída do fluxo e não
    mais um campo dele. */
@@ -1893,7 +1907,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* A altura propria da vistoria saiu: ela nao tem mais medida so dela. Todas as
    janelas de trabalho leem `--modal-trabalho-alt`, e sobem e descem juntas. */
 
-.rel-item{display:grid;grid-template-columns:46px 1fr 44px;gap:10px;align-items:start;
+.rel-item{display:grid;grid-template-columns:46px 1fr 76px;gap:10px;align-items:start;
   border:1.5px solid var(--bord);border-radius:var(--r);padding:9px 10px;margin-bottom:7px;
   background:var(--sur);cursor:pointer;transition:border-color .13s,background .13s}
 .rel-item:hover{border-color:var(--tx3);background:var(--blt)}
@@ -1939,7 +1953,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vs-dobra{margin:14px 0 4px;border:1.5px solid var(--bord);border-radius:var(--r);
   background:var(--sur);overflow:hidden}
 .vs-dobra summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;
-  font-family:'Manrope',sans-serif;font-weight:600;font-size:12.5px;color:var(--gd);
+  font-family:'Manrope',sans-serif;font-weight:600;font-size:12.5px;color:var(--tx);
   list-style:none;min-height:44px;box-sizing:border-box}
 .vs-dobra summary::-webkit-details-marker{display:none}
 .vs-dobra summary::before{content:'▸';color:var(--tx3);font-size:11px;transition:transform .15s}
@@ -1995,7 +2009,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .os-item{cursor:pointer;display:flex;flex-direction:column;align-items:stretch;gap:0;
   padding:11px 10px}
 .os-topo{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:3px}
-.os-num{font-size:12.5px;font-weight:600;color:var(--gd)}
+.os-num{font-size:12.5px;font-weight:600;color:var(--tx)}
 .os-nat{margin-left:auto;font-size:10px;font-weight:700;text-transform:uppercase;
   letter-spacing:.04em;color:var(--tx3)}
 .os-obj{font-size:13.5px;font-weight:600;color:var(--tx);line-height:1.35;margin-bottom:3px}
@@ -2075,7 +2089,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .doc-ico svg{width:17px;height:17px}
 .doc-ident{flex:1;min-width:0}
 .doc-l1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
-.doc-tipo{font-family:'Manrope',sans-serif;font-weight:700;font-size:13.5px;color:var(--gd)}
+.doc-tipo{font-family:'Manrope',sans-serif;font-weight:700;font-size:13.5px;color:var(--tx)}
 /* Autuado acima do imóvel: depois do número, é o que se procura numa lista. */
 .doc-autuado{font-size:14px;font-weight:600;color:var(--chumbo);line-height:1.3;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2117,8 +2131,8 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .filtro-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .filtro-chips:empty{display:none}
 .chip-filtro{display:inline-flex;align-items:center;gap:6px;padding:5px 9px 5px 10px;
-  border:1.5px solid var(--gm);border-radius:999px;background:var(--gl);
-  font-family:'Inter',sans-serif;font-size:11.5px;font-weight:600;color:var(--gd);
+  border:1.5px solid var(--bord);border-radius:999px;background:var(--blt);
+  font-family:'Inter',sans-serif;font-size:11.5px;font-weight:600;color:var(--tx2);
   cursor:pointer;transition:background .13s}
 .chip-filtro:hover{background:#DCEFE3}
 .chip-rot{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
@@ -2164,7 +2178,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tabela-lista tbody tr:last-child td{border-bottom:0}
 .tabela-lista tbody tr{cursor:pointer;transition:background .12s}
-.tabela-lista tbody tr:hover{background:var(--gl)}
+.tabela-lista tbody tr:hover{background:var(--blt)}
 
 /* A barra de status na primeira célula, e não só o selo colorido na última:
    numa lista de vinte, o selo sozinho obriga a ler cada linha para achar o
@@ -2263,7 +2277,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* O marco clicável se comporta como botão: quem não abre nada continua sendo
    texto, e a diferença tem de ser visível ANTES do clique. */
 .lt-item.lt-abre{cursor:pointer;border-radius:var(--r);transition:background .12s}
-.lt-item.lt-abre:hover{background:var(--gl)}
+.lt-item.lt-abre:hover{background:var(--blt)}
 .lt-item.lt-abre:focus-visible{outline:2px solid var(--gd);outline-offset:2px}
 
 .vv-secao{margin-bottom:16px}
@@ -2343,7 +2357,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vato-op{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;
   padding:10px 12px;border:1.5px solid var(--bord);border-radius:var(--r);
   background:var(--sur);cursor:pointer;transition:border-color .13s,background .13s}
-.vato-op:hover{border-color:var(--gm);background:var(--gl)}
+.vato-op:hover{border-color:var(--tx3);background:var(--blt)}
 /* O traço separa o que AVISA do que SANCIONA — a mesma divisão do menu. */
 .vato-op.vato-sep{margin-top:8px;border-top-width:1.5px}
 .vato-ico{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--gl);
@@ -2364,13 +2378,13 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vv-arquivo{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;
   padding:10px 12px;border:1.5px dashed var(--bord);border-radius:var(--r);
   text-decoration:none;color:inherit;transition:border-color .13s,background .13s}
-.vv-arquivo:hover{border-color:var(--gm);background:var(--gl)}
+.vv-arquivo:hover{border-color:var(--tx3);background:var(--blt)}
 .vv-arquivo-ico{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:var(--blt);
   color:var(--gd);display:flex;align-items:center;justify-content:center}
 .vv-arquivo-ico svg{width:16px;height:16px}
 .vv-arquivo-txt{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:12.5px}
 .vv-arquivo-obs{color:var(--tx2)}
-.vv-arquivo-abrir{font-size:11px;color:var(--gd);font-weight:700}
+.vv-arquivo-abrir{font-size:11px;color:var(--tx2);font-weight:700}
 
 /* As peças geradas: cada uma abre a sua ficha. */
 .vv-docs{display:flex;flex-direction:column;gap:6px}
@@ -2378,7 +2392,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   padding:8px 10px;border:1.5px solid var(--bord);border-radius:var(--r);
   background:var(--sur);cursor:pointer;font-size:12.5px;
   transition:border-color .13s,background .13s}
-.vv-doc:hover{border-color:var(--gm);background:var(--gl)}
+.vv-doc:hover{border-color:var(--tx3);background:var(--blt)}
 .vv-doc-tipo{font-weight:700;color:var(--tx)}
 .vv-doc-meta{margin-left:auto;color:var(--tx3);font-size:11.5px;white-space:nowrap}
 
@@ -2387,7 +2401,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Diz A QUAL vistoria a peça se prendeu. Sem isso, um vínculo errado — a peça
    presa à visita de outro dia — só apareceria na defesa. */
 .nd-vinculo-ok{font-size:12.5px;color:var(--tx2);padding:9px 12px;
-  background:var(--gl);border:1.5px solid var(--gm);border-radius:var(--r)}
+  background:var(--blt);border:1.5px solid var(--bord);border-radius:var(--r)}
 .nd-vinculo{margin-top:6px;font-size:12px;color:var(--tx2)}
 
 /* Separador do lançador cadastral: os atos DIRETOS são de outra natureza que os
@@ -2449,11 +2463,11 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .rel-setas button:disabled{opacity:.3;cursor:default}
 
 /* A coluna de ações do cartão: excluir em cima, mover embaixo — a exclusão
-   fica mais longe do polegar de propósito, porque não tem volta. */
-.rel-acoes{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.rel-excluir{border:1px solid transparent;background:none;color:var(--tx3);
-  cursor:pointer;padding:3px;border-radius:6px;line-height:0}
-.rel-excluir:hover{color:var(--red);background:var(--rlt);border-color:var(--rlt)}
+   fica mais longe do polegar de propósito, porque não tem volta. O botão é o
+   mesmo "Excluir" com nome por extenso do resto do sistema — não uma lixeira
+   à parte — só que do tamanho que cabe numa lista, `.btn.sm`. */
+.rel-acoes{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.rel-acoes .btn{width:100%;text-align:center}
 
 /* ── A JANELA DO ITEM ──
    Duas partes, sempre nesta ordem: o que ADICIONAR (compacto, muda por aba) e
@@ -2464,56 +2478,68 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vsi-bloco{flex-shrink:0}
 .vsi-bloco[hidden]{display:none}
 
-/* O formulário de acrescentar: compacto, sem rótulo em cima de cada campo —
-   o placeholder já diz o que é, e um combo com um botão ao lado não precisa
-   de mais altura do que uma linha. */
-.vsi-add{display:flex;flex-direction:column;gap:6px}
-.vsi-add-linha{display:flex;gap:6px}
-.vsi-add-linha > select,.vsi-add-linha > textarea,.vsi-add-linha > input{flex:1;min-width:0}
-.vsi-bloco select,.vsi-bloco .vsi-add > textarea,.vsi-bloco .vsi-add > input{
-  padding:7px 9px;font-size:12.5px;border:1.5px solid var(--f-bord);border-radius:var(--r);
-  background:var(--f-fundo);color:var(--tx);font-family:inherit;resize:none}
-.vsi-bloco textarea{width:100%}
-#vsi-texto{min-height:64px}
+/* O formulário de acrescentar: os campos são `.field` — o MESMO invólucro
+   usado em toda tela do sistema (rótulo pequeno em cima, campo sem borda
+   própria dentro) — e não mais um `<select>`/`<textarea>` com CSS só seu.
+   Aqui só se ajusta o espaçamento para caber numa linha compacta. */
+.vsi-bloco .field{margin:0}
+.vsi-bloco textarea{width:100%;resize:vertical;min-height:2.4em}
+
+/* A busca: campo + "+ add" na mesma linha, e a lista de sugestões logo
+   abaixo — a MESMA lógica em irregularidade e em artigo. */
+.vsi-busca{display:flex;gap:8px;align-items:flex-end}
+.vsi-sugestoes{display:flex;flex-direction:column;gap:4px;margin-top:6px;
+  max-height:168px;overflow-y:auto}
+.vsi-sugestoes[hidden]{display:none}
+.vsi-sugestao{display:block;width:100%;text-align:left;cursor:pointer;
+  background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--r);
+  padding:7px 10px;font:inherit}
+.vsi-sugestao:hover{border-color:var(--tx3);background:var(--blt)}
+.vsi-sugestao b{display:block;font-size:12.5px;color:var(--tx);font-weight:600}
+.vsi-sugestao span{display:block;font-size:11px;color:var(--tx3);margin-top:1px}
 
 /* ── O RESUMO ──
    Fixo fora das abas, igual em qualquer uma delas. `flex:1` para ocupar o
    que sobrar da janela — nunca mais que isso — e rolagem própria quando o
    item cresce, sem empurrar o "adicionar" para fora da vista. */
 .vsi-resumo{flex:1;min-height:64px;overflow-y:auto;background:var(--blt);
-  border-radius:var(--r);padding:9px 10px;display:flex;flex-direction:column;gap:8px}
+  border-radius:var(--r);padding:9px;display:flex;flex-direction:column;gap:7px}
 .vsi-resumo-vazio{color:var(--tx3);font-style:italic}
-.vsi-resumo-grupo{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-.vsi-resumo-rot{flex-shrink:0;width:76px;font-size:9.5px;font-weight:800;
-  text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);padding-top:3px}
-.vsi-resumo-chips{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0}
 
-/* Chip: o que foi adicionado, com o × para tirar sem trocar de aba. */
-.vsi-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;
-  background:var(--sur);border:1px solid var(--bord);border-radius:20px;
-  padding:3px 4px 3px 9px;font-size:11.5px;color:var(--tx);line-height:1.3}
-.vsi-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vsi-chip button{border:0;background:var(--blt);color:var(--tx3);cursor:pointer;
-  width:16px;height:16px;border-radius:50%;font-size:9px;line-height:1;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center}
-.vsi-chip button:hover{background:var(--rlt);color:var(--red)}
-.vsi-chip-texto{max-width:100%}
-.vsi-chip-texto span{white-space:normal}
-.vsi-chip-info{background:transparent;border-style:dashed;color:var(--tx2)}
-.vsi-x:hover{color:var(--red)}
+/* O cartão do resumo: título, subtítulo, descrição — o mesmo formato de
+   "resultado encontrado" que o sistema já usa para citar artigo, só que
+   aqui é o que JÁ FOI posto no item, com o × que tira. */
+.vsi-cartao{display:flex;gap:8px;align-items:flex-start;
+  background:var(--sur);border:1px solid var(--bord);border-radius:var(--r);
+  padding:9px 11px}
+.vsi-cartao-corpo{flex:1;min-width:0;font-size:12.5px;line-height:1.4}
+.vsi-cartao-corpo b{color:var(--tx);font-weight:700}
+.vsi-cartao-sub{color:var(--tx3);font-size:11px}
+.vsi-cartao-corpo p{margin:3px 0 0;color:var(--tx2)}
+.vsi-cartao > .acao-x{flex-shrink:0}
 
 /* Irregularidade já usada em outro item: o banco não aceita a mesma duas
-   vezes, e dizer isso aqui evita o pedido recusado depois do trabalho todo. */
-.chk-item.chk-bloq{opacity:.5;cursor:not-allowed}
+   vezes, e ela nem chega a aparecer na busca — ver `buscarIrregularidade`. */
 .chk-item.chk-linha{border:0;padding:0;background:none}
 
-/* ── as fotos dentro do item ── */
-.vsi-foto{border:1.5px solid var(--bord);border-radius:var(--r);padding:10px;margin-bottom:10px}
-.vsi-foto .vsi-palco{margin-bottom:8px}
+/* ── AS FOTOS: UMA LINHA POR FOTO, do mesmo `.par-linha` usado no resto do
+   sistema para lista de arquivo — miniatura, texto, três ícones. Só a que
+   está sendo trabalhada abre a imagem grande, embaixo da própria linha. ── */
+.vsi-foto-linha{cursor:default;margin-bottom:0}
+.vsi-foto-icones{display:flex;gap:4px;flex-shrink:0}
+.ico-circ{width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  background:var(--sur);border:1.5px solid var(--gm);color:var(--gd)}
+.ico-circ svg{width:14px;height:14px}
+.ico-circ:hover{background:var(--gl)}
+.ico-circ-perigo{border-color:#EF9A9A;color:var(--red)}
+.ico-circ-perigo:hover{background:var(--rlt)}
+.vsi-foto-expandida{border:1.5px solid var(--bord);border-top:none;
+  border-radius:0 0 var(--r) var(--r);padding:10px;margin:-8px 0 10px}
+.vsi-foto-expandida .vsi-palco{margin-bottom:0}
 .vsi-arquivo{background:var(--blt);border-radius:var(--r);padding:10px 12px;
   font-size:12.5px;color:var(--tx2);margin-bottom:8px}
-.vsi-foto-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
-.vsi-foto-acoes .btn.perigo{color:var(--red);border-color:var(--rlt);background:var(--rlt)}
+.vsi-foto-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
 
 /* ── o item na janela de leitura ── */
 .vv-item{border-left:3px solid var(--gm);padding-left:11px;margin-bottom:16px}
@@ -2565,12 +2591,12 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   transform:translate(-50%, -50%);
 }
 .des-medida .des-rot{
-  font-size:11.5px; color:var(--gxd); cursor:text;
+  font-size:11.5px; color:var(--tx); cursor:text;
   background:rgba(255,255,255,.95); border:1.5px solid var(--gm);
   border-radius:6px; padding:2px 7px; box-shadow:0 1px 5px rgba(0,0,0,.16);
   transition:border-color .12s, background .12s, box-shadow .12s;
 }
-.des-medida .des-rot:hover{border-color:var(--gd); background:#fff;
+.des-medida .des-rot:hover{border-color:var(--tx3); background:#fff;
   box-shadow:0 2px 9px rgba(0,0,0,.2)}
 
 /* O lado de FECHAMENTO é resultado, não entrada: tracejado, cinza e sem cursor
@@ -2641,7 +2667,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 
 .des-medida-campo{
   width:5.2em; border:none; background:none; outline:none; padding:0;
-  font:inherit; color:var(--gxd); text-align:center;
+  font:inherit; color:var(--tx); text-align:center;
 }
 
 .des-area .des-rot{
@@ -2696,9 +2722,9 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cad-mesa-x{background:none;border:none;color:var(--tx3);cursor:pointer;
   font-size:15px;line-height:1;padding:2px 4px}
-.cad-mesa-voltar{background:none;border:none;color:var(--gd);cursor:pointer;
+.cad-mesa-voltar{background:none;border:none;color:var(--tx2);cursor:pointer;
   font-size:17px;line-height:1;padding:2px 6px 2px 0;flex-shrink:0}
-.cad-mesa-voltar:hover{color:var(--gxd)}
+.cad-mesa-voltar:hover{color:var(--tx)}
 .cad-mesa-voltar[hidden]{display:none}
 /* Ação sem volta dentro de um grupo de botões iguais. Sem isto, "Apagar 3
    lotes" e "Limpar" são o mesmo retângulo cinza, lado a lado. */
@@ -2720,7 +2746,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 }
 .des-barra[hidden]{display:none}
 .des-barra-modo{font-size:10px;font-weight:800;text-transform:uppercase;
-  letter-spacing:.07em;color:var(--gxd);white-space:nowrap}
+  letter-spacing:.07em;color:var(--tx);white-space:nowrap}
 .des-barra-passo{font-size:12px;color:var(--tx2);white-space:nowrap;
   padding-right:4px;border-right:1px solid var(--blt)}
 .des-barra .btn{white-space:nowrap}
