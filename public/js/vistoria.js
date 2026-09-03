@@ -1135,32 +1135,13 @@ function renderRelatorio() {
     return
   }
 
-  alvo.innerHTML = vState.relatorio.map((item, i) => {
-    const selos = []
-    if (item.irregularidades.length) { selos.push(`${item.irregularidades.length} irregularidade(s)`) }
-    if (item.artigos.length)         { selos.push(`${item.artigos.length} artigo(s)`) }
-    if (item.exigencias.length)      { selos.push(`${item.exigencias.length} exigência(s)`) }
-    if (item.fotos.length)           { selos.push(`${item.fotos.length} foto(s)`) }
-
-    // A primeira foto do item vira a miniatura: é o que faz reconhecer o ponto
-    // da obra de relance, sem abrir.
-    const capa = item.fotos.find(f => vState.anexos[f.anexo]?.url && !vState.anexos[f.anexo]?.removido)
-    const mini = capa
-      ? `<img class="rel-mini" src="${esc(vState.anexos[capa.anexo].url)}" alt="">`
-      : `<span class="rel-num">${i + 1}</span>`
-
-    const resumo = item.texto?.trim()
-      ? esc(item.texto.trim().slice(0, 120)) + (item.texto.trim().length > 120 ? '…' : '')
-      : '<span class="rel-sem">sem texto</span>'
-
-    return `
+  alvo.innerHTML = vState.relatorio.map((item, i) => `
       <div class="rel-item${itemVazioDeConteudo(item) ? ' rel-falta' : ''}"
            onclick="abrirItemRelatorio(${i})">
-        <div class="rel-capa">${mini}</div>
+        <div class="rel-capa">${capaDoItem(item, i)}</div>
         <div class="rel-corpo">
           <div class="rel-tit">Item ${i + 1}</div>
-          <div class="rel-txt">${resumo}</div>
-          ${selos.length ? `<div class="rel-selos">${selos.map(s => `<span>${esc(s)}</span>`).join('')}</div>` : ''}
+          ${conteudoDoItem(item)}
         </div>
         <div class="rel-setas" onclick="event.stopPropagation()">
           <button type="button" onclick="moverItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}
@@ -1168,8 +1149,92 @@ function renderRelatorio() {
           <button type="button" onclick="moverItem(${i}, 1)"
                   ${i === vState.relatorio.length - 1 ? 'disabled' : ''} title="Descer">&#9660;</button>
         </div>
-      </div>`
-  }).join('')
+      </div>`).join('')
+}
+
+/**
+ * A primeira foto do item vira a miniatura.
+ *
+ * É o que faz reconhecer o ponto da obra de relance, sem abrir. Sem foto,
+ * fica o número do item — que é como ele aparece no relatório impresso.
+ */
+function capaDoItem(item, i) {
+  const capa = item.fotos.find(f => vState.anexos[f.anexo]?.url && !vState.anexos[f.anexo]?.removido)
+  return capa
+    ? `<img class="rel-mini" src="${esc(vState.anexos[capa.anexo].url)}" alt="">`
+    : `<span class="rel-num">${i + 1}</span>`
+}
+
+/**
+ * O QUE ESTÁ NO ITEM, dito por extenso — e só o que está.
+ *
+ * A versão anterior mostrava o texto livre e, embaixo, selos contando o resto:
+ * "2 irregularidade(s)", "1 artigo(s)". Contar não é dizer: dois itens com
+ * duas irregularidades cada ficavam idênticos na lista, e para saber QUAL era
+ * a irregularidade — que é o que decide o enquadramento — só abrindo os dois.
+ *
+ * Agora cada bloco preenchido aparece nomeado, na mesma ordem em que sai no
+ * relatório, e o bloco vazio não aparece: um item que é só uma foto se lê como
+ * uma foto, não como quatro categorias em branco.
+ *
+ * @param {Object} item
+ */
+function conteudoDoItem(item) {
+  const linhas = []
+
+  if (item.irregularidades.length) {
+    const nomes = item.irregularidades
+      .map(id => vState.catalogo.find(c => c.id === id)?.descricao)
+      .filter(Boolean)
+    linhas.push(linhaDoItem('Irregularidade', nomes, item.irregularidades.length))
+  }
+
+  if (item.texto?.trim()) {
+    const t = item.texto.trim()
+    linhas.push(`<div class="rel-linha"><span class="rel-rot">Relato</span>
+      <span class="rel-val">${esc(t.slice(0, 140))}${t.length > 140 ? '…' : ''}</span></div>`)
+  }
+
+  if (item.artigos.length) {
+    const nomes = item.artigos
+      .map(a => vState.artigos.find(x => x.id === a.artigo_id)?.rotulo
+        || vState.artigos.find(x => x.id === a.artigo_id)?.numero)
+      .filter(Boolean)
+    linhas.push(linhaDoItem('Artigo', nomes, item.artigos.length))
+  }
+
+  if (item.exigencias.length) {
+    const textos = item.exigencias.map(e =>
+      e.texto + (e.prazo ? ` (${e.prazo} dias)` : ''))
+    linhas.push(linhaDoItem('Exigência', textos, item.exigencias.length))
+  }
+
+  if (item.fotos.length) {
+    linhas.push(`<div class="rel-linha"><span class="rel-rot">Fotos</span>
+      <span class="rel-val">${item.fotos.length}${
+        item.fotos.some(f => f.fachada) ? ' · uma delas é a fachada' : ''}</span></div>`)
+  }
+
+  return linhas.length
+    ? linhas.join('')
+    : '<div class="rel-linha rel-sem">Item vazio — toque para preencher.</div>'
+}
+
+/**
+ * Uma linha do cartão: rótulo, os primeiros nomes, e quantos ficaram de fora.
+ *
+ * Corta em dois porque o cartão é para reconhecer o item, não para lê-lo
+ * inteiro — mas dizer "e mais 3" é diferente de esconder três.
+ *
+ * @param {string} rotulo @param {string[]} nomes @param {number} total
+ */
+function linhaDoItem(rotulo, nomes, total) {
+  const mostra = nomes.slice(0, 2).map(n => esc(String(n)))
+  const resto = total - mostra.length
+  return `<div class="rel-linha">
+    <span class="rel-rot">${esc(rotulo)}${total > 1 ? 's' : ''}</span>
+    <span class="rel-val">${mostra.join(' · ')}${resto > 0 ? ` <i>e mais ${resto}</i>` : ''}</span>
+  </div>`
 }
 
 /** @param {number} i @param {number} d -1 sobe, 1 desce */
@@ -1202,7 +1267,67 @@ function abrirItemRelatorio(i) {
   renderExigenciasDoItem()
   renderFotosDoItem()
 
+  // Abre no bloco que JÁ TEM alguma coisa: reabrir um item para conferir a
+  // foto não deveria começar pelo catálogo de irregularidades. Item novo abre
+  // nas irregularidades, que é por onde o enquadramento começa.
+  abaDoItem(primeiroBlocoComConteudo(item))
+
   openModal('m-vs-item')
+}
+
+/** Os cinco blocos do item, na ordem em que saem no relatório. */
+const BLOCOS_DO_ITEM = ['irreg', 'texto', 'artigos', 'exigencias', 'fotos']
+
+/** @param {Object} item @returns {string} */
+function primeiroBlocoComConteudo(item) {
+  if (item.irregularidades.length) { return 'irreg' }
+  if (item.texto?.trim())          { return 'texto' }
+  if (item.artigos.length)         { return 'artigos' }
+  if (item.exigencias.length)      { return 'exigencias' }
+  if (item.fotos.length)           { return 'fotos' }
+  return 'irreg'
+}
+
+/**
+ * Mostra um bloco de cada vez.
+ *
+ * @param {string} nome
+ */
+function abaDoItem(nome) {
+  document.querySelectorAll('#vsi-abas button[data-bloco]').forEach(b => {
+    b.classList.toggle('at', b.dataset.bloco === nome)
+  })
+  document.querySelectorAll('#m-vs-item .vsi-bloco[data-bloco]').forEach(d => {
+    d.hidden = d.dataset.bloco !== nome
+  })
+  pintarContasDoItem()
+}
+
+/**
+ * A contagem em cada botão.
+ *
+ * É ela que substitui o empilhamento: sem abrir bloco nenhum dá para ver que o
+ * item tem duas irregularidades e nenhuma foto, que era justamente o que a
+ * janela cheia não deixava enxergar.
+ */
+function pintarContasDoItem() {
+  const item = itemAtual()
+  if (!item) { return }
+
+  const põe = (id, n) => {
+    const e = document.getElementById(id)
+    if (!e) { return }
+    e.textContent = n || ''
+    e.parentElement.classList.toggle('vsi-tem', !!n)
+  }
+
+  põe('vsi-n-irreg', item.irregularidades.length)
+  // O texto não se conta: ou tem ou não tem. O ponto marca a diferença sem
+  // fingir que "1" significa alguma coisa.
+  põe('vsi-n-texto', item.texto?.trim() ? '•' : '')
+  põe('vsi-n-artigos', item.artigos.length)
+  põe('vsi-n-exigencias', item.exigencias.length)
+  põe('vsi-n-fotos', item.fotos.length)
 }
 
 /** O item aberto agora, ou null. */
@@ -1261,6 +1386,7 @@ function alternarIrregularidadeDoItem(id, marcado) {
     : item.irregularidades.filter(x => x !== id)
 
   renderIrregularidadesDoItem()
+  pintarContasDoItem()
   // A sugestão de artigos lê a SOMA dos itens: marcar aqui muda o que ela
   // oferece no item inteiro.
   sugerirArtigos()
@@ -1313,6 +1439,7 @@ function adicionarArtigoAoItem() {
   })
   document.getElementById('vsi-artigo-obs').value = ''
   renderArtigosDoItem()
+  pintarContasDoItem()
 }
 
 /** @param {number} j */
@@ -1321,6 +1448,7 @@ function removerArtigoDoItem(j) {
   if (!item) { return }
   item.artigos.splice(j, 1)
   renderArtigosDoItem()
+  pintarContasDoItem()
 }
 
 /** O seletor traz os artigos sugeridos pelas irregularidades da vistoria. */
@@ -1356,6 +1484,8 @@ function renderExigenciasDoItem() {
                   title="Remover">&#10005;</button>
         </div>`).join('')
     : '<div class="leg">Nenhuma exigência neste item.</div>'
+
+  pintarContasDoItem()
 }
 
 function adicionarExigenciaAoItem() {
@@ -1427,6 +1557,8 @@ function renderFotosDoItem() {
           </div>`
       }).join('')
     : '<div class="leg">Nenhuma foto neste item.</div>'
+
+  pintarContasDoItem()
 }
 
 /** @param {number} j @param {boolean} marcado */

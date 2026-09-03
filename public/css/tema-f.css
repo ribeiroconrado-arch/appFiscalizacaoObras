@@ -2447,8 +2447,19 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .rel-setas button:disabled{opacity:.3;cursor:default}
 
 /* ── a janela do item: cinco blocos na ordem do papel ── */
-.vsi-bloco{padding-bottom:14px;margin-bottom:14px;border-bottom:1.5px solid var(--bord)}
-.vsi-bloco:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+/* Um bloco por vez, e ele ocupa a janela.
+   O traço separador entre blocos deixou de existir junto com o empilhamento —
+   não há mais o que separar. E sem `height`, a lista de irregularidades ficava
+   com a sua própria rolagem no alto de uma janela vazia pela metade. */
+/* O corpo desta janela é coluna para que o bloco ativo possa esticar; nas
+   demais ele continua sendo um rolo simples. */
+#m-vs-item .doc-body{display:flex;flex-direction:column;overflow:hidden}
+.vsi-bloco{display:flex;flex-direction:column;min-height:0;flex:1}
+.vsi-bloco[hidden]{display:none}
+/* `max-height:290px` vem de app.css e serve à checklist do resto do sistema,
+   que aparece no meio de um formulário. Aqui a lista É o formulário: presa
+   em 290px, ela rolava dentro de uma janela com 380px de sobra em branco. */
+.vsi-bloco .checklist{flex:1;min-height:0;max-height:none;overflow-y:auto}
 
 /* O formulário de acrescentar fica recuado e em fundo próprio: separa o que
    JÁ está no item do que se está prestes a pôr. */
@@ -2570,6 +2581,35 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .desm-bloco-tit .desm-num{display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;border-radius:50%;color:#fff;font-size:11.5px;flex-shrink:0}
 .desm-cortar{margin-left:auto}
+
+/* ── OS CINCO BOTÕES DO ITEM ──
+   Um bloco de cada vez. A contagem no botão é o que substitui o empilhamento:
+   sem abrir nada dá para ver que o item tem duas irregularidades e nenhuma
+   foto — que era justamente o que a janela cheia escondia. */
+.vsi-abas{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px 0;flex-shrink:0}
+.vsi-abas button{display:inline-flex;align-items:center;gap:6px;
+  background:var(--sur);border:1.5px solid var(--bord);border-radius:999px;
+  padding:5px 12px;font-size:12px;font-weight:600;color:var(--tx2);cursor:pointer;
+  transition:border-color .12s,background .12s,color .12s}
+.vsi-abas button:hover{border-color:var(--gm)}
+.vsi-abas button.at{background:var(--gl);border-color:var(--gd);color:var(--gxd)}
+.vsi-conta{display:none}
+.vsi-abas button.vsi-tem .vsi-conta{display:inline-flex;align-items:center;
+  justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:999px;
+  background:var(--gd);color:#fff;font-size:10.5px;font-weight:800}
+.vsi-abas button.at.vsi-tem .vsi-conta{background:var(--gxd)}
+
+/* ── O CARTÃO DO ITEM ──
+   Rótulo à esquerda, o que foi informado à direita. Só os blocos preenchidos
+   aparecem: um item que é só uma foto se lê como uma foto. */
+.rel-linha{display:flex;gap:8px;align-items:baseline;font-size:12px;line-height:1.45;
+  margin-top:3px}
+.rel-rot{flex-shrink:0;width:82px;font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--tx3)}
+.rel-val{flex:1;min-width:0;color:var(--tx1);overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.rel-val i{font-style:normal;color:var(--tx3)}
+.rel-linha.rel-sem{color:var(--tx3);font-style:italic}
 
 .des-alca{cursor:grab}
 .des-alca:active{cursor:grabbing}

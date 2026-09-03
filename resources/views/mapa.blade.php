@@ -1479,10 +1479,30 @@
       </div>
     </div>
 
+    {{-- OS CINCO BLOCOS VIRAM CINCO BOTÕES.
+         Antes eles vinham empilhados numa janela só: abrir um item despejava
+         o catálogo inteiro de irregularidades, mais um formulário de artigo
+         com três campos, mais um de exigência com dois, mais as fotos — tudo
+         de uma vez, para preencher talvez um deles. A janela dizia o que ela
+         PODE ter, quando o que o fiscal precisa ver é o que ela TEM.
+         Cada botão traz a contagem do que já foi posto ali dentro. --}}
+    <div class="vsi-abas" id="vsi-abas">
+      <button type="button" data-bloco="irreg" onclick="abaDoItem('irreg')">
+        Irregularidades <span class="vsi-conta" id="vsi-n-irreg"></span></button>
+      <button type="button" data-bloco="texto" onclick="abaDoItem('texto')">
+        O que você viu <span class="vsi-conta" id="vsi-n-texto"></span></button>
+      <button type="button" data-bloco="artigos" onclick="abaDoItem('artigos')">
+        Artigos <span class="vsi-conta" id="vsi-n-artigos"></span></button>
+      <button type="button" data-bloco="exigencias" onclick="abaDoItem('exigencias')">
+        Exigências <span class="vsi-conta" id="vsi-n-exigencias"></span></button>
+      <button type="button" data-bloco="fotos" onclick="abaDoItem('fotos')">
+        Fotos <span class="vsi-conta" id="vsi-n-fotos"></span></button>
+    </div>
+
     <div class="doc-body">
 
       {{-- 1 — IRREGULARIDADES --}}
-      <div class="vsi-bloco">
+      <div class="vsi-bloco" data-bloco="irreg">
         <div class="sec-title-row">
           <div class="sec-title">1 · Irregularidades</div>
           <span class="leg" id="vsi-irreg-conta"></span>
@@ -1493,7 +1513,7 @@
       </div>
 
       {{-- 2 — TEXTO LIVRE --}}
-      <div class="vsi-bloco">
+      <div class="vsi-bloco" data-bloco="texto" hidden>
         <div class="sec-title">2 · O que você viu</div>
         <div class="field">
           <label for="vsi-texto">Descrição</label>
@@ -1503,7 +1523,7 @@
       </div>
 
       {{-- 3 — ARTIGOS --}}
-      <div class="vsi-bloco">
+      <div class="vsi-bloco" data-bloco="artigos" hidden>
         <div class="sec-title">3 · Artigos</div>
         <div id="vsi-artigos"></div>
         <div class="vsi-add">
@@ -1531,7 +1551,7 @@
       </div>
 
       {{-- 4 — EXIGÊNCIAS --}}
-      <div class="vsi-bloco">
+      <div class="vsi-bloco" data-bloco="exigencias" hidden>
         <div class="sec-title">4 · Exigências</div>
         <div class="leg">O que o administrado deve fazer, com prazo. A notificação imprime.</div>
         <div id="vsi-exigencias"></div>
@@ -1549,7 +1569,7 @@
       </div>
 
       {{-- 5 — FOTOS --}}
-      <div class="vsi-bloco">
+      <div class="vsi-bloco" data-bloco="fotos" hidden>
         <div class="sec-title-row">
           <div class="sec-title">5 · Fotos</div>
           <button type="button" class="btn sm sec-title-acao"
