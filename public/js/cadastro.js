@@ -259,6 +259,19 @@ function pintarMesaCadastral() {
   if (lanca) { lanca.hidden = emFerramenta }
   if (props) { props.hidden = !emFerramenta }
 
+  // ENQUANTO SE TRAÇA, A COLUNA SAI DE CENA.
+  //
+  // Durante o desenho ela não tem o que dizer — a barra sobre o mapa é que
+  // conduz o passo, e o formulário só faz sentido com o contorno fechado. Sem
+  // isto, ficava uma caixa branca vazia com um título e um "✕", ocupando um
+  // terço da tela ao lado do lote que se está desenhando.
+  const tracando = typeof estaDesenhando === 'function' && estaDesenhando()
+  mesa.classList.toggle('mesa-recolhida', tracando)
+
+  // Com a coluna recolhida, a barra do desenho volta ao centro do mapa: ela é
+  // deslocada para a direita só para não cobrir a mesa, e a mesa não está lá.
+  document.body.classList.toggle('com-mesa', !tracando)
+
   // O painel do modo corrente, e só ele. Sem isto, sair de "corrigir quadra"
   // para "desenhar lote" deixava os dois formulários na tela.
   const quadra = document.getElementById('cadp-quadra')
@@ -510,15 +523,25 @@ function pintarPainelCadastro() {
     }
   }
 
+  // APAGAR usa a MESMA lista de lotes marcados, e por isso o mesmo painel —
+  // mas não é a mesma pergunta. Enquanto o painel só era aberto para corrigir
+  // quadra, isso não aparecia; com ele na mesa lateral, o modo "apagar
+  // resíduo" passou a exibir o campo "Quadra a gravar" depois de marcar os
+  // lotes a apagar. Perguntar a quadra de um lote que vai deixar de existir é
+  // pior do que inútil: é a pergunta de outra ferramenta, no meio desta.
+  const emApagar = cadModo === 'apagar'
+
   // O QUE FALTA PARA PODER SEGUIR, dito em número: a unificação precisa de dois,
   // e "1 lote marcado" sem mais nada deixava o fiscal esperando um botão que
   // não ia aparecer.
   const contagem = document.getElementById('cad-contagem')
   if (contagem) {
     if (n === 0) {
-      contagem.textContent = emAto
-        ? 'Nenhum lote marcado — toque em dois ou mais no mapa.'
-        : 'Nenhum lote marcado ainda — toque neles no mapa.'
+      contagem.textContent = emApagar
+        ? 'Nenhum lote marcado — toque nos resíduos a apagar. Vários, se for o caso.'
+        : emAto
+          ? 'Nenhum lote marcado — toque em dois ou mais no mapa.'
+          : 'Nenhum lote marcado ainda — toque neles no mapa.'
     } else if (emAto && n === 1) {
       contagem.textContent = '1 lote marcado — falta ao menos mais um para unificar.'
     } else {
@@ -529,16 +552,24 @@ function pintarPainelCadastro() {
   // Em unificação o mínimo é DOIS: com um só, o botão de conferir levaria a uma
   // recusa do servidor dizendo exatamente isto.
   document.getElementById('cad-acoes').hidden = emAto ? n < 2 : n === 0
-  document.getElementById('cad-quadra-campo').hidden = emAto
-  document.getElementById('cad-btn-conferir').setAttribute('onclick',
-    emAto ? 'conferirUnificacao()' : 'conferirQuadraSelecao()')
+  document.getElementById('cad-quadra-campo').hidden = emAto || emApagar
+
+  const conferir = document.getElementById('cad-btn-conferir')
+  conferir.setAttribute('onclick',
+    emApagar ? 'abrirExclusaoSelecionados()'
+      : emAto ? 'conferirUnificacao()' : 'conferirQuadraSelecao()')
+  conferir.textContent = emApagar
+    ? (n === 1 ? 'Apagar 1 lote' : `Apagar ${n} lotes`)
+    : 'Conferir'
+  conferir.classList.toggle('perigo', emApagar)
+
   document.getElementById('cad-btn-limpar').setAttribute('onclick',
     emAto ? 'cancelarAtoCadastral()' : 'limparSelecaoCadastral()')
   document.getElementById('cad-btn-limpar').textContent = emAto ? 'Cancelar ato' : 'Limpar'
 
   // ── bloco de desenho ──
-  const desenhando = typeof estaDesenhando === 'function' && estaDesenhando()
-  document.getElementById('des-desenhando').hidden = !desenhando
+  // O formulário só aparece com o contorno FECHADO: pedir bairro e quadra no
+  // meio do traçado seria disputar a atenção com o mapa.
   document.getElementById('des-dados').hidden = !desenhoPendente
   if (!desenhoPendente) { document.getElementById('des-previa').innerHTML = '' }
 }
@@ -861,6 +892,7 @@ function desenharParte() {
 
   iniciarDesenho({
     modo: 'poligono',
+    rotulo: 'Parte do desmembramento',
     snap: true,
     onConcluir: g => {
       desmState.partes.push({ geometry: g, numero_lote: '', desmembramento: null })
@@ -899,6 +931,7 @@ function cortarLote() {
 
   iniciarDesenho({
     modo: 'linha',
+    rotulo: 'Divisa do desmembramento',
     snap: true,
     onConcluir: g => {
       const r = cortarPorLinha(anel, g.coordinates)
@@ -1099,6 +1132,7 @@ function iniciarDesenhoDeLote() {
 
   iniciarDesenho({
     modo: 'poligono',
+    rotulo: 'Lote novo',
     snap: true,
     onConcluir: g => {
       desenhoPendente = g
@@ -1194,14 +1228,16 @@ function lerCoordenadas() {
 }
 
 /** Chamado por desenho.js a cada vértice — mantém a contagem na tela. */
-function aoDesenharVertice(n) {
-  const el = document.getElementById('des-contagem')
-  if (!el) { return }
-  el.textContent = n === 0
-    ? 'Toque nos cantos do lote. Duplo toque fecha.'
-    : `${n} canto(s). Duplo toque fecha; Ctrl+Z desfaz.`
-  const acoes = document.getElementById('des-desenhando')
-  if (acoes) { acoes.hidden = !estaDesenhando() }
+/**
+ * O motor de desenho avisa a cada vértice.
+ *
+ * O texto do passo saiu daqui: quem o escreve agora é a barra sobre o mapa
+ * (`_pintarBarraDesenho`, em desenho.js), que vale para todo desenho e não só
+ * para o lote. O que sobra é repintar o painel, porque é ele que decide quando
+ * o formulário de dados aparece.
+ */
+function aoDesenharVertice() {
+  pintarPainelCadastro()
 }
 
 // ── BAIRROS E MEDIDAS DO LOTE ────────────────────────────────
@@ -1354,35 +1390,6 @@ function areaDoAnel(g) {
     s += xy[i][0] * xy[j][1] - xy[j][0] * xy[i][1]
   }
   return Math.abs(s) / 2
-}
-/**
- * Crava um lado com a medida digitada.
- *
- * A direção é dita em relação ao lado ANTERIOR ("vira à direita", "segue
- * reto"), e não em rumo geográfico, porque é assim que a matrícula descreve o
- * perímetro: "frente 12,00 m; daí, à direita, 30,00 m". Quem quiser o rumo
- * tem o azimute.
- */
-function cravarLadoDaTela() {
-  const m = Number(String(document.getElementById('des-metros').value).replace(',', '.'))
-  const dir = document.getElementById('des-direcao').value
-  const az = Number(String(document.getElementById('des-azimute').value).replace(',', '.'))
-
-  if (!cravarLado(m, dir, Number.isFinite(az) && document.getElementById('des-azimute').value !== '' ? az : NaN)) {
-    return
-  }
-
-  // A medida some, a direção fica: os lados de um lote são medidas diferentes
-  // na mesma volta, e reescolher "vira à direita" a cada lado seria repetir o
-  // óbvio quatro vezes.
-  document.getElementById('des-metros').value = ''
-  document.getElementById('des-metros').focus()
-}
-
-/** O campo de azimute só aparece quando é ele que decide a direção. */
-function pintarDirecaoDoLado() {
-  const az = document.getElementById('des-azimute')
-  if (az) { az.hidden = document.getElementById('des-direcao').value !== 'azimute' }
 }
 
 function largarDesenho() {

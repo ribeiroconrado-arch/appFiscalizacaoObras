@@ -64,6 +64,11 @@ function iniciarDesenho(opcoes) {
   Object.assign(desenhoState, {
     ativo: true,
     modo: opcoes.modo || 'poligono',
+    // Como a barra chama o que está em curso. Sem isto ela diria só
+    // "Desenhando" tanto para um lote quanto para uma casa quanto para a
+    // divisa de um desmembramento — três coisas com consequências
+    // diferentes, indistinguíveis no meio do gesto.
+    rotulo: opcoes.rotulo || 'Desenhando',
     snap: opcoes.snap !== false,
     vertices: [],
     // O plano nasce nulo e é fixado no primeiro vértice — ver `_plano`.
@@ -105,7 +110,39 @@ function iniciarDesenho(opcoes) {
   mapa.on('mousemove', _aoMover)
 
   document.getElementById('map').classList.add('desenhando')
-  toast('Toque nos cantos do lote. Duplo toque fecha.', 'aviso')
+  _pintarBarraDesenho()
+}
+
+/**
+ * A barra do desenho: o que se está traçando e o que fazer a seguir.
+ *
+ * É do MOTOR e não de quem o chamou — é isso que faz lote novo, edificação e
+ * divisa de desmembramento terem exatamente os mesmos controles. Antes cada
+ * fluxo tinha (ou não tinha) os seus, e só o desenho de lote ganhava a trava
+ * de esquadro e o desfazer.
+ */
+function _pintarBarraDesenho() {
+  const barra = document.getElementById('des-barra')
+  if (!barra) { return }
+
+  barra.hidden = !desenhoState.ativo
+  if (!desenhoState.ativo) { return }
+
+  const n = desenhoState.vertices.length
+  const linha = desenhoState.modo === 'linha'
+  const minimo = linha ? 2 : 3
+
+  document.getElementById('des-barra-modo').textContent = desenhoState.rotulo
+  document.getElementById('des-barra-passo').textContent =
+    n === 0 ? (linha ? 'Toque nos dois extremos da divisa.' : 'Toque nos cantos.')
+      : n < minimo ? `${n} canto(s) — faltam ${minimo - n}.`
+        : `${n} cantos. Toque na medida de um lado para digitá-la.`
+
+  // Fechar só aparece quando há o que fechar: um botão que recusa o próprio
+  // clique ensina menos do que um botão que ainda não está lá.
+  document.getElementById('des-barra-fechar').hidden = n < minimo
+
+  _pintarTrava()
 }
 
 function cancelarDesenho() {
@@ -518,10 +555,31 @@ function _empurrar(c) {
 }
 
 /**
- * Rótulo em cada lado e a área no meio.
+ * A medida de cada lado, EDITÁVEL, em cima do próprio lado.
  *
- * Sem isto, o único jeito de saber o que se desenhou era gravar e ler a prévia
- * do servidor — ou seja, descobrir o erro depois de ter feito o lote.
+ * ── Por que aqui e não num campo lateral ──
+ *
+ * A primeira versão pedia a medida num formulário na coluna: digite 12,
+ * escolha "vira à direita", clique em "cravar lado". Três controles e um
+ * vocabulário inventado ("azimute", "segue reto") para dizer o que o desenho
+ * já mostra. Quem tem a matrícula na mão não pensa em rumo — pensa "esta
+ * frente aqui tem doze metros", apontando para o lado.
+ *
+ * Agora é isso: toca-se no número em cima do lado e digita-se o valor certo.
+ * O desenho se ajusta sozinho.
+ *
+ * ── O que acontece ao mudar um lado ──
+ *
+ * O lado mantém a DIREÇÃO e ganha o comprimento pedido; o vértice do fim anda
+ * sobre essa direção e leva junto, rigidamente, todos os vértices seguintes —
+ * os outros lados não mudam de tamanho nem de ângulo. Quem absorve a diferença
+ * é o LADO DE FECHAMENTO, o último, que volta ao primeiro canto.
+ *
+ * É como o memorial descritivo é escrito e conferido: percorre-se o perímetro
+ * leg a leg, e a última perna fecha. Por isso o lado de fechamento é pintado
+ * de outra cor e não aceita digitação — ele é resultado, não entrada. Deixá-lo
+ * editável permitiria pedir quatro lados que não fecham figura nenhuma, e o
+ * polígono teria de escolher em silêncio qual deles desobedecer.
  */
 function _pintarMedidas() {
   const mapa = mapaState.obj
@@ -535,9 +593,6 @@ function _pintarMedidas() {
   const v = desenhoState.vertices
   if (v.length < 2) { return }
 
-  // O lado de fechamento (do último ao primeiro) só ganha rótulo quando o
-  // polígono de fato fecha: numa linha ele não existe, e com dois pontos seria
-  // o mesmo lado medido duas vezes.
   const fecha = desenhoState.modo === 'poligono' && v.length >= 3
   const lados = fecha ? v.length : v.length - 1
 
@@ -547,16 +602,143 @@ function _pintarMedidas() {
   for (let i = 0; i < lados; i++) {
     const a = v[i]
     const b = v[(i + 1) % v.length]
-    desenhoState.rotulos.push(_rotulo(
-      (a[1] + b[1]) / 2, (a[0] + b[0]) / 2,
-      fmtMedida(distanciaNoPlano(a, b)), 'des-medida',
-      _foraDoLado(a, b, [cx, cy])))
+    // O último lado de um polígono fechado é o que volta ao primeiro canto.
+    const ehFechamento = fecha && i === v.length - 1
+    const metros = distanciaNoPlano(a, b)
+
+    desenhoState.rotulos.push(_rotuloMedida({
+      lat: (a[1] + b[1]) / 2,
+      lon: (a[0] + b[0]) / 2,
+      metros,
+      lado: i,
+      editavel: !ehFechamento,
+      fora: _foraDoLado(a, b, [cx, cy]),
+    }))
   }
 
-  if (fecha) {
+  // A ÁREA SÓ APARECE SE COUBER.
+  //
+  // Num lote de 12 m de frente visto de longe, o polígono tem cinquenta pixels
+  // de largura e a etiqueta da área tem oitenta: ela saía por cima das duas
+  // cotas laterais e as três viravam um borrão. Aproximar já resolve — e é o
+  // que o operador faz naturalmente para conferir uma medida.
+  if (fecha && _cabeNaTela(v, 96)) {
     desenhoState.rotuloArea = _rotulo(cy, cx,
       areaDoDesenho().toFixed(2).replace('.', ',') + ' m²', 'des-area')
   }
+}
+
+/**
+ * O polígono tem, na tela, ao menos `px` de largura?
+ *
+ * @param {Array<[number,number]>} v @param {number} px
+ */
+function _cabeNaTela(v, px) {
+  const mapa = mapaState.obj
+  if (!mapa) { return false }
+  const pontos = v.map(c => mapa.latLngToContainerPoint([c[1], c[0]]))
+  const xs = pontos.map(p => p.x)
+  return (Math.max(...xs) - Math.min(...xs)) >= px
+}
+
+/**
+ * Uma etiqueta de medida que aceita toque.
+ *
+ * O painel `desenho` fica surdo fora do desenho (ver `_limpar`), então a
+ * etiqueta é marcada `interactive` e o clique é tratado no próprio elemento —
+ * sem isso o toque atravessaria para a folha de captura e viraria mais um
+ * vértice, no meio do lado que se queria corrigir.
+ */
+function _rotuloMedida({ lat, lon, metros, lado, editavel, fora }) {
+  const classe = 'des-medida' + (editavel ? '' : ' des-medida-fecha')
+  const attr = editavel
+    ? ` role="button" tabindex="0" title="Toque para digitar a medida deste lado"`
+    : ` title="Lado de fechamento: sai do que os outros deixaram"`
+
+  const m = L.marker([lat, lon], {
+    pane: 'desenho', interactive: editavel, keyboard: false,
+    icon: L.divIcon({
+      className: classe, iconSize: null,
+      html: `<span class="des-rot"${attr} data-lado="${lado}"
+              style="transform:translate(-50%,-50%) translate(${_empurrar(fora[0])},${_empurrar(fora[1])})"
+              >${fmtMedida(metros)}</span>`,
+    }),
+  }).addTo(mapaState.obj)
+
+  if (editavel) {
+    const el = m.getElement()
+    L.DomEvent.disableClickPropagation(el)
+    el.addEventListener('click', ev => { L.DomEvent.stop(ev); editarLado(lado) })
+  }
+  return m
+}
+
+/**
+ * Abre a caixinha de digitação sobre o lado e aplica a medida.
+ *
+ * @param {number} i índice do lado (do vértice i ao i+1)
+ */
+function editarLado(i) {
+  const v = desenhoState.vertices
+  const a = v[i]
+  const b = v[(i + 1) % v.length]
+  if (!a || !b) { return }
+
+  const atual = distanciaNoPlano(a, b)
+  const rot = desenhoState.rotulos[i]?.getElement()?.querySelector('.des-rot')
+  if (!rot) { return }
+
+  // A caixa nasce EM CIMA da etiqueta, com o valor atual selecionado: o gesto
+  // é corrigir um número que já está lá, não preencher um campo vazio.
+  rot.innerHTML = `<input class="des-medida-campo" inputmode="decimal"
+    value="${atual.toFixed(2).replace('.', ',')}" aria-label="Medida do lado em metros">`
+  const campo = rot.querySelector('input')
+  campo.focus()
+  campo.select()
+
+  const aplicar = () => {
+    const n = Number(String(campo.value).replace(',', '.'))
+    if (Number.isFinite(n) && n > 0.05) { aplicarMedidaDoLado(i, n) } else { _pintar() }
+  }
+
+  campo.addEventListener('keydown', ev => {
+    ev.stopPropagation()   // Esc e Enter são do desenho; aqui são do campo
+    if (ev.key === 'Enter') { aplicar() }
+    if (ev.key === 'Escape') { _pintar() }
+  })
+  campo.addEventListener('blur', aplicar)
+}
+
+/**
+ * Dá ao lado `i` o comprimento pedido, arrastando o resto do polígono.
+ *
+ * @param {number} i @param {number} metros
+ */
+function aplicarMedidaDoLado(i, metros) {
+  const v = desenhoState.vertices
+  const a = aoPlano(v[i][0], v[i][1])
+  const b = aoPlano(v[(i + 1) % v.length][0], v[(i + 1) % v.length][1])
+
+  const dx = b[0] - a[0]
+  const dy = b[1] - a[1]
+  const atual = Math.hypot(dx, dy)
+  if (atual < 0.001) { toast('Este lado tem comprimento zero.', 'err'); return }
+
+  // De quanto o vértice do fim precisa andar, na direção do próprio lado.
+  const passo = metros - atual
+  const ux = dx / atual
+  const uy = dy / atual
+
+  // Todos os vértices DEPOIS de `i` andam junto: assim os outros lados
+  // guardam o tamanho e o ângulo que já tinham, e só o fechamento se ajusta.
+  for (let k = i + 1; k < v.length; k++) {
+    const p = aoPlano(v[k][0], v[k][1])
+    const [lon, lat] = doPlano(p[0] + ux * passo, p[1] + uy * passo)
+    v[k] = [lon, lat]
+  }
+
+  _pintar()
+  toast(`Lado ${i + 1} com ${fmtMedida(metros)}.`)
 }
 
 // ── ENCAIXE EM VÉRTICE VIZINHO ───────────────────────────────
@@ -637,6 +819,7 @@ function _pintar() {
   }).addTo(mapa))
 
   _pintarMedidas()
+  _pintarBarraDesenho()
 
   if (typeof aoDesenharVertice === 'function') {
     aoDesenharVertice(desenhoState.vertices.length)
@@ -673,9 +856,11 @@ function _limpar() {
     ativo: false, modo: null, vertices: [], rascunho: null, previa: null,
     elastico: null, captura: null, marcadores: [], onConcluir: null, onCancelar: null,
     plano: null, rotulos: [], rotuloArea: null, rotuloElastico: null, shiftSolto: false,
+    rotulo: null,
   })
 
   document.getElementById('map')?.classList.remove('desenhando')
+  _pintarBarraDesenho()
   if (typeof aoDesenharVertice === 'function') { aoDesenharVertice(0) }
 }
 
@@ -690,6 +875,19 @@ function _arredondar(v) {
 document.addEventListener('keydown', ev => {
   if (!desenhoState.ativo) { return }
   if (document.querySelector('.modal-bg.open')) { return }
+
+  // TECLA DIGITADA DENTRO DE UM CAMPO É DO CAMPO.
+  //
+  // Este handler roda na fase de CAPTURA — de propósito, para chegar antes dos
+  // de mapa.js. O efeito colateral é que ele também chega antes do campo de
+  // medida em cima do lado: teclar Enter para confirmar "12,00" fechava o
+  // polígono inteiro, e Esc cancelava o desenho. `stopPropagation` do lado do
+  // campo não resolve — na captura, ele já perdeu a vez.
+  const alvo = ev.target
+  if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA'
+      || alvo.tagName === 'SELECT' || alvo.isContentEditable)) {
+    return
+  }
 
   if (ev.key === 'Escape') { ev.stopPropagation(); cancelarDesenho(); return }
   if (ev.key === 'Enter') { ev.stopPropagation(); concluirDesenho(); return }

@@ -1984,47 +1984,9 @@
         <div id="coo-resultado"></div>
       </div>
 
-      <div id="des-desenhando" hidden>
-        <div class="leg" id="des-contagem">Toque nos cantos do lote. Duplo toque fecha.</div>
-
-        {{-- A MESA DE MEDIDAS.
-             Desenhar lote não é trabalho de campo: é trabalho de mesa, com a
-             matrícula ao lado. Estes dois controles são o que traz a matrícula
-             para dentro do desenho — a trava dá o esquadro, e o lado digitado
-             dá a medida exata. Sem eles o polígono sai de onde o dedo clicou. --}}
-        <div class="des-trava-linha">
-          <button type="button" class="btn sm at" id="des-trava" aria-pressed="true"
-                  onclick="alternarTravaAngulo()"
-                  title="Trava o lado em múltiplos de 45°. Segure Shift para soltar num canto.">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M4 4v16h16"/><path d="M4 12h8v8"/>
-            </svg>
-            Ângulo 90°
-          </button>
-          <span class="des-trava-obs">Shift solta num canto só.</span>
-        </div>
-
-        <div class="cad-row des-medir">
-          <input type="number" id="des-metros" step="0.01" min="0" placeholder="Metros"
-                 inputmode="decimal" onkeydown="if(event.key==='Enter')cravarLadoDaTela()">
-          <select id="des-direcao" onchange="pintarDirecaoDoLado()">
-            <option value="dir">Vira à direita</option>
-            <option value="esq">Vira à esquerda</option>
-            <option value="reta">Segue reto</option>
-            <option value="azimute">Azimute</option>
-          </select>
-          <input type="number" id="des-azimute" step="0.1" min="0" max="360" placeholder="Az °"
-                 hidden style="max-width:88px"
-                 onkeydown="if(event.key==='Enter')cravarLadoDaTela()">
-          <button type="button" class="btn primary sm" onclick="cravarLadoDaTela()">Cravar lado</button>
-        </div>
-
-        <div class="seg" style="margin:6px 0 0">
-          <button type="button" onclick="desfazerVertice()">Desfazer canto</button>
-          <button type="button" onclick="largarDesenho()">Cancelar</button>
-        </div>
-      </div>
+      {{-- Enquanto se desenha, esta coluna fica VAZIA de propósito: quem está
+           traçando olha para o mapa, e é lá que a barra `#des-barra` diz o
+           passo. Aqui só aparece o formulário, depois que o contorno fecha. --}}
 
       <div id="des-dados" hidden>
         {{-- BAIRRO ESCOLHIDO, não digitado.
@@ -2129,6 +2091,39 @@
     <div id="mesa-props"></div>
   </div>
 </aside>
+
+{{-- ══════ BARRA DE DESENHO ══════
+
+     UMA barra para todo desenho no mapa. Ela é do motor de desenho
+     (public/js/desenho.js), não do cadastro: aparece sozinha sempre que um
+     traçado começa, seja lote novo, edificação ou a divisa de um
+     desmembramento, e some quando ele termina.
+
+     Antes estes controles moravam dentro do painel "desenhar lote faltante" —
+     então desenhar uma edificação era o mesmo motor sem trava de esquadro e
+     sem desfazer, e a divisa do desmembramento idem. Mesmo gesto, três
+     experiências diferentes. --}}
+<div class="des-barra" id="des-barra" hidden>
+  <span class="des-barra-modo" id="des-barra-modo">Desenhando</span>
+  <span class="des-barra-passo" id="des-barra-passo">Toque nos cantos.</span>
+
+  <button type="button" class="btn sm at" id="des-trava" aria-pressed="true"
+          onclick="alternarTravaAngulo()"
+          title="Trava cada lado em múltiplo de 45° do anterior. Segure Shift para soltar num canto.">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 4v16h16"/><path d="M4 12h8v8"/>
+    </svg>
+    90°
+  </button>
+
+  <button type="button" class="btn sm" onclick="desfazerVertice()"
+          title="Ctrl+Z">Desfazer canto</button>
+  <button type="button" class="btn primary sm" id="des-barra-fechar"
+          onclick="concluirDesenho()" title="Enter">Fechar desenho</button>
+  <button type="button" class="btn sm" onclick="cancelarDesenho()"
+          title="Esc">Cancelar</button>
+</div>
 
 {{-- ══════ MESA DE DESMEMBRAMENTO ══════
 

@@ -110,6 +110,7 @@ function desenharEdificacao() {
 
   iniciarDesenho({
     modo: 'poligono',
+    rotulo: 'Edificação',
     // O encaixe fica LIGADO: o muro da edícula costuma nascer na divisa, e
     // encostar nela de olho deixa a fresta de sempre.
     snap: true,
