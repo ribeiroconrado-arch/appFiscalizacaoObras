@@ -362,19 +362,57 @@
            fazer; o que é feito no mapa fica no mapa (barra de estado no topo)
            e o que é formulário vai para o modal. --}}
       <div id="cad-geral">
+        <div class="cad-sep">Corrigir o desenho</div>
+
         <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('quadra')">
-          Corrigir quadra de vários lotes</button>
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.2"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.2"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.2"/>
+            <path d="M14 17.5h7M17.5 14v7"/>
+          </svg>
+          <span class="cad-lanca-txt">Corrigir quadra
+            <span class="cad-lanca-obs">Toque em vários lotes; todos recebem a mesma quadra.</span>
+          </span>
+        </button>
+
         <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('desenho')">
-          Desenhar lote faltante</button>
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 20 20 4"/><path d="M4 14v6h6"/>
+            <path d="M13.5 4H20v6.5"/>
+          </svg>
+          <span class="cad-lanca-txt">Desenhar lote faltante
+            <span class="cad-lanca-obs">Com medida, esquadro e encaixe no vizinho.</span>
+          </span>
+        </button>
+
         <button type="button" class="btn sm cad-lanca" onclick="modoCadastral('coordenadas')">
-          Lote por coordenadas</button>
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21z"/>
+            <circle cx="12" cy="9.5" r="2.4"/>
+          </svg>
+          <span class="cad-lanca-txt">Lote por coordenadas
+            <span class="cad-lanca-obs">Cole os vértices do memorial descritivo.</span>
+          </span>
+        </button>
 
         {{-- A edificação não é um "modo cadastral": ela não mexe na divisa do
              lote, não pede quadra nem número, e o desenho termina numa única
              pergunta. Por isso chama direto, sem passar por `modoCadastral`. --}}
+        <div class="cad-sep">O que está construído</div>
+
         <button type="button" class="btn sm cad-lanca" onclick="desenharEdificacao()">
-          Desenhar edificação
-          <span class="cad-lanca-obs">Selecione 1 lote e contorne a construção dentro dele.</span>
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/>
+            <path d="M10 20v-5h4v5"/>
+          </svg>
+          <span class="cad-lanca-txt">Desenhar edificação
+            <span class="cad-lanca-obs">Selecione 1 lote e contorne a construção dentro dele.</span>
+          </span>
         </button>
 
         @if (auth()->user()->podeCurarCadastro())
@@ -392,23 +430,42 @@
           <div class="cad-sep">Sem protocolo — só curadoria</div>
 
           <button type="button" class="btn sm cad-lanca" onclick="atoDiretoCadastral('unificacao')">
-            Unificar lotes direto
-            <span class="cad-lanca-obs">Toque em 2 ou mais lotes vizinhos; eles viram um.</span>
+            <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="6" width="8" height="12" rx="1.2"/>
+              <rect x="13" y="6" width="8" height="12" rx="1.2"/>
+              <path d="M11 12h2"/>
+            </svg>
+            <span class="cad-lanca-txt">Unificar lotes direto
+              <span class="cad-lanca-obs">Toque em 2 ou mais lotes vizinhos; eles viram um.</span>
+            </span>
           </button>
 
           <button type="button" class="btn sm cad-lanca" onclick="atoDiretoCadastral('desmembramento')">
-            Desmembrar lote direto
-            <span class="cad-lanca-obs">Selecione 1 lote no mapa e desenhe as partes.</span>
+            <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="1.4"/>
+              <path d="M12 3v18" stroke-dasharray="3 2.5"/>
+            </svg>
+            <span class="cad-lanca-txt">Desmembrar lote direto
+              <span class="cad-lanca-obs">Selecione 1 lote; a divisa sai de um corte, não de novo desenho.</span>
+            </span>
           </button>
 
           <button type="button" class="btn sm cad-lanca cad-lanca-perigo" onclick="apagarLoteDoPainel()">
-            Apagar lote residual
-            <span class="cad-lanca-obs">Selecione 1 lote. Só para sobra da conversão do desenho.</span>
+            <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
+              <path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/>
+            </svg>
+            <span class="cad-lanca-txt">Apagar lote residual
+              <span class="cad-lanca-obs">Marque um ou vários. Só para sobra da conversão do desenho.</span>
+            </span>
           </button>
         @endif
 
-        <div class="cad-dica">O trabalho acontece no mapa; os dados são pedidos
-          depois, numa janela.</div>
+        <div class="cad-dica">O trabalho acontece no mapa; o que a ferramenta
+          pede aparece aqui nesta coluna.</div>
       </div>{{-- /cad-geral --}}
     </div>
   </div>
@@ -2060,7 +2117,10 @@
      para o painel flutuante — que é o que cabe na mão. --}}
 <aside class="cad-mesa" id="cad-mesa" hidden aria-label="Edição cadastral">
   <div class="cad-mesa-topo">
-    <span class="cad-mesa-tit" id="cad-mesa-titulo">Edição cadastral</span>
+    {{-- Só aparece com ferramenta ativa: no menu não há para onde voltar. --}}
+    <button class="cad-mesa-voltar" id="cad-mesa-voltar" hidden
+            onclick="voltarAsFerramentas()" title="Voltar às ferramentas">&#8592;</button>
+    <span class="cad-mesa-tit" id="cad-mesa-titulo">Ferramentas do cadastro</span>
     <button class="cad-mesa-x" onclick="fecharMesaCadastral()"
             title="Fechar a mesa" aria-label="Fechar a mesa">&#10005;</button>
   </div>

@@ -2487,7 +2487,16 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* O lançador cadastral passa a dizer O QUE PRECISA ANTES, em duas linhas: o
    nome do ato e a exigência dele. As três são diferentes — dois lotes, um lote,
    um lote sem história — e descobrir isso na recusa é tarde. */
-.cad-lanca{flex-direction:column;align-items:flex-start;gap:2px;padding-top:8px;padding-bottom:8px}
+/* ÍCONE À ESQUERDA, TEXTO À DIREITA.
+   Empilhado (nome em cima, explicação embaixo, sem ícone) o menu lia como
+   lista de links de celular espremida numa coluna. Com o ícone fixo na
+   margem, a coluna passa a se percorrer pelo desenho — que é como se usa uma
+   barra de ferramentas — e a explicação deixa de disputar a primeira leitura. */
+.cad-lanca{flex-direction:row;align-items:flex-start;gap:10px;
+  padding-top:9px;padding-bottom:9px}
+.cad-lanca .cad-ico{width:18px;height:18px;flex-shrink:0;margin-top:1px;color:var(--gd)}
+.cad-lanca-perigo .cad-ico{color:var(--red)}
+.cad-lanca-txt{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left}
 .cad-lanca-obs{font-size:11px;font-weight:400;color:var(--tx2);line-height:1.35;
   white-space:normal;text-align:left}
 /* Apagar não tem volta: a cor diz isso no menu, antes do clique. */
@@ -2545,7 +2554,11 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
     display:flex; flex-direction:column; position:fixed; z-index:900;
     /* 120px é logo abaixo do sub-cabeçalho (que termina em 110px): com 82px a
        barra do brasão passava por cima do título da mesa. */
-    left:12px; top:120px; bottom:78px; width:326px;
+    /* ALTURA PELO CONTEÚDO, e não da barra ao rodapé.
+       Com `bottom` fixo, a ferramenta ativa — quatro linhas — ficava dentro de
+       uma caixa branca de 660px de altura, quase toda vazia, tapando o mapa
+       sem motivo. O teto continua existindo para o menu não passar do rodapé. */
+    left:12px; top:120px; max-height:calc(100vh - 200px); width:326px;
     background:rgba(255,255,255,.97); border:1.5px solid var(--bord);
     border-radius:var(--rl); box-shadow:0 10px 32px rgba(0,0,0,.14);
   }
@@ -2561,13 +2574,15 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cad-mesa-x{background:none;border:none;color:var(--tx3);cursor:pointer;
   font-size:15px;line-height:1;padding:2px 4px}
+.cad-mesa-voltar{background:none;border:none;color:var(--gd);cursor:pointer;
+  font-size:17px;line-height:1;padding:2px 6px 2px 0;flex-shrink:0}
+.cad-mesa-voltar:hover{color:var(--gxd)}
+.cad-mesa-voltar[hidden]{display:none}
 .cad-mesa-x:hover{color:var(--red)}
 .cad-mesa-rolo{flex:1;min-height:0;overflow-y:auto;padding:12px}
-/* O separador entre as ferramentas e o que a ferramenta pede: sem ele os dois
-   blocos viram uma lista só, e não se sabe onde termina a escolha e onde
-   começa o trabalho. */
-.cad-mesa #mesa-props:not(:empty){margin-top:12px;padding-top:12px;
-  border-top:1.5px solid var(--blt)}
+/* Menu e ferramenta nunca aparecem juntos (ver pintarMesaCadastral), então não
+   há separador entre eles — havia um traço aqui de quando conviviam. */
+.cad-mesa #mesa-lanca[hidden], .cad-mesa #mesa-props[hidden]{display:none}
 
 /* A mesa de desmembramento herda a caixa da mesa cadastral: é o mesmo objeto
    na tela, com outro assunto dentro. */
@@ -2575,7 +2590,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 @media (min-width:1000px){
   .desm-mesa{
     display:flex; flex-direction:column; position:fixed; z-index:901;
-    left:12px; top:120px; bottom:78px; width:340px;
+    left:12px; top:120px; max-height:calc(100vh - 200px); width:340px;
     background:rgba(255,255,255,.97); border:1.5px solid var(--bord);
     border-radius:var(--rl); box-shadow:0 10px 32px rgba(0,0,0,.14);
   }

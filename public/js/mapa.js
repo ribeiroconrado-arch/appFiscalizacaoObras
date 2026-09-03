@@ -284,7 +284,7 @@ function alternarPainelMapa(idGrupo) {
     const mesa = document.getElementById('cad-mesa')
     if (mesa) {
       fecharPaineisMapa()
-      if (mesa.hidden) { abrirMesaCadastral('Edição cadastral') } else { fecharMesaCadastral() }
+      if (mesa.hidden) { abrirMesaCadastral() } else { fecharMesaCadastral() }
       return
     }
   }

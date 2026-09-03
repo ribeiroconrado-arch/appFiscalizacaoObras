@@ -68,6 +68,13 @@ function sairMesaDesmembramento() {
   const barra = document.getElementById('desm-mesa')
   if (barra) { barra.hidden = true }
   cancelarDesenho()
+
+  // Devolve às FERRAMENTAS. Sem isto, sair do desmembramento deixava a tela
+  // sem coluna nenhuma, e a única saída era reabrir tudo pelo ícone — quem
+  // desiste de um ato quase sempre quer o ato ao lado, não o mapa limpo.
+  if (typeof ehMesaCadastral === 'function' && ehMesaCadastral()) {
+    abrirMesaCadastral()
+  }
 }
 
 /**

@@ -177,9 +177,14 @@ function sairModoCadastral(silencioso) {
   cadModo = null
   if (!silencioso) {
     fModalBtn('m-cad')
-    const mesa = document.getElementById('cad-mesa')
-    if (mesa) { mesa.hidden = true; document.body.classList.remove('com-mesa') }
+    // A MESA CONTINUA ABERTA, mostrando o menu.
+    //
+    // Fechá-la aqui fazia o "← Ferramentas" apagar a coluna inteira em vez de
+    // voltar um passo — quem largava uma ferramenta tinha de reabrir a mesa
+    // pelo ícone para escolher a próxima, que é o caminho mais longo possível
+    // entre duas ferramentas vizinhas.
     pintarPainelCadastro()
+    pintarMesaCadastral()
   }
 }
 
@@ -229,13 +234,93 @@ function montarMesaCadastral(abrir) {
   }
 
   document.body.classList.toggle('com-mesa', ehMesaCadastral() && !mesa.hidden)
+  pintarMesaCadastral()
 }
 
-/** Abre a mesa e escreve nela o assunto do momento. */
-function abrirMesaCadastral(titulo) {
-  montarMesaCadastral(true)
+/**
+ * A mesa mostra UMA coisa de cada vez: o menu OU a ferramenta.
+ *
+ * Antes mostrava as duas empilhadas, e era o defeito principal: escolhida a
+ * ferramenta, os sete botões de lançamento continuavam ocupando a coluna
+ * inteira e o trabalho de verdade — marcar lotes, digitar a quadra, conferir —
+ * ficava espremido no rodapé, fora da vista em qualquer notebook de 768px.
+ *
+ * Escolher uma ferramenta recolhe o menu; o "← Ferramentas" no topo traz ele
+ * de volta. É a mesma navegação que Parâmetros já usa em lei → artigos e em
+ * ano → feriados.
+ */
+function pintarMesaCadastral() {
+  const mesa = document.getElementById('cad-mesa')
+  if (!mesa || mesa.hidden) { return }
+
+  const emFerramenta = !!(cadModo || atoState.tipo)
+  const lanca = document.getElementById('mesa-lanca')
+  const props = document.getElementById('mesa-props')
+  if (lanca) { lanca.hidden = emFerramenta }
+  if (props) { props.hidden = !emFerramenta }
+
+  // O painel do modo corrente, e só ele. Sem isto, sair de "corrigir quadra"
+  // para "desenhar lote" deixava os dois formulários na tela.
+  const quadra = document.getElementById('cadp-quadra')
+  const desenho = document.getElementById('cadp-desenho')
+  if (quadra && desenho && emFerramenta) {
+    const ehQuadra = cadModo === 'quadra' || cadModo === 'apagar' || atoState.tipo === 'unificacao'
+    quadra.hidden = !ehQuadra
+    desenho.hidden = ehQuadra
+  }
+
+  const voltar = document.getElementById('cad-mesa-voltar')
+  if (voltar) { voltar.hidden = !emFerramenta }
+
   const t = document.getElementById('cad-mesa-titulo')
-  if (t && titulo) { t.textContent = titulo }
+  if (t) { t.textContent = emFerramenta ? tituloDaFerramenta() : 'Ferramentas do cadastro' }
+}
+
+/** O nome da ferramenta ativa, para o topo da mesa. */
+function tituloDaFerramenta() {
+  if (atoState.tipo === 'unificacao') { return 'Unificar lotes' }
+  if (atoState.tipo === 'desmembramento') { return 'Desmembrar lote' }
+  return {
+    quadra: 'Corrigir quadra',
+    apagar: 'Apagar lote residual',
+    desenho: 'Desenhar lote',
+    coordenadas: 'Lote por coordenadas',
+  }[cadModo] ?? 'Edição cadastral'
+}
+
+/**
+ * Volta ao menu, largando a ferramenta.
+ *
+ * Confirma quando há trabalho em curso — lotes marcados ou desenho pendente.
+ * Sair é a mesma coisa que o "Sair" da barra flutuante sempre fez; a diferença
+ * é que ali ele era um botão isolado, e aqui fica ao lado do título, onde a
+ * mão passa sem querer.
+ */
+function voltarAsFerramentas() {
+  const temTrabalho = selState.ids.size > 0 || desenhoPendente
+    || (typeof estaDesenhando === 'function' && estaDesenhando())
+
+  if (!temTrabalho) { sairModoCadastral(); return }
+
+  confirmarAcao({
+    titulo: 'Largar o que está em curso',
+    mensagem: selState.ids.size
+      ? `${selState.ids.size} lote(s) marcado(s) serão desmarcados.`
+      : 'O desenho em curso será descartado.',
+    perigo: true,
+    onConfirm: () => sairModoCadastral(),
+  })
+}
+
+/**
+ * Abre a mesa. O título é decidido por `pintarMesaCadastral`, e não aqui.
+ *
+ * O parâmetro existia e escrevia por cima: abrir pelo ícone deixava
+ * "Edição cadastral" fixo no topo mesmo com uma ferramenta ativa, e o título
+ * deixava de dizer onde a pessoa estava.
+ */
+function abrirMesaCadastral() {
+  montarMesaCadastral(true)
 }
 
 /**
@@ -282,7 +367,7 @@ function abrirModalCad() {
   // por cima do mapa para digitar a quadra de lotes que estão no mapa é
   // esconder a resposta atrás da pergunta.
   if (ehMesaCadastral()) {
-    abrirMesaCadastral(document.getElementById('cad-modal-titulo').textContent)
+    abrirMesaCadastral()
   } else {
     openModal('m-cad')
   }
@@ -313,8 +398,21 @@ function pintarBarraCadastral() {
   // Esconder, e nao sair do modo: o trabalho em curso (lotes marcados, desenho
   // pendente) continua de pe, e volta a aparecer ao voltar para o mapa.
   const noMapa = typeof mapaVisivel !== 'function' || mapaVisivel()
-  barra.hidden = !cadModo || !noMapa
-  if (!cadModo || !noMapa) { return }
+
+  // A MESA E A BARRA NÃO FALAM JUNTAS.
+  //
+  // As duas dizem o mesmo: em que passo se está e qual é o próximo botão. Com
+  // a mesa aberta ao lado do mapa, a barra virava um segundo painel repetindo
+  // "2 lote(s) marcados · Limpar marcação · Informar a quadra" logo acima do
+  // painel que já oferecia exatamente isso — dois controles para a mesma ação,
+  // que é como se perde a confiança no que a tela está dizendo.
+  //
+  // A barra continua existindo para o celular, onde não há mesa, e para quando
+  // a mesa é fechada de propósito para ver o mapa inteiro.
+  const mesaAberta = ehMesaCadastral() && document.getElementById('cad-mesa')?.hidden === false
+
+  barra.hidden = !cadModo || !noMapa || mesaAberta
+  if (barra.hidden) { return }
 
   const n = selState.ids.size
   const emAto = atoState.tipo === 'unificacao'
@@ -383,6 +481,7 @@ function pintarBarraCadastral() {
  */
 function pintarPainelCadastro() {
   pintarBarraCadastral()
+  pintarMesaCadastral()
 
   const cont = document.getElementById('cadp-quadra')
   if (!cont) { return }
