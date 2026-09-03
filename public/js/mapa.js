@@ -122,6 +122,18 @@ function iniciarMapa() {
   mapaState.obj.on('moveend', sincronizarRotulos)
   mapaState.obj.on('baselayerchange', () => ajustarNitidezSatelite())
 
+  // Duplo toque FORA de um lote larga a seleção — o mesmo gesto do Esc, para
+  // quem tem o dedo no mapa e não no teclado. Cada lote consome o próprio
+  // duplo toque (ver onEachFeature) antes de ele chegar aqui, então isto só
+  // dispara quando o toque caiu fora de qualquer lote.
+  mapaState.obj.on('dblclick', () => {
+    if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
+      desligarSelecao()
+      return
+    }
+    limparSelecao()
+  })
+
   recortarMunicipio()
 }
 
@@ -663,6 +675,10 @@ function adicionarAoMapa(geojson, aoClicar) {
         destacar(camada)
         abrirBalao(feicao, camada)
       })
+      // Duplo toque NO lote é do lote — para de subir até o mapa. Sem isto,
+      // o duplo toque para dar zoom no imóvel também disparava o "duplo toque
+      // fora larga a seleção" do mapa, no mesmo gesto.
+      camada.on('dblclick', ev => L.DomEvent.stopPropagation(ev))
       // O número do lote fica GUARDADO, não criado.
       //
       // Antes, cada lote recebia aqui um tooltip permanente, escondido por CSS
