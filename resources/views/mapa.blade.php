@@ -2119,8 +2119,10 @@
 
   <button type="button" class="btn sm" onclick="desfazerVertice()"
           title="Ctrl+Z">Desfazer canto</button>
+  <button type="button" class="btn sm" id="des-barra-voltar" hidden
+          onclick="voltarATracar()">Voltar a traçar</button>
   <button type="button" class="btn primary sm" id="des-barra-fechar"
-          onclick="concluirDesenho()" title="Enter">Fechar desenho</button>
+          onclick="concluirDesenho()" title="Enter">Fechar contorno</button>
   <button type="button" class="btn sm" onclick="cancelarDesenho()"
           title="Esc">Cancelar</button>
 </div>

@@ -251,7 +251,22 @@ function montarMesaCadastral(abrir) {
  */
 function pintarMesaCadastral() {
   const mesa = document.getElementById('cad-mesa')
-  if (!mesa || mesa.hidden) { return }
+  if (!mesa) { return }
+
+  // O DESMEMBRAMENTO TEM MESA PRÓPRIA, e as duas ocupam o mesmo canto da tela.
+  //
+  // Com o ato em curso, esta aqui abria junto e VAZIA — título "Desmembrar
+  // lote" e nada embaixo, porque o formulário do lote não é o formulário do
+  // desmembramento. Quem começava o ato ficava com uma caixa branca inútil por
+  // cima da mesa onde o trabalho de fato acontece, sem passo seguinte à vista:
+  // a ferramenta parecia travada, e estava.
+  if (atoState.tipo === 'desmembramento') {
+    mesa.hidden = true
+    document.body.classList.remove('com-mesa')
+    return
+  }
+
+  if (mesa.hidden) { return }
 
   const emFerramenta = !!(cadModo || atoState.tipo)
   const lanca = document.getElementById('mesa-lanca')
@@ -949,6 +964,7 @@ function cortarLote() {
       toast('Lote cortado em duas partes. Informe o numero de cada uma.')
       pintarDesmembramento()
       pintarMesaDesmembramento()
+      if (typeof pintarPartesNoMapa === 'function') { pintarPartesNoMapa() }
     },
     onCancelar: () => { pintarDesmembramento(); pintarMesaDesmembramento() },
   })

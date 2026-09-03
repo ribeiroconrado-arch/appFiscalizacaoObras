@@ -24,6 +24,12 @@ const desenhoState = {
   travaAngulo: true,
   /** Shift pressionado agora: solta a trava sem desligá-la. */
   shiftSolto: false,
+  /**
+   * Contorno fechado, em AJUSTE: não aceita mais cantos novos por clique, as
+   * alças estão à mão e falta confirmar. É o estado onde o desenho deixa de
+   * ser traçado e passa a ser corrigido.
+   */
+  fechado: false,
   /** Plano local em metros, fixado no primeiro vértice — ver `_plano`. */
   plano: null,
   /** @type {L.Marker[]} rótulos de medida dos lados */ rotulos: [],
@@ -78,6 +84,7 @@ function iniciarDesenho(opcoes) {
     // perpendicular a coisa nenhuma. `travaAngulo` na chamada manda em ambos.
     travaAngulo: opcoes.travaAngulo ?? (opcoes.modo !== 'linha'),
     shiftSolto: false,
+    fechado: false,
     onConcluir: opcoes.onConcluir,
     onCancelar: opcoes.onCancelar || null,
     ultimoClique: { t: 0, x: 0, y: 0 },
@@ -131,16 +138,26 @@ function _pintarBarraDesenho() {
   const n = desenhoState.vertices.length
   const linha = desenhoState.modo === 'linha'
   const minimo = linha ? 2 : 3
+  const ajustando = desenhoState.fechado
 
   document.getElementById('des-barra-modo').textContent = desenhoState.rotulo
-  document.getElementById('des-barra-passo').textContent =
-    n === 0 ? (linha ? 'Toque nos dois extremos da divisa.' : 'Toque nos cantos.')
+  document.getElementById('des-barra-passo').textContent = ajustando
+    ? 'Arraste os cantos, toque numa medida para digitá-la, e confirme.'
+    : n === 0 ? (linha ? 'Toque nos dois extremos da divisa.' : 'Toque nos cantos.')
       : n < minimo ? `${n} canto(s) — faltam ${minimo - n}.`
-        : `${n} cantos. Toque na medida de um lado para digitá-la.`
+        : `${n} cantos. Duplo toque fecha.`
 
   // Fechar só aparece quando há o que fechar: um botão que recusa o próprio
   // clique ensina menos do que um botão que ainda não está lá.
-  document.getElementById('des-barra-fechar').hidden = n < minimo
+  const fechar = document.getElementById('des-barra-fechar')
+  fechar.hidden = n < minimo
+  fechar.textContent = ajustando ? 'Confirmar' : 'Fechar contorno'
+  fechar.setAttribute('onclick', ajustando ? 'confirmarDesenho()' : 'concluirDesenho()')
+
+  // "Voltar a traçar" só existe no ajuste, e é o que devolve o gesto de
+  // acrescentar cantos no fim do contorno.
+  const voltar = document.getElementById('des-barra-voltar')
+  if (voltar) { voltar.hidden = !ajustando }
 
   _pintarTrava()
 }
@@ -160,14 +177,17 @@ function desfazerVertice() {
 }
 
 /**
- * Fecha o desenho e devolve a geometria a quem pediu.
+ * Fecha o contorno e entra em AJUSTE — não entrega ainda.
  *
- * O polígono é fechado AQUI, repetindo o primeiro vértice no fim, porque é o
- * que a RFC 7946 exige e o que `ST_GeomFromGeoJSON` espera. Deixar isso para o
- * servidor faria a mesma regra viver em dois lugares.
+ * Antes, fechar era o fim: a geometria ia embora no mesmo gesto e o único
+ * conserto de um canto torto era refazer o desenho inteiro. Agora fechar é o
+ * meio do caminho: o contorno fica na tela com as alças à mão, e só sai daqui
+ * quando alguém confirma.
+ *
+ * É a diferença entre uma ferramenta de traçar e uma de desenhar.
  */
 function concluirDesenho() {
-  if (!desenhoState.ativo) { return }
+  if (!desenhoState.ativo || desenhoState.fechado) { return }
 
   const minimo = desenhoState.modo === 'linha' ? 2 : 3
   if (desenhoState.vertices.length < minimo) {
@@ -177,10 +197,45 @@ function concluirDesenho() {
     return
   }
 
+  desenhoState.fechado = true
+
+  // O elástico não tem mais para onde ir: o próximo clique não cria canto.
+  if (desenhoState.elastico) {
+    mapaState.obj.removeLayer(desenhoState.elastico)
+    desenhoState.elastico = null
+  }
+  if (desenhoState.rotuloElastico) {
+    mapaState.obj.removeLayer(desenhoState.rotuloElastico)
+    desenhoState.rotuloElastico = null
+  }
+
+  _pintar()
+  toast('Ajuste os cantos se precisar e confirme.', 'aviso')
+}
+
+/**
+ * Entrega a geometria a quem pediu o desenho.
+ *
+ * O polígono é fechado AQUI, repetindo o primeiro vértice no fim, porque é o
+ * que a RFC 7946 exige e o que `ST_GeomFromGeoJSON` espera. Deixar isso para o
+ * servidor faria a mesma regra viver em dois lugares.
+ */
+function confirmarDesenho() {
+  if (!desenhoState.ativo) { return }
+  if (!desenhoState.fechado) { concluirDesenho(); return }
+
   const g = geometriaDoDesenho()
   const cb = desenhoState.onConcluir
   _limpar()
   if (cb) cb(g)
+}
+
+/** Volta do ajuste para o traçado, para acrescentar cantos no fim. */
+function voltarATracar() {
+  if (!desenhoState.fechado) { return }
+  desenhoState.fechado = false
+  _pintar()
+  toast('Continue tocando nos cantos.', 'aviso')
 }
 
 /** @returns {Object|null} GeoJSON Polygon ou LineString, em (lon, lat) */
@@ -199,6 +254,10 @@ function geometriaDoDesenho() {
 /** @param {L.LeafletMouseEvent} ev */
 function _aoClicar(ev) {
   L.DomEvent.stop(ev)
+  // Em ajuste o clique no mapa não cria canto: quem cria é a alça do meio do
+  // lado. Sem isto, tocar no mapa para conferir alguma coisa acrescentaria um
+  // vértice solto no fim do contorno já fechado.
+  if (desenhoState.fechado) { return }
 
   // Metade de um duplo clique não vira vértice.
   //
@@ -236,7 +295,7 @@ function _aoDuploClique(ev) {
 
 /** @param {L.LeafletMouseEvent} ev */
 function _aoMover(ev) {
-  if (!desenhoState.ativo || !desenhoState.vertices.length) { return }
+  if (!desenhoState.ativo || desenhoState.fechado || !desenhoState.vertices.length) { return }
 
   const ultimo = desenhoState.vertices[desenhoState.vertices.length - 1]
   const encaixado = desenhoState.snap ? _encaixar(ev.latlng) : ev.latlng
@@ -812,11 +871,7 @@ function _pintar() {
     desenhoState.previa = null
   }
 
-  desenhoState.marcadores.forEach(m => mapa.removeLayer(m))
-  desenhoState.marcadores = latlngs.map((ll, i) => L.circleMarker(ll, {
-    pane: 'desenho', radius: i === 0 ? 6 : 4, weight: 2,
-    color: '#fff', fillColor: COR_DESENHO, fillOpacity: 1, interactive: false,
-  }).addTo(mapa))
+  _pintarAlcas(latlngs)
 
   _pintarMedidas()
   _pintarBarraDesenho()
@@ -824,6 +879,137 @@ function _pintar() {
   if (typeof aoDesenharVertice === 'function') {
     aoDesenharVertice(desenhoState.vertices.length)
   }
+}
+
+// ── ALÇAS: AJUSTAR O QUE JÁ ESTÁ DESENHADO ─────────────────
+//
+// Traçar clique a clique acerta a forma, nunca o detalhe: o canto sai dois
+// metros fora, a divisa pega a calçada. Sem poder pegar o canto e puxar, o
+// único conserto era desfazer tudo até ali e refazer — e por isso o desenho
+// "não ficava bom" mesmo com as medidas certas.
+//
+// Três gestos, e valem em QUALQUER desenho (lote, edificação, divisa):
+//   arrastar o canto        move o vértice
+//   arrastar o meio do lado cria um canto ali
+//   duplo clique no canto   tira o vértice
+//
+// O encaixe no vizinho vale no arrasto também: soltar o canto perto de um
+// vértice de lote existente crava a coordenada exata dele.
+
+/** Raio da alça, em pixels. Maior no primeiro canto: é o que fecha o anel. */
+const DESENHO_ALCA_PX = 6
+
+/**
+ * Redesenha as alças de canto e as de meio-de-lado.
+ *
+ * @param {Array<[number,number]>} latlngs vértices em [lat, lon]
+ */
+function _pintarAlcas(latlngs) {
+  const mapa = mapaState.obj
+  desenhoState.marcadores.forEach(m => mapa.removeLayer(m))
+  desenhoState.marcadores = []
+
+  // ENQUANTO SE TRAÇA, NÃO HÁ ALÇA.
+  //
+  // O clique que criaria o próximo canto cairia em cima da alça do anterior e
+  // viraria um arrasto — o desenho pararia de aceitar pontos justamente onde
+  // o dedo mira. As alças entram quando o contorno fecha, que é quando o
+  // ajuste fino faz sentido.
+  const ajustando = !desenhoState.ativo || desenhoState.fechado
+
+  latlngs.forEach((ll, i) => {
+    const alca = L.circleMarker(ll, {
+      pane: 'desenho',
+      radius: i === 0 ? DESENHO_ALCA_PX : DESENHO_ALCA_PX - 2,
+      weight: 2, color: '#fff', fillColor: COR_DESENHO, fillOpacity: 1,
+      interactive: ajustando,
+      className: ajustando ? 'des-alca' : '',
+    }).addTo(mapa)
+
+    if (ajustando) { _armarArrasto(alca, i) }
+    desenhoState.marcadores.push(alca)
+  })
+
+  if (!ajustando) { return }
+
+  // Alça de MEIO DE LADO: arrastá-la cria um canto novo ali. É como se
+  // acrescenta o vértice que faltou sem refazer o contorno.
+  const fecha = desenhoState.modo === 'poligono' && latlngs.length >= 3
+  const lados = fecha ? latlngs.length : latlngs.length - 1
+  for (let i = 0; i < lados; i++) {
+    const a = latlngs[i]
+    const b = latlngs[(i + 1) % latlngs.length]
+    const meio = L.circleMarker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], {
+      pane: 'desenho', radius: 4, weight: 1.5,
+      color: COR_DESENHO, fillColor: '#fff', fillOpacity: .9,
+      interactive: true, className: 'des-alca des-alca-meio',
+    }).addTo(mapaState.obj)
+
+    _armarArrasto(meio, i, true)
+    desenhoState.marcadores.push(meio)
+  }
+}
+
+/**
+ * Faz a alça responder ao arrasto.
+ *
+ * O Leaflet não arrasta `circleMarker`, então o gesto é montado à mão sobre o
+ * mapa: ao pegar a alça, o arrasto do mapa é desligado (senão o mapa desliza
+ * junto e o canto nunca chega ao lugar) e religado ao soltar.
+ *
+ * @param {L.CircleMarker} alca
+ * @param {number} i índice do vértice (ou do lado, quando `novo`)
+ * @param {boolean} [novo] a alça cria um vértice em vez de mover um
+ */
+function _armarArrasto(alca, i, novo) {
+  const mapa = mapaState.obj
+
+  alca.on('mousedown', ev => {
+    L.DomEvent.stop(ev)
+    mapa.dragging.disable()
+
+    let indice = i
+    if (novo) {
+      // O vértice nasce no meio do lado e passa a ser arrastado como qualquer
+      // outro — daí em diante o gesto é o mesmo.
+      const a = desenhoState.vertices[i]
+      const b = desenhoState.vertices[(i + 1) % desenhoState.vertices.length]
+      indice = i + 1
+      desenhoState.vertices.splice(indice, 0,
+        [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2])
+    }
+
+    const mover = e => {
+      const ll = desenhoState.snap ? _encaixar(e.latlng) : e.latlng
+      desenhoState.vertices[indice] = [ll.lng, ll.lat]
+      _pintar()
+    }
+
+    const soltar = () => {
+      mapa.off('mousemove', mover)
+      mapa.off('mouseup', soltar)
+      mapa.dragging.enable()
+      _pintar()
+    }
+
+    mapa.on('mousemove', mover)
+    mapa.on('mouseup', soltar)
+  })
+
+  if (novo) { return }
+
+  // Duplo clique tira o canto. Abaixo do mínimo o polígono deixaria de ser
+  // polígono, então o gesto é recusado com a razão, e não ignorado.
+  alca.on('dblclick', ev => {
+    L.DomEvent.stop(ev)
+    const minimo = desenhoState.modo === 'linha' ? 2 : 3
+    if (desenhoState.vertices.length <= minimo) {
+      toast(`Com ${minimo} cantos não dá para tirar mais nenhum.`, 'err')
+      return
+    }
+    desenhoState.vertices.splice(i, 1)
+    _pintar()
+  })
 }
 
 function _limpar() {
@@ -856,7 +1042,7 @@ function _limpar() {
     ativo: false, modo: null, vertices: [], rascunho: null, previa: null,
     elastico: null, captura: null, marcadores: [], onConcluir: null, onCancelar: null,
     plano: null, rotulos: [], rotuloArea: null, rotuloElastico: null, shiftSolto: false,
-    rotulo: null,
+    rotulo: null, fechado: false,
   })
 
   document.getElementById('map')?.classList.remove('desenhando')
@@ -890,7 +1076,9 @@ document.addEventListener('keydown', ev => {
   }
 
   if (ev.key === 'Escape') { ev.stopPropagation(); cancelarDesenho(); return }
-  if (ev.key === 'Enter') { ev.stopPropagation(); concluirDesenho(); return }
+  // Enter fecha o contorno; com ele já fechado, confirma. Duas etapas, duas
+  // teclas iguais — é o mesmo "prosseguir" das duas vezes.
+  if (ev.key === 'Enter') { ev.stopPropagation(); confirmarDesenho(); return }
   if (ev.key === 'z' && (ev.ctrlKey || ev.metaKey)) { ev.stopPropagation(); desfazerVertice() }
 
   // Shift SOLTA a trava enquanto está pressionado, e não a desliga.

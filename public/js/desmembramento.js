@@ -21,7 +21,93 @@ const desmMesa = {
   /** @type {number|null} */ loteId: null,
   /** @type {L.Polygon|null} realce do lote alvo */ realce: null,
   /** @type {L.Marker[]} medidas dos lados do alvo */ rotulos: [],
+  /** @type {Array<L.Layer>} as partes desenhadas e seus números */ camadasPartes: [],
   satelite: true,
+}
+
+/** Cores das partes, na ordem. Repetem depois da sexta — seis já é muito lote. */
+const CORES_PARTE = ['#2563EB', '#059669', '#D97706', '#7C3AED', '#DB2777', '#0891B2']
+
+/**
+ * Desenha no mapa as partes já cortadas, cada uma com sua cor e seu número.
+ *
+ * Sem isto o corte acontecia às cegas: as partes existiam só como duas linhas
+ * de formulário na coluna, e a única forma de saber onde tinha caído a divisa
+ * era confiar. Dividir terreno é um ato sobre o chão — ele precisa ser visto
+ * no chão antes de virar dois cadastros.
+ */
+function pintarPartesNoMapa() {
+  const mapa = mapaState.obj
+  desmMesa.camadasPartes.forEach(c => mapa.removeLayer(c))
+  desmMesa.camadasPartes = []
+  if (!desmMesa.ativa) { return }
+
+  desmState.partes.forEach((p, i) => {
+    const cor = CORES_PARTE[i % CORES_PARTE.length]
+
+    desmMesa.camadasPartes.push(L.geoJSON(p.geometry, {
+      pane: _paneMesa(), interactive: false,
+      style: { color: cor, weight: 2.5, opacity: 1, fillColor: cor, fillOpacity: .3 },
+    }).addTo(mapa))
+
+    const anel = p.geometry.coordinates[0]
+    const cx = anel.reduce((s, c) => s + c[0], 0) / anel.length
+    const cy = anel.reduce((s, c) => s + c[1], 0) / anel.length
+
+    desmMesa.camadasPartes.push(L.marker([cy, cx], {
+      pane: _paneMesa(), interactive: false, keyboard: false,
+      icon: L.divIcon({
+        className: 'desm-selo', iconSize: null,
+        html: `<span class="desm-selo-txt" style="background:${cor}">${i + 1}</span>`,
+      }),
+    }).addTo(mapa))
+  })
+}
+
+/**
+ * Corta UMA das partes em duas.
+ *
+ * É o que permite dividir em três ou mais: corta-se o lote, e depois corta-se
+ * a parte que ainda precisa ser dividida. Cada corte é um traço confirmado,
+ * sobre o contorno que já existe — nunca sobre um desenho novo, para a soma
+ * continuar fechando com o lote de origem.
+ *
+ * @param {number} i
+ */
+function cortarParte(i) {
+  const parte = desmState.partes[i]
+  const anel = parte?.geometry?.coordinates?.[0]
+  if (!anel) { toast('Esta parte não tem contorno.', 'err'); return }
+
+  toast(`Trace a divisa dentro da parte ${i + 1}.`, 'aviso')
+
+  iniciarDesenho({
+    modo: 'linha',
+    rotulo: `Dividir a parte ${i + 1}`,
+    snap: true,
+    onConcluir: g => {
+      const r = cortarPorLinha(anel, g.coordinates)
+      if (r.erro) { toast(r.erro, 'err'); pintarMesaDesmembramento(); return }
+
+      // A parte cortada some e as duas filhas ocupam o lugar dela, na mesma
+      // posição da lista: assim a numeração acompanha a leitura do mapa.
+      desmState.partes.splice(i, 1,
+        { geometry: r.a, numero_lote: parte.numero_lote || '', desmembramento: null },
+        { geometry: r.b, numero_lote: '', desmembramento: null })
+
+      toast(`Parte ${i + 1} dividida. Agora são ${desmState.partes.length} partes.`)
+      pintarMesaDesmembramento()
+      pintarPartesNoMapa()
+    },
+    onCancelar: () => { pintarMesaDesmembramento(); pintarPartesNoMapa() },
+  })
+}
+
+/** @param {number} i */
+function removerParteDaMesa(i) {
+  // Tirar uma parte deixaria um buraco no lote: o que sobra não cobre mais o
+  // pai, e a soma para de fechar. Por isso não se remove — refaz-se o corte.
+  toast('Para mudar a divisão, use "Refazer o corte".', 'aviso')
 }
 
 /**
@@ -57,6 +143,7 @@ function abrirMesaDesmembramento(loteId) {
 
   _enquadrarAlvo(feicao)
   _realcarAlvo(feicao)
+  pintarPartesNoMapa()
   pintarMesaDesmembramento()
 }
 
@@ -172,6 +259,8 @@ function _limparRealce() {
   if (desmMesa.realce) { mapa.removeLayer(desmMesa.realce); desmMesa.realce = null }
   desmMesa.rotulos.forEach(r => mapa.removeLayer(r))
   desmMesa.rotulos = []
+  desmMesa.camadasPartes.forEach(c => mapa.removeLayer(c))
+  desmMesa.camadasPartes = []
 }
 
 /**
@@ -217,8 +306,12 @@ function pintarMesaDesmembramento() {
 
   alvo.innerHTML = cabeca + partes.map((p, i) => `
     <div class="desm-bloco">
-      <div class="desm-bloco-tit"><span class="desm-num">${i + 1}</span>
-        ${fmtNum(areaDoAnel(p.geometry) || 0)} m²</div>
+      <div class="desm-bloco-tit">
+        <span class="desm-num" style="background:${CORES_PARTE[i % CORES_PARTE.length]}">${i + 1}</span>
+        ${fmtNum(areaDoAnel(p.geometry) || 0)} m²
+        <button type="button" class="btn sm desm-cortar" onclick="cortarParte(${i})"
+                title="Dividir esta parte em duas">Dividir</button>
+      </div>
       <div class="g2" style="margin-bottom:6px">
         <div class="field" style="margin:0">
           <label>Lote</label>

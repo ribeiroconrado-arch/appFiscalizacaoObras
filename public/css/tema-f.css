@@ -2555,6 +2555,27 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff;
 }
 
+/* ALÇAS DE AJUSTE.
+   O cursor é o que anuncia o gesto: sem ele, o canto é um ponto decorativo e
+   o operador refaz o desenho inteiro para corrigir dois metros. */
+/* O NÚMERO DA PARTE, no meio dela.
+   A lista da coluna e o desenho no mapa precisam se reconhecer: sem o número
+   em cima do polígono, "parte 2" na coluna não diz qual metade do lote é. */
+.desm-selo{background:none;border:none;pointer-events:none}
+.desm-selo-txt{position:absolute;transform:translate(-50%,-50%);
+  display:flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;color:#fff;
+  font:700 13px/1 ui-sans-serif,system-ui,sans-serif;
+  box-shadow:0 1px 5px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.9)}
+.desm-bloco-tit .desm-num{display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:50%;color:#fff;font-size:11.5px;flex-shrink:0}
+.desm-cortar{margin-left:auto}
+
+.des-alca{cursor:grab}
+.des-alca:active{cursor:grabbing}
+.des-alca-meio{opacity:.75}
+.des-alca-meio:hover{opacity:1}
+
 .des-medida-campo{
   width:5.2em; border:none; background:none; outline:none; padding:0;
   font:inherit; color:var(--gxd); text-align:center;
