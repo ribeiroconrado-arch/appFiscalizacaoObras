@@ -984,7 +984,7 @@ async function carregarCatalogo() {
  * então esta função só repinta a janela aberta, se houver uma.
  */
 function renderChecklist() {
-  if (vState.itemAberto !== null) { renderIrregularidadesDoItem() }
+  if (vState.itemAberto !== null) { preencherSeletorDeIrregularidades() }
 
   // O catálogo só chega do servidor DEPOIS de o rascunho ser lido, e por isso
   // as marcas são reaplicadas aqui — não em restaurarRascunho, onde ainda não
@@ -1097,6 +1097,14 @@ function syncDataHora() {
 // sair diferente, e quem lê vinte por semana perde o hábito de leitura.
 // ══════════════════════════════════════════════
 
+// Ícone próprio, e não o das lixeiras de outros módulos: aqueles vivem em
+// arquivos carregados só para admin ou para curador, e a vistoria é aberta
+// por qualquer agente.
+const ICO_LIXO_ITEM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+  <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+  <path d="M10 11v6M14 11v6"/></svg>`
+
 /** Um item vazio — a folha em branco de um grupo. */
 function itemVazio() {
   return { texto: '', irregularidades: [], artigos: [], exigencias: [], fotos: [] }
@@ -1135,6 +1143,9 @@ function renderRelatorio() {
     return
   }
 
+  // Excluir e mover moram AQUI, na lista — não dentro da janela do item. Só
+  // depois de Guardado o item existe como algo que se possa excluir; enquanto
+  // se preenche, "Cancelar" já é a saída.
   alvo.innerHTML = vState.relatorio.map((item, i) => `
       <div class="rel-item${itemVazioDeConteudo(item) ? ' rel-falta' : ''}"
            onclick="abrirItemRelatorio(${i})">
@@ -1143,13 +1154,41 @@ function renderRelatorio() {
           <div class="rel-tit">Item ${i + 1}</div>
           ${conteudoDoItem(item)}
         </div>
-        <div class="rel-setas" onclick="event.stopPropagation()">
-          <button type="button" onclick="moverItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}
-                  title="Subir">&#9650;</button>
-          <button type="button" onclick="moverItem(${i}, 1)"
-                  ${i === vState.relatorio.length - 1 ? 'disabled' : ''} title="Descer">&#9660;</button>
+        <div class="rel-acoes" onclick="event.stopPropagation()">
+          <button type="button" class="rel-excluir" onclick="excluirItemDaLista(${i})"
+                  title="Excluir item">${ICO_LIXO_ITEM}</button>
+          <span class="rel-setas">
+            <button type="button" onclick="moverItem(${i}, -1)" ${i === 0 ? 'disabled' : ''}
+                    title="Subir">&#9650;</button>
+            <button type="button" onclick="moverItem(${i}, 1)"
+                    ${i === vState.relatorio.length - 1 ? 'disabled' : ''} title="Descer">&#9660;</button>
+          </span>
         </div>
       </div>`).join('')
+}
+
+/** @param {number} i */
+function excluirItemDaLista(i) {
+  const item = vState.relatorio[i]
+  if (!item) { return }
+
+  confirmarAcao({
+    titulo: 'Excluir item',
+    mensagem: `O item ${i + 1} sai do relatório com tudo que está nele — `
+      + 'irregularidades, texto, artigos, exigências e fotos.',
+    textoBtn: 'Excluir',
+    perigo: true,
+    onConfirm: () => {
+      // As fotos do item somem junto: elas eram a prova DELE.
+      item.fotos.forEach(f => {
+        const anexo = vState.anexos[f.anexo]
+        if (anexo) { anexo.removido = true }
+      })
+      vState.relatorio.splice(i, 1)
+      if (vState.itemAberto === i) { fModalBtn('m-vs-item'); vState.itemAberto = null }
+      renderRelatorio()
+    },
+  })
 }
 
 /**
@@ -1262,10 +1301,10 @@ function abrirItemRelatorio(i) {
   document.getElementById('vsi-titulo').textContent = `Item ${i + 1} do relatório`
   document.getElementById('vsi-texto').value = item.texto ?? ''
 
-  renderIrregularidadesDoItem()
-  renderArtigosDoItem()
-  renderExigenciasDoItem()
+  preencherSeletorDeIrregularidades()
+  preencherSeletorDeArtigos()
   renderFotosDoItem()
+  pintarContasDoItem()
 
   // Abre no bloco que JÁ TEM alguma coisa: reabrir um item para conferir a
   // foto não deveria começar pelo catálogo de irregularidades. Item novo abre
@@ -1328,6 +1367,91 @@ function pintarContasDoItem() {
   põe('vsi-n-artigos', item.artigos.length)
   põe('vsi-n-exigencias', item.exigencias.length)
   põe('vsi-n-fotos', item.fotos.length)
+
+  pintarResumoDoItem()
+}
+
+/**
+ * O RESUMO É FIXO, e é o MESMO em qualquer aba.
+ *
+ * Cada aba do item tem, agora, só o controle de acrescentar — um combo, um
+ * texto, um formulário curto. O que já foi posto no item mora aqui, fora das
+ * abas, sempre visível, para não ser preciso visitar as cinco só para saber o
+ * que já está preenchido. Cada linha tem seu próprio × — remover não exige
+ * trocar de aba.
+ */
+function pintarResumoDoItem() {
+  const alvo = document.getElementById('vsi-resumo')
+  const item = itemAtual()
+  if (!alvo || !item) { return }
+
+  const grupos = []
+
+  if (item.irregularidades.length) {
+    grupos.push(grupoDoResumo('Irregularidades', item.irregularidades.map(id => {
+      const irr = vState.catalogo.find(c => c.id === id)
+      return { texto: irr?.descricao ?? `#${id}`, onclick: `removerIrregularidadeDoItem(${id})` }
+    })))
+  }
+
+  if (item.texto?.trim()) {
+    const t = item.texto.trim()
+    grupos.push(`
+      <div class="vsi-resumo-grupo">
+        <div class="vsi-resumo-rot">Relato</div>
+        <div class="vsi-chip vsi-chip-texto">
+          <span>${esc(t.slice(0, 90))}${t.length > 90 ? '…' : ''}</span>
+          <button type="button" onclick="limparTextoDoItem()" title="Apagar o texto">&#10005;</button>
+        </div>
+      </div>`)
+  }
+
+  if (item.artigos.length) {
+    grupos.push(grupoDoResumo('Artigos', item.artigos.map((a, j) => ({
+      texto: nomeDoArtigo(a.artigo_id) + (a.tipo === 'parecer' ? ' · parecer' : ''),
+      onclick: `removerArtigoDoItem(${j})`,
+    }))))
+  }
+
+  if (item.exigencias.length) {
+    grupos.push(grupoDoResumo('Exigências', item.exigencias.map((e, j) => ({
+      texto: e.texto + (e.prazo ? ` (${e.prazo}d)` : ''),
+      onclick: `removerExigenciaDoItem(${j})`,
+    }))))
+  }
+
+  if (item.fotos.length) {
+    const vivas = item.fotos.filter(f => !vState.anexos[f.anexo]?.removido).length
+    grupos.push(`
+      <div class="vsi-resumo-grupo">
+        <div class="vsi-resumo-rot">Fotos</div>
+        <div class="vsi-chip vsi-chip-info">${vivas} foto(s)</div>
+      </div>`)
+  }
+
+  alvo.innerHTML = grupos.length
+    ? grupos.join('')
+    : '<div class="leg vsi-resumo-vazio">Nada adicionado ainda.</div>'
+}
+
+/**
+ * Um grupo do resumo: rótulo à esquerda, os chips do que foi adicionado.
+ *
+ * @param {string} rotulo
+ * @param {Array<{texto:string, onclick:string}>} entradas
+ */
+function grupoDoResumo(rotulo, entradas) {
+  return `
+    <div class="vsi-resumo-grupo">
+      <div class="vsi-resumo-rot">${esc(rotulo)}</div>
+      <div class="vsi-resumo-chips">
+        ${entradas.map(e => `
+          <span class="vsi-chip">
+            ${esc(e.texto)}
+            <button type="button" onclick="${e.onclick}" title="Remover">&#10005;</button>
+          </span>`).join('')}
+      </div>
+    </div>`
 }
 
 /** O item aberto agora, ou null. */
@@ -1345,76 +1469,74 @@ function itemAtual() {
  * evita o pedido recusado depois de todo o trabalho — o que se repete em vários
  * pontos da obra é o texto e a foto, não o enquadramento.
  */
-function renderIrregularidadesDoItem() {
-  const alvo = document.getElementById('vsi-irreg')
+/**
+ * O combo, com o que já foi usado em OUTRO item excluído das opções.
+ *
+ * O banco tem índice único (vistoria, irregularidade): a mesma não pode ser
+ * constatada em dois itens. Tirá-la do combo evita o pedido recusado depois
+ * de todo o trabalho — o que se repete em vários pontos da obra é o texto e
+ * a foto, não o enquadramento.
+ */
+function preencherSeletorDeIrregularidades() {
+  const sel = document.getElementById('vsi-irreg-id')
   const item = itemAtual()
-  if (!alvo || !item) { return }
+  if (!sel || !item) { return }
 
-  // De quem é cada irregularidade já escolhida em outro item.
   const dono = new Map()
   vState.relatorio.forEach((it, n) => {
     if (n === vState.itemAberto) { return }
     it.irregularidades.forEach(id => dono.set(id, n + 1))
   })
 
-  alvo.innerHTML = vState.catalogo.map(irr => {
-    const marcado = item.irregularidades.includes(irr.id)
-    const usadaEm = dono.get(irr.id)
+  const disponiveis = vState.catalogo.filter(irr => !item.irregularidades.includes(irr.id))
 
-    return `
-      <label class="chk-item${marcado ? ' marcado' : ''}${usadaEm ? ' chk-bloq' : ''}">
-        <input type="checkbox" value="${irr.id}" ${marcado ? 'checked' : ''}
-               ${usadaEm ? 'disabled' : ''} onchange="alternarIrregularidadeDoItem(${irr.id}, this.checked)">
-        <span class="desc">${esc(irr.descricao)}<br>
-          <span class="cod">${esc(irr.codigo)} · ${esc(irr.gravidade)}${
-            usadaEm ? ` · já usada no item ${usadaEm}` : ''}</span>
-        </span>
-      </label>`
-  }).join('')
+  sel.innerHTML = '<option value="">— escolha a irregularidade —</option>'
+    + disponiveis.map(irr => {
+        const usadaEm = dono.get(irr.id)
+        return `<option value="${irr.id}" ${usadaEm ? 'disabled' : ''}>${esc(irr.descricao)}`
+          + `${usadaEm ? ` (já no item ${usadaEm})` : ''}</option>`
+      }).join('')
 
-  document.getElementById('vsi-irreg-conta').textContent =
-    item.irregularidades.length ? `${item.irregularidades.length} marcada(s)` : ''
+  document.getElementById('vsi-irreg-nota').textContent = disponiveis.length
+    ? 'O que a lei chama de infração. É daqui que saem os artigos sugeridos.'
+    : 'Todas as irregularidades do catálogo já estão marcadas em algum item.'
 }
 
-/** @param {number} id @param {boolean} marcado */
-function alternarIrregularidadeDoItem(id, marcado) {
+function adicionarIrregularidadeAoItem() {
   const item = itemAtual()
-  if (!item) { return }
+  const sel = document.getElementById('vsi-irreg-id')
+  const id = Number(sel.value)
+  if (!item || !id) { toast('Escolha a irregularidade', 'err'); return }
 
-  item.irregularidades = marcado
-    ? [...new Set([...item.irregularidades, id])]
-    : item.irregularidades.filter(x => x !== id)
+  item.irregularidades = [...new Set([...item.irregularidades, id])]
 
-  renderIrregularidadesDoItem()
+  preencherSeletorDeIrregularidades()
   pintarContasDoItem()
   // A sugestão de artigos lê a SOMA dos itens: marcar aqui muda o que ela
   // oferece no item inteiro.
   sugerirArtigos()
 }
 
-// ── bloco 3: artigos ──
-
-function renderArtigosDoItem() {
-  const alvo = document.getElementById('vsi-artigos')
+/** @param {number} id */
+function removerIrregularidadeDoItem(id) {
   const item = itemAtual()
-  if (!alvo || !item) { return }
-
-  alvo.innerHTML = item.artigos.length
-    ? item.artigos.map((a, j) => `
-        <div class="vsi-linha">
-          <div class="vsi-linha-corpo">
-            <div class="vsi-linha-tit">${esc(nomeDoArtigo(a.artigo_id))}
-              <span class="vsi-linha-tipo">${a.tipo === 'parecer' ? 'parecer' : 'citação'}</span>
-            </div>
-            ${a.texto ? `<div class="vsi-linha-txt">${esc(a.texto)}</div>` : ''}
-          </div>
-          <button type="button" class="vsi-x" onclick="removerArtigoDoItem(${j})"
-                  title="Remover">&#10005;</button>
-        </div>`).join('')
-    : '<div class="leg">Nenhum artigo citado neste item.</div>'
-
-  preencherSeletorDeArtigos()
+  if (!item) { return }
+  item.irregularidades = item.irregularidades.filter(x => x !== id)
+  preencherSeletorDeIrregularidades()
+  pintarContasDoItem()
+  sugerirArtigos()
 }
+
+/** Some com o relato do item — a única forma de "remover" um texto livre. */
+function limparTextoDoItem() {
+  const item = itemAtual()
+  if (!item) { return }
+  item.texto = ''
+  document.getElementById('vsi-texto').value = ''
+  pintarContasDoItem()
+}
+
+// ── bloco 3: artigos ──
 
 /** @param {number} id @returns {string} */
 function nomeDoArtigo(id) {
@@ -1438,7 +1560,6 @@ function adicionarArtigoAoItem() {
     texto: document.getElementById('vsi-artigo-obs').value.trim() || null,
   })
   document.getElementById('vsi-artigo-obs').value = ''
-  renderArtigosDoItem()
   pintarContasDoItem()
 }
 
@@ -1447,7 +1568,6 @@ function removerArtigoDoItem(j) {
   const item = itemAtual()
   if (!item) { return }
   item.artigos.splice(j, 1)
-  renderArtigosDoItem()
   pintarContasDoItem()
 }
 
@@ -1468,26 +1588,6 @@ function preencherSeletorDeArtigos() {
 
 // ── bloco 4: exigências ──
 
-function renderExigenciasDoItem() {
-  const alvo = document.getElementById('vsi-exigencias')
-  const item = itemAtual()
-  if (!alvo || !item) { return }
-
-  alvo.innerHTML = item.exigencias.length
-    ? item.exigencias.map((e, j) => `
-        <div class="vsi-linha">
-          <div class="vsi-linha-corpo">
-            <div class="vsi-linha-txt">${esc(e.texto)}</div>
-            ${e.prazo ? `<div class="vsi-linha-tipo">prazo de ${e.prazo} dias</div>` : ''}
-          </div>
-          <button type="button" class="vsi-x" onclick="removerExigenciaDoItem(${j})"
-                  title="Remover">&#10005;</button>
-        </div>`).join('')
-    : '<div class="leg">Nenhuma exigência neste item.</div>'
-
-  pintarContasDoItem()
-}
-
 function adicionarExigenciaAoItem() {
   const item = itemAtual()
   const texto = document.getElementById('vsi-exig-texto').value.trim()
@@ -1499,7 +1599,7 @@ function adicionarExigenciaAoItem() {
 
   document.getElementById('vsi-exig-texto').value = ''
   document.getElementById('vsi-exig-prazo').value = ''
-  renderExigenciasDoItem()
+  pintarContasDoItem()
 }
 
 /** @param {number} j */
@@ -1507,7 +1607,7 @@ function removerExigenciaDoItem(j) {
   const item = itemAtual()
   if (!item) { return }
   item.exigencias.splice(j, 1)
-  renderExigenciasDoItem()
+  pintarContasDoItem()
 }
 
 // ── bloco 5: fotos ──
@@ -1623,29 +1723,10 @@ function fecharItemRelatorio() {
   renderRelatorio()
 }
 
-function excluirItemRelatorio() {
-  const i = vState.itemAberto
-  if (i === null || !vState.relatorio[i]) { return }
+// `excluirItemRelatorio` (excluir de dentro da janela) saiu daqui: quem
+// exclui agora é `excluirItemDaLista(i)`, a partir do cartão na lista — ver
+// o comentário em `renderRelatorio`.
 
-  confirmarAcao({
-    titulo: 'Excluir item',
-    mensagem: 'O item sai do relatório com tudo que está nele — irregularidades, '
-      + 'texto, artigos, exigências e fotos.',
-    textoBtn: 'Excluir',
-    perigo: true,
-    onConfirm: () => {
-      // As fotos do item somem junto: elas eram a prova DELE.
-      vState.relatorio[i].fotos.forEach(f => {
-        const anexo = vState.anexos[f.anexo]
-        if (anexo) { anexo.removido = true }
-      })
-      vState.relatorio.splice(i, 1)
-      fModalBtn('m-vs-item')
-      vState.itemAberto = null
-      renderRelatorio()
-    },
-  })
-}
 /** Todas as irregularidades marcadas na vistoria, de todos os itens. */
 function irregularidadesDaVistoria() {
   return [...new Set(vState.relatorio.flatMap(i => i.irregularidades))]

@@ -30,10 +30,15 @@ html[data-tema="institucional"]{
      significa prazo correndo. Tirado da interface, ele volta a ser sinal. */
   --gold:#B45309; --gold-lt:#FDF3E3; --gold-dk:#8A4B00;
 
-  /* Neutros com leve viés verde, para não brigar com a marca. Cinza puro
-     ao lado de verde institucional lê como cinza sujo. */
-  --bg:#F6F8F6; --sur:#FFFFFF; --bord:#D8E3DA; --blt:#EEF3EF;
-  --tx:#16211C; --tx2:#42544A; --tx3:#71857A;
+  /* NEUTROS DE VERDADE — branco, preto e cinza, sem viés de cor.
+     Até aqui os neutros levavam um leve verde ("para não brigar com a
+     marca"). A instrução mudou: cabeçalho, menu, ícones e botões continuam
+     verdes — são eles que carregam a identidade —, mas o CONTEÚDO passa a
+     ser branco/preto/cinza puro, com prioridade para o cinza nos fundos,
+     campos e tags. O verde de `--g`/`--gd`/`--gxd` não muda: continua
+     disponível para quem precisar dele (botão primário, seleção, ícone). */
+  --bg:#F5F5F5; --sur:#FFFFFF; --bord:#DCDCDC; --blt:#EFEFEF;
+  --tx:#1A1A1A; --tx2:#4D4D4D; --tx3:#767676;
 
   /* --chumbo fica de fora da repintura DE PROPÓSITO. É o único token que as
      tags de status leem (o resto da tag é cor própria, fixa), e a instrução
@@ -44,10 +49,10 @@ html[data-tema="institucional"]{
   --warn:#B45309; --wlt:#FDF3E3;
   --blue:#1D4ED8; --blt2:#EAF0FE;
 
-  /* Cinzas de formulário: mesma regra do Tema F — fora da faixa da marca,
-     para a borda de foco não competir com a cor que carrega significado. */
-  --f-bord:#C6CFC8; --f-bord-foco:#5A6B60; --f-anel:rgba(90,107,96,.16);
-  --f-fundo:#FFFFFF; --f-fundo-ro:#F1F4F2; --f-rot:#6B7A70;
+  /* Cinzas de formulário: já estavam fora da faixa da marca — o ajuste aqui
+     é só tirar o resto de verde que sobrava neles. */
+  --f-bord:#C7C7C7; --f-bord-foco:#595959; --f-anel:rgba(89,89,89,.16);
+  --f-fundo:#FFFFFF; --f-fundo-ro:#F0F0F0; --f-rot:#6E6E6E;
 
   /* ── FORMA ──
      Raios curtos e sombra de 1px: a gramática de sistema administrativo, no

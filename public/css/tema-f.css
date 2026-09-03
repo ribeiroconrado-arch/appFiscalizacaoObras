@@ -197,8 +197,10 @@
 .topo-lista .sec-simples{margin:0;flex:1}
 .sec-simples{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--chumbo);
   display:flex;align-items:center;gap:9px;margin:0 0 10px}
-.sec-simples .cont{background:var(--gl);color:var(--gd);border-radius:999px;padding:2px 9px;
-  font-size:10px;letter-spacing:0}
+/* O contador é uma TAG de conteúdo, não um botão — cinza, como o resto do
+   que não é cabeçalho, menu, ícone ou ação. */
+.sec-simples .cont{background:var(--blt);color:var(--tx2);border-radius:999px;padding:2px 9px;
+  font-size:10px;letter-spacing:0;font-weight:700}
 .linha-filtro{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap}
 .linha-filtro input,.linha-filtro select,.doc-filtro-larga select{font-size:13px;padding:8px 10px;
   border:1.5px solid var(--f-bord);border-radius:var(--r);background:#fff;
@@ -1891,10 +1893,10 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* A altura propria da vistoria saiu: ela nao tem mais medida so dela. Todas as
    janelas de trabalho leem `--modal-trabalho-alt`, e sobem e descem juntas. */
 
-.rel-item{display:grid;grid-template-columns:46px 1fr 26px;gap:10px;align-items:start;
+.rel-item{display:grid;grid-template-columns:46px 1fr 44px;gap:10px;align-items:start;
   border:1.5px solid var(--bord);border-radius:var(--r);padding:9px 10px;margin-bottom:7px;
   background:var(--sur);cursor:pointer;transition:border-color .13s,background .13s}
-.rel-item:hover{border-color:var(--gm);background:var(--gl)}
+.rel-item:hover{border-color:var(--tx3);background:var(--blt)}
 /* Item sem texto (ou artigo sem dispositivo escolhido) fica marcado: e a
    pendencia mais comum, e so aparece na revisao se ninguem avisar antes. */
 .rel-item.rel-falta{border-left:3px solid var(--gold)}
@@ -2440,41 +2442,64 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   border-radius:20px;padding:2px 8px}
 
 /* As setas movem o GRUPO inteiro — é ele que é a unidade de raciocínio. */
-.rel-setas{display:flex;flex-direction:column;gap:2px}
+.rel-setas{display:flex;gap:2px}
 .rel-setas button{border:1px solid var(--bord);background:var(--sur);border-radius:6px;
-  width:26px;height:21px;font-size:9px;color:var(--tx2);cursor:pointer;line-height:1}
-.rel-setas button:hover:not(:disabled){border-color:var(--gm);color:var(--gd)}
+  width:20px;height:18px;font-size:8px;color:var(--tx2);cursor:pointer;line-height:1}
+.rel-setas button:hover:not(:disabled){border-color:var(--tx3);color:var(--tx)}
 .rel-setas button:disabled{opacity:.3;cursor:default}
 
-/* ── a janela do item: cinco blocos na ordem do papel ── */
-/* Um bloco por vez, e ele ocupa a janela.
-   O traço separador entre blocos deixou de existir junto com o empilhamento —
-   não há mais o que separar. E sem `height`, a lista de irregularidades ficava
-   com a sua própria rolagem no alto de uma janela vazia pela metade. */
-/* O corpo desta janela é coluna para que o bloco ativo possa esticar; nas
-   demais ele continua sendo um rolo simples. */
-#m-vs-item .doc-body{display:flex;flex-direction:column;overflow:hidden}
-.vsi-bloco{display:flex;flex-direction:column;min-height:0;flex:1}
+/* A coluna de ações do cartão: excluir em cima, mover embaixo — a exclusão
+   fica mais longe do polegar de propósito, porque não tem volta. */
+.rel-acoes{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.rel-excluir{border:1px solid transparent;background:none;color:var(--tx3);
+  cursor:pointer;padding:3px;border-radius:6px;line-height:0}
+.rel-excluir:hover{color:var(--red);background:var(--rlt);border-color:var(--rlt)}
+
+/* ── A JANELA DO ITEM ──
+   Duas partes, sempre nesta ordem: o que ADICIONAR (compacto, muda por aba) e
+   o que JÁ ESTÁ no item (`#vsi-resumo`, fixo, igual em qualquer aba). Nenhuma
+   das duas domina a tela — é o bloco de adicionar que fica do tamanho do seu
+   conteúdo, e o resumo que ocupa o resto, com rolagem própria. */
+#m-vs-item .doc-body{display:flex;flex-direction:column;overflow:hidden;gap:10px}
+.vsi-bloco{flex-shrink:0}
 .vsi-bloco[hidden]{display:none}
-/* `max-height:290px` vem de app.css e serve à checklist do resto do sistema,
-   que aparece no meio de um formulário. Aqui a lista É o formulário: presa
-   em 290px, ela rolava dentro de uma janela com 380px de sobra em branco. */
-.vsi-bloco .checklist{flex:1;min-height:0;max-height:none;overflow-y:auto}
 
-/* O formulário de acrescentar fica recuado e em fundo próprio: separa o que
-   JÁ está no item do que se está prestes a pôr. */
-.vsi-add{background:var(--blt);border-radius:var(--r);padding:10px 12px;margin-top:8px}
-.vsi-add .field{margin-bottom:8px}
+/* O formulário de acrescentar: compacto, sem rótulo em cima de cada campo —
+   o placeholder já diz o que é, e um combo com um botão ao lado não precisa
+   de mais altura do que uma linha. */
+.vsi-add{display:flex;flex-direction:column;gap:6px}
+.vsi-add-linha{display:flex;gap:6px}
+.vsi-add-linha > select,.vsi-add-linha > textarea,.vsi-add-linha > input{flex:1;min-width:0}
+.vsi-bloco select,.vsi-bloco .vsi-add > textarea,.vsi-bloco .vsi-add > input{
+  padding:7px 9px;font-size:12.5px;border:1.5px solid var(--f-bord);border-radius:var(--r);
+  background:var(--f-fundo);color:var(--tx);font-family:inherit;resize:none}
+.vsi-bloco textarea{width:100%}
+#vsi-texto{min-height:64px}
 
-.vsi-linha{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:6px;
-  border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur)}
-.vsi-linha-corpo{flex:1;min-width:0}
-.vsi-linha-tit{font-size:13px;font-weight:700;color:var(--tx)}
-.vsi-linha-tipo{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
-  color:var(--tx3);margin-left:6px}
-.vsi-linha-txt{font-size:12.5px;color:var(--tx2);line-height:1.45;word-break:break-word}
-.vsi-x{border:0;background:none;color:var(--tx3);font-size:13px;cursor:pointer;
-  padding:2px 4px;line-height:1;flex-shrink:0}
+/* ── O RESUMO ──
+   Fixo fora das abas, igual em qualquer uma delas. `flex:1` para ocupar o
+   que sobrar da janela — nunca mais que isso — e rolagem própria quando o
+   item cresce, sem empurrar o "adicionar" para fora da vista. */
+.vsi-resumo{flex:1;min-height:64px;overflow-y:auto;background:var(--blt);
+  border-radius:var(--r);padding:9px 10px;display:flex;flex-direction:column;gap:8px}
+.vsi-resumo-vazio{color:var(--tx3);font-style:italic}
+.vsi-resumo-grupo{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.vsi-resumo-rot{flex-shrink:0;width:76px;font-size:9.5px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);padding-top:3px}
+.vsi-resumo-chips{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0}
+
+/* Chip: o que foi adicionado, com o × para tirar sem trocar de aba. */
+.vsi-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;
+  background:var(--sur);border:1px solid var(--bord);border-radius:20px;
+  padding:3px 4px 3px 9px;font-size:11.5px;color:var(--tx);line-height:1.3}
+.vsi-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vsi-chip button{border:0;background:var(--blt);color:var(--tx3);cursor:pointer;
+  width:16px;height:16px;border-radius:50%;font-size:9px;line-height:1;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.vsi-chip button:hover{background:var(--rlt);color:var(--red)}
+.vsi-chip-texto{max-width:100%}
+.vsi-chip-texto span{white-space:normal}
+.vsi-chip-info{background:transparent;border-style:dashed;color:var(--tx2)}
 .vsi-x:hover{color:var(--red)}
 
 /* Irregularidade já usada em outro item: o banco não aceita a mesma duas
@@ -2586,18 +2611,16 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    Um bloco de cada vez. A contagem no botão é o que substitui o empilhamento:
    sem abrir nada dá para ver que o item tem duas irregularidades e nenhuma
    foto — que era justamente o que a janela cheia escondia. */
-.vsi-abas{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px 0;flex-shrink:0}
-.vsi-abas button{display:inline-flex;align-items:center;gap:6px;
-  background:var(--sur);border:1.5px solid var(--bord);border-radius:999px;
-  padding:5px 12px;font-size:12px;font-weight:600;color:var(--tx2);cursor:pointer;
-  transition:border-color .12s,background .12s,color .12s}
-.vsi-abas button:hover{border-color:var(--gm)}
-.vsi-abas button.at{background:var(--gl);border-color:var(--gd);color:var(--gxd)}
+/* A base — trilho, pílula ativa, texto — vem de `.sub-abas`, a MESMA classe
+   de Parâmetros e do formulário de documento. Aqui só se acrescenta a
+   pequena contagem, que não existe nos outros lugares. */
+#vsi-abas{margin:10px 16px 0;flex-shrink:0;width:auto}
+#vsi-abas button{gap:5px}
 .vsi-conta{display:none}
-.vsi-abas button.vsi-tem .vsi-conta{display:inline-flex;align-items:center;
-  justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:999px;
-  background:var(--gd);color:#fff;font-size:10.5px;font-weight:800}
-.vsi-abas button.at.vsi-tem .vsi-conta{background:var(--gxd)}
+#vsi-abas button.vsi-tem .vsi-conta{display:inline-flex;align-items:center;
+  justify-content:center;min-width:15px;height:15px;padding:0 4px;border-radius:999px;
+  background:var(--tx3);color:#fff;font-size:10px;font-weight:800}
+#vsi-abas button.at.vsi-tem .vsi-conta{background:var(--gd)}
 
 /* ── O CARTÃO DO ITEM ──
    Rótulo à esquerda, o que foi informado à direita. Só os blocos preenchidos
@@ -2606,7 +2629,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   margin-top:3px}
 .rel-rot{flex-shrink:0;width:82px;font-size:10px;font-weight:800;text-transform:uppercase;
   letter-spacing:.05em;color:var(--tx3)}
-.rel-val{flex:1;min-width:0;color:var(--tx1);overflow:hidden;
+.rel-val{flex:1;min-width:0;color:var(--tx);overflow:hidden;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .rel-val i{font-style:normal;color:var(--tx3)}
 .rel-linha.rel-sem{color:var(--tx3);font-style:italic}

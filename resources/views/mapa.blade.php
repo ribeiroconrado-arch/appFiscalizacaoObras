@@ -1486,7 +1486,9 @@
          de uma vez, para preencher talvez um deles. A janela dizia o que ela
          PODE ter, quando o que o fiscal precisa ver é o que ela TEM.
          Cada botão traz a contagem do que já foi posto ali dentro. --}}
-    <div class="vsi-abas" id="vsi-abas">
+    {{-- Mesmo padrão de aba do resto do sistema (Parâmetros, o formulário de
+         documento): trilho cinza, aba ativa em pílula branca com texto verde. --}}
+    <div class="sub-abas" id="vsi-abas">
       <button type="button" data-bloco="irreg" onclick="abaDoItem('irreg')">
         Irregularidades <span class="vsi-conta" id="vsi-n-irreg"></span></button>
       <button type="button" data-bloco="texto" onclick="abaDoItem('texto')">
@@ -1499,52 +1501,51 @@
         Fotos <span class="vsi-conta" id="vsi-n-fotos"></span></button>
     </div>
 
+    {{-- O CORPO TEM DUAS PARTES, sempre nesta ordem:
+
+         (1) O QUE ADICIONAR — muda com a aba, e é só isso: um combo, um
+             texto, um formulário curto. Nunca uma lista do que já foi posto.
+
+         (2) O QUE JÁ ESTÁ NO ITEM — `#vsi-resumo`, FORA dos blocos de aba, o
+             mesmo em qualquer uma delas. É aqui que se vê (e se remove) o que
+             já foi adicionado, sem precisar visitar cada aba para conferir.
+             Altura travada e com rolagem própria: ele não pode crescer e
+             empurrar o "adicionar" para fora da vista — é coadjuvante, não
+             tela principal. --}}
     <div class="doc-body">
 
-      {{-- 1 — IRREGULARIDADES --}}
+      {{-- 1 — IRREGULARIDADES: um combo, não mais um catálogo inteiro. As já
+           marcadas aparecem no resumo, não como caixa marcada aqui. --}}
       <div class="vsi-bloco" data-bloco="irreg">
-        <div class="sec-title-row">
-          <div class="sec-title">1 · Irregularidades</div>
-          <span class="leg" id="vsi-irreg-conta"></span>
+        <div class="vsi-add">
+          <div class="vsi-add-linha">
+            <select id="vsi-irreg-id"></select>
+            <button type="button" class="btn sm" onclick="adicionarIrregularidadeAoItem()">Adicionar</button>
+          </div>
+          <div class="leg" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
+            os artigos sugeridos — e é o que o auto de infração vai usar.</div>
         </div>
-        <div class="leg">O que a lei chama de infração. É daqui que saem os artigos
-          sugeridos — e é o que o auto de infração vai usar.</div>
-        <div class="checklist" id="vsi-irreg"></div>
       </div>
 
       {{-- 2 — TEXTO LIVRE --}}
       <div class="vsi-bloco" data-bloco="texto" hidden>
-        <div class="sec-title">2 · O que você viu</div>
-        <div class="field">
-          <label for="vsi-texto">Descrição</label>
-          <textarea id="vsi-texto" rows="4" maxlength="5000"
-                    placeholder="Com as suas palavras — é este texto que vira o FATO na peça."></textarea>
-        </div>
+        <textarea id="vsi-texto" rows="3" maxlength="5000"
+                  placeholder="O que você viu, com as suas palavras — é este texto que vira o FATO na peça."
+                  oninput="pintarContasDoItem()"></textarea>
       </div>
 
       {{-- 3 — ARTIGOS --}}
       <div class="vsi-bloco" data-bloco="artigos" hidden>
-        <div class="sec-title">3 · Artigos</div>
-        <div id="vsi-artigos"></div>
         <div class="vsi-add">
-          <div class="field">
-            <label for="vsi-artigo-id">Dispositivo</label>
+          <div class="vsi-add-linha">
             <select id="vsi-artigo-id"></select>
-          </div>
-          <div class="field">
-            <label for="vsi-artigo-tipo">Como entra</label>
             <select id="vsi-artigo-tipo">
-              {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. A
-                   distinção existe porque as duas coisas ocupam lugares
-                   diferentes no auto. --}}
-              <option value="citacao">Citação — o que se constatou</option>
-              <option value="parecer">Parecer — a sua conclusão</option>
+              {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
+              <option value="citacao">Citação</option>
+              <option value="parecer">Parecer</option>
             </select>
           </div>
-          <div class="field">
-            <label for="vsi-artigo-obs">Observação (opcional)</label>
-            <textarea id="vsi-artigo-obs" rows="2" maxlength="2000"></textarea>
-          </div>
+          <textarea id="vsi-artigo-obs" rows="1" maxlength="2000" placeholder="Observação (opcional)"></textarea>
           <div class="leg" id="vsi-artigo-nota"></div>
           <button type="button" class="btn sm" onclick="adicionarArtigoAoItem()">Acrescentar artigo</button>
         </div>
@@ -1552,38 +1553,35 @@
 
       {{-- 4 — EXIGÊNCIAS --}}
       <div class="vsi-bloco" data-bloco="exigencias" hidden>
-        <div class="sec-title">4 · Exigências</div>
-        <div class="leg">O que o administrado deve fazer, com prazo. A notificação imprime.</div>
-        <div id="vsi-exigencias"></div>
         <div class="vsi-add">
-          <div class="field">
-            <label for="vsi-exig-texto">Providência</label>
-            <textarea id="vsi-exig-texto" rows="2" maxlength="500"></textarea>
-          </div>
-          <div class="field">
-            <label for="vsi-exig-prazo">Prazo em dias (opcional)</label>
-            <input type="number" id="vsi-exig-prazo" class="mono" min="1" max="3650" placeholder="15">
+          <div class="vsi-add-linha">
+            <textarea id="vsi-exig-texto" rows="1" maxlength="500" placeholder="Providência exigida"
+                      style="flex:1"></textarea>
+            <input type="number" id="vsi-exig-prazo" class="mono" min="1" max="3650"
+                   placeholder="Prazo (dias)" style="max-width:110px">
           </div>
           <button type="button" class="btn sm" onclick="adicionarExigenciaAoItem()">Acrescentar exigência</button>
         </div>
       </div>
 
-      {{-- 5 — FOTOS --}}
+      {{-- 5 — FOTOS. Mantém lista própria: é a única aba onde o que se
+           adiciona é visual, e miniatura não cabe numa linha de resumo. --}}
       <div class="vsi-bloco" data-bloco="fotos" hidden>
         <div class="sec-title-row">
-          <div class="sec-title">5 · Fotos</div>
-          <button type="button" class="btn sm sec-title-acao"
-                  onclick="document.getElementById('nv-arquivo').click()">Anexar</button>
+          <button type="button" class="btn sm" onclick="document.getElementById('nv-arquivo').click()">Anexar foto</button>
+          <span class="leg">Toque na foto para apontar o que a legenda descreve.</span>
         </div>
-        <div class="leg">Toque na foto para apontar o que a legenda descreve.</div>
         <div id="vsi-fotos"></div>
       </div>
 
+      <div class="vsi-resumo" id="vsi-resumo"></div>
     </div>
 
     <div class="doc-foot">
-      <button class="btn danger" onclick="excluirItemRelatorio()">Excluir item</button>
-      <div style="flex:1"></div>
+      {{-- "Excluir item" saiu daqui. Item recém-criado que ainda não foi
+           Guardado não tem o que excluir — ele só existe se você cancelar
+           (e some sozinho, vazio). Item já na lista se exclui DE LÁ, com o
+           mesmo cuidado de qualquer exclusão do sistema. --}}
       <button class="btn" onclick="fecharItemRelatorio()">Cancelar</button>
       <button class="btn primary" onclick="salvarItemRelatorio()">Guardar</button>
     </div>
