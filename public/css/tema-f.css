@@ -2146,6 +2146,28 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 }
 
 /* ── BUSCA À VISTA, FILTRO GUARDADO ── */
+/* ── O INVÓLUCRO DO FILTRO, IGUAL EM TODA LISTA ──
+   As três listas e a Consulta pediam a mesma coisa com desenhos diferentes:
+   uma tinha caixa branca com Buscar e Limpar, as outras tinham controles
+   soltos sobre o fundo cinza. Quatro telas, quatro molduras — e nenhuma
+   pista de onde o filtro começa e termina.
+
+   Reutiliza `.busca-form` (a caixa) e acrescenta só o que muda: nas listas o
+   filtro é INSTANTÂNEO, então não há "Buscar" — a lista já respondeu. Fica o
+   "Limpar", que é o que ninguém consegue fazer sozinho quando quatro
+   seletores estão combinados. */
+.lista-form .filtro-barra{margin-bottom:0}
+/* Dentro do invólucro o funil não tem o rótulo "Filtros" ao lado, então
+   perde a margem que o separava da linha de baixo e o contador vira selo no
+   canto, como no botão do mapa. */
+.lista-form .bs-mais{position:relative;margin-bottom:0;align-self:stretch;height:auto}
+.lista-form .bs-mais .filtro-cont{position:absolute;top:-6px;right:-6px}
+.lista-form .filtros-lista{margin-bottom:0}
+.lista-form .doc-filtro-larga{margin-bottom:0}
+.lista-form .filtro-chips:not(:empty){margin-top:10px}
+.lista-form-acoes{margin:12px 0 0;justify-content:flex-end}
+.lista-form-acoes:empty{display:none}
+
 .filtro-barra{display:flex;gap:8px;margin-bottom:9px;align-items:stretch}
 .filtro-busca{flex:1;min-width:0;display:flex;align-items:center;gap:8px;
   border:1.5px solid var(--f-bord);border-radius:var(--r);background:var(--sur);
@@ -2229,10 +2251,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    e o tipo é o que confirma que é ela. */
 .tl-num{display:flex;align-items:center;gap:7px;min-width:0}
 .tl-num .proto-badge{flex-shrink:0}
-.tl-sub{display:block;color:var(--tx3);font-size:10.5px;margin-top:2px;
+.tl-sub{display:block;color:var(--tx2);font-size:10.5px;margin-top:2px;
   overflow:hidden;text-overflow:ellipsis}
 .tl-forte{font-weight:700;color:var(--tx)}
-.tl-fraco{color:var(--tx2)}
+/* CONTEÚDO CARREGADO EM CHUMBO, e não no cinza de texto secundário. Numa
+   tabela de conferência não há "informação de apoio": bairro, imóvel e
+   fundamentação são o que se veio ler. O cinza claro servia para rótulo, e
+   aplicado à linha inteira fazia a lista parecer desabilitada. */
+.tl-fraco{color:var(--chumbo)}
 .tl-falta{color:var(--red)}
 /* A ÚNICA coluna que quebra em vez de cortar. Nome de empresa cortado se
    resolve com a dica do título; "03/09/2026, 08:00–" não se resolve com nada —
@@ -2253,13 +2279,18 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    `table-layout:fixed` com largura declarada: sem isso o navegador redistribui
    as colunas a cada carga, conforme o conteúdo, e a tabela "dança" entre uma
    busca e a seguinte — que é justamente o alinhamento que se veio buscar. */
-.tl-doc  th:nth-child(1){width:17%} .tl-doc  th:nth-child(2){width:20%}
-.tl-doc  th:nth-child(3){width:19%} .tl-doc  th:nth-child(4){width:17%}
-.tl-doc  th:nth-child(5){width:11%} .tl-doc  th:nth-child(6){width:16%}
+/* A COLUNA DO IMÓVEL (3) É A MAIOR das duas primeiras listas. Ela passou a
+   trazer o nome OFICIAL do bairro, bem mais longo que o do desenho
+   ("RESIDENCIAL BURITIS PRIMAVERA V - PRIME" contra "Residencial Buritis V"),
+   e com 19% saía cortada logo depois do "JARDIM EU…". Quadra e lote foram
+   abreviados para Qd./Lt. pelo mesmo motivo — ver `Lote::rotuloCompleto`. */
+.tl-doc  th:nth-child(1){width:16%} .tl-doc  th:nth-child(2){width:17%}
+.tl-doc  th:nth-child(3){width:27%} .tl-doc  th:nth-child(4){width:15%}
+.tl-doc  th:nth-child(5){width:10%} .tl-doc  th:nth-child(6){width:15%}
 
-.tl-prot th:nth-child(1){width:17%} .tl-prot th:nth-child(2){width:20%}
-.tl-prot th:nth-child(3){width:21%} .tl-prot th:nth-child(4){width:16%}
-.tl-prot th:nth-child(5){width:10%} .tl-prot th:nth-child(6){width:16%}
+.tl-prot th:nth-child(1){width:16%} .tl-prot th:nth-child(2){width:18%}
+.tl-prot th:nth-child(3){width:26%} .tl-prot th:nth-child(4){width:15%}
+.tl-prot th:nth-child(5){width:10%} .tl-prot th:nth-child(6){width:15%}
 
 .tl-os   th:nth-child(1){width:15%} .tl-os   th:nth-child(2){width:22%}
 .tl-os   th:nth-child(3){width:18%} .tl-os   th:nth-child(4){width:18%}
@@ -2283,15 +2314,20 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   .doc-filtro-larga select{flex:1 1 180px;min-width:150px}
   /* Com os seletores à vista, o botão e as etiquetas não têm mais o que
      informar — o próprio seletor mostra o que está valendo. */
-  #t-documentos .filtro-barra .btn.opcoes,#doc-chips{display:none}
+  #t-documentos .filtro-barra .bs-mais,#doc-chips{display:none}
 
   /* A COLUNA DE LEITURA CRESCE — só nestas duas telas.
      900px é a medida do resto do sistema, e é a certa para texto corrido e
      para cartão. Sete colunas dentro dela cortam a data no meio: medido, a
      célula pedia 88px e recebia 82. As listas são tabela de conferência, não
      leitura — aqui a largura trabalha a favor. O limite continua existindo
-     para a linha não virar uma faixa de um metro num monitor grande. */
-  #t-documentos,#t-protocolos{max-width:1400px}
+     para a linha não virar uma faixa de um metro num monitor grande.
+
+     1610px (+15% sobre os 1400 anteriores): com sete colunas mais a do ⋮, o
+     que sobrava para o imóvel cortava o nome do bairro — que passou a ser o
+     OFICIAL, mais longo que o do desenho ("RESIDENCIAL BURITIS PRIMAVERA V -
+     PRIME" no lugar de "Residencial Buritis V"). */
+  #t-documentos,#t-protocolos{max-width:1610px}
 }
 
 /* Cada lista marca na barra lateral o SEU risco: no protocolo, ficar sem dono

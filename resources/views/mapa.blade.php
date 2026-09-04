@@ -613,24 +613,33 @@
        busca fica; o resto vai para uma janela, e o que estiver aplicado volta
        como etiqueta — porque filtro escondido é como uma lista parece vazia
        sem que ninguém lembre por quê. --}}
-  <div class="filtro-barra">
-    <div class="filtro-busca">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
-      <input type="text" id="doc-busca" placeholder="Buscar nº, imóvel ou autuado…"
-             oninput="filtrarDocumentos('busca', this.value)">
+  {{-- MESMO INVÓLUCRO DA CONSULTA (`.busca-form`): caixa branca delimitando o
+       filtro, o funil recolhendo o que é ocasional, e as ações à direita. As
+       três listas do sistema e a Consulta pediam a mesma coisa com desenhos
+       diferentes — quatro telas, quatro molduras. --}}
+  <div class="busca-form lista-form">
+    <div class="filtro-barra">
+      <div class="filtro-busca">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        <input type="text" id="doc-busca" placeholder="Buscar nº, imóvel ou autuado…"
+               oninput="filtrarDocumentos('busca', this.value)">
+      </div>
+      <button type="button" class="bs-mais" onclick="abrirFiltrosDoc()" title="Mais filtros">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+        <span class="filtro-cont" id="doc-filtro-n" hidden>0</span>
+      </button>
     </div>
-    <button type="button" class="btn opcoes" onclick="abrirFiltrosDoc()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
-      Filtros<span class="filtro-cont" id="doc-filtro-n" hidden>0</span>
-    </button>
+    {{-- No computador os mesmos seletores voltam para cá, à vista. Nascem
+         clonados dos da janela (`montarFiltroLargoDoc`), para as opções de tipo
+         não serem escritas duas vezes e divergirem depois. --}}
+    <div class="doc-filtro-larga" id="doc-filtro-larga"></div>
+    <div class="filtro-chips" id="doc-chips"></div>
+    <div class="btn-row lista-form-acoes">
+      <button type="button" class="btn" onclick="limparFiltrosDoc()">Limpar</button>
+    </div>
   </div>
-  <div class="filtro-chips" id="doc-chips"></div>
-  {{-- No computador os mesmos seletores voltam para cá, à vista. Nascem
-       clonados dos da janela (`montarFiltroLargoDoc`), para as opções de tipo
-       não serem escritas duas vezes e divergirem depois. --}}
-  <div class="doc-filtro-larga" id="doc-filtro-larga"></div>
 
   <div id="lista-documentos"></div>
 </section>
@@ -663,7 +672,10 @@
   </div>
 
   {{-- No celular continuam duas linhas de dois controles; acima de 1000px o
-       invólucro vira faixa e os quatro ficam lado a lado. --}}
+       invólucro vira faixa e os quatro ficam lado a lado. O invólucro branco
+       é o mesmo da Consulta — aqui não há funil porque não há filtro
+       escondido: os quatro estão à vista. --}}
+  <div class="busca-form lista-form">
   <div class="filtros-lista">
   <div class="linha-filtro">
     <select onchange="filtrarProtocolos('tipo', this.value)">
@@ -691,6 +703,10 @@
     </select>
   </div>
   </div>{{-- /filtros-lista --}}
+    <div class="btn-row lista-form-acoes">
+      <button type="button" class="btn" onclick="limparFiltrosProtocolos()">Limpar</button>
+    </div>
+  </div>{{-- /lista-form --}}
 
   <div id="lista-protocolos"></div>
   </div>{{-- /po-protocolos --}}
@@ -713,6 +729,7 @@
       @endif
     </div>
 
+    <div class="busca-form lista-form">
     <div class="filtros-lista">
     <div class="linha-filtro">
       <select onchange="filtrarOs('situacao', this.value)">
@@ -739,6 +756,10 @@
       </select>
     </div>
     </div>{{-- /filtros-lista --}}
+      <div class="btn-row lista-form-acoes">
+        <button type="button" class="btn" onclick="limparFiltrosOs()">Limpar</button>
+      </div>
+    </div>{{-- /lista-form --}}
 
     <div id="lista-os"></div>
   </div>{{-- /po-os --}}

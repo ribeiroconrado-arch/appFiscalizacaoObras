@@ -199,11 +199,19 @@ class Lote extends Model
         return (new BairrosDoDesenho())->oficial($this->bairro);
     }
 
-    /** "Quadra 24 · Lote 9 — JARDIM EUROPA IV", como sai em peça e em lista. */
+    /**
+     * "Qd. 24 · Lt. 9 — JARDIM EUROPA IV", como sai em lista e em peça.
+     *
+     * ABREVIADO porque a coluna é estreita e o que ela precisa dizer é o
+     * BAIRRO: "Quadra" e "Lote" por extenso comiam 9 caracteres cada, e o
+     * nome oficial do bairro — mais longo que o do desenho — saía cortado com
+     * reticências. Quadra e lote são números de duas casas; o que identifica
+     * o imóvel na leitura corrida é o bairro.
+     */
     public function rotuloCompleto(): string
     {
         return sprintf(
-            'Quadra %s · Lote %s — %s',
+            'Qd. %s · Lt. %s — %s',
             $this->quadra ?? '—',
             $this->numero_lote ?? '—',
             $this->bairroOficial() ?? '—'

@@ -186,6 +186,24 @@ function filtrarProtocolos(campo, valor) {
   carregarProtocolos()
 }
 
+/**
+ * Devolve os filtros ao PADRÃO da tela — que não é "tudo vazio".
+ *
+ * "Todos os agentes" é o padrão daqui: protocolo chega sem dono, e limpar
+ * para "meus" esconderia justamente o que ninguém assumiu (ver o comentário
+ * do seletor no Blade).
+ */
+function limparFiltrosProtocolos() {
+  protoState.filtros = { tipo: '', situacao: '', agente: 'todos', busca: '' }
+
+  document.querySelectorAll('#po-protocolos .lista-form select').forEach(s => {
+    s.value = s.getAttribute('onchange')?.includes("'agente'") ? 'todos' : ''
+  })
+  document.querySelectorAll('#po-protocolos .lista-form input').forEach(i => { i.value = '' })
+
+  carregarProtocolos()
+}
+
 // ── FICHA ────────────────────────────────────────────────────
 
 /** @param {number} id */

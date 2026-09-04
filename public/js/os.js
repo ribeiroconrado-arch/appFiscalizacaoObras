@@ -47,6 +47,25 @@ function filtrarOs(chave, valor) {
   carregarOs()
 }
 
+/**
+ * Devolve os filtros ao PADRÃO da tela.
+ *
+ * O escopo não zera: ele vem do servidor conforme o perfil — a coordenação
+ * abre em "todas" para ver o que distribuiu, o fiscal em "minhas" para ver o
+ * que lhe cabe. Limpar não pode transformar a tela de um no do outro.
+ */
+function limparFiltrosOs() {
+  const escopo = document.getElementById('os-escopo')
+  osState.filtros = escopo?.value ? { agente: escopo.value } : {}
+
+  document.querySelectorAll('#po-os .lista-form select').forEach(s => {
+    if (s.id !== 'os-escopo') { s.value = '' }
+  })
+  document.querySelectorAll('#po-os .lista-form input').forEach(i => { i.value = '' })
+
+  carregarOs()
+}
+
 async function carregarOs() {
   const alvo = document.getElementById('lista-os')
   if (!alvo) { return }
