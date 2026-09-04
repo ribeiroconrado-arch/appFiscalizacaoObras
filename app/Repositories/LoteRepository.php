@@ -19,8 +19,15 @@ use Illuminate\Support\Facades\DB;
  */
 class LoteRepository
 {
-    /** Colunas devolvidas nas consultas de identificação (sem a geometria). */
-    private const CAMPOS = 'id, bairro, quadra, numero_lote, chave, area_gis_m2, inscricao_imobiliaria';
+    /**
+     * Colunas devolvidas nas consultas de identificação (sem a geometria).
+     *
+     * `desmembramento` entra porque é a ÚLTIMA parte da inscrição imobiliária,
+     * derivada a partir daqui (ver App\Cadastro\BairrosDoDesenho). Hoje é 0 em
+     * todos os lotes, então a falta não aparecia; apareceria na primeira parte
+     * de desmembramento desenhada, com a variação saindo 000 em vez de 001.
+     */
+    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria';
 
     /**
      * Recorte padrão de TODA consulta de mapa, GPS e busca.

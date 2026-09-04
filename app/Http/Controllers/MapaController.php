@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Cadastro\BairrosDoDesenho;
 use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -146,6 +147,11 @@ class MapaController extends Controller
         $limite = (int) config('gis.max_lotes');
         $linhas = $this->lotes->porBbox($oeste, $sul, $leste, $norte, $limite);
 
+        // A tradução bairro-do-desenho → código-do-cadastro é lida UMA VEZ:
+        // são milhares de feições por requisição, e uma consulta por lote
+        // poria o mapa de joelhos.
+        $bairros = new BairrosDoDesenho();
+
         $feicoes = array_map(fn ($l) => [
             'type'       => 'Feature',
             'geometry'   => json_decode($l->geojson),
@@ -157,7 +163,12 @@ class MapaController extends Controller
                 'chave'       => $l->chave,
                 // Código oficial do imóvel: é ele que o balão mostra quando
                 // existe, no lugar da chave interna de integração.
-                'inscricao'   => $l->inscricao_imobiliaria,
+                //
+                // DERIVADA das partes do lote, e não lida da coluna — que está
+                // vazia nos 2.239. Era isso que fazia a ficha aberta pelo mapa
+                // cair no montador do navegador, que escrevia 000 no lugar do
+                // bairro que ele não tinha como conhecer.
+                'inscricao'   => $bairros->inscricaoDe($l),
                 'area_gis_m2' => (float) $l->area_gis_m2,
             ],
         ], $linhas);

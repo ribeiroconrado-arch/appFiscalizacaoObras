@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Cadastro\BairrosDoDesenho;
 use App\Models\Documento;
 use App\Models\Lote;
 use App\Models\Vistoria;
@@ -103,44 +104,16 @@ class BuscaController extends Controller
     }
 
     /**
-     * Nome do bairro no desenho → código dele no cadastro.
+     * A tradução nome-do-desenho → código-do-cadastro, lida uma vez só.
      *
-     * Resolvido UMA VEZ por requisição: derivar a inscrição lote a lote faria
+     * Instância própria por requisição: derivar a inscrição lote a lote faria
      * uma consulta por linha, e uma busca devolve até 200 delas.
-     *
-     * @var array<string,string>|null
      */
-    private ?array $codigosDeBairro = null;
+    private ?BairrosDoDesenho $bairros = null;
 
-    /**
-     * A inscrição de um lote (modelo ou linha crua), derivada das partes.
-     *
-     * Ver Lote::inscricao() para o porquê de derivar em vez de guardar. Aqui a
-     * conta é refeita com o mapa em memória, e não chamando o modelo, só para
-     * não consultar o banco a cada linha do resultado.
-     *
-     * @param  object  $l  precisa de bairro, quadra, numero_lote, desmembramento
-     */
     private function inscricaoDe(object $l): ?string
     {
-        if ($this->codigosDeBairro === null) {
-            $this->codigosDeBairro = DB::table('cadastro_bairros')
-                ->whereNotNull('nome_gis')
-                ->pluck('codigo', 'nome_gis')
-                ->all();
-        }
-
-        $gravada = InscricaoImobiliaria::normalizar($l->inscricao_imobiliaria ?? null);
-        if ($gravada !== null) {
-            return InscricaoImobiliaria::formatar($gravada);
-        }
-
-        return InscricaoImobiliaria::formatar(InscricaoImobiliaria::montar(
-            $this->codigosDeBairro[$l->bairro] ?? null,
-            $l->quadra ?? null,
-            $l->numero_lote ?? null,
-            $l->desmembramento ?? 0
-        ));
+        return ($this->bairros ??= new BairrosDoDesenho())->inscricaoDe($l);
     }
 
     /**

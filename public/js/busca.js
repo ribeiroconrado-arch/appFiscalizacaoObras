@@ -252,7 +252,7 @@ function renderFichaImovel(d) {
       ${selo}
       <div class="bs-ficha-topo">
         <div>
-          <h3 class="mono">${esc(d.inscricao || montarInscricao({ bairro: d.bairro, quadra: d.quadra, numero_lote: d.lote }))}</h3>
+          <h3 class="mono">${esc(d.inscricao || 'sem inscrição')}</h3>
           <div class="sub">${esc(d.bairro || '—')} · Quadra ${esc(d.quadra ?? '—')} · Lote ${esc(d.lote ?? '—')}</div>
         </div>
         <div class="btn-row" style="margin:0">${noMapa}${voltar}</div>

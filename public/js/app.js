@@ -217,8 +217,7 @@ function abrirFicha(feicao) {
   // O título é fixo — "Ficha Imóvel". A inscrição saiu dele e desceu para a
   // faixa de campos: no cabeçalho ela competia com o nome da tela, e quem
   // abre a ficha já sabe qual imóvel abriu.
-  const inscricao = p.inscricao || montarInscricao(p)
-  document.getElementById('fi-inscricao').textContent = inscricao
+  document.getElementById('fi-inscricao').textContent = p.inscricao || 'sem inscrição'
 
   document.getElementById('fi-endereco').innerHTML = montarEndereco(p)
 
@@ -284,27 +283,18 @@ function subFicha(nome) {
   }
 }
 
-/**
- * Inscrição imobiliária no formato 01.BBB.QQQ.LLLL.DDD
- *
- *   01   constante do município
- *   BBB  código do bairro
- *   QQQ  quadra
- *   LLLL lote
- *   DDD  sufixo de desmembramento (000 enquanto o lote for original)
- *
- * Montada aqui só enquanto o cadastro imobiliário não é integrado: a partir
- * da Etapa 4 a inscrição vem da prefeitura, que é a fonte legítima. O código
- * do bairro sai do cadastro; sem ele, fica 000 — melhor um campo visivelmente
- * incompleto do que um número plausível e errado numa certidão.
- *
- * @param {Object} p propriedades do lote
- */
-function montarInscricao(p) {
-  const pad = (v, n) => String(v ?? '').replace(/\D/g, '').padStart(n, '0').slice(-n)
-  return ['01', pad(p.codigo_bairro, 3), pad(p.quadra, 3),
-          pad(p.numero_lote, 4), pad(p.desmembramento, 3)].join('.')
-}
+// `montarInscricao` SAIU DAQUI.
+//
+// Ela montava 01.BBB.QQQ.LLLL.DDD no navegador e, quando não sabia o código do
+// bairro — que a ficha nunca recebeu, e que a busca sequer passava —, escrevia
+// 000 no lugar dele. A intenção estava dita no comentário ("melhor um campo
+// visivelmente incompleto do que um número plausível e errado"), mas 000 não é
+// visivelmente incompleto: é um número de bairro, com a mesma cara dos outros,
+// numa tela de onde se copia inscrição para dentro de auto de infração.
+//
+// Agora quem monta é o servidor (App\Support\InscricaoImobiliaria), num lugar
+// só, e ele devolve NULO quando o bairro do desenho ainda não foi amarrado a um
+// bairro do cadastro. A tela mostra "sem inscrição", que é o que se sabe.
 
 /**
  * Endereço no MESMO desenho da linha de baixo: rótulo e valor, aos pares.
