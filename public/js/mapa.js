@@ -127,8 +127,11 @@ function iniciarMapa() {
   // duplo toque (ver onEachFeature) antes de ele chegar aqui, então isto só
   // dispara quando o toque caiu fora de qualquer lote.
   mapaState.obj.on('dblclick', () => {
+    // `escaparSelecao` e não `desligarSelecao`: na mesa, soltar as marcas não
+    // pode desarmar a marcação — desarmada, ela devolveria o clique ao balão e
+    // a régua ficaria sem como acender. Ver cadastro.js.
     if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
-      desligarSelecao()
+      escaparSelecao()
       return
     }
     limparSelecao()
@@ -827,7 +830,7 @@ document.addEventListener('keydown', ev => {
   // comportamentos disparariam no mesmo toque: a pessoa sairia do modo e ainda
   // perderia a seleção de consulta por baixo, sem ter pedido.
   if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
-    desligarSelecao()
+    escaparSelecao()
     return
   }
 

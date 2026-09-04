@@ -22,7 +22,16 @@
  */
 const selState = {
   ativa: false,
-  /** @type {'quadra'|null} */ modo: null,
+  /**
+   * `livre` é a marcação SEM ferramenta escolhida, e é o que inverte a ordem
+   * do trabalho na mesa: primeiro se marca no mapa, e a régua acende só as
+   * ferramentas que aquela marcação comporta. Antes era o contrário —
+   * escolher a ferramenta ligava a marcação —, e a exigência de cada uma só
+   * aparecia na recusa depois do trabalho todo feito.
+   *
+   * @type {'livre'|'quadra'|'apagar'|null}
+   */
+  modo: null,
   /** @type {Set<number>} */  ids: new Set(),
   /** Teto igual ao do servidor (QuadraDeLotesSelecionados::MAXIMO). */
   max: 300,
@@ -45,11 +54,69 @@ function ligarSelecao(modo) {
   pintarPainelCadastro()
 }
 
+/**
+ * Garante o painel de cadastro ABERTO, seja qual for a largura da tela.
+ *
+ * Existe porque `alternarPainelMapa` alterna, e quem começa um ato precisa que
+ * ele esteja aberto — não do contrário do que estava.
+ */
+function garantirPainelCadastroAberto() {
+  if (ehMesaCadastral()) {
+    const mesa = document.getElementById('cad-mesa')
+    if (mesa?.hidden) { abrirMesaCadastral() }
+    return
+  }
+  const g = document.getElementById('grupo-cadastro')
+  if (g && !g.classList.contains('aberto')) { alternarPainelMapa('grupo-cadastro') }
+}
+
+/**
+ * NA MESA, A MARCAÇÃO É DO OPERADOR — NÃO DA FERRAMENTA.
+ *
+ * Ela existe ANTES de a ferramenta ser escolhida: foi ela que decidiu quais
+ * ferramentas estavam disponíveis. Limpá-la ao entrar obrigaria a marcar tudo
+ * de novo, que é o mesmo trabalho duas vezes com a chance de a segunda sair
+ * diferente da primeira.
+ *
+ * Por isso a limpeza automática vale só FORA da mesa — no celular, onde não há
+ * marcação livre e o conjunto está sempre vazio na entrada, de modo que
+ * preservá-lo não mudaria nada de qualquer jeito. Na mesa, a marcação sai por
+ * ato explícito: Limpar, Esc, duplo clique fora, ou o fim do trabalho.
+ */
+function marcacaoEhDoOperador() {
+  const mesa = document.getElementById('cad-mesa')
+  return ehMesaCadastral() && !!mesa && !mesa.hidden
+}
+
 function desligarSelecao() {
   selState.ativa = false
   selState.modo = null
   limparSelecaoCadastral()
   pintarPainelCadastro()
+}
+
+/**
+ * Esc e duplo clique fora: soltam as MARCAS, e não a marcação.
+ *
+ * Na mesa, desarmar devolveria o clique ao balão do lote — e a régua ficaria
+ * sem como acender, porque não haveria mais o que marcar. Fora da mesa não há
+ * modo livre, e o comportamento antigo continua valendo inteiro.
+ */
+function escaparSelecao() {
+  if (selState.modo === 'livre') { limparSelecaoCadastral(); return }
+  desligarSelecao()
+}
+
+/**
+ * Volta ao estado de "mesa aberta, nenhuma ferramenta": marcação ligada e
+ * livre. É para onde se cai ao largar uma ferramenta sem fechar a mesa.
+ */
+function selecaoLivreNaMesa() {
+  if (!ehMesaCadastral()) { return }
+  const mesa = document.getElementById('cad-mesa')
+  if (!mesa || mesa.hidden) { return }
+  selState.ativa = true
+  selState.modo = 'livre'
 }
 
 function alternarModoSelecao() {
@@ -161,8 +228,10 @@ function modoCadastral(modo) {
 
 /** Sai do modo e limpa o que estava em curso. @param {boolean} [silencioso] */
 function sairModoCadastral(silencioso) {
-  if (selState.ativa) { desligarSelecao() }
-  limparSelecaoCadastral()
+  if (!marcacaoEhDoOperador()) {
+    if (selState.ativa) { desligarSelecao() }
+    limparSelecaoCadastral()
+  }
   if (typeof cancelarDesenho === 'function') { cancelarDesenho() }
   desenhoPendente = null
   limparPreviaCoordenadas()
@@ -175,6 +244,12 @@ function sairModoCadastral(silencioso) {
   if (res) { res.innerHTML = '' }
 
   cadModo = null
+
+  // Largou a ferramenta e a mesa continua aberta: volta para a marcação livre,
+  // senão o clique no mapa passaria a abrir o balão e a régua nunca mais
+  // acenderia sem reabrir a mesa.
+  selecaoLivreNaMesa()
+
   if (!silencioso) {
     fModalBtn('m-cad')
     // A MESA CONTINUA ABERTA, mostrando o menu.
@@ -366,7 +441,8 @@ function montarReguaCadastral() {
       const obs = b.querySelector('.cad-lanca-obs')?.textContent.trim() ?? ''
       const ico = b.querySelector('.cad-ico')?.outerHTML ?? ''
       h += `<button type="button" class="cad-fer${b.classList.contains('cad-lanca-perigo') ? ' perigo' : ''}"
-              data-fer="${b.dataset.fer}" aria-label="${esc(nome)}">
+              data-fer="${b.dataset.fer}" data-min="${b.dataset.min ?? 0}"
+              data-max="${b.dataset.max ?? ''}" aria-label="${esc(nome)}">
           ${ico}
           <span class="cad-dica-fer"><b>${esc(nome)}</b><span>${esc(obs)}</span>
             <span class="exige">Precisa de: ${esc(b.dataset.exige || '—')}</span>
@@ -379,7 +455,11 @@ function montarReguaCadastral() {
   // que está sempre na tela: sem ferramenta ativa o lado direito some, e um
   // "fechar" que some junto deixa a mesa sem saída.
   h += '<div class="cad-regua-pe">'
-    + '<div class="cad-selo-sel" id="cad-selo-sel" title="Lotes marcados">0</div>'
+    + '<button type="button" class="cad-selo-sel" id="cad-selo-sel"'
+    + ' onclick="limparSelecaoCadastral()">0'
+    + '<span class="cad-dica-fer"><b>Lotes marcados</b>'
+    + '<span>Clique para desmarcar todos. Esc faz o mesmo.</span></span>'
+    + '</button>'
     + '<button type="button" class="cad-fer cad-fechar" onclick="fecharMesaCadastral()"'
     + ' aria-label="Fechar a mesa">'
     + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
@@ -417,19 +497,47 @@ function acionarFerramenta(id) {
   // sugere, e evita ter de procurar a seta de sair.
   if (ferramentaAtiva() === id) { voltarAsFerramentas(); return }
 
-  const temTrabalho = selState.ids.size > 0 || desenhoPendente
+  // Apagada não age. O botão já diz isso pela cor; o ATALHO não tem como
+  // dizer, e sem esta linha "U" com um lote só entraria na unificação para ser
+  // recusado três passos adiante.
+  if (!cabeNaMarcacao(alvo)) {
+    toast('Precisa de ' + (alvo.dataset.exige || 'outra marcação') + '.', 'aviso')
+    return
+  }
+
+  // Troca LEVANDO a marcação: foi ela que acendeu esta ferramenta, e descartá-la
+  // agora seria pedir o mesmo trabalho de novo — com a chance de a segunda
+  // marcação sair diferente da primeira. Só o desenho em curso é perguntado,
+  // porque esse sim se perde.
+  const desenhando = desenhoPendente
     || (typeof estaDesenhando === 'function' && estaDesenhando())
 
-  if (!temTrabalho) { alvo.click(); return }
+  const entrar = () => alvo.click()
+
+  if (!desenhando) { entrar(); return }
 
   confirmarAcao({
     titulo: 'Trocar de ferramenta',
-    mensagem: selState.ids.size
-      ? `${selState.ids.size} lote(s) marcado(s) serão desmarcados.`
-      : 'O desenho em curso será descartado.',
+    mensagem: 'O desenho em curso será descartado.',
     perigo: true,
-    onConfirm: () => { sairModoCadastral(true); alvo.click() },
+    onConfirm: () => { sairModoCadastral(true); entrar() },
   })
+}
+
+/**
+ * A marcação corrente comporta esta ferramenta?
+ *
+ * Lê `data-min`/`data-max` do próprio lançador — a mesma exigência que a dica
+ * escreve em português. Escrita em dois lugares, ela vira duas exigências
+ * assim que alguém corrigir só uma.
+ *
+ * @param {HTMLElement} lanca @returns {boolean}
+ */
+function cabeNaMarcacao(lanca) {
+  const n = selState.ids.size
+  const min = Number(lanca.dataset.min ?? 0)
+  const max = lanca.dataset.max ? Number(lanca.dataset.max) : Infinity
+  return n >= min && n <= max
 }
 
 /**
@@ -454,15 +562,34 @@ function pintarRegua() {
   if (!regua || !regua.dataset.pronta) { return }
 
   const at = ferramentaAtiva()
-  regua.querySelectorAll('.cad-fer').forEach(f =>
-    f.classList.toggle('at', f.dataset.fer === at))
+  const n = selState.ids.size
+
+  regua.querySelectorAll('.cad-fer[data-fer]').forEach(f => {
+    f.classList.toggle('at', f.dataset.fer === at)
+
+    // A EXIGÊNCIA APARECE ANTES DO CLIQUE, e não na recusa.
+    //
+    // Unificar nasce apagado e acende quando o segundo lote é marcado;
+    // desmembrar apaga no mesmo instante, porque ele divide UM. A regra deixa
+    // de ser um texto que alguém precisa lembrar e passa a ser o estado do
+    // botão.
+    //
+    // A ferramenta ATIVA nunca apaga: ela precisa continuar clicável para ser
+    // largada, e uma marcação ainda incompleta é o estado normal do trabalho
+    // em curso, não um impedimento.
+    const min = Number(f.dataset.min || 0)
+    const max = f.dataset.max ? Number(f.dataset.max) : Infinity
+    f.toggleAttribute('disabled', f.dataset.fer !== at && (n < min || n > max))
+  })
 
   const selo = document.getElementById('cad-selo-sel')
   if (selo) {
     const n = selState.ids.size
-    selo.textContent = n
+    // `firstChild` e não `textContent`: a dica do ponteiro mora dentro do
+    // selo, e reescrever o conteúdo inteiro a apagaria no primeiro lote marcado.
+    selo.firstChild.nodeValue = String(n)
     selo.classList.toggle('tem', n > 0)
-    selo.title = n === 1 ? '1 lote marcado' : `${n} lotes marcados`
+    selo.disabled = n === 0
   }
 }
 
@@ -518,16 +645,21 @@ function tituloDaFerramenta() {
  * mão passa sem querer.
  */
 function voltarAsFerramentas() {
-  const temTrabalho = selState.ids.size > 0 || desenhoPendente
+  // NA MESA, LARGAR A FERRAMENTA NÃO DESMARCA NADA — a marcação é do operador
+  // (ver `marcacaoEhDoOperador`), e continua valendo para a próxima. Só o
+  // desenho em curso se perde, e é só por ele que vale perguntar. Perguntar
+  // sobre lotes que não vão sumir seria ensinar a ignorar a pergunta.
+  const perdeDesenho = !!desenhoPendente
     || (typeof estaDesenhando === 'function' && estaDesenhando())
+  const perdeMarcas = selState.ids.size > 0 && !marcacaoEhDoOperador()
 
-  if (!temTrabalho) { sairModoCadastral(); return }
+  if (!perdeDesenho && !perdeMarcas) { sairModoCadastral(); return }
 
   confirmarAcao({
     titulo: 'Largar o que está em curso',
-    mensagem: selState.ids.size
-      ? `${selState.ids.size} lote(s) marcado(s) serão desmarcados.`
-      : 'O desenho em curso será descartado.',
+    mensagem: perdeDesenho
+      ? 'O desenho em curso será descartado.'
+      : `${selState.ids.size} lote(s) marcado(s) serão desmarcados.`,
     perigo: true,
     onConfirm: () => sairModoCadastral(),
   })
@@ -542,6 +674,12 @@ function voltarAsFerramentas() {
  */
 function abrirMesaCadastral() {
   montarMesaCadastral(true)
+  // Abrir a mesa JÁ ARMA a marcação. É isto que inverte a ordem do trabalho:
+  // chega-se marcando os lotes no mapa, e a régua responde com o que aquela
+  // marcação comporta. Sem isto o clique abriria o balão do lote e não haveria
+  // como acender ferramenta nenhuma sem antes escolher uma — que é a ordem
+  // antiga, e a que faz a exigência só aparecer na recusa.
+  if (!cadModo && !atoState.tipo) { selecaoLivreNaMesa(); pintarPainelCadastro() }
 }
 
 /**
@@ -556,6 +694,12 @@ function fecharMesaCadastral() {
   if (!mesa) { return }
   mesa.hidden = true
   document.body.classList.remove('com-mesa')
+  document.body.classList.remove('mesa-larga')
+
+  // Fechada a mesa, o clique no lote volta a ser o balão. Deixar a marcação
+  // armada por baixo faria o mapa continuar marcando lotes sem nada na tela
+  // dizendo por quê.
+  if (selState.modo === 'livre') { desligarSelecao() }
   pintarPainelCadastro()
 }
 
@@ -923,7 +1067,12 @@ function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
 
   setTimeout(() => {
     fecharPaineisMapa()
-    alternarPainelMapa('grupo-cadastro')
+    // ABRIR, e não alternar. `alternarPainelMapa` foi escrito para o painel
+    // flutuante, onde o ato sempre chegava com ele fechado. Na mesa o mesmo
+    // chamado encontra a coluna ABERTA — e a fecha, no exato momento em que o
+    // ato começa: quem iniciava uma unificação pela régua via a mesa
+    // desaparecer e o trabalho continuar sem lugar nenhum na tela.
+    garantirPainelCadastroAberto()
 
     if (tipo === 'unificacao') {
       ligarSelecao('unificacao')
@@ -963,8 +1112,17 @@ function atoDiretoCadastral(tipo) {
   //
   // O desmembramento parava aqui em silêncio: sem lote selecionado, começava
   // com `loteId: null` e só falhava lá na frente, depois de desenhar tudo.
-  if (tipo === 'desmembramento' && !state.selecionado?.properties?.id) {
-    toast('Toque primeiro no lote que será desmembrado.', 'err')
+  // O ALVO PODE VIR DE DUAS SELEÇÕES.
+  //
+  // Na mesa o lote chega MARCADO: lá o clique no mapa marca em vez de abrir o
+  // balão, e `state.selecionado` fica vazio. Exigir o balão travaria o
+  // desmembramento justamente na tela feita para ele. No celular nada muda —
+  // não há marcação livre, e o lote continua chegando pelo balão.
+  const alvoMarcado = selState.ids.size === 1 ? [...selState.ids][0] : null
+  const loteAlvo = alvoMarcado ?? state.selecionado?.properties?.id ?? null
+
+  if (tipo === 'desmembramento' && !loteAlvo) {
+    toast('Marque primeiro o lote que será desmembrado.', 'err')
     return
   }
 
@@ -977,7 +1135,7 @@ function atoDiretoCadastral(tipo) {
     onOk: texto => {
       atoState.justificativa = texto
       // Protocolo nulo é o que marca o ato como direto — ver `rotaDoAto`.
-      iniciarAtoCadastral(null, tipo, state.selecionado?.properties?.id ?? null)
+      iniciarAtoCadastral(null, tipo, loteAlvo)
       // O desmembramento tem tela própria: o lote alvo ocupa o mapa e os
       // vizinhos viram referência. A unificação não precisa — ali o trabalho é
       // tocar em lotes espalhados, que é justamente o que a mesa esconderia.

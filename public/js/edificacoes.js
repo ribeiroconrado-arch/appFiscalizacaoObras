@@ -100,9 +100,19 @@ function limparEdificacoes() {
  * custaria o desenho inteiro.
  */
 function desenharEdificacao() {
-  const p = state.selecionado?.properties
+  // DUAS SELEÇÕES, e a edificação aceita as duas.
+  //
+  // Na mesa o lote chega MARCADO (selState.ids, um só) — lá o clique no mapa
+  // marca em vez de abrir o balão, então `state.selecionado` fica vazio e
+  // exigir o balão travaria a ferramenta. No celular não há marcação livre, e
+  // o lote chega pelo balão, como sempre chegou.
+  const marcado = typeof selState !== 'undefined' && selState.ids.size === 1
+    ? mapaState.porId.get([...selState.ids][0])?.feature?.properties
+    : null
+
+  const p = marcado ?? state.selecionado?.properties
   if (!p?.id) {
-    toast('Abra primeiro o lote onde está a construção.', 'err')
+    toast('Marque primeiro o lote onde está a construção.', 'err')
     return
   }
 

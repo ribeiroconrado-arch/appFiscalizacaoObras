@@ -3128,3 +3128,16 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .cad-regua-pe{display:flex;flex-direction:column;gap:3px}
 .cad-fechar{color:var(--tx3)}
 .cad-fechar:hover{background:var(--rlt);color:var(--red)}
+
+/* Ferramenta que a marcação corrente não comporta. Apagada, e não escondida:
+   sumir mudaria a posição das outras a cada lote marcado, e a mão perderia a
+   referência do lugar de cada uma. */
+.cad-fer[disabled]{opacity:.3;cursor:not-allowed}
+.cad-fer[disabled]:hover{background:transparent;color:var(--tx2)}
+.cad-fer[disabled] .cad-dica-fer .exige{color:var(--gold)}
+
+/* O selo é botão: desmarca tudo. Fica sem cara de clicável quando não há o que
+   desmarcar, porque aí ele é só um número. */
+.cad-selo-sel{border:1px solid transparent;cursor:pointer;position:relative;padding:0}
+.cad-selo-sel:disabled{cursor:default}
+.cad-selo-sel.tem:hover{background:var(--gm)}

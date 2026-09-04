@@ -365,7 +365,7 @@
       <div id="cad-geral">
         <div class="cad-sep">Corrigir o desenho</div>
 
-        <button type="button" class="btn sm cad-lanca" data-fer="quadra" data-tecla="Q" data-exige="1 lote ou mais" onclick="modoCadastral('quadra')">
+        <button type="button" class="btn sm cad-lanca" data-fer="quadra" data-tecla="Q" data-min="1" data-exige="1 lote ou mais" onclick="modoCadastral('quadra')">
           <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="7" height="7" rx="1.2"/>
@@ -378,7 +378,7 @@
           </span>
         </button>
 
-        <button type="button" class="btn sm cad-lanca" data-fer="desenho" data-tecla="D" data-exige="nenhuma seleção" onclick="modoCadastral('desenho')">
+        <button type="button" class="btn sm cad-lanca" data-fer="desenho" data-tecla="D" data-min="0" data-exige="nenhuma seleção" onclick="modoCadastral('desenho')">
           <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M4 20 20 4"/><path d="M4 14v6h6"/>
@@ -389,7 +389,7 @@
           </span>
         </button>
 
-        <button type="button" class="btn sm cad-lanca" data-fer="coordenadas" data-tecla="C" data-exige="nenhuma seleção" onclick="modoCadastral('coordenadas')">
+        <button type="button" class="btn sm cad-lanca" data-fer="coordenadas" data-tecla="C" data-min="0" data-exige="nenhuma seleção" onclick="modoCadastral('coordenadas')">
           <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21z"/>
@@ -405,7 +405,7 @@
              pergunta. Por isso chama direto, sem passar por `modoCadastral`. --}}
         <div class="cad-sep">O que está construído</div>
 
-        <button type="button" class="btn sm cad-lanca" data-fer="edificacao" data-tecla="E" data-exige="1 lote aberto pelo balão" onclick="desenharEdificacao()">
+        <button type="button" class="btn sm cad-lanca" data-fer="edificacao" data-tecla="E" data-min="1" data-max="1" data-exige="exatamente 1 lote" onclick="desenharEdificacao()">
           <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/>
@@ -430,7 +430,7 @@
                  apagar       um lote, sem nada preso a ele --}}
           <div class="cad-sep">Sem protocolo — só curadoria</div>
 
-          <button type="button" class="btn sm cad-lanca" data-fer="unificacao" data-tecla="U" data-exige="2 lotes ou mais, vizinhos" onclick="atoDiretoCadastral('unificacao')">
+          <button type="button" class="btn sm cad-lanca" data-fer="unificacao" data-tecla="U" data-min="2" data-exige="2 lotes ou mais, vizinhos" onclick="atoDiretoCadastral('unificacao')">
             <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="6" width="8" height="12" rx="1.2"/>
@@ -442,7 +442,7 @@
             </span>
           </button>
 
-          <button type="button" class="btn sm cad-lanca" data-fer="desmembramento" data-tecla="S" data-exige="1 lote" onclick="atoDiretoCadastral('desmembramento')">
+          <button type="button" class="btn sm cad-lanca" data-fer="desmembramento" data-tecla="S" data-min="1" data-max="1" data-exige="1 lote" onclick="atoDiretoCadastral('desmembramento')">
             <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="4" y="4" width="16" height="16" rx="1.4"/>
@@ -453,7 +453,7 @@
             </span>
           </button>
 
-          <button type="button" class="btn sm cad-lanca cad-lanca-perigo" data-fer="apagar" data-tecla="Del" data-exige="1 lote ou mais, sem nada preso" onclick="apagarLoteDoPainel()">
+          <button type="button" class="btn sm cad-lanca cad-lanca-perigo" data-fer="apagar" data-tecla="Del" data-min="1" data-exige="1 lote ou mais, sem nada preso" onclick="apagarLoteDoPainel()">
             <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
