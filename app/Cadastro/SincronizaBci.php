@@ -36,6 +36,11 @@ class SincronizaBci
                 $retrato->imovel + [
                     'consultado_em'  => now(),
                     'consultado_por' => Auth::user()?->name ?? 'sistema',
+                    // De onde este retrato veio. Fica AQUI, e não é lida no
+                    // momento da lavratura, porque ela é do retrato: um
+                    // documento lavrado amanhã sobre uma integração de hoje
+                    // tem de dizer a fonte de hoje.
+                    'fonte'          => $this->fonte->nome(),
                 ]
             );
 

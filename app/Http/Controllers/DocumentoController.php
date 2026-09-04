@@ -390,6 +390,15 @@ class DocumentoController extends Controller
             ],
 
             'autuado'   => ['nome' => $documento->autuado_nome, 'documento' => $documento->autuado_documento],
+
+            // De quando é o dado cadastral que esta peça usou. Vai para a ficha
+            // e para o PDF, e para lugar nenhum mais: é dado de conferência,
+            // consultado quando alguém questiona — não coluna de lista nem
+            // filtro, que seria pagar por ele a cada abertura de tela.
+            'cadastro'  => $documento->status === 'rascunho' ? null : [
+                'consultado_em' => $documento->cadastro_consultado_em?->format('d/m/Y'),
+                'fonte'         => $documento->cadastro_fonte,
+            ],
             'descricao' => $documento->descricao,
             'observacoes' => $documento->observacoes,
 

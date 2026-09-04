@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Artigo;
+use App\Models\Bci\BciImovel;
 use App\Models\Documento;
 use App\Models\DocumentoArtigo;
 use App\Models\Feriado;
@@ -117,6 +118,22 @@ class LavraturaService
             // reabrir renovaria o prazo de um documento antigo — o autuado
             // ganharia tempo toda vez que alguém abrisse a tela.
             $this->calcularPrazos($doc);
+
+            // CARIMBO DE PROCEDÊNCIA — de quando é o dado cadastral que esta
+            // peça usou, e de onde ele veio.
+            //
+            // Aqui e não na criação do rascunho: um rascunho fica dias em
+            // aberto, e uma integração no meio do caminho mudaria o dado sob os
+            // pés dele. Na lavratura o conteúdo congela — mesmo momento do
+            // prazo de defesa e da rubrica, pela mesma razão.
+            //
+            // CÓPIA, e não referência: a linha do BCI é substituída inteira a
+            // cada integração, então apontar para ela faria o documento citar o
+            // retrato de hoje em vez do que ele usou. Nulo quando o imóvel
+            // nunca foi integrado — e nulo é informação, não ausência.
+            $bci = BciImovel::where('lote_id', $doc->lote_id)->first();
+            $doc->cadastro_consultado_em = $bci?->consultado_em;
+            $doc->cadastro_fonte         = $bci?->fonte;
 
             $doc->save();
 

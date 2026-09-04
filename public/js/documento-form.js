@@ -229,6 +229,20 @@ function preencherFormDoc(d) {
   document.getElementById('nd-tipo').value = d.tipo
   document.getElementById('nd-autuado').value = d.autuado.nome || ''
   document.getElementById('nd-autuado-doc').value = d.autuado.documento || ''
+
+  // De quando é o dado cadastral desta peça. `d.cadastro` vem nulo no
+  // rascunho — lá o carimbo ainda não existe, porque o conteúdo ainda pode
+  // mudar até a lavratura.
+  const carimbo = document.getElementById('nd-carimbo')
+  if (carimbo) {
+    carimbo.hidden = !d.cadastro
+    if (d.cadastro) {
+      carimbo.textContent = d.cadastro.consultado_em
+        ? 'Cadastro do imóvel consultado em ' + d.cadastro.consultado_em
+          + (d.cadastro.fonte === 'exportacao' ? ', por exportação do cadastro imobiliário.' : '.')
+        : 'Lavrado sem consulta ao cadastro imobiliário.'
+    }
+  }
   document.getElementById('nd-endereco').value = d.imovel.endereco || ''
   document.getElementById('nd-descricao').value = d.descricao || ''
   document.getElementById('nd-area-terreno').value = d.imovel.terreno ?? ''

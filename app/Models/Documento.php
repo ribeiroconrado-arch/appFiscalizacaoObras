@@ -19,6 +19,7 @@ class Documento extends Model
         return [
             'data_fato'          => 'datetime',
             'data_lavratura'     => 'datetime',
+            'cadastro_consultado_em' => 'datetime',
             'anulado_em'         => 'datetime',
             'prazo_ate'          => 'date',
             'defesa_ate'         => 'date',

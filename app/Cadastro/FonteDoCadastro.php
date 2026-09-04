@@ -26,4 +26,14 @@ interface FonteDoCadastro
 
     /** Frase curta que explica por que a última consulta veio vazia. */
     public function porQueVazio(Lote $lote): string;
+
+    /**
+     * Como esta fonte se chama no carimbo do documento.
+     *
+     * Vai gravada no RETRATO, e de lá é copiada para a peça lavrada. Sem isso,
+     * o dia em que a exportação der lugar ao banco da prefeitura, um documento
+     * lavrado depois da troca — mas com integração feita antes — diria "banco"
+     * sobre um dado que veio de planilha.
+     */
+    public function nome(): string;
 }

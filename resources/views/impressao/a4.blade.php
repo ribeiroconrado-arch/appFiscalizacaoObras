@@ -331,6 +331,37 @@
         </div>
       @endif
 
+      {{-- CARIMBO DE PROCEDÊNCIA — de quando é o dado cadastral desta peça.
+
+           O documento guarda cópia própria do autuado, então reintegrar o
+           cadastro nunca o altera. Faltava dizer de QUANDO os valores são: sem
+           isso, quem questionar o auto daqui a dois anos não tem como saber se
+           o nome era o vigente na lavratura.
+
+           A linha do "sem consulta" é impressa, e não omitida. Omitir
+           esconderia justamente o caso em que alguém deveria olhar. --}}
+      @if ($doc->status !== 'rascunho')
+        <div class="rodape-inst" style="border-top:none; margin-top:6px; padding-top:0">
+          @php
+            // A origem em português, montada ANTES da frase.
+            // `@elseif` colado a uma palavra não é reconhecido pelo Blade: a
+            // diretiva sai impressa como texto, no papel, dentro do auto.
+            $origem = match ($doc->cadastro_fonte) {
+                'exportacao' => ', por exportação do cadastro imobiliário',
+                'banco'      => ', por consulta ao cadastro da prefeitura',
+                null         => '',
+                default      => ', fonte: ' . $doc->cadastro_fonte,
+            };
+          @endphp
+          @if ($doc->cadastro_consultado_em)
+            Dados cadastrais do imóvel consultados em
+            {{ $doc->cadastro_consultado_em->format('d/m/Y') }}{{ $origem }}.
+          @else
+            Lavrado sem consulta ao cadastro imobiliário.
+          @endif
+        </div>
+      @endif
+
       @if (count($rodape))
         <div class="rodape-inst">
           @foreach ($rodape as $linha)

@@ -26,6 +26,11 @@ use Illuminate\Support\Facades\DB;
  */
 class CadastroCarregado implements FonteDoCadastro
 {
+    public function nome(): string
+    {
+        return 'exportacao';
+    }
+
     public function consultar(Lote $lote): ?RetratoBci
     {
         $linhas = $this->linhasDoLote($lote);
