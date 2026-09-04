@@ -1195,11 +1195,22 @@
              estando na ficha, o fiscal já sabe sobre qual imóvel vai lavrar —
              obrigá-lo a sair daqui para abrir uma notificação era um desvio sem
              motivo. --}}
-        <button class="btn opcoes" onclick="novoDocumento(event)">Opções</button>
+        {{-- Com os três pontos, como no rodapé do formulário de documento: é o
+             MESMO gesto (abrir um menu de ações), e sem o ícone ele se lia
+             como um botão comum que executa alguma coisa direto. --}}
+        <button class="btn opcoes" onclick="novoDocumento(event)">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          Opções
+        </button>
       @else
         {{-- Visualizador não registra: esconder o botão evita a ida ao
              servidor só para receber 403. A regra real está no controller. --}}
-        <button class="btn opcoes" disabled title="Seu perfil permite apenas consulta">Opções</button>
+        <button class="btn opcoes" disabled title="Seu perfil permite apenas consulta">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          Opções
+        </button>
       @endif
     </div>
   </div>
@@ -1509,16 +1520,35 @@
 
     </div>{{-- /vs-corpo --}}
 
-    <div class="btn-row vs-rodape">
-      <button class="btn" id="nv-voltar" onclick="passo(-1)">Voltar</button>
+    {{-- MESMAS SETAS DAS OUTRAS DUAS JANELAS de várias abas (item do relatório
+         e formulário de documento). "Voltar" e "Avançar" escritos saíram: os
+         quatro passos da vistoria se percorrem para frente e para trás o tempo
+         todo, e duas palavras longas empurravam "Gravar" para fora da linha no
+         celular.
+
+         E "Gravar" fica VISÍVEL SEMPRE, não só no último passo. A vistoria é
+         ato de campo: quem terminou o que tinha para registrar deve poder
+         gravar de onde está, sem percorrer os passos restantes só para achar o
+         botão. O que falta continua sendo cobrado por `gravarVistoria`, que
+         leva ao passo do problema. --}}
+    <div class="btn-row vs-rodape" id="nv-setas">
+      <div class="foot-setas">
+        <button class="btn sm" data-ir="primeira" title="Primeiro passo"
+                onclick="irPassoPara('primeira')">&laquo;</button>
+        <button class="btn" data-ir="anterior" title="Passo anterior"
+                onclick="irPassoPara('anterior')">&lsaquo;</button>
+        <button class="btn primary" data-ir="proxima" title="Próximo passo"
+                onclick="irPassoPara('proxima')">&rsaquo;</button>
+        <button class="btn sm" data-ir="ultima" title="Último passo"
+                onclick="irPassoPara('ultima')">&raquo;</button>
+      </div>
       <div style="flex:1"></div>
       {{-- O ÚNICO caminho que guarda rascunho. A tela não guarda mais nada por
            conta: gravar é decisão de quem escreve, e o botão fica ao lado de
            onde se sai, que é quando a decisão aparece. --}}
       <button class="btn" onclick="guardarRascunho()" title="Guarda o que está na tela neste aparelho, para continuar depois">Salvar rascunho</button>
       <button class="btn" onclick="fecharVistoria()">Cancelar</button>
-      <button class="btn primary" id="nv-avancar" onclick="passo(1)">Avançar</button>
-      <button class="btn primary" id="nv-gravar" onclick="gravarVistoria()" hidden>Gravar vistoria</button>
+      <button class="btn primary" id="nv-gravar" onclick="gravarVistoria()">Gravar vistoria</button>
     </div>
   </div>
 </div>
@@ -2629,9 +2659,18 @@
       <div style="flex:1"></div>
       <button class="btn" onclick="imprimirVistoria()">Imprimir</button>
       {{-- O caminho de quem volta ao caso dias depois. A peça nasce presa a
-           ESTA vistoria, e não à última do imóvel. --}}
+           ESTA vistoria, e não à última do imóvel.
+
+           "Opções", e não "Gerar documento": o botão ABRE UM MENU com as
+           quatro peças — nunca gerou nada direto. O nome antigo prometia um
+           ato e entregava uma escolha, e é o mesmo gesto do ⋮ do resto do
+           sistema. --}}
       @if (auth()->user()->podeLavrarDocumento())
-        <button class="btn primary" onclick="documentoDaVistoria(event)">Gerar documento</button>
+        <button class="btn opcoes" onclick="documentoDaVistoria(event)">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          Opções
+        </button>
       @endif
     </div>
   </div>

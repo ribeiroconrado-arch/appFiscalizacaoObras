@@ -793,6 +793,23 @@ function passo(d) {
 }
 
 /**
+ * As quatro setas do rodapé. @param {'primeira'|'anterior'|'proxima'|'ultima'} destino
+ *
+ * Pular direto para o último passo passa pela MESMA checagem de avançar: um
+ * salto que ignorasse o que falta seria um caminho lateral para o que o
+ * botão "›" recusa.
+ */
+function irPassoPara(destino) {
+  const lista = passosDaVistoria().map(x => x.k)
+  const alvo = abaAlvo(lista, vState.passo, destino)
+
+  const indo = lista.indexOf(alvo) > lista.indexOf(vState.passo)
+  if (indo && !passoCompleto(vState.passo)) { return }
+
+  irPasso(alvo)
+}
+
+/**
  * O que impede de avançar. Deliberadamente pouco: o formulário não pode virar
  * interrogatório, e o que de fato não pode faltar é conferido na gravação.
  * @param {number} n
@@ -867,9 +884,9 @@ function irPasso(k) {
     p.classList.toggle('at', p.dataset.passo === k)
   })
 
-  document.getElementById('nv-voltar').hidden = i === 0
-  document.getElementById('nv-avancar').hidden = i === lista.length - 1
-  document.getElementById('nv-gravar').hidden = i !== lista.length - 1
+  // As setas se desligam nas pontas, como nas outras janelas de várias abas.
+  // "Gravar" não some mais no meio do caminho — ver o comentário do rodapé.
+  pintarSetasDeAba('nv-setas', lista.map(x => x.k), k)
   const corpo = document.querySelector('.vs-corpo')
   if (corpo) { corpo.scrollTop = 0 }
 
