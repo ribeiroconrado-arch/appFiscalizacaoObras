@@ -201,6 +201,48 @@ function esconderCarregandoTela() {
   falta > 0 ? setTimeout(fechar, falta) : fechar()
 }
 
+/* ── FILTRO ALTERADO E AINDA NÃO BUSCADO ──
+   Tirar a busca instantânea resolve um problema e cria outro: a pessoa troca o
+   seletor, NADA acontece, e ela não sabe se o filtro não pegou ou se a lista já
+   é aquela. O ponto no botão responde exatamente isso — "há filtro escolhido
+   que esta lista ainda não reflete" — e some sozinho quando a busca volta.
+   É por isso que ele é aceso pelo filtro e apagado pelo SUCESSO da consulta, e
+   não pelo clique: busca que falhou continua sendo filtro não aplicado. */
+
+/** @param {string} idBotao */
+function marcarBuscaPendente(idBotao) {
+  document.getElementById(idBotao)?.classList.add('pendente')
+}
+
+/** @param {string} idBotao */
+function limparBuscaPendente(idBotao) {
+  document.getElementById(idBotao)?.classList.remove('pendente')
+}
+
+/**
+ * Enter num campo de filtro vale como clicar em Buscar.
+ *
+ * Não é volta da busca instantânea: continua sendo um ato deliberado, com hora
+ * marcada por quem digita. É o gesto que todo mundo já tem no dedo depois de
+ * escrever num campo de busca, e negá-lo faria o campo parecer travado.
+ *
+ * @param {string[]} ids @param {Function} buscar
+ */
+function enterBusca(ids, buscar) {
+  for (const id of ids) {
+    const e = document.getElementById(id)
+    if (!e) { continue }
+    e.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter') { return }
+      ev.preventDefault()
+      // Uma sugestão aberta manda no Enter: ali ele escolhe a linha da lista,
+      // e não dispara a busca da tela.
+      if (document.querySelector('.ac-list.open')) { return }
+      buscar()
+    })
+  }
+}
+
 /** Escapa texto antes de injetar em innerHTML. @param {*} s @returns {string} */
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => (

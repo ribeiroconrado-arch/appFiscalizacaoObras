@@ -40,15 +40,19 @@ async function carregarDocumentos() {
   }
   const alvo = document.getElementById('lista-documentos')
   alvo.innerHTML = '<div class="lista-vazia">Carregando…</div>'
+  mostrarCarregandoTela('Buscando documentos...')
   try {
     const r = await fetch('/api/documentos?' + p, { headers: { Accept: 'application/json' } })
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
     dState.lista = d.documentos
     renderDocumentos()
+    limparBuscaPendente('doc-buscar')
   } catch (e) {
     console.error(e)
     alvo.innerHTML = '<div class="lista-vazia">Não foi possível carregar os documentos.</div>'
+  } finally {
+    esconderCarregandoTela()
   }
 }
 
@@ -373,10 +377,23 @@ function espelharFiltrosDoc() {
   }
 }
 
-/** @param {string} campo @param {string} valor */
+/**
+ * ANOTA O FILTRO, MAS NÃO BUSCA.
+ *
+ * A lista respondia enquanto se digitava. Parecia agilidade e era o contrário:
+ * cada tecla virava uma consulta ao banco, a lista pulava embaixo da mão de
+ * quem ainda estava escrevendo, e não havia como saber se o que estava na tela
+ * já era o resultado final. Agora quem decide a hora é o botão Buscar.
+ *
+ * A exceção continua sendo o combobox que pesquisa DENTRO do próprio campo
+ * (logradouro, irregularidade, artigo): ali a lista É a escrita, e esperar um
+ * botão seria pior.
+ *
+ * @param {string} campo @param {string} valor
+ */
 function filtrarDocumentos(campo, valor) {
   dState.filtros[campo] = valor
-  carregarDocumentos()
+  marcarBuscaPendente('doc-buscar')
 }
 
 // ── APOIO AO FORMULÁRIO ──────────────────────────────────────

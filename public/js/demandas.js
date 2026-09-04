@@ -23,9 +23,14 @@ const dmState = {
 }
 
 /** @param {string} chave @param {string} valor */
+/**
+ * ANOTA O FILTRO, MAS NÃO BUSCA — mesma regra da lista de documentos e da
+ * Consulta: quem dispara a consulta é o botão Buscar. Ver `filtrarDocumentos`
+ * para o porquê.
+ */
 function filtrarDemandas(chave, valor) {
   dmState.filtros[chave] = valor
-  carregarDemandas()
+  marcarBuscaPendente('dm-buscar')
 }
 
 function limparFiltrosDemandas() {
@@ -48,6 +53,7 @@ async function carregarDemandas() {
   for (const [k, v] of Object.entries(dmState.filtros)) { if (v) { p.set(k, v) } }
 
   alvo.innerHTML = '<div class="lista-vazia">Carregando…</div>'
+  mostrarCarregandoTela('Buscando na fila...')
   try {
     const r = await fetch('/api/demandas?' + p, { headers: { Accept: 'application/json' } })
     if (!r.ok) { throw new Error('HTTP ' + r.status) }
@@ -57,9 +63,12 @@ async function carregarDemandas() {
     montarSituacoesDemanda(d.situacoes)
     document.getElementById('cont-demandas').textContent = d.total ?? 0
     renderDemandas()
+    limparBuscaPendente('dm-buscar')
   } catch (e) {
     console.error(e)
     alvo.innerHTML = '<div class="lista-vazia">Não foi possível carregar a fila.</div>'
+  } finally {
+    esconderCarregandoTela()
   }
 }
 

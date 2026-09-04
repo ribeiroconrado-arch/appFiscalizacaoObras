@@ -659,13 +659,14 @@
          não serem escritas duas vezes e divergirem depois. --}}
     <div class="doc-filtro-larga" id="doc-filtro-larga"></div>
     <div class="filtro-chips" id="doc-chips"></div>
-    {{-- As mesmas duas ações da Consulta. Aqui o filtro já é instantâneo — a
-         lista responde enquanto se digita —, então "Buscar" REEXECUTA a
-         consulta: serve para recarregar sem trocar de aba, depois de alguém
-         ter lavrado uma peça em outra janela. --}}
+    {{-- As mesmas duas ações da Consulta — e aqui "Buscar" é a ÚNICA porta:
+         escolher filtro não consulta nada, só anota. O ponto no botão avisa que
+         há escolha ainda não aplicada. Serve também para recarregar sem trocar
+         de aba, depois de alguém ter lavrado uma peça em outra janela. --}}
     <div class="btn-row lista-form-acoes">
       <button type="button" class="btn" onclick="limparFiltrosDoc()">Limpar</button>
-      <button type="button" class="btn primary" onclick="carregarDocumentos()">Buscar</button>
+      <button type="button" class="btn primary" id="doc-buscar"
+              onclick="carregarDocumentos()">Buscar</button>
     </div>
   </div>
 
@@ -739,7 +740,8 @@
     </div>
     <div class="btn-row lista-form-acoes">
       <button type="button" class="btn" onclick="limparFiltrosDemandas()">Limpar</button>
-      <button type="button" class="btn primary" onclick="carregarDemandas()">Buscar</button>
+      <button type="button" class="btn primary" id="dm-buscar"
+              onclick="carregarDemandas()">Buscar</button>
     </div>
   </div>
 

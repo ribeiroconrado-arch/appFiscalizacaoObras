@@ -209,6 +209,7 @@ async function executarBusca() {
 
   const alvo = document.getElementById('busca-resultado')
   alvo.innerHTML = '<div class="lista-vazia">Buscando…</div>'
+  mostrarCarregandoTela('Buscando imóveis...')
 
   try {
     const r = await fetch('/api/imoveis/busca?' + p, { headers: { Accept: 'application/json' } })
@@ -222,11 +223,18 @@ async function executarBusca() {
     }
     // Resultado único vai direto para a ficha: obrigar a clicar numa tabela
     // de uma linha só é um passo sem informação nova.
-    if (d.imoveis.length === 1) { abrirImovel(d.imoveis[0].id); return }
+    // `await`: sem ele o `finally` daqui embaixo apagaria o overlay ENQUANTO a
+    // ficha ainda estivesse carregando — a busca some da tela e a ficha demora,
+    // que é justamente a espera que o overlay existe para cobrir.
+    if (d.imoveis.length === 1) { await abrirImovel(d.imoveis[0].id); return }
     renderTabelaBusca(d)
   } catch (e) {
     console.error(e)
     alvo.innerHTML = `<div class="lista-vazia">${esc(e.message || 'Falha na busca.')}</div>`
+  } finally {
+    // No `finally` e não no fim do `try`: o caminho de resultado único sai por
+    // um `return` no meio, e ali o overlay ficaria preso na tela.
+    esconderCarregandoTela()
   }
 }
 
@@ -269,6 +277,7 @@ function renderTabelaBusca(d) {
 async function abrirImovel(id) {
   const alvo = document.getElementById('busca-resultado')
   alvo.innerHTML = '<div class="lista-vazia">Carregando ficha…</div>'
+  mostrarCarregandoTela('Abrindo o imóvel...')
 
   try {
     const r = await fetch('/api/imoveis/' + id, { headers: { Accept: 'application/json' } })
@@ -278,6 +287,8 @@ async function abrirImovel(id) {
   } catch (e) {
     console.error(e)
     alvo.innerHTML = `<div class="lista-vazia">${esc(e.message || 'Não foi possível abrir o imóvel.')}</div>`
+  } finally {
+    esconderCarregandoTela()
   }
 }
 

@@ -3038,3 +3038,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .baixado-sair{position:fixed;z-index:902;top:122px;left:50%;transform:translateX(-50%);
   background:var(--sur);box-shadow:0 4px 16px rgba(0,0,0,.16)}
 .baixado-sair[hidden]{display:none}
+
+/* ── FILTRO ESCOLHIDO E AINDA NÃO BUSCADO ──
+   As listas deixaram de buscar a cada tecla: agora quem consulta é o botão.
+   O efeito colateral é o silêncio — trocar o seletor não muda nada na tela —,
+   e este ponto é a resposta a "o filtro pegou?". Âmbar, e não vermelho: não é
+   erro, é trabalho pendente. */
+.btn.pendente{position:relative}
+.btn.pendente::after{
+  content:'';position:absolute;top:-3px;right:-3px;width:9px;height:9px;
+  border-radius:50%;background:var(--gold);border:2px solid var(--sur);
+}

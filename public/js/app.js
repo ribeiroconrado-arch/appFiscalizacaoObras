@@ -192,6 +192,14 @@ async function bootstrap() {
   carregarNotificacoes()
   carregarPainel()
   prepararMapa()   // sem efeito se a aba Mapa ainda não estiver visível
+
+  // Enter = Buscar nos campos de texto dos três filtros. As listas não buscam
+  // mais sozinhas (ver `filtrarDocumentos`), e sem isto escrever e apertar
+  // Enter — que é o que a mão faz — não produziria nada.
+  enterBusca(['doc-busca'], carregarDocumentos)
+  enterBusca(['dm-busca'], carregarDemandas)
+  enterBusca(['bs-inscricao', 'bs-quadra', 'bs-lote', 'bs-numero',
+              'bs-bci-de', 'bs-bci-ate', 'bs-logradouro'], executarBusca)
 }
 
 // ── FICHA DO IMÓVEL ──────────────────────────────────────────
