@@ -70,7 +70,7 @@ class OrdemServicoController extends Controller
             'prioridade'=> $os->prioridade,
             'fiscais'   => $os->fiscais->pluck('name'),
             'emitente'  => $os->emitente?->name,
-            'imovel'    => $os->lote ? trim("Q{$os->lote->quadra} L{$os->lote->numero_lote} · {$os->lote->bairro}") : null,
+            'imovel'    => $os->lote ? trim("Q{$os->lote->quadra} L{$os->lote->numero_lote} · {$os->lote->bairroOficial()}") : null,
         ]);
 
         return response()->json([
@@ -124,7 +124,7 @@ class OrdemServicoController extends Controller
             'falta_assinar' => $ordem->assinatura_emitente === null,
             'encerramento' => $ordem->encerramento,
             'encerrada_em' => $ordem->encerrada_em?->format('d/m/Y H:i'),
-            'imovel'    => $ordem->lote ? trim("Quadra {$ordem->lote->quadra} · Lote {$ordem->lote->numero_lote} — {$ordem->lote->bairro}") : null,
+            'imovel'    => $ordem->lote ? trim("Quadra {$ordem->lote->quadra} · Lote {$ordem->lote->numero_lote} — {$ordem->lote->bairroOficial()}") : null,
             'protocolo' => $ordem->protocolo?->numero,
             'fiscais'   => $ordem->fiscais->map(fn ($f) => [
                 'id' => $f->id, 'name' => $f->name,

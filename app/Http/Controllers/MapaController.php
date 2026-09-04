@@ -157,7 +157,13 @@ class MapaController extends Controller
             'geometry'   => json_decode($l->geojson),
             'properties' => [
                 'id'          => $l->id,
+                // OS DOIS NOMES viajam juntos, e cada tela usa o seu: o
+                // desenho rotula o mapa com `bairro` (é o que está escrito na
+                // planta que o fiscal tem à frente), e tudo o mais — ficha,
+                // vistoria, peça — usa `bairro_oficial`, que é como o registro
+                // do município chama o lugar.
                 'bairro'      => $l->bairro,
+                'bairro_oficial' => $bairros->oficial($l->bairro),
                 'quadra'      => $l->quadra,
                 'numero_lote' => $l->numero_lote,
                 'chave'       => $l->chave,

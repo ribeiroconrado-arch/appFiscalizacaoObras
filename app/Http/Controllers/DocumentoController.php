@@ -84,9 +84,9 @@ class DocumentoController extends Controller
                 // palavra na tela.
                 'status'      => ['valor' => $doc->status, 'texto' => $stTxt, 'classe' => $stCls],
                 'prazo'       => $prazo ? ['texto' => $prazo[0], 'classe' => $prazo[1]] : null,
-                'imovel'      => $doc->lote
-                    ? sprintf('Quadra %s · Lote %s — %s', $doc->lote->quadra ?? '—', $doc->lote->numero_lote ?? '—', $doc->lote->bairro)
-                    : '—',
+                // `rotuloCompleto` traz o bairro pelo NOME OFICIAL: peça e
+                // lista de peça citam o bairro como o registro o chama.
+                'imovel'      => $doc->lote?->rotuloCompleto() ?? '—',
                 'autuado'     => $doc->autuado_nome ?: '—',
                 'lei'         => $doc->legislacao?->rotulo() ?: '—',
                 'artigos'     => $doc->artigos_count,
@@ -156,9 +156,7 @@ class DocumentoController extends Controller
                 'classe' => $v->situacaoBadge(),
             ],
             'prazo'       => null,
-            'imovel'      => $v->lote
-                ? sprintf('Quadra %s · Lote %s — %s', $v->lote->quadra ?? '—', $v->lote->numero_lote ?? '—', $v->lote->bairro)
-                : '—',
+            'imovel'      => $v->lote?->rotuloCompleto() ?? '—',
             'autuado'     => '—',
             'lei'         => '—',
             'artigos'     => $v->artigos_count,
@@ -380,8 +378,10 @@ class DocumentoController extends Controller
             'origem'         => $documento->origem?->numeroFormatado(),
 
             'imovel' => [
-                'inscricao' => $documento->lote?->inscricao_imobiliaria,
-                'bairro'    => $documento->lote?->bairro,
+                // Derivada, e bairro pelo nome OFICIAL: é esta a identificação
+                // que entra na peça.
+                'inscricao' => $documento->lote?->inscricaoFormatada(),
+                'bairro'    => $documento->lote?->bairroOficial(),
                 'quadra'    => $documento->lote?->quadra,
                 'lote'      => $documento->lote?->numero_lote,
                 'endereco'  => $documento->endereco,

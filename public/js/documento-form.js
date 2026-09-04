@@ -278,7 +278,7 @@ function renderImovelDoc() {
 
   const linhas = [
     ['Inscrição imobiliária', p.inscricao || 'sem inscrição'],
-    ['Bairro', p.bairro],
+    ['Bairro', bairroDe(p)],
     ['Quadra / Lote', `${p.quadra ?? '—'} / ${p.numero_lote ?? '—'}`],
     ['Área do terreno', p.area_gis_m2 ? fmtNum(p.area_gis_m2) + ' m²' : null],
   ].filter(([, v]) => v)
@@ -631,7 +631,7 @@ function renderResumoDoc() {
 
     ${sec('Imóvel')}
     ${linha('Inscrição', p.inscricao || 'sem inscrição')}
-    ${linha('Bairro', p.bairro)}
+    ${linha('Bairro', bairroDe(p))}
     ${linha('Quadra / Lote', `${p.quadra ?? '—'} / ${p.numero_lote ?? '—'}`)}
     ${linha('Endereço', document.getElementById('nd-endereco').value)}
 

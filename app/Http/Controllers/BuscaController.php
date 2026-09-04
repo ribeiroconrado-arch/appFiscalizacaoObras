@@ -85,7 +85,8 @@ class BuscaController extends Controller
         return response()->json([
             'imoveis' => $lotes->map(fn (Lote $l) => [
                 'id'         => $l->id,
-                'bairro'     => $l->bairro,
+                // NOME OFICIAL: fora do mapa é ele que identifica o bairro.
+                'bairro'     => $this->bairroOficial($l->bairro),
                 'quadra'     => $l->quadra,
                 'lote'       => $l->numero_lote,
                 'inscricao'  => $this->inscricaoDe($l),
@@ -114,6 +115,12 @@ class BuscaController extends Controller
     private function inscricaoDe(object $l): ?string
     {
         return ($this->bairros ??= new BairrosDoDesenho())->inscricaoDe($l);
+    }
+
+    /** O nome de registro do bairro — o que vale fora do mapa. */
+    private function bairroOficial(?string $doDesenho): ?string
+    {
+        return ($this->bairros ??= new BairrosDoDesenho())->oficial($doDesenho);
     }
 
     /**
@@ -271,10 +278,18 @@ class BuscaController extends Controller
             preg_match_all('/\d+/', $t, $m);
             $numeros = $m[0];
 
-            $q->where(function ($s) use ($t, $numeros) {
+            // O campo único aceita os DOIS nomes do bairro: quem digita o
+            // oficial ("Buritis Primavera V") e quem digita o do desenho
+            // ("Buritis V") procuram o mesmo lugar. A coluna só tem o segundo,
+            // então o primeiro é traduzido antes.
+            $porOficial = ($this->bairros ??= new BairrosDoDesenho())->desenhosQueCasam($t);
+
+            $q->where(function ($s) use ($t, $numeros, $porOficial) {
                 $s->where('bairro', 'like', '%' . $t . '%')
                   ->orWhere('inscricao_imobiliaria', 'like', '%' . $t . '%')
                   ->orWhere('chave', 'like', '%' . $t . '%');
+
+                if ($porOficial) { $s->orWhereIn('bairro', $porOficial); }
 
                 // "24 9" e "quadra 24 lote 9" caem aqui: dois números soltos
                 // são quadra e lote, na ordem em que se fala.
@@ -285,7 +300,14 @@ class BuscaController extends Controller
             $usou = true;
         }
 
-        if (! empty($d['bairro'])) { $q->where('bairro', 'like', '%' . $d['bairro'] . '%'); $usou = true; }
+        // O QUE CHEGA É O NOME OFICIAL — é ele que a tela oferece. A coluna
+        // `lotes.bairro` guarda o do desenho, então o oficial é traduzido de
+        // volta antes de bater na consulta.
+        if (! empty($d['bairro'])) {
+            $q->whereIn('bairro', ($this->bairros ??= new BairrosDoDesenho())
+                ->nomesDeDesenhoDe($d['bairro']));
+            $usou = true;
+        }
         if (! empty($d['quadra'])) { $q->where('quadra', $d['quadra']); $usou = true; }
         if (! empty($d['lote']))   { $q->where('numero_lote', $d['lote']); $usou = true; }
 
@@ -374,13 +396,21 @@ class BuscaController extends Controller
      */
     public function bairros(): JsonResponse
     {
-        return response()->json([
-            'bairros' => DB::table('lotes')
-                ->where('situacao', 'ativo')
-                ->whereNotNull('bairro')->where('bairro', '<>', '')
-                ->distinct()->orderBy('bairro')
-                ->pluck('bairro'),
-        ]);
+        // A lista sai com o NOME OFICIAL: fora do mapa é ele que identifica o
+        // bairro (ver App\Cadastro\BairrosDoDesenho::oficial). O que se oferece
+        // continua vindo dos LOTES, e não do cadastro inteiro — oferecer um
+        // bairro sem lote levantado é oferecer uma busca que devolve vazio.
+        $b = new BairrosDoDesenho();
+
+        $nomes = DB::table('lotes')
+            ->where('situacao', 'ativo')
+            ->whereNotNull('bairro')->where('bairro', '<>', '')
+            ->distinct()->pluck('bairro')
+            ->map(fn ($n) => $b->oficial($n))
+            ->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return response()->json(['bairros' => $nomes]);
     }
 
     /**
@@ -479,7 +509,7 @@ class BuscaController extends Controller
                 'id'        => $l->id,
                 'lat'       => (float) $l->lat,
                 'lon'       => (float) $l->lon,
-                'bairro'    => $l->bairro,
+                'bairro'    => $this->bairroOficial($l->bairro),
                 'quadra'    => $l->quadra,
                 'lote'      => $l->numero_lote,
                 'inscricao' => $this->inscricaoDe($l),
@@ -539,7 +569,7 @@ class BuscaController extends Controller
 
         return response()->json([
             'id'        => $lote->id,
-            'bairro'    => $lote->bairro,
+            'bairro'    => $this->bairroOficial($lote->bairro),
             'quadra'    => $lote->quadra,
             'lote'      => $lote->numero_lote,
             'inscricao' => $lote->inscricaoFormatada(),
@@ -592,7 +622,7 @@ class BuscaController extends Controller
             ->map(fn ($r) => [
                 'id'        => $r->id,
                 'rotulo'    => 'Quadra ' . ($r->quadra ?? '—') . ' · Lote ' . ($r->numero_lote ?? '—'),
-                'bairro'    => $r->bairro,
+                'bairro'    => $this->bairroOficial($r->bairro),
                 'situacao'  => $r->situacao,
                 'tipo'      => $r->tipo,
                 'protocolo' => $r->protocolo_id,

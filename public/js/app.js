@@ -327,8 +327,27 @@ function montarEndereco(p) {
     // outro.
     par('Qd.', esc(p.quadra ?? '—'), true),
     par('Lt.', esc(p.numero_lote ?? '—'), true),
-    p.bairro ? par('Bairro', esc(p.bairro)) : '',
+    bairroDe(p) ? par('Bairro', esc(bairroDe(p))) : '',
   ].filter(Boolean).join('')
+}
+
+/**
+ * O nome do bairro que vale FORA DO MAPA — o oficial, do cadastro.
+ *
+ * O lote viaja com os dois: `bairro` é o que está escrito no desenho
+ * ("Residencial Buritis V") e rotula o mapa; `bairro_oficial` é como o
+ * registro do município chama o mesmo lugar ("RESIDENCIAL BURITIS PRIMAVERA V
+ * - PRIME"), e é ele que vai para ficha, vistoria e peça — um auto que cite o
+ * bairro pelo apelido da planta cita um bairro que não existe no cadastro.
+ *
+ * Cai no do desenho quando não há oficial: sem amarração, é o único nome que
+ * se conhece, e a alternativa seria um campo vazio.
+ *
+ * @param {Object} p propriedades do lote
+ * @returns {string}
+ */
+function bairroDe(p) {
+  return p?.bairro_oficial || p?.bairro || ''
 }
 
 /**

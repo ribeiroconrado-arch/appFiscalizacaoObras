@@ -54,9 +54,7 @@ class ProtocoloController extends Controller
             'situacao'    => ['texto' => $sTxt, 'classe' => $sCls],
             'prazo'       => $prazo ? ['texto' => $prazo[0], 'classe' => $prazo[1]] : null,
             'requerente'  => $p->requerente_nome,
-            'imovel'      => $p->lote
-                ? sprintf('Quadra %s · Lote %s — %s', $p->lote->quadra ?? '—', $p->lote->numero_lote ?? '—', $p->lote->bairro)
-                : 'Não vinculado a lote',
+            'imovel'      => $p->lote?->rotuloCompleto() ?? 'Não vinculado a lote',
             'responsavel' => $p->responsavel?->name ?? 'Não distribuído',
             'objeto'      => $p->objeto,
             'lote_id'     => $p->lote_id,

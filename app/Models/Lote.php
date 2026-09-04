@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Cadastro\BairrosDoDesenho;
 use App\Models\Concerns\RegistraAuditoria;
 use App\Support\InscricaoImobiliaria;
 use Illuminate\Database\Eloquent\Builder;
@@ -179,5 +180,33 @@ class Lote extends Model
     public function inscricaoFormatada(): ?string
     {
         return InscricaoImobiliaria::formatar($this->inscricao());
+    }
+
+    /**
+     * O NOME OFICIAL do bairro — o que vale fora do mapa.
+     *
+     * `bairro` guarda o nome que veio do DWG ("Residencial Buritis V"); o
+     * registro do município chama o mesmo lugar de "RESIDENCIAL BURITIS
+     * PRIMAVERA V - PRIME". Busca, documento e peça usam o oficial: auto de
+     * infração que cite bairro por apelido de planta cita bairro que não
+     * existe no cadastro. O mapa continua mostrando o do desenho, que é o que
+     * está escrito na planta à frente do fiscal.
+     *
+     * Sem amarração devolve o do desenho — é o único nome que se conhece.
+     */
+    public function bairroOficial(): ?string
+    {
+        return (new BairrosDoDesenho())->oficial($this->bairro);
+    }
+
+    /** "Quadra 24 · Lote 9 — JARDIM EUROPA IV", como sai em peça e em lista. */
+    public function rotuloCompleto(): string
+    {
+        return sprintf(
+            'Quadra %s · Lote %s — %s',
+            $this->quadra ?? '—',
+            $this->numero_lote ?? '—',
+            $this->bairroOficial() ?? '—'
+        );
     }
 }

@@ -749,12 +749,16 @@ function abrirBalao(feicao, camada) {
 
   // O chip só aparece quando existe inscrição imobiliária — o código pelo
   // qual a prefeitura conhece o imóvel. Cair para a chave interna aqui
-  // repetiria bairro, quadra e lote, que já estão no título; enquanto o
-  // cadastro não é integrado (Etapa 4), o balão fica sem o chip.
+  // repetiria bairro, quadra e lote, que já estão no título.
+  //
+  // O bairro sai pelo NOME OFICIAL (`bairroDe`), e não pelo do desenho: o
+  // balão IDENTIFICA o imóvel — é dele que se abre a ficha e se lavra peça —,
+  // e a inscrição logo abaixo é oficial. Os dois têm de concordar. O nome do
+  // desenho fica para o rótulo escrito sobre o mapa.
   const html = `
     <div class="balao">
       <div class="balao-tit">Quadra ${esc(p.quadra ?? '—')} · Lote ${esc(p.numero_lote ?? '—')}</div>
-      <div class="balao-sub">${esc(p.bairro ?? '')}</div>
+      <div class="balao-sub">${esc(bairroDe(p))}</div>
       ${p.inscricao ? `<div class="balao-chip">${esc(p.inscricao)}</div>` : ''}
       <div class="balao-area">${area}</div>
       <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Ver ficha completa</button>

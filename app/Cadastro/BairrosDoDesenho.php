@@ -60,6 +60,96 @@ class BairrosDoDesenho
         return $this->codigos;
     }
 
+    /** @var array<string,string>|null chave normalizada => nome oficial */
+    private ?array $oficiais = null;
+
+    /**
+     * O NOME OFICIAL do bairro, a partir do nome que está no desenho.
+     *
+     * ── Dois nomes para o mesmo lugar, e qual vale onde ──
+     *
+     * O desenho vem do DWG e traz o nome que o topógrafo escreveu
+     * ("Residencial Buritis V"). O cadastro da prefeitura tem o nome de
+     * registro ("RESIDENCIAL BURITIS PRIMAVERA V - PRIME"). São o mesmo
+     * bairro, e a amarração entre eles é `nome_gis`.
+     *
+     * Fora do mapa, vale o OFICIAL: é ele que identifica o bairro em busca,
+     * documento e peça — o nome do desenho é apelido de trabalho, e um auto de
+     * infração que cite bairro por apelido cita um bairro que não existe no
+     * registro do município. No mapa continua o do desenho, que é o que está
+     * escrito na planta que o fiscal tem à frente.
+     *
+     * Sem amarração devolve o nome do desenho: é o único que se conhece, e uma
+     * lista com a coluna de bairro vazia seria pior do que uma com o apelido.
+     */
+    public function oficial(?string $nomeDoDesenho): ?string
+    {
+        if ($nomeDoDesenho === null || $nomeDoDesenho === '') {
+            return null;
+        }
+
+        if ($this->oficiais === null) {
+            $this->oficiais = [];
+            foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->get() as $b) {
+                $this->oficiais[self::chave($b->nome_gis)] = $b->nome_cadastro;
+            }
+        }
+
+        return $this->oficiais[self::chave($nomeDoDesenho)] ?? $nomeDoDesenho;
+    }
+
+    /**
+     * O caminho de volta: os nomes DE DESENHO de um bairro oficial.
+     *
+     * É o que faz o filtro funcionar. Quem escolhe "RESIDENCIAL BURITIS
+     * PRIMAVERA V - PRIME" na tela precisa achar lotes gravados como
+     * "Residencial Buritis V" — a coluna `lotes.bairro` guarda o do desenho, e
+     * é nela que a consulta bate.
+     *
+     * Devolve o próprio termo junto, para o caso de alguém filtrar pelo nome do
+     * desenho (uma URL antiga, um favorito) — continuar funcionando é de graça.
+     *
+     * @return array<int,string>
+     */
+    public function nomesDeDesenhoDe(?string $oficial): array
+    {
+        if ($oficial === null || $oficial === '') {
+            return [];
+        }
+
+        $alvo = self::chave($oficial);
+        $nomes = DB::table('cadastro_bairros')
+            ->whereNotNull('nome_gis')->get()
+            ->filter(fn ($b) => self::chave($b->nome_cadastro) === $alvo)
+            ->pluck('nome_gis')
+            ->all();
+
+        return array_values(array_unique([...$nomes, $oficial]));
+    }
+
+    /**
+     * Os nomes de desenho cujo nome OFICIAL contém o texto procurado.
+     *
+     * Serve ao campo único da busca, onde se digita um pedaço do nome. Sem
+     * isto, procurar por "Primavera" — que é como o bairro se chama no
+     * registro — não acharia nada, porque a coluna guarda "Buritis V".
+     *
+     * @return array<int,string>
+     */
+    public function desenhosQueCasam(string $termo): array
+    {
+        $t = self::chave($termo);
+        if ($t === '') {
+            return [];
+        }
+
+        return DB::table('cadastro_bairros')
+            ->whereNotNull('nome_gis')->get()
+            ->filter(fn ($b) => str_contains(self::chave($b->nome_cadastro), $t))
+            ->pluck('nome_gis')
+            ->unique()->values()->all();
+    }
+
     /**
      * A forma comparável de um nome de bairro: sem caixa, sem acento, sem
      * espaço sobrando. É o que a colação do banco já fazia.

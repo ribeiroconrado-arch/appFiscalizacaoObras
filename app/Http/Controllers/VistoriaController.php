@@ -110,7 +110,7 @@ class VistoriaController extends Controller
     public function mostrar(Vistoria $vistoria): JsonResponse
     {
         $vistoria->load([
-            'fiscal:id,name', 'lote:id,bairro,quadra,numero_lote,inscricao',
+            'fiscal:id,name', 'lote:id,bairro,quadra,numero_lote,inscricao_imobiliaria',
             'itens.irregularidades', 'itens.artigos.artigo', 'itens.exigencias', 'itens.evidencias',
             'evidencias', 'itensDeArtigo.artigo', 'exigencias',
             'irregularidades:id,codigo,descricao,gravidade', 'artigos',
@@ -147,7 +147,7 @@ class VistoriaController extends Controller
             ],
             'fiscal'      => $vistoria->fiscal?->name,
             'imovel'      => $vistoria->lote
-                ? trim("Qd. {$vistoria->lote->quadra} Lt. {$vistoria->lote->numero_lote} — {$vistoria->lote->bairro}")
+                ? trim("Qd. {$vistoria->lote->quadra} Lt. {$vistoria->lote->numero_lote} — {$vistoria->lote->bairroOficial()}")
                 : null,
             'observacoes' => $vistoria->observacoes,
             'acompanhante' => $vistoria->acompanhante_nome ? [
