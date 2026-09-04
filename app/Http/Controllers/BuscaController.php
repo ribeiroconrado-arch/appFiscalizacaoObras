@@ -117,6 +117,59 @@ class BuscaController extends Controller
     }
 
     /**
+     * A inscrição montada EM SQL, para poder ser comparada num intervalo.
+     *
+     * Derivar em PHP resolve exibir; não resolve filtrar — o intervalo precisa
+     * ser um `WHERE`, e o banco não conhece a fórmula. Aqui ela é escrita uma
+     * vez em SQL, com o código do bairro vindo de um CASE sobre os bairros
+     * amarrados (são poucos: um por loteamento levantado).
+     *
+     * O CASE compara `bairro` com o nome do cadastro pela colação da coluna,
+     * que ignora caixa — o mesmo que `BairrosDoDesenho::chave` faz em PHP.
+     *
+     * @return array{0:string, 1:array<int,string>, 2:array<int,string>}
+     *         expressão, valores dela e os nomes de bairro que ela cobre
+     */
+    private function inscricaoEmSql(): array
+    {
+        $pares = DB::table('cadastro_bairros')
+            ->whereNotNull('nome_gis')
+            ->pluck('codigo', 'nome_gis');
+
+        $casos = '';
+        $bind = [];
+        foreach ($pares as $nome => $codigo) {
+            $casos .= ' WHEN ? THEN ?';
+            $bind[] = $nome;
+            $bind[] = str_pad((string) (int) $codigo, 3, '0', STR_PAD_LEFT);
+        }
+
+        $expr = "CONCAT('01', CASE bairro{$casos} END,"
+              . " LPAD(CAST(quadra AS UNSIGNED), 3, '0'),"
+              . " LPAD(CAST(numero_lote AS UNSIGNED), 4, '0'),"
+              . " LPAD(COALESCE(desmembramento, 0), 3, '0'))";
+
+        return [$expr, $bind, $pares->keys()->all()];
+    }
+
+    /**
+     * Completa um extremo do intervalo até os 15 dígitos.
+     *
+     * "01.090.001" com zeros vira o primeiro imóvel da quadra 1; com noves,
+     * o último. É o que faz um prefixo digitado significar "esta quadra
+     * inteira" em vez de não achar nada.
+     *
+     * @param  string  $v  o que o fiscal digitou
+     * @param  string  $preenche  '0' para o piso, '9' para o teto
+     */
+    private static function extremo(string $v, string $preenche): string
+    {
+        $n = preg_replace('/\D/', '', $v);
+
+        return substr(str_pad($n, 15, $preenche), 0, 15);
+    }
+
+    /**
      * Aplica os filtros na consulta, respeitando a PRECEDÊNCIA definida.
      *
      * A precedência não é detalhe de interface, é regra do domínio: a
@@ -137,13 +190,36 @@ class BuscaController extends Controller
         $de  = trim((string) ($d['inscricao_de'] ?? ''));
         $ate = trim((string) ($d['inscricao_ate'] ?? ''));
 
-        // 1. Intervalo de BCI. Comparação como texto: a inscrição é código
-        // formatado (01.000.024.0009.000), não número — e o formato é de
-        // largura fixa, então a ordem alfabética coincide com a numérica.
+        // 1. Intervalo de BCI. Comparação como texto: a inscrição é código de
+        // LARGURA FIXA (15 dígitos), então a ordem alfabética coincide com a
+        // numérica e o intervalo se resolve com >= e <=.
+        //
+        // O que se compara é a inscrição MONTADA EM SQL a partir das partes do
+        // lote — a coluna `inscricao_imobiliaria` está vazia nos 2.239, e este
+        // filtro devolvia lista vazia para qualquer intervalo, sempre.
         if ($de !== '' || $ate !== '') {
-            $q->whereNotNull('inscricao_imobiliaria');
-            if ($de !== '')  { $q->where('inscricao_imobiliaria', '>=', $de); }
-            if ($ate !== '') { $q->where('inscricao_imobiliaria', '<=', $ate); }
+            [$expr, $bind, $bairros] = $this->inscricaoEmSql();
+
+            // Nenhum bairro amarrado: não há inscrição no sistema inteiro, e o
+            // intervalo não tem o que devolver.
+            if (! $bairros) {
+                $q->whereRaw('1 = 0');
+                return true;
+            }
+
+            // Lote sem quadra ou sem lote não TEM inscrição (ver
+            // InscricaoImobiliaria::montar); deixá-lo entrar faria o LPAD
+            // fabricar 000/0000 e o cadastro cairia dentro de intervalos que
+            // não são dele.
+            $q->whereIn('bairro', $bairros)
+                ->whereNotNull('quadra')->where('quadra', '<>', '')
+                ->whereNotNull('numero_lote')->where('numero_lote', '<>', '');
+
+            // Extremos incompletos viram o menor e o maior do prefixo: quem
+            // digita "01.090.001" quer a quadra 1 inteira, não um erro.
+            if ($de !== '')  { $q->whereRaw("{$expr} >= ?", [...$bind, self::extremo($de, '0')]); }
+            if ($ate !== '') { $q->whereRaw("{$expr} <= ?", [...$bind, self::extremo($ate, '9')]); }
+
             return true;
         }
 

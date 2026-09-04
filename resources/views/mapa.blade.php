@@ -500,8 +500,12 @@
     <div class="busca-campos">
       <div class="field bc-insc">
         <label for="bs-inscricao">Inscrição imobiliária</label>
+        {{-- O exemplo traz um BAIRRO DE VERDADE (105). O anterior mostrava
+             000 no lugar dele, herdado de quando a tela montava a inscrição
+             sem conhecer o código do bairro — e ensinava, no campo de busca,
+             um número que não corresponde a imóvel nenhum. --}}
         <input type="text" id="bs-inscricao" class="mono" maxlength="40"
-               placeholder="01.000.024.0009.000" oninput="marcarPrecedencia()">
+               placeholder="01.105.024.0009.000" oninput="marcarPrecedencia()">
       </div>
       <div class="field bc-bairro">
         <label for="bs-bairro">Bairro / loteamento</label>
