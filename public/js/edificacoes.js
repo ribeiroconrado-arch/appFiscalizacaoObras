@@ -102,7 +102,7 @@ function limparEdificacoes() {
 function desenharEdificacao() {
   const p = state.selecionado?.properties
   if (!p?.id) {
-    toast('Toque primeiro no lote onde está a construção.', 'err')
+    toast('Abra primeiro o lote onde está a construção.', 'err')
     return
   }
 

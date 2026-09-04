@@ -2916,11 +2916,18 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
     left:12px; top:120px; max-height:calc(100vh - 200px); width:326px;
     background:rgba(255,255,255,.97); border:1.5px solid var(--bord);
     border-radius:var(--rl); box-shadow:0 10px 32px rgba(0,0,0,.14);
+    /* DUAS COLUNAS: régua encostada na borda, propriedades ao lado. A largura
+       total é a mesma de antes — 56 + 270 —, mas o menu deixou de disputar a
+       coluna com o formulário. */
+    flex-direction:row; overflow:hidden;
   }
+  /* Sem ferramenta ativa a mesa encolhe para a régua: uma coluna de 326px
+     mostrando só uma frase de convite ocuparia o mapa à toa. */
+  .cad-mesa.so-regua{width:56px}
+  .cad-mesa.so-regua .cad-mesa-lado{display:none}
   .cad-mesa[hidden]{display:none}
-  /* Recolhida durante o traçado: some da tela sem perder o estado, e volta
-     inteira quando o contorno fecha. */
-  .cad-mesa.mesa-recolhida{display:none}
+  /* Durante o traçado ela não some: encolhe para a régua (ver
+     pintarMesaCadastral). O estado continua todo lá. */
   /* Com a mesa aberta o ícone do lançador não tem o que lançar: ele abriria um
      segundo menu com os mesmos botões que já estão à vista. */
   body.com-mesa #grupo-cadastro{display:none}
@@ -2967,7 +2974,10 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Com a mesa aberta à esquerda, a barra centrada no mapa fica descentrada em
    relação ao espaço que sobra — ela se desloca para não cobrir a coluna. */
 @media (min-width:1000px){
-  body.com-mesa .des-barra{left:calc(50% + 170px)}
+  /* `mesa-larga`, e não `com-mesa`: o deslocamento existe para não cobrir a
+     COLUNA. Com a mesa encolhida para a régua não há coluna a evitar, e
+     deslocar mandaria a barra para fora do centro sem motivo. */
+  body.mesa-larga .des-barra{left:calc(50% + 170px)}
 }
 /* No celular ela vira uma faixa colada ao topo do mapa: não há largura para
    uma pílula centralizada com cinco controles. */
@@ -2981,6 +2991,68 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 /* Menu e ferramenta nunca aparecem juntos (ver pintarMesaCadastral), então não
    há separador entre eles — havia um traço aqui de quando conviviam. */
 .cad-mesa #mesa-lanca[hidden], .cad-mesa #mesa-props[hidden]{display:none}
+
+/* ── A RÉGUA DE FERRAMENTAS ──
+   Ícone só, 42px, encostado na borda esquerda da mesa. O texto que hoje fica
+   permanentemente visível embaixo de cada botão não sumiu: virou a dica do
+   ponteiro, com o atalho e a exigência de seleção junto. Some da tela, não do
+   sistema — e é isso que paga os 270px que a coluna devolve ao mapa. */
+.cad-regua{
+  flex:0 0 56px; display:flex; flex-direction:column;
+  background:var(--sur); border-right:1.5px solid var(--bord); padding:7px 0;
+}
+.cad-regua-gp{display:flex;flex-direction:column;gap:3px;padding:4px 7px}
+.cad-regua-gp + .cad-regua-gp{border-top:1px solid var(--blt)}
+.cad-fer{
+  width:42px;height:42px;border-radius:9px;border:1px solid transparent;
+  background:transparent;color:var(--tx2);display:grid;place-items:center;
+  cursor:pointer;position:relative;transition:background .13s,color .13s;padding:0;
+}
+.cad-fer:hover{background:var(--blt);color:var(--tx)}
+.cad-fer.at{background:var(--g);color:#fff;border-color:var(--gd)}
+.cad-fer.perigo:not(.at):hover{background:var(--rlt);color:var(--red)}
+.cad-fer svg{width:21px;height:21px}
+/* O ícone vinha de um botão que também tinha texto ao lado; solto, ele precisa
+   ocupar o quadrado inteiro. */
+.cad-fer .cad-ico{width:21px;height:21px;flex:none}
+
+/* A dica sai POR FORA da mesa, à direita, e por isso a régua não pode recortar
+   o que transborda — é o único motivo de ela não ter overflow próprio. */
+.cad-dica-fer{
+  position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);
+  width:236px;background:var(--tx);color:var(--sur);padding:9px 12px;
+  border-radius:9px;box-shadow:0 8px 26px rgba(0,0,0,.22);text-align:left;
+  opacity:0;visibility:hidden;transition:opacity .13s;pointer-events:none;z-index:60;
+}
+.cad-fer:hover .cad-dica-fer, .cad-fer:focus-visible .cad-dica-fer{opacity:1;visibility:visible}
+.cad-dica-fer b{display:block;font-size:13px;font-weight:700;margin-bottom:3px}
+.cad-dica-fer span{display:block;font-size:12px;line-height:1.45;opacity:.74}
+.cad-dica-fer .exige{margin-top:6px;font-size:11.5px;opacity:.92;color:var(--gm)}
+.cad-dica-fer kbd{
+  display:inline-block;margin-top:7px;font-family:ui-monospace,monospace;
+  font-size:10.5px;background:rgba(255,255,255,.16);border-radius:4px;padding:2px 6px;
+}
+
+/* O contador de seleção, sempre no mesmo lugar. Antes o número só existia
+   dentro do texto do painel da ferramenta — quem estava desenhando não via
+   quantos lotes tinha marcado antes. */
+.cad-regua-pe{margin-top:auto;padding:7px 7px 0;border-top:1px solid var(--blt)}
+.cad-selo-sel{
+  width:42px;height:42px;border-radius:9px;background:var(--blt);display:grid;
+  place-items:center;font-size:14.5px;font-weight:700;color:var(--tx3);
+  font-variant-numeric:tabular-nums;
+}
+.cad-selo-sel.tem{background:var(--gl);color:var(--gxd)}
+
+.cad-mesa-lado{flex:1;min-width:0;display:flex;flex-direction:column}
+.mesa-vazio{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:30px 18px;text-align:center;color:var(--tx3);
+  font-size:12.5px;line-height:1.5;
+}
+.mesa-vazio[hidden]{display:none}
+.mesa-vazio svg{width:28px;height:28px;opacity:.4}
+.mesa-vazio p{margin:0}
 
 /* A mesa de desmembramento herda a caixa da mesa cadastral: é o mesmo objeto
    na tela, com outro assunto dentro. */
@@ -3049,3 +3121,10 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   content:'';position:absolute;top:-3px;right:-3px;width:9px;height:9px;
   border-radius:50%;background:var(--gold);border:2px solid var(--sur);
 }
+
+/* O fechar mora no pé da régua (ver montarReguaCadastral): sem ferramenta
+   ativa o lado direito da mesa some, e um "fechar" que some junto deixaria a
+   mesa aberta sem como sair dela. */
+.cad-regua-pe{display:flex;flex-direction:column;gap:3px}
+.cad-fechar{color:var(--tx3)}
+.cad-fechar:hover{background:var(--rlt);color:var(--red)}

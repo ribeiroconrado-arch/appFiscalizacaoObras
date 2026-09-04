@@ -218,7 +218,12 @@ function montarMesaCadastral(abrir) {
   if (!mesa || !corpo) { return }
 
   if (ehMesaCadastral()) {
-    if (geral) { document.getElementById('mesa-lanca').appendChild(geral) }
+    // O LANÇADOR NÃO VIAJA MAIS PARA A MESA. Quem mostra as ferramentas aqui é
+    // a régua, montada a partir dele — então ele fica onde sempre esteve, no
+    // painel flutuante, que a mesa esconde por CSS. Movê-lo para cá deixava o
+    // painel flutuante VAZIO quando alguém fechava a mesa: o ícone passava a
+    // abrir uma caixa com título e nada dentro.
+    montarReguaCadastral()
     document.getElementById('mesa-props').appendChild(corpo)
     if (abrir !== undefined) { mesa.hidden = !abrir }
     // A janela não tem mais corpo nenhum: se ficasse aberta, seria um retângulo
@@ -230,6 +235,12 @@ function montarMesaCadastral(abrir) {
     const flutuante = document.querySelector('#grupo-cadastro .ctrl-corpo')
     if (geral && flutuante) { flutuante.appendChild(geral) }
     document.getElementById('cad-modal-corpo')?.appendChild(corpo)
+    // Esvazia a régua E o carimbo de "já montada" JUNTO. Sem apagar o carimbo,
+    // voltar do celular para a tela grande encontrava a contagem batendo com a
+    // do lançador, concluía que não havia o que fazer, e deixava a mesa com uma
+    // régua vazia — sem nenhuma ferramenta e sem erro nenhum no console.
+    const r = document.getElementById('cad-regua')
+    if (r) { r.replaceChildren(); delete r.dataset.pronta }
     mesa.hidden = true
   }
 
@@ -268,24 +279,37 @@ function pintarMesaCadastral() {
 
   if (mesa.hidden) { return }
 
+  // A RÉGUA FICA; o que troca é o lado direito.
+  //
+  // Antes o menu e a ferramenta eram duas TELAS da mesma coluna: escolher uma
+  // ferramenta apagava a lista, e trocar de ferramenta era voltar e escolher de
+  // novo. Agora a lista está encostada na borda o tempo todo, e o lado direito
+  // só carrega o que a ferramenta ativa pede — sem ferramenta, ele some e a
+  // mesa encolhe para a largura da régua, devolvendo 270px ao mapa.
   const emFerramenta = !!(cadModo || atoState.tipo)
   const lanca = document.getElementById('mesa-lanca')
   const props = document.getElementById('mesa-props')
-  if (lanca) { lanca.hidden = emFerramenta }
+  if (lanca) { lanca.hidden = true }
   if (props) { props.hidden = !emFerramenta }
+  pintarRegua()
 
-  // ENQUANTO SE TRAÇA, A COLUNA SAI DE CENA.
+  // ENQUANTO SE TRAÇA, O LADO DIREITO SAI DE CENA — MAS A RÉGUA FICA.
   //
-  // Durante o desenho ela não tem o que dizer — a barra sobre o mapa é que
-  // conduz o passo, e o formulário só faz sentido com o contorno fechado. Sem
-  // isto, ficava uma caixa branca vazia com um título e um "✕", ocupando um
-  // terço da tela ao lado do lote que se está desenhando.
+  // Durante o desenho o formulário não tem o que dizer: quem conduz o passo é a
+  // barra sobre o mapa, e os dados só fazem sentido com o contorno fechado.
+  // Antes a mesa INTEIRA sumia, e junto com ela ia embora o único lugar de onde
+  // se troca de ferramenta ou se larga o traçado sem procurar. Agora ela
+  // encolhe para os 56px da régua: o mapa fica quase todo livre do mesmo jeito,
+  // e a saída continua na tela.
   const tracando = typeof estaDesenhando === 'function' && estaDesenhando()
-  mesa.classList.toggle('mesa-recolhida', tracando)
+  mesa.classList.toggle('so-regua', !emFerramenta || tracando)
 
-  // Com a coluna recolhida, a barra do desenho volta ao centro do mapa: ela é
-  // deslocada para a direita só para não cobrir a mesa, e a mesa não está lá.
-  document.body.classList.toggle('com-mesa', !tracando)
+  // `com-mesa` diz que a mesa está na tela — é o que esconde o painel
+  // flutuante. `mesa-larga` diz que o LADO DIREITO está aberto, e é só isso
+  // que a barra de desenho precisa saber para se deslocar: com a mesa
+  // encolhida, deslocar 170px a jogaria para fora do centro sem motivo.
+  document.body.classList.add('com-mesa')
+  document.body.classList.toggle('mesa-larga', emFerramenta && !tracando)
 
   // O painel do modo corrente, e só ele. Sem isto, sair de "corrigir quadra"
   // para "desenhar lote" deixava os dois formulários na tela.
@@ -303,6 +327,175 @@ function pintarMesaCadastral() {
   const t = document.getElementById('cad-mesa-titulo')
   if (t) { t.textContent = emFerramenta ? tituloDaFerramenta() : 'Ferramentas do cadastro' }
 }
+
+// ── A RÉGUA ──────────────────────────────────────────────────
+//
+// Ícone só, encostado na borda. O texto de cada lançador não sumiu: virou a
+// dica do ponteiro, com o atalho e a exigência de seleção junto — e é isso que
+// paga os 270px que a coluna devolve ao mapa.
+//
+// Ela é MONTADA A PARTIR DE #cad-geral, e não de uma lista escrita aqui. Um
+// catálogo em JavaScript seria uma segunda verdade: ferramenta nova precisaria
+// ser lembrada em dois lugares, e a permissão de curador — que é @if no Blade,
+// e por isso simplesmente não existe no DOM de quem não a tem — nunca chegaria
+// a este arquivo. Lendo do lançador, quem não pode curar não vê os três botões
+// de curadoria na régua pelo mesmo motivo que não os vê no painel.
+
+/** Escapa para atributo/HTML. Local: `esc` de ui.js já faz isso, e é ele que uso. */
+function montarReguaCadastral() {
+  const regua = document.getElementById('cad-regua')
+  const geral = document.getElementById('cad-geral')
+  if (!regua || !geral) { return }
+
+  // Idempotente: chamada em toda troca de modo e em todo redimensionamento.
+  if (regua.dataset.pronta === String(geral.querySelectorAll('.cad-lanca').length)) { return }
+
+  const grupos = []
+  let atual = null
+  for (const el of geral.children) {
+    if (el.classList.contains('cad-sep')) { atual = { nome: el.textContent.trim(), itens: [] }; grupos.push(atual) }
+    else if (el.classList.contains('cad-lanca') && atual) { atual.itens.push(el) }
+  }
+
+  let h = ''
+  for (const g of grupos) {
+    if (!g.itens.length) { continue }
+    h += '<div class="cad-regua-gp">'
+    for (const b of g.itens) {
+      const nome = b.querySelector('.cad-lanca-txt')?.childNodes[0]?.textContent.trim() ?? ''
+      const obs = b.querySelector('.cad-lanca-obs')?.textContent.trim() ?? ''
+      const ico = b.querySelector('.cad-ico')?.outerHTML ?? ''
+      h += `<button type="button" class="cad-fer${b.classList.contains('cad-lanca-perigo') ? ' perigo' : ''}"
+              data-fer="${b.dataset.fer}" aria-label="${esc(nome)}">
+          ${ico}
+          <span class="cad-dica-fer"><b>${esc(nome)}</b><span>${esc(obs)}</span>
+            <span class="exige">Precisa de: ${esc(b.dataset.exige || '—')}</span>
+            <kbd>${esc(b.dataset.tecla || '')}</kbd></span>
+        </button>`
+    }
+    h += '</div>'
+  }
+  // O contador e o fechar ficam NA RÉGUA porque ela é a única parte da mesa
+  // que está sempre na tela: sem ferramenta ativa o lado direito some, e um
+  // "fechar" que some junto deixa a mesa sem saída.
+  h += '<div class="cad-regua-pe">'
+    + '<div class="cad-selo-sel" id="cad-selo-sel" title="Lotes marcados">0</div>'
+    + '<button type="button" class="cad-fer cad-fechar" onclick="fecharMesaCadastral()"'
+    + ' aria-label="Fechar a mesa">'
+    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    + ' stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+    + '<span class="cad-dica-fer"><b>Fechar a mesa</b>'
+    + '<span>O que estiver marcado ou desenhado continua no mapa.</span></span>'
+    + '</button></div>'
+
+  regua.innerHTML = h
+  regua.dataset.pronta = String(geral.querySelectorAll('.cad-lanca').length)
+
+  // O clique da régua É o clique do lançador: mesmo `onclick`, mesma função,
+  // mesmo caminho. A régua não sabe o que cada ferramenta faz, e não deve.
+  regua.querySelectorAll('.cad-fer').forEach(f => {
+    f.onclick = () => acionarFerramenta(f.dataset.fer)
+  })
+  pintarRegua()
+}
+
+/**
+ * Aciona a ferramenta pelo botão original.
+ *
+ * Passa pela confirmação de `voltarAsFerramentas` quando há trabalho em curso:
+ * com o menu sempre à vista, trocar de ferramenta virou um clique — e um clique
+ * que descarta 40 lotes marcados sem perguntar seria pior do que o menu que
+ * obrigava a voltar.
+ *
+ * @param {string} id valor de data-fer
+ */
+function acionarFerramenta(id) {
+  const alvo = document.querySelector(`#cad-geral .cad-lanca[data-fer="${id}"]`)
+  if (!alvo) { return }
+
+  // Clicar na ferramenta que já está ativa a larga — é o que o botão aceso
+  // sugere, e evita ter de procurar a seta de sair.
+  if (ferramentaAtiva() === id) { voltarAsFerramentas(); return }
+
+  const temTrabalho = selState.ids.size > 0 || desenhoPendente
+    || (typeof estaDesenhando === 'function' && estaDesenhando())
+
+  if (!temTrabalho) { alvo.click(); return }
+
+  confirmarAcao({
+    titulo: 'Trocar de ferramenta',
+    mensagem: selState.ids.size
+      ? `${selState.ids.size} lote(s) marcado(s) serão desmarcados.`
+      : 'O desenho em curso será descartado.',
+    perigo: true,
+    onConfirm: () => { sairModoCadastral(true); alvo.click() },
+  })
+}
+
+/**
+ * Qual ferramenta está acesa.
+ *
+ * A edificação NÃO aparece aqui: ela não é um modo cadastral — não liga
+ * seleção, não pede quadra, e termina numa pergunta só (ver
+ * edificacoes.js). Enquanto ela não guardar estado, a régua não tem o que
+ * acender, e inventar um estado só para a régua seria mentir sobre o sistema.
+ *
+ * @returns {string|null}
+ */
+function ferramentaAtiva() {
+  if (atoState.tipo === 'unificacao') { return 'unificacao' }
+  if (atoState.tipo === 'desmembramento') { return 'desmembramento' }
+  return cadModo
+}
+
+/** Acende a ferramenta corrente e atualiza o contador de seleção. */
+function pintarRegua() {
+  const regua = document.getElementById('cad-regua')
+  if (!regua || !regua.dataset.pronta) { return }
+
+  const at = ferramentaAtiva()
+  regua.querySelectorAll('.cad-fer').forEach(f =>
+    f.classList.toggle('at', f.dataset.fer === at))
+
+  const selo = document.getElementById('cad-selo-sel')
+  if (selo) {
+    const n = selState.ids.size
+    selo.textContent = n
+    selo.classList.toggle('tem', n > 0)
+    selo.title = n === 1 ? '1 lote marcado' : `${n} lotes marcados`
+  }
+}
+
+// ── ATALHOS ──────────────────────────────────────────────────
+//
+// Só valem com a MESA ABERTA, e nunca dentro de um campo: "D" digitado no nome
+// de um bairro não pode largar a ferramenta e começar a desenhar um lote.
+// Também não valem com modal aberto — lá o teclado é do formulário.
+document.addEventListener('keydown', ev => {
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) { return }
+
+  const mesa = document.getElementById('cad-mesa')
+  if (!mesa || mesa.hidden || !ehMesaCadastral()) { return }
+
+  // `instanceof Element`: o alvo de um keydown nem sempre é elemento — quando
+  // nada está focado ele é o próprio `document`, que não tem `matches`, e
+  // chamá-lo derruba o ouvinte inteiro em silêncio.
+  const alvo = ev.target
+  if (alvo instanceof Element && (alvo.matches('input, textarea, select') || alvo.isContentEditable)) { return }
+
+  // Janela aberta manda no teclado: ali "D" é texto sendo digitado, ou atalho
+  // do próprio formulário. O elemento que `openModal` marca com `.open` é o
+  // FUNDO da janela, de classe `modal-bg` — `.modal` é a caixa de dentro, e
+  // procurar por ela devolvia "nenhuma janela aberta" com uma janela na tela.
+  if (document.querySelector('.modal-bg.open')) { return }
+
+  const tecla = ev.key === 'Delete' ? 'Del' : ev.key.toUpperCase()
+  const botao = document.querySelector(`#cad-geral .cad-lanca[data-tecla="${tecla}"]`)
+  if (!botao) { return }
+
+  ev.preventDefault()
+  acionarFerramenta(botao.dataset.fer)
+})
 
 /** O nome da ferramenta ativa, para o topo da mesa. */
 function tituloDaFerramenta() {
@@ -457,7 +650,7 @@ function pintarBarraCadastral() {
   if (cadModo === 'apagar') {
     modo.textContent = 'Apagar resíduo'
     passo.textContent = n === 0
-      ? 'Toque nos lotes a apagar. Vários de uma vez, se for o caso.'
+      ? 'Marque os lotes a apagar. Vários de uma vez, se for o caso.'
       : `${n} lote(s) marcado(s) para apagar.`
     if (n > 0) {
       ok.hidden = false
@@ -470,7 +663,7 @@ function pintarBarraCadastral() {
   } else if (cadModo === 'quadra') {
     modo.textContent = emAto ? 'Unificação' : 'Corrigir quadra'
     passo.textContent = n === 0
-      ? 'Toque nos lotes do mapa para marcá-los.'
+      ? 'Marque os lotes no mapa.'
       : `${n} lote(s) marcado(s).`
     if (n > 0) {
       ok.hidden = false
@@ -532,9 +725,9 @@ function pintarPainelCadastro() {
       // mandaria o fiscal procurar um processo que não existe.
       cabecalho.innerHTML = atoState.direto
         ? '<div class="cad-nota"><b>Unificação direta</b>, sem protocolo. '
-          + 'Toque em DOIS ou mais lotes; eles precisam se encostar e ser da mesma quadra.</div>'
+          + 'Marque DOIS ou mais lotes; eles precisam se encostar e ser da mesma quadra.</div>'
         : '<div class="cad-nota">Unificando pelo protocolo. '
-          + 'Toque nos lotes; eles precisam se encostar e ser da mesma quadra.</div>'
+          + 'Marque os lotes; eles precisam se encostar e ser da mesma quadra.</div>'
     }
   }
 
@@ -553,10 +746,10 @@ function pintarPainelCadastro() {
   if (contagem) {
     if (n === 0) {
       contagem.textContent = emApagar
-        ? 'Nenhum lote marcado — toque nos resíduos a apagar. Vários, se for o caso.'
+        ? 'Nenhum lote marcado — marque os resíduos a apagar. Vários, se for o caso.'
         : emAto
-          ? 'Nenhum lote marcado — toque em dois ou mais no mapa.'
-          : 'Nenhum lote marcado ainda — toque neles no mapa.'
+          ? 'Nenhum lote marcado — marque dois ou mais no mapa.'
+          : 'Nenhum lote marcado ainda — marque-os no mapa.'
     } else if (emAto && n === 1) {
       contagem.textContent = '1 lote marcado — falta ao menos mais um para unificar.'
     } else {
