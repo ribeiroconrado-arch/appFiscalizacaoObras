@@ -213,6 +213,58 @@ function fmtNum(n) {
   return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 })
 }
 
+// ── SETAS DE ABA ─────────────────────────────────────────────
+//
+// Todo formulário de várias abas ganha o mesmo par de controles: primeira,
+// anterior, próxima e última. A barra de abas continua sendo o caminho para
+// quem sabe onde quer chegar; as setas são para quem está preenchendo em
+// ordem — e para o celular, onde o trilho rola de lado e a última aba fica
+// fora da vista.
+
+/**
+ * Para onde uma seta leva, dentro de uma lista de abas.
+ *
+ * Não dá a volta nas pontas de propósito: aqui a ordem é a do preenchimento,
+ * e saltar da última para a primeira num formulário de peça parece perda do
+ * que foi digitado. Quem está na ponta simplesmente fica (o botão aparece
+ * desligado — ver `pintarSetasDeAba`).
+ *
+ * @param {Array<string>} lista abas em ordem
+ * @param {string} atual
+ * @param {'primeira'|'anterior'|'proxima'|'ultima'} destino
+ * @returns {string}
+ */
+function abaAlvo(lista, atual, destino) {
+  const i = Math.max(0, lista.indexOf(atual))
+  if (destino === 'primeira') { return lista[0] }
+  if (destino === 'ultima')   { return lista[lista.length - 1] }
+  if (destino === 'anterior') { return lista[Math.max(0, i - 1)] }
+  return lista[Math.min(lista.length - 1, i + 1)]
+}
+
+/**
+ * Desliga as setas que não levam a lugar nenhum.
+ *
+ * Seta que não faz nada quando tocada é pior que seta ausente: ensina a não
+ * confiar no controle.
+ *
+ * @param {string} idBarra id da barra de setas
+ * @param {Array<string>} lista @param {string} atual
+ */
+function pintarSetasDeAba(idBarra, lista, atual) {
+  const barra = document.getElementById(idBarra)
+  if (!barra) { return }
+
+  const i = lista.indexOf(atual)
+  const noComeco = i <= 0
+  const noFim = i >= lista.length - 1
+
+  barra.querySelectorAll('.aba-seta').forEach(b => {
+    const ir = b.dataset.ir
+    b.disabled = (ir === 'primeira' || ir === 'anterior') ? noComeco : noFim
+  })
+}
+
 // ── DATA E HORA ──────────────────────────────────────────────
 // Nunca usar `new Date().toISOString()` para "hoje"/"agora": o ISO converte
 // para UTC e, no fuso de Cuiabá, das 20h em diante já devolve o dia seguinte.

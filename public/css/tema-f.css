@@ -241,6 +241,27 @@
   background:transparent;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;
   font-weight:700;color:var(--tx3);white-space:nowrap;transition:background .15s,color .15s}
 .sub-abas button.at{background:var(--sur);color:var(--tx);box-shadow:var(--sh)}
+
+/* ── SETAS DE ABA ──
+   Primeira, anterior, próxima e última, para todo formulário de várias abas.
+   A barra de abas continua sendo o caminho de quem sabe onde quer chegar;
+   estas são para quem preenche em ordem — e para o celular, onde o trilho
+   rola de lado e a última aba fica fora da vista. A PRÓXIMA é a cheia: num
+   formulário que se preenche do começo ao fim, avançar é o gesto comum, e as
+   outras três são saídas eventuais. */
+.aba-setas{display:flex;gap:8px;justify-content:center;align-items:center;
+  margin:10px 0 0;flex-shrink:0}
+.aba-seta{width:34px;height:34px;border-radius:50%;flex-shrink:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--blt);border:none;color:var(--tx2);
+  font-size:15px;line-height:1;font-family:inherit;
+  transition:background .13s,color .13s,opacity .13s}
+.aba-seta:hover:not(:disabled){background:var(--bord);color:var(--tx)}
+.aba-seta.principal{background:var(--g);color:#fff}
+.aba-seta.principal:hover:not(:disabled){background:var(--gd);color:#fff}
+/* Desligada e não escondida: o lugar dela na fila é uma informação — some com
+   o botão e os outros três dançam de posição a cada troca de aba. */
+.aba-seta:disabled{opacity:.35;cursor:default}
 /* Altura fixa e rolagem interna: sem isto cada aba esticava o modal ao
    tamanho do próprio conteúdo, e a janela pulava de tamanho a cada troca de
    aba. Com altura travada, todas as abas ocupam o mesmo container. */
@@ -2499,38 +2520,61 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vsi-bloco .field{margin:0}
 .vsi-bloco textarea{width:100%;resize:vertical;min-height:2.4em}
 
-/* A busca: campo + "+ add" na mesma linha, e a lista de sugestões logo
-   abaixo — a MESMA lógica em irregularidade e em artigo. */
+/* A busca: campo + "+add" na mesma linha. */
 .vsi-busca{display:flex;gap:8px;align-items:flex-end}
-.vsi-sugestoes{display:flex;flex-direction:column;gap:4px;margin-top:6px;
-  max-height:168px;overflow-y:auto}
-.vsi-sugestoes[hidden]{display:none}
-.vsi-sugestao{display:block;width:100%;text-align:left;cursor:pointer;
-  background:var(--sur);border:1.5px solid var(--bord);border-radius:var(--r);
-  padding:7px 10px;font:inherit}
-.vsi-sugestao:hover{border-color:var(--tx3);background:var(--blt)}
-.vsi-sugestao b{display:block;font-size:12.5px;color:var(--tx);font-weight:600}
-.vsi-sugestao span{display:block;font-size:11px;color:var(--tx3);margin-top:1px}
+
+/* "Como entra" tem duas respostas de uma palavra: o que sobra da linha é da
+   LEI, cujo nome ("Lei Complementar 1/2023") não cabe em meia largura. */
+.vsi-linha-lei{display:flex;gap:9px;align-items:flex-end}
+.vsi-campo-curto{flex:0 0 auto;width:max-content;min-width:112px}
+.vsi-campo-curto select{width:100%}
+
+/* ── COMBOBOX ──
+   A lista FLUTUA sobre o conteúdo, ancorada no campo — mesmo contrato do
+   `.ac-list` do AppPOSTURAS, para os dois sistemas se lerem igual. Antes ela
+   era um bloco no fluxo: abrir o combo empurrava o formulário para baixo e a
+   própria lista ganhava uma barra de rolagem no meio da tela, que é o oposto
+   do que um combo faz. */
+.ac-wrap{position:relative}
+.ac-list{position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:400;
+  display:none;flex-direction:column;background:var(--sur);
+  border:1.5px solid var(--tx3);border-radius:var(--r);
+  max-height:230px;overflow-y:auto;box-shadow:0 10px 26px rgba(0,0,0,.16)}
+.ac-list.open{display:flex}
+.ac-item{display:block;width:100%;text-align:left;cursor:pointer;font:inherit;
+  background:none;border:none;border-bottom:1px solid var(--blt);padding:8px 11px}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover{background:var(--blt)}
+.ac-item b{display:block;font-size:12.5px;color:var(--tx);font-weight:600}
+.ac-item span{display:block;font-size:11px;color:var(--tx3);margin-top:1px}
 
 /* ── O RESUMO ──
    Fixo fora das abas, igual em qualquer uma delas. `flex:1` para ocupar o
    que sobrar da janela — nunca mais que isso — e rolagem própria quando o
    item cresce, sem empurrar o "adicionar" para fora da vista. */
-.vsi-resumo{flex:1;min-height:64px;overflow-y:auto;background:var(--blt);
-  border-radius:var(--r);padding:9px;display:flex;flex-direction:column;gap:7px}
+/* FUNDO BRANCO, BALÕES CINZA — e não o contrário, como estava. O cinza era do
+   fundo, e o cartão saía branco sobre ele: cada linha do item virava uma
+   caixa clara empilhada na outra, sem contorno que a separasse da vizinha.
+   Agora o cinza está no que É uma coisa (o balão), como no AppPOSTURAS. */
+.vsi-resumo{flex:1;min-height:64px;overflow-y:auto;background:var(--sur);
+  border:1.5px solid var(--bord);border-radius:var(--r);
+  padding:9px;display:flex;flex-direction:column;gap:7px}
 .vsi-resumo-vazio{color:var(--tx3);font-style:italic}
 
-/* O cartão do resumo: título, subtítulo, descrição — o mesmo formato de
-   "resultado encontrado" que o sistema já usa para citar artigo, só que
-   aqui é o que JÁ FOI posto no item, com o × que tira. */
 .vsi-cartao{display:flex;gap:8px;align-items:flex-start;
-  background:var(--sur);border:1px solid var(--bord);border-radius:var(--r);
-  padding:9px 11px}
+  background:var(--blt);border:1.5px solid var(--tx3);border-radius:var(--r);
+  padding:8px 12px}
 .vsi-cartao-corpo{flex:1;min-width:0;font-size:12.5px;line-height:1.4}
 .vsi-cartao-corpo b{color:var(--tx);font-weight:700}
 .vsi-cartao-sub{color:var(--tx3);font-size:11px}
-.vsi-cartao-corpo p{margin:3px 0 0;color:var(--tx2)}
-.vsi-cartao > .acao-x{flex-shrink:0}
+.vsi-cartao-corpo p{margin:4px 0 0;color:var(--tx2);font-size:11px;line-height:1.5}
+
+/* O × do balão: sinal solto, sem moldura. O `.acao-x` de antes desenhava um
+   quadrado em volta — um botão a mais competindo com o texto em cada linha da
+   lista, quando o gesto é o mesmo "tira isto daqui" de sempre. */
+.cartao-x{flex-shrink:0;background:none;border:none;padding:0 0 0 4px;
+  color:var(--red);font-size:17px;line-height:1;cursor:pointer}
+.cartao-x:hover{color:#8E1F1F}
 
 /* ── A NOTA DE APOIO ──
    O texto que explica o campo. Era um parágrafo solto, do tamanho do

@@ -1543,6 +1543,20 @@
         Fotos <span class="vsi-conta" id="vsi-n-fotos"></span></button>
     </div>
 
+    {{-- As setas de aba: mesmo componente do formulário de documento. Cinco
+         abas cabem na barra num monitor, mas no celular elas rolam de lado e
+         a última fica fora da vista — a seta chega lá sem procurar. --}}
+    <div class="aba-setas" id="vsi-setas">
+      <button type="button" class="aba-seta" data-ir="primeira"
+              onclick="irAbaItem('primeira')" title="Primeira aba">&laquo;</button>
+      <button type="button" class="aba-seta" data-ir="anterior"
+              onclick="irAbaItem('anterior')" title="Aba anterior">&lsaquo;</button>
+      <button type="button" class="aba-seta principal" data-ir="proxima"
+              onclick="irAbaItem('proxima')" title="Próxima aba">&rsaquo;</button>
+      <button type="button" class="aba-seta" data-ir="ultima"
+              onclick="irAbaItem('ultima')" title="Última aba">&raquo;</button>
+    </div>
+
     {{-- O CORPO TEM DUAS PARTES, sempre nesta ordem:
 
          (1) O QUE ADICIONAR — muda com a aba, e é só isso: um combo, um
@@ -1560,33 +1574,46 @@
            marcadas aparecem no resumo, não como caixa marcada aqui. --}}
       <div class="vsi-bloco" data-bloco="irreg">
         <div class="vsi-busca">
-          <div class="field" style="flex:1;margin:0">
-            <label for="vsi-irreg-busca">Irregularidade</label>
-            {{-- COMBO DE VERDADE: escolher na lista só PREENCHE o campo — quem
-                 põe no item é o "+ add" (ou o Enter). Antes o toque na
-                 sugestão já jogava na lista, e o botão ao lado não servia
-                 para nada. --}}
-            <input type="text" id="vsi-irreg-busca" autocomplete="off"
-                   placeholder="Digite para buscar…"
-                   oninput="buscarIrregularidade(this.value)"
-                   onfocus="buscarIrregularidade(this.value)"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarIrregularidadeAoItem()}">
+          {{-- COMBOBOX DE VERDADE: a lista FLUTUA sobre o conteúdo, ancorada
+               no campo (`.ac-wrap`/`.ac-list`, o mesmo do AppPOSTURAS). Antes
+               ela era um bloco no fluxo: abrir o combo empurrava tudo para
+               baixo e a própria lista ganhava uma barra de rolagem no meio do
+               formulário — que é o oposto do que um combo faz. --}}
+          <div class="ac-wrap" style="flex:1;min-width:0">
+            <div class="field" style="margin:0">
+              <label for="vsi-irreg-busca">Irregularidade</label>
+              {{-- Escolher na lista só PREENCHE o campo — quem põe no item é o
+                   "+add" (ou o Enter). --}}
+              <input type="text" id="vsi-irreg-busca" autocomplete="off"
+                     placeholder="Digite para buscar…"
+                     oninput="buscarIrregularidade(this.value)"
+                     onfocus="buscarIrregularidade(this.value)"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarIrregularidadeAoItem()}">
+            </div>
+            <div class="ac-list" id="vsi-irreg-sugestoes"></div>
           </div>
-          <button type="button" class="btn sm" onclick="adicionarIrregularidadeAoItem()">+ add</button>
+          <button type="button" class="btn out-verde sm" onclick="adicionarIrregularidadeAoItem()">+add</button>
         </div>
-        <div class="vsi-sugestoes" id="vsi-irreg-sugestoes" hidden></div>
         <div class="vsi-nota" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
           os artigos sugeridos — e é o que o auto de infração vai usar.</div>
       </div>
 
-      {{-- 2 — TEXTO LIVRE --}}
+      {{-- 2 — O QUE VOCÊ VIU: também uma LISTA, e não um campo só.
+           Um item da obra costuma render mais de uma constatação, e escrever
+           tudo num bloco corrido obrigava a reescrever o parágrafo inteiro
+           para tirar uma frase. Cada relato entra pelo "+add" e sai sozinho
+           do resumo, como irregularidade e artigo. --}}
       <div class="vsi-bloco" data-bloco="texto" hidden>
-        <div class="field" style="margin:0">
-          <label for="vsi-texto">O que você viu</label>
-          <textarea id="vsi-texto" rows="3" maxlength="5000"
-                    placeholder="Com as suas palavras — é este texto que vira o FATO na peça."
-                    oninput="pintarContasDoItem()"></textarea>
+        <div class="vsi-busca">
+          <div class="field" style="flex:1;margin:0">
+            <label for="vsi-texto">O que você viu</label>
+            <textarea id="vsi-texto" rows="3" maxlength="5000"
+                      placeholder="Com as suas palavras — é este texto que vira o FATO na peça."
+                      onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();adicionarRelatoAoItem()}"></textarea>
+          </div>
+          <button type="button" class="btn out-verde sm" onclick="adicionarRelatoAoItem()">+add</button>
         </div>
+        <div class="vsi-nota">Um parágrafo por constatação. Ctrl+Enter também adiciona.</div>
       </div>
 
       {{-- 3 — ARTIGOS --}}
@@ -1595,14 +1622,17 @@
            filtra a busca do artigo, e perguntar o artigo antes obriga a
            procurar no bolo de todas as leis. --}}
       <div class="vsi-bloco" data-bloco="artigos" hidden>
-        <div class="g2">
-          <div class="field" style="margin:0">
+        {{-- "Como entra" tem duas respostas de uma palavra: ocupar metade da
+             linha era desperdiçar largura de que a LEI precisa — nome de lei
+             não cabe em meia linha e vinha cortado com reticências. --}}
+        <div class="vsi-linha-lei">
+          <div class="field" style="flex:1;min-width:0;margin:0">
             <label for="vsi-artigo-lei">Lei infringida</label>
             <select id="vsi-artigo-lei" onchange="buscarArtigo(document.getElementById('vsi-artigo-busca').value)">
               <option value="">— todas as leis —</option>
             </select>
           </div>
-          <div class="field" style="margin:0">
+          <div class="field vsi-campo-curto" style="margin:0">
             <label for="vsi-artigo-tipo">Como entra</label>
             {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
             <select id="vsi-artigo-tipo">
@@ -1612,21 +1642,22 @@
           </div>
         </div>
         <div class="vsi-busca" style="margin-top:8px">
-          <div class="field" style="flex:1;margin:0">
-            <label for="vsi-artigo-busca">Artigo infringido</label>
-            <input type="text" id="vsi-artigo-busca" autocomplete="off"
-                   placeholder="Digite para buscar o artigo…"
-                   oninput="buscarArtigo(this.value)"
-                   onfocus="buscarArtigo(this.value)"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+          <div class="ac-wrap" style="flex:1;min-width:0">
+            <div class="field" style="margin:0">
+              <label for="vsi-artigo-busca">Artigo infringido</label>
+              <input type="text" id="vsi-artigo-busca" autocomplete="off"
+                     placeholder="Digite para buscar o artigo…"
+                     oninput="buscarArtigo(this.value)"
+                     onfocus="buscarArtigo(this.value)"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+            </div>
+            <div class="ac-list" id="vsi-artigo-sugestoes"></div>
           </div>
-          <button type="button" class="btn sm" onclick="adicionarArtigoAoItem()">+ add</button>
+          <button type="button" class="btn out-verde sm" onclick="adicionarArtigoAoItem()">+add</button>
         </div>
-        <div class="vsi-sugestoes" id="vsi-artigo-sugestoes" hidden></div>
-        <div class="field" style="margin:8px 0 0">
-          <label for="vsi-artigo-obs">Observação (opcional)</label>
-          <input type="text" id="vsi-artigo-obs" maxlength="2000">
-        </div>
+        {{-- O campo "Observação" saiu: o que se tem a dizer sobre o artigo é o
+             relato do item, e um segundo lugar para escrever a mesma coisa só
+             espalhava o texto da peça por dois campos. --}}
         <div class="vsi-nota" id="vsi-artigo-nota" hidden></div>
       </div>
 
@@ -1785,6 +1816,19 @@
       <button class="doc-tab" data-aba="infracao" onclick="irAbaDoc('infracao')">Infração</button>
       <button class="doc-tab" data-aba="anexos"   onclick="irAbaDoc('anexos')">Anexos</button>
       <button class="doc-tab" data-aba="resumo"   onclick="irAbaDoc('resumo')">Resumo</button>
+    </div>
+
+    {{-- Mesmas setas da janela do item: cinco abas numa peça longa, e a
+         navegação não pode depender de acertar o alvo certo no trilho. --}}
+    <div class="aba-setas" id="fd-setas">
+      <button type="button" class="aba-seta" data-ir="primeira"
+              onclick="irAbaDocPara('primeira')" title="Primeira aba">&laquo;</button>
+      <button type="button" class="aba-seta" data-ir="anterior"
+              onclick="irAbaDocPara('anterior')" title="Aba anterior">&lsaquo;</button>
+      <button type="button" class="aba-seta principal" data-ir="proxima"
+              onclick="irAbaDocPara('proxima')" title="Próxima aba">&rsaquo;</button>
+      <button type="button" class="aba-seta" data-ir="ultima"
+              onclick="irAbaDocPara('ultima')" title="Última aba">&raquo;</button>
     </div>
   </div>
 

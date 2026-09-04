@@ -360,6 +360,8 @@ function irAbaDoc(nome) {
   // O corpo volta ao topo: a aba nova começa onde a anterior tinha rolado.
   document.getElementById('fd-body').scrollTop = 0
 
+  pintarSetasDeAba('fd-setas', ABAS_DOC, nome)
+
   if (nome === 'resumo') renderResumoDoc()
   renderRodapeDoc()
 }
@@ -369,6 +371,11 @@ function passoAbaDoc(passo) {
   const i = ABAS_DOC.indexOf(fdState.aba)
   const alvo = ABAS_DOC[i + passo]
   if (alvo) irAbaDoc(alvo)
+}
+
+/** As setas do cabeçalho. @param {'primeira'|'anterior'|'proxima'|'ultima'} destino */
+function irAbaDocPara(destino) {
+  irAbaDoc(abaAlvo(ABAS_DOC, fdState.aba, destino))
 }
 
 // ── ESTADO E TRAVAMENTO ──────────────────────────────────────

@@ -1116,7 +1116,39 @@ function syncDataHora() {
 
 /** Um item vazio — a folha em branco de um grupo. */
 function itemVazio() {
-  return { texto: '', irregularidades: [], artigos: [], exigencias: [], fotos: [] }
+  // `relatos` é a lista que a tela edita; `texto` é ela junta, e continua
+  // sendo o que o servidor recebe e o que o resto do sistema lê. Uma verdade
+  // só, derivada num lugar só — ver `sincronizarRelatos`.
+  return { texto: '', relatos: [], irregularidades: [], artigos: [], exigencias: [], fotos: [] }
+}
+
+/**
+ * Junta os relatos no `texto` do item — a forma que o servidor recebe.
+ *
+ * Um parágrafo por relato, na ordem em que foram escritos: é assim que eles
+ * saem impressos na peça.
+ *
+ * @param {Object} item
+ */
+function sincronizarRelatos(item) {
+  item.relatos = item.relatos ?? []
+  item.texto = item.relatos.join('\n\n')
+}
+
+/**
+ * Garante a lista de relatos num item que ainda não a tinha.
+ *
+ * Rascunho gravado antes desta mudança (e item vindo de qualquer caminho mais
+ * antigo) traz só o `texto` corrido: ele vira a lista, quebrado nos parágrafos
+ * em que foi escrito. Sem isto, abrir um rascunho antigo mostraria o relato
+ * como vazio e ele se perderia no primeiro "Guardar".
+ *
+ * @param {Object} item
+ */
+function garantirRelatos(item) {
+  if (Array.isArray(item.relatos)) { return }
+  const t = (item.texto ?? '').trim()
+  item.relatos = t ? t.split(/\n{2,}/).map(s => s.trim()).filter(Boolean) : []
 }
 
 /** Acrescenta um item e abre a janela dele: ninguém quer um grupo vazio na lista. */
@@ -1309,10 +1341,12 @@ function abrirItemRelatorio(i) {
   irregEscolhida = null
   artigoEscolhido = null
   document.getElementById('vsi-titulo').textContent = `Item ${i + 1} do relatório`
-  document.getElementById('vsi-texto').value = item.texto ?? ''
+  // O campo de relato abre VAZIO: o que já foi escrito está na lista do
+  // resumo, e trazer de volta para o campo faria o "+add" duplicá-lo.
+  garantirRelatos(item)
+  document.getElementById('vsi-texto').value = ''
   document.getElementById('vsi-irreg-busca').value = ''
   document.getElementById('vsi-artigo-busca').value = ''
-  document.getElementById('vsi-artigo-obs').value = ''
   fecharSugestoes('vsi-irreg-sugestoes')
   fecharSugestoes('vsi-artigo-sugestoes')
   descartarFotoPendente()
@@ -1364,7 +1398,18 @@ function abaDoItem(nome) {
   document.querySelectorAll('#m-vs-item .vsi-bloco[data-bloco]').forEach(d => {
     d.hidden = d.dataset.bloco !== nome
   })
+  // Trocar de aba fecha qualquer combo aberto: a lista flutua sobre o
+  // conteúdo, e ficaria pairando sobre a aba nova.
+  fecharSugestoes('vsi-irreg-sugestoes')
+  fecharSugestoes('vsi-artigo-sugestoes')
+  pintarSetasDeAba('vsi-setas', BLOCOS_DO_ITEM, nome)
   pintarContasDoItem()
+}
+
+/** As setas da janela do item. @param {'primeira'|'anterior'|'proxima'|'ultima'} destino */
+function irAbaItem(destino) {
+  const atual = document.querySelector('#vsi-abas button.at')?.dataset.bloco ?? BLOCOS_DO_ITEM[0]
+  abaDoItem(abaAlvo(BLOCOS_DO_ITEM, atual, destino))
 }
 
 /**
@@ -1386,9 +1431,9 @@ function pintarContasDoItem() {
   }
 
   põe('vsi-n-irreg', item.irregularidades.length)
-  // O texto não se conta: ou tem ou não tem. O ponto marca a diferença sem
-  // fingir que "1" significa alguma coisa.
-  põe('vsi-n-texto', item.texto?.trim() ? '•' : '')
+  // O relato passou a ser uma LISTA, então conta como as outras: antes era um
+  // campo só, e a aba mostrava um ponto porque "1" não dizia nada.
+  põe('vsi-n-texto', item.relatos?.length ?? 0)
   põe('vsi-n-artigos', item.artigos.length)
   põe('vsi-n-exigencias', item.exigencias.length)
   põe('vsi-n-fotos', item.fotos.length)
@@ -1412,35 +1457,46 @@ function pintarResumoDoItem() {
 
   const cartoes = []
 
+  // O resumo é redesenhado inteiro a cada mudança: as remoções guardadas do
+  // desenho anterior apontariam para índices que já mudaram de dono.
+  removedores.length = 0
+
   item.irregularidades.forEach(id => {
     const irr = vState.catalogo.find(c => c.id === id)
+    const nome = irr?.descricao ?? `Irregularidade #${id}`
     cartoes.push(cartaoDoResumo({
-      titulo: irr?.descricao ?? `Irregularidade #${id}`,
+      titulo: nome,
       sub: irr ? `${irr.codigo} · ${irr.gravidade}` : null,
       desc: irr?.base_legal,
-      onclick: `removerIrregularidadeDoItem(${id})`,
+      onclick: () => removerIrregularidadeDoItem(id),
+      oQue: 'a irregularidade', qual: nome,
     }))
   })
 
-  if (item.texto?.trim()) {
-    cartoes.push(cartaoDoResumo({
-      titulo: 'Relato',
-      desc: item.texto.trim(),
-      onclick: 'limparTextoDoItem()',
-    }))
-  }
-
-  item.artigos.forEach((a, j) => cartoes.push(cartaoDoResumo({
-    titulo: nomeDoArtigo(a.artigo_id),
-    sub: a.tipo === 'parecer' ? 'Parecer — sua conclusão' : 'Citação — o que se constatou',
-    desc: a.texto,
-    onclick: `removerArtigoDoItem(${j})`,
+  garantirRelatos(item)
+  item.relatos.forEach((t, k) => cartoes.push(cartaoDoResumo({
+    titulo: `Relato ${k + 1}`,
+    desc: t,
+    onclick: () => removerRelatoDoItem(k),
+    oQue: 'o relato', qual: t,
   })))
+
+  item.artigos.forEach((a, j) => {
+    const nome = nomeDoArtigo(a.artigo_id)
+    cartoes.push(cartaoDoResumo({
+      titulo: nome,
+      sub: a.tipo === 'parecer' ? 'Parecer — sua conclusão' : 'Citação — o que se constatou',
+      desc: a.texto,
+      onclick: () => removerArtigoDoItem(j),
+      oQue: 'o artigo', qual: nome,
+    }))
+  })
 
   item.exigencias.forEach((e, j) => cartoes.push(cartaoDoResumo({
     titulo: e.texto,
     sub: e.prazo ? `Prazo de ${e.prazo} dia(s)` : null,
-    onclick: `removerExigenciaDoItem(${j})`,
+    onclick: () => removerExigenciaDoItem(j),
+    oQue: 'a exigência', qual: e.texto,
   })))
 
   // AS FOTOS ENTRAM INTEIRAS, e não como "3 foto(s) anexada(s)". O resumo é o
@@ -1486,16 +1542,49 @@ function pintarResumoDoItem() {
  * @param {{titulo:string, sub?:string|null, desc?:string|null,
  *          onclick?:string, semRemover?:boolean}} p
  */
-function cartaoDoResumo({ titulo, sub, desc, onclick, semRemover }) {
+function cartaoDoResumo({ titulo, sub, desc, onclick, semRemover, oQue, qual }) {
+  // O × PERGUNTA ANTES. Tirar da lista é gesto de um toque e sem desfazer, e o
+  // botão fica a poucos pixels do texto do próprio cartão — num celular, em
+  // campo, o dedo erra. A remoção fica guardada como FUNÇÃO em `removedores`,
+  // e o HTML chama pelo índice: montar a chamada como texto obrigaria a
+  // escapar aspas de descrição de irregularidade dentro de um `onclick`, que é
+  // o tipo de coisa que quebra no primeiro registro com apóstrofo.
+  let acao = ''
+  if (!semRemover) {
+    removedores.push(() => confirmarRemocaoDoResumo(oQue ?? 'o registro', qual ?? '', onclick))
+    acao = `removedores[${removedores.length - 1}]()`
+  }
+
   return `
     <div class="vsi-cartao">
       <div class="vsi-cartao-corpo">
         <b>${esc(titulo)}</b>${sub ? ` <span class="vsi-cartao-sub">${esc(sub)}</span>` : ''}
         ${desc ? `<p>${esc(desc)}</p>` : ''}
       </div>
-      ${semRemover ? '' : `<button type="button" class="acao-x" onclick="${onclick}"
-        title="Remover">&#10005;</button>`}
+      ${semRemover ? '' : `<button type="button" class="cartao-x" onclick="${acao}"
+        title="Remover">&times;</button>`}
     </div>`
+}
+
+/**
+ * Pergunta antes de tirar uma linha do resumo.
+ *
+ * O modal genérico já se fecha sozinho depois que a ação resolve — ver
+ * `confirmarAcao` em ui.js.
+ *
+ * @param {string} oQue "a irregularidade", "o artigo"…
+ * @param {string} qual o nome, para a pessoa reconhecer o que vai sair
+ * @param {Function} acao o que remove de fato
+ */
+function confirmarRemocaoDoResumo(oQue, qual, acao) {
+  const nome = qual.length > 80 ? qual.slice(0, 80) + '…' : qual
+  confirmarAcao({
+    titulo: 'Remover do item',
+    mensagem: nome ? `Tirar ${oQue} "${nome}" deste item?` : `Tirar ${oQue} deste item?`,
+    textoBtn: 'Remover',
+    perigo: true,
+    onConfirm: acao,
+  })
 }
 
 /** O item aberto agora, ou null. */
@@ -1530,6 +1619,17 @@ let sugestoesArtigo = []
 // guarda a escolha aqui; quem põe no item é o "+ add" (ou o Enter). Antes o
 // toque já jogava na lista — o que deixava o botão ao lado sem função e, pior,
 // não dava chance de escolher "como entra" antes de o artigo estar dentro.
+/**
+ * As remoções do resumo, uma por cartão desenhado.
+ *
+ * O HTML chama `removedores[i]()` em vez de trazer a chamada escrita: nome de
+ * irregularidade tem apóstrofo, e apóstrofo dentro de um `onclick` montado
+ * como texto quebra o atributo.
+ *
+ * @type {Array<Function>}
+ */
+const removedores = []
+
 /** @type {Object|null} a irregularidade escolhida e ainda não adicionada */
 let irregEscolhida = null
 /** @type {Object|null} o artigo escolhido e ainda não adicionado */
@@ -1629,10 +1729,13 @@ function pintarSugestoes(idAlvo, itens, formatar, aoEscolherFn) {
   const alvo = document.getElementById(idAlvo)
   if (!alvo) { return }
 
-  alvo.hidden = itens.length === 0
+  // `.open` e não `hidden`: a lista é um dropdown ancorado no campo, e quem
+  // decide se ela aparece é a classe — o mesmo contrato do `.ac-list` do
+  // AppPOSTURAS, para os dois sistemas se lerem igual.
+  alvo.classList.toggle('open', itens.length > 0)
   alvo.innerHTML = itens.map((it, i) => {
     const f = formatar(it)
-    return `<button type="button" class="vsi-sugestao" onclick="${aoEscolherFn}(${i})">
+    return `<button type="button" class="ac-item" onclick="${aoEscolherFn}(${i})">
       <b>${esc(f.titulo)}</b>${f.sub ? `<span>${esc(f.sub)}</span>` : ''}
     </button>`
   }).join('')
@@ -1642,16 +1745,51 @@ function pintarSugestoes(idAlvo, itens, formatar, aoEscolherFn) {
 function fecharSugestoes(idAlvo) {
   const alvo = document.getElementById(idAlvo)
   if (!alvo) { return }
-  alvo.hidden = true
+  alvo.classList.remove('open')
   alvo.innerHTML = ''
 }
 
-/** Some com o relato do item — a única forma de "remover" um texto livre. */
-function limparTextoDoItem() {
+// Clicar fora fecha o combo — é o que se espera de um dropdown, e sem isto ele
+// ficaria aberto sobre o resumo até alguém escolher alguma coisa. O clique na
+// própria lista não conta: é ele que escolhe.
+document.addEventListener('mousedown', ev => {
+  if (ev.target.closest('.ac-wrap')) { return }
+  fecharSugestoes('vsi-irreg-sugestoes')
+  fecharSugestoes('vsi-artigo-sugestoes')
+})
+
+// ── bloco 2: o que você viu ──
+//
+// Uma LISTA de relatos, e não um campo corrido. Um item da obra costuma
+// render mais de uma constatação, e tudo num bloco só obrigava a reescrever o
+// parágrafo inteiro para tirar uma frase. Cada relato entra pelo "+add" e sai
+// sozinho do resumo, como irregularidade e artigo.
+
+/** O "+add" da aba: leva o que está escrito para a lista. */
+function adicionarRelatoAoItem() {
   const item = itemAtual()
   if (!item) { return }
-  item.texto = ''
-  document.getElementById('vsi-texto').value = ''
+
+  const campo = document.getElementById('vsi-texto')
+  const texto = campo.value.trim()
+  if (!texto) { toast('Escreva o que você viu', 'err'); return }
+
+  garantirRelatos(item)
+  item.relatos.push(texto)
+  sincronizarRelatos(item)
+
+  campo.value = ''
+  campo.focus()
+  pintarContasDoItem()
+}
+
+/** @param {number} k posição do relato na lista */
+function removerRelatoDoItem(k) {
+  const item = itemAtual()
+  if (!item?.relatos?.[k]) { return }
+
+  item.relatos.splice(k, 1)
+  sincronizarRelatos(item)
   pintarContasDoItem()
 }
 
@@ -1747,12 +1885,14 @@ function adicionarArtigoAoItem() {
   item.artigos.push({
     artigo_id: a.id,
     tipo: document.getElementById('vsi-artigo-tipo').value,
-    texto: document.getElementById('vsi-artigo-obs').value.trim() || null,
+    // A observação por artigo saiu da tela: o que se tem a dizer é o relato do
+    // item. O campo segue no envio (o servidor o aceita nulo) para não mexer
+    // no contrato por causa de uma mudança de tela.
+    texto: null,
   })
 
   artigoEscolhido = null
   document.getElementById('vsi-artigo-busca').value = ''
-  document.getElementById('vsi-artigo-obs').value = ''
   buscarArtigo('')
   fecharSugestoes('vsi-artigo-sugestoes')
   pintarContasDoItem()
@@ -2174,7 +2314,19 @@ function fecharVisualizadorDeFoto() {
 
 function salvarItemRelatorio() {
   const item = itemAtual()
-  if (item) { item.texto = document.getElementById('vsi-texto').value.trim() }
+
+  // Relato digitado e ainda não adicionado entra assim mesmo: quem escreveu e
+  // foi direto em "Guardar" quis guardar aquilo, e não perdê-lo por não ter
+  // tocado no "+add".
+  if (item) {
+    const sobrou = document.getElementById('vsi-texto').value.trim()
+    if (sobrou) {
+      garantirRelatos(item)
+      item.relatos.push(sobrou)
+      sincronizarRelatos(item)
+      document.getElementById('vsi-texto').value = ''
+    }
+  }
 
   if (item && itemVazioDeConteudo(item)) {
     toast('O item está vazio — escreva algo, marque uma irregularidade ou anexe uma foto.', 'err')
@@ -2187,11 +2339,11 @@ function salvarItemRelatorio() {
 }
 
 /**
- * Fecha sem gravar o texto digitado.
+ * Fecha sem levar o que estava só digitado.
  *
- * Os outros blocos já foram para o estado quando foram acrescentados — botão
- * "adicionar" é gravação. O texto livre é o único que fica no campo até o fim,
- * e é ele que se perde aqui; o aviso diz isso.
+ * Tudo que passou pelo "+add" já está no item — botão "adicionar" é gravação.
+ * O que fica no campo de relato sem ter sido adicionado é o que se perde aqui,
+ * e é justamente o que "Guardar" salva.
  */
 function fecharItemRelatorio() {
   const item = itemAtual()
