@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BuscaController;
 use App\Http\Controllers\CadastroImobiliarioController;
 use App\Http\Controllers\CadastroLoteController;
+use App\Http\Controllers\DemandaController;
 use App\Http\Controllers\EdificacaoController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\LegislacaoController;
@@ -181,6 +182,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/os/{ordem}/situacao', [OrdemServicoController::class, 'situacao']);
         Route::post('/os/{ordem}/ciencia', [OrdemServicoController::class, 'ciencia']);
 
+        // A FILA NUMA LISTA SÓ: protocolo e ordem de serviço respondem à mesma
+        // pergunta ("o que há para fazer?") e viviam em duas abas. As tabelas
+        // continuam separadas — ver DemandaController para o porquê.
+        Route::get('/demandas', [DemandaController::class, 'index']);
         Route::get('/protocolos', [ProtocoloController::class, 'index']);
         Route::post('/protocolos', [ProtocoloController::class, 'store']);
         Route::get('/protocolos/{protocolo}', [ProtocoloController::class, 'mostrar']);

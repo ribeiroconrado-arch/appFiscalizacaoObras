@@ -2328,6 +2328,22 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .tl-os   th:nth-child(3){width:18%} .tl-os   th:nth-child(4){width:18%}
 .tl-os   th:nth-child(5){width:12%} .tl-os   th:nth-child(6){width:15%}
 
+/* A FILA: protocolo e ordem de serviço na mesma tabela. A primeira coluna é o
+   TIPO — numa lista que mistura os dois, é a primeira coisa que se precisa
+   saber, antes até do número. */
+.tl-dem  th:nth-child(1){width:9%}  .tl-dem  th:nth-child(2){width:15%}
+.tl-dem  th:nth-child(3){width:16%} .tl-dem  th:nth-child(4){width:22%}
+.tl-dem  th:nth-child(5){width:14%} .tl-dem  th:nth-child(6){width:9%}
+.tl-dem  th:nth-child(7){width:15%}
+
+/* O selo de tipo: forma discreta, sem cor de status — ele diz DE QUE espécie é
+   a linha, não como ela está. Cor aqui competiria com o selo de situação, que
+   é o que muda e o que se procura. */
+.dm-tipo{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap;
+  background:var(--blt);color:var(--tx2);border:1px solid var(--bord)}
+.dm-tipo-os{background:var(--sur)}
+
 /* ── FILTROS À VISTA NO COMPUTADOR ──
    No celular o filtro se esconde atrás de um botão porque a tela é curta e a
    lista é o que importa. No monitor sobra largura, e filtro escondido tem um

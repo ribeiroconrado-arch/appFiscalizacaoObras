@@ -692,7 +692,8 @@ function irPara(destino) {
   } else if (destino === 'documentos') {
     carregarDocumentos()
   } else if (destino === 'protocolos') {
-    carregarProtocolos()
+    // A tela virou UMA fila com protocolos e ordens de serviço juntos.
+    carregarDemandas()
   } else if (destino === 'painel') {
     carregarPainel()
   }

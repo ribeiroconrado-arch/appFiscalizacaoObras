@@ -539,8 +539,9 @@ function ehTelaLarga() { return TELA_LARGA.matches }
 // busca — e o filtro do computador ficaria escondido numa tela larga.
 TELA_LARGA.addEventListener('change', () => {
   if (typeof dState !== 'undefined' && dState.lista?.length) { renderDocumentos() }
-  if (typeof protoState !== 'undefined' && protoState.lista?.length) { renderProtocolos() }
-  if (typeof osState !== 'undefined' && osState.lista?.length) { renderOs() }
+  // Protocolo e ordem de serviço viraram UMA fila (demandas.js): antes eram
+  // dois redesenhos, um por aba.
+  if (typeof dmState !== 'undefined' && dmState.lista?.length) { renderDemandas() }
 })
 
 // ── PEDIR UM TEXTO ───────────────────────────────────────────

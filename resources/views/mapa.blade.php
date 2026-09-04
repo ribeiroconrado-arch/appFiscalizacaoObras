@@ -681,14 +681,14 @@
        determina para dentro. Moram na mesma tela porque é a mesma pergunta —
        "o que há para fazer?" —, e se separam em abas porque as respostas têm
        dono diferente. --}}
-  <div class="sub-abas" id="po-abas">
-    <button class="at" data-po="protocolos" onclick="abaProtocoloOs('protocolos')">Protocolos</button>
-    <button data-po="os" onclick="abaProtocoloOs('os')">Ordens de serviço</button>
-  </div>
-
-  <div class="po-painel at" id="po-protocolos">
+  {{-- AS DUAS ABAS VIRARAM UMA LISTA. Elas respondiam à mesma pergunta e
+       obrigavam a olhar duas telas para saber o que estava pendente. O TIPO
+       virou coluna e filtro; o que continua separado é o formulário — e as
+       tabelas do banco, que só têm quatro colunas em comum (ver
+       DemandaController). --}}
   <div class="topo-lista">
-    <div class="sec-simples">Protocolos <span class="cont" id="cont-proto">0</span></div>
+    <div class="sec-simples">Protocolos e ordens de serviço
+      <span class="cont" id="cont-demandas">0</span></div>
     @if (auth()->user()->canEdit())
       <button class="btn primary sm" onclick="novoProtocolo()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -697,102 +697,53 @@
     @else
       <button class="btn sm" disabled title="Seu perfil é somente de consulta">Novo protocolo</button>
     @endif
+    {{-- Emitir é da coordenação. Esconder de quem não pode não é a segurança —
+         quem autoriza é OrdemServicoController::store —, é não oferecer o que
+         seria recusado. --}}
+    @if (auth()->user()->isAdmin())
+      <button class="btn primary sm" onclick="novaOs()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Nova OS
+      </button>
+    @else
+      <button class="btn sm" disabled title="Só a coordenação emite ordem de serviço">Nova OS</button>
+    @endif
   </div>
 
-  {{-- No celular continuam duas linhas de dois controles; acima de 1000px o
-       invólucro vira faixa e os quatro ficam lado a lado. O invólucro branco
-       é o mesmo da Consulta — aqui não há funil porque não há filtro
-       escondido: os quatro estão à vista. --}}
   <div class="busca-form lista-form">
-  <div class="filtros-lista">
-  <div class="linha-filtro">
-    <select onchange="filtrarProtocolos('tipo', this.value)">
-      <option value="">Todos os tipos</option>
-      @foreach (\App\Models\Protocolo::TIPOS as $valor => $rotulo)
-        <option value="{{ $valor }}">{{ $rotulo }}</option>
-      @endforeach
-    </select>
-    {{-- Padrão "todos" e não "meus": protocolo chega sem dono, e abrir a lista
-         filtrada pelo agente esconderia justamente o que ninguém assumiu. --}}
-    <select onchange="filtrarProtocolos('agente', this.value)">
-      <option value="todos">Todos os agentes</option>
-      <option value="eu">Meus protocolos</option>
-      <option value="sem_dono">Não distribuídos</option>
-    </select>
-  </div>
-  <div class="linha-filtro">
-    <input type="text" placeholder="Buscar nº, requerente ou imóvel…"
-           oninput="filtrarProtocolos('busca', this.value)">
-    <select onchange="filtrarProtocolos('situacao', this.value)">
-      <option value="">Todas as situações</option>
-      @foreach (\App\Models\Protocolo::SITUACOES as $valor => $s)
-        <option value="{{ $valor }}">{{ $s[0] }}</option>
-      @endforeach
-    </select>
-  </div>
-  </div>{{-- /filtros-lista --}}
-    <div class="btn-row lista-form-acoes">
-      <button type="button" class="btn" onclick="limparFiltrosProtocolos()">Limpar</button>
-      <button type="button" class="btn primary" onclick="carregarProtocolos()">Buscar</button>
-    </div>
-  </div>{{-- /lista-form --}}
-
-  <div id="lista-protocolos"></div>
-  </div>{{-- /po-protocolos --}}
-
-  {{-- ══════ ORDENS DE SERVIÇO ══════ --}}
-  <div class="po-painel" id="po-os">
-    <div class="topo-lista">
-      <div class="sec-simples">Ordens de serviço <span class="cont" id="cont-os">0</span></div>
-      {{-- Emitir é da coordenação. Esconder o botão de quem não pode não é a
-           segurança — quem autoriza é OrdemServicoController::store —, é não
-           oferecer o que vai ser recusado. --}}
-      @if (auth()->user()->isAdmin())
-        <button class="btn primary sm" onclick="novaOs()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-               stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          Nova OS
-        </button>
-      @else
-        <button class="btn sm" disabled title="Só a coordenação emite ordem de serviço">Nova OS</button>
-      @endif
-    </div>
-
-    <div class="busca-form lista-form">
     <div class="filtros-lista">
-    <div class="linha-filtro">
-      <select onchange="filtrarOs('situacao', this.value)">
-        <option value="">Todas as situações</option>
-        @foreach (\App\Models\OrdemServico::SITUACOES as $valor => $sit)
-          <option value="{{ $valor }}">{{ $sit['texto'] }}</option>
-        @endforeach
-      </select>
-      {{-- O padrão vem do servidor: coordenação abre em "todas" para ver o que
-           distribuiu; o fiscal abre em "minhas" para ver o que lhe cabe. --}}
-      <select id="os-escopo" onchange="filtrarOs('agente', this.value)">
-        <option value="eu">Minhas ordens</option>
-        <option value="todas">Todas</option>
-      </select>
-    </div>
-    <div class="linha-filtro">
-      <input type="text" placeholder="Buscar nº ou objeto…"
-             oninput="filtrarOs('busca', this.value)">
-      <select onchange="filtrarOs('natureza', this.value)">
-        <option value="">Toda natureza</option>
-        @foreach (\App\Models\OrdemServico::NATUREZAS as $valor => $rotulo)
-          <option value="{{ $valor }}">{{ $rotulo }}</option>
-        @endforeach
-      </select>
-    </div>
-    </div>{{-- /filtros-lista --}}
-      <div class="btn-row lista-form-acoes">
-        <button type="button" class="btn" onclick="limparFiltrosOs()">Limpar</button>
-        <button type="button" class="btn primary" onclick="carregarOs()">Buscar</button>
+      <div class="linha-filtro">
+        <select id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
+          <option value="">Protocolos e ordens</option>
+          <option value="protocolo">Só protocolos</option>
+          <option value="os">Só ordens de serviço</option>
+        </select>
+        {{-- "Todos" e não "meus": protocolo chega SEM DONO, e abrir a fila
+             filtrada pelo agente esconderia justamente o que ninguém assumiu.
+             Vale para a lista inteira agora. --}}
+        <select id="dm-agente" onchange="filtrarDemandas('agente', this.value)">
+          <option value="todos">Todos os responsáveis</option>
+          <option value="eu">Meus</option>
+          <option value="sem_dono">Não distribuídos</option>
+        </select>
       </div>
-    </div>{{-- /lista-form --}}
+      <div class="linha-filtro">
+        <input type="text" id="dm-busca" placeholder="Buscar nº, requerente, objeto ou imóvel…"
+               oninput="filtrarDemandas('busca', this.value)">
+        {{-- Agrupada por tipo: "Deferido" e "Concluída" não são alternativas
+             da mesma pergunta. --}}
+        <select id="dm-situacao" onchange="filtrarDemandas('situacao', this.value)">
+          <option value="">Todas as situações</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-row lista-form-acoes">
+      <button type="button" class="btn" onclick="limparFiltrosDemandas()">Limpar</button>
+      <button type="button" class="btn primary" onclick="carregarDemandas()">Buscar</button>
+    </div>
+  </div>
 
-    <div id="lista-os"></div>
-  </div>{{-- /po-os --}}
+  <div id="lista-demandas"></div>
 </section>
 
 {{-- ══════ PARÂMETROS DO SISTEMA — modal (só administrador) ══════ --}}
@@ -3248,6 +3199,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/documento-form.js')"></script>
 <script src="@assetv('js/protocolos.js')"></script>
 <script src="@assetv('js/os.js')"></script>
+{{-- Depois dos dois: a fila lê as duas fontes e abre a ficha de cada uma. --}}
+<script src="@assetv('js/demandas.js')"></script>
 <script src="@assetv('js/perfil.js')"></script>
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
