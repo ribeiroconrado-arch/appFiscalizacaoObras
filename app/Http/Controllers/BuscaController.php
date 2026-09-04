@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Documento;
 use App\Models\Lote;
 use App\Models\Vistoria;
+use App\Support\InscricaoImobiliaria;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +87,7 @@ class BuscaController extends Controller
                 'bairro'     => $l->bairro,
                 'quadra'     => $l->quadra,
                 'lote'       => $l->numero_lote,
-                'inscricao'  => $l->inscricao_imobiliaria,
+                'inscricao'  => $this->inscricaoDe($l),
                 'area'       => $l->area_gis_m2,
                 'documentos' => (int) ($docs[$l->id] ?? 0),
                 'vistorias'  => (int) ($vist[$l->id] ?? 0),
@@ -99,6 +100,47 @@ class BuscaController extends Controller
             'total'    => $lotes->count(),
             'truncado' => $truncado,
         ]);
+    }
+
+    /**
+     * Nome do bairro no desenho → código dele no cadastro.
+     *
+     * Resolvido UMA VEZ por requisição: derivar a inscrição lote a lote faria
+     * uma consulta por linha, e uma busca devolve até 200 delas.
+     *
+     * @var array<string,string>|null
+     */
+    private ?array $codigosDeBairro = null;
+
+    /**
+     * A inscrição de um lote (modelo ou linha crua), derivada das partes.
+     *
+     * Ver Lote::inscricao() para o porquê de derivar em vez de guardar. Aqui a
+     * conta é refeita com o mapa em memória, e não chamando o modelo, só para
+     * não consultar o banco a cada linha do resultado.
+     *
+     * @param  object  $l  precisa de bairro, quadra, numero_lote, desmembramento
+     */
+    private function inscricaoDe(object $l): ?string
+    {
+        if ($this->codigosDeBairro === null) {
+            $this->codigosDeBairro = DB::table('cadastro_bairros')
+                ->whereNotNull('nome_gis')
+                ->pluck('codigo', 'nome_gis')
+                ->all();
+        }
+
+        $gravada = InscricaoImobiliaria::normalizar($l->inscricao_imobiliaria ?? null);
+        if ($gravada !== null) {
+            return InscricaoImobiliaria::formatar($gravada);
+        }
+
+        return InscricaoImobiliaria::formatar(InscricaoImobiliaria::montar(
+            $this->codigosDeBairro[$l->bairro] ?? null,
+            $l->quadra ?? null,
+            $l->numero_lote ?? null,
+            $l->desmembramento ?? 0
+        ));
     }
 
     /**
@@ -133,8 +175,40 @@ class BuscaController extends Controller
         }
 
         // 2. Inscrição unitária.
+        //
+        // A INSCRIÇÃO É DESMONTADA, e não comparada como texto. A coluna
+        // `inscricao_imobiliaria` está vazia nos 2.239 lotes — o desenho vem do
+        // DWG e não a traz —, então procurar por ela nunca achava nada: a tela
+        // de Consulta oferecia como PRIMEIRO campo uma busca que não podia dar
+        // certo. Mas a inscrição É bairro + quadra + lote + variação (ver
+        // App\Support\InscricaoImobiliaria), e por essas quatro o lote se acha.
         if (! empty($d['inscricao'])) {
-            $q->where('inscricao_imobiliaria', 'like', '%' . $d['inscricao'] . '%');
+            $partes = InscricaoImobiliaria::partes($d['inscricao']);
+
+            if ($partes) {
+                // O nome do bairro é resolvido em PHP, e não por subconsulta:
+                // `lotes.bairro` e `cadastro_bairros.nome_gis` foram criadas com
+                // COLAÇÕES DIFERENTES (utf8mb4_0900_ai_ci e utf8mb4_unicode_ci),
+                // e o MySQL recusa comparar as duas — "Illegal mix of
+                // collations". Trazer os nomes e comparar com literais evita o
+                // encontro. A divergência em si continua lá, esperando a
+                // próxima consulta que junte as duas tabelas.
+                $nomes = DB::table('cadastro_bairros')
+                    ->whereRaw('CAST(codigo AS UNSIGNED) = ?', [$partes['bairro']])
+                    ->whereNotNull('nome_gis')
+                    ->pluck('nome_gis')
+                    ->all();
+
+                $q->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [(string) $partes['quadra']])
+                    ->whereRaw("TRIM(LEADING '0' FROM numero_lote) = ?", [(string) $partes['lote']])
+                    ->where('desmembramento', $partes['variacao'])
+                    ->whereIn('bairro', $nomes);
+            } else {
+                // Inscrição pela metade (o fiscal ainda está digitando): vale a
+                // busca na coluna, para as que um dia forem informadas à mão.
+                $q->where('inscricao_imobiliaria', 'like', '%' . $d['inscricao'] . '%');
+            }
+
             return true;
         }
 
@@ -359,7 +433,7 @@ class BuscaController extends Controller
                 'bairro'    => $l->bairro,
                 'quadra'    => $l->quadra,
                 'lote'      => $l->numero_lote,
-                'inscricao' => $l->inscricao_imobiliaria,
+                'inscricao' => $this->inscricaoDe($l),
             ])->values();
 
         return response()->json([
@@ -419,7 +493,7 @@ class BuscaController extends Controller
             'bairro'    => $lote->bairro,
             'quadra'    => $lote->quadra,
             'lote'      => $lote->numero_lote,
-            'inscricao' => $lote->inscricao_imobiliaria,
+            'inscricao' => $lote->inscricaoFormatada(),
             'chave'     => $lote->chave,
             'area'      => $lote->area_gis_m2,
             'fonte'     => $lote->fonte,

@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Models\Concerns\RegistraAuditoria;
+use App\Support\InscricaoImobiliaria;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Lote extends Model
 {
@@ -137,5 +139,45 @@ class Lote extends Model
     public function rotulo(): string
     {
         return sprintf('Quadra %s · Lote %s', $this->quadra ?? '—', $this->numero_lote ?? '—');
+    }
+
+    /**
+     * A inscrição imobiliária: a gravada, ou a que as partes do lote formam.
+     *
+     * O desenho vem do DWG e não traz inscrição — os 2.239 lotes estão com a
+     * coluna vazia, e é por isso que a busca por inscrição da tela de Consulta
+     * nunca achou nada. Mas a inscrição não é um dado à parte: ela É bairro +
+     * quadra + lote + variação (ver App\Support\InscricaoImobiliaria), e o
+     * sistema já tem os quatro.
+     *
+     * DERIVADA, e não gravada: guardar cópia do que se calcula cria duas
+     * verdades, que divergem na primeira renumeração de quadra. A coluna
+     * continua existindo e TEM PRECEDÊNCIA — é onde entra a inscrição que a
+     * prefeitura informar e que, por qualquer motivo, não siga a fórmula.
+     *
+     * Devolve null quando o bairro do desenho ainda não foi amarrado a um do
+     * cadastro: sem o código não há o que montar, e inventar número de imóvel
+     * é pior do que não ter nenhum.
+     */
+    public function inscricao(): ?string
+    {
+        $gravada = InscricaoImobiliaria::normalizar($this->inscricao_imobiliaria);
+        if ($gravada !== null) {
+            return $gravada;
+        }
+
+        $codigo = DB::table('cadastro_bairros')
+            ->where('nome_gis', $this->bairro)
+            ->value('codigo');
+
+        return InscricaoImobiliaria::montar(
+            $codigo, $this->quadra, $this->numero_lote, $this->desmembramento ?? 0
+        );
+    }
+
+    /** A inscrição pronta para ler: 01.124.002.0001.000. */
+    public function inscricaoFormatada(): ?string
+    {
+        return InscricaoImobiliaria::formatar($this->inscricao());
     }
 }

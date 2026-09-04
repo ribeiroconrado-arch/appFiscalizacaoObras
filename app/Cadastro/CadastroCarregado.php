@@ -109,8 +109,15 @@ class CadastroCarregado implements FonteDoCadastro
         // Zeros à esquerda são de formatação, não de identidade: o cadastro
         // grava "001"/"0001" e o GIS, "1"/"1". Comparar sem eles é o que faz
         // os dois mundos se reconhecerem.
+        //
+        // O CÓDIGO DO BAIRRO ESTAVA FORA DESSA REGRA, e era o pior dos três:
+        // `cadastro_bairros` guarda "124" e a exportação da prefeitura,
+        // "000124" — a comparação direta nunca casava. A aba BCI vinha vazia
+        // mesmo com o bairro amarrado e o cadastro carregado, e vazia com a
+        // MESMA mensagem de quem não tem cadastro nenhum, o que escondia o
+        // defeito atrás de uma explicação plausível.
         return DB::table('cadastro_externo_imoveis')
-            ->where('codigo_bairro', $codigo)
+            ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim((string) $codigo, '0')])
             ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [ltrim((string) $lote->quadra, '0')])
             ->whereRaw("TRIM(LEADING '0' FROM lote) = ?", [ltrim((string) $lote->numero_lote, '0')])
             ->orderBy('inscricao')
