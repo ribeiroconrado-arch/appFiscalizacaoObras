@@ -50,10 +50,10 @@ class BuscaController extends Controller
             'obra_sem_vistoria' => ['nullable', 'boolean'],
             // Campo único da busca do mapa
             'termo'         => ['nullable', 'string', 'max:120'],
-            'incluir_baixados' => ['nullable', 'boolean'],
+            'incluir_inativos' => ['nullable', 'boolean'],
         ]);
 
-        // Lote baixado (unificado ou desmembrado) nao e mais um imovel que
+        // Lote inativo (unificado ou desmembrado) nao e mais um imovel que
         // existe: fica na base para o historico, mas nao se busca nem se marca
         // no mapa. A ficha dele continua abrindo — ver ficha().
         //
@@ -62,7 +62,7 @@ class BuscaController extends Controller
         // acha o lote que foi unificado ou desmembrado e leva à história dele.
         // Sem ele, um imóvel com processo em curso desaparecia do sistema no
         // instante em que o ato cadastral era executado.
-        $q = empty($d['incluir_baixados']) ? Lote::query()->ativos() : Lote::query();
+        $q = empty($d['incluir_inativos']) ? Lote::query()->ativos() : Lote::query();
         $usou = $this->aplicarFiltros($q, $d);
 
         if (! $usou) {
@@ -96,10 +96,10 @@ class BuscaController extends Controller
                 'documentos' => (int) ($docs[$l->id] ?? 0),
                 'vistorias'  => (int) ($vist[$l->id] ?? 0),
                 // A situação viaja SEMPRE, mesmo sem o filtro: sem ela, a linha
-                // de um baixado seria idêntica à de um imóvel vivo, e alguém
+                // de um inativo seria idêntica à de um imóvel vivo, e alguém
                 // acabaria lavrando peça contra um lote que não existe mais.
                 'situacao'   => $l->situacao,
-                'baixado_em' => $l->baixado_em?->format('d/m/Y'),
+                'inativado_em' => $l->inativado_em?->format('d/m/Y'),
             ])->values(),
             'total'    => $lotes->count(),
             'truncado' => $truncado,
@@ -444,12 +444,12 @@ class BuscaController extends Controller
     /**
      * GET /api/imoveis/{lote}/geometria — o contorno de UM imóvel.
      *
-     * Existe por causa do lote BAIXADO: ele não está na camada do mapa (o
+     * Existe por causa do lote INATIVO: ele não está na camada do mapa (o
      * repositório filtra `situacao = 'ativo'`) e não voltaria a estar sem
      * trazer junto o loteamento antigo inteiro, sobreposto ao atual. Aqui se
      * pede um contorno de cada vez, para desenhar por cima e tracejado.
      *
-     * Serve a qualquer lote e não só ao baixado: a regra de quem aparece na
+     * Serve a qualquer lote e não só ao inativo: a regra de quem aparece na
      * camada é do mapa, não desta consulta — e uma exceção escrita aqui seria
      * uma segunda regra para manter em dia.
      */
@@ -464,7 +464,7 @@ class BuscaController extends Controller
         return response()->json([
             'id'         => $lote->id,
             'situacao'   => $lote->situacao,
-            'baixado_em' => $lote->baixado_em?->format('d/m/Y'),
+            'inativado_em' => $lote->inativado_em?->format('d/m/Y'),
             'geometry'   => json_decode($geojson),
         ]);
     }
@@ -597,7 +597,7 @@ class BuscaController extends Controller
             'obra_sem_vistoria' => ['nullable', 'boolean'],
         ]);
 
-        // Lote baixado (unificado ou desmembrado) nao e mais um imovel que
+        // Lote inativo (unificado ou desmembrado) nao e mais um imovel que
         // existe: fica na base para o historico, mas nao se busca nem se marca
         // no mapa. A ficha dele continua abrindo — ver ficha().
         $q = Lote::query()->ativos();
@@ -696,7 +696,7 @@ class BuscaController extends Controller
             'area'      => $lote->area_gis_m2,
             'fonte'     => $lote->fonte,
             'situacao'  => $lote->situacao,
-            'baixado_em' => $lote->baixado_em?->format('d/m/Y'),
+            'inativado_em' => $lote->inativado_em?->format('d/m/Y'),
             'lat'       => $p?->lat !== null ? (float) $p->lat : null,
             'lon'       => $p?->lon !== null ? (float) $p->lon : null,
             'documentos' => $documentos,

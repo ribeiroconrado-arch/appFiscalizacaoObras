@@ -112,12 +112,12 @@ function renderResumo(resumo) {
   põe('fi-ultima-vistoria', resumo.ultima_vistoria || 'nenhuma')
 
   // A situação do cabeçalho segue o status quando ele é definitivo (lote
-  // baixado), porque aí o imóvel não existe mais e isso vale mais do que
+  // inativo), porque aí o imóvel não existe mais e isso vale mais do que
   // qualquer outra informação da ficha.
   const sit = document.getElementById('fi-situacao')
-  if (sit && resumo.status.texto === 'Baixado') {
+  if (sit && resumo.status.texto === 'Inativo') {
     sit.className = 'badge bd-cx'
-    sit.textContent = 'Baixado'
+    sit.textContent = 'Inativo'
   }
 
   renderFachada(resumo.fachada)

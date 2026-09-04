@@ -31,13 +31,13 @@ class Lote extends Model
     protected $guarded = [];
 
     /**
-     * Sem esta declaracao o Eloquent devolve `baixado_em` como STRING, e
+     * Sem esta declaracao o Eloquent devolve `inativo_em` como STRING, e
      * qualquer `->format()` sobre ela estoura em tempo de execucao — o que
-     * so aparece quando alguem abre a ficha de um lote baixado.
+     * so aparece quando alguem abre a ficha de um lote inativo.
      */
     protected function casts(): array
     {
-        return ['baixado_em' => 'datetime', 'area_gis_m2' => 'float'];
+        return ['inativado_em' => 'datetime', 'area_gis_m2' => 'float'];
     }
 
     /**
@@ -51,7 +51,7 @@ class Lote extends Model
     public const COLUNAS = [
         'id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'chave',
         'inscricao_imobiliaria', 'area_gis_m2', 'fonte', 'origem',
-        'situacao', 'baixado_em',
+        'situacao', 'inativado_em',
         'created_at', 'updated_at',
     ];
 
@@ -77,7 +77,7 @@ class Lote extends Model
      * Imóveis que existem hoje.
      *
      * Deliberadamente NÃO é escopo global. Como global, quebraria o
-     * route-model binding da ficha de um lote baixado — que é justamente o que
+     * route-model binding da ficha de um lote inativo — que é justamente o que
      * a sucessão precisa mostrar — e ainda daria falsa sensação de segurança,
      * porque não alcança o LoteRepository (SQL cru) nem os pontos que usam
      * `DB::table()`. Filtro tem de ser explícito em cada consulta.
@@ -88,9 +88,9 @@ class Lote extends Model
     }
 
     /** Imóveis que deixaram de existir por desmembramento ou unificação. */
-    public function scopeBaixados(Builder $q): Builder
+    public function scopeInativos(Builder $q): Builder
     {
-        return $q->where('lotes.situacao', 'baixado');
+        return $q->where('lotes.situacao', 'inativo');
     }
 
     public function ehAtivo(): bool
@@ -121,7 +121,7 @@ class Lote extends Model
     protected function acaoAuditoria(array $novos): string
     {
         if (array_key_exists('situacao', $novos)) {
-            return $novos['situacao'] === 'baixado' ? 'baixou' : 'reativou';
+            return $novos['situacao'] === 'inativo' ? 'inativou' : 'reativou';
         }
         if (array_key_exists('quadra', $novos)) {
             return 'corrigiu quadra';

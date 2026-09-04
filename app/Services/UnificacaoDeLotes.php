@@ -84,7 +84,7 @@ class UnificacaoDeLotes
 
         $lotes = $this->lotes($ids);
         if ($lotes->count() !== count($ids)) {
-            return 'Algum lote da seleção não existe ou já foi baixado. Recarregue o mapa.';
+            return 'Algum lote da seleção não existe ou já foi inativado. Recarregue o mapa.';
         }
 
         if ($lotes->pluck('bairro')->unique()->count() > 1) {
@@ -142,9 +142,9 @@ class UnificacaoDeLotes
 
         // ── a identificação nova está livre? ──
         //
-        // Descontando os que serão baixados: unificar 05 e 06 e chamar o
+        // Descontando os que serão inativados: unificar 05 e 06 e chamar o
         // resultado de "05" é a prática, e só funciona porque a baixa e a
-        // criação acontecem na MESMA transação e o índice único ignora baixado.
+        // criação acontecem na MESMA transação e o índice único ignora inativo.
         $choque = DB::table('lotes')->where('bairro', $lotes->first()->bairro)
             ->where('quadra', $lotes->first()->quadra)
             ->where('numero_lote', $numeroLote)
@@ -164,7 +164,7 @@ class UnificacaoDeLotes
         $r = $this->retrato($ids)['vinculos'];
 
         // Aviso, NUNCA impedimento: é a razão de os lotes não serem excluídos.
-        // O histórico continua pendurado no lote baixado, e a ficha do
+        // O histórico continua pendurado no lote inativo, e a ficha do
         // sucessor mostra de onde ele veio.
         $partes = [];
         foreach (['documentos' => 'documento', 'vistorias' => 'vistoria', 'obras' => 'obra'] as $k => $rot) {
@@ -192,7 +192,7 @@ class UnificacaoDeLotes
 
         return DB::transaction(function () use ($protocolo, $ids, $numeroLote, $desmembramento, $primeiro, $u, $justificativa) {
             // A baixa vem ANTES da criação: o índice único só ignora quem já
-            // está baixado, e o número do lote novo costuma ser o de um dos
+            // está inativo, e o número do lote novo costuma ser o de um dos
             // antigos. Fora de uma transação isto seria uma janela de
             // inconsistência; dentro dela, ninguém vê o estado intermediário.
             $atributos = [
@@ -210,7 +210,7 @@ class UnificacaoDeLotes
             ];
 
             foreach (Lote::whereIn('id', $ids)->get() as $lote) {
-                $lote->update(['situacao' => 'baixado', 'baixado_em' => now()]);
+                $lote->update(['situacao' => 'inativo', 'inativado_em' => now()]);
             }
 
             $id = $this->lotes->criarComGeometria($atributos, $u['geojson']);

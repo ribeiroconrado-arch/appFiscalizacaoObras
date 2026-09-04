@@ -186,7 +186,7 @@ function secProprietarios(lista) {
  *
  * "Situação", no quadro de características, quer dizer onde o lote está no
  * quarteirão (MEIO DA QUADRA, ESQUINA). Na ficha, "Situação" já quer dizer
- * outra coisa — imóvel ativo ou baixado por sucessão. Duas palavras iguais com
+ * outra coisa — imóvel ativo ou inativo por sucessão. Duas palavras iguais com
  * sentidos diferentes na mesma tela é erro esperando acontecer, e quem paga é
  * quem lê o auto depois.
  */

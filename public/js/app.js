@@ -91,7 +91,7 @@ const desenhados = new Set()
  * `desenhados.clear()` sozinho não removia camada nenhuma: ele só dizia "pode
  * desenhar de novo". Depois de um desmembramento ou de uma unificação, o lote
  * de ORIGEM continuava pintado por cima dos sucessores até alguém recarregar a
- * página — um imóvel que o sistema já tinha baixado seguia clicável no mapa, e
+ * página — um imóvel que o sistema já tinha inativado seguia clicável no mapa, e
  * abria a ficha de um lote que não existe mais.
  *
  * Por isso limpar é remover as camadas, esvaziar os índices e recarregar do
@@ -230,7 +230,7 @@ function abrirFicha(feicao) {
   document.getElementById('fi-endereco').innerHTML = montarEndereco(p)
 
   // A situação nasce "Ativo" e é corrigida pelo resumo, que chega junto do
-  // histórico. Só o mapa nunca traz lote baixado, então este é o estado certo
+  // histórico. Só o mapa nunca traz lote inativo, então este é o estado certo
   // enquanto a resposta não volta — e não um travessão que pisca.
   const sit = document.getElementById('fi-situacao')
   sit.className = 'badge bd-ok'

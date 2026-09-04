@@ -110,7 +110,7 @@ class DesmembramentoDeLote
         }
 
         if ($pai->situacao !== 'ativo') {
-            return 'Este lote já foi baixado. Desmembre o sucessor dele.';
+            return 'Este lote já foi inativado. Desmembre o sucessor dele.';
         }
 
         $minimo = $derivarUltima ? 1 : 2;
@@ -182,7 +182,7 @@ class DesmembramentoDeLote
             $numeros[$n] = true;
         }
 
-        // Descontando o próprio pai, que vai ser baixado no mesmo ato.
+        // Descontando o próprio pai, que vai ser inativado no mesmo ato.
         $choque = DB::table('lotes')->where('bairro', $pai->bairro)
             ->where('quadra', $pai->quadra)->whereIn('numero_lote', array_keys($numeros))
             ->where('situacao', 'ativo')->where('id', '<>', $pai->id)->pluck('numero_lote');
@@ -249,9 +249,9 @@ class DesmembramentoDeLote
 
         return DB::transaction(function () use ($protocolo, $pai, $medidas, $modo, $justificativa) {
             // A baixa vem ANTES da criação: o índice único de identificação só
-            // ignora quem já está baixado, e uma das partes pode legitimamente
+            // ignora quem já está inativo, e uma das partes pode legitimamente
             // herdar o número do pai.
-            $pai->update(['situacao' => 'baixado', 'baixado_em' => now()]);
+            $pai->update(['situacao' => 'inativo', 'inativado_em' => now()]);
 
             $criados = [];
             foreach ($medidas['partes'] as $p) {

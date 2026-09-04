@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  * existir, M passam a existir, e um registro amarra os dois conjuntos ao
  * processo administrativo que autorizou a mudança.
  *
- * Nenhum lote é excluído. O antigo fica BAIXADO, apontando para os sucessores.
+ * Nenhum lote é excluído. O antigo fica INATIVO, apontando para os sucessores.
  * Excluir seria destrutivo em silêncio: `vistorias` e `obras` têm FK em CASCADE
  * e iriam junto sem aviso, e o auto de infração já lavrado (FK RESTRICT)
  * trancaria a operação pela metade. Além disso o auto se refere ÀQUELE imóvel,
@@ -71,7 +71,7 @@ class SucessaoDeLotes
             // Pelo Eloquent, para cada baixa deixar a linha "baixou" na
             // trilha de auditoria (ver App\Models\Lote::acaoAuditoria).
             foreach (Lote::whereIn('id', $anteriores)->get() as $lote) {
-                $lote->update(['situacao' => 'baixado', 'baixado_em' => now()]);
+                $lote->update(['situacao' => 'inativo', 'inativado_em' => now()]);
             }
 
             return $ato;

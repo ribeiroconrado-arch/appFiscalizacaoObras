@@ -259,7 +259,7 @@ class ConferirBaseGis extends Command
     }
 
     /**
-     * Lote ATIVO com a mesma identificação de um lote BAIXADO.
+     * Lote ATIVO com a mesma identificação de um lote INATIVO.
      *
      * Não é erro por si: unificar os lotes 05 e 06 e chamar o resultado de
      * "05" produz exatamente isso, e é a prática. O que a conferência procura
@@ -270,10 +270,10 @@ class ConferirBaseGis extends Command
     private function identidadeRessuscitada(string $b): int
     {
         $linhas = DB::select("
-            SELECT a.quadra, a.numero_lote, a.id AS ativo, x.id AS baixado
+            SELECT a.quadra, a.numero_lote, a.id AS ativo, x.id AS inativo
               FROM lotes a
               JOIN lotes x ON x.bairro = a.bairro AND x.quadra = a.quadra
-                          AND x.numero_lote = a.numero_lote AND x.situacao = 'baixado'
+                          AND x.numero_lote = a.numero_lote AND x.situacao = 'inativo'
              WHERE a.bairro = ? AND a.situacao = 'ativo'
                AND NOT EXISTS (
                      SELECT 1 FROM lote_ato_lotes p
@@ -289,7 +289,7 @@ class ConferirBaseGis extends Command
         $this->error('  IDENTIFICAÇÃO REAPROVEITADA SEM ATO (' . count($linhas) . '):');
         foreach (array_slice($linhas, 0, 8) as $l) {
             $this->line("    Q{$l->quadra} Lt{$l->numero_lote}: o lote {$l->ativo} usa a identificação "
-                . "do lote {$l->baixado}, que foi baixado — e nenhum ato liga os dois.");
+                . "do lote {$l->inativo}, que foi inativado — e nenhum ato liga os dois.");
         }
         $this->line('    Provável reimportação sobre imóvel que já tinha sido unificado.');
 
@@ -385,7 +385,7 @@ class ConferirBaseGis extends Command
      * Três defeitos que só existem depois que desmembramento e unificação
      * passam a gravar, e que nada mais enxerga:
      *
-     *   - lote baixado sem ato nenhum: baixaram na mão, e o imóvel sumiu do
+     *   - lote inativo sem ato nenhum: inativaram na mão, e o imóvel sumiu do
      *     mapa sem deixar dito para onde foi;
      *   - ato sem anterior ou sem posterior: gravação interrompida no meio;
      *   - sufixo de desmembramento preenchido sem ato de origem.
@@ -394,7 +394,7 @@ class ConferirBaseGis extends Command
     {
         $achados = 0;
 
-        $orfaos = DB::table('lotes')->where('situacao', 'baixado')
+        $orfaos = DB::table('lotes')->where('situacao', 'inativo')
             ->whereNotExists(fn ($q) => $q->from('lote_ato_lotes')
                 ->whereColumn('lote_ato_lotes.lote_id', 'lotes.id')
                 ->where('papel', 'anterior'))
@@ -406,7 +406,7 @@ class ConferirBaseGis extends Command
             foreach ($orfaos->take(8) as $l) {
                 $this->line("  lote {$l->id} — {$l->bairro} Q{$l->quadra} Lt{$l->numero_lote}");
             }
-            $this->line('  Imóvel baixado sem dizer para onde foi. Sem isso a ficha não');
+            $this->line('  Imóvel inativado sem dizer para onde foi. Sem isso a ficha não');
             $this->line('  consegue mostrar a origem do sucessor.');
             $achados += $orfaos->count();
         }

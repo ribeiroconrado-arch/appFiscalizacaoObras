@@ -592,11 +592,11 @@
           <span class="desc">Projeto aprovado sem vistoria</span></label>
         {{-- O IMÓVEL QUE DEIXOU DE EXISTIR.
              Unificação e desmembramento não apagam o lote de origem: ele fica
-             baixado, com os documentos e vistorias dele pendurados. Some do
+             inativo, com os documentos e vistorias dele pendurados. Some do
              mapa, some da consulta — e era só por aqui que se podia chegar de
              volta a um processo que corre contra um lote já desmembrado. --}}
-        <label class="chk-item"><input type="checkbox" id="bs-baixados">
-          <span class="desc">Incluir imóveis baixados (unificados/desmembrados)</span></label>
+        <label class="chk-item"><input type="checkbox" id="bs-inativos">
+          <span class="desc">Incluir imóveis inativos (unificados/desmembrados)</span></label>
       </div>
     </div>
 
@@ -1939,6 +1939,10 @@
         fiscalização encontra obra sem responsável no local o tempo todo. O
         nome pode ser completado antes da entrega da via.
       </p>
+      {{-- CARIMBO DE PROCEDÊNCIA. Só em peça lavrada: no rascunho ainda não há
+           carimbo, porque o dado ainda pode mudar. Discreto de propósito — é
+           conferência, e quem abre a peça quase nunca está atrás dele. --}}
+      <p class="doc-carimbo" id="nd-carimbo" hidden></p>
     </div>
 
     {{-- IMÓVEL / ORIGEM --}}
@@ -2447,11 +2451,11 @@
      Não há "desenhar as partes à mão": só o corte por linha, que preserva o
      contorno externo do lote. Um ato que divide não pode mudar a divisa com o
      vizinho, e o desenho livre permitia exatamente isso. --}}
-{{-- O contorno de um imóvel BAIXADO fica por cima do mapa até alguém tirá-lo.
+{{-- O contorno de um imóvel INATIVO fica por cima do mapa até alguém tirá-lo.
      Sem este botão, sair dele exigiria recarregar a página — e um traço cinza
      que não sai vira ruído em cima do trabalho seguinte. --}}
-<button type="button" class="btn sm baixado-sair" id="btn-tirar-baixado" hidden
-        onclick="tirarBaixadoDoMapa()">Tirar o contorno antigo do mapa</button>
+<button type="button" class="btn sm inativo-sair" id="btn-tirar-inativo" hidden
+        onclick="tirarInativoDoMapa()">Tirar o contorno antigo do mapa</button>
 
 <aside class="desm-mesa" id="desm-mesa" hidden aria-label="Desmembramento">
   <div class="cad-mesa-topo">

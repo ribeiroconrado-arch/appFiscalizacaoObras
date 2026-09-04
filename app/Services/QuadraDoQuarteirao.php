@@ -46,7 +46,7 @@ class QuadraDoQuarteirao
      */
     public function quarteiroes(string $bairro): array
     {
-        // Lote baixado nao se corrige: quem tem quadra a corrigir e o sucessor.
+        // Lote inativo nao se corrige: quem tem quadra a corrigir e o sucessor.
         $ids = DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')
             ->whereNull('quadra')->orderBy('id')->pluck('id')->all();
 

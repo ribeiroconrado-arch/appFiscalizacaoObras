@@ -114,11 +114,11 @@ class ImportarLotes extends Command
             // Lote que participou de desmembramento ou unificação não está na
             // conta acima e seria apagado — arrastando o ato pela FK RESTRICT
             // (erro cru de banco) ou, pior, deixando a cadeia de sucessão do
-            // imóvel manca. O baixado entra junto: ele só existe para contar a
+            // imóvel manca. O inativo entra junto: ele só existe para contar a
             // história, e apagá-lo apaga a história.
             $emSucessao = DB::table('lotes')->whereIn('bairro', $nomes)
                 ->where(fn ($q) => $q
-                    ->where('situacao', 'baixado')
+                    ->where('situacao', 'inativo')
                     ->orWhereExists(fn ($s) => $s->from('lote_ato_lotes')
                         ->whereColumn('lote_ato_lotes.lote_id', 'lotes.id')))
                 ->count();
@@ -182,7 +182,7 @@ class ImportarLotes extends Command
                 // não reconhece "o mesmo lote" e volta a duplicar. Hoje o
                 // índice é sobre a coluna gerada `chave_identidade`, que só
                 // tem valor para lote ATIVO: reimportar não ressuscita lote
-                // baixado, ele simplesmente não é reconhecido como o mesmo.
+                // inativo, ele simplesmente não é reconhecido como o mesmo.
                 //
                 // created_at fica de fora do UPDATE de propósito: é a data em
                 // que o lote entrou na base, não a da última reimportação.
@@ -312,7 +312,7 @@ class ImportarLotes extends Command
      *
      * O segundo veio com a sucessão (migração 2026_08_21_000100): sem ele,
      * unificar os lotes 05 e 06 e chamar o resultado de "05" colidiria com o
-     * 05 recém-baixado, que é o caminho normal da unificação.
+     * 05 recém-inativado, que é o caminho normal da unificação.
      *
      * Quadra nula não atrapalha em nenhum dos dois: no MySQL o índice único
      * trata cada NULL como distinto, então lote cuja quadra o desenho não
@@ -332,7 +332,7 @@ class ImportarLotes extends Command
             return true;
         }
 
-        // Só entre ATIVOS: lote baixado não disputa identidade com ninguém.
+        // Só entre ATIVOS: lote inativo não disputa identidade com ninguém.
         $duplicadas = DB::selectOne('SELECT COUNT(*) n FROM (
             SELECT 1 FROM lotes
              WHERE situacao = "ativo" AND quadra IS NOT NULL AND numero_lote IS NOT NULL

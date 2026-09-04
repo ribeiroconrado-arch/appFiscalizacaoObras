@@ -50,7 +50,7 @@ class PainelController extends Controller
             'recentes'  => $this->recentes($uid),
             'por_tipo'  => $this->documentosPorTipo(clone $documentos),
             'irregularidades' => $this->irregularidadesFrequentes($desde),
-            // So bairros com imovel ativo: bairro que so tem lote baixado nao
+            // So bairros com imovel ativo: bairro que so tem lote inativo nao
             // existe mais como opcao de filtro.
             'bairros'   => DB::table('lotes')->where('situacao', 'ativo')
                 ->distinct()->orderBy('bairro')->pluck('bairro'),

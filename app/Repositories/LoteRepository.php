@@ -32,7 +32,7 @@ class LoteRepository
     /**
      * Recorte padrão de TODA consulta de mapa, GPS e busca.
      *
-     * Lote baixado — o que foi unificado ou desmembrado — continua na base
+     * Lote inativo — o que foi unificado ou desmembrado — continua na base
      * para o histórico do imóvel responder por si, mas não é mais um imóvel
      * que existe: não pode ser pintado no mapa, encontrado pelo GPS do fiscal
      * em campo nem devolvido numa busca de balcão.
@@ -168,14 +168,14 @@ class LoteRepository
      * que é bem pior de diagnosticar. Por isso a verificação é explícita.
      *
      * É a ÚNICA consulta deste repositório que não filtra por lote ativo, e de
-     * propósito: geometria inválida ou SRID errado num lote baixado é defeito
+     * propósito: geometria inválida ou SRID errado num lote inativo é defeito
      * do mesmo jeito, e escondê-lo da conferência derrotaria o objetivo dela.
-     * Os baixados aparecem contados à parte.
+     * Os inativos aparecem contados à parte.
      */
     public function diagnostico(): object
     {
         return DB::selectOne("SELECT COUNT(*)                    AS total,
-                                     SUM(situacao = 'baixado')   AS baixados,
+                                     SUM(situacao = 'inativo')   AS inativos,
                                      SUM(ST_SRID(geom) <> 4326)  AS srid_errado,
                                      SUM(NOT ST_IsValid(geom))   AS geometria_invalida,
                                      COUNT(DISTINCT chave)       AS chaves_distintas,

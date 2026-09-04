@@ -330,7 +330,7 @@ class VistoriaController extends Controller
      * Ele é DERIVADO do que já está registrado, não digitado por ninguém. A
      * ordem abaixo é de precedência, e cada degrau existe por um motivo:
      *
-     *   baixado    o lote deixou de existir por unificação ou desmembramento,
+     *   inativo    o lote deixou de existir por unificação ou desmembramento,
      *              e isso vence qualquer outra informação;
      *   embargado  há auto ou notificação de embargo lavrado e não anulado —
      *              é o estado que MUDA o que o fiscal pode fazer em campo;
@@ -358,7 +358,7 @@ class VistoriaController extends Controller
         $obra = Obra::where('lote_id', $lote->id)->latest('id')->first();
 
         $status = match (true) {
-            $lote->situacao === 'baixado' => ['Baixado', 'bd-cx'],
+            $lote->situacao === 'inativo' => ['Inativo', 'bd-cx'],
             $embargo                      => ['Embargado', 'bd-cx'],
             $ultima?->situacao === 'irregular' => ['Irregular', 'bd-al'],
             $obra !== null                => [$obra->situacaoRotulo(), 'bd-in'],
