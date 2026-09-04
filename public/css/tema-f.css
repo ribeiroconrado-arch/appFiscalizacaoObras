@@ -2519,7 +2519,20 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vsi-bloco .field{margin:0}
 .vsi-bloco textarea{width:100%;resize:vertical;min-height:2.4em}
 
-/* A busca: campo + "+add" na mesma linha. */
+/* ── O "+add" DENTRO DO CAMPO ──
+   Ele pertence ao que está escrito ali, e não à linha: solto ao lado da
+   moldura, virava um terceiro elemento disputando a largura — e, com o campo
+   de texto do relato, ficava pendurado no canto de uma caixa três vezes mais
+   alta que ele. Dentro, é a moldura inteira que diz "escreva aqui e some
+   isto à lista". */
+.campo-add{display:flex;align-items:center;gap:9px}
+.campo-add-corpo{flex:1;min-width:0}
+.campo-add > .btn{flex-shrink:0}
+/* No relato a caixa é alta: o botão acompanha a base, junto do canto onde se
+   para de escrever, e não boiando no meio da altura. */
+.campo-add.campo-add-alto{align-items:flex-end}
+
+/* A busca: o campo (já com o botão dentro) ocupa a linha toda. */
 .vsi-busca{display:flex;gap:8px;align-items:flex-end}
 
 /* "Como entra" tem duas respostas de uma palavra: o que sobra da linha é da
@@ -2527,6 +2540,19 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vsi-linha-lei{display:flex;gap:9px;align-items:flex-end}
 .vsi-campo-curto{flex:0 0 auto;width:max-content;min-width:112px}
 .vsi-campo-curto select{width:100%}
+/* Com o "+add" dentro, o campo curto precisa caber os dois: o rótulo em cima
+   e, embaixo, o número ao lado do botão. Três dígitos bastam para um prazo. */
+.vsi-campo-curto.campo-add{min-width:0}
+.vsi-campo-curto.campo-add .campo-add-corpo{width:86px}
+
+/* No celular os dois campos EMPILHAM. Lado a lado em 375px, o curto (que tem
+   largura fixa, e mais o botão dentro) come metade da linha e sobra menos que
+   o rótulo do outro: "PROVIDÊNCIA EXIGIDA" saía cortado na moldura. */
+@media(max-width:560px){
+  .vsi-linha-lei{flex-direction:column;align-items:stretch;gap:8px}
+  .vsi-campo-curto{width:auto}
+  .vsi-campo-curto.campo-add .campo-add-corpo{width:auto;flex:1}
+}
 
 /* ── COMBOBOX ──
    A lista FLUTUA sobre o conteúdo, ancorada no campo — mesmo contrato do

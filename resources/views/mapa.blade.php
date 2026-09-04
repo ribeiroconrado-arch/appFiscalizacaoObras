@@ -1567,19 +1567,22 @@
                baixo e a própria lista ganhava uma barra de rolagem no meio do
                formulário — que é o oposto do que um combo faz. --}}
           <div class="ac-wrap" style="flex:1;min-width:0">
-            <div class="field" style="margin:0">
-              <label for="vsi-irreg-busca">Irregularidade</label>
-              {{-- Escolher na lista só PREENCHE o campo — quem põe no item é o
-                   "+add" (ou o Enter). --}}
-              <input type="text" id="vsi-irreg-busca" autocomplete="off"
-                     placeholder="Digite para buscar…"
-                     oninput="buscarIrregularidade(this.value)"
-                     onfocus="buscarIrregularidade(this.value)"
-                     onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarIrregularidadeAoItem()}">
+            <div class="field campo-add" style="margin:0">
+              <div class="campo-add-corpo">
+                <label for="vsi-irreg-busca">Irregularidade</label>
+                {{-- Escolher na lista só PREENCHE o campo — quem põe no item é
+                     o "+add" (ou o Enter). --}}
+                <input type="text" id="vsi-irreg-busca" autocomplete="off"
+                       placeholder="Digite para buscar…"
+                       oninput="buscarIrregularidade(this.value)"
+                       onfocus="buscarIrregularidade(this.value)"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarIrregularidadeAoItem()}">
+              </div>
+              <button type="button" class="btn out-verde sm"
+                      onclick="adicionarIrregularidadeAoItem()">+add</button>
             </div>
             <div class="ac-list" id="vsi-irreg-sugestoes"></div>
           </div>
-          <button type="button" class="btn out-verde sm" onclick="adicionarIrregularidadeAoItem()">+add</button>
         </div>
         <div class="vsi-nota" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
           os artigos sugeridos — e é o que o auto de infração vai usar.</div>
@@ -1591,8 +1594,8 @@
            para tirar uma frase. Cada relato entra pelo "+add" e sai sozinho
            do resumo, como irregularidade e artigo. --}}
       <div class="vsi-bloco" data-bloco="texto" hidden>
-        <div class="vsi-busca">
-          <div class="field" style="flex:1;margin:0">
+        <div class="field campo-add campo-add-alto" style="margin:0">
+          <div class="campo-add-corpo">
             <label for="vsi-texto">O que você viu</label>
             <textarea id="vsi-texto" rows="3" maxlength="5000"
                       placeholder="Com as suas palavras — é este texto que vira o FATO na peça."
@@ -1630,17 +1633,20 @@
         </div>
         <div class="vsi-busca" style="margin-top:8px">
           <div class="ac-wrap" style="flex:1;min-width:0">
-            <div class="field" style="margin:0">
-              <label for="vsi-artigo-busca">Artigo infringido</label>
-              <input type="text" id="vsi-artigo-busca" autocomplete="off"
-                     placeholder="Digite para buscar o artigo…"
-                     oninput="buscarArtigo(this.value)"
-                     onfocus="buscarArtigo(this.value)"
-                     onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+            <div class="field campo-add" style="margin:0">
+              <div class="campo-add-corpo">
+                <label for="vsi-artigo-busca">Artigo infringido</label>
+                <input type="text" id="vsi-artigo-busca" autocomplete="off"
+                       placeholder="Digite para buscar o artigo…"
+                       oninput="buscarArtigo(this.value)"
+                       onfocus="buscarArtigo(this.value)"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+              </div>
+              <button type="button" class="btn out-verde sm"
+                      onclick="adicionarArtigoAoItem()">+add</button>
             </div>
             <div class="ac-list" id="vsi-artigo-sugestoes"></div>
           </div>
-          <button type="button" class="btn out-verde sm" onclick="adicionarArtigoAoItem()">+add</button>
         </div>
         {{-- O campo "Observação" saiu: o que se tem a dizer sobre o artigo é o
              relato do item, e um segundo lugar para escrever a mesma coisa só
@@ -1648,19 +1654,31 @@
         <div class="vsi-nota" id="vsi-artigo-nota" hidden></div>
       </div>
 
-      {{-- 4 — EXIGÊNCIAS --}}
+      {{-- 4 — EXIGÊNCIAS.
+           Os dois campos e o "+add" NUMA LINHA SÓ. O botão cinza embaixo, com
+           a largura do próprio texto, sobrava no canto esquerdo sem se ligar a
+           nada — e era o único "+ add" do sistema fora do padrão dos outros
+           três. O prazo é curto por natureza (três dígitos bastam) e cede a
+           largura à providência, que é uma frase. --}}
       <div class="vsi-bloco" data-bloco="exigencias" hidden>
-        <div class="g2">
-          <div class="field" style="margin:0">
+        <div class="vsi-linha-lei">
+          <div class="field" style="flex:1;min-width:0;margin:0">
             <label for="vsi-exig-texto">Providência exigida</label>
-            <input type="text" id="vsi-exig-texto" maxlength="500">
+            <input type="text" id="vsi-exig-texto" maxlength="500"
+                   placeholder="O que o responsável tem de fazer"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarExigenciaAoItem()}">
           </div>
-          <div class="field" style="margin:0;max-width:120px">
-            <label for="vsi-exig-prazo">Prazo (dias)</label>
-            <input type="number" id="vsi-exig-prazo" class="mono" min="1" max="3650">
+          <div class="field campo-add vsi-campo-curto" style="margin:0">
+            <div class="campo-add-corpo">
+              <label for="vsi-exig-prazo">Prazo (dias)</label>
+              <input type="number" id="vsi-exig-prazo" class="mono" min="1" max="3650"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarExigenciaAoItem()}">
+            </div>
+            <button type="button" class="btn out-verde sm"
+                    onclick="adicionarExigenciaAoItem()">+add</button>
           </div>
         </div>
-        <button type="button" class="btn sm" onclick="adicionarExigenciaAoItem()" style="margin-top:8px">+ add</button>
+        <div class="vsi-nota">O prazo é opcional — sem ele, a exigência entra sem contagem.</div>
       </div>
 
       {{-- 5 — FOTOS. A ABA SÓ ADICIONA, como as outras quatro: a lista do que
