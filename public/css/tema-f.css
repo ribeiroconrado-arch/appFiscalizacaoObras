@@ -437,12 +437,21 @@ body.login-bg{
    de `.tela` e o painel passaria a aparecer POR CIMA das outras abas. */
 #t-painel.at{display:flex;flex-direction:column;gap:14px}
 
-/* Duas colunas quando cabem, uma quando não cabem. 900px é onde duas colunas
-   de lista ainda leem sem quebrar cada linha em duas — medido, não escolhido. */
+/* TRÊS, DUAS OU UMA COLUNA, conforme a largura — e a atividade é a que cede.
+   900px é onde duas colunas de lista ainda leem sem quebrar cada linha em
+   duas; abaixo disso, empilham. Entre 900 e 1240 a atividade atravessa a
+   linha inteira embaixo das duas: ela é a mais larga das três (nome do
+   registro à esquerda, data à direita) e a primeira a ficar ilegível quando
+   espremida. De 1240 para cima cabem as três lado a lado. */
 .painel-duo{display:flex;flex-direction:column;gap:14px}
 .painel-duo > *{min-width:0}
 @media(min-width:900px){
   .painel-duo{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+  .painel-feed{grid-column:1 / -1}
+}
+@media(min-width:1240px){
+  .painel-duo{grid-template-columns:1fr 1fr 1fr}
+  .painel-feed{grid-column:auto}
 }
 
 /* O dashboard é um agrupamento, não um cartão: os cartões estão dentro dele.

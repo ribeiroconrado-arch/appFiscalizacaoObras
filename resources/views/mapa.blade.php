@@ -131,9 +131,12 @@
        por período, bairro ou agente. Deixá-los no topo dava a entender o
        contrário. --}}
 
-  {{-- FAIXA 1 — as duas listas de AÇÃO, lado a lado.
-       Ficam juntas porque se comparam: uma é o que o sistema avisa, a outra é
-       o que ele cobra. Em tela estreita empilham nesta mesma ordem. --}}
+  {{-- FAIXA 1 — as TRÊS listas do dia, lado a lado.
+       Ficam juntas porque se leem juntas: uma é o que o sistema avisa, outra o
+       que ele cobra, a terceira o que já foi feito. Em monitor largo cabem as
+       três na mesma linha e a manhã inteira se lê sem rolar; em tela média a
+       atividade desce para baixo das duas (é a que menos urge), e no celular
+       empilham nesta mesma ordem. --}}
   <div class="painel-duo">
     <div class="bloco">
       <div class="sec-simples">Avisos <span class="cont" id="pn-avisos-n">0</span></div>
@@ -148,15 +151,13 @@
            protocolos sob minha responsabilidade — ver PainelController::atencao. --}}
       <div id="pn-atencao"></div>
     </div>
-  </div>
 
-  {{-- FAIXA 2 — a linha do tempo, em largura cheia: ela se lê de corrida, e
-       não item a item, então ganha com a largura que as listas não precisam. --}}
-  <div class="bloco">
-    <div class="sec-simples">Atividade recente</div>
-    {{-- Alimentada pela tabela de auditoria — a mesma trilha que responde
-         "quem fez o quê" no processo administrativo, não um log paralelo. --}}
-    <div class="feed" id="pn-recentes"></div>
+    <div class="bloco painel-feed">
+      <div class="sec-simples">Atividade recente</div>
+      {{-- Alimentada pela tabela de auditoria — a mesma trilha que responde
+           "quem fez o quê" no processo administrativo, não um log paralelo. --}}
+      <div class="feed" id="pn-recentes"></div>
+    </div>
   </div>
 
   {{-- FAIXA 3 — o dashboard, com os filtros que valem só para ele. --}}
