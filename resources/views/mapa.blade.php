@@ -1245,6 +1245,29 @@
 
     {{-- ── 1 · IDENTIFICAÇÃO ── --}}
     <div class="vs-painel at" id="nv-p-id" data-passo="id">
+      {{-- O IMÓVEL PODE SER ESCOLHIDO AQUI, e não só no mapa. "Novo documento"
+           oferece cinco peças; quatro abriam sem imóvel e a vistoria era a
+           única que recusava com "selecione um lote no mapa" — obrigando a
+           fechar o menu, achar o lote no mapa e recomeçar. O localizador é o
+           MESMO da aba Imóvel do formulário de documento (rota
+           /api/imoveis/busca), e some assim que o imóvel é conhecido. --}}
+      <div id="nv-imovel-escolha" hidden>
+        <div class="vs-aviso">Vistoria é de um imóvel: escolha qual, ou selecione um lote no mapa.</div>
+        <div class="vsi-busca">
+          <div class="field campo-add" style="flex:1;margin:0">
+            <div class="campo-add-corpo">
+              <label for="nv-imovel-termo">Imóvel</label>
+              <input type="text" id="nv-imovel-termo" autocomplete="off"
+                     placeholder="Inscrição imobiliária ou “quadra lote”"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();procurarImovelVistoria()}">
+            </div>
+            <button type="button" class="btn out-verde sm"
+                    onclick="procurarImovelVistoria()">Localizar</button>
+          </div>
+        </div>
+        <div id="nv-imovel-resultado" class="vsi-nota"></div>
+      </div>
+
       {{-- Data + hora como UM campo visual, dois inputs nativos por baixo.
            Nunca datetime-local: mistura os dois no formato do SO. --}}
       <div class="data-hora-combo">

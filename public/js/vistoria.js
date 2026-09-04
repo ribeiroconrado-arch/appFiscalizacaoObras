@@ -303,11 +303,20 @@ function usarAreaDesenhada(area) {
   }
   toast('Área do desenho copiada. Confira o método de obtenção.', 'aviso')
 }
+/**
+ * Abre a vistoria.
+ *
+ * SEM LOTE SELECIONADO ELA ABRE ASSIM MESMO, com o localizador de imóvel no
+ * passo 1. As outras quatro peças do menu "Novo documento" já nasciam sem
+ * imóvel; a vistoria era a única que recusava, e quem escolhia por engano
+ * tinha de fechar o menu, achar o lote no mapa e recomeçar. O imóvel continua
+ * obrigatório para GRAVAR — é vistoria de alguma coisa —, mas isso se cobra
+ * na hora de gravar, não na de abrir.
+ */
 async function novaVistoria() {
   const f = state.selecionado
-  if (!f) { toast('Selecione um lote no mapa', 'err'); return }
 
-  vState.lote = f.properties
+  vState.lote = f ? f.properties : null
   // Trava a gravação do rascunho durante a montagem. Sem isto, o primeiro
   // irPasso() da abertura salvava a tela ainda VAZIA por cima do rascunho que
   // ele estava justamente indo buscar — o trabalho de campo era apagado pelo
@@ -316,8 +325,7 @@ async function novaVistoria() {
   zerarVistoria()
   fModalBtn('m-ficha')
 
-  document.getElementById('nv-lote').textContent =
-    `${f.properties.bairro} · Quadra ${f.properties.quadra ?? '—'} · Lote ${f.properties.numero_lote ?? '—'}`
+  pintarImovelDaVistoria()
 
   // Data e hora já preenchidas com o momento da abertura — o fiscal está em
   // campo, e digitar data no celular é o que ele menos quer fazer.
@@ -338,13 +346,91 @@ async function novaVistoria() {
   irPasso('id')
   oferecerRascunho()
   vState.abrindo = false
-  // Sem `await`: a sugestão da área desenhada é conveniência, e a vistoria não
-  // pode esperar por ela para abrir — o fiscal está em campo, muitas vezes com
-  // rede ruim, e a tela tem de subir mesmo que esta consulta demore ou falhe.
-  oferecerAreaDesenhada(f.properties.id)
-  await carregarProtocolosCadastrais(f.properties.id)
+  // O catálogo não depende do imóvel e é o que a janela precisa para trabalhar.
   await carregarCatalogo()
   openModal('m-vistoria')
+
+  // Só o que depende do imóvel, e só quando há um.
+  if (vState.lote) { await carregarDadosDoImovel() }
+}
+
+/**
+ * O que a tela busca DEPOIS de saber qual é o imóvel — área desenhada e
+ * protocolos cadastrais pendentes.
+ *
+ * Separado da abertura porque o imóvel pode chegar depois, pelo localizador do
+ * passo 1. Sem `await` na área: é conveniência, e a vistoria não pode esperar
+ * por ela — o fiscal está em campo, muitas vezes com rede ruim.
+ */
+async function carregarDadosDoImovel() {
+  const id = vState.lote?.id
+  if (!id) { return }
+  oferecerAreaDesenhada(id)
+  await carregarProtocolosCadastrais(id)
+}
+
+/**
+ * Mostra o imóvel no cabeçalho — ou abre o localizador, quando não há um.
+ */
+function pintarImovelDaVistoria() {
+  const l = vState.lote
+  const escolha = document.getElementById('nv-imovel-escolha')
+
+  document.getElementById('nv-lote').textContent = l
+    ? `${l.bairro} · Quadra ${l.quadra ?? '—'} · Lote ${l.numero_lote ?? '—'}`
+    : 'Imóvel não identificado'
+
+  if (escolha) { escolha.hidden = !!l }
+}
+
+/** Busca o imóvel pela inscrição ou por "quadra lote" — a mesma rota do documento. */
+async function procurarImovelVistoria() {
+  const termo = document.getElementById('nv-imovel-termo').value.trim()
+  const saida = document.getElementById('nv-imovel-resultado')
+  if (!termo) { saida.textContent = 'Digite a inscrição imobiliária ou “quadra lote”.'; return }
+
+  saida.textContent = 'Procurando…'
+  try {
+    const r = await fetch('/api/imoveis/busca?' + new URLSearchParams({ termo }),
+      { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    if (!r.ok) { throw new Error(d.message || 'HTTP ' + r.status) }
+    if (!d.imoveis.length) { saida.textContent = 'Nenhum imóvel encontrado.'; return }
+
+    // Guardados para o clique: é daqui que sai o imóvel, sem nova consulta.
+    vState.imoveisBuscados = d.imoveis
+
+    saida.innerHTML = d.imoveis.slice(0, 12).map(i => `
+      <button type="button" class="doc-imovel-op" onclick="vincularImovelVistoria(${i.id})">
+        <b>${esc(i.inscricao || 'sem inscrição')}</b>
+        ${esc(i.bairro || '')} · Q ${esc(i.quadra ?? '—')} · Lt ${esc(i.lote ?? '—')}
+      </button>`).join('')
+      + (d.total > 12 ? '<div class="leg">' + d.total + ' acertos — refine o termo.</div>' : '')
+  } catch (e) {
+    console.error(e)
+    saida.textContent = e.message || 'Falha na busca.'
+  }
+}
+
+/**
+ * Amarra a vistoria ao imóvel escolhido na busca.
+ *
+ * Sem segunda consulta: o resumo da busca já traz tudo que o formulário lê
+ * daqui — o id (que vai na URL de gravação), o bairro e a quadra/lote (que
+ * aparecem no cabeçalho e na confirmação). O resto a vistoria não usa.
+ *
+ * @param {number} id
+ */
+async function vincularImovelVistoria(id) {
+  const i = (vState.imoveisBuscados || []).find(x => x.id === id)
+  if (!i) { return }
+
+  vState.lote = { id, bairro: i.bairro, quadra: i.quadra, numero_lote: i.lote }
+
+  document.getElementById('nv-imovel-resultado').innerHTML = ''
+  document.getElementById('nv-imovel-termo').value = ''
+  pintarImovelDaVistoria()
+  await carregarDadosDoImovel()
 }
 
 /** Devolve o formulário ao estado de folha em branco. */
@@ -353,6 +439,13 @@ function zerarVistoria() {
   vState.anexos = []
   vState.relatorio = []
   vState.itemAberto = null
+  vState.imoveisBuscados = []
+  // A busca de imóvel não pode sobreviver à vistoria anterior: os acertos da
+  // outra ficariam à vista, prontos para serem clicados por engano.
+  const termo = document.getElementById('nv-imovel-termo')
+  if (termo) { termo.value = '' }
+  const achados = document.getElementById('nv-imovel-resultado')
+  if (achados) { achados.innerHTML = '' }
   vState.artigos = []
   vState.semArtigo = []
   vState.finalidade = 'obras'
@@ -2642,6 +2735,15 @@ function gravarVistoria() {
   const marcadas = irregularidadesDaVistoria()
   const situacao = document.getElementById('nv-situacao').value
 
+  // O IMÓVEL É COBRADO AQUI, e não na abertura: a janela abre sem ele para que
+  // se possa começar a escrever, mas vistoria é vistoria DE alguma coisa, e a
+  // gravação vai para /api/lotes/{id}/vistorias.
+  if (!vState.lote?.id) {
+    irPasso('id')
+    document.getElementById('nv-imovel-termo')?.focus()
+    toast('Escolha o imóvel desta vistoria', 'err')
+    return
+  }
   if (!document.getElementById('nv-datahora').value) {
     irPasso('id'); toast('Informe data e hora da vistoria', 'err'); return
   }
