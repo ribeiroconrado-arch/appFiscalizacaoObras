@@ -2156,17 +2156,32 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    filtro é INSTANTÂNEO, então não há "Buscar" — a lista já respondeu. Fica o
    "Limpar", que é o que ninguém consegue fazer sozinho quando quatro
    seletores estão combinados. */
-.lista-form .filtro-barra{margin-bottom:0}
-/* Dentro do invólucro o funil não tem o rótulo "Filtros" ao lado, então
-   perde a margem que o separava da linha de baixo e o contador vira selo no
-   canto, como no botão do mapa. */
+/* O ESPAÇO ENTRE AS FAIXAS VEM DO `gap`, e não da margem de cada uma.
+   Zerar as margens de dentro — que foi a primeira tentativa — colou a busca
+   nos seletores: cada bloco perdeu o respiro e nada o devolveu. Com o
+   invólucro em coluna, o vão é UM só, igual entre todos, e some sozinho
+   quando um bloco não é exibido (a faixa larga no celular, as etiquetas
+   quando não há filtro aplicado). */
+.lista-form{display:flex;flex-direction:column;gap:11px}
+/* Os alvos vêm NOMEADOS, e não por `.lista-form > *`: o seletor universal tem
+   a mesma especificidade das regras que zera, e perdia para as que vêm
+   depois no arquivo — a margem de 9px da barra de busca sobrevivia e somava
+   ao gap. */
+.lista-form .filtro-barra,
+.lista-form .filtros-lista,
+.lista-form .doc-filtro-larga,
+.lista-form .filtro-chips{margin-bottom:0;margin-top:0}
+/* No celular `.filtros-lista` é `display:contents` — as linhas viram itens do
+   invólucro sem serem filhas DELE no DOM, então o `> *` acima não as alcança
+   e a margem delas somaria ao gap. */
+.lista-form .linha-filtro{margin-bottom:0}
+.lista-form-acoes{margin:0;justify-content:flex-end}
+.lista-form-acoes:empty{display:none}
+
+/* Dentro do invólucro o funil não tem o rótulo "Filtros" ao lado: o contador
+   vira selo no canto, como no botão do mapa. */
 .lista-form .bs-mais{position:relative;margin-bottom:0;align-self:stretch;height:auto}
 .lista-form .bs-mais .filtro-cont{position:absolute;top:-6px;right:-6px}
-.lista-form .filtros-lista{margin-bottom:0}
-.lista-form .doc-filtro-larga{margin-bottom:0}
-.lista-form .filtro-chips:not(:empty){margin-top:10px}
-.lista-form-acoes{margin:12px 0 0;justify-content:flex-end}
-.lista-form-acoes:empty{display:none}
 
 .filtro-barra{display:flex;gap:8px;margin-bottom:9px;align-items:stretch}
 .filtro-busca{flex:1;min-width:0;display:flex;align-items:center;gap:8px;

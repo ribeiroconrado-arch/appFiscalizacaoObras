@@ -276,6 +276,15 @@ function limparFiltrosDoc() {
   // "Meus documentos" é o padrão da tela, não a ausência de filtro: limpar
   // para "todos" mudaria o que o fiscal vê ao abrir, que não é o pedido.
   dState.filtros.agente = 'eu'
+
+  // A BUSCA TAMBÉM. Ela não está em `ROTULOS_FILTRO` — não vira etiqueta,
+  // porque o texto já está à vista no próprio campo —, e por isso escapava
+  // do laço acima: "Limpar" devolvia os seletores ao padrão e deixava o termo
+  // digitado filtrando a lista, sem nada na tela explicando por quê.
+  dState.filtros.busca = ''
+  const campo = document.getElementById('doc-busca')
+  if (campo) { campo.value = '' }
+
   fModalBtn('m-doc-filtros')
   carregarDocumentos()
 }
