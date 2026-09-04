@@ -1037,6 +1037,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    bairro ocupando três quartos da linha enquanto quadra e lote ficavam com
    64px cada. Passando de 460px ele não fica mais legível, só mais largo. */
 .bc-bairro{flex:1 1 200px;min-width:0;max-width:460px}
+/* O logradouro é o outro campo de texto longo da linha. Divide a sobra com o
+   bairro, com o mesmo teto: nome de rua não passa disso. */
+.bc-logr{flex:1 1 200px;min-width:0;max-width:460px;position:relative}
+.bc-logr .field{margin-bottom:9px}
+
+/* Lista fechada que pode estar VAZIA — e aí a razão é dita, em vez de o
+   dropdown abrir em branco e parecer defeito. */
+.ac-vazio{padding:9px 11px;font-size:11.5px;line-height:1.45;color:var(--tx2)}
 .bc-num{flex:0 0 64px}   /* 1/3 dos 190px originais — cabem 3 dígitos e o rótulo */
 .bc-insc{flex:0 0 184px}   /* 10% sobre os 167px, que ainda apertavam a inscrição */
 

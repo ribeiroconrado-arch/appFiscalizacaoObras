@@ -67,6 +67,9 @@ Route::middleware('auth')->group(function () {
         // um lote NOVO — e lote novo pode ser o primeiro do bairro dele.
         Route::get('/imoveis/bairros', [BuscaController::class, 'bairros']);
         Route::get('/bairros', [BuscaController::class, 'bairrosDoMunicipio']);
+        // As ruas que a busca pode achar — só as dos bairros cujo cadastro já
+        // foi carregado e amarrado. Ver BuscaController::logradouros.
+        Route::get('/imoveis/logradouros', [BuscaController::class, 'logradouros']);
         Route::get('/imoveis/busca', [BuscaController::class, 'buscar']);
         Route::get('/imoveis/pins', [BuscaController::class, 'pins']);
         // Depois das rotas fixas: registrada antes, a curinga engoliria

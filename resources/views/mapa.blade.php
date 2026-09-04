@@ -507,11 +507,25 @@
         <input type="text" id="bs-inscricao" class="mono" maxlength="40"
                placeholder="01.105.024.0009.000" oninput="marcarPrecedencia()">
       </div>
-      <div class="field bc-bairro">
-        <label for="bs-bairro">Bairro / loteamento</label>
-        <select id="bs-bairro" onchange="marcarPrecedencia()">
-          <option value="">— todos —</option>
-        </select>
+      {{-- LOGRADOURO E NÚMERO vêm do cadastro da prefeitura, não do desenho: o
+           DWG traz o polígono, a quadra e o lote, e nunca o nome da rua. O
+           combo só oferece ruas que PODEM achar alguma coisa — as dos bairros
+           cujo cadastro já foi carregado e amarrado (ver /api/imoveis/
+           logradouros). Oferecer o resto seria oferecer busca vazia. --}}
+      <div class="ac-wrap bc-logr">
+        <div class="field">
+          <label for="bs-logradouro">Logradouro</label>
+          <input type="text" id="bs-logradouro" autocomplete="off"
+                 placeholder="Digite para buscar a rua…"
+                 oninput="buscarLogradouro(this.value); marcarPrecedencia()"
+                 onfocus="buscarLogradouro(this.value)">
+        </div>
+        <div class="ac-list" id="bs-logr-sugestoes"></div>
+      </div>
+      <div class="field bc-num">
+        <label for="bs-numero">Número</label>
+        <input type="text" id="bs-numero" class="mono" inputmode="numeric" maxlength="12"
+               placeholder="1300" oninput="marcarPrecedencia()">
       </div>
       <div class="field bc-num">
         <label for="bs-quadra">Quadra</label>
@@ -522,6 +536,15 @@
         <label for="bs-lote">Lote</label>
         <input type="text" id="bs-lote" class="mono" inputmode="numeric" maxlength="20"
                placeholder="9" oninput="marcarPrecedencia()">
+      </div>
+      {{-- O bairro fecha a linha, encostado no funil: é o filtro mais LARGO e
+           o menos específico dos cinco — quem sabe a rua ou a quadra não
+           precisa dele, e quem só tem o bairro começa por ele mesmo. --}}
+      <div class="field bc-bairro">
+        <label for="bs-bairro">Bairro / loteamento</label>
+        <select id="bs-bairro" onchange="marcarPrecedencia()">
+          <option value="">— todos —</option>
+        </select>
       </div>
 
       {{-- Mais filtros recolhidos: são de uso ocasional e ocupariam a linha

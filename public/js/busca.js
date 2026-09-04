@@ -13,6 +13,12 @@
 
 const bState = {
   /** @type {string[]|null} carregado uma vez por sessão */ bairros: null,
+  /**
+   * As ruas que a busca PODE achar — só as dos bairros cujo cadastro já foi
+   * carregado e amarrado. Ver BuscaController::logradouros.
+   * @type {string[]|null}
+   */
+  logradouros: null,
   /** @type {Array<Object>} */ resultado: [],
 }
 
@@ -31,10 +37,82 @@ async function prepararBusca() {
   }
 }
 
-function limparBusca() {
-  for (const id of ['bs-bairro', 'bs-quadra', 'bs-lote', 'bs-inscricao', 'bs-bci-de', 'bs-bci-ate', 'bs-vistoria']) {
-    document.getElementById(id).value = ''
+// ── COMBOBOX DE LOGRADOURO ───────────────────────────────────
+//
+// O logradouro NÃO VEM DO DESENHO: o DWG traz o polígono, a quadra e o lote,
+// e nunca o nome da rua. Ele vem do cadastro da prefeitura, e chega ao lote
+// pelo casamento bairro + quadra + lote.
+//
+// Por isso a lista é fechada — só oferece rua que pode achar alguma coisa — e
+// por isso ela pode estar VAZIA: enquanto não houver bairro com cadastro
+// carregado e amarrado, não há rua nenhuma a oferecer. Nesse caso o combo diz
+// isso, em vez de abrir vazio e parecer defeito.
+
+/** Carrega as ruas uma vez por sessão. */
+async function carregarLogradouros() {
+  if (bState.logradouros) { return bState.logradouros }
+  try {
+    const r = await fetch('/api/imoveis/logradouros', { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    bState.logradouros = d.logradouros ?? []
+  } catch (e) {
+    console.error(e)
+    bState.logradouros = []
   }
+  return bState.logradouros
+}
+
+/** @param {string} texto */
+async function buscarLogradouro(texto) {
+  const alvo = document.getElementById('bs-logr-sugestoes')
+  if (!alvo) { return }
+
+  const ruas = await carregarLogradouros()
+  const q = texto.trim().toLowerCase()
+
+  if (!ruas.length) {
+    alvo.classList.add('open')
+    alvo.innerHTML = '<div class="ac-vazio">Nenhum logradouro disponível — '
+      + 'depende de carregar o cadastro da prefeitura do bairro.</div>'
+    return
+  }
+
+  const achados = (q ? ruas.filter(r => r.toLowerCase().includes(q)) : ruas).slice(0, 10)
+
+  alvo.classList.toggle('open', achados.length > 0)
+  alvo.innerHTML = achados.map(r =>
+    `<button type="button" class="ac-item" onclick="escolherLogradouro(${JSON.stringify(r).replace(/"/g, '&quot;')})">
+       <b>${esc(r)}</b></button>`).join('')
+}
+
+/** @param {string} rua */
+function escolherLogradouro(rua) {
+  document.getElementById('bs-logradouro').value = rua
+  fecharListaLogradouro()
+  marcarPrecedencia()
+}
+
+function fecharListaLogradouro() {
+  const alvo = document.getElementById('bs-logr-sugestoes')
+  if (!alvo) { return }
+  alvo.classList.remove('open')
+  alvo.innerHTML = ''
+}
+
+// Clicar fora fecha — é o que se espera de um dropdown.
+document.addEventListener('mousedown', ev => {
+  if (!ev.target.closest('#bs-logr-sugestoes') && !ev.target.closest('.bc-logr')) {
+    fecharListaLogradouro()
+  }
+})
+
+function limparBusca() {
+  for (const id of ['bs-bairro', 'bs-quadra', 'bs-lote', 'bs-inscricao',
+                    'bs-logradouro', 'bs-numero', 'bs-bci-de', 'bs-bci-ate', 'bs-vistoria']) {
+    const e = document.getElementById(id)
+    if (e) { e.value = '' }
+  }
+  fecharListaLogradouro()
   for (const id of ['bs-embargo', 'bs-pendente', 'bs-sem-vistoria', 'bs-baixados']) {
     const e = document.getElementById(id)
     if (e) { e.checked = false }
@@ -110,7 +188,8 @@ async function executarBusca() {
     p.set('inscricao', v('bs-inscricao'))
   } else {
     for (const [campo, id] of [['bairro', 'bs-bairro'], ['quadra', 'bs-quadra'],
-                               ['lote', 'bs-lote'], ['vistoria', 'bs-vistoria']]) {
+                               ['lote', 'bs-lote'], ['vistoria', 'bs-vistoria'],
+                               ['logradouro', 'bs-logradouro'], ['numero', 'bs-numero']]) {
       if (v(id)) p.set(campo, v(id))
     }
     if (document.getElementById('bs-embargo').checked) p.set('embargo', '1')

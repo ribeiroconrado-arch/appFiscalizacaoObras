@@ -38,6 +38,8 @@ class BuscaController extends Controller
             'bairro'        => ['nullable', 'string', 'max:120'],
             'quadra'        => ['nullable', 'string', 'max:20'],
             'lote'          => ['nullable', 'string', 'max:20'],
+            'logradouro'    => ['nullable', 'string', 'max:180'],
+            'numero'        => ['nullable', 'string', 'max:20'],
             'inscricao'     => ['nullable', 'string', 'max:40'],
             'inscricao_de'  => ['nullable', 'string', 'max:40'],
             'inscricao_ate' => ['nullable', 'string', 'max:40'],
@@ -121,6 +123,59 @@ class BuscaController extends Controller
     private function bairroOficial(?string $doDesenho): ?string
     {
         return ($this->bairros ??= new BairrosDoDesenho())->oficial($doDesenho);
+    }
+
+    /**
+     * Os imóveis do cadastro que casam com a rua e/ou o número procurados,
+     * traduzidos para o que o LOTE entende.
+     *
+     * Devolve tripas `[nomes-de-desenho-do-bairro, quadra, lote]` — a quadra e
+     * o lote já sem zero à esquerda, que é como o desenho os guarda.
+     *
+     * Só considera bairro AMARRADO: sem a amarração não há como saber a que
+     * nome de desenho aquele código corresponde, e o resultado seria um par
+     * (quadra, lote) solto — que existe em mais de um bairro da cidade e
+     * amarraria a busca ao imóvel errado.
+     *
+     * @return array<int, array{0:array<int,string>, 1:string, 2:string}>
+     */
+    private function cadastroQueCasa(string $logradouro, string $numero): array
+    {
+        $porCodigo = [];
+        foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->get() as $b) {
+            $porCodigo[ltrim((string) $b->codigo, '0')][] = $b->nome_gis;
+        }
+        if (! $porCodigo) {
+            return [];
+        }
+
+        $q = DB::table('cadastro_externo_imoveis')
+            ->whereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), array_keys($porCodigo));
+
+        // A rua casa por PEDAÇO — quem digita "babaçu" não devia precisar
+        // saber que o cadastro grava "AV BABAÇU".
+        if ($logradouro !== '') { $q->where('logradouro', 'like', '%' . $logradouro . '%'); }
+        // O número casa EXATO, sem zero à esquerda: é identificação, não busca.
+        if ($numero !== '') {
+            $q->whereRaw("TRIM(LEADING '0' FROM numero_predial) = ?", [ltrim($numero, '0')]);
+        }
+
+        // Teto de segurança: uma avenida inteira pode ter centenas de imóveis,
+        // e cada um vira uma condição OR na consulta do lote.
+        $linhas = $q->limit(600)->get(['codigo_bairro', 'quadra', 'lote']);
+
+        $pares = [];
+        foreach ($linhas as $l) {
+            $cod = ltrim((string) $l->codigo_bairro, '0');
+            if (! isset($porCodigo[$cod])) { continue; }
+            $pares[] = [
+                $porCodigo[$cod],
+                ltrim((string) $l->quadra, '0'),
+                ltrim((string) $l->lote, '0'),
+            ];
+        }
+
+        return $pares;
     }
 
     /**
@@ -311,6 +366,34 @@ class BuscaController extends Controller
         if (! empty($d['quadra'])) { $q->where('quadra', $d['quadra']); $usou = true; }
         if (! empty($d['lote']))   { $q->where('numero_lote', $d['lote']); $usou = true; }
 
+        // ── LOGRADOURO E NÚMERO ──
+        //
+        // Vêm do CADASTRO DA PREFEITURA, não do desenho: o DWG não traz nome
+        // de rua. O caminho até o lote é o mesmo casamento de
+        // `CadastroCarregado::linhasDoLote` — bairro + quadra + lote, todos
+        // sem zero à esquerda —, e é por isso que só acha imóvel de bairro
+        // cujo cadastro foi carregado E amarrado.
+        if (! empty($d['logradouro']) || ! empty($d['numero'])) {
+            $pares = $this->cadastroQueCasa($d['logradouro'] ?? '', $d['numero'] ?? '');
+
+            if (! $pares) {
+                $q->whereRaw('1 = 0');
+            } else {
+                // Os pares (bairro-do-desenho, quadra, lote) viram uma
+                // condição OR só: são poucos por rua, e assim a comparação
+                // acontece nas colunas do lote, com os índices que já existem.
+                $q->where(function ($s) use ($pares) {
+                    foreach ($pares as [$bairros, $quadra, $lote]) {
+                        $s->orWhere(fn ($x) => $x
+                            ->whereIn('bairro', $bairros)
+                            ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [$quadra])
+                            ->whereRaw("TRIM(LEADING '0' FROM numero_lote) = ?", [$lote]));
+                    }
+                });
+            }
+            $usou = true;
+        }
+
         // Situação da última vistoria — não de qualquer uma. Um imóvel
         // regularizado depois de irregular não deve aparecer como irregular.
         if (! empty($d['vistoria'])) {
@@ -411,6 +494,42 @@ class BuscaController extends Controller
             ->values();
 
         return response()->json(['bairros' => $nomes]);
+    }
+
+    /**
+     * GET /api/imoveis/logradouros
+     *
+     * As ruas que a busca PODE encontrar.
+     *
+     * O logradouro não existe no desenho: o DWG traz o polígono, a quadra e o
+     * lote, e nunca o nome da rua. Ele vem do cadastro da prefeitura, e só
+     * chega a um lote pelo casamento bairro + quadra + lote — o mesmo de
+     * `CadastroCarregado`.
+     *
+     * Por isso a lista sai FILTRADA pelos bairros amarrados: oferecer a rua de
+     * um bairro cujo cadastro ninguém carregou é oferecer uma busca que
+     * devolve vazio, e o vazio pareceria defeito do sistema. Quando não houver
+     * nenhuma, quem responde é a tela — ver `buscarLogradouro`.
+     */
+    public function logradouros(): JsonResponse
+    {
+        $codigos = DB::table('cadastro_bairros')
+            ->whereNotNull('nome_gis')
+            ->pluck('codigo')
+            ->map(fn ($c) => ltrim((string) $c, '0'))
+            ->all();
+
+        if (! $codigos) {
+            return response()->json(['logradouros' => []]);
+        }
+
+        $ruas = DB::table('cadastro_externo_imoveis')
+            ->whereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), $codigos)
+            ->whereNotNull('logradouro')->where('logradouro', '<>', '')
+            ->distinct()->orderBy('logradouro')
+            ->pluck('logradouro');
+
+        return response()->json(['logradouros' => $ruas]);
     }
 
     /**
