@@ -20,16 +20,56 @@ use Illuminate\Support\Facades\DB;
  */
 class BairrosDoDesenho
 {
-    /** @var array<string,string>|null nome no desenho => código no cadastro */
+    /** @var array<string,string>|null chave normalizada => código no cadastro */
     private ?array $codigos = null;
 
-    /** @return array<string,string> */
+    /**
+     * O mapa, com as chaves NORMALIZADAS.
+     *
+     * ── Por que normalizar, e o que isso custou para aprender ──
+     *
+     * A busca por bairro sempre foi um `WHERE nome_gis = ?` no MySQL, e as
+     * colunas são `utf8mb4_..._ci`: comparação SEM diferença de maiúsculas.
+     * Quem digitou "RESIDENCIAL BURITIS V" em Parâmetros casava com o
+     * "Residencial Buritis V" do desenho, e ninguém precisou pensar nisso.
+     *
+     * Trazer o mapa para a memória — que é o que evita uma consulta por lote —
+     * trocou a comparação do banco por índice de array PHP, que é byte a byte.
+     * A amarração feita em produção parou de valer da noite para o dia, sem
+     * erro nenhum: a inscrição simplesmente sumiu de todas as telas. Otimizar
+     * mudou a SEMÂNTICA junto com o desempenho, que é o modo mais silencioso
+     * de quebrar uma coisa.
+     *
+     * `chave()` refaz aqui o que a colação fazia lá: caixa e acento não
+     * distinguem bairro nenhum, e quem preenche o campo à mão não deveria ter
+     * de acertar os dois.
+     *
+     * @return array<string,string>
+     */
     public function codigos(): array
     {
-        return $this->codigos ??= DB::table('cadastro_bairros')
-            ->whereNotNull('nome_gis')
-            ->pluck('codigo', 'nome_gis')
-            ->all();
+        if ($this->codigos !== null) {
+            return $this->codigos;
+        }
+
+        $this->codigos = [];
+        foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->get() as $b) {
+            $this->codigos[self::chave($b->nome_gis)] = $b->codigo;
+        }
+
+        return $this->codigos;
+    }
+
+    /**
+     * A forma comparável de um nome de bairro: sem caixa, sem acento, sem
+     * espaço sobrando. É o que a colação do banco já fazia.
+     */
+    public static function chave(?string $nome): string
+    {
+        $n = trim((string) $nome);
+        $n = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $n) ?: $n;
+
+        return mb_strtolower(preg_replace('/\s+/', ' ', $n));
     }
 
     /**
@@ -51,7 +91,7 @@ class BairrosDoDesenho
         }
 
         return InscricaoImobiliaria::formatar(InscricaoImobiliaria::montar(
-            $this->codigos()[$l->bairro] ?? null,
+            $this->codigos()[self::chave($l->bairro ?? null)] ?? null,
             $l->quadra ?? null,
             $l->numero_lote ?? null,
             $l->desmembramento ?? 0
