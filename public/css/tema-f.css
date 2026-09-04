@@ -1019,7 +1019,12 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 #t-busca{position:fixed;top:68px;left:0;right:0;
   bottom:calc(80px + env(safe-area-inset-bottom));overflow-y:auto;padding:14px}
 @media(min-width:1024px){
-  #t-busca{max-width:1100px;margin:0 auto;padding:18px 20px 40px}
+  /* MESMA LARGURA DE DOCUMENTOS E PROTOCOLOS. As três são listas de
+     conferência com o mesmo desenho — filtro em caixa branca, resultado em
+     tabela —, e larguras diferentes faziam a página "pular" de tamanho ao
+     trocar de aba. O valor mora aqui e é repetido lá embaixo, no bloco de
+     1000px que essas duas usam; mexer numa é mexer nas duas. */
+  #t-busca{max-width:1610px;margin:0 auto;padding:18px 20px 40px}
 }
 
 /* Uma linha só. As larguras são proporcionais ao conteúdo real: quadra e lote
@@ -1027,7 +1032,11 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    para o bairro — o único campo com texto longo. */
 .busca-campos{display:flex;flex-wrap:wrap;gap:0 10px;align-items:stretch}
 .busca-campos .field{margin-bottom:9px}
-.bc-bairro{flex:1 1 200px;min-width:0}
+/* O bairro é o único campo de texto longo e por isso absorve a sobra — mas
+   com TETO: numa tela de 1610px ele chegava a 1142px, um seletor de nome de
+   bairro ocupando três quartos da linha enquanto quadra e lote ficavam com
+   64px cada. Passando de 460px ele não fica mais legível, só mais largo. */
+.bc-bairro{flex:1 1 200px;min-width:0;max-width:460px}
 .bc-num{flex:0 0 64px}   /* 1/3 dos 190px originais — cabem 3 dígitos e o rótulo */
 .bc-insc{flex:0 0 184px}   /* 10% sobre os 167px, que ainda apertavam a inscrição */
 
