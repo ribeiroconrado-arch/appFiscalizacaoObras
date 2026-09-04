@@ -11,6 +11,7 @@ use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
 use App\Models\VistoriaArtigo;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
@@ -520,6 +521,16 @@ class VistoriaController extends Controller
             // Marcações sobre a imagem, em JSON: [{n, x, y}] com x e y de 0 a 1.
             'marcacoes'          => ['array'],
             'marcacoes.*'        => ['nullable', 'string', 'max:4000'],
+            // QUANDO E ONDE CADA FOTO FOI FEITA — colunas que existiam desde a
+            // primeira migração e vinham preenchidas com os dados DA VISTORIA,
+            // iguais para todas. Chegam por índice, pareadas com evidencias[],
+            // e caem no valor da vistoria quando o aparelho não soube dizer.
+            'fotos_quando'       => ['array'],
+            'fotos_quando.*'     => ['nullable', 'date'],
+            'fotos_lat'          => ['array'],
+            'fotos_lat.*'        => ['nullable', 'numeric', 'between:-90,90'],
+            'fotos_lon'          => ['array'],
+            'fotos_lon.*'        => ['nullable', 'numeric', 'between:-180,180'],
 
             // ── a obra ──
             'acompanhante_nome'         => ['nullable', 'string', 'max:160'],
@@ -774,9 +785,15 @@ class VistoriaController extends Controller
                     // decodificado aqui, e descartado em silêncio se vier
                     // corrompido: marcação perdida não pode custar a foto.
                     'marcacoes'     => self::marcacoesDe($d['marcacoes'][$i] ?? null),
-                    'latitude'      => $d['latitude'] ?? null,
-                    'longitude'     => $d['longitude'] ?? null,
-                    'data_hora'     => str_replace('T', ' ', $d['data_hora']) . ':00',
+                    // A da FOTO quando o aparelho soube dizer; a da VISTORIA
+                    // como piso. Sem isso, toda evidência nascia com a hora do
+                    // lançamento e a coordenada de um ponto só — o que, num
+                    // processo, é justamente o que a foto deveria provar.
+                    'latitude'      => $d['fotos_lat'][$i] ?? $d['latitude'] ?? null,
+                    'longitude'     => $d['fotos_lon'][$i] ?? $d['longitude'] ?? null,
+                    'data_hora'     => isset($d['fotos_quando'][$i])
+                        ? Carbon::parse($d['fotos_quando'][$i])
+                        : str_replace('T', ' ', $d['data_hora']) . ':00',
                     'criado_por'    => $u->id,
                 ]);
             }

@@ -25,7 +25,20 @@ const vState = {
    */
   relatorio: [],
   /** @type {number|null} índice do item aberto na janela de edição */ itemAberto: null,
-  /** @type {number|null} índice da foto expandida (ver e marcar), só uma por vez */ fotoAberta: null,
+  /**
+   * A foto ESCOLHIDA E AINDA NÃO ANEXADA — a que está na ficha da aba Fotos,
+   * esperando legenda, fachada e marcas. Ela só entra no item no "+ add".
+   *
+   * `editando` guarda o índice quando a ficha foi aberta para CORRIGIR uma
+   * foto que já está no item: é o mesmo formulário, e por isso o mesmo estado.
+   *
+   * @type {{arquivo:File|null, url:string|null, titulo:string,
+   *         marcacoes:Array<{n:number,x:number,y:number}>,
+   *         quando:string|null, lat:number|null, lon:number|null,
+   *         editando:number|null}|null}
+   */
+  fotoPendente: null,
+  /** @type {Array<File>} escolhidas de uma vez, atendidas uma a uma */ filaFotos: [],
   /** @type {Array<Object>} artigos sugeridos pelas irregularidades marcadas */ artigos: [],
   /** @type {Array<string>} irregularidades que nenhum artigo enquadra */ semArtigo: [],
   /** @type {string} para que serve esta vistoria — decide os passos */
@@ -350,7 +363,7 @@ function zerarVistoria() {
   vState.rascunhoPendente = null
 
   const põe = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v } }
-  põe('nv-obs', ''); põe('nv-area', ''); põe('nv-area-metodo', '')
+  põe('nv-area', ''); põe('nv-area-metodo', '')
   põe('nv-acomp-nome', ''); põe('nv-acomp-qual', ''); põe('nv-alvara-numero', '')
   põe('nv-ano', '')
   põe('nv-exig-texto', ''); põe('nv-exig-prazo', '')
@@ -1060,7 +1073,10 @@ function renderArtigos(semArtigo) {
   }
 
   // O seletor do item se refaz com a lista nova, se a janela estiver aberta.
-  if (vState.itemAberto !== null) { buscarArtigo(document.getElementById('vsi-artigo-busca')?.value ?? '') }
+  if (vState.itemAberto !== null) {
+    pintarLeisDoItem()
+    buscarArtigo(document.getElementById('vsi-artigo-busca')?.value ?? '')
+  }
 }
 
 /** Os artigos citados na vistoria — a soma do que os itens citaram. */
@@ -1290,7 +1306,8 @@ function abrirItemRelatorio(i) {
   if (!item) { return }
 
   vState.itemAberto = i
-  vState.fotoAberta = null
+  irregEscolhida = null
+  artigoEscolhido = null
   document.getElementById('vsi-titulo').textContent = `Item ${i + 1} do relatório`
   document.getElementById('vsi-texto').value = item.texto ?? ''
   document.getElementById('vsi-irreg-busca').value = ''
@@ -1298,8 +1315,9 @@ function abrirItemRelatorio(i) {
   document.getElementById('vsi-artigo-obs').value = ''
   fecharSugestoes('vsi-irreg-sugestoes')
   fecharSugestoes('vsi-artigo-sugestoes')
+  descartarFotoPendente()
+  pintarLeisDoItem()
 
-  renderFotosDoItem()
   pintarContasDoItem()
 
   // Abre no bloco que JÁ TEM alguma coisa: reabrir um item para conferir a
@@ -1425,14 +1443,35 @@ function pintarResumoDoItem() {
     onclick: `removerExigenciaDoItem(${j})`,
   })))
 
-  const fotosVivas = item.fotos.filter(f => !vState.anexos[f.anexo]?.removido).length
-  if (fotosVivas) {
-    cartoes.push(cartaoDoResumo({
-      titulo: `${fotosVivas} foto(s) anexada(s)`,
-      sub: item.fotos.some(f => f.fachada) ? 'Uma delas é a fachada do imóvel' : null,
-      semRemover: true,
-    }))
-  }
+  // AS FOTOS ENTRAM INTEIRAS, e não como "3 foto(s) anexada(s)". O resumo é o
+  // que aparece em TODAS as abas: reduzir a foto a um número aqui era o mesmo
+  // que escondê-la de quem não estivesse na aba Fotos — e a foto é a prova.
+  // A linha é a MESMA de qualquer lista de arquivo do sistema (`.par-linha`,
+  // miniatura + três ícones), agora com os três botões fazendo três coisas:
+  // ver no visualizador, corrigir na ficha, remover.
+  fotosVivasDoItem().forEach(({ f, j }) => {
+    const anexo = vState.anexos[f.anexo] ?? {}
+    const legenda = f.texto?.trim()
+    cartoes.push(`
+      <div class="par-linha vsi-foto-linha">
+        <div class="rel-capa">${anexo.url
+          ? `<img class="rel-mini" src="${esc(anexo.url)}" alt="">`
+          : `<span class="rel-num">${j + 1}</span>`}</div>
+        <div class="principal">
+          <b>${esc(legenda || anexo.titulo || `Foto ${j + 1}`)}</b>
+          <span>${esc(metaDaFoto(f))}${f.fachada ? ' · fachada' : ''}${
+            legenda ? '' : ' · sem legenda'}</span>
+        </div>
+        <div class="vsi-foto-icones">
+          <button type="button" class="ico-circ" onclick="verFotoDoItem(${j})"
+                  title="Ver a foto">${ICO_OLHO}</button>
+          <button type="button" class="ico-circ" onclick="editarFotoDoItem(${j})"
+                  title="Corrigir legenda e marcas">${ICO_LAPIS}</button>
+          <button type="button" class="ico-circ ico-circ-perigo" onclick="removerFotoDoItem(${j})"
+                  title="Remover">${ICO_X}</button>
+        </div>
+      </div>`)
+  })
 
   alvo.innerHTML = cartoes.length
     ? cartoes.join('')
@@ -1487,6 +1526,15 @@ let sugestoesIrreg = []
 /** @type {Array<Object>} a busca de artigo mostrada agora */
 let sugestoesArtigo = []
 
+// ESCOLHER NÃO É ADICIONAR. Tocar numa sugestão apenas PREENDE o campo e
+// guarda a escolha aqui; quem põe no item é o "+ add" (ou o Enter). Antes o
+// toque já jogava na lista — o que deixava o botão ao lado sem função e, pior,
+// não dava chance de escolher "como entra" antes de o artigo estar dentro.
+/** @type {Object|null} a irregularidade escolhida e ainda não adicionada */
+let irregEscolhida = null
+/** @type {Object|null} o artigo escolhido e ainda não adicionado */
+let artigoEscolhido = null
+
 /** @param {string} texto */
 function buscarIrregularidade(texto) {
   const item = itemAtual()
@@ -1502,10 +1550,16 @@ function buscarIrregularidade(texto) {
   const disponiveis = vState.catalogo.filter(irr =>
     !item.irregularidades.includes(irr.id) && !dono.has(irr.id))
 
+  // Campo vazio (ou recém-focado) mostra o começo do catálogo: combo que só
+  // responde a quem já sabe o que digitar não é combo, é adivinhação.
   sugestoesIrreg = q
     ? disponiveis.filter(irr => irr.descricao.toLowerCase().includes(q)
         || irr.codigo.toLowerCase().includes(q)).slice(0, 8)
-    : []
+    : disponiveis.slice(0, 8)
+
+  // Some com a escolha que o texto não descreve mais: digitar por cima do
+  // nome escolhido é desistir dela.
+  if (irregEscolhida && irregEscolhida.descricao !== texto) { irregEscolhida = null }
 
   pintarSugestoes('vsi-irreg-sugestoes', sugestoesIrreg,
     irr => ({ titulo: irr.descricao, sub: `${irr.codigo} · ${irr.gravidade}` }),
@@ -1516,27 +1570,42 @@ function buscarIrregularidade(texto) {
     : 'Todas as irregularidades do catálogo já estão marcadas em algum item.'
 }
 
-/** @param {number} i índice em `sugestoesIrreg` */
+/**
+ * Escolhe (não adiciona): põe o nome no campo e guarda a escolha.
+ * @param {number} i índice em `sugestoesIrreg`
+ */
 function selecionarIrregularidade(i) {
   const irr = sugestoesIrreg[i]
   if (!irr) { return }
+
+  irregEscolhida = irr
+  document.getElementById('vsi-irreg-busca').value = irr.descricao
+  fecharSugestoes('vsi-irreg-sugestoes')
+  document.getElementById('vsi-irreg-nota').textContent =
+    `${irr.codigo} · ${irr.gravidade}. Toque em "+ add" para pôr no item.`
+}
+
+/**
+ * O "+ add" e o Enter: põem no item a irregularidade ESCOLHIDA — ou, se
+ * ninguém escolheu ainda, a primeira da busca em curso.
+ */
+function adicionarIrregularidadeAoItem() {
   const item = itemAtual()
   if (!item) { return }
 
+  const irr = irregEscolhida ?? sugestoesIrreg[0]
+  if (!irr) { toast('Escolha a irregularidade na lista', 'err'); return }
+
   item.irregularidades = [...new Set([...item.irregularidades, irr.id])]
 
+  irregEscolhida = null
   document.getElementById('vsi-irreg-busca').value = ''
   buscarIrregularidade('')
+  fecharSugestoes('vsi-irreg-sugestoes')
   pintarContasDoItem()
   // A sugestão de artigos lê a SOMA dos itens: marcar aqui muda o que ela
   // oferece no item inteiro.
   sugerirArtigos()
-}
-
-/** O botão "+ add" e o Enter: adicionam a primeira sugestão da busca atual. */
-function adicionarIrregularidadeAoItem() {
-  if (!sugestoesIrreg.length) { toast('Digite para buscar a irregularidade', 'err'); return }
-  selecionarIrregularidade(0)
 }
 
 /** @param {number} id */
@@ -1594,31 +1663,86 @@ function nomeDoArtigo(id) {
   return a ? (a.rotulo || a.numero) : 'Artigo'
 }
 
+/**
+ * O select "Lei infringida" — as leis DOS ARTIGOS SUGERIDOS, e não o catálogo
+ * inteiro de legislação: oferecer uma lei que não enquadra nenhuma das
+ * irregularidades marcadas é oferecer um filtro que só sabe esvaziar a lista.
+ */
+function pintarLeisDoItem() {
+  const sel = document.getElementById('vsi-artigo-lei')
+  if (!sel) { return }
+
+  const leis = [...new Set(vState.artigos.map(a => a.lei).filter(Boolean))].sort()
+  const antes = sel.value
+
+  sel.innerHTML = '<option value="">— todas as leis —</option>'
+    + leis.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')
+
+  // Mantém a lei escolhida se ela ainda existe na lista nova.
+  sel.value = leis.includes(antes) ? antes : ''
+}
+
 /** @param {string} texto */
 function buscarArtigo(texto) {
   const item = itemAtual()
   if (!item) { return }
 
   const q = texto.trim().toLowerCase()
-  const disponiveis = vState.artigos.filter(a => !item.artigos.some(x => x.artigo_id === a.id))
+  const lei = document.getElementById('vsi-artigo-lei')?.value ?? ''
+
+  const disponiveis = vState.artigos
+    .filter(a => !item.artigos.some(x => x.artigo_id === a.id))
+    .filter(a => !lei || a.lei === lei)
 
   sugestoesArtigo = q
-    ? disponiveis.filter(a => (a.rotulo || a.numero || '').toLowerCase().includes(q)).slice(0, 8)
+    ? disponiveis.filter(a => (a.rotulo || a.numero || '').toLowerCase().includes(q)
+        || (a.conduta || '').toLowerCase().includes(q)).slice(0, 8)
     : disponiveis.slice(0, 8)
 
-  pintarSugestoes('vsi-artigo-sugestoes', sugestoesArtigo,
-    a => ({ titulo: a.rotulo || a.numero }), 'selecionarArtigo')
+  if (artigoEscolhido && (artigoEscolhido.rotulo || artigoEscolhido.numero) !== texto) {
+    artigoEscolhido = null
+  }
 
-  document.getElementById('vsi-artigo-nota').textContent = vState.artigos.length
-    ? ''
-    : 'Marque irregularidades para ver os artigos que as enquadram.'
+  // `a.lei` já vem com o nome inteiro ("Lei Complementar 1/2023"): prefixar
+  // "Lei" aqui escrevia "Lei Lei Complementar".
+  pintarSugestoes('vsi-artigo-sugestoes', sugestoesArtigo,
+    a => ({ titulo: a.rotulo || a.numero, sub: a.lei || null }),
+    'selecionarArtigo')
+
+  const nota = document.getElementById('vsi-artigo-nota')
+  const texto2 = vState.artigos.length
+    ? '' : 'Marque irregularidades para ver os artigos que as enquadram.'
+  nota.textContent = texto2
+  nota.hidden = !texto2
 }
 
-/** @param {number} i índice em `sugestoesArtigo` */
+/**
+ * Escolhe (não adiciona): põe o artigo no campo e guarda a escolha, para que
+ * "como entra" e a observação ainda possam mudar antes do "+ add".
+ * @param {number} i índice em `sugestoesArtigo`
+ */
 function selecionarArtigo(i) {
   const a = sugestoesArtigo[i]
+  if (!a) { return }
+
+  artigoEscolhido = a
+  document.getElementById('vsi-artigo-busca').value = a.rotulo || a.numero
+  fecharSugestoes('vsi-artigo-sugestoes')
+
+  const nota = document.getElementById('vsi-artigo-nota')
+  nota.textContent = a.conduta
+    ? `${a.conduta} — toque em "+ add" para citar no item.`
+    : 'Toque em "+ add" para citar no item.'
+  nota.hidden = false
+}
+
+/** O "+ add" e o Enter: citam no item o artigo escolhido (ou o primeiro da busca). */
+function adicionarArtigoAoItem() {
   const item = itemAtual()
-  if (!a || !item) { return }
+  if (!item) { return }
+
+  const a = artigoEscolhido ?? sugestoesArtigo[0]
+  if (!a) { toast('Escolha o artigo na lista', 'err'); return }
 
   item.artigos.push({
     artigo_id: a.id,
@@ -1626,16 +1750,12 @@ function selecionarArtigo(i) {
     texto: document.getElementById('vsi-artigo-obs').value.trim() || null,
   })
 
+  artigoEscolhido = null
   document.getElementById('vsi-artigo-busca').value = ''
   document.getElementById('vsi-artigo-obs').value = ''
   buscarArtigo('')
+  fecharSugestoes('vsi-artigo-sugestoes')
   pintarContasDoItem()
-}
-
-/** O botão "+ add" e o Enter: acrescentam o primeiro artigo da busca atual. */
-function adicionarArtigoAoItem() {
-  if (!sugestoesArtigo.length) { toast('Digite para buscar o artigo', 'err'); return }
-  selecionarArtigo(0)
 }
 
 /** @param {number} j */
@@ -1671,127 +1791,385 @@ function removerExigenciaDoItem(j) {
 }
 
 // ── bloco 5: fotos ──
+//
+// A ABA SÓ ADICIONA, como as outras quatro. A LISTA do que já está no item
+// mora no resumo (`pintarResumoDoItem`), o mesmo em todas as abas — a foto era
+// a única com lista própria, e por isso só existia para quem estivesse
+// justamente na aba Fotos.
+//
+// E o caminho da foto tem TRÊS tempos: escolher o arquivo, DESCREVER (legenda,
+// fachada, marcas) e só então anexar. Antes ela entrava na lista no instante
+// da escolha — sem chance de dizer o que mostra, e com o botão de anexar ao
+// lado sem serventia nenhuma.
+
+/** Abre a galeria/explorador (aceita PDF; não força a câmera). */
+function escolherFotoDaGaleria() {
+  prepararItemParaFoto()
+  document.getElementById('nv-arquivo-galeria').click()
+}
+
+/** Abre a câmera traseira no celular. */
+function tirarFotoDaCamera() {
+  prepararItemParaFoto()
+  document.getElementById('nv-arquivo').click()
+}
 
 /**
- * As fotos do item, com a legenda e as marcações de cada uma.
+ * Garante um item aberto para receber a foto.
  *
- * A marcação (o pino numerado sobre a imagem) continua sendo POR FOTO: é ela
- * que deixa a legenda dizer "1" e "2" em vez de "no canto superior direito".
+ * A foto entra SEMPRE num item: se nenhum está aberto — é o caso da vistoria
+ * rápida, que pula direto para a foto —, um item nasce para recebê-la.
  */
-/**
- * Cada foto é uma LINHA — miniatura, legenda ao lado, três ícones. Só a foto
- * que está sendo trabalhada (aberta pelo olho ou pelo lápis) mostra a imagem
- * grande e o resto dos controles: marcar pino, apagar marcas, fachada. Numa
- * vistoria com seis fotos, seis imagens grandes empilhadas era a maior parte
- * da rolagem da janela para chegar a qualquer outra coisa.
- */
-function renderFotosDoItem() {
-  const alvo = document.getElementById('vsi-fotos')
-  const item = itemAtual()
-  if (!alvo || !item) { return }
-
-  const vivas = item.fotos.filter(f => !vState.anexos[f.anexo]?.removido)
-
-  alvo.innerHTML = vivas.length
-    ? vivas.map(f => {
-        const j = item.fotos.indexOf(f)
-        const anexo = vState.anexos[f.anexo] ?? {}
-        const ehImagem = !!anexo.url
-        const aberta = vState.fotoAberta === j
-
-        const linha = `
-          <div class="par-linha vsi-foto-linha">
-            <div class="rel-capa">${ehImagem
-              ? `<img class="rel-mini" src="${esc(anexo.url)}" alt="">`
-              : `<span class="rel-num">${j + 1}</span>`}</div>
-            <div class="principal">
-              <b>${f.texto?.trim() ? esc(f.texto.trim()) : `Foto ${j + 1}`}</b>
-              <span>${f.fachada ? 'Fachada do imóvel' : (ehImagem ? 'Toque no olho para ver e marcar' : esc(anexo.titulo || 'Documento anexado'))}</span>
-            </div>
-            <div class="vsi-foto-icones">
-              <button type="button" class="ico-circ" onclick="alternarFotoAberta(${j})"
-                      title="${aberta ? 'Fechar' : 'Ver e marcar'}">${ICO_OLHO}</button>
-              <button type="button" class="ico-circ" onclick="alternarFotoAberta(${j}, true)"
-                      title="Editar legenda">${ICO_LAPIS}</button>
-              <button type="button" class="ico-circ ico-circ-perigo" onclick="removerFotoDoItem(${j})"
-                      title="Remover">${ICO_X}</button>
-            </div>
-          </div>`
-
-        if (!aberta) { return linha }
-
-        return linha + `
-          <div class="vsi-foto-expandida">
-            ${ehImagem
-              ? `<div class="vsi-palco" onclick="marcarNaFoto(event, ${j})">
-                   <img src="${esc(anexo.url)}" alt="">
-                   <div class="vsi-pinos">${(f.marcacoes || []).map((m, k) =>
-                     `<span class="vsi-pino" style="left:${m.x * 100}%;top:${m.y * 100}%">${k + 1}</span>`).join('')}</div>
-                 </div>`
-              : ''}
-            <div class="field" style="margin:8px 0 0">
-              <label>Legenda</label>
-              <textarea rows="2" id="vsi-foto-legenda-${j}"
-                        oninput="vState.relatorio[${vState.itemAberto}].fotos[${j}].texto = this.value; renderFotosDoItem()"
-                        placeholder="O que esta foto mostra">${esc(f.texto ?? '')}</textarea>
-            </div>
-            <div class="vsi-foto-acoes">
-              <label class="chk-item chk-linha">
-                <input type="checkbox" ${f.fachada ? 'checked' : ''}
-                       onchange="marcarFachada(${j}, this.checked)">
-                <span class="desc">É a fachada do imóvel</span>
-              </label>
-              ${ehImagem ? `<button type="button" class="btn sm" onclick="limparMarcacoes(${j})">Limpar marcas</button>` : ''}
-            </div>
-          </div>`
-      }).join('')
-    : '<div class="leg">Nenhuma foto neste item.</div>'
-
-  if (vState.fotoAberta !== null) {
-    document.getElementById(`vsi-foto-legenda-${vState.fotoAberta}`)?.focus()
-  }
-
-  pintarContasDoItem()
-}
-
-/**
- * Abre (ou fecha) a foto para ver e marcar. Só uma por vez.
- * @param {number} j @param {boolean} [focarLegenda]
- */
-function alternarFotoAberta(j, focarLegenda) {
-  vState.fotoAberta = vState.fotoAberta === j ? null : j
-  renderFotosDoItem()
-  if (focarLegenda && vState.fotoAberta === j) {
-    setTimeout(() => document.getElementById(`vsi-foto-legenda-${j}`)?.focus(), 30)
+function prepararItemParaFoto() {
+  if (vState.itemAberto === null) {
+    vState.relatorio.push(itemVazio())
+    vState.itemAberto = vState.relatorio.length - 1
+    renderRelatorio()
   }
 }
 
-/** @param {number} j @param {boolean} marcado */
-function marcarFachada(j, marcado) {
+/** O atalho da vistoria rápida entra por aqui: uma foto, direto da câmera. */
+function escolherArquivoDeFoto() { tirarFotoDaCamera() }
+
+/**
+ * Recebe os arquivos escolhidos e ENFILEIRA: um de cada vez ganha a ficha.
+ *
+ * Escolher cinco fotos de uma vez continua valendo — o que não vale é as cinco
+ * entrarem sem legenda. Elas viram fila, e a ficha atende uma a uma.
+ *
+ * @param {HTMLInputElement} input
+ */
+function anexarArquivos(input) {
+  prepararItemParaFoto()
+
+  vState.filaFotos.push(...input.files)
+  input.value = ''   // permite reescolher o mesmo arquivo depois de descartar
+
+  if (!document.getElementById('m-vs-item').classList.contains('open')) {
+    abrirItemRelatorio(vState.itemAberto)
+  }
+  abaDoItem('fotos')
+
+  if (!vState.fotoPendente) { proximaFotoDaFila() }
+}
+
+/** Puxa o próximo arquivo da fila para a ficha; sem fila, fecha a ficha. */
+function proximaFotoDaFila() {
+  const arquivo = vState.filaFotos.shift()
+  if (!arquivo) { renderFotoPendente(); return }
+
+  const ehImagem = arquivo.type.startsWith('image/')
+
+  vState.fotoPendente = {
+    arquivo,
+    url: ehImagem ? URL.createObjectURL(arquivo) : null,
+    titulo: arquivo.name,
+    marcacoes: [],
+    // DATA E HORA DA FOTO, e não da vistoria: `lastModified` é o instante em
+    // que a câmera gravou o arquivo. Quem lê o processo depois precisa saber
+    // quando a prova foi feita — a vistoria pode ser lançada horas depois, e
+    // até então as duas datas eram a mesma por construção.
+    //
+    // Em hora de parede (`instanteLocal`), e NÃO em ISO: o banco guarda o que
+    // o relógio de quem estava lá marcava, como já faz a data da vistoria.
+    quando: instanteLocal(new Date(arquivo.lastModified || Date.now())),
+    lat: vState.gps?.lat ?? null,
+    lon: vState.gps?.lon ?? null,
+    editando: null,
+  }
+
+  renderFotoPendente()
+  posicaoDaFoto()
+}
+
+/**
+ * A posição NO MOMENTO DA FOTO, pedida ao aparelho em segundo plano.
+ *
+ * A da vistoria (capturada no passo 1) serve de piso e já entrou acima; esta a
+ * substitui quando chega, porque o fiscal anda pelo terreno entre uma foto e
+ * outra. Falhar é aceitável e silencioso: foto sem coordenada continua sendo
+ * prova, e um alerta a cada foto seria ruído para quem está trabalhando.
+ */
+function posicaoDaFoto() {
+  if (!navigator.geolocation) { return }
+
+  const alvo = vState.fotoPendente
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      // A ficha pode ter sido fechada ou trocada enquanto o GPS respondia.
+      if (vState.fotoPendente !== alvo) { return }
+      alvo.lat = pos.coords.latitude
+      alvo.lon = pos.coords.longitude
+      renderFotoPendente()
+    },
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
+  )
+}
+
+/** Desenha a ficha da foto pendente (ou some com ela). */
+function renderFotoPendente() {
+  const caixa = document.getElementById('vsi-foto-nova')
+  const dica = document.getElementById('vsi-foto-dica')
+  if (!caixa) { return }
+
+  const p = vState.fotoPendente
+  caixa.hidden = !p
+  if (dica) { dica.hidden = !!p }
+  if (!p) { return }
+
+  const img = document.getElementById('vsi-foto-nova-img')
+  const palco = document.getElementById('vsi-foto-nova-palco')
+  // Anexo que não é imagem (PDF de projeto) não tem palco nem marcação.
+  palco.hidden = !p.url
+  if (p.url) { img.src = p.url }
+
+  document.getElementById('vsi-foto-nova-pinos').innerHTML =
+    p.marcacoes.map((m, k) =>
+      `<span class="vsi-pino" style="left:${m.x * 100}%;top:${m.y * 100}%">${k + 1}</span>`).join('')
+
+  document.getElementById('vsi-foto-nova-meta').textContent = metaDaFoto(p)
+
+  const naFila = vState.filaFotos.length
+  document.getElementById('vsi-foto-nova-titulo').textContent = p.editando !== null
+    ? 'Corrigindo a foto'
+    : (naFila ? `${p.titulo} — mais ${naFila} na fila` : p.titulo)
+
+  document.getElementById('vsi-foto-nova-add').textContent =
+    p.editando !== null ? 'Guardar' : '+ add'
+}
+
+/**
+ * Data/hora e coordenada da foto, em uma linha.
+ * @param {Object} p a foto (pendente ou já anexada)
+ * @returns {string}
+ */
+function metaDaFoto(p) {
+  const partes = []
+  if (p.quando) {
+    const d = new Date(p.quando)
+    if (!isNaN(d.getTime())) {
+      partes.push(d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))
+    }
+  }
+  partes.push(p.lat != null && p.lon != null
+    ? `${Number(p.lat).toFixed(6)}, ${Number(p.lon).toFixed(6)}`
+    : 'sem coordenada')
+  return partes.join(' · ')
+}
+
+/** Um toque crava um número na foto da ficha. @param {MouseEvent} ev */
+function marcarNaFotoPendente(ev) {
+  const p = vState.fotoPendente
+  if (!p || !p.url) { return }
+
+  const img = ev.currentTarget.querySelector('img')
+  if (!img) { return }
+
+  const r = img.getBoundingClientRect()
+  const x = (ev.clientX - r.left) / r.width
+  const y = (ev.clientY - r.top) / r.height
+  if (x < 0 || x > 1 || y < 0 || y > 1) { return }
+
+  if (p.marcacoes.length >= 20) { toast('Limite de 20 marcas na foto', 'aviso'); return }
+  p.marcacoes.push({ n: p.marcacoes.length + 1, x: +x.toFixed(4), y: +y.toFixed(4) })
+  renderFotoPendente()
+}
+
+function limparMarcacoesPendente() {
+  if (!vState.fotoPendente) { return }
+  vState.fotoPendente.marcacoes = []
+  renderFotoPendente()
+}
+
+/** Larga a foto da ficha sem anexar — e chama a próxima da fila, se houver. */
+function descartarFotoPendente() {
+  const p = vState.fotoPendente
+
+  // A URL local só existe para exibir aqui; soltá-la evita segurar o arquivo
+  // inteiro na memória. Numa CORREÇÃO ela não é nossa: pertence ao anexo, que
+  // continua no item — revogá-la apagaria a miniatura da lista.
+  if (p && p.url && p.editando === null) { URL.revokeObjectURL(p.url) }
+  vState.fotoPendente = null
+
+  const campo = document.getElementById('vsi-foto-nova-legenda')
+  if (campo) { campo.value = '' }
+  const fach = document.getElementById('vsi-foto-nova-fachada')
+  if (fach) { fach.checked = false }
+
+  if (vState.filaFotos.length) { proximaFotoDaFila() } else { renderFotoPendente() }
+}
+
+/** O "+ add" da ficha: agora sim a foto entra no item. */
+function adicionarFotoAoItem() {
   const item = itemAtual()
-  if (!item) { return }
+  const p = vState.fotoPendente
+  if (!item || !p) { return }
+
+  const legenda = document.getElementById('vsi-foto-nova-legenda').value.trim()
+  const fachada = document.getElementById('vsi-foto-nova-fachada').checked
 
   // A fachada é UMA na vistoria inteira: é a foto que responde "como está o
-  // imóvel hoje", e duas respostas para isso não fazem sentido.
-  if (marcado) {
-    vState.relatorio.forEach(it => it.fotos.forEach(f => { f.fachada = false }))
+  // imóvel hoje", e duas respostas para isso não respondem nada.
+  if (fachada) { vState.relatorio.forEach(it => it.fotos.forEach(f => { f.fachada = false })) }
+
+  if (p.editando !== null) {
+    Object.assign(item.fotos[p.editando], {
+      texto: legenda, fachada, marcacoes: p.marcacoes,
+      quando: p.quando, lat: p.lat, lon: p.lon,
+    })
+  } else {
+    vState.anexos.push({
+      arquivo: p.arquivo, titulo: p.titulo, url: p.url, removido: false,
+    })
+    item.fotos.push({
+      anexo: vState.anexos.length - 1,
+      texto: legenda,
+      fachada,
+      marcacoes: p.marcacoes,
+      quando: p.quando, lat: p.lat, lon: p.lon,
+    })
+    // A URL passou a ser do anexo, que a usa na miniatura: não revogar aqui.
   }
-  item.fotos[j].fachada = marcado
-  renderFotosDoItem()
+
+  vState.fotoPendente = null
+  document.getElementById('vsi-foto-nova-legenda').value = ''
+  document.getElementById('vsi-foto-nova-fachada').checked = false
+
+  if (vState.filaFotos.length) { proximaFotoDaFila() } else { renderFotoPendente() }
+  pintarContasDoItem()
+  renderRelatorio()
+}
+
+/**
+ * O LÁPIS da lista: traz a foto de volta para a MESMA ficha, agora corrigindo.
+ *
+ * Um formulário só para pôr e para corrigir. O olho, que antes abria esta
+ * mesma edição, passou a abrir o VISUALIZADOR — ver e editar eram dois botões
+ * fazendo a mesma coisa.
+ *
+ * @param {number} j índice da foto dentro do item
+ */
+function editarFotoDoItem(j) {
+  const item = itemAtual()
+  const foto = item?.fotos?.[j]
+  if (!foto) { return }
+
+  const anexo = vState.anexos[foto.anexo] ?? {}
+  vState.fotoPendente = {
+    arquivo: anexo.arquivo ?? null,
+    url: anexo.url ?? null,
+    titulo: anexo.titulo ?? `Foto ${j + 1}`,
+    marcacoes: [...(foto.marcacoes ?? [])],
+    quando: foto.quando ?? null,
+    lat: foto.lat ?? null,
+    lon: foto.lon ?? null,
+    editando: j,
+  }
+
+  abaDoItem('fotos')
+  renderFotoPendente()
+  document.getElementById('vsi-foto-nova-legenda').value = foto.texto ?? ''
+  document.getElementById('vsi-foto-nova-fachada').checked = !!foto.fachada
 }
 
 /** @param {number} j */
 function removerFotoDoItem(j) {
   const item = itemAtual()
-  if (!item) { return }
+  if (!item?.fotos?.[j]) { return }
+
+  // Corrigindo justamente esta? A ficha ficaria apontando para um índice que
+  // mudou de dono depois do splice — fecha antes.
+  if (vState.fotoPendente?.editando === j) {
+    vState.fotoPendente = null
+    renderFotoPendente()
+  }
 
   const anexo = vState.anexos[item.fotos[j].anexo]
   if (anexo) { anexo.removido = true }
   item.fotos.splice(j, 1)
-  renderFotosDoItem()
+  pintarContasDoItem()
   renderRelatorio()
 }
 
+// ── O VISUALIZADOR (#m-foto-view) ────────────────────────────
+//
+// Mesmo visualizador do AppPOSTURAS: a foto grande, as setas andando pelas
+// fotos do MESMO item (dando a volta nas pontas) e o contador "N de M". Aqui
+// ele mostra também os pinos e a legenda — ver a marca "2" sem saber o que ela
+// aponta é meio caminho.
+
+/** @type {number} índice, dentro do item, da foto aberta no visualizador */
+let fotoVista = -1
+
+/** @param {number} j índice da foto dentro do item */
+function verFotoDoItem(j) {
+  const item = itemAtual()
+  if (!item?.fotos?.[j]) { return }
+  fotoVista = j
+  pintarVisualizadorDeFoto()
+  openModal('m-foto-view')
+}
+
+/** @param {number} d -1 anterior, 1 próxima — dá a volta nas pontas. */
+function navegarFoto(d) {
+  const vivas = fotosVivasDoItem()
+  if (vivas.length < 2) { return }
+
+  const atual = vivas.findIndex(({ j }) => j === fotoVista)
+  const proxima = (atual + d + vivas.length) % vivas.length
+  fotoVista = vivas[proxima].j
+  pintarVisualizadorDeFoto()
+}
+
+/** As fotos do item que não foram removidas, com o índice original. */
+function fotosVivasDoItem() {
+  const item = itemAtual()
+  if (!item) { return [] }
+  return item.fotos
+    .map((f, j) => ({ f, j }))
+    .filter(({ f }) => !vState.anexos[f.anexo]?.removido)
+}
+
+function pintarVisualizadorDeFoto() {
+  const item = itemAtual()
+  const foto = item?.fotos?.[fotoVista]
+  if (!foto) { return }
+
+  const anexo = vState.anexos[foto.anexo] ?? {}
+  const vivas = fotosVivasDoItem()
+  const pos = vivas.findIndex(({ j }) => j === fotoVista)
+
+  document.getElementById('foto-view-titulo').textContent =
+    foto.texto?.trim() || anexo.titulo || `Foto ${fotoVista + 1}`
+
+  const img = document.getElementById('foto-view-img')
+  img.src = anexo.url ?? ''
+  img.hidden = !anexo.url
+
+  document.getElementById('foto-view-pinos').innerHTML =
+    (foto.marcacoes ?? []).map((m, k) =>
+      `<span class="vsi-pino" style="left:${m.x * 100}%;top:${m.y * 100}%">${k + 1}</span>`).join('')
+
+  const legenda = document.getElementById('foto-view-legenda')
+  legenda.textContent = foto.texto?.trim() ?? ''
+  legenda.hidden = !foto.texto?.trim()
+
+  document.getElementById('foto-view-meta').textContent =
+    metaDaFoto(foto) + (foto.fachada ? ' · fachada do imóvel' : '')
+
+  // Setas e contador só quando há para onde ir.
+  const multi = vivas.length > 1
+  document.getElementById('foto-view-prev').hidden = !multi
+  document.getElementById('foto-view-next').hidden = !multi
+  document.getElementById('foto-view-contador').textContent =
+    multi ? `${pos + 1} de ${vivas.length}` : ''
+}
+
+function fecharVisualizadorDeFoto() {
+  fotoVista = -1
+  fModalBtn('m-foto-view')
+}
 // ── fechar a janela ──
 
 function salvarItemRelatorio() {
@@ -1837,118 +2215,6 @@ function irregularidadesDaVistoria() {
   return [...new Set(vState.relatorio.flatMap(i => i.irregularidades))]
 }
 
-/**
- * Abre o seletor de arquivo.
- *
- * A foto entra SEMPRE num item: se nenhum está aberto — é o caso da vistoria
- * rápida, que pula direto para a foto —, um item nasce para recebê-la. Foto
- * solta não existe mais no relatório.
- */
-function escolherArquivoDeFoto() {
-  if (vState.itemAberto === null) {
-    vState.relatorio.push(itemVazio())
-    vState.itemAberto = vState.relatorio.length - 1
-    renderRelatorio()
-  }
-  document.getElementById('nv-arquivo').click()
-}
-
-/**
- * Recebe os arquivos escolhidos e pendura no item aberto.
- *
- * O anexo vai para `vState.anexos` (a remessa achatada, que é como o upload
- * funciona) e o item guarda só o ÍNDICE dele — é esse índice que o servidor usa
- * para saber de qual grupo é cada arquivo.
- *
- * @param {HTMLInputElement} input
- */
-function anexarArquivos(input) {
-  const item = itemAtual()
-  if (!item) { input.value = ''; return }
-
-  for (const arquivo of input.files) {
-    // A URL local é só para exibir enquanto a vistoria não foi gravada; ela é
-    // revogada em `zerarVistoria` para não vazar memória.
-    const ehImagem = arquivo.type.startsWith('image/')
-
-    vState.anexos.push({
-      arquivo,
-      titulo: arquivo.name,
-      url: ehImagem ? URL.createObjectURL(arquivo) : null,
-      removido: false,
-    })
-
-    item.fotos.push({
-      anexo: vState.anexos.length - 1,
-      texto: '',
-      fachada: false,
-      marcacoes: [],
-    })
-  }
-
-  input.value = ''   // permite reanexar o mesmo arquivo depois de remover
-
-  // A primeira imagem da vistoria vira a fachada: é quase sempre a que
-  // responde "como está o imóvel hoje", e marcar à mão toda vez é atrito.
-  const jaTemFachada = vState.relatorio.some(i => i.fotos.some(f => f.fachada))
-  if (!jaTemFachada) {
-    const primeira = item.fotos.find(f => vState.anexos[f.anexo]?.url)
-    if (primeira) { primeira.fachada = true }
-  }
-
-  renderFotosDoItem()
-  renderRelatorio()
-
-  // Chamada pela vistoria rápida, quando a janela ainda não está aberta.
-  if (!document.getElementById('m-vs-item').classList.contains('open')) {
-    abrirItemRelatorio(vState.itemAberto)
-  }
-}
-
-// ── MARCAÇÕES SOBRE A FOTO ───────────────────────────────────
-//
-// Um toque crava um número na imagem. A legenda pode então dizer "1" e "2" em
-// vez de "no canto superior direito, mais ou menos no meio" — que é o tipo de
-// descrição que ninguém consegue conferir meses depois.
-//
-// As coordenadas são RELATIVAS (0 a 1): a mesma foto aparece em tamanhos
-// diferentes na janela, na lista e na ficha, e pixel absoluto sairia do lugar.
-
-/**
- * Um toque crava um número NA FOTO daquele índice do item.
- *
- * O índice é obrigatório agora: o item tem várias fotos, e antes havia uma só
- * — a função lia `vState.itemAberto` e pronto. Sem ele, a marca cairia sempre
- * na primeira.
- *
- * @param {MouseEvent} ev @param {number} j índice da foto dentro do item
- */
-function marcarNaFoto(ev, j) {
-  const foto = itemAtual()?.fotos?.[j]
-  if (!foto) { return }
-
-  const img = ev.currentTarget.querySelector('img')
-  if (!img) { return }
-
-  const r = img.getBoundingClientRect()
-  const x = (ev.clientX - r.left) / r.width
-  const y = (ev.clientY - r.top) / r.height
-  if (x < 0 || x > 1 || y < 0 || y > 1) { return }
-
-  foto.marcacoes = foto.marcacoes || []
-  if (foto.marcacoes.length >= 20) { toast('Limite de 20 marcas na foto', 'aviso'); return }
-
-  foto.marcacoes.push({ n: foto.marcacoes.length + 1, x: +x.toFixed(4), y: +y.toFixed(4) })
-  renderFotosDoItem()
-}
-
-/** @param {number} j */
-function limparMarcacoes(j) {
-  const foto = itemAtual()?.fotos?.[j]
-  if (!foto) { return }
-  foto.marcacoes = []
-  renderFotosDoItem()
-}
 
 // ── PASSO 5: REVISÃO ─────────────────────────────────────────
 
@@ -1965,7 +2231,6 @@ function renderRevisao() {
   const sit = document.getElementById('nv-situacao')
   const area = document.getElementById('nv-area').value
   const metodo = document.getElementById('nv-area-metodo')
-  const obs = document.getElementById('nv-obs').value.trim()
   const acomp = document.getElementById('nv-acomp-nome').value.trim()
   const qual = document.getElementById('nv-acomp-qual')
 
@@ -2048,7 +2313,6 @@ function renderRevisao() {
         + (fotos.some(f => f.fachada) ? ', uma marcada como fachada' : ', ' + falta('sem fachada marcada'))
         + (fotos.some(f => !f.texto?.trim()) ? '<br>' + falta('há foto sem legenda') : '')
     })()],
-    ['Observações', obs ? esc(obs) : falta('nenhuma')],
   ]
 
   document.getElementById('nv-revisao').innerHTML = linhas.map(([r, v]) => `
@@ -2068,8 +2332,7 @@ function renderRevisao() {
 const RASCUNHO = 'vistoria-rascunho'
 
 function temConteudo() {
-  return !!(document.getElementById('nv-obs').value.trim()
-    || document.getElementById('nv-area').value
+  return !!(document.getElementById('nv-area').value
     || vState.relatorio.length)
 }
 
@@ -2083,7 +2346,7 @@ function salvarRascunho() {
       passo: vState.passo,
       campos: {
         data: v('nv-data'), hora: v('nv-hora'), situacao: v('nv-situacao'),
-        obs: v('nv-obs'), area: v('nv-area'), metodo: v('nv-area-metodo'),
+        area: v('nv-area'), metodo: v('nv-area-metodo'),
         acompNome: v('nv-acomp-nome'), acompQual: v('nv-acomp-qual'),
         alvaraNumero: v('nv-alvara-numero'), ano: v('nv-ano'),
       },
@@ -2195,7 +2458,7 @@ function aplicarRascunho(d) {
   const põe = (id, valor) => { const e = document.getElementById(id); if (e && valor) { e.value = valor } }
   const c = d.campos ?? {}
   põe('nv-data', c.data); põe('nv-hora', c.hora); põe('nv-situacao', c.situacao)
-  põe('nv-obs', c.obs); põe('nv-area', c.area); põe('nv-area-metodo', c.metodo)
+  põe('nv-area', c.area); põe('nv-area-metodo', c.metodo)
   põe('nv-acomp-nome', c.acompNome); põe('nv-acomp-qual', c.acompQual)
   põe('nv-alvara-numero', c.alvaraNumero); põe('nv-ano', c.ano)
   syncDataHora()
@@ -2262,7 +2525,9 @@ async function enviarVistoria() {
   // pertence a ela é descartado lá, e não aqui — ver Vistoria::colunasForaDa.
   fd.append('finalidade', vState.finalidade)
   fd.append('situacao', campo('nv-situacao'))
-  fd.append('observacoes', campo('nv-obs'))
+  // `observacoes` não é mais preenchido pela tela — o campo saiu do passo do
+  // relatório (todo relato pertence a um item). A coluna segue no banco pelas
+  // vistorias antigas que a usaram, e o servidor a aceita nula.
   // O vínculo com o protocolo é o que, mais tarde, libera o ato cadastral.
   const proto = document.getElementById('nv-protocolo')?.value
   if (proto) { fd.append('protocolo_id', proto) }
@@ -2319,6 +2584,16 @@ async function enviarVistoria() {
       fd.append(`titulos[${nFoto}]`, anexo.titulo)
       fd.append(`descricoes[${nFoto}]`, f.texto ?? '')
       fd.append(`ordens[${nFoto}]`, nFoto)
+      // QUANDO E ONDE A FOTO FOI FEITA. Até aqui toda evidência era gravada
+      // com a data e a coordenada DA VISTORIA — iguais para todas, e da hora
+      // do lançamento, não da captura. Num processo, é a foto que precisa
+      // dizer quando e de onde: a vistoria pode ser digitada horas depois, e
+      // o fiscal anda pelo terreno entre uma foto e outra.
+      if (f.quando) { fd.append(`fotos_quando[${nFoto}]`, f.quando) }
+      if (f.lat != null && f.lon != null) {
+        fd.append(`fotos_lat[${nFoto}]`, f.lat)
+        fd.append(`fotos_lon[${nFoto}]`, f.lon)
+      }
       if ((f.marcacoes || []).length) {
         fd.append(`marcacoes[${nFoto}]`, JSON.stringify(f.marcacoes))
       }

@@ -1881,12 +1881,16 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vs-corpo .leg{font-size:11px;color:var(--tx2);line-height:1.5;margin:2px 0 8px}
 
 /* Alvos de dedo, e não de mouse. O `.btn.sm` do sistema tem 31px — cabe numa
-   lista de escritório, não numa mão só, de pé, ao sol. Estes quatro são as
-   ações que a tela de vistoria executa EM CAMPO, e só eles crescem: mudar o
-   `.btn.sm` inteiro mexeria em telas onde 31px nunca atrapalhou. */
+   lista de escritório, não numa mão só, de pé, ao sol. Estes são as ações que
+   a tela de vistoria executa EM CAMPO, e só eles crescem: mudar o `.btn.sm`
+   inteiro mexeria em telas onde 31px nunca atrapalhou.
+
+   `.sec-title-acao` SAIU da lista: com 44px, o "Adicionar item" virava uma
+   pílula verde do dobro da altura de qualquer outro botão do sistema, ao lado
+   de um título de seção de 11px — chamava mais atenção que o próprio
+   relatório. Ele abre uma janela, não é o gesto repetido em campo. */
 #m-vistoria #nv-gps-btn,
 #m-vistoria .vs-atalho,
-#m-vistoria .sec-title-acao,
 .vs-nova-exig input,
 .vs-nova-exig .btn{min-height:44px}
 /* Com botões dentro, o aviso deixa de ser um recado e vira uma escolha: o
@@ -1973,6 +1977,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   width:22px;height:22px;border-radius:999px;background:var(--gold);color:#fff;
   border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);
   font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.vsi-palco[hidden]{display:none}
 .vsi-palco-acoes{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .vsi-palco-acoes .leg{flex:1;min-width:0;margin:0}
 
@@ -2518,15 +2523,32 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vsi-cartao-corpo p{margin:3px 0 0;color:var(--tx2)}
 .vsi-cartao > .acao-x{flex-shrink:0}
 
+/* ── A NOTA DE APOIO ──
+   O texto que explica o campo. Era um parágrafo solto, do tamanho do
+   conteúdo, ocupando duas linhas cheias logo abaixo do combo — mais alto que
+   o próprio campo que ele explica. Vira uma faixa cinza discreta, do mesmo
+   feitio da nota de rodapé que o sistema já usa (o aviso de LGPD da ficha):
+   quem precisa lê, quem não precisa passa por cima. */
+.vsi-nota{background:var(--blt);border-radius:var(--r);padding:6px 9px;
+  margin-top:6px;font-size:11px;line-height:1.45;color:var(--tx2)}
+.vsi-nota:empty,.vsi-nota[hidden]{display:none}
+
 /* Irregularidade já usada em outro item: o banco não aceita a mesma duas
    vezes, e ela nem chega a aparecer na busca — ver `buscarIrregularidade`. */
 .chk-item.chk-linha{border:0;padding:0;background:none}
 
 /* ── AS FOTOS: UMA LINHA POR FOTO, do mesmo `.par-linha` usado no resto do
-   sistema para lista de arquivo — miniatura, texto, três ícones. Só a que
-   está sendo trabalhada abre a imagem grande, embaixo da própria linha. ── */
+   sistema para lista de arquivo — miniatura, texto, três ícones. A lista mora
+   no RESUMO, e por isso é a mesma em todas as abas; a aba Fotos só tem a
+   ficha de quem está entrando. ── */
 .vsi-foto-linha{cursor:default;margin-bottom:0}
 .vsi-foto-icones{display:flex;gap:4px;flex-shrink:0}
+
+/* Os dois caminhos da foto, lado a lado: o arquivo que já existe e o que
+   ainda vai ser tirado. Um input só, com `capture`, não dava conta dos dois. */
+.vsi-foto-botoes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.vsi-foto-nova-tit{font-size:11px;font-weight:700;color:var(--tx2);
+  margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ico-circ{width:28px;height:28px;border-radius:50%;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;cursor:pointer;
   background:var(--sur);border:1.5px solid var(--gm);color:var(--gd)}
@@ -2540,6 +2562,32 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vsi-arquivo{background:var(--blt);border-radius:var(--r);padding:10px 12px;
   font-size:12.5px;color:var(--tx2);margin-bottom:8px}
 .vsi-foto-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+
+/* ── O VISUALIZADOR DE FOTO (#m-foto-view) ──
+   Mesmo desenho do `#m-anexo-view` do AppPOSTURAS: a imagem centrada num
+   palco escuro e as setas flutuando sobre ela, uma de cada lado. Acima do
+   item (que já é modal) para abrir por cima dele, e não atrás. */
+#m-foto-view{z-index:2050}
+#m-foto-view .modal{max-width:860px}
+.foto-view-box{position:relative;display:flex;align-items:center;
+  justify-content:center;background:var(--bg);border:1.5px solid var(--bord);
+  border-radius:var(--r);overflow:hidden}
+.foto-view-palco{position:relative;display:block;max-width:100%}
+.foto-view-palco img{display:block;max-width:100%;max-height:66vh}
+.foto-view-palco img[hidden]{display:none}
+/* Setas: mesmo "Modelo" do .modal-x — círculo flutuante sobre o conteúdo. */
+.foto-view-nav{position:absolute;top:50%;transform:translateY(-50%);
+  width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.92);
+  border:1.5px solid var(--bord);box-shadow:var(--sh);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--tx2);z-index:1}
+.foto-view-nav svg{width:18px;height:18px}
+.foto-view-nav:hover{background:#fff;color:var(--tx);border-color:var(--tx3)}
+.foto-view-nav[hidden]{display:none}
+.foto-view-prev{left:10px}
+.foto-view-next{right:10px}
+.foto-view-legenda{margin-top:9px;font-size:13px;line-height:1.5;color:var(--tx)}
+.foto-view-legenda[hidden]{display:none}
+.foto-view-contador{flex:1;font-size:12px;color:var(--tx3)}
 
 /* ── o item na janela de leitura ── */
 .vv-item{border-left:3px solid var(--gm);padding-left:11px;margin-bottom:16px}

@@ -1442,29 +1442,32 @@
         <button type="button" class="btn primary sm sec-title-acao" onclick="novoItemRelatorio()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          Adicionar</button>
+          Adicionar item</button>
       </div>
       <div class="leg">Cada item é um ponto da obra, com o que for preciso dentro —
         na ordem em que você quiser contar.</div>
       <div id="nv-relatorio"></div>
-      {{-- Fora do menu de propósito: é o mesmo input para o item "Foto" e para
-           o atalho da vistoria rápida. `capture="environment"` abre a câmera
-           traseira direto no celular; no desktop vira seletor de arquivo. --}}
-      <input type="file" id="nv-arquivo" accept="image/*,application/pdf" multiple
+      {{-- DOIS INPUTS, e não um: `capture="environment"` manda o celular abrir
+           a CÂMERA direto, o que é certo para "Tirar foto" e errado para
+           "Escolher arquivo" — com ele, não havia como pegar uma foto que já
+           estava na galeria, nem um PDF de projeto. --}}
+      <input type="file" id="nv-arquivo" accept="image/*" multiple
              capture="environment" style="display:none" onchange="anexarArquivos(this)">
+      <input type="file" id="nv-arquivo-galeria" accept="image/*,application/pdf" multiple
+             style="display:none" onchange="anexarArquivos(this)">
 
       {{-- O CHECKLIST SAIU DAQUI. Ele era uma lista única da vistoria, num
            bloco recolhido ao pé da tela; agora a irregularidade pertence ao
            ITEM onde foi constatada, e é escolhida dentro dele. Os artigos que
            ela sugere alimentam o seletor da mesma janela. --}}
 
-      <div class="sec-title">Observações gerais</div>
-      <div class="field">
-        <label for="nv-obs">Descrição livre</label>
-        <textarea id="nv-obs" rows="3" maxlength="5000"
-                  style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
-                  placeholder="O que não coube nos itens acima"></textarea>
-      </div>
+      {{-- "OBSERVAÇÕES GERAIS" SAIU DAQUI. Era um segundo lugar para escrever
+           a mesma coisa: tudo que se observa numa obra pertence a um ponto
+           dela, e ponto da obra é ITEM. Um campo de sobra no fim da tela só
+           dividia o relato em dois — parte nos itens, parte solta — e quem
+           lesse depois teria de juntar. A COLUNA `observacoes` CONTINUA no
+           banco e continua sendo exibida nas vistorias antigas que a usaram:
+           o que sai é a porta de entrada, não o que já foi escrito. --}}
     </div>
 
     {{-- ── 4 · REVISÃO ── --}}
@@ -1558,15 +1561,20 @@
         <div class="vsi-busca">
           <div class="field" style="flex:1;margin:0">
             <label for="vsi-irreg-busca">Irregularidade</label>
+            {{-- COMBO DE VERDADE: escolher na lista só PREENCHE o campo — quem
+                 põe no item é o "+ add" (ou o Enter). Antes o toque na
+                 sugestão já jogava na lista, e o botão ao lado não servia
+                 para nada. --}}
             <input type="text" id="vsi-irreg-busca" autocomplete="off"
                    placeholder="Digite para buscar…"
                    oninput="buscarIrregularidade(this.value)"
+                   onfocus="buscarIrregularidade(this.value)"
                    onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarIrregularidadeAoItem()}">
           </div>
           <button type="button" class="btn sm" onclick="adicionarIrregularidadeAoItem()">+ add</button>
         </div>
         <div class="vsi-sugestoes" id="vsi-irreg-sugestoes" hidden></div>
-        <div class="leg" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
+        <div class="vsi-nota" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
           os artigos sugeridos — e é o que o auto de infração vai usar.</div>
       </div>
 
@@ -1581,19 +1589,18 @@
       </div>
 
       {{-- 3 — ARTIGOS --}}
+      {{-- A ORDEM DOS CAMPOS É A DA PERGUNTA: primeiro QUAL LEI e COMO o
+           dispositivo entra na peça, depois QUAL ARTIGO dela — porque a lei
+           filtra a busca do artigo, e perguntar o artigo antes obriga a
+           procurar no bolo de todas as leis. --}}
       <div class="vsi-bloco" data-bloco="artigos" hidden>
-        <div class="vsi-busca">
-          <div class="field" style="flex:1;margin:0">
-            <label for="vsi-artigo-busca">Artigo infringido</label>
-            <input type="text" id="vsi-artigo-busca" autocomplete="off"
-                   placeholder="Digite para buscar o artigo…"
-                   oninput="buscarArtigo(this.value)"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+        <div class="g2">
+          <div class="field" style="margin:0">
+            <label for="vsi-artigo-lei">Lei infringida</label>
+            <select id="vsi-artigo-lei" onchange="buscarArtigo(document.getElementById('vsi-artigo-busca').value)">
+              <option value="">— todas as leis —</option>
+            </select>
           </div>
-          <button type="button" class="btn sm" onclick="adicionarArtigoAoItem()">+ add</button>
-        </div>
-        <div class="vsi-sugestoes" id="vsi-artigo-sugestoes" hidden></div>
-        <div class="g2" style="margin:8px 0 0">
           <div class="field" style="margin:0">
             <label for="vsi-artigo-tipo">Como entra</label>
             {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
@@ -1602,12 +1609,24 @@
               <option value="parecer">Parecer</option>
             </select>
           </div>
-          <div class="field" style="margin:0">
-            <label for="vsi-artigo-obs">Observação (opcional)</label>
-            <input type="text" id="vsi-artigo-obs" maxlength="2000">
-          </div>
         </div>
-        <div class="leg" id="vsi-artigo-nota"></div>
+        <div class="vsi-busca" style="margin-top:8px">
+          <div class="field" style="flex:1;margin:0">
+            <label for="vsi-artigo-busca">Artigo infringido</label>
+            <input type="text" id="vsi-artigo-busca" autocomplete="off"
+                   placeholder="Digite para buscar o artigo…"
+                   oninput="buscarArtigo(this.value)"
+                   onfocus="buscarArtigo(this.value)"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+          </div>
+          <button type="button" class="btn sm" onclick="adicionarArtigoAoItem()">+ add</button>
+        </div>
+        <div class="vsi-sugestoes" id="vsi-artigo-sugestoes" hidden></div>
+        <div class="field" style="margin:8px 0 0">
+          <label for="vsi-artigo-obs">Observação (opcional)</label>
+          <input type="text" id="vsi-artigo-obs" maxlength="2000">
+        </div>
+        <div class="vsi-nota" id="vsi-artigo-nota" hidden></div>
       </div>
 
       {{-- 4 — EXIGÊNCIAS --}}
@@ -1625,14 +1644,45 @@
         <button type="button" class="btn sm" onclick="adicionarExigenciaAoItem()" style="margin-top:8px">+ add</button>
       </div>
 
-      {{-- 5 — FOTOS. Mantém lista própria: é a única aba onde o que se
-           adiciona é visual, e miniatura não cabe numa linha de resumo. --}}
+      {{-- 5 — FOTOS. A ABA SÓ ADICIONA, como as outras quatro: a lista do que
+           já foi anexado é a MESMA do resumo, e por isso aparece igual em
+           qualquer aba. Escolher o arquivo não anexa nada ainda — abre a
+           ficha da foto (legenda, fachada) e o "+ add" é que a põe no item.
+           Antes o arquivo entrava na lista no instante em que era escolhido,
+           sem chance de dizer o que ele mostra. --}}
       <div class="vsi-bloco" data-bloco="fotos" hidden>
-        <div class="sec-title-row">
-          <button type="button" class="btn sm" onclick="document.getElementById('nv-arquivo').click()">Anexar foto</button>
-          <span class="leg">Toque na foto para apontar o que a legenda descreve.</span>
+        <div class="vsi-foto-botoes">
+          <button type="button" class="btn sm" onclick="escolherFotoDaGaleria()">Escolher arquivo</button>
+          <button type="button" class="btn sm" onclick="tirarFotoDaCamera()">Tirar foto</button>
         </div>
-        <div id="vsi-fotos"></div>
+
+        {{-- A FICHA DA FOTO PENDENTE. Fica escondida até haver uma escolhida. --}}
+        <div id="vsi-foto-nova" hidden>
+          <div class="vsi-foto-nova-tit" id="vsi-foto-nova-titulo"></div>
+          <div class="vsi-palco" id="vsi-foto-nova-palco" onclick="marcarNaFotoPendente(event)">
+            <img id="vsi-foto-nova-img" alt="">
+            <div class="vsi-pinos" id="vsi-foto-nova-pinos"></div>
+          </div>
+          <div class="vsi-nota" id="vsi-foto-nova-meta"></div>
+          <div class="field" style="margin:8px 0 0">
+            <label for="vsi-foto-nova-legenda">Legenda</label>
+            <textarea id="vsi-foto-nova-legenda" rows="2" maxlength="1000"
+                      placeholder="O que esta foto mostra"></textarea>
+          </div>
+          <div class="vsi-foto-acoes">
+            <label class="chk-item chk-linha">
+              <input type="checkbox" id="vsi-foto-nova-fachada">
+              <span class="desc">É a fachada do imóvel</span>
+            </label>
+            <button type="button" class="btn sm" onclick="limparMarcacoesPendente()">Limpar marcas</button>
+            <div style="flex:1"></div>
+            <button type="button" class="btn sm" onclick="descartarFotoPendente()">Cancelar</button>
+            <button type="button" class="btn sm primary" id="vsi-foto-nova-add"
+                    onclick="adicionarFotoAoItem()">+ add</button>
+          </div>
+        </div>
+
+        <div class="vsi-nota" id="vsi-foto-dica">Toque na foto para numerar o que a legenda descreve.</div>
       </div>
 
       <div class="vsi-resumo" id="vsi-resumo"></div>
@@ -1645,6 +1695,42 @@
            mesmo cuidado de qualquer exclusão do sistema. --}}
       <button class="btn" onclick="fecharItemRelatorio()">Cancelar</button>
       <button class="btn primary" onclick="salvarItemRelatorio()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ VISUALIZADOR DE FOTO (#m-foto-view) ══════
+     O olho da lista abre AQUI, e o lápis abre a edição — antes os dois
+     faziam a mesma coisa. Mesmo visualizador do AppPOSTURAS
+     (`#m-anexo-view`): a foto grande, as setas andando pelas fotos do
+     MESMO item (dá a volta nas pontas, como o visualizador do Windows) e o
+     contador "N de M". Aqui ele mostra também os pinos numerados e a
+     legenda — ver a marca "2" sem saber o que ela aponta é meio caminho. --}}
+<div class="modal-bg" id="m-foto-view" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharVisualizadorDeFoto()">&#10005;</button>
+    <h3 id="foto-view-titulo">Foto</h3>
+    <div class="foto-view-box">
+      <button type="button" class="foto-view-nav foto-view-prev" id="foto-view-prev"
+              title="Anterior" onclick="navegarFoto(-1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="foto-view-palco">
+        <img id="foto-view-img" alt="">
+        <div class="vsi-pinos" id="foto-view-pinos"></div>
+      </div>
+      <button type="button" class="foto-view-nav foto-view-next" id="foto-view-next"
+              title="Próxima" onclick="navegarFoto(1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    <div class="foto-view-legenda" id="foto-view-legenda"></div>
+    <div class="vsi-nota" id="foto-view-meta"></div>
+    <div class="btn-row">
+      <div id="foto-view-contador" class="foto-view-contador"></div>
+      <button class="btn" onclick="fecharVisualizadorDeFoto()">Fechar</button>
     </div>
   </div>
 </div>

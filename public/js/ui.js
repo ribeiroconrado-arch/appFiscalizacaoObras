@@ -234,6 +234,22 @@ function horaAgoraLocal() {
 }
 
 /**
+ * Um instante qualquer em aaaa-mm-ddThh:mm:ss, NO FUSO DO APARELHO.
+ *
+ * É o mesmo formato que o campo de data/hora da vistoria manda, e pela mesma
+ * razão: o banco guarda hora de parede (a aplicação roda em UTC, e o que se
+ * grava é o que o relógio de quem estava lá marcava). `toISOString()` aqui
+ * adiantaria a foto em 4 horas em Cuiabá — ver o aviso no alto desta seção.
+ *
+ * @param {Date} d @returns {string}
+ */
+function instanteLocal(d) {
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+       + `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+/**
  * Converte aaaa-mm-dd em dd/mm/aaaa sem passar por `new Date()`, que
  * interpretaria a string como UTC e poderia devolver o dia anterior.
  * @param {string} iso @returns {string}
