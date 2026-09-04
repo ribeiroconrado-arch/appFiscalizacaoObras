@@ -471,9 +471,14 @@ function montarReguaCadastral() {
   regua.innerHTML = h
   regua.dataset.pronta = String(geral.querySelectorAll('.cad-lanca').length)
 
-  // O clique da régua É o clique do lançador: mesmo `onclick`, mesma função,
-  // mesmo caminho. A régua não sabe o que cada ferramenta faz, e não deve.
-  regua.querySelectorAll('.cad-fer').forEach(f => {
+  // `[data-fer]`, e não `.cad-fer` inteiro.
+  //
+  // O botão de fechar TAMBÉM é um `.cad-fer` — é o mesmo quadrado, com a mesma
+  // aparência — e o seletor sem qualificação sobrescrevia o `onclick` dele por
+  // `acionarFerramenta(undefined)`, que não acha lançador nenhum e retorna em
+  // silêncio. O X ficava na tela, clicável, bonito, e não fechava a mesa. Sem
+  // erro no console: só um botão que não faz nada.
+  regua.querySelectorAll('.cad-fer[data-fer]').forEach(f => {
     f.onclick = () => acionarFerramenta(f.dataset.fer)
   })
   pintarRegua()
@@ -1183,6 +1188,15 @@ function cancelarAtoCadastral() {
   atoState.tipo = null
   if (selState.ativa) { desligarSelecao() }
   largarDesenho()
+
+  // A MESA CONTINUA ABERTA — E A MARCAÇÃO TEM DE VOLTAR A FICAR ARMADA.
+  //
+  // `desligarSelecao` acima desarma, e é o que se quer no celular. Na mesa, sem
+  // isto, o fim de uma unificação deixava a régua na tela viva e inútil: clicar
+  // num lote voltava a abrir o balão, nada mais acendia, e a única saída era
+  // fechar e reabrir a mesa. É o estado em que o operador cai logo depois de
+  // gravar o ato — ou seja, sempre.
+  selecaoLivreNaMesa()
   pintarPainelCadastro()
 }
 
@@ -1222,7 +1236,7 @@ async function gravarUnificacao() {
   confirmarAcao({
     titulo: 'Unificar lotes',
     mensagem: `${selState.ids.size} imóveis deixam de existir e um novo passa a existir. `
-      + 'Os antigos não são apagados: ficam baixados, apontando para o sucessor, e '
+      + 'Os antigos não são apagados: ficam inativos, apontando para o sucessor, e '
       + 'vistorias, obras e documentos continuam neles.',
     textoBtn: 'Unificar',
     onConfirm: async () => {
@@ -1472,7 +1486,7 @@ async function gravarDesmembramento() {
   confirmarAcao({
     titulo: 'Desmembrar lote',
     mensagem: 'O lote de origem deixa de existir e as partes passam a existir. '
-      + 'Ele não é apagado: fica baixado, apontando para as partes, e vistorias, '
+      + 'Ele não é apagado: fica inativo, apontando para as partes, e vistorias, '
       + 'obras e documentos continuam nele.',
     textoBtn: 'Desmembrar',
     onConfirm: async () => {
@@ -1890,7 +1904,7 @@ async function postCadastro(url, corpo) {
 //
 // NÃO é baixa. Baixa é o que acontece com um lote que existiu e deixou de
 // existir — fica na sucessão, apontando para o sucessor. Resíduo nunca existiu:
-// guardá-lo como "baixado" inventaria um ato que não houve.
+// guardá-lo como "inativo" inventaria um ato que não houve.
 //
 // A senha é pedida porque isto é irreversível e o sistema é usado no celular,
 // em campo, com o dedo. Quem confere a senha é o servidor.

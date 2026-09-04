@@ -3098,18 +3098,18 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .desm-bloco-tit{display:flex;align-items:center;gap:8px;margin-bottom:8px;
   font-size:12.5px;font-weight:700;color:var(--chumbo)}
 
-/* Selo do imóvel baixado. Cinza e não vermelho: não é erro nem alerta — é um
+/* Selo do imóvel inativo. Cinza e não vermelho: não é erro nem alerta — é um
    imóvel que cumpriu seu ciclo e virou outros. O que ele precisa é ser
    inconfundível com um imóvel vivo na mesma tabela. */
-.bs-selo-baixado{display:inline-block;padding:1px 7px;border-radius:999px;
+.bs-selo-inativo{display:inline-block;padding:1px 7px;border-radius:999px;
   background:var(--blt);border:1px solid var(--bord);color:var(--tx3);
   font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 
 /* Fica em cima do mapa, centralizado no alto — no mesmo lugar da barra de
    estado do cadastro, porque diz a mesma coisa: há algo em curso na tela. */
-.baixado-sair{position:fixed;z-index:902;top:122px;left:50%;transform:translateX(-50%);
+.inativo-sair{position:fixed;z-index:902;top:122px;left:50%;transform:translateX(-50%);
   background:var(--sur);box-shadow:0 4px 16px rgba(0,0,0,.16)}
-.baixado-sair[hidden]{display:none}
+.inativo-sair[hidden]{display:none}
 
 /* ── FILTRO ESCOLHIDO E AINDA NÃO BUSCADO ──
    As listas deixaram de buscar a cada tecla: agora quem consulta é o botão.
@@ -3141,3 +3141,20 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .cad-selo-sel{border:1px solid transparent;cursor:pointer;position:relative;padding:0}
 .cad-selo-sel:disabled{cursor:default}
 .cad-selo-sel.tem:hover{background:var(--gm)}
+
+/* O chip "N lotes carregados" fica em top:118px/left:12px — debaixo da mesa,
+   que começa dois pixels abaixo no mesmo canto. Enquanto a mesa só aparecia
+   quando alguém a abria, isso passava; com a régua permanente, o número de
+   lotes vive escondido. Ele se desloca o quanto a mesa estiver ocupando. */
+@media (min-width:1000px){
+  body.com-mesa .chip-estado{left:80px}     /* 12 + 56 da régua + 12 */
+  body.mesa-larga .chip-estado{left:350px}  /* 12 + 326 da mesa + 12 */
+}
+
+/* Carimbo de procedência na ficha do documento. Menor e mais apagado que o
+   aviso legal acima dele: é dado de conferência, não instrução. */
+.doc-carimbo{
+  margin:6px 0 0; font-size:11.5px; line-height:1.45; color:var(--tx3);
+  font-style:italic;
+}
+.doc-carimbo[hidden]{display:none}
