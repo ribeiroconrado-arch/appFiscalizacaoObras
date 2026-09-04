@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Cadastro\BairrosDoDesenho;
 use App\Models\Documento;
 use App\Models\Irregularidade;
 use App\Models\OrdemServico;
@@ -199,6 +200,36 @@ class PainelController extends Controller
                 'titulo'  => $semArtigo . ' irregularidade(s) sem artigo vinculado',
                 'detalhe' => 'Sem fundamentação legal o sistema bloqueia a lavratura',
                 'tag'     => ['texto' => 'Bloqueia auto', 'classe' => 'bd-al'],
+                'aba'     => null,
+            ];
+        }
+
+        // 7. Bairro do desenho sem cadastro amarrado.
+        //
+        // ISTO É PENDÊNCIA POR CAUSA DE COMO O DEFEITO SE ESCONDE. Sem a
+        // amarração, `BairrosDoDesenho::oficial` devolve o nome do desenho —
+        // de propósito, porque coluna de bairro vazia seria pior. O preço é que
+        // a falha não parece falha: a tela mostra "Residencial Buritis V" onde
+        // devia mostrar "RESIDENCIAL BURITIS PRIMAVERA V - PRIME", e continua
+        // parecendo certa. Pior: sem o código do bairro não há inscrição
+        // imobiliária, e o imóvel some da busca por inscrição.
+        //
+        // Contamos pelos LOTES, e não pelos bairros do cadastro: bairro
+        // cadastrado que ainda não foi desenhado não é pendência de ninguém.
+        $doDesenho = new BairrosDoDesenho();
+        $soltos = DB::table('lotes')
+            ->where('situacao', 'ativo')
+            ->whereNotNull('bairro')->where('bairro', '<>', '')
+            ->select('bairro')->selectRaw('count(*) as lotes')
+            ->groupBy('bairro')->get()
+            ->filter(fn ($r) => $doDesenho->oficial($r->bairro) === $r->bairro);
+
+        if ($soltos->isNotEmpty()) {
+            $itens[] = [
+                'titulo'  => $soltos->count() . ' bairro(s) do desenho sem cadastro',
+                'detalhe' => $soltos->sum('lotes') . ' lote(s) sem inscrição imobiliária · '
+                    . $soltos->pluck('bairro')->implode(', '),
+                'tag'     => ['texto' => 'Sem inscrição', 'classe' => 'bd-al'],
                 'aba'     => null,
             ];
         }
