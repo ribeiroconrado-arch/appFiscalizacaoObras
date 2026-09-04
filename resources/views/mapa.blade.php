@@ -1670,9 +1670,23 @@
            Antes o arquivo entrava na lista no instante em que era escolhido,
            sem chance de dizer o que ele mostra. --}}
       <div class="vsi-bloco" data-bloco="fotos" hidden>
+        {{-- Câmera e Galeria, com o ícone à frente — o mesmo par do
+             AppPOSTURAS. Em cinza, e não no verde de lá: os dois caminhos
+             valem o mesmo, e a cor de ação principal em ambos não escolheria
+             nada. O ícone é o que se lê primeiro na mão, ao sol. --}}
         <div class="vsi-foto-botoes">
-          <button type="button" class="btn sm" onclick="escolherFotoDaGaleria()">Escolher arquivo</button>
-          <button type="button" class="btn sm" onclick="tirarFotoDaCamera()">Tirar foto</button>
+          <button type="button" class="btn out-cinza sm" onclick="tirarFotoDaCamera()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/></svg>
+            Câmera</button>
+          <button type="button" class="btn out-cinza sm" onclick="escolherFotoDaGaleria()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Galeria</button>
         </div>
 
         {{-- A FICHA DA FOTO PENDENTE. Fica escondida até haver uma escolhida. --}}

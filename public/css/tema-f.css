@@ -1398,6 +1398,11 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    compete com o Editar. */
 .btn.out-verde{background:var(--sur);border-color:var(--g);color:var(--gd)}
 .btn.out-verde:hover{background:var(--gl)}
+/* O mesmo botão de contorno, em cinza — para onde o verde não informa nada.
+   "Câmera" e "Galeria" são dois caminhos IGUAIS para a mesma coisa: pintá-los
+   de verde daria a um deles o peso de ação principal que nenhum tem. */
+.btn.out-cinza{background:var(--sur);border-color:var(--tx3);color:var(--tx2)}
+.btn.out-cinza:hover{background:var(--blt);border-color:var(--tx2);color:var(--tx)}
 
 /* EXCLUIR — branco com contorno vermelho.
    Par do Editar cheio: um chama, o outro adverte. O vermelho fica na borda e
