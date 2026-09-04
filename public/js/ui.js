@@ -215,11 +215,12 @@ function fmtNum(n) {
 
 // ── SETAS DE ABA ─────────────────────────────────────────────
 //
-// Todo formulário de várias abas ganha o mesmo par de controles: primeira,
-// anterior, próxima e última. A barra de abas continua sendo o caminho para
-// quem sabe onde quer chegar; as setas são para quem está preenchendo em
-// ordem — e para o celular, onde o trilho rola de lado e a última aba fica
-// fora da vista.
+// Todo formulário de várias abas ganha os mesmos quatro controles NO RODAPÉ,
+// à esquerda das ações: primeira, anterior, próxima e última. É onde o
+// formulário de documento já os punha, e onde a mão vai parar de qualquer
+// jeito para gravar. A barra de abas continua sendo o caminho de quem sabe
+// onde quer chegar; as setas são para quem preenche em ordem — e para o
+// celular, onde o trilho rola de lado e a última aba fica fora da vista.
 
 /**
  * Para onde uma seta leva, dentro de uma lista de abas.
@@ -245,10 +246,11 @@ function abaAlvo(lista, atual, destino) {
 /**
  * Desliga as setas que não levam a lugar nenhum.
  *
- * Seta que não faz nada quando tocada é pior que seta ausente: ensina a não
- * confiar no controle.
+ * Desabilita em vez de esconder, como o rodapé do formulário de documento já
+ * fazia: o botão desligado diz "aqui é o início/fim", e o que some faz os
+ * outros três dançarem de posição a cada troca de aba.
  *
- * @param {string} idBarra id da barra de setas
+ * @param {string} idBarra id do rodapé que contém as setas
  * @param {Array<string>} lista @param {string} atual
  */
 function pintarSetasDeAba(idBarra, lista, atual) {
@@ -259,7 +261,7 @@ function pintarSetasDeAba(idBarra, lista, atual) {
   const noComeco = i <= 0
   const noFim = i >= lista.length - 1
 
-  barra.querySelectorAll('.aba-seta').forEach(b => {
+  barra.querySelectorAll('[data-ir]').forEach(b => {
     const ir = b.dataset.ir
     b.disabled = (ir === 'primeira' || ir === 'anterior') ? noComeco : noFim
   })

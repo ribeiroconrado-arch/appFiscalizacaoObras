@@ -1543,19 +1543,6 @@
         Fotos <span class="vsi-conta" id="vsi-n-fotos"></span></button>
     </div>
 
-    {{-- As setas de aba: mesmo componente do formulário de documento. Cinco
-         abas cabem na barra num monitor, mas no celular elas rolam de lado e
-         a última fica fora da vista — a seta chega lá sem procurar. --}}
-    <div class="aba-setas" id="vsi-setas">
-      <button type="button" class="aba-seta" data-ir="primeira"
-              onclick="irAbaItem('primeira')" title="Primeira aba">&laquo;</button>
-      <button type="button" class="aba-seta" data-ir="anterior"
-              onclick="irAbaItem('anterior')" title="Aba anterior">&lsaquo;</button>
-      <button type="button" class="aba-seta principal" data-ir="proxima"
-              onclick="irAbaItem('proxima')" title="Próxima aba">&rsaquo;</button>
-      <button type="button" class="aba-seta" data-ir="ultima"
-              onclick="irAbaItem('ultima')" title="Última aba">&raquo;</button>
-    </div>
 
     {{-- O CORPO TEM DUAS PARTES, sempre nesta ordem:
 
@@ -1720,7 +1707,23 @@
       <div class="vsi-resumo" id="vsi-resumo"></div>
     </div>
 
-    <div class="doc-foot">
+    {{-- RODAPÉ: navegação entre abas à esquerda, ações à direita — a mesma
+         divisão do formulário de documento, que é onde este padrão nasceu.
+         As setas ficam aqui, e não sob as abas: é o rodapé que a mão já
+         procura para gravar, e as duas coisas que se faz ao terminar uma aba
+         (ir para a próxima, ou fechar) passam a ficar no mesmo lugar. --}}
+    <div class="doc-foot" id="vsi-setas">
+      <div class="foot-setas">
+        <button class="btn sm" data-ir="primeira" title="Primeira aba"
+                onclick="irAbaItem('primeira')">&laquo;</button>
+        <button class="btn" data-ir="anterior" title="Aba anterior"
+                onclick="irAbaItem('anterior')">&lsaquo;</button>
+        <button class="btn primary" data-ir="proxima" title="Próxima aba"
+                onclick="irAbaItem('proxima')">&rsaquo;</button>
+        <button class="btn sm" data-ir="ultima" title="Última aba"
+                onclick="irAbaItem('ultima')">&raquo;</button>
+      </div>
+      <div style="flex:1"></div>
       {{-- "Excluir item" saiu daqui. Item recém-criado que ainda não foi
            Guardado não tem o que excluir — ele só existe se você cancelar
            (e some sozinho, vazio). Item já na lista se exclui DE LÁ, com o
@@ -1817,19 +1820,9 @@
       <button class="doc-tab" data-aba="anexos"   onclick="irAbaDoc('anexos')">Anexos</button>
       <button class="doc-tab" data-aba="resumo"   onclick="irAbaDoc('resumo')">Resumo</button>
     </div>
-
-    {{-- Mesmas setas da janela do item: cinco abas numa peça longa, e a
-         navegação não pode depender de acertar o alvo certo no trilho. --}}
-    <div class="aba-setas" id="fd-setas">
-      <button type="button" class="aba-seta" data-ir="primeira"
-              onclick="irAbaDocPara('primeira')" title="Primeira aba">&laquo;</button>
-      <button type="button" class="aba-seta" data-ir="anterior"
-              onclick="irAbaDocPara('anterior')" title="Aba anterior">&lsaquo;</button>
-      <button type="button" class="aba-seta principal" data-ir="proxima"
-              onclick="irAbaDocPara('proxima')" title="Próxima aba">&rsaquo;</button>
-      <button type="button" class="aba-seta" data-ir="ultima"
-              onclick="irAbaDocPara('ultima')" title="Última aba">&raquo;</button>
-    </div>
+    {{-- As setas de aba desta peça ficam NO RODAPÉ (#fd-primeira e as três
+         seguintes), que é onde o sistema as põe desde sempre — junto das
+         ações, na mão que já está lá para gravar. --}}
   </div>
 
   {{-- ── CORPO ROLÁVEL ── --}}
@@ -1958,10 +1951,12 @@
        Navegação entre abas à esquerda; ações à direita. Quais ações aparecem
        depende do estado — ver renderRodapeDoc(). --}}
   <div class="doc-foot">
-    <button class="btn sm" id="fd-primeira" title="Primeira aba" onclick="irAbaDoc('autuado')">&laquo;</button>
-    <button class="btn" id="fd-voltar" title="Aba anterior" onclick="passoAbaDoc(-1)">&lsaquo;</button>
-    <button class="btn primary" id="fd-avancar" title="Próxima aba" onclick="passoAbaDoc(1)">&rsaquo;</button>
-    <button class="btn sm" id="fd-ultima" title="Última aba" onclick="irAbaDoc('resumo')">&raquo;</button>
+    <div class="foot-setas">
+      <button class="btn sm" id="fd-primeira" title="Primeira aba" onclick="irAbaDoc('autuado')">&laquo;</button>
+      <button class="btn" id="fd-voltar" title="Aba anterior" onclick="passoAbaDoc(-1)">&lsaquo;</button>
+      <button class="btn primary" id="fd-avancar" title="Próxima aba" onclick="passoAbaDoc(1)">&rsaquo;</button>
+      <button class="btn sm" id="fd-ultima" title="Última aba" onclick="irAbaDoc('resumo')">&raquo;</button>
+    </div>
     <div style="flex:1"></div>
 
     <div class="df-opcoes" id="fd-opcoes-wrap" hidden>

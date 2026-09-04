@@ -242,26 +242,6 @@
   font-weight:700;color:var(--tx3);white-space:nowrap;transition:background .15s,color .15s}
 .sub-abas button.at{background:var(--sur);color:var(--tx);box-shadow:var(--sh)}
 
-/* ── SETAS DE ABA ──
-   Primeira, anterior, próxima e última, para todo formulário de várias abas.
-   A barra de abas continua sendo o caminho de quem sabe onde quer chegar;
-   estas são para quem preenche em ordem — e para o celular, onde o trilho
-   rola de lado e a última aba fica fora da vista. A PRÓXIMA é a cheia: num
-   formulário que se preenche do começo ao fim, avançar é o gesto comum, e as
-   outras três são saídas eventuais. */
-.aba-setas{display:flex;gap:8px;justify-content:center;align-items:center;
-  margin:10px 0 0;flex-shrink:0}
-.aba-seta{width:34px;height:34px;border-radius:50%;flex-shrink:0;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--blt);border:none;color:var(--tx2);
-  font-size:15px;line-height:1;font-family:inherit;
-  transition:background .13s,color .13s,opacity .13s}
-.aba-seta:hover:not(:disabled){background:var(--bord);color:var(--tx)}
-.aba-seta.principal{background:var(--g);color:#fff}
-.aba-seta.principal:hover:not(:disabled){background:var(--gd);color:#fff}
-/* Desligada e não escondida: o lugar dela na fila é uma informação — some com
-   o botão e os outros três dançam de posição a cada troca de aba. */
-.aba-seta:disabled{opacity:.35;cursor:default}
 /* Altura fixa e rolagem interna: sem isto cada aba esticava o modal ao
    tamanho do próprio conteúdo, e a janela pulava de tamanho a cada troca de
    aba. Com altura travada, todas as abas ocupam o mesmo container. */
@@ -1280,11 +1260,25 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .doc-painel{display:none}
 .doc-painel.ativa{display:block}
 
-.doc-foot{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:12px 18px;
-  border-top:1.5px solid var(--bord);background:var(--sur)}
+/* `flex-wrap` é rede de segurança, não desenho: o rodapé ganha botões
+   conforme o estado da peça (Opções, Sair, Editar, Lavrar…), e em algum
+   estado a soma passa da largura de um celular. Passando, as ações descem
+   uma linha — que é feio, mas é melhor que "Gravar" cortado na borda. */
+.doc-foot{flex-shrink:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  padding:12px 18px;border-top:1.5px solid var(--bord);background:var(--sur)}
 .doc-foot .btn.sm{padding:7px 10px;font-size:13px}
 .doc-foot .btn:disabled{opacity:.4;cursor:default}
 .doc-foot [hidden]{display:none !important}
+/* As quatro setas andam JUNTAS: agrupadas, a quebra de linha no celular é
+   uma decisão (elas ficam numa faixa própria, as ações na de baixo, cada uma
+   inteira) e não o acaso de qual botão não coube — que foi o que aconteceu
+   quando eram quatro filhos soltos do rodapé e "Guardar" desceu sozinho. */
+.foot-setas{display:flex;align-items:center;gap:8px;flex-shrink:0}
+@media(max-width:560px){
+  .doc-foot{gap:6px;padding:10px 12px}
+  .foot-setas{flex-basis:100%;gap:5px}
+  .foot-setas .btn{padding:7px 10px;font-size:13px}
+}
 
 /* Editar em verde de contorno e Lavrar em âmbar: são atos de peso diferente e
    a cor separa os dois à distância, como no AppPOSTURAS. */
