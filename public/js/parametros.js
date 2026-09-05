@@ -39,6 +39,12 @@ function abrirParametros() {
 function subParametros(nome) {
   document.querySelectorAll('.sub-abas > button[data-sub]').forEach(b => b.classList.toggle('at', b.dataset.sub === nome))
   document.querySelectorAll('.par-painel').forEach(p => p.classList.toggle('at', p.id === 'par-' + nome))
+
+  // A TRILHA CARREGA SÓ QUANDO ABRE, e não junto de `carregarParametros`.
+  // Ela é a única aba cujo conteúdo cresce sem parar — 244 linhas hoje,
+  // milhares em um ano — e trazê-la na abertura de Parâmetros faria toda
+  // visita à tela pagar por um dado que quase ninguém vai olhar.
+  if (nome === 'trilha' && typeof carregarTrilha === 'function') { carregarTrilha() }
 }
 
 async function carregarParametros() {

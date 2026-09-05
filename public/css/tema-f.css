@@ -3158,3 +3158,42 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   font-style:italic;
 }
 .doc-carimbo[hidden]{display:none}
+
+/* ── A TRILHA DE ALTERAÇÕES ──
+   Uma linha por evento, lida da esquerda para a direita: quando, o quê, em quem,
+   e o que mudou. O antes/depois é a razão de a tela existir — é o que a
+   "Atividade recente" do Painel não diz. */
+.tr-filtros{display:flex;gap:9px;flex-wrap:wrap}
+.tr-filtros select,.tr-filtros input{
+  flex:1 1 150px;min-width:0;padding:8px 10px;border:1.5px solid var(--bord);
+  border-radius:8px;background:var(--sur);color:var(--tx);font:inherit;font-size:13px;
+}
+.tr-filtros input[type=number]{flex:0 0 120px}
+
+.tr-linha{
+  display:flex;align-items:baseline;gap:12px;padding:11px 4px;
+  border-bottom:1px solid var(--blt);font-size:13.6px;flex-wrap:wrap;
+}
+.tr-linha:last-child{border-bottom:none}
+.tr-quando{flex:0 0 104px;font-family:ui-monospace,monospace;font-size:12.2px;color:var(--tx3)}
+.tr-acao{flex:0 0 122px;font-weight:700;color:var(--tx2)}
+.tr-acao.perigosa{color:var(--red)}
+.tr-alvo{flex:1 1 190px;min-width:0;color:var(--tx)}
+.tr-bairro{color:var(--tx3);font-size:12.5px}
+.tr-quem{display:block;font-size:12.2px;color:var(--tx3)}
+.tr-mudou{flex:1 1 230px;min-width:0;display:flex;flex-wrap:wrap;gap:5px}
+.tr-delta{
+  font-family:ui-monospace,monospace;font-size:11.8px;color:var(--tx2);
+  background:var(--blt);border-radius:5px;padding:2px 8px;
+  /* O valor vem cru da auditoria e pode ser longo. O controller já corta em 60
+     caracteres; isto garante que mesmo esses 60 quebrem dentro da caixa em vez
+     de empurrar a linha para fora dela. */
+  max-width:100%;overflow-wrap:anywhere;
+}
+.tr-delta b{color:var(--tx);font-weight:600}
+.tr-seta{color:var(--tx3)}
+/* "Sem volta" é constatação, não alerta: cinza, com o motivo no título. */
+.tr-sem-volta{
+  font-size:11.8px;color:var(--tx3);border:1px solid var(--bord);
+  border-radius:999px;padding:3px 10px;white-space:nowrap;cursor:help;
+}

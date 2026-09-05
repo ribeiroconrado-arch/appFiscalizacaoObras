@@ -134,7 +134,14 @@ trait RegistraAuditoria
     protected function limparAuditoria(array $dados): array
     {
         $ocultar = array_merge(
-            ['password', 'remember_token', 'geom', 'assinatura_agente', 'assinatura_autuado'],
+            // `assinatura` é a rubrica do perfil do usuário, guardada como
+            // data URL de PNG. Sem ela na lista, cada alteração de perfil
+            // gravava a IMAGEM INTEIRA em base64 dentro da linha de auditoria:
+            // 300 KB por linha, e uma célula de 320 mil pixels de largura na
+            // tela da trilha. As irmãs dela (`assinatura_agente`,
+            // `assinatura_autuado`) já estavam aqui; esta escapou.
+            ['password', 'remember_token', 'geom',
+             'assinatura', 'assinatura_agente', 'assinatura_autuado'],
             property_exists($this, 'auditoriaOculta') ? $this->auditoriaOculta : []
         );
 

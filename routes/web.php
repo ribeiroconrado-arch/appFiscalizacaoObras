@@ -11,6 +11,7 @@ use App\Http\Controllers\LegislacaoController;
 use App\Http\Controllers\MapaController;
 use App\Http\Controllers\PainelController;
 use App\Http\Controllers\ParametroController;
+use App\Http\Controllers\TrilhaController;
 use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\OrdemServicoController;
 use App\Http\Controllers\ProtocoloController;
@@ -198,6 +199,15 @@ Route::middleware('auth')->group(function () {
         Route::delete('/perfil/assinatura', [PerfilController::class, 'excluirAssinatura']);
 
         // Parâmetros do sistema (só administrador — trava no controller)
+        // A TRILHA DE ALTERAÇÕES — quem mexeu no quê, e o que mudou.
+        //
+        // Fica no grupo de parâmetros porque é onde ela mora na tela, mas a
+        // permissão é decidida no controller e não aqui: ela vale para
+        // administrador OU curador do cadastro, e o middleware do grupo não
+        // distingue os dois.
+        Route::get('/trilha', [TrilhaController::class, 'index']);
+        Route::post('/trilha/{id}/desfazer', [TrilhaController::class, 'desfazer']);
+
         Route::get('/parametros', [ParametroController::class, 'index']);
         Route::post('/parametros/usuarios', [ParametroController::class, 'salvarUsuario']);
         Route::post('/parametros/geral', [ParametroController::class, 'salvarGeral']);

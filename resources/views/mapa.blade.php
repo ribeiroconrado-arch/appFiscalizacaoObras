@@ -769,6 +769,7 @@
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
     <button data-sub="irregularidades" onclick="subParametros('irregularidades')">Irregularidades</button>
     <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
+    <button data-sub="trilha" onclick="subParametros('trilha')">Trilha</button>
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
 
@@ -927,6 +928,62 @@
   {{-- BAIRROS — cadastro direto na linha, como a UPF: são três campos curtos,
        e abrir uma janela para digitar um código e um nome custa mais do que o
        dado vale. --}}
+  {{-- TRILHA DE ALTERAÇÕES — quem mexeu no quê, e o que mudou.
+
+       O dado sempre existiu: a auditoria é um trait de eventos do Eloquent, e
+       nenhuma operação escapa dela. O que não existia era como chegar até ele —
+       havia as 12 linhas mais recentes no Painel, e mais nada.
+
+       Só administrador e curador veem: a trilha mostra o NOME de quem fez cada
+       coisa, e num órgão isso pesa diferente de ver o que foi feito. O fiscal
+       continua com a "Atividade recente", que é o resumo. --}}
+  <div class="par-painel par-fixo" id="par-trilha">
+    <div class="par-fixo-topo">
+      <div class="sec-simples">Trilha de alterações <span class="cont" id="cont-trilha">0</span></div>
+      <p class="aviso-legal">
+        Toda alteração de lote fica registrada com <b>quem</b>, <b>quando</b> e o
+        <b>valor de antes</b>. Desfazer não apaga o registro: grava uma linha nova,
+        porque num processo administrativo apagar o erro é pior que o erro.
+      </p>
+
+      {{-- Mesmo invólucro das outras listas: caixa branca, Buscar e Limpar, e a
+           busca acontecendo só no botão. --}}
+      <div class="busca-form lista-form">
+        <div class="filtro-barra">
+          <div class="filtro-busca">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+            <input type="text" id="tr-busca" placeholder="Buscar por pessoa ou descrição…"
+                   oninput="filtrarTrilha('busca', this.value)">
+          </div>
+        </div>
+        <div class="tr-filtros">
+          <select id="tr-acao" onchange="filtrarTrilha('acao', this.value)">
+            <option value="">Todas as ações</option>
+          </select>
+          <select id="tr-pessoa" onchange="filtrarTrilha('user_id', this.value)">
+            <option value="">Todas as pessoas</option>
+          </select>
+          <select id="tr-dias" onchange="filtrarTrilha('dias', this.value)">
+            <option value="30">Últimos 30 dias</option>
+            <option value="7">Últimos 7 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="">Desde o começo</option>
+          </select>
+          <input type="number" id="tr-lote" min="1" placeholder="Nº do lote"
+                 oninput="filtrarTrilha('lote_id', this.value)">
+        </div>
+        <div class="btn-row lista-form-acoes">
+          <button type="button" class="btn" onclick="limparTrilha()">Limpar</button>
+          <button type="button" class="btn primary" id="tr-buscar"
+                  onclick="carregarTrilha()">Buscar</button>
+        </div>
+      </div>
+    </div>
+    <div class="par-fixo-lista" id="lista-trilha"></div>
+  </div>
+
+
   <div class="par-painel par-fixo" id="par-bairros">
     <div class="par-fixo-topo">
       <div class="sec-simples">Bairros do município <span class="cont" id="cont-bairros">0</span></div>
@@ -3262,6 +3319,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/perfil.js')"></script>
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
+<script src="@assetv('js/trilha.js')"></script>
 @endif
 <script src="@assetv('js/app.js')"></script>
 </body>
