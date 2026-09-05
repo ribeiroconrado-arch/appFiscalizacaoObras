@@ -3,7 +3,7 @@
 > O que foi construído, em ordem, e **o que cada bloco resolveu**. Serve para
 > entender por que o código está como está — a mensagem de commit costuma
 > guardar a razão inteira.
-> 72 commits · 18/08/2026 → 04/09/2026 · atualizado em 04/09/2026.
+> 91 commits · 18/08/2026 → 05/09/2026 · atualizado em 05/09/2026.
 
 ## Como ler
 
@@ -202,6 +202,104 @@ cadastro**; o do desenho fica só no rótulo do mapa. Um auto de infração que
 cite bairro pelo apelido da planta cita bairro que não existe no registro.
 
 ---
+
+## 04/09 · A busca passa a ser um ato
+
+`b533a3c` `afafe69`
+
+As listas de Documentos e da fila consultavam a cada tecla e a cada troca de
+seletor. Agora quem consulta é o botão Buscar; Enter vale como clique; o
+combobox que pesquisa dentro do próprio campo fica como estava. Um ponto âmbar
+avisa que há filtro escolhido e ainda não aplicado — sem ele, trocar o seletor
+e nada acontecer se lê como defeito.
+
+O overlay de carregamento passou a cobrir Consulta, Documentos, fila e abertura
+de ficha. Ele só aparece depois de 180 ms, então busca rápida não pisca.
+
+↳ **decisão** Bairro do desenho sem cadastro amarrado virou pendência no
+Painel. O bairro 90 tinha 1.528 lotes sem inscrição imobiliária e nada na tela
+dizia por quê — `oficial()` devolve o nome do desenho quando não há amarração,
+e a falha não parece falha.
+
+## 04/09 · A régua, e a marcação antes da ferramenta
+
+`c249ca0` `0892c0b` `2bb869f`
+
+A mesa do cadastro ganhou uma régua de ícones encostada na borda: a ociosa caiu
+de 326px para 56, e trocar de ferramenta virou um clique. A régua é montada a
+partir dos próprios botões do lançador — catálogo em JavaScript seria uma
+segunda verdade, e a permissão de curador, que é `@if` no Blade, não chegaria
+a ele.
+
+↳ **decisão** A ordem do trabalho inverteu: **marca-se primeiro, e a marcação
+acende as ferramentas**. Unificar nasce apagado e acende no segundo lote;
+desmembrar apaga no mesmo instante. A exigência deixou de ser um texto que
+alguém precisa lembrar e virou o estado do botão.
+
+Três defeitos da própria régua vieram depois: o X não fechava (o seletor
+`.cad-fer` sobrescrevia o `onclick` dele por `acionarFerramenta(undefined)`,
+sem erro no console), a régua ficava viva e inútil depois de um ato, e o chip
+de lotes carregados vivia escondido atrás da mesa.
+
+## 04/09 · "Baixado" vira "inativo", e o documento diz de quando é
+
+`f705dfb` `1ff9753`
+
+O sistema tributário chama de INATIVO o imóvel que saiu do cadastro; o nosso
+chamava de "baixado". Duas palavras para o mesmo estado é uma tradução que
+alguém faz de cabeça toda vez. Renomeados o valor, a coluna (`inativado_em`) e
+os comentários — vocabulário meio trocado custa mais que nenhum.
+
+↳ **decisão** A colisão com `bci_imoveis.isencao = 'Inativo'` é consciente: são
+fatos diferentes com a mesma palavra, e a escolha é falar a língua do cadastro.
+
+O documento ganhou **carimbo de procedência**: de quando é o dado cadastral que
+ele usou, e de onde veio. Aplicado na lavratura, junto do prazo e da rubrica,
+porque é ali que o conteúdo congela. Cópia e não referência — a linha do BCI é
+substituída inteira a cada integração.
+
+## 04–05/09 · O cadastro ganha volta
+
+`fdcb1a6` `8df1d0f` `e6b0769` `ffe942c`
+
+Apagar lote era a única operação sem volta, e não por decisão: o escopo global
+`sem_geometria` tira `geom` de toda consulta do Eloquent, então o desenho nunca
+chegava à auditoria. `lotes_apagados` guarda a linha inteira com o polígono, na
+mesma transação da exclusão.
+
+↳ **decisão** Restaurar devolve o lote com **id novo**. Reciclar o antigo faria
+vistorias e documentos órfãos voltarem a apontar para ALGO — e esse algo seria
+outro imóvel.
+
+↳ **decisão** **Desfazer é ato novo, nunca apagamento do anterior.** A reversão
+grava a sua própria linha. Num processo administrativo, apagar o erro é pior
+que o erro.
+
+A primeira versão pôs a trilha numa aba de Parâmetros. Errado duas vezes, e o
+usuário apontou as duas: desfazer é trabalho de cadastro — de quem está no mapa
+com o lote à frente —, e Parâmetros não é lugar de auditoria. O histórico virou
+ferramenta da régua, ao lado das outras de curadoria, e mostra **só o que sabe
+desfazer**. Isso também matou o ruído da unificação, que escrevia uma linha por
+lote de origem.
+
+O desmembramento entrou por último e exigiu mover a auditoria do ato: cada
+parte gravava `desmembrou`, então três partes eram três linhas e nenhuma delas
+ERA o ato. Agora a parte grava `criou` e o ato grava uma linha no pai.
+
+## 05/09 · Nenhuma assinatura na trilha
+
+`dd56d22`
+
+A tela do histórico revelou um defeito de agosto: assinaturas em base64 dentro
+das linhas de auditoria — 613 KB em treze linhas, 40% da tabela, e uma célula
+de 320 mil pixels de largura.
+
+↳ **decisão** A lista nominal de campos ocultos virou **regra por nome**:
+qualquer coluna com "assinatura" sai, exceto `recusa_assinatura`, que é
+booleano e informação do processo. A lista nominal falhou duas vezes — nasceu
+sem `assinatura`, e depois sem `assinatura_emitente`. A segunda só apareceu
+porque fui buscar os números para explicar a primeira.
+
 
 ## Padrões que este histórico revela
 

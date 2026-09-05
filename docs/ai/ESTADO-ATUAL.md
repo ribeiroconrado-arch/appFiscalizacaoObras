@@ -12,7 +12,7 @@
 
 | Tabela | Linhas | Observação |
 |---|---:|---|
-| `lotes` | **2.235** | 2 bairros levantados; 0 baixados |
+| `lotes` | **2.235** | 2 bairros levantados; 0 inativos; **0 sem quadra** |
 | `cadastro_bairros` | 125 | **só 2 amarrados ao desenho** |
 | `cadastro_externo_imoveis` | 990 | exportação da prefeitura, **só do bairro 124** |
 | `irregularidades` | 20 | **18 sem artigo vinculado** |
@@ -22,7 +22,8 @@
 | `protocolos` / `ordens_servico` | 4 / 2 | |
 | `evidencias` | 3 | |
 | `edificacoes` | 0 | recurso novo, sem uso ainda |
-| `auditoria` | 138 | |
+| `lotes_apagados` | 2 | dois resultantes de unificação desfeita, com o desenho guardado |
+| `auditoria` | 255 | |
 | `users` | 3 | |
 
 **Leitura honesta:** a base cartográfica está carregada e a aplicação está
@@ -67,17 +68,13 @@ Para resolver: carregar a exportação XLSX dos bairros 105 e 90 com
 o zero à esquerda — foi corrigido em `5adc833`. A consulta antiga achava 0
 linhas; a corrigida acha 990.)*
 
-### 🟡 101 lotes sem quadra no desenho
+### ✅ Os 101 lotes sem quadra — resolvido
 
-De 2.235 lotes, **101 estão sem quadra** (e 4 sem número de lote) — todos no
-Buritis. Consequências:
+Eram 101 lotes sem quadra e 4 sem número, todos no Buritis, sem inscrição
+imobiliária e fora da busca por intervalo de BCI. **Corrigidos pelo usuário na
+tela**, em 04–05/09, com a ferramenta de correção em massa.
 
-- não têm inscrição imobiliária (o sistema devolve vazio, não inventa)
-- ficam fora de qualquer busca por intervalo de BCI
-- são a origem dos "21 grupos de inscrição repetida" que a conferência acusa —
-  entre lotes **com** quadra não há repetição nenhuma
-
-Precisa de conferência contra o DWG. É dado de origem, não defeito de software.
+Hoje a base tem **zero** lotes sem quadra e zero sem número.
 
 ### 🟡 18 das 20 irregularidades não têm artigo vinculado
 

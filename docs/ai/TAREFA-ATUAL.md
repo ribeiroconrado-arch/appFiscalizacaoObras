@@ -44,7 +44,7 @@ dado, e dependem do usuário:
 1. alimentar a legislação (18 irregularidades sem artigo travam a lavratura)
 2. carregar a exportação do cadastro dos bairros 105 e 90 (a aba BCI está
    vazia para todos os imóveis)
-3. conferir os 101 lotes sem quadra contra o DWG do Buritis
+3. ~~conferir os 101 lotes sem quadra~~ — **feito em 04–05/09**, pela tela
 
 ## Antes de começar qualquer coisa
 

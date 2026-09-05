@@ -36,15 +36,34 @@ com desenho (105 e 90) não têm exportação — então a aba BCI está vazia p
 
 Onde: `php artisan cadastro:carregar <arquivo.xlsx>`.
 
-### 🟡 [dado] Conferir os 101 lotes sem quadra
-
-Não têm inscrição, ficam fora da busca por intervalo, e são a origem das
-"inscrições repetidas" que a conferência acusa. Precisa de olho no DWG do
-Buritis.
-
 ---
 
 ## 2 · Fechar buracos que já morderam
+
+### 🟡 Recorte de colunas em `Documento` — antes de a assinatura entrar em uso
+
+`DocumentoController::index` traz **todas** as colunas de `documentos`, e duas
+delas são assinaturas em data URL (~14 KB cada). Hoje é grátis: em produção há 4
+documentos e nenhuma assinatura gravada. No dia em que o contribuinte passar a
+assinar, cada abertura da lista puxa até 300 × 28 KB ≈ 8 MB para desenhar uma
+tabela que não mostra assinatura nenhuma. A ficha do imóvel tem o mesmo padrão.
+
+O remédio é o que o `Lote` já faz: constante `COLUNAS` no model, assinatura
+fora, e carregamento explícito na impressão. **Fazer ANTES de a captura de
+assinatura existir** — depois vira investigação de lentidão sem causa aparente,
+que é o jeito caro de descobrir a mesma coisa.
+
+Ver ARQUITETURA → "Coluna pesada e o `SELECT *`" para os números medidos.
+
+### 🟢 Limpar as assinaturas antigas da auditoria
+
+Treze linhas de agosto carregam PNG em base64 dentro de `dados_novos` — 613 KB,
+40% da tabela. A causa está corrigida (regra por nome em `limparAuditoria`); o
+que sobra é o passado. Trocar o base64 por `[omitido]`, preservando quem,
+quando e os demais campos.
+
+**É escrita sobre trilha de auditoria** — não se faz sem o usuário mandar.
+
 
 ### 🟡 Combo no lugar do "Nome no desenho"
 
@@ -100,17 +119,22 @@ só existe no terminal. Caberiam em Parâmetros, como relatório.
 
 ## 4 · Completar o ciclo do processo
 
-### 🟢 Etapa 5 do plano de lotes — o baixado na Consulta
+### 🟡 A sucessão na ficha — payload calculado que ninguém lê
 
-Metade já existe: unificação e desmembramento deixam o lote com
-`situacao = 'baixado'`, o mapa não o desenha, e a Consulta tem o filtro
-"incluir baixados". Falta:
+`BuscaController::sucessao()` monta as origens e os destinos de cada lote a
+**toda abertura de ficha**, e `busca.js` não usa o campo: `d.sucessao` não
+aparece uma vez no front. É trabalho de banco pago em toda consulta para nada.
 
-- selo e data da baixa no resultado
-- abrir um baixado desenhando **só ele**, tracejado, por cima da camada
-- a ficha dele mostrar o ato que o baixou e para quais lotes ele foi
+O resto da Etapa 5 do plano de lotes **já está pronto** (conferido em 05/09):
+selo com a data no resultado da Consulta (`.bs-selo-inativo`), filtro "incluir
+imóveis inativos", e "Ver o contorno antigo no mapa" desenhando só o lote,
+tracejado (`dashArray '7,6'`), num pane próprio.
 
-Como não há lote baixado em produção, isto ainda não incomodou ninguém.
+Falta a ficha do inativo dizer **o ato que o inativou e para quais lotes ele
+foi** — que é justamente o `sucessao` já calculado. É render, não consulta.
+
+Deixou de ser hipotético: **há 4 lotes inativos em produção** desde 04/09, da
+unificação da Q21.
 
 ### 🟢 Área construída vinda das edificações
 

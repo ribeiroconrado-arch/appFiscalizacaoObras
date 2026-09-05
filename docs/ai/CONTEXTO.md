@@ -85,7 +85,7 @@ anula, e a anulação fica registrada. Formulário gravado que continua aberto
 para digitação convida à alteração acidental de peça de processo.
 
 **Nada se apaga em silêncio.** Lote unificado ou desmembrado não some: fica
-`situacao = 'baixado'`, apontando para os sucessores. Vistorias e peças
+`situacao = 'inativo'`, apontando para os sucessores. Vistorias e peças
 continuam penduradas nele.
 
 **Toda alteração de identificação de imóvel é auditada.** Quadra, número de

@@ -71,7 +71,7 @@ Os controllers validam, chamam e devolvem JSON. Quem decide é o serviço:
 | `LavraturaService` | que artigos enquadram as irregularidades constatadas |
 | `UnificacaoDeLotes` | dois lotes podem virar um? o que isso produz? |
 | `DesmembramentoDeLote` | um lote pode virar N? as partes preservam o contorno? |
-| `SucessaoDeLotes` | quem sucedeu quem, e o que fica pendurado no baixado |
+| `SucessaoDeLotes` | quem sucedeu quem, e o que fica pendurado no inativo |
 | `DesenhoDeLote` | o polígono desenhado é aceitável (não sobrepõe, fecha figura)? |
 | `QuadraDoQuarteirao` / `QuadraDeLotesSelecionados` | correção de quadra em massa |
 | `DocumentoImpressao` / `VistoriaImpressao` | montam o que vai para o papel |
@@ -182,6 +182,23 @@ Modelos com auditoria têm `acaoAuditoria()` sobrescrito para dizer o que
 mudou em vez de "alterou" genérico: `Lote` distingue "corrigiu quadra",
 "renumerou", "alterou inscrição", "baixou", "reativou".
 
+### Nenhuma assinatura entra na trilha
+
+`limparAuditoria` omite, por REGRA DE NOME, qualquer coluna cujo nome contenha
+"assinatura" — exceto `recusa_assinatura`, que é booleano e informação do
+processo (o autuado se recusou a assinar), não uma imagem.
+
+A regra é por nome porque a lista nominal falhou duas vezes: nasceu com
+`assinatura_agente` e `assinatura_autuado`, esqueceu `assinatura` (perfil e
+fiscal na OS) e depois `assinatura_emitente` (ordem de serviço). Campo de
+assinatura novo já nasce coberto.
+
+**Treze linhas antigas em produção ainda carregam os blobs** (613 KB). Limpá-las
+é escrita sobre trilha de auditoria — decisão do usuário, não da implementação.
+O que se faria é trocar o base64 por `[omitido]`, preservando quem, quando e os
+demais campos.
+
+
 ## Armadilha do `Lote::COLUNAS`
 
 `Lote` restringe o `SELECT` a uma lista fixa de colunas — `geom` fica fora de
@@ -191,6 +208,67 @@ propósito (viria como WKB binário e estouraria a serialização JSON).
 erro: `$lote->campoNovo` devolve `null`, o filtro passa como se estivesse tudo
 certo, e a auditoria compara contra um original que não tem o campo. Quem
 acrescenta coluna em `lotes` acrescenta ali também.
+
+## Coluna pesada e o `SELECT *` — a regra que o `Lote` já aplica
+
+A seção acima trata `Lote::COLUNAS` como armadilha. Ela também é um **padrão a
+copiar**: tabela com coluna grande precisa de recorte explícito, senão toda
+consulta que não a usa paga por ela.
+
+**Colunas grandes que existem hoje:**
+
+| tabela | coluna | o que é | tamanho medido |
+|---|---|---|---|
+| `lotes` | `geom` | polígono | recortada — fora de `COLUNAS` |
+| `lotes_apagados` | `geom` | polígono do lote apagado | consulta própria |
+| `users` | `assinatura` | PNG em data URL | **14 KB** (620×420, aparada) |
+| `documentos` | `assinatura_agente`, `assinatura_autuado` | idem | ~14 KB cada |
+| `ordens_servico` | `assinatura_emitente` | idem | ~14–29 KB |
+| `os_fiscais` | `assinatura` | idem | ~14 KB |
+| `auditoria` | `dados_anteriores`, `dados_novos` | JSON do antes/depois | ver abaixo |
+
+**`Documento` NÃO tem recorte.** `DocumentoController::index` faz
+`Documento::query()->…->limit(300)->get()`, e o Eloquent traz todas as colunas.
+Hoje isso não custa nada porque não há assinatura gravada em documento nenhum
+(conferido em produção: 4 documentos, 0 assinaturas). Com o campo em uso, cada
+abertura da lista passa a trazer até **300 × 28 KB ≈ 8 MB** do banco para o PHP,
+para desenhar uma tabela que não mostra assinatura alguma. O mesmo vale para a
+ficha do imóvel (`Documento::where('lote_id', …)->limit(20)`).
+
+Não trava: fica lento aos poucos, e do jeito mais difícil de diagnosticar —
+porque "sempre funcionou".
+
+**A regra, quando for mexer em consulta:** coluna que a tela não desenha não
+entra no `SELECT`. Ela é carregada explicitamente por quem precisa dela — a
+impressão, no caso da assinatura.
+
+### O volume não é o problema; a consulta é
+
+Medido em produção: uma assinatura aparada ocupa **14 KB**. Um documento
+assinado pelas duas partes, ~28 KB. Projetando:
+
+| documentos/ano | por ano | em 10 anos |
+|---|---|---|
+| 500 | 14 MB | 140 MB |
+| 2.000 | 56 MB | 560 MB |
+| 5.000 | 140 MB | 1,4 GB |
+
+O banco inteiro tem 10,6 MB e o servidor tem 39 GB livres de 45. **Guardar
+assinatura no banco está certo** — ela é parte do documento, viaja com ele no
+backup e não pode depender de um arquivo que alguém move de lugar. Migrar para
+disco trocaria um problema simples por um de sincronia entre banco e sistema de
+arquivos, e só se justificaria com número na mão.
+
+O efeito colateral que sobra é o **backup**: `mysqldump` é texto, e base64 não
+comprime bem.
+
+### O aviso barato que já veio
+
+`auditoria` tem 1,56 MB em 231 linhas — e **613 KB disso eram assinaturas**
+vazadas em treze linhas. Quarenta por cento de uma tabela, por um campo que
+ninguém ia ler. A causa está corrigida (ver Auditoria), mas serve de medida: é o
+que acontece quando imagem entra onde não devia.
+
 
 ## Duas colações diferentes — cuidado ao juntar tabelas
 
