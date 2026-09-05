@@ -8,6 +8,7 @@ use App\Models\Protocolo;
 use App\Models\Vistoria;
 use App\Services\DesenhoDeLote;
 use App\Services\DesmembramentoDeLote;
+use App\Services\LotesApagados;
 use App\Services\QuadraDeLotesSelecionados;
 use App\Services\UnificacaoDeLotes;
 use Illuminate\Http\JsonResponse;
@@ -497,10 +498,18 @@ class CadastroLoteController extends Controller
         // Pelo Eloquent e um a um, para cada exclusão deixar a sua linha na
         // trilha de auditoria (ver App\Models\Concerns\RegistraAuditoria) — um
         // `delete()` em massa apagaria os lotes sem deixar quem, quando e qual.
+        // E o DESENHO É GUARDADO ANTES, na mesma transação. A auditoria
+        // registra todos os campos do lote menos `geom` — o escopo global
+        // `sem_geometria` a tira de qualquer consulta do Eloquent —, e sem o
+        // desenho a exclusão não tinha volta. Guardar e apagar acontecem
+        // juntos: a cópia sem a exclusão deixa lixo, e a exclusão sem a cópia
+        // é exatamente o que estamos consertando.
         $apagados = [];
-        DB::transaction(function () use ($lotes, &$apagados) {
+        $guarda = app(LotesApagados::class);
+        DB::transaction(function () use ($lotes, &$apagados, $guarda, $d) {
             foreach ($lotes as $lote) {
                 $apagados[] = $this->identificar($lote);
+                $guarda->guardar($lote, $d['motivo'] ?? null);
                 $lote->delete();
             }
         });
