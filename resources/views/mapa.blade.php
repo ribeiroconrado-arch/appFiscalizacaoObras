@@ -463,7 +463,29 @@
               <span class="cad-lanca-obs">Marque um ou vários. Só para sobra da conversão do desenho.</span>
             </span>
           </button>
+        {{-- O DESFAZER MORA AQUI, e não numa tela de administração.
+
+             Quem desfaz um ato do cadastro é quem estava fazendo o ato — o
+             curador, no mapa, com o desenho à frente. Levar isso para
+             Parâmetros obrigaria a sair do trabalho, procurar a linha numa
+             lista do sistema inteiro e voltar. O histórico do cadastro é
+             ferramenta de cadastro. --}}
+        <div class="cad-sep">O que foi feito</div>
+
+        <button type="button" class="btn sm cad-lanca"
+                data-fer="historico" data-tecla="H" data-min="0"
+                data-exige="nenhuma seleção" onclick="abrirHistoricoCadastral()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>
+          </svg>
+          <span class="cad-lanca-txt">Histórico do cadastro
+            <span class="cad-lanca-obs">O que foi alterado no desenho, e o caminho de volta.</span>
+          </span>
+        </button>
+
         @endif
+
 
         <div class="cad-dica">O trabalho acontece no mapa; o que a ferramenta
           pede aparece aqui nesta coluna.</div>
@@ -769,7 +791,6 @@
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
     <button data-sub="irregularidades" onclick="subParametros('irregularidades')">Irregularidades</button>
     <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
-    <button data-sub="trilha" onclick="subParametros('trilha')">Trilha</button>
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
 
@@ -928,61 +949,6 @@
   {{-- BAIRROS — cadastro direto na linha, como a UPF: são três campos curtos,
        e abrir uma janela para digitar um código e um nome custa mais do que o
        dado vale. --}}
-  {{-- TRILHA DE ALTERAÇÕES — quem mexeu no quê, e o que mudou.
-
-       O dado sempre existiu: a auditoria é um trait de eventos do Eloquent, e
-       nenhuma operação escapa dela. O que não existia era como chegar até ele —
-       havia as 12 linhas mais recentes no Painel, e mais nada.
-
-       Só administrador e curador veem: a trilha mostra o NOME de quem fez cada
-       coisa, e num órgão isso pesa diferente de ver o que foi feito. O fiscal
-       continua com a "Atividade recente", que é o resumo. --}}
-  <div class="par-painel par-fixo" id="par-trilha">
-    <div class="par-fixo-topo">
-      <div class="sec-simples">Trilha de alterações <span class="cont" id="cont-trilha">0</span></div>
-      <p class="aviso-legal">
-        Toda alteração de lote fica registrada com <b>quem</b>, <b>quando</b> e o
-        <b>valor de antes</b>. Desfazer não apaga o registro: grava uma linha nova,
-        porque num processo administrativo apagar o erro é pior que o erro.
-      </p>
-
-      {{-- Mesmo invólucro das outras listas: caixa branca, Buscar e Limpar, e a
-           busca acontecendo só no botão. --}}
-      <div class="busca-form lista-form">
-        <div class="filtro-barra">
-          <div class="filtro-busca">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
-            <input type="text" id="tr-busca" placeholder="Buscar por pessoa ou descrição…"
-                   oninput="filtrarTrilha('busca', this.value)">
-          </div>
-        </div>
-        <div class="tr-filtros">
-          <select id="tr-acao" onchange="filtrarTrilha('acao', this.value)">
-            <option value="">Todas as ações</option>
-          </select>
-          <select id="tr-pessoa" onchange="filtrarTrilha('user_id', this.value)">
-            <option value="">Todas as pessoas</option>
-          </select>
-          <select id="tr-dias" onchange="filtrarTrilha('dias', this.value)">
-            <option value="30">Últimos 30 dias</option>
-            <option value="7">Últimos 7 dias</option>
-            <option value="90">Últimos 90 dias</option>
-            <option value="">Desde o começo</option>
-          </select>
-          <input type="number" id="tr-lote" min="1" placeholder="Nº do lote"
-                 oninput="filtrarTrilha('lote_id', this.value)">
-        </div>
-        <div class="btn-row lista-form-acoes">
-          <button type="button" class="btn" onclick="limparTrilha()">Limpar</button>
-          <button type="button" class="btn primary" id="tr-buscar"
-                  onclick="carregarTrilha()">Buscar</button>
-        </div>
-      </div>
-    </div>
-    <div class="par-fixo-lista" id="lista-trilha"></div>
-  </div>
-
 
   <div class="par-painel par-fixo" id="par-bairros">
     <div class="par-fixo-topo">
@@ -2415,6 +2381,28 @@
       </div>
     </div>
 
+
+    {{-- HISTÓRICO DO CADASTRO — o que foi feito no desenho, e o desfazer.
+
+         Só o que acontece NO MAPA: quadra corrigida, lote renumerado,
+         unificação, desmembramento, exclusão e restauração. A auditoria do
+         sistema inteiro — usuários, documentos, protocolos — é outra coisa, com
+         outro público, e não cabe na coluna de trabalho do cadastro. --}}
+    <div class="cad-painel" id="cadp-historico" hidden>
+      <div class="hc-filtros">
+        <select id="hc-escopo" onchange="carregarHistoricoCadastral()">
+          <option value="tudo">Todo o cadastro</option>
+          <option value="marcados">Só os lotes marcados</option>
+        </select>
+        <select id="hc-dias" onchange="carregarHistoricoCadastral()">
+          <option value="7">Últimos 7 dias</option>
+          <option value="30">Últimos 30 dias</option>
+          <option value="90">Últimos 90 dias</option>
+        </select>
+      </div>
+      <div id="hc-lista"></div>
+    </div>
+
     </div>{{-- /cad-corpo --}}
     </div>{{-- /cad-modal-corpo --}}
 
@@ -3305,6 +3293,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/coordenadas.js')"></script>
 <script src="@assetv('js/corte.js')"></script>
 <script src="@assetv('js/cadastro.js')"></script>
+<script src="@assetv('js/historico-cadastro.js')"></script>
 <script src="@assetv('js/edificacoes.js')"></script>
 <script src="@assetv('js/desmembramento.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>
@@ -3319,7 +3308,6 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/perfil.js')"></script>
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
-<script src="@assetv('js/trilha.js')"></script>
 @endif
 <script src="@assetv('js/app.js')"></script>
 </body>

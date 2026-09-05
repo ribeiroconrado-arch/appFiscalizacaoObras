@@ -3197,3 +3197,37 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   font-size:11.8px;color:var(--tx3);border:1px solid var(--bord);
   border-radius:999px;padding:3px 10px;white-space:nowrap;cursor:help;
 }
+
+/* ── HISTÓRICO DO CADASTRO (dentro da mesa) ──
+   Coluna estreita: três linhas por registro, e não colunas lado a lado. O que
+   manda é o ato e o alvo; quem e quando ficam menores, embaixo. */
+.hc-filtros{display:flex;gap:7px;margin-bottom:10px}
+.hc-filtros select{
+  flex:1;min-width:0;padding:7px 9px;border:1.5px solid var(--bord);
+  border-radius:8px;background:var(--sur);color:var(--tx);font:inherit;font-size:12.5px;
+}
+.hc-linha{padding:9px 0;border-bottom:1px solid var(--blt)}
+.hc-linha:last-child{border-bottom:none}
+.hc-l1{display:flex;align-items:baseline;gap:8px}
+.hc-acao{font-size:12.5px;font-weight:800;color:var(--tx2);text-transform:lowercase}
+.hc-acao.perigosa{color:var(--red)}
+.hc-quando{margin-left:auto;font-family:ui-monospace,monospace;font-size:11.3px;color:var(--tx3)}
+.hc-l2{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;margin:3px 0}
+/* O lote é botão porque leva o mapa até ele — registro de alteração sem poder
+   olhar o desenho é metade da resposta. */
+.hc-ir{
+  background:none;border:none;padding:0;font:inherit;font-size:13px;font-weight:700;
+  color:var(--gd);cursor:pointer;text-align:left;
+}
+.hc-ir:hover{text-decoration:underline}
+.hc-delta{
+  font-family:ui-monospace,monospace;font-size:11.5px;color:var(--tx2);
+  background:var(--blt);border-radius:5px;padding:2px 7px;
+  max-width:100%;overflow-wrap:anywhere;
+}
+.hc-delta b{color:var(--tx);font-weight:600}
+.hc-seta{color:var(--tx3)}
+.hc-l3{display:flex;align-items:center;gap:8px}
+.hc-quem{font-size:11.8px;color:var(--tx3)}
+.hc-l3 .btn{margin-left:auto}
+.hc-sem-volta{margin-left:auto;font-size:11.3px;color:var(--tx3);cursor:help}

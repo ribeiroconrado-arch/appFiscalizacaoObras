@@ -208,6 +208,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/trilha', [TrilhaController::class, 'index']);
         Route::post('/trilha/{id}/desfazer', [TrilhaController::class, 'desfazer']);
 
+        // O histórico DO MAPA — recorte do cadastro, para a mesa de curadoria.
+        // Separado de `/trilha` porque a regra de quem vê é outra: aqui é o
+        // curador, o mesmo que a mesa já exige para as ferramentas vizinhas.
+        Route::get('/cadastro/historico', [TrilhaController::class, 'cadastro']);
+
         Route::get('/parametros', [ParametroController::class, 'index']);
         Route::post('/parametros/usuarios', [ParametroController::class, 'salvarUsuario']);
         Route::post('/parametros/geral', [ParametroController::class, 'salvarGeral']);

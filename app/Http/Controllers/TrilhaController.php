@@ -236,6 +236,64 @@ class TrilhaController extends Controller
     }
 
 
+    /**
+     * GET /api/cadastro/historico — o que foi feito no desenho.
+     *
+     * Endpoint próprio, e não um parâmetro do `index`, porque as regras são
+     * outras: o recorte é o mapa, o filtro é a marcação corrente, e quem
+     * enxerga é o CURADOR — o mesmo que a mesa já exige para as ferramentas ao
+     * lado das quais este histórico vive.
+     */
+    public function cadastro(Request $request, DesfazerAlteracao $svc): JsonResponse
+    {
+        if (! $request->user()?->podeCurarCadastro()) {
+            return response()->json([
+                'message' => 'O histórico do cadastro é do curador.',
+            ], 403);
+        }
+
+        $d = $request->validate([
+            'dias'  => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'lotes' => ['nullable', 'string', 'max:4000'],
+        ]);
+
+        $q = DB::table('auditoria')
+            ->where('tabela', 'lotes')
+            // SÓ O QUE TEM VOLTA. O histórico do cadastro é a lista do que o
+            // curador pode desfazer, e não o diário do que aconteceu — para
+            // isso existe a auditoria, que guarda tudo.
+            //
+            // Isto também resolve o ruído da unificação: ela escreve uma linha
+            // 'unificou' e uma 'inativou' POR LOTE de origem. Filtrando pelas
+            // reversíveis, um ato de quatro lotes vira uma linha, que é o que
+            // ele é.
+            ->whereIn('acao', self::REVERSIVEIS)
+            ->where('created_at', '>=', now()->subDays((int) ($d['dias'] ?? 7)))
+            ->orderByDesc('id');
+
+        // "Só os lotes marcados": a marcação vem da tela porque é ela que a
+        // tem — o servidor não guarda seleção de ninguém.
+        if (! empty($d['lotes'])) {
+            $ids = array_filter(array_map('intval', explode(',', $d['lotes'])));
+            if ($ids) {
+                $q->whereIn('registro_id', $ids);
+            }
+        }
+
+        $linhas = $q->limit(120)->get();
+
+        $idsLote = $linhas->pluck('registro_id')->filter()->unique();
+        $lotes = $idsLote->isEmpty()
+            ? collect()
+            : Lote::whereIn('id', $idsLote)->get()->keyBy('id');
+
+        return response()->json([
+            'linhas'  => $linhas->map(fn ($a) => $this->linha($a, $lotes))->values(),
+            'truncou' => $linhas->count() === 120,
+        ]);
+    }
+
+
     private function exigirPermissao(Request $request): ?JsonResponse
     {
         $u = $request->user();

@@ -386,14 +386,18 @@ function pintarMesaCadastral() {
   document.body.classList.add('com-mesa')
   document.body.classList.toggle('mesa-larga', emFerramenta && !tracando)
 
-  // O painel do modo corrente, e só ele. Sem isto, sair de "corrigir quadra"
-  // para "desenhar lote" deixava os dois formulários na tela.
-  const quadra = document.getElementById('cadp-quadra')
-  const desenho = document.getElementById('cadp-desenho')
-  if (quadra && desenho && emFerramenta) {
-    const ehQuadra = cadModo === 'quadra' || cadModo === 'apagar' || atoState.tipo === 'unificacao'
-    quadra.hidden = !ehQuadra
-    desenho.hidden = ehQuadra
+  // O painel do modo corrente, e só ele. São TRÊS agora: sem isto, sair de
+  // "corrigir quadra" para "desenhar lote" deixava os dois formulários na
+  // tela, e o histórico apareceria por baixo de qualquer um deles.
+  const painel = cadModo === 'historico' ? 'cadp-historico'
+    : (cadModo === 'quadra' || cadModo === 'apagar' || atoState.tipo === 'unificacao')
+      ? 'cadp-quadra' : 'cadp-desenho'
+
+  if (emFerramenta) {
+    for (const id of ['cadp-quadra', 'cadp-desenho', 'cadp-historico']) {
+      const el = document.getElementById(id)
+      if (el) { el.hidden = id !== painel }
+    }
   }
 
   const voltar = document.getElementById('cad-mesa-voltar')
@@ -638,6 +642,7 @@ function tituloDaFerramenta() {
     apagar: 'Apagar lote residual',
     desenho: 'Desenhar lote',
     coordenadas: 'Lote por coordenadas',
+    historico: 'Histórico do cadastro',
   }[cadModo] ?? 'Edição cadastral'
 }
 
