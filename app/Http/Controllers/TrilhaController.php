@@ -36,7 +36,7 @@ class TrilhaController extends Controller
      * perguntas: o que o filtro oferece, se o botão acende, e o que a rota de
      * desfazer aceita. Três cópias divergem no primeiro ajuste.
      */
-    public const REVERSIVEIS = ['corrigiu quadra', 'renumerou', 'unificou', 'excluiu'];
+    public const REVERSIVEIS = ['corrigiu quadra', 'renumerou', 'unificou', 'desmembrou', 'excluiu'];
 
     public function index(Request $request): JsonResponse
     {

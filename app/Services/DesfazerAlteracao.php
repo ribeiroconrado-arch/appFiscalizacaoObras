@@ -44,6 +44,7 @@ class DesfazerAlteracao
         return match ($a->acao) {
             'excluiu'         => $this->desfazerExclusao($a),
             'unificou'        => $this->desfazerUnificacao($a),
+            'desmembrou'      => $this->desfazerDesmembramento($a),
             'corrigiu quadra',
             'renumerou'       => $this->desfazerCampo($a),
             default           => throw new RuntimeException(
@@ -183,6 +184,87 @@ class DesfazerAlteracao
                 $anteriores->count());
         });
     }
+
+    /**
+     * As partes são apagadas e o pai volta a ativo.
+     *
+     * Espelho da unificação, ao contrário: lá o resultante some e as origens
+     * voltam; aqui as partes somem e a origem volta. As partes saem por
+     * LotesApagados — com o desenho guardado —, e não por um `delete()` seco:
+     * desfazer um desfazer tem de ser possível, e polígono de corte não se
+     * remonta à mão.
+     */
+    private function desfazerDesmembramento(object $a): string
+    {
+        $pai = Lote::find($a->registro_id);
+        if (! $pai) {
+            throw new RuntimeException('O lote de origem do desmembramento não existe mais.');
+        }
+
+        $ato = DB::table('lote_atos as at')
+            ->join('lote_ato_lotes as al', 'al.ato_id', '=', 'at.id')
+            ->where('al.lote_id', $pai->id)->where('al.papel', 'anterior')
+            ->where('at.tipo', 'desmembramento')
+            ->orderByDesc('at.id')
+            ->first(['at.id', 'at.protocolo_id']);
+
+        if (! $ato) {
+            throw new RuntimeException('Não encontrei o ato de desmembramento deste lote.');
+        }
+        if ($ato->protocolo_id) {
+            throw new RuntimeException(
+                'Este desmembramento veio de um protocolo deferido. Desfazê-lo por aqui '
+                . 'deixaria o protocolo dizendo que foi executado. O caminho é pelo protocolo.'
+            );
+        }
+
+        $ids = DB::table('lote_ato_lotes')->where('ato_id', $ato->id)
+            ->where('papel', 'posterior')->pluck('lote_id');
+
+        // TUDO OU NADA, e a recusa NOMEIA o que prende. Apagar duas partes e
+        // deixar a terceira porque ela tem um auto produziria um lote pai ativo
+        // sobreposto a um filho vivo — dois imóveis sobre o mesmo terreno.
+        $presos = [];
+        foreach ($ids as $id) {
+            $parte = Lote::find($id);
+            if (! $parte) {
+                continue;
+            }
+            if ($preso = $this->oQuePrende($parte)) {
+                $presos[] = $parte->rotulo() . ' (' . rtrim($preso, '.') . ')';
+            }
+        }
+        if ($presos) {
+            throw new RuntimeException(
+                'Não dá para desfazer: ' . implode('; ', $presos)
+                . '. Desfazer apagaria essa(s) parte(s), e o processo ficaria sem imóvel.'
+            );
+        }
+
+        return DB::transaction(function () use ($pai, $ato, $ids) {
+            // O vínculo sai ANTES dos lotes: `lote_ato_lotes` é RESTRICT, e a
+            // exclusão das partes esbarraria nele.
+            DB::table('lote_ato_lotes')->where('ato_id', $ato->id)->delete();
+            DB::table('lote_atos')->where('id', $ato->id)->delete();
+
+            $n = 0;
+            foreach ($ids as $id) {
+                $parte = Lote::find($id);
+                if (! $parte) {
+                    continue;
+                }
+                $this->apagados->guardar($parte, 'Desmembramento desfeito pelo histórico');
+                $parte->delete();
+                $n++;
+            }
+
+            $pai->update(['situacao' => 'ativo', 'inativado_em' => null]);
+
+            return sprintf('Desmembramento desfeito: %d parte(s) saíram do desenho e %s voltou a ativo.',
+                $n, $pai->rotulo());
+        });
+    }
+
 
     /** O mesmo teste da exclusão de lote, com o mesmo texto. */
     private function oQuePrende(Lote $lote): ?string

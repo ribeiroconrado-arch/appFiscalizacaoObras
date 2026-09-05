@@ -284,7 +284,12 @@ class DesmembramentoDeLote
                 $novo = Lote::find($id);
                 // O INSERT é cru (geom é NOT NULL e só se escreve por expressão
                 // SQL), então não dispara o evento do Eloquent.
-                $novo->registrarAuditoria('desmembrou', null, $atributos);
+                //
+                // A parte registra 'criou', e não 'desmembrou': o ATO é um só e
+                // pertence ao pai. Uma linha por parte fazia um desmembramento em
+                // três virar três linhas de histórico, e o desfazer não teria como
+                // saber qual delas é o ato — as três são o mesmo.
+                $novo->registrarAuditoria('criou', null, $atributos);
                 $criados[] = $novo;
             }
 
@@ -292,6 +297,14 @@ class DesmembramentoDeLote
                 'desmembramento', [$pai->id], array_map(fn ($l) => $l->id, $criados),
                 $protocolo, $modo, $justificativa
             );
+
+            // O ATO, uma linha só, no PAI — que é quem o identifica: as partes
+            // são muitas e nenhuma delas é "o desmembramento". Espelha o
+            // `unificou`, que também é uma linha no lote que o ato produziu.
+            $pai->registrarAuditoria('desmembrou', null, [
+                'partes'  => count($criados),
+                'numeros' => implode(', ', array_map(fn ($l) => $l->numero_lote, $criados)),
+            ]);
 
             return $criados;
         });
