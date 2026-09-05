@@ -134,16 +134,33 @@ trait RegistraAuditoria
     protected function limparAuditoria(array $dados): array
     {
         $ocultar = array_merge(
-            // `assinatura` é a rubrica do perfil do usuário, guardada como
-            // data URL de PNG. Sem ela na lista, cada alteração de perfil
-            // gravava a IMAGEM INTEIRA em base64 dentro da linha de auditoria:
-            // 300 KB por linha, e uma célula de 320 mil pixels de largura na
-            // tela da trilha. As irmãs dela (`assinatura_agente`,
-            // `assinatura_autuado`) já estavam aqui; esta escapou.
-            ['password', 'remember_token', 'geom',
-             'assinatura', 'assinatura_agente', 'assinatura_autuado'],
+            // TODA ASSINATURA, e não as três que alguém lembrou na hora.
+            //
+            // Assinatura é imagem: um data URL de PNG, dezenas de KB de texto.
+            // Gravá-la na auditoria põe a imagem inteira dentro da linha —
+            // 613 KB em treze linhas, em produção, e uma célula de 320 mil
+            // pixels de largura em qualquer tela que mostre o antes/depois.
+            //
+            // A lista original tinha `assinatura_agente` e `assinatura_autuado`;
+            // escaparam `assinatura` (rubrica do perfil e do fiscal na OS) e
+            // `assinatura_emitente` (quem emitiu a ordem de serviço). Foram
+            // ACRESCENTADAS UMA A UMA, e por isso o esquecimento se repetiu.
+            //
+            // Confira com:
+            //   SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
+            //    WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME LIKE '%assinatura%'
+            ['password', 'remember_token', 'geom'],
             property_exists($this, 'auditoriaOculta') ? $this->auditoriaOculta : []
         );
+
+        // Qualquer coluna cujo nome contenha "assinatura" sai — menos a que
+        // guarda um booleano, `recusa_assinatura`, que é informação do
+        // processo (o autuado se recusou a assinar) e não uma imagem.
+        foreach (array_keys($dados) as $campo) {
+            if (str_contains($campo, 'assinatura') && $campo !== 'recusa_assinatura') {
+                $dados[$campo] = '[omitido]';
+            }
+        }
 
         foreach ($ocultar as $campo) {
             if (array_key_exists($campo, $dados)) {
