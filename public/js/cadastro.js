@@ -291,6 +291,8 @@ function montarMesaCadastral(abrir) {
   const geral = document.getElementById('cad-geral')
   const corpo = document.getElementById('cad-corpo')
   if (!mesa || !corpo) { return }
+  // A mesa vive fora da aba do mapa; não pode reaparecer por resize/pintura.
+  if (!document.getElementById('t-mapa')?.classList.contains('at')) { abrir = false }
 
   if (ehMesaCadastral()) {
     // O LANÇADOR NÃO VIAJA MAIS PARA A MESA. Quem mostra as ferramentas aqui é
@@ -446,7 +448,7 @@ function montarReguaCadastral() {
       const ico = b.querySelector('.cad-ico')?.outerHTML ?? ''
       h += `<button type="button" class="cad-fer${b.classList.contains('cad-lanca-perigo') ? ' perigo' : ''}"
               data-fer="${b.dataset.fer}" data-min="${b.dataset.min ?? 0}"
-              data-max="${b.dataset.max ?? ''}" aria-label="${esc(nome)}">
+              data-max="${b.dataset.max ?? ''}" aria-label="${esc(nome)}" title="${esc(nome)}">
           ${ico}
           <span class="cad-dica-fer"><b>${esc(nome)}</b><span>${esc(obs)}</span>
             <span class="exige">Precisa de: ${esc(b.dataset.exige || '—')}</span>
@@ -460,12 +462,12 @@ function montarReguaCadastral() {
   // "fechar" que some junto deixa a mesa sem saída.
   h += '<div class="cad-regua-pe">'
     + '<button type="button" class="cad-selo-sel" id="cad-selo-sel"'
-    + ' onclick="limparSelecaoCadastral()">0'
+    + ' title="Limpar seleção" aria-label="Limpar seleção" onclick="limparSelecaoCadastral()">0'
     + '<span class="cad-dica-fer"><b>Lotes marcados</b>'
     + '<span>Clique para desmarcar todos. Esc faz o mesmo.</span></span>'
     + '</button>'
     + '<button type="button" class="cad-fer cad-fechar" onclick="fecharMesaCadastral()"'
-    + ' aria-label="Fechar a mesa">'
+    + ' aria-label="Fechar a mesa" title="Fechar a mesa">'
     + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
     + ' stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
     + '<span class="cad-dica-fer"><b>Fechar a mesa</b>'
@@ -498,6 +500,44 @@ function montarReguaCadastral() {
  *
  * @param {string} id valor de data-fer
  */
+const unificacaoDisponivel = { chave: null, permitido: false, motivo: 'Selecione dois ou mais lotes contíguos da mesma quadra.', timer: null, controller: null }
+function pintarDisponibilidadeUnificacao() {
+  for (const b of document.querySelectorAll('[data-fer="unificacao"]')) {
+    b.disabled = !unificacaoDisponivel.permitido
+    b.setAttribute('aria-disabled', String(b.disabled))
+    b.title = unificacaoDisponivel.permitido ? 'Unificação' : 'Unificação — '+unificacaoDisponivel.motivo
+    const dica = b.querySelector('.cad-dica-fer .exige')
+    if (dica) dica.textContent = unificacaoDisponivel.permitido ? 'Lotes contíguos da mesma quadra.' : unificacaoDisponivel.motivo
+  }
+}
+function conferirDisponibilidadeUnificacao() {
+  const ids = [...selState.ids].map(Number).sort((a,b)=>a-b)
+  const feicoes = ids.map(id=>state.lotes.get(id))
+  const chave = JSON.stringify(feicoes.map((f,i)=>[ids[i],f?.properties?.bairro,f?.properties?.quadra,f?.geometry]))
+  if (chave === unificacaoDisponivel.chave) { pintarDisponibilidadeUnificacao(); return }
+  clearTimeout(unificacaoDisponivel.timer);unificacaoDisponivel.controller?.abort()
+  Object.assign(unificacaoDisponivel,{chave,permitido:false,motivo:'Verificando se os lotes fazem divisa…'})
+  if(ids.length<2)unificacaoDisponivel.motivo='Selecione dois ou mais lotes contíguos da mesma quadra.'
+  else if(feicoes.some(f=>!f))unificacaoDisponivel.motivo='Aguarde o carregamento dos lotes selecionados.'
+  else if(new Set(feicoes.map(f=>JSON.stringify([f.properties.bairro,f.properties.quadra]))).size>1)unificacaoDisponivel.motivo='Selecione lotes do mesmo bairro e da mesma quadra.'
+  else unificacaoDisponivel.timer=setTimeout(async()=>{
+    const controller=new AbortController();unificacaoDisponivel.controller=controller
+    const prazo=setTimeout(()=>controller.abort(),15000)
+    try {
+      const r=await fetch('/api/lotes/unificacao-direta/previa',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json',Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content||''},body:JSON.stringify({ids})})
+      const d=await r.json();if(chave!==unificacaoDisponivel.chave)return
+      if(!r.ok)throw new Error(r.status===403?'Você não tem permissão para unificar lotes.':r.status===419?'Sessão expirada. Recarregue a página.':'Não foi possível validar a seleção. Selecione os lotes novamente.')
+      unificacaoDisponivel.motivo=d.impedimento||d.retrato?.erro_identidade||''
+      unificacaoDisponivel.permitido=!unificacaoDisponivel.motivo&&d.retrato?.geometry?.type==='Polygon'
+      if(!unificacaoDisponivel.permitido&&!unificacaoDisponivel.motivo)unificacaoDisponivel.motivo='Os lotes precisam formar um único terreno, compartilhando divisas.'
+    } catch(err) {
+      if(chave!==unificacaoDisponivel.chave)return
+      unificacaoDisponivel.permitido=false
+      unificacaoDisponivel.motivo=err.name==='AbortError'?'A validação demorou demais. Selecione os lotes novamente.':err instanceof SyntaxError?'Resposta inválida do servidor. Selecione os lotes novamente.':err.message
+    } finally {clearTimeout(prazo);if(chave===unificacaoDisponivel.chave)pintarDisponibilidadeUnificacao()}
+  },300)
+  pintarDisponibilidadeUnificacao()
+}
 function acionarFerramenta(id) {
   const alvo = document.querySelector(`#cad-geral .cad-lanca[data-fer="${id}"]`)
   if (!alvo) { return }
@@ -505,6 +545,7 @@ function acionarFerramenta(id) {
   // Clicar na ferramenta que já está ativa a larga — é o que o botão aceso
   // sugere, e evita ter de procurar a seta de sair.
   if (ferramentaAtiva() === id) { voltarAsFerramentas(); return }
+  if(id==='unificacao'){conferirDisponibilidadeUnificacao();if(!unificacaoDisponivel.permitido){toast(unificacaoDisponivel.motivo,'aviso');return}}
 
   // Apagada não age. O botão já diz isso pela cor; o ATALHO não tem como
   // dizer, e sem esta linha "U" com um lote só entraria na unificação para ser
@@ -590,6 +631,7 @@ function pintarRegua() {
     const max = f.dataset.max ? Number(f.dataset.max) : Infinity
     f.toggleAttribute('disabled', f.dataset.fer !== at && (n < min || n > max))
   })
+  pintarDisponibilidadeUnificacao()
 
   const selo = document.getElementById('cad-selo-sel')
   if (selo) {
@@ -855,6 +897,7 @@ function pintarBarraCadastral() {
  * pontos (seleção, desenho, atos cadastrais); o que mudou foi ONDE ela pinta.
  */
 function pintarPainelCadastro() {
+  conferirDisponibilidadeUnificacao()
   pintarBarraCadastral()
   pintarMesaCadastral()
 
@@ -1065,42 +1108,21 @@ function corpoDoAto(extra) {
 }
 
 function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
+  clearTimeout(timerRascunhoDesm)
+  const ids = tipo === 'desmembramento'
+    ? [loteId || (selState.ids.size === 1 ? [...selState.ids][0] : state.selecionado?.properties?.id)].filter(Boolean)
+    : [...selState.ids]
+  if (!ids.length || (tipo === 'unificacao' && ids.length < 2)) {
+    toast(tipo === 'unificacao' ? 'Marque pelo menos dois lotes vizinhos antes de abrir a unificação.' : 'Selecione o lote a desmembrar.', 'aviso')
+    return
+  }
+  cancelarDesenho()
   atoState.protocoloId = protocoloId
   atoState.tipo = tipo
-  // Protocolo nulo = ato direto. Quem chama pela ficha sempre traz um.
   atoState.direto = !protocoloId
-
-  // Fecha a ficha e leva ao mapa: o ato é geométrico, e a escolha acontece
-  // sobre o desenho, não numa lista.
   fModalBtn('m-ficha')
-  irPara('mapa')
-
-  setTimeout(() => {
-    fecharPaineisMapa()
-    // ABRIR, e não alternar. `alternarPainelMapa` foi escrito para o painel
-    // flutuante, onde o ato sempre chegava com ele fechado. Na mesa o mesmo
-    // chamado encontra a coluna ABERTA — e a fecha, no exato momento em que o
-    // ato começa: quem iniciava uma unificação pela régua via a mesa
-    // desaparecer e o trabalho continuar sem lugar nenhum na tela.
-    garantirPainelCadastroAberto()
-
-    if (tipo === 'unificacao') {
-      ligarSelecao('unificacao')
-      toast('Toque nos lotes a unificar. Eles precisam se encostar.', 'aviso')
-    } else {
-      // O lote a desmembrar é o que a ficha estava mostrando: quem chegou aqui
-      // veio da vistoria DELE, então perguntar de novo seria atrito.
-      desmState.loteId = loteId || state.selecionado?.properties?.id || null
-      desmState.partes = []
-      desmState.derivar = true
-  desmState.modo = 'poligonos'
-      toast('Desenhe cada parte. A última sai do que sobrar.', 'aviso')
-    }
-    pintarPainelCadastro()
-    pintarDesmembramento()
-  }, 260)
+  PranchetaCad.abrir(tipo, ids, protocoloId).catch(err => toast(err.message, 'err'))
 }
-
 /**
  * COMEÇA UM ATO DIRETO — sem protocolo.
  *
@@ -1112,48 +1134,10 @@ function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
  * @param {'unificacao'|'desmembramento'} tipo
  */
 function atoDiretoCadastral(tipo) {
-  const rotulo = tipo === 'unificacao' ? 'Unificação direta' : 'Desmembramento direto'
-
-  // CADA ATO PEDE UMA COISA DIFERENTE, e é melhor dizer isso antes de o fiscal
-  // escrever a justificativa do que depois:
-  //
-  //   unificação      DOIS ou mais lotes, que se encostam — eles viram um
-  //   desmembramento  UM lote, que vai ser dividido em partes desenhadas
-  //
-  // O desmembramento parava aqui em silêncio: sem lote selecionado, começava
-  // com `loteId: null` e só falhava lá na frente, depois de desenhar tudo.
-  // O ALVO PODE VIR DE DUAS SELEÇÕES.
-  //
-  // Na mesa o lote chega MARCADO: lá o clique no mapa marca em vez de abrir o
-  // balão, e `state.selecionado` fica vazio. Exigir o balão travaria o
-  // desmembramento justamente na tela feita para ele. No celular nada muda —
-  // não há marcação livre, e o lote continua chegando pelo balão.
-  const alvoMarcado = selState.ids.size === 1 ? [...selState.ids][0] : null
-  const loteAlvo = alvoMarcado ?? state.selecionado?.properties?.id ?? null
-
-  if (tipo === 'desmembramento' && !loteAlvo) {
-    toast('Marque primeiro o lote que será desmembrado.', 'err')
-    return
-  }
-
-  pedirTexto({
-    titulo: rotulo,
-    rotulo: 'Por que este ato não tem protocolo?',
-    dica: 'Ex.: lote já unificado na matrícula 12.345 do CRI; o desenho do DWG '
-      + 'não foi atualizado. Fica registrado com o seu nome.',
-    minimo: 10,
-    onOk: texto => {
-      atoState.justificativa = texto
-      // Protocolo nulo é o que marca o ato como direto — ver `rotaDoAto`.
-      iniciarAtoCadastral(null, tipo, loteAlvo)
-      // O desmembramento tem tela própria: o lote alvo ocupa o mapa e os
-      // vizinhos viram referência. A unificação não precisa — ali o trabalho é
-      // tocar em lotes espalhados, que é justamente o que a mesa esconderia.
-      if (tipo === 'desmembramento') { abrirMesaDesmembramento() }
-    },
-  })
+  if(tipo==='unificacao'){conferirDisponibilidadeUnificacao();if(!unificacaoDisponivel.permitido){toast(unificacaoDisponivel.motivo,'aviso');return}}
+  atoState.justificativa = ''
+  iniciarAtoCadastral(null, tipo)
 }
-
 /**
  * Apagar resíduo: marcar no mapa e apagar o conjunto.
  *
@@ -1265,6 +1249,67 @@ async function gravarUnificacao() {
 
 /** @type {{loteId:number|null, partes:Array<Object>, derivar:boolean}} */
 const desmState = { loteId: null, partes: [], derivar: true, modo: 'poligonos' }
+let timerRascunhoDesm = null
+let previaDesmConferida = null
+
+function rotaRascunhoDesmembramento() {
+  if (!desmState.loteId) return null
+  return atoState.direto
+    ? `/api/lotes/${desmState.loteId}/desmembramento-rascunho`
+    : `/api/lotes/${desmState.loteId}/protocolos/${atoState.protocoloId}/desmembramento-rascunho`
+}
+
+function agendarRascunhoDesmembramento() {
+  previaDesmConferida = null
+  document.getElementById('desm-previa')?.replaceChildren()
+  clearTimeout(timerRascunhoDesm)
+  timerRascunhoDesm = setTimeout(salvarRascunhoDesmembramento, 700)
+}
+
+async function salvarRascunhoDesmembramento() {
+  const rota = rotaRascunhoDesmembramento()
+  if (!rota) return
+  clearTimeout(timerRascunhoDesm)
+  const estado = { ..._corpoDesmembramento(), partes: structuredClone(desmState.partes), editor: estadoEditorCortes(), justificativa: atoState.justificativa || '' }
+  let d
+  try { d = await requisicaoCadastro(rota, 'PUT', { estado }) }
+  catch { toast('Não foi possível salvar o rascunho. Mantenha a página aberta e tente novamente.', 'err'); return }
+  if (d) document.getElementById('desm-rascunho-status')?.replaceChildren('Rascunho salvo agora')
+}
+
+async function carregarRascunhoDesmembramento() {
+  const rota = rotaRascunhoDesmembramento()
+  if (!rota) return
+  const d = await requisicaoCadastro(rota, 'GET', null, false)
+  const r = d?.rascunho
+  if (rota !== rotaRascunhoDesmembramento()) return
+  if (editorCortes.ativo || desmState.partes.length) return
+  if (!r?.partes?.length) return
+  desmState.partes = r.partes
+  restaurarEditorCortes(r.editor)
+  desmState.derivar = !!r.derivar_ultima
+  desmState.modo = r.modo || 'corte'
+  if (atoState.direto && r.justificativa) atoState.justificativa = r.justificativa
+  toast('Rascunho recuperado. Ajuste, confira e finalize quando estiver pronto.')
+  pintarDesmembramento()
+  if (typeof pintarMesaDesmembramento === 'function') pintarMesaDesmembramento()
+  if (typeof pintarPartesNoMapa === 'function') pintarPartesNoMapa()
+}
+
+async function descartarRascunhoDesmembramento() {
+  if (editorCortes.ativo) cancelarDesenho()
+  clearTimeout(timerRascunhoDesm)
+  const rota = rotaRascunhoDesmembramento()
+  if (!rota) return
+  const d = await requisicaoCadastro(rota, 'DELETE')
+  if (!d) return
+  desmState.partes = []
+  desmState.derivar = false
+  restaurarEditorCortes(null)
+  pintarDesmembramento()
+  if (typeof pintarMesaDesmembramento === 'function') pintarMesaDesmembramento()
+  if (typeof pintarPartesNoMapa === 'function') pintarPartesNoMapa()
+}
 
 /** Começa a desenhar mais uma parte. */
 function desenharParte() {
@@ -1298,6 +1343,7 @@ function desenharParte() {
  * desmembramento, em vez de virar base torta.
  */
 function cortarLote() {
+  if (desmMesa.ativa) { editarCorte(); return }
   const id = desmState.loteId || state.selecionado?.properties?.id
   if (!id) { toast('Selecione no mapa o lote a cortar.', 'err'); return }
 
@@ -1331,6 +1377,7 @@ function cortarLote() {
       // As duas partes vem prontas: nao ha resto a derivar.
       desmState.derivar = false
       desmState.modo = 'corte'
+      agendarRascunhoDesmembramento()
       toast('Lote cortado em duas partes. Informe o numero de cada uma.')
       pintarDesmembramento()
       pintarMesaDesmembramento()
@@ -1345,6 +1392,7 @@ function cortarLote() {
 /** @param {number} i */
 function removerParte(i) {
   desmState.partes.splice(i, 1)
+  agendarRascunhoDesmembramento()
   pintarDesmembramento()
 }
 
@@ -1385,9 +1433,9 @@ function pintarDesmembramento() {
     <div class="desm-parte">
       <span class="desm-num">${i + 1}</span>
       <input type="text" class="mono" placeholder="Lote" maxlength="20"
-             value="${esc(p.numero_lote)}" oninput="desmState.partes[${i}].numero_lote=this.value">
+             value="${esc(p.numero_lote)}" oninput="desmState.partes[${i}].numero_lote=this.value;agendarRascunhoDesmembramento()">
       <input type="text" class="mono" placeholder="Sufixo" inputmode="numeric" maxlength="3"
-             value="${p.desmembramento ?? ''}" oninput="desmState.partes[${i}].desmembramento=this.value">
+             value="${p.desmembramento ?? ''}" oninput="desmState.partes[${i}].desmembramento=this.value;agendarRascunhoDesmembramento()">
       <button type="button" class="desm-x" onclick="removerParte(${i})" title="Remover">&#10005;</button>
     </div>`).join('')
 
@@ -1411,10 +1459,13 @@ function pintarDesmembramento() {
     ${linhas}${derivada}
     <div class="seg" style="margin:8px 0 0">
       <button type="button" onclick="largarDesmembramento()">Cancelar</button>
+      <button type="button" onclick="salvarRascunhoDesmembramento()">Salvar rascunho</button>
+      <button type="button" onclick="descartarRascunhoDesmembramento()">Descartar rascunho</button>
       <button type="button" onclick="cortarLote()">Cortar por linha</button>
       <button type="button" onclick="desenharParte()">Desenhar parte</button>
       <button type="button" onclick="conferirDesmembramento()">Conferir</button>
     </div>
+    <div class="leg" id="desm-rascunho-status">Alterações são salvas automaticamente.</div>
     <div id="desm-previa"></div>`
 }
 
@@ -1459,12 +1510,15 @@ function _num(v) {
 }
 
 async function conferirDesmembramento() {
+  if (editorCortes.ativo) { toast('Aplique ou cancele o ajuste da divisa antes de conferir.', 'aviso'); return }
   if (!desmState.partes.length) { toast('Desenhe ao menos uma parte.', 'err'); return }
 
   const alvo = document.getElementById('desm-previa')
   alvo.innerHTML = '<div class="cad-nota">Conferindo…</div>'
 
-  const d = await postCadastro(rotaDoAto('desmembramento', true), _corpoDesmembramento())
+  const corpo = _corpoDesmembramento()
+  const d = await postCadastro(rotaDoAto('desmembramento', true), corpo)
+  if (JSON.stringify(corpo) !== JSON.stringify(_corpoDesmembramento())) return
   if (!d) { alvo.innerHTML = ''; return }
 
   if (d.impedimento) {
@@ -1473,6 +1527,7 @@ async function conferirDesmembramento() {
   }
 
   const r = d.retrato
+  previaDesmConferida = JSON.stringify(corpo)
   const avisos = d.avisos.map(a => `<div class="cad-nota cad-aviso">${esc(a)}</div>`).join('')
   const lista = r.partes.map((p, i) =>
     `<span>${i + 1}. Lote ${esc(p.numero_lote || '—')} — ${fmtNum(p.area)} m²${p.derivada ? ' (resto)' : ''}</span>`
@@ -1488,6 +1543,9 @@ async function conferirDesmembramento() {
 }
 
 async function gravarDesmembramento() {
+  if (editorCortes.ativo) return
+  const corpo = _corpoDesmembramento()
+  if (previaDesmConferida !== JSON.stringify(corpo)) { toast('Confira novamente as partes antes de finalizar.', 'aviso'); return }
   confirmarAcao({
     titulo: 'Desmembrar lote',
     mensagem: 'O lote de origem deixa de existir e as partes passam a existir. '
@@ -1496,10 +1554,15 @@ async function gravarDesmembramento() {
     textoBtn: 'Desmembrar',
     onConfirm: async () => {
       const d = await postCadastro(rotaDoAto('desmembramento'),
-        corpoDoAto(_corpoDesmembramento()))
+        corpoDoAto(corpo))
       if (!d) { return }
 
       toast(d.message)
+      // O ato já foi efetivado; manter a cópia de trabalho faria a tela
+      // oferecer um lote de origem que acabou de ficar inativo.
+      clearTimeout(timerRascunhoDesm)
+      atoState.tipo = null
+      try { await requisicaoCadastro(rotaRascunhoDesmembramento(), 'DELETE', null, false) } catch { /* O ato já foi concluído. */ }
       largarDesmembramento()
       limparLotesDoMapa()
       carregarLotesVisiveis()
@@ -1877,14 +1940,18 @@ function _corpoDesenho() {
  * @param {string} url @param {Object} corpo
  */
 async function postCadastro(url, corpo) {
+  return requisicaoCadastro(url, 'POST', corpo)
+}
+
+async function requisicaoCadastro(url, method, corpo, avisar = true) {
   const r = await fetch(url, {
-    method: 'POST',
+    method,
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
     },
-    body: JSON.stringify(corpo),
+    body: corpo ? JSON.stringify(corpo) : undefined,
   })
 
   if (r.status === 419) {
@@ -1895,7 +1962,7 @@ async function postCadastro(url, corpo) {
 
   const d = await r.json()
   if (!r.ok) {
-    toast(d.message || 'Não foi possível concluir.', 'err', { campo: 'cad-quadra' })
+    if (avisar) toast(d.message || 'Não foi possível concluir.', 'err', { campo: 'cad-quadra' })
     return null
   }
   return d

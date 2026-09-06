@@ -630,7 +630,7 @@ body.login-bg{
 .seg button{flex:1;border:1.5px solid var(--f-bord);background:#fff;border-radius:999px;
   font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:var(--tx2);
   padding:4px 8px;cursor:pointer}
-.seg button.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+.seg button.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
 .ctrl-corpo .leg{font-size:10.5px;color:var(--tx2);line-height:1.5}
 .ctrl-corpo .cor{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px}
 .ctrl-corpo .cor i{width:12px;height:12px;border-radius:3px;display:block;flex-shrink:0}
@@ -1150,8 +1150,8 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 #cad-previa .btn{width:100%;margin-top:8px}
 #grupo-cadastro .ctrl-corpo{max-width:262px}
 #grupo-cadastro .field{margin-bottom:0}
-#cad-modo.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
-#des-iniciar.at{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+#cad-modo.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
+#des-iniciar.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
 #des-previa .btn{width:100%;margin-top:8px}
 /* Separa as duas ferramentas do painel: corrigir quadra e desenhar lote sao
    coisas diferentes e nao devem parecer passos de um mesmo formulario. */
@@ -1856,10 +1856,16 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur)}
 .vs-gps>div:first-child{flex:1;min-width:0}
 .vs-gps .fi-val{font-size:12px;word-break:break-all}
+/* Ao lado da Situação constatada, na mesma linha: sem a margem que ela tem
+   sozinha, e do tamanho da célula do grid. */
+.g2 .vs-gps{margin-top:0;height:100%}
 
-/* Escolha única em botões, não em <select>: alvará e fase têm poucas opções e
-   todas precisam estar à vista. Abrir uma lista suspensa para escolher entre
-   três custa dois toques a mais e esconde o que existe. */
+/* Escolha única em botões, não em <select>: conformidade e uso constatado
+   somam mais opções do que cabe olhando uma de cada vez, e o fiscal costuma
+   comparar as alternativas antes de marcar. Alvará e fase viraram <select>
+   (ver `#nv-alvara`/`#nv-fase` no HTML): ali a resposta certa já é conhecida
+   na maioria das vistorias, e o combo pesa menos na tela agora que os dois
+   moraram para dentro da Identificação. */
 .vs-opcoes{display:flex;flex-wrap:wrap;gap:7px}
 .vs-op{min-height:40px;padding:9px 13px;border:1.5px solid var(--f-bord);border-radius:999px;
   background:var(--sur);color:var(--tx);cursor:pointer;font-family:'Inter',sans-serif;
@@ -2026,24 +2032,6 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .vsi-palco[hidden]{display:none}
 .vsi-palco-acoes{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .vsi-palco-acoes .leg{flex:1;min-width:0;margin:0}
-
-/* Finalidade: uma escolha por linha, com a explicação embaixo do nome.
-   São cinco opções que decidem a tela inteira — reconhecer a certa importa
-   mais aqui do que economizar altura, e o nome sozinho ("Habite-se",
-   "Constatação") não diz a quem nunca usou. */
-.vs-finalidades{flex-direction:column;gap:6px}
-.vs-op-larga{width:100%;text-align:left;border-radius:var(--r);padding:9px 12px;
-  display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:52px}
-.vs-op-larga .t{font-size:13px;font-weight:700;line-height:1.25}
-.vs-op-larga .o{font-size:11px;font-weight:500;color:var(--tx3);line-height:1.35}
-.vs-op-larga.at .o{color:var(--tx);opacity:.85}
-/* A escolhida tem de se distinguir do item sob o cursor. Entre cinco opções
-   que decidem a tela inteira, "qual está valendo?" não pode depender de
-   comparar tons de verde: entram a barra na lateral e o ✓. */
-.vs-op-larga{position:relative;padding-right:34px}
-.vs-op-larga.at{box-shadow:inset 3px 0 0 var(--tx2)}
-.vs-op-larga.at::after{content:'✓';position:absolute;right:12px;top:50%;
-  transform:translateY(-50%);font-size:14px;font-weight:800;color:var(--tx2)}
 
 /* ══════════════════════════════════════════════
    ORDEM DE SERVIÇO
@@ -2890,7 +2878,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .des-trava-linha{display:flex;align-items:center;gap:8px;margin:8px 0 6px;flex-wrap:wrap}
 .des-trava-obs{font-size:10.5px;color:var(--tx3);line-height:1.3}
 #des-trava svg{width:15px;height:15px}
-#des-trava.at{background:var(--gl);border-color:var(--gm);color:var(--gxd)}
+#des-trava.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
 .des-medir{gap:6px}
 .des-medir #des-metros{max-width:104px}
 /* O contador de medidas preenchidas vira alerta quando as duas áreas
@@ -2969,7 +2957,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .des-barra .btn{white-space:nowrap}
 .des-barra #des-trava{display:inline-flex;align-items:center;gap:5px}
 .des-barra #des-trava svg{width:14px;height:14px}
-.des-barra #des-trava.at{background:var(--gl);border-color:var(--gm);color:var(--gxd)}
+.des-barra #des-trava.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
 
 /* Com a mesa aberta à esquerda, a barra centrada no mapa fica descentrada em
    relação ao espaço que sobra — ela se desloca para não cobrir a coluna. */
@@ -3056,6 +3044,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 
 /* A mesa de desmembramento herda a caixa da mesa cadastral: é o mesmo objeto
    na tela, com outro assunto dentro. */
+.editor-cortes{padding:14px;margin:10px 0;border:1px solid var(--gm);border-radius:10px;background:var(--gl)}
+.editor-cortes p{font-size:12px;line-height:1.5;margin:8px 0}
+.editor-snaps{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.editor-snaps label{display:flex;align-items:center;gap:4px;padding:6px;background:var(--bg,#fff);border:1px solid var(--gm);border-radius:6px;font-size:12px}
+.editor-acoes{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:8px 0}
+.editor-acoes span{margin-right:auto}
+#editor-corte-ajuste{border-top:1px solid var(--gm);padding-top:12px;margin-top:12px}
+#editor-corte-previa{padding:10px;border-radius:6px;background:var(--bg,#fff)}
 .desm-mesa{display:none}
 @media (min-width:1000px){
   .desm-mesa{
@@ -3076,7 +3072,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
     border-radius:var(--rl);box-shadow:0 -6px 24px rgba(0,0,0,.16)}
 }
 #desm-sat{flex-shrink:0}
-#desm-sat.at{background:var(--gl);border-color:var(--gm);color:var(--gxd)}
+#desm-sat.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
 
 /* A VIZINHANÇA VIRA REFERÊNCIA.
    Apagar os outros lotes e tirar o clique deles é o que faz a tela dizer, sem

@@ -166,6 +166,7 @@ class MapaController extends Controller
                 'bairro_oficial' => $bairros->oficial($l->bairro),
                 'quadra'      => $l->quadra,
                 'numero_lote' => $l->numero_lote,
+                'tag_origem' => \App\Models\Lote::tagOrigem($l->origem ?? null),
                 'chave'       => $l->chave,
                 // Código oficial do imóvel: é ele que o balão mostra quando
                 // existe, no lugar da chave interna de integração.

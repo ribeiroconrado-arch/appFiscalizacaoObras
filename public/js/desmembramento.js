@@ -75,34 +75,8 @@ function pintarPartesNoMapa() {
  * @param {number} i
  */
 function cortarParte(i) {
-  const parte = desmState.partes[i]
-  const anel = parte?.geometry?.coordinates?.[0]
-  if (!anel) { toast('Esta parte não tem contorno.', 'err'); return }
-
-  toast(`Trace a divisa dentro da parte ${i + 1}.`, 'aviso')
-
-  iniciarDesenho({
-    modo: 'linha',
-    rotulo: `Dividir a parte ${i + 1}`,
-    snap: true,
-    onConcluir: g => {
-      const r = cortarPorLinha(anel, g.coordinates)
-      if (r.erro) { toast(r.erro, 'err'); pintarMesaDesmembramento(); return }
-
-      // A parte cortada some e as duas filhas ocupam o lugar dela, na mesma
-      // posição da lista: assim a numeração acompanha a leitura do mapa.
-      desmState.partes.splice(i, 1,
-        { geometry: r.a, numero_lote: parte.numero_lote || '', desmembramento: null },
-        { geometry: r.b, numero_lote: '', desmembramento: null })
-
-      toast(`Parte ${i + 1} dividida. Agora são ${desmState.partes.length} partes.`)
-      pintarMesaDesmembramento()
-      pintarPartesNoMapa()
-    },
-    onCancelar: () => { pintarMesaDesmembramento(); pintarPartesNoMapa() },
-  })
+  editarCorte(null, desmState.partes[i])
 }
-
 /** @param {number} i */
 function removerParteDaMesa(i) {
   // Tirar uma parte deixaria um buraco no lote: o que sobra não cobre mais o
@@ -148,13 +122,16 @@ function abrirMesaDesmembramento(loteId) {
 }
 
 function sairMesaDesmembramento() {
+  cancelarDesenho()
+  clearTimeout(timerRascunhoDesm)
+  if (desmState.loteId && atoState.tipo === 'desmembramento') salvarRascunhoDesmembramento()
+  atoState.tipo = null
   desmMesa.ativa = false
   _limparRealce()
   document.getElementById('map')?.classList.remove('desm-foco', 'sem-satelite')
   desmMesa.satelite = true
   const barra = document.getElementById('desm-mesa')
   if (barra) { barra.hidden = true }
-  cancelarDesenho()
 
   // Devolve às FERRAMENTAS. Sem isto, sair do desmembramento deixava a tela
   // sem coluna nenhuma, e a única saída era reabrir tudo pelo ícone — quem
@@ -291,7 +268,7 @@ function pintarMesaDesmembramento() {
   const cabeca = `
     <div class="cad-nota">Dividindo <b>Quadra ${esc(pai?.quadra ?? '—')} · Lote
       ${esc(pai?.numero_lote ?? '—')}</b> de ${fmtNum(pai?.area_gis_m2 ?? 0)} m².
-      O contorno externo não muda: as partes saem do corte, não de um novo desenho.</div>`
+      O original será preservado no histórico e inativado somente na finalização.</div>` + ferramentasCortes()
 
   if (!partes.length) {
     alvo.innerHTML = cabeca + `
@@ -316,57 +293,65 @@ function pintarMesaDesmembramento() {
         <div class="field" style="margin:0">
           <label>Lote</label>
           <input type="text" class="mono" maxlength="20" value="${esc(p.numero_lote)}"
-                 oninput="desmState.partes[${i}].numero_lote=this.value">
+                 oninput="desmState.partes[${i}].numero_lote=this.value;agendarRascunhoDesmembramento()">
         </div>
         <div class="field" style="margin:0">
           <label>Sufixo</label>
           <input type="text" class="mono" inputmode="numeric" maxlength="3"
                  value="${p.desmembramento ?? ''}"
-                 oninput="desmState.partes[${i}].desmembramento=this.value">
+                 oninput="desmState.partes[${i}].desmembramento=this.value;agendarRascunhoDesmembramento()">
         </div>
       </div>
       <div class="g2" style="margin-bottom:6px">
         <div class="field" style="margin:0">
           <label>Frente (m)</label>
           <input type="number" class="mono" step="0.01" min="0" value="${p.frente_m ?? ''}"
-                 oninput="desmState.partes[${i}].frente_m=this.value">
+                 oninput="desmState.partes[${i}].frente_m=this.value;agendarRascunhoDesmembramento()">
         </div>
         <div class="field" style="margin:0">
           <label>Fundos (m)</label>
           <input type="number" class="mono" step="0.01" min="0" value="${p.fundos_m ?? ''}"
-                 oninput="desmState.partes[${i}].fundos_m=this.value">
+                 oninput="desmState.partes[${i}].fundos_m=this.value;agendarRascunhoDesmembramento()">
         </div>
       </div>
       <div class="g2" style="margin-bottom:6px">
         <div class="field" style="margin:0">
           <label>Lado direito (m)</label>
           <input type="number" class="mono" step="0.01" min="0" value="${p.lado_direito_m ?? ''}"
-                 oninput="desmState.partes[${i}].lado_direito_m=this.value">
+                 oninput="desmState.partes[${i}].lado_direito_m=this.value;agendarRascunhoDesmembramento()">
         </div>
         <div class="field" style="margin:0">
           <label>Lado esquerdo (m)</label>
           <input type="number" class="mono" step="0.01" min="0" value="${p.lado_esquerdo_m ?? ''}"
-                 oninput="desmState.partes[${i}].lado_esquerdo_m=this.value">
+                 oninput="desmState.partes[${i}].lado_esquerdo_m=this.value;agendarRascunhoDesmembramento()">
         </div>
       </div>
       <div class="field" style="margin:0">
         <label>Área da matrícula (m²)</label>
         <input type="number" class="mono" step="0.01" min="0" value="${p.area_matricula_m2 ?? ''}"
-               oninput="desmState.partes[${i}].area_matricula_m2=this.value">
+               oninput="desmState.partes[${i}].area_matricula_m2=this.value;agendarRascunhoDesmembramento()">
       </div>
     </div>`).join('') + `
     <div class="seg" style="margin:8px 0 0">
       <button type="button" onclick="sairMesaDesmembramento()">Sair</button>
+      <button type="button" onclick="salvarRascunhoDesmembramento()">Salvar rascunho</button>
+      <button type="button" onclick="descartarRascunhoDesmembramento()">Descartar rascunho</button>
       <button type="button" onclick="refazerCorte()">Refazer o corte</button>
       <button type="button" onclick="conferirDesmembramento()">Conferir</button>
     </div>
+    <div class="leg" id="desm-rascunho-status">Alterações são salvas automaticamente.</div>
     <div id="desm-previa"></div>`
 }
 
 /** Larga as partes e volta a pedir a linha. */
 function refazerCorte() {
+  if (editorCortes.ativo) { cancelarDesenho() }
+  editorCortes.undo.push(estadoEditorCortes())
+  editorCortes.cortes = []; editorCortes.redo = []
+  editorCortes.base = state.lotes.get(desmState.loteId)?.geometry
   desmState.partes = []
   desmState.derivar = false
   pintarMesaDesmembramento()
+  pintarPartesNoMapa()
   cortarLote()
 }

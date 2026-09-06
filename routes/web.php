@@ -88,6 +88,9 @@ Route::middleware('auth')->group(function () {
         Route::delete('/edificacoes/{edificacao}', [EdificacaoController::class, 'excluir']);
 
         Route::get('/mapa/lotes', [MapaController::class, 'lotes']);
+        Route::post('/pranchetas/carregar', [\App\Http\Controllers\PranchetaController::class, 'carregar']);
+        Route::post('/pranchetas/salvar', [\App\Http\Controllers\PranchetaController::class, 'salvar']);
+        Route::get('/lotes/{lote}/pranchas', [\App\Http\Controllers\PranchetaController::class, 'historico']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);
         Route::post('/localizacao/identificar', [MapaController::class, 'identificar']);
@@ -118,6 +121,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/lotes/unificacao-direta', [CadastroLoteController::class, 'unificarDireto']);
         Route::post('/lotes/desmembramento-direto/previa', [CadastroLoteController::class, 'previaDesmembramentoDireto']);
         Route::post('/lotes/desmembramento-direto', [CadastroLoteController::class, 'desmembrarDireto']);
+        Route::get('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'mostrarRascunhoDesmembramento']);
+        Route::put('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'salvarRascunhoDesmembramento']);
+        Route::delete('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'excluirRascunhoDesmembramento']);
 
         // Apagar resíduo do desenho — um ou VÁRIOS de uma vez, marcados no
         // mapa. Pede a senha no corpo, e por isso não é DELETE /lotes/{id}:
@@ -137,6 +143,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/protocolos/{protocolo}/unificacao', [CadastroLoteController::class, 'unificar']);
         Route::post('/protocolos/{protocolo}/desmembramento/previa', [CadastroLoteController::class, 'previaDesmembramento']);
         Route::post('/protocolos/{protocolo}/desmembramento', [CadastroLoteController::class, 'desmembrar']);
+        Route::get('/lotes/{lote}/protocolos/{protocolo}/desmembramento-rascunho', [CadastroLoteController::class, 'mostrarRascunhoDesmembramento']);
+        Route::put('/lotes/{lote}/protocolos/{protocolo}/desmembramento-rascunho', [CadastroLoteController::class, 'salvarRascunhoDesmembramento']);
+        Route::delete('/lotes/{lote}/protocolos/{protocolo}/desmembramento-rascunho', [CadastroLoteController::class, 'excluirRascunhoDesmembramento']);
 
         // Protocolos de desmembramento/unificacao a espera de vistoria. A
         // vistoria e o portao do ato cadastral: o deferimento diz que o pedido

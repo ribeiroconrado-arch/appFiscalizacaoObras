@@ -692,6 +692,7 @@ class BuscaController extends Controller
             'quadra'    => $lote->quadra,
             'lote'      => $lote->numero_lote,
             'inscricao' => $lote->inscricaoFormatada(),
+            'tag_origem' => Lote::tagOrigem($lote->origem),
             'chave'     => $lote->chave,
             'area'      => $lote->area_gis_m2,
             'fonte'     => $lote->fonte,

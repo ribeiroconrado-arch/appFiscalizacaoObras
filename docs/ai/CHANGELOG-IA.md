@@ -300,6 +300,47 @@ booleano e informação do processo. A lista nominal falhou duas vezes — nasce
 sem `assinatura`, e depois sem `assinatura_emitente`. A segunda só apareceu
 porque fui buscar os números para explicar a primeira.
 
+---
+
+## 05/09 · A régua do sistema passa a ser a grade
+
+Relato do usuário: os lotes importados e os desenhados tinham diferenças de
+medida "mínimas, mas que fazem muita diferença" em desmembramento e
+unificação — largura e comprimento não batiam com o original.
+
+Batiam com o original, na régua errada. O DWG está em **UTM** (EPSG:31981),
+que é projeção de **grade**; o sistema media no plano tangente ao elipsoide,
+que dá distância de **terreno**. Entre as duas há o fator de escala da zona:
+em Primavera do Leste, +0,063% em medida linear e +0,126% em área.
+
+Conferido sobre os **2.482 lotes** dos três loteamentos importados: a razão
+medida entre as réguas bate com o fator teórico com resíduo de 0,0015% — a
+diferença é a projeção e mais nada. Em números do Buritis V, quadra 47 lote 29:
+projetado com **10,00 × 21,50 m**, o sistema mostrava **9,99 × 21,49 m**.
+
+↳ **decisão** A régua passa a ser a **GRADE**, porque é a régua dos documentos
+com que o sistema conversa: matrícula, projeto de loteamento e planta do
+agrimensor. Nenhuma das duas medidas é errada — são réguas diferentes —, mas
+uma peça que diga 9,99 onde a matrícula diz 10,00 obriga o fiscal a explicar a
+projeção a quem contesta uma multa por metro quadrado.
+
+O fator entrou nas **três** implementações do plano (`GeometriaPlana` no PHP,
+`planoLocal` no desenho, `PranchetaGeo.plano` na prancheta), cada uma com teste
+medindo o MESMO lote real contra a medida do projeto.
+
+↳ **decisão** `area_gis_m2` do lote novo saiu do `ST_Area`. Ele mede área
+geodésica — de terreno —, enquanto os 2.235 importados foram gravados com área
+de grade pelo pipeline de extração. O lote desenhado nascia 0,126% mais leve
+que o vizinho, e a conta de desmembramento comparava as duas réguas: num lote
+de 360 m², 0,45 m² fantasmas, quase toda a tolerância de sobreposição gasta
+antes de medir qualquer coisa. Um comentário no código afirmava justamente o
+contrário — que o `ST_Area` punha o lote novo "na mesma régua dos importados".
+
+↳ **decisão** A correção dos lotes já gravados virou **comando**
+(`gis:reaferir-areas`), não migration: `area_gis_m2` é a base da multa por m², e
+reescrevê-la em silêncio no meio de um deploy é o tipo de coisa que ninguém
+consegue explicar depois. Sem `--aplicar`, ele só relata.
+
 
 ## Padrões que este histórico revela
 

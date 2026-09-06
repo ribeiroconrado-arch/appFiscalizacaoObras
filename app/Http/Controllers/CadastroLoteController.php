@@ -180,7 +180,7 @@ class CadastroLoteController extends Controller
             return response()->json(['message' => $impedimento], 422);
         }
 
-        $novo = $svc->aplicar($protocolo, $d['ids'], $d['numero_lote']);
+        $novo = $svc->aplicar($protocolo, $d['ids'], $d['numero_lote'], visualizacao: $this->visualizacao($request));
 
         return response()->json([
             'id'      => $novo->id,
@@ -231,7 +231,7 @@ class CadastroLoteController extends Controller
             return response()->json(['message' => $impedimento], 422);
         }
 
-        $novos = $svc->aplicar($protocolo, $pai, $d['partes'], $d['derivar_ultima'], $d['modo'] ?? 'poligonos');
+        $novos = $svc->aplicar($protocolo, $pai, $d['partes'], $d['derivar_ultima'], $d['modo'] ?? 'poligonos', visualizacao: $this->visualizacao($request));
 
         return response()->json([
             'lotes'   => array_map(fn ($l) => [
@@ -375,7 +375,7 @@ class CadastroLoteController extends Controller
             return response()->json(['message' => $impedimento], 422);
         }
 
-        $novo = $svc->aplicar(null, $d['ids'], $d['numero_lote'], null, $d['justificativa']);
+        $novo = $svc->aplicar(null, $d['ids'], $d['numero_lote'], null, $d['justificativa'], $this->visualizacao($request));
 
         return response()->json([
             'id'      => $novo->id,
@@ -423,7 +423,7 @@ class CadastroLoteController extends Controller
         }
 
         $novos = $svc->aplicar(null, $pai, $d['partes'], $d['derivar_ultima'],
-                               $d['modo'] ?? 'poligonos', $justificativa);
+                               $d['modo'] ?? 'poligonos', $justificativa, $this->visualizacao($request));
 
         return response()->json([
             'lotes'   => array_map(fn ($l) => [
@@ -432,6 +432,91 @@ class CadastroLoteController extends Controller
             'message' => sprintf('Lote %s desmembrado em %s. Ato direto, sem protocolo.',
                 $pai->numero_lote, implode(', ', array_map(fn ($l) => $l->numero_lote, $novos))),
         ], 201);
+    }
+
+    private function visualizacao(Request $request): ?array
+    {
+        $d = $request->validate([
+            'visualizacao' => 'nullable|array',
+            'visualizacao.angulo' => 'required_with:visualizacao|numeric|between:-1000,1000',
+            'visualizacao.linhas' => 'sometimes|array|max:200',
+            'visualizacao.anotacoes' => 'sometimes|array|max:100',
+        ]);
+        $v = $d['visualizacao'] ?? null;
+        abort_if($v !== null && strlen(json_encode($v)) > 2000000, 422, 'A visualização ultrapassa 2 MB.');
+        return $v;
+    }
+
+    /** Salva a mesa de trabalho sem executar o ato. */
+    public function salvarRascunhoDesmembramento(Request $request, Lote $lote, ?Protocolo $protocolo = null): JsonResponse
+    {
+        if ($erro = $protocolo
+            ? $this->recusarSemEdicao($request)
+            : $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        abort_if($lote->situacao !== 'ativo', 422, 'Este lote já foi inativado. O rascunho não pode mais ser alterado.');
+        abort_if($protocolo && ($protocolo->tipo !== 'desmembramento' || (int) $protocolo->lote_id !== (int) $lote->id), 422,
+            'O protocolo não corresponde ao desmembramento deste lote.');
+
+        $d = $request->validate([
+            'estado' => ['required', 'array'],
+            'estado.partes' => ['present', 'array', 'max:20'],
+            'estado.partes.*.geometry' => ['required', 'array'],
+        ]);
+
+        $chave = $this->chaveRascunho($request, $lote, $protocolo);
+        DB::table('desmembramento_rascunhos')->updateOrInsert(
+            ['chave' => $chave],
+            [
+                'user_id' => $request->user()->id,
+                'lote_id' => $lote->id,
+                'protocolo_id' => $protocolo?->id,
+                'estado' => json_encode($d['estado']),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
+
+        return response()->json(['message' => 'Rascunho salvo.', 'salvo_em' => now()->toIso8601String()]);
+    }
+
+    /** Recupera somente o rascunho da pessoa que o criou. */
+    public function mostrarRascunhoDesmembramento(Request $request, Lote $lote, ?Protocolo $protocolo = null): JsonResponse
+    {
+        if ($erro = $protocolo
+            ? $this->recusarSemEdicao($request)
+            : $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        $r = DB::table('desmembramento_rascunhos')
+            ->where('chave', $this->chaveRascunho($request, $lote, $protocolo))->first();
+
+        return response()->json([
+            'rascunho' => $r ? json_decode($r->estado, true) : null,
+            'salvo_em' => $r?->updated_at,
+        ]);
+    }
+
+    public function excluirRascunhoDesmembramento(Request $request, Lote $lote, ?Protocolo $protocolo = null): JsonResponse
+    {
+        if ($erro = $protocolo
+            ? $this->recusarSemEdicao($request)
+            : $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        DB::table('desmembramento_rascunhos')
+            ->where('chave', $this->chaveRascunho($request, $lote, $protocolo))->delete();
+
+        return response()->json(['message' => 'Rascunho descartado.']);
+    }
+
+    private function chaveRascunho(Request $request, Lote $lote, ?Protocolo $protocolo): string
+    {
+        return implode(':', ['desm', $request->user()->id, $protocolo?->id ?? 'direto', $lote->id]);
     }
 
     /**

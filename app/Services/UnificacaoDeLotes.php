@@ -6,6 +6,7 @@ use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Repositories\LoteRepository;
 use App\Support\GeometriaPlana;
+use App\Support\InscricaoImobiliaria;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,6 +22,17 @@ use Illuminate\Support\Facades\DB;
  */
 class UnificacaoDeLotes
 {
+    private function identidade(array $ids): array
+    {
+        $inscricoes = Lote::whereIn('id', $ids)->get()->map(fn ($l) => $l->inscricao())->all();
+        if (count($inscricoes) < 2 || in_array(null, $inscricoes, true)) return ['erro'=>'Todos os lotes precisam de inscrição válida para unificar.'];
+        $prefixos = array_unique(array_map(fn ($n) => substr($n,0,8), $inscricoes));
+        if (count($prefixos) !== 1) return ['erro'=>'As inscrições devem pertencer ao mesmo setor, bairro e quadra.'];
+        $numeros = array_map(fn ($n) => (int) substr($n,8,4), $inscricoes);
+        $numero = (string) min($numeros) . (string) max($numeros);
+        if (strlen($numero) > 4) return ['erro'=>'A combinação do menor e maior lote excede os quatro dígitos da inscrição. Revise a numeração antes de unificar.'];
+        return ['numero'=>$numero, 'inscricao'=>$prefixos[0].str_pad($numero,4,'0',STR_PAD_LEFT).'000'];
+    }
     /**
      * Folga para dois lotes serem considerados vizinhos, em metros.
      *
@@ -46,6 +58,7 @@ class UnificacaoDeLotes
     {
         $lotes = $this->lotes($ids);
         $u = count($ids) >= 2 ? $this->lotes->uniao($ids) : null;
+        $identidade = $this->identidade($ids);
 
         $vinculos = [
             'documentos' => DB::table('documentos')->whereIn('lote_id', $ids)->count(),
@@ -61,10 +74,13 @@ class UnificacaoDeLotes
             'soma_area'    => round($lotes->sum(fn ($l) => (float) $l->area_gis_m2), 2),
             'area_uniao'   => $u ? round($u['area_m2'], 2) : null,
             'tipo_uniao'   => $u['tipo'] ?? null,
+            'geometry'     => isset($u['geojson']) ? json_decode($u['geojson'], true) : null,
             'bairro'       => $lotes->first()->bairro ?? null,
             'quadra'       => $lotes->first()->quadra ?? null,
             'vinculos'     => $vinculos,
-            'sugestao_lote' => $lotes->sortBy(fn ($l) => (int) $l->numero_lote)->first()->numero_lote ?? null,
+            'sugestao_lote' => $identidade['numero'] ?? null,
+            'inscricao' => InscricaoImobiliaria::formatar($identidade['inscricao'] ?? null),
+            'erro_identidade' => $identidade['erro'] ?? null,
         ];
     }
 
@@ -102,9 +118,9 @@ class UnificacaoDeLotes
                 . 'corrija-a antes pela seleção em massa.';
         }
 
-        if (! $numeroLote) {
-            return 'Informe o número do lote resultante.';
-        }
+        $identidade = $this->identidade($ids);
+        if (isset($identidade['erro'])) return $identidade['erro'];
+        if ($numeroLote !== $identidade['numero']) return 'O lote resultante deve ser '.$identidade['numero'].' (menor número + maior número).';
 
         // ── a prova física ──
         if ($solto = $this->desencostado($ids)) {
@@ -126,10 +142,10 @@ class UnificacaoDeLotes
 
         // ── a área fecha? ──
         //
-        // Os dois lados medidos pela MESMA régua (GeometriaPlana), nunca
-        // misturando com o ST_Area: réguas diferentes produzem 0,25% de
-        // diferença fantasma, que num lote de 360 m² já consome metade da
-        // tolerância sem nada ter acontecido.
+        // Os dois lados medidos pela MESMA régua (GeometriaPlana, que mede em
+        // GRADE), nunca misturando com o ST_Area, que mede área geodésica de
+        // TERRENO: são 0,126% de diferença sistemática, e num lote de 360 m²
+        // isso consome quase toda a tolerância sem nada ter acontecido.
         $conta = $this->conferirArea($ids, $u['geojson']);
         if ($conta['diferenca'] > $conta['tolerado']) {
             return sprintf('A união dá %s m², mas os lotes somam %s m² — diferença de %s m², '
@@ -152,6 +168,10 @@ class UnificacaoDeLotes
 
         if ($choque) {
             return "A quadra {$lotes->first()->quadra} já tem outro lote {$numeroLote} ativo.";
+        }
+        if (DB::table('lotes')->where('situacao','ativo')->whereNotIn('id',$ids)
+            ->whereRaw("REPLACE(inscricao_imobiliaria, '.', '') = ?",[$identidade['inscricao']])->exists()) {
+            return 'Já existe um lote ativo com a inscrição resultante.';
         }
 
         return null;
@@ -184,13 +204,18 @@ class UnificacaoDeLotes
      *
      * @param  list<int>  $ids
      */
-    public function aplicar(?Protocolo $protocolo, array $ids, string $numeroLote, ?int $desmembramento = null, ?string $justificativa = null): Lote
+    public function aplicar(?Protocolo $protocolo, array $ids, string $numeroLote, ?int $desmembramento = null, ?string $justificativa = null, ?array $visualizacao = null): Lote
     {
-        $lotes = $this->lotes($ids);
-        $primeiro = $lotes->first();
-        $u = $this->lotes->uniao($ids);
-
-        return DB::transaction(function () use ($protocolo, $ids, $numeroLote, $desmembramento, $primeiro, $u, $justificativa) {
+        return DB::transaction(function () use ($protocolo, $ids, $numeroLote, $justificativa, $visualizacao) {
+            $ref = Lote::whereKey($ids[0])->firstOrFail();
+            Lote::where('bairro',$ref->bairro)->where('quadra',$ref->quadra)->orderBy('id')->lockForUpdate()->get();
+            if ($protocolo) $protocolo = Protocolo::whereKey($protocolo->id)->lockForUpdate()->firstOrFail();
+            if ($erro = $this->impedimento($protocolo,$ids,$numeroLote,direto:$protocolo===null)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['ids'=>$erro]);
+            }
+            $primeiro = $this->lotes($ids)->first();
+            $u = $this->lotes->uniao($ids);
+            $identidade = $this->identidade($ids);
             // A baixa vem ANTES da criação: o índice único só ignora quem já
             // está inativo, e o número do lote novo costuma ser o de um dos
             // antigos. Fora de uma transação isto seria uma janela de
@@ -199,7 +224,8 @@ class UnificacaoDeLotes
                 'bairro'         => $primeiro->bairro,
                 'quadra'         => $primeiro->quadra,
                 'numero_lote'    => $numeroLote,
-                'desmembramento' => $desmembramento ?? 0,
+                'desmembramento' => 0,
+                'inscricao_imobiliaria' => $identidade['inscricao'],
                 'chave'          => $primeiro->bairro . '|' . $primeiro->quadra . '|' . $numeroLote,
                 'area_gis_m2'    => round($u['area_m2'], 2),
                 'fonte'          => $protocolo
@@ -217,7 +243,7 @@ class UnificacaoDeLotes
             $novo = Lote::find($id);
             $novo->registrarAuditoria('unificou', null, $atributos);
 
-            $this->sucessao->registrar('unificacao', $ids, [$id], $protocolo, null, $justificativa);
+            $this->sucessao->registrar('unificacao', $ids, [$id], $protocolo, null, $justificativa, $visualizacao);
 
             return $novo;
         });

@@ -25,20 +25,31 @@ namespace App\Support;
  * Existem três medidas de área em jogo, e elas NÃO coincidem:
  *
  *   ST_Area do MySQL   área geodésica. Erra ±0,35% de forma ruidosa, sem viés.
- *   GeometriaPlana     área real de terreno. Constante e previsível.
+ *   Plano tangente     área real de TERRENO. Constante e previsível.
  *   UTM (EPSG:31981)   área de GRADE. É o que o DWG traz e o que o agrimensor
- *                      usa, e vem inflada ~0,12% aqui: Primavera fica a 2,7°
- *                      do meridiano central e o fator k0=0,9996 do UTM cresce
- *                      com a distância. Medido: GeometriaPlana fica 0,126%
- *                      abaixo do UTM em TODOS os lotes conferidos — que é
- *                      exatamente a distorção esperada, não erro.
+ *                      usa, e fica ~0,126% acima do terreno aqui: Primavera
+ *                      está a 2,7° do meridiano central, e o fator de escala
+ *                      do UTM cresce com essa distância.
  *
- * Daí a regra: `area_gis_m2` continua vindo do `ST_Area`, para o lote novo
- * ficar na mesma régua dos 2.239 que vieram da importação. E toda COMPARAÇÃO
- * — partes contra o pai, união contra a soma, sobreposição contra tolerância —
- * mede os dois lados com a MESMA régua, sempre esta. Comparar área medida por
- * motores diferentes produziria diferença de 0,25% sem nada ter acontecido: num
- * lote de 360 m² são 0,9 m² fantasmas, metade da tolerância gasta à toa.
+ * A RÉGUA DO SISTEMA É A GRADE, e é por isso que `projetar()` multiplica o
+ * plano tangente pelo fator de escala (`fatorDeEscala`). O motivo é que a
+ * grade é a régua dos documentos com os quais o sistema conversa: matrícula,
+ * projeto de loteamento e planta do agrimensor trazem medida de grade. Medir
+ * em terreno não é errado — é outra régua —, mas obrigava o fiscal a explicar
+ * por que a peça dizia 9,99 onde a matrícula diz 10,00.
+ *
+ * Medido sobre os 2.482 lotes dos três loteamentos importados: a razão entre
+ * terreno e grade bate com o fator de escala teórico com resíduo de 0,0015%,
+ * o que prova que a diferença é a projeção e mais nada.
+ *
+ * Daí a regra: `area_gis_m2` sai DAQUI em todo lote novo — ver
+ * LoteRepository::areaDoGeoJson —, que é a mesma régua dos que vieram da
+ * importação, cuja área foi medida em UTM pelo pipeline de extração antes de
+ * reprojetar. E toda COMPARAÇÃO — partes contra o pai, união contra a soma,
+ * sobreposição contra tolerância — mede os dois lados com a MESMA régua,
+ * sempre esta. Comparar área medida por motores diferentes produziria
+ * diferença de 0,126% sem nada ter acontecido: num lote de 360 m² são 0,45 m²
+ * fantasmas, quase a tolerância inteira gasta à toa.
  *
  * ── Sobre projetar em plano ──
  *
@@ -56,6 +67,44 @@ class GeometriaPlana
 
     /** Primeira excentricidade ao quadrado do GRS80. */
     private const E2 = 0.00669438002290;
+
+    /** Fator de escala no meridiano central do UTM. */
+    private const K0 = 0.9996;
+
+    /**
+     * O fator de escala do UTM no ponto: quantos metros de GRADE valem um
+     * metro de terreno ali. É o que põe a medida do sistema na régua do DWG
+     * e da matrícula — ver o cabeçalho desta classe.
+     *
+     * A zona sai da própria longitude, e não de configuração: assim o cálculo
+     * acompanha o município sem depender de ninguém lembrar de ajustar uma
+     * chave. Para Primavera do Leste isto devolve a zona 21 (meridiano central
+     * 57°O), a mesma do `srid_origem` declarado em config/gis.php — se um dia
+     * as duas discordarem, é a base que está em outra zona, e aí o pipeline de
+     * importação é que precisa ser conferido.
+     *
+     * O gêmeo em JavaScript é `fatorEscalaUTM`, em public/js/geo.js.
+     */
+    public static function fatorDeEscala(float $lat, float $lon): float
+    {
+        $zona = (int) floor(($lon + 180) / 6) + 1;
+        $meridianoCentral = $zona * 6 - 183;
+
+        $f = deg2rad($lat);
+        $t = tan($f);
+        $linhaE2 = self::E2 / (1 - self::E2);       // e'², segunda excentricidade
+        $eta2 = $linhaE2 * cos($f) ** 2;
+        $a = deg2rad($lon - $meridianoCentral) * cos($f);
+        $a2 = $a * $a;
+
+        // Série do fator de escala pontual da Transversa de Mercator. O termo
+        // de quarta ordem vale menos de um milímetro em cem metros nesta
+        // distância do meridiano central, mas custa uma linha e evita ter de
+        // justificar o corte.
+        return self::K0 * (1
+            + (1 + $eta2) * $a2 / 2
+            + (5 - 4 * $t * $t + 42 * $eta2 + 13 * $eta2 ** 2 - 28 * $linhaE2) * $a2 ** 2 / 24);
+    }
 
     /**
      * Converte um anel [[lon,lat],…] em metros locais, com origem no próprio
@@ -78,6 +127,11 @@ class GeometriaPlana
      * Com o raio meridional e o raio da grande normal do próprio elipsoide, o
      * viés sistemático desaparece.
      *
+     * O resultado sai em metros de GRADE, não de terreno: o plano tangente é
+     * multiplicado pelo fator de escala do UTM (`fatorDeEscala`). Sem isso a
+     * medida ficava 0,063% abaixo da do DWG em cada lado — um lote projetado
+     * com 10,00 m era medido como 9,99 m.
+     *
      * @param  list<array{0:float,1:float}>  $anel
      * @return list<array{0:float,1:float}>
      */
@@ -97,8 +151,10 @@ class GeometriaPlana
         $m = self::A * (1 - self::E2) / ($w * sqrt($w));
         $n = self::A / sqrt($w);
 
-        $porGrauLat = $m * M_PI / 180;
-        $porGrauLon = $n * M_PI / 180 * cos(deg2rad($latRef));
+        $k = self::fatorDeEscala($latRef, $lonRef);
+
+        $porGrauLat = $m * M_PI / 180 * $k;
+        $porGrauLon = $n * M_PI / 180 * cos(deg2rad($latRef)) * $k;
 
         return array_map(
             fn ($c) => [($c[0] - $lonRef) * $porGrauLon, ($c[1] - $latRef) * $porGrauLat],

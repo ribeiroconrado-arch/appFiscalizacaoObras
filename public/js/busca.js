@@ -343,6 +343,7 @@ function renderFichaImovel(d) {
       <div class="bs-ficha-topo">
         <div>
           <h3 class="mono">${esc(d.inscricao || 'sem inscrição')}</h3>
+          <span class="lote-tag-origem">${esc(d.tag_origem || 'ORIGINAL')}</span>
           <div class="sub">${esc(d.bairro || '—')} · Quadra ${esc(d.quadra ?? '—')} · Lote ${esc(d.lote ?? '—')}</div>
         </div>
         <div class="btn-row" style="margin:0">${noMapa}${voltar}</div>

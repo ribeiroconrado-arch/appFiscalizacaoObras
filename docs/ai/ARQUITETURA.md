@@ -128,8 +128,21 @@ espelhando `GeometriaPlana::projetar` no PHP): elipsoide WGS84, raio meridional
 certo na tela e errado no terreno — e a diferença já foi medida em ~0,4% com
 haversine, o que não serve para medida cadastral.
 
-**Se mexer nas medidas do desenho, mexa nos dois lados.** A projeção existe
-duplicada de propósito (PHP valida, JS desenha) e as duas têm de concordar.
+**A régua é a GRADE do UTM, não o terreno.** O plano tangente é multiplicado
+pelo fator de escala da zona (`fatorEscalaUTM` em `public/js/geo.js`,
+`GeometriaPlana::fatorDeEscala` no PHP). Em Primavera do Leste isso vale
++0,063% em cada medida linear e +0,126% em área. O motivo é que grade é a régua
+dos documentos com que o sistema conversa — matrícula, projeto de loteamento e
+planta do agrimensor —, e o DWG de origem já vem em EPSG:31981. Sem o fator, um
+lote projetado com 10,00 × 21,50 m era medido como 9,99 × 21,49 m.
+
+**Se mexer nas medidas do desenho, mexa nos TRÊS lados.** A projeção existe
+triplicada de propósito — `GeometriaPlana` (PHP valida), `planoLocal`
+(JS desenha) e `PranchetaGeo.plano` (prancheta, que roda isolada, sem globais,
+para poder ser testada sem navegador). As três têm de concordar, e há teste
+para isso em cada uma: `tests/Unit/GeometriaPlanaTest.php`,
+`tests/desenho-medidas.test.cjs` e `tests/prancheta-geo.test.cjs`, todos
+medindo o MESMO lote real contra a medida do projeto.
 
 ## Fluxo de uma requisição típica
 

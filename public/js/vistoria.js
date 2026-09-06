@@ -41,9 +41,9 @@ const vState = {
   /** @type {Array<File>} escolhidas de uma vez, atendidas uma a uma */ filaFotos: [],
   /** @type {Array<Object>} artigos sugeridos pelas irregularidades marcadas */ artigos: [],
   /** @type {Array<string>} irregularidades que nenhum artigo enquadra */ semArtigo: [],
-  /** @type {string} para que serve esta vistoria — decide os passos */
+  /** @type {string} para que serve esta vistoria — decide os campos de obra */
   finalidade: 'obras',
-  /** @type {{alvara:string, fase:string, projeto:string, uso:string}} escolhas em botão */
+  /** @type {{alvara:string, fase:string, projeto:string, uso:string}} campos de obra escolhidos */
   obra: { alvara: '', fase: '', projeto: '', uso: '' },
   /** @type {{lat:number, lon:number, prec:number}|null} posição da vistoria */ gps: null,
   /** @type {string} chave do passo visível */ passo: 'id',
@@ -458,9 +458,9 @@ function zerarVistoria() {
   const põe = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v } }
   põe('nv-area', ''); põe('nv-area-metodo', '')
   põe('nv-acomp-nome', ''); põe('nv-acomp-qual', ''); põe('nv-alvara-numero', '')
+  põe('nv-alvara-vencimento', ''); atualizarDisplayData(document.getElementById('nv-alvara-vencimento'))
   põe('nv-ano', '')
   põe('nv-exig-texto', ''); põe('nv-exig-prazo', '')
-  document.getElementById('nv-alvara-num-campo').hidden = true
   document.getElementById('nv-rascunho').hidden = true
   // As irregularidades vivem DENTRO dos itens agora: zerar `relatorio` já as
   // leva junto, e não sobra checklist de tela para desmarcar à mão.
@@ -822,29 +822,29 @@ function irPassoPara(destino) {
  * a ser oferecido aqui e ignorado lá.
  */
 const FINALIDADES = {
-  obras:         { passo: 'A obra',        campos: ['alvara', 'area', 'fase'] },
-  cadastral:     { passo: 'O imóvel',      campos: ['area', 'uso', 'ano'] },
-  habite_se:     { passo: 'A conclusão',   campos: ['alvara', 'area', 'projeto', 'fase'] },
-  regularizacao: { passo: 'A construção',  campos: ['alvara', 'area', 'ano', 'uso', 'projeto'] },
-  constatacao:   { passo: null,            campos: [] },
+  obras:         { campos: ['alvara', 'area', 'fase'] },
+  cadastral:     { campos: ['area', 'uso', 'ano'] },
+  habite_se:     { campos: ['alvara', 'area', 'projeto', 'fase'] },
+  regularizacao: { campos: ['alvara', 'area', 'ano', 'uso', 'projeto'] },
+  constatacao:   { campos: [] },
 }
 
 /**
- * Os passos da finalidade corrente, por CHAVE e não por número.
+ * Os passos da vistoria — sempre três, na mesma ordem.
  *
- * O auto de constatação não tem passo de medição: são três passos, e o
- * "Relatório" é o segundo. Numerar os passos no código faria essa variação
- * virar aritmética espalhada por toda parte.
+ * Os campos de obra moravam num segundo passo à parte, que a finalidade
+ * podia até apagar (o auto de constatação não tinha nenhum). Agora eles
+ * vivem dentro da Identificação, escondidos ou não por `pintarFinalidade`
+ * conforme o `campos` acima — e por isso os passos não variam mais.
  *
  * @returns {Array<{k:string, rotulo:string}>}
  */
 function passosDaVistoria() {
-  const f = FINALIDADES[vState.finalidade] || FINALIDADES.obras
-  const lista = [{ k: 'id', rotulo: 'Identificação' }]
-  if (f.passo) { lista.push({ k: 'obra', rotulo: f.passo }) }
-  lista.push({ k: 'rel', rotulo: 'Relatório' })
-  lista.push({ k: 'rev', rotulo: 'Revisão' })
-  return lista
+  return [
+    { k: 'id', rotulo: 'Identificação' },
+    { k: 'rel', rotulo: 'Relatório' },
+    { k: 'rev', rotulo: 'Revisão' },
+  ]
 }
 
 /**
@@ -854,10 +854,10 @@ function passosDaVistoria() {
  * @param {string} k chave do passo
  */
 function passoCompleto(k) {
-  if (k === 'id' && !document.getElementById('nv-datahora').value) {
-    toast('Informe data e hora da vistoria', 'err'); return false
-  }
-  if (k === 'obra') {
+  if (k === 'id') {
+    if (!document.getElementById('nv-datahora').value) {
+      toast('Informe data e hora da vistoria', 'err'); return false
+    }
     const area = document.getElementById('nv-area').value
     if (area && !document.getElementById('nv-area-metodo').value) {
       toast('Diga como a área foi obtida', 'err'); return false
@@ -914,12 +914,12 @@ function pintarBarraDePassos() {
 }
 
 /**
- * A escolha que decide o resto da tela.
+ * A escolha que decide os campos de obra logo abaixo, na Identificação.
  *
- * Trocar a finalidade REFAZ os passos na hora — inclusive fazendo o segundo
- * desaparecer, no auto de constatação. O que já foi digitado nos campos que
- * somem continua na tela (só escondido) e é descartado na gravação pelo
- * servidor, que é quem tem a palavra final sobre o que pertence a quê.
+ * Trocar a finalidade esconde ou mostra blocos na hora. O que já foi
+ * digitado nos que somem continua na tela (só escondido) e é descartado na
+ * gravação pelo servidor, que é quem tem a palavra final sobre o que
+ * pertence a quê.
  *
  * @param {string} valor
  */
@@ -927,31 +927,27 @@ function escolherFinalidade(valor) {
   if (!FINALIDADES[valor]) { return }
   vState.finalidade = valor
   pintarFinalidade()
-
-  // Se o passo em que se está deixou de existir, cai no relatório — que é o
-  // passo que toda finalidade tem.
-  const lista = passosDaVistoria()
-  irPasso(lista.some(x => x.k === vState.passo) ? vState.passo : 'rel')
 }
 
-/** Pinta a escolha e mostra só os blocos que a finalidade pede. */
+/** Pinta a escolha e mostra só os blocos de obra que a finalidade pede. */
 function pintarFinalidade() {
   const f = FINALIDADES[vState.finalidade] || FINALIDADES.obras
 
-  document.querySelectorAll('#nv-finalidade .vs-op').forEach(b =>
-    b.classList.toggle('at', b.dataset.valor === vState.finalidade))
+  const sel = document.getElementById('nv-finalidade')
+  if (sel) { sel.value = vState.finalidade }
+  const obs = document.getElementById('nv-finalidade-obs')
+  if (obs) { obs.textContent = sel?.options[sel.selectedIndex]?.dataset.obs ?? '' }
 
-  document.querySelectorAll('#nv-p-obra [data-bloco]').forEach(bloco => {
+  document.querySelectorAll('#nv-p-id [data-bloco]').forEach(bloco => {
     bloco.hidden = !f.campos.includes(bloco.dataset.bloco)
   })
-  pintarBarraDePassos()
 }
 
 /**
  * Atalho da ronda de rotina: situação, foto, gravar.
  *
- * A vistoria de rotina é a esmagadora maioria, e obrigá-la a atravessar cinco
- * passos cobraria mais do que a informação que os passos coletam — o custo
+ * A vistoria de rotina é a esmagadora maioria, e obrigá-la a atravessar todos
+ * os passos cobraria mais do que a informação que eles coletam — o custo
  * disso não é um formulário chato, é o fiscal deixando de registrar.
  */
 function vistoriaRapida() {
@@ -1005,20 +1001,17 @@ function pintarGps() {
   if (btn) { btn.textContent = 'Atualizar' }
 }
 
-// ── PASSO 2: A OBRA ──────────────────────────────────────────
+// ── OS CAMPOS DA OBRA (dentro da Identificação) ───────────────
 
 /** @param {string} v */
 function escolherAlvara(v) {
-  vState.obra.alvara = vState.obra.alvara === v ? '' : v
-  // O número só faz sentido quando há alvará: campo aberto para quem respondeu
-  // "não possui" é convite a preencher o que não existe.
-  document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
+  vState.obra.alvara = v
   pintarOpcoes()
 }
 
 /** @param {string} v */
 function escolherFase(v) {
-  vState.obra.fase = vState.obra.fase === v ? '' : v
+  vState.obra.fase = v
   pintarOpcoes()
 }
 
@@ -1037,10 +1030,16 @@ function escolherUso(v) {
 function pintarOpcoes() {
   const marca = (id, valor) => document.querySelectorAll('#' + id + ' .vs-op')
     .forEach(b => b.classList.toggle('at', b.dataset.valor === valor))
-  marca('nv-alvara', vState.obra.alvara)
-  marca('nv-fase', vState.obra.fase)
   marca('nv-projeto', vState.obra.projeto)
   marca('nv-uso', vState.obra.uso)
+
+  const sel = (id, valor) => { const e = document.getElementById(id); if (e) { e.value = valor || '' } }
+  sel('nv-alvara', vState.obra.alvara)
+  sel('nv-fase', vState.obra.fase)
+  // O número e o vencimento só fazem sentido quando há alvará: campo aberto
+  // para quem respondeu "não possui" é convite a preencher o que não existe.
+  document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
+  document.getElementById('nv-alvara-vencimento-campo').hidden = vState.obra.alvara !== 'possui'
 }
 
 /**
@@ -2499,8 +2498,11 @@ function renderRevisao() {
   const falta = t => `<span class="falta">${t}</span>`
   const rotOp = (id, v) =>
     document.querySelector(`#${id} .vs-op[data-valor="${v}"]`)?.textContent.trim() ?? ''
+  const rotSel = (id, v) =>
+    document.querySelector(`#${id} option[value="${v}"]`)?.textContent.trim() ?? ''
 
-  const rotuloFinalidade = document.querySelector('#nv-finalidade .vs-op.at .t')?.textContent.trim()
+  const finalidadeSel = document.getElementById('nv-finalidade')
+  const rotuloFinalidade = finalidadeSel?.options[finalidadeSel.selectedIndex]?.text.trim()
   const campos = (FINALIDADES[vState.finalidade] || FINALIDADES.obras).campos
 
   const linhas = [
@@ -2517,9 +2519,11 @@ function renderRevisao() {
       ? esc(acomp) + (qual.value ? ' — ' + esc(qual.options[qual.selectedIndex].text) : '')
       : falta('ninguém identificado')],
     ...(campos.includes('alvara') ? [['Alvará', vState.obra.alvara
-      ? esc(rotOp('nv-alvara', vState.obra.alvara))
+      ? esc(rotSel('nv-alvara', vState.obra.alvara))
         + (vState.obra.alvara === 'possui' && document.getElementById('nv-alvara-numero').value
            ? ' nº ' + esc(document.getElementById('nv-alvara-numero').value) : '')
+        + (vState.obra.alvara === 'possui' && document.getElementById('nv-alvara-vencimento').value
+           ? ' — vencimento ' + esc(formatarDataBR(document.getElementById('nv-alvara-vencimento').value)) : '')
       : falta('não informado')]] : []),
     // A área é a linha que mais importa nesta tela: sem ela, multa por metro
     // quadrado sai como "não calculada" — ver Artigo::calcularMulta().
@@ -2527,7 +2531,7 @@ function renderRevisao() {
       ? esc(area) + ' m²' + (metodo.value ? ' (' + esc(metodo.options[metodo.selectedIndex].text.toLowerCase()) + ')' : '')
       : falta('não medida — multa por m² não será calculada')]] : []),
     ...(campos.includes('fase') ? [['Fase da obra',
-      vState.obra.fase ? esc(rotOp('nv-fase', vState.obra.fase)) : falta('não informada')]] : []),
+      vState.obra.fase ? esc(rotSel('nv-fase', vState.obra.fase)) : falta('não informada')]] : []),
     ...(campos.includes('projeto') ? [['Projeto aprovado',
       vState.obra.projeto ? esc(rotOp('nv-projeto', vState.obra.projeto)) : falta('não verificado')]] : []),
     ...(campos.includes('uso') ? [['Uso constatado',
@@ -2610,7 +2614,8 @@ function salvarRascunho() {
         data: v('nv-data'), hora: v('nv-hora'), situacao: v('nv-situacao'),
         area: v('nv-area'), metodo: v('nv-area-metodo'),
         acompNome: v('nv-acomp-nome'), acompQual: v('nv-acomp-qual'),
-        alvaraNumero: v('nv-alvara-numero'), ano: v('nv-ano'),
+        alvaraNumero: v('nv-alvara-numero'), alvaraVencimento: v('nv-alvara-vencimento'),
+        ano: v('nv-ano'),
       },
       finalidade: vState.finalidade,
       obra: vState.obra,
@@ -2722,8 +2727,10 @@ function aplicarRascunho(d) {
   põe('nv-data', c.data); põe('nv-hora', c.hora); põe('nv-situacao', c.situacao)
   põe('nv-area', c.area); põe('nv-area-metodo', c.metodo)
   põe('nv-acomp-nome', c.acompNome); põe('nv-acomp-qual', c.acompQual)
-  põe('nv-alvara-numero', c.alvaraNumero); põe('nv-ano', c.ano)
+  põe('nv-alvara-numero', c.alvaraNumero); põe('nv-alvara-vencimento', c.alvaraVencimento)
+  põe('nv-ano', c.ano)
   syncDataHora()
+  atualizarDisplayData(document.getElementById('nv-alvara-vencimento'))
 
   vState.finalidade = FINALIDADES[d.finalidade] ? d.finalidade : 'obras'
   vState.obra = d.obra ?? { alvara: '', fase: '', projeto: '', uso: '' }
@@ -2733,7 +2740,6 @@ function aplicarRascunho(d) {
   // gravado: rascunho de uma versão antiga não pode trazer índices de anexo
   // que não existem mais nesta sessão.
   vState.relatorio = (d.relatorio ?? []).map(i => ({ ...itemVazio(), ...i, fotos: [] }))
-  document.getElementById('nv-alvara-num-campo').hidden = vState.obra.alvara !== 'possui'
 
   pintarOpcoes(); pintarFinalidade(); pintarGps(); renderRelatorio()
   irPasso(d.passo ?? 'id')
@@ -2770,15 +2776,16 @@ function gravarVistoria() {
   // A mesma regra do servidor, dita antes de o fiscal perder o envio: área sem
   // método é número que não se sustenta em defesa.
   if (document.getElementById('nv-area').value && !document.getElementById('nv-area-metodo').value) {
-    irPasso('obra'); toast('Diga como a área foi obtida', 'err'); return
+    irPasso('id'); toast('Diga como a área foi obtida', 'err'); return
   }
 
   const resumo = marcadas.length
     ? `${marcadas.length} irregularidade${marcadas.length > 1 ? 's' : ''}`
     : 'sem irregularidades'
 
+  const finalidadeSel = document.getElementById('nv-finalidade')
   confirmarAcao({
-    titulo: 'Gravar ' + (document.querySelector('#nv-finalidade .vs-op.at .t')?.textContent.trim().toLowerCase() || 'vistoria'),
+    titulo: 'Gravar ' + (finalidadeSel?.options[finalidadeSel.selectedIndex]?.text.trim().toLowerCase() || 'vistoria'),
     mensagem: `Registrar vistoria do lote ${vState.lote.numero_lote}, quadra `
             + `${vState.lote.quadra}, com ${resumo} e ${vState.relatorio.length} item(ns) no relatório?`,
     textoBtn: 'Gravar',
@@ -2811,7 +2818,10 @@ async function enviarVistoria() {
   opcional('acompanhante_nome', campo('nv-acomp-nome').trim())
   opcional('acompanhante_qualificacao', campo('nv-acomp-qual'))
   opcional('alvara_situacao', vState.obra.alvara)
-  if (vState.obra.alvara === 'possui') { opcional('alvara_numero', campo('nv-alvara-numero').trim()) }
+  if (vState.obra.alvara === 'possui') {
+    opcional('alvara_numero', campo('nv-alvara-numero').trim())
+    opcional('alvara_vencimento', campo('nv-alvara-vencimento'))
+  }
   opcional('area_construida_aferida_m2', campo('nv-area'))
   opcional('area_metodo', campo('nv-area-metodo'))
   opcional('fase_obra', vState.obra.fase)

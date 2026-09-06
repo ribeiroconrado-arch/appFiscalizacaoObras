@@ -30,6 +30,7 @@
      isso que os dois temas convivem sem custo: um tema é um bloco de tokens,
      não uma segunda folha de componentes. --}}
 <link rel="stylesheet" href="@assetv('css/tema-institucional.css')">
+<link rel="stylesheet" href="@assetv('css/prancheta-cadastral.css')">
 {{-- Sem defer: precisa rodar antes do primeiro pintar (ver js/tema.js). --}}
 <script src="@assetv('js/tema.js')"></script>
 </head>
@@ -1243,15 +1244,19 @@
 
 {{-- NOVA VISTORIA (Etapa 5) --}}
 {{-- ══════════════════════════════════════════════
-     VISTORIA DE OBRA (#m-vistoria) — CINCO PASSOS
+     VISTORIA DE OBRA (#m-vistoria) — TRÊS PASSOS
 
      Um assunto por vez, e não uma coluna longa. O fiscal usa esta tela de pé,
      no sol, num celular: rolagem infinita ali é o que faz alguém desistir de
      registrar e "anotar depois" — que na prática é não registrar.
 
+     Os campos da obra (alvará, área, fase...) vivem dentro da Identificação,
+     e não num segundo passo à parte: são a maioria das vistorias, e separá-los
+     custava uma troca de aba para o caso mais comum.
+
      O ATALHO existe pelo mesmo motivo. A ronda de rotina é a maioria absoluta
-     das vistorias, e obrigá-la a atravessar cinco passos custaria mais do que
-     a informação que os passos coletam.
+     das vistorias, e obrigá-la a atravessar todos os passos custaria mais do
+     que a informação que eles coletam.
      ══════════════════════════════════════════════ --}}
 <div class="modal-bg" id="m-vistoria" onclick="fModal()">
   <div class="modal modal-flex" onclick="event.stopPropagation()">
@@ -1276,9 +1281,9 @@
 
       {{-- Barra de passos: mostra onde se está e o que falta. Clicável para
            voltar, porque conferir o que já foi preenchido é gesto legítimo. --}}
-      {{-- Barra de passos montada pelo JavaScript: quantos passos existem, e
-           como se chama o segundo, dependem da FINALIDADE. Um auto de
-           constatação não tem passo de medição nenhum — ver
+      {{-- Barra de passos montada pelo JavaScript: são sempre três
+           (Identificação, Relatório, Revisão) — o que muda com a FINALIDADE
+           é quais campos de obra aparecem dentro da Identificação, ver
            Vistoria::FINALIDADES, que é a fonte dessa regra dos dois lados. --}}
       <div class="vs-passos" id="nv-passos"></div>
     </div>
@@ -1327,89 +1332,52 @@
       </div>
       <input type="hidden" id="nv-datahora">
 
-      {{-- A finalidade vem ANTES de tudo: ela decide quais passos existem e o
-           que cada um pergunta. Escolhê-la depois obrigaria a refazer o que já
-           tivesse sido preenchido. --}}
-      <div class="sec-title">Para que é esta vistoria</div>
-      <div class="vs-opcoes vs-finalidades" id="nv-finalidade">
-        @foreach (\App\Models\Vistoria::FINALIDADES as $valor => $f)
-          <button type="button" class="vs-op vs-op-larga" data-valor="{{ $valor }}"
-                  onclick="escolherFinalidade('{{ $valor }}')">
-            <span class="t">{{ $f['rotulo'] }}</span>
-            <span class="o">{{ $f['obs'] }}</span>
-          </button>
-        @endforeach
-      </div>
-
+      {{-- A finalidade vem ANTES de tudo: ela decide o que os campos de obra,
+           logo abaixo, perguntam. Escolhê-la depois obrigaria a refazer o que
+           já tivesse sido preenchido. Combobox, e não cartões: as cinco
+           opções com sua descrição ocupavam a tela toda antes de chegar ao
+           resto da identificação — e a esmagadora maioria das vistorias é
+           "Fiscalização de obras", que por isso já vem selecionada. --}}
       <div class="field" style="margin-top:9px">
-        <label for="nv-situacao">Situação constatada</label>
-        <select id="nv-situacao">
-          @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
+        <label for="nv-finalidade">Para que é esta vistoria</label>
+        <select id="nv-finalidade" onchange="escolherFinalidade(this.value)">
+          @foreach (\App\Models\Vistoria::FINALIDADES as $valor => $f)
+            <option value="{{ $valor }}" data-obs="{{ $f['obs'] }}" @selected($valor === 'obras')>{{ $f['rotulo'] }}</option>
+          @endforeach
+        </select>
+      </div>
+      <div class="cad-nota" id="nv-finalidade-obs" style="margin:-4px 0 2px"></div>
+
+      {{-- OS CAMPOS DA OBRA, que antes viviam num segundo passo só deles.
+           Juntá-los à identificação poupa uma troca de aba para o caso comum
+           (fiscalização de obra), que é exatamente quem mais os usa. Cada
+           bloco aparece ou não conforme a finalidade escolhida acima
+           (data-bloco) — ver Vistoria::FINALIDADES no servidor, fonte única
+           dessa regra. Um auto de constatação não mostra nenhum. --}}
+      <div data-bloco="alvara">
+      <div class="field" style="margin-top:9px">
+        <label for="nv-alvara">Alvará</label>
+        {{-- "Não verificado" é estado legítimo, distinto de "não possui": o
+             fiscal pode não ter conseguido conferir. --}}
+        <select id="nv-alvara" onchange="escolherAlvara(this.value)">
+          <option value="">—</option>
+          @foreach (\App\Models\Vistoria::ALVARA as $valor => $rotulo)
             <option value="{{ $valor }}">{{ $rotulo }}</option>
           @endforeach
         </select>
       </div>
-
-      {{-- A posição é capturada AQUI, e não só aproveitada do mapa: a vistoria
-           acontece em frente ao imóvel, e é essa coordenada que vale como
-           prova de que o fiscal esteve lá. --}}
-      <div class="vs-gps">
-        <div>
-          <div class="fi-rot">Coordenada da vistoria</div>
-          <div class="fi-val mono" id="nv-gps">não capturada</div>
-        </div>
-        <button type="button" class="btn sm out-green" id="nv-gps-btn"
-                onclick="capturarGpsVistoria()">Capturar</button>
-      </div>
-
-      <div class="sec-title">Quem acompanhou</div>
       <div class="g2">
-        <div class="field" style="margin:0">
-          <label for="nv-acomp-nome">Nome</label>
-          <input type="text" id="nv-acomp-nome" maxlength="160" placeholder="Quem recebeu o fiscal">
+        <div class="field" id="nv-alvara-num-campo" hidden style="margin:0">
+          <label for="nv-alvara-numero">Número do alvará</label>
+          <input type="text" id="nv-alvara-numero" class="mono" maxlength="40">
         </div>
-        <div class="field" style="margin:0">
-          <label for="nv-acomp-qual">Qualificação</label>
-          <select id="nv-acomp-qual">
-            <option value="">—</option>
-            @foreach (\App\Models\Vistoria::QUALIFICACOES as $valor => $rotulo)
-              <option value="{{ $valor }}">{{ $rotulo }}</option>
-            @endforeach
-          </select>
+        <div class="field" id="nv-alvara-vencimento-campo" hidden style="margin:0">
+          <label for="nv-alvara-vencimento">Vencimento do alvará</label>
+          <label class="date-ov">
+            <input type="date" id="nv-alvara-vencimento" onchange="atualizarDisplayData(this)">
+            <span class="date-ov-txt vazio">dd/mm/aaaa</span>
+          </label>
         </div>
-      </div>
-
-      {{-- Só aparece quando o imóvel tem protocolo de desmembramento ou
-           unificação deferido e ainda sem vistoria. É o vínculo que, mais
-           tarde, libera o ato cadastral. --}}
-      <div id="nv-protocolo-caixa" hidden>
-        <div class="sec-title">Processo atendido</div>
-        <div class="field">
-          <label for="nv-protocolo">Esta vistoria atende ao protocolo</label>
-          <select id="nv-protocolo"><option value="">— nenhum —</option></select>
-        </div>
-      </div>
-
-      <button type="button" class="btn sm vs-atalho" onclick="vistoriaRapida()">
-        Vistoria rápida — só situação e foto</button>
-    </div>
-
-    {{-- ── 2 · A OBRA ── --}}
-    {{-- Os blocos são todos escritos aqui e MOSTRADOS conforme a finalidade
-         (data-bloco). Montar a marcação por finalidade daria cinco cópias
-         quase iguais para manter em dia. --}}
-    <div class="vs-painel" id="nv-p-obra" data-passo="obra">
-      <div data-bloco="alvara">
-      <div class="sec-title">Alvará</div>
-      <div class="vs-opcoes" id="nv-alvara">
-        @foreach (\App\Models\Vistoria::ALVARA as $valor => $rotulo)
-          <button type="button" class="vs-op" data-valor="{{ $valor }}"
-                  onclick="escolherAlvara('{{ $valor }}')">{{ $rotulo }}</button>
-        @endforeach
-      </div>
-      <div class="field" id="nv-alvara-num-campo" hidden style="margin-top:8px">
-        <label for="nv-alvara-numero">Número do alvará</label>
-        <input type="text" id="nv-alvara-numero" class="mono" maxlength="40">
       </div>
       </div>{{-- /alvara --}}
 
@@ -1445,12 +1413,14 @@
       </div>{{-- /area --}}
 
       <div data-bloco="fase">
-      <div class="sec-title">Fase da obra</div>
-      <div class="vs-opcoes" id="nv-fase">
-        @foreach (\App\Models\Vistoria::FASES_OBRA as $valor => $rotulo)
-          <button type="button" class="vs-op" data-valor="{{ $valor }}"
-                  onclick="escolherFase('{{ $valor }}')">{{ $rotulo }}</button>
-        @endforeach
+      <div class="field" style="margin-top:9px">
+        <label for="nv-fase">Fase da obra</label>
+        <select id="nv-fase" onchange="escolherFase(this.value)">
+          <option value="">—</option>
+          @foreach (\App\Models\Vistoria::FASES_OBRA as $valor => $rotulo)
+            <option value="{{ $valor }}">{{ $rotulo }}</option>
+          @endforeach
+        </select>
       </div>
       </div>{{-- /fase --}}
 
@@ -1487,9 +1457,65 @@
                min="1900" max="{{ date('Y') + 1 }}" placeholder="{{ date('Y') - 10 }}">
       </div>
       </div>{{-- /ano --}}
+
+      {{-- Situação e coordenada NA MESMA LINHA: as duas são respostas curtas
+           sobre o estado da vistoria, e lado a lado cabem sem disputar
+           espaço com os campos de obra acima, que são mais longos. --}}
+      <div class="g2">
+        <div class="field" style="margin:0">
+          <label for="nv-situacao">Situação constatada</label>
+          <select id="nv-situacao">
+            @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
+              <option value="{{ $valor }}">{{ $rotulo }}</option>
+            @endforeach
+          </select>
+        </div>
+        {{-- A posição é capturada AQUI, e não só aproveitada do mapa: a
+             vistoria acontece em frente ao imóvel, e é essa coordenada que
+             vale como prova de que o fiscal esteve lá. --}}
+        <div class="vs-gps">
+          <div>
+            <div class="fi-rot">Coordenada da vistoria</div>
+            <div class="fi-val mono" id="nv-gps">não capturada</div>
+          </div>
+          <button type="button" class="btn sm out-green" id="nv-gps-btn"
+                  onclick="capturarGpsVistoria()">Capturar</button>
+        </div>
+      </div>
+
+      <div class="sec-title">Quem acompanhou</div>
+      <div class="g2">
+        <div class="field" style="margin:0">
+          <label for="nv-acomp-nome">Nome</label>
+          <input type="text" id="nv-acomp-nome" maxlength="160" placeholder="Quem recebeu o fiscal">
+        </div>
+        <div class="field" style="margin:0">
+          <label for="nv-acomp-qual">Qualificação</label>
+          <select id="nv-acomp-qual">
+            <option value="">—</option>
+            @foreach (\App\Models\Vistoria::QUALIFICACOES as $valor => $rotulo)
+              <option value="{{ $valor }}">{{ $rotulo }}</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
+
+      {{-- Só aparece quando o imóvel tem protocolo de desmembramento ou
+           unificação deferido e ainda sem vistoria. É o vínculo que, mais
+           tarde, libera o ato cadastral. --}}
+      <div id="nv-protocolo-caixa" hidden>
+        <div class="sec-title">Processo atendido</div>
+        <div class="field">
+          <label for="nv-protocolo">Esta vistoria atende ao protocolo</label>
+          <select id="nv-protocolo"><option value="">— nenhum —</option></select>
+        </div>
+      </div>
+
+      <button type="button" class="btn sm vs-atalho" onclick="vistoriaRapida()">
+        Vistoria rápida — só situação e foto</button>
     </div>
 
-    {{-- ── 3 · RELATÓRIO ──
+    {{-- ── 2 · RELATÓRIO ──
          Uma lista só, montada na ordem em que o fiscal escreve.
 
          Antes eram dois passos, "Constatações" e "Fotos". O problema não era
@@ -1536,7 +1562,7 @@
            o que sai é a porta de entrada, não o que já foi escrito. --}}
     </div>
 
-    {{-- ── 4 · REVISÃO ── --}}
+    {{-- ── 3 · REVISÃO ── --}}
     <div class="vs-painel" id="nv-p-rev" data-passo="rev">
       <div class="leg">Confira antes de gravar. A vistoria é ato: depois de
         gravada, ela fundamenta notificação, auto e embargo.</div>
@@ -3296,6 +3322,9 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/historico-cadastro.js')"></script>
 <script src="@assetv('js/edificacoes.js')"></script>
 <script src="@assetv('js/desmembramento.js')"></script>
+<script src="@assetv('js/editor-cortes.js')"></script>
+<script src="@assetv('js/prancheta-geo.js')"></script>
+<script src="@assetv('js/prancheta-cadastral.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>
 <script src="@assetv('js/painel.js')"></script>
 <script src="@assetv('js/busca.js')"></script>

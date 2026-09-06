@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use App\Support\GeometriaPlana;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,7 +28,7 @@ class LoteRepository
      * todos os lotes, então a falta não aparecia; apareceria na primeira parte
      * de desmembramento desenhada, com a variação saindo 000 em vez de 001.
      */
-    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria';
+    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria, origem';
 
     /**
      * Recorte padrão de TODA consulta de mapa, GPS e busca.
@@ -232,18 +233,26 @@ class LoteRepository
     }
 
     /**
-     * Área de um polígono GeoJSON, medida pelo BANCO, em m².
+     * Área de um polígono GeoJSON, em m² de GRADE (UTM). É a medida que vai
+     * para `area_gis_m2` de todo lote novo.
      *
-     * `ST_Area` de um polígono só (sem operação booleana antes) é confiável em
-     * SRID 4326 — foi conferido contra a área cadastral do DWG com diferença
-     * de 0,23%. É a medida que vai para `area_gis_m2`, para o lote desenhado
-     * ficar na mesma régua dos 2.239 que vieram da importação.
+     * SAIU DO BANCO de propósito. O `ST_Area` em SRID 4326 devolve área
+     * GEODÉSICA, que é área de terreno: ficava 0,126% abaixo da área de grade
+     * com que os 2.235 lotes importados foram gravados — o pipeline de
+     * extração os mediu em UTM, antes de reprojetar. O lote desenhado nascia
+     * assim numa régua diferente da do vizinho, e a conta de desmembramento
+     * (partes contra o pai) comparava as duas.
+     *
+     * Num lote de 360 m² a diferença é de 0,45 m² — quase toda a tolerância de
+     * sobreposição, gasta sem nada ter acontecido. Ver App\Support\GeometriaPlana.
      */
     public function areaDoGeoJson(string $geojson): float
     {
-        return (float) DB::scalar(
-            'SELECT ST_Area(ST_GeomFromGeoJSON(?, 1, 4326))', [$geojson]
-        );
+        // Anel externo do Polygon. Quem chama já recusou MultiPolygon —
+        // ver `tipoDoGeoJson`, que é conferido antes de gravar.
+        $anel = json_decode($geojson, true)['coordinates'][0] ?? [];
+
+        return GeometriaPlana::area(GeometriaPlana::projetar($anel));
     }
 
     /** O polígono fecha, não se cruza e é aceito pelo MySQL? */

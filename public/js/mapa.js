@@ -299,7 +299,11 @@ function alternarPainelMapa(idGrupo) {
     const mesa = document.getElementById('cad-mesa')
     if (mesa) {
       fecharPaineisMapa()
-      if (mesa.hidden) { abrirMesaCadastral() } else { fecharMesaCadastral() }
+      if (mesa.hidden) {
+        limparSelecao()
+        limparSelecaoCadastral()
+        abrirMesaCadastral()
+      } else { fecharMesaCadastral() }
       return
     }
   }
@@ -310,6 +314,11 @@ function alternarPainelMapa(idGrupo) {
 
   fecharPaineisMapa()
   if (!abrindo) return
+
+  if (idGrupo === 'grupo-cadastro') {
+    limparSelecao()
+    limparSelecaoCadastral()
+  }
 
   grupo.classList.add('aberto')
   grupo.querySelector('.ctrl-btn')?.setAttribute('aria-expanded', 'true')
@@ -762,6 +771,7 @@ function abrirBalao(feicao, camada) {
     <div class="balao">
       <div class="balao-tit">Quadra ${esc(p.quadra ?? '—')} · Lote ${esc(p.numero_lote ?? '—')}</div>
       <div class="balao-sub">${esc(bairroDe(p))}</div>
+      <span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span>
       ${p.inscricao ? `<div class="balao-chip">${esc(p.inscricao)}</div>` : ''}
       <div class="balao-area">${area}</div>
       <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Ver ficha completa</button>

@@ -52,6 +52,36 @@ Ao final da importação o comando confere sozinho SRID, validade das geometrias
 e unicidade da chave. Um SRID errado não gera erro — gera mapa vazio, que é
 muito pior de diagnosticar.
 
+## Testes
+
+```bash
+php artisan test
+node --test tests/prancheta-geo.test.cjs tests/editor-cortes.test.cjs tests/desenho-medidas.test.cjs
+```
+
+Os `.cjs` rodam a geometria fora do navegador, carregando os arquivos de
+`public/js` num sandbox. `desenho-medidas` e `prancheta-geo` medem o MESMO lote
+real (Buritis V, Q47 L29 — projetado com 10,00 × 21,50 m) que
+`tests/Unit/GeometriaPlanaTest.php` mede no servidor: as três implementações do
+plano têm de concordar, senão o lote desenhado no mapa deixa de bater com o
+mesmo lote desenhado na prancheta.
+
+## A régua das medidas
+
+O sistema mede na **grade do UTM**, que é a régua do DWG e da matrícula — e não
+em distância de terreno. Ver `App\Support\GeometriaPlana`.
+
+```bash
+php artisan gis:reaferir-areas            # só relata
+php artisan gis:reaferir-areas --aplicar  # grava
+```
+
+Só é preciso rodar uma vez, e apenas em base que já tenha lotes criados DENTRO
+do sistema (desenho, desmembramento, unificação) anteriores a 05/09/2026:
+naquela época o `area_gis_m2` deles vinha do `ST_Area`, que mede terreno, e
+ficava 0,126% abaixo da régua dos lotes importados. Lotes de importação não são
+tocados.
+
 ## Rotas
 
 | Método | Rota | Acesso |

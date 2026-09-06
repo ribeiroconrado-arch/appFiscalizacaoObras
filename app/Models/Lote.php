@@ -30,6 +30,15 @@ class Lote extends Model
     protected $table = 'lotes';
     protected $guarded = [];
 
+    public static function tagOrigem(?string $origem): string
+    {
+        return match ($origem) {
+            'desmembramento' => 'DESMEMBRADO',
+            'unificacao' => 'UNIFICADO',
+            default => 'ORIGINAL',
+        };
+    }
+
     /**
      * Sem esta declaracao o Eloquent devolve `inativo_em` como STRING, e
      * qualquer `->format()` sobre ela estoura em tempo de execucao — o que

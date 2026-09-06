@@ -108,7 +108,11 @@ class VistoriaImpressao
             $rotulo = Vistoria::ALVARA[$v->alvara_situacao] ?? null;
             $põe(
                 'Alvará de construção',
-                $rotulo ? $rotulo . ($v->alvara_numero ? " nº {$v->alvara_numero}" : '') : null,
+                $rotulo
+                    ? $rotulo
+                        . ($v->alvara_numero ? " nº {$v->alvara_numero}" : '')
+                        . ($v->alvara_vencimento ? ' — vencimento ' . $v->alvara_vencimento->format('d/m/Y') : '')
+                    : null,
                 'não verificado'
             );
         }

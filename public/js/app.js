@@ -686,6 +686,7 @@ function irPara(destino) {
   // se esconder quando o mapa nao esta a vista.
   if (typeof pintarBarraCadastral === 'function') { pintarBarraCadastral() }
   if (typeof fecharPaineisMapa === 'function' && destino !== 'mapa') { fecharPaineisMapa() }
+  if (destino !== 'mapa' && typeof fecharMesaCadastral === 'function') { fecharMesaCadastral() }
 
   if (destino === 'busca') {
     prepararBusca()

@@ -27,6 +27,7 @@ class Vistoria extends Model
             'accuracy'  => 'float',
             'area_construida_aferida_m2' => 'float',
             'ano_construcao_estimado'    => 'integer',
+            'alvara_vencimento'          => 'date',
         ];
     }
 
@@ -39,47 +40,43 @@ class Vistoria extends Model
      * um campo passa a ser oferecido na tela e ignorado no servidor (ou o
      * contrário), e ninguém descobre até faltar dado numa peça.
      *
-     * `campos` diz quais blocos o segundo passo mostra. Finalidade sem campo
-     * nenhum não tem segundo passo: o auto de constatação registra o que se
-     * vê, e não mede nada — inventar um passo vazio para ele seria manter a
-     * forma da fiscalização de obra onde ela não faz sentido.
+     * `campos` diz quais blocos de obra a Identificação mostra. Finalidade
+     * sem campo nenhum não mostra bloco de obra nenhum: o auto de
+     * constatação registra o que se vê, e não mede nada — inventar campos
+     * vazios para ele seria manter a forma da fiscalização de obra onde ela
+     * não faz sentido.
      */
     public const FINALIDADES = [
         'obras' => [
             'rotulo' => 'Fiscalização de obras',
             'obs'    => 'Obra em andamento: alvará, área e fase.',
-            'passo'  => 'A obra',
             'campos' => ['alvara', 'area', 'fase'],
         ],
         'cadastral' => [
             'rotulo' => 'Atualização cadastral',
             'obs'    => 'Conferir em campo os dados do imóvel no cadastro.',
-            'passo'  => 'O imóvel',
             'campos' => ['area', 'uso', 'ano'],
         ],
         'habite_se' => [
             'rotulo' => 'Habite-se',
             'obs'    => 'Obra concluída: confere com o projeto aprovado?',
-            'passo'  => 'A conclusão',
             'campos' => ['alvara', 'area', 'projeto', 'fase'],
         ],
         'regularizacao' => [
             'rotulo' => 'Regularização de imóvel pronto',
             'obs'    => 'Construção que já existe, sem alvará.',
-            'passo'  => 'A construção',
             'campos' => ['alvara', 'area', 'ano', 'uso', 'projeto'],
         ],
         'constatacao' => [
             'rotulo' => 'Auto de constatação',
             'obs'    => 'Só registrar o que se vê. Sem medição.',
-            'passo'  => null,
             'campos' => [],
         ],
     ];
 
-    /** Cada bloco do segundo passo e as colunas que ele preenche. */
+    /** Cada bloco de obra e as colunas que ele preenche. */
     public const CAMPOS_POR_BLOCO = [
-        'alvara'  => ['alvara_situacao', 'alvara_numero'],
+        'alvara'  => ['alvara_situacao', 'alvara_numero', 'alvara_vencimento'],
         'area'    => ['area_construida_aferida_m2', 'area_metodo'],
         'fase'    => ['fase_obra'],
         'projeto' => ['conforme_projeto'],
@@ -316,7 +313,7 @@ class Vistoria extends Model
         return $this->evidencias()->where('fachada', true)->first();
     }
 
-    /** Os blocos que o segundo passo mostra nesta finalidade. */
+    /** Os blocos de obra que a Identificação mostra nesta finalidade. */
     public function camposDaFinalidade(): array
     {
         return self::FINALIDADES[$this->finalidade]['campos'] ?? [];

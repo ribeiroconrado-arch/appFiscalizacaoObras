@@ -195,7 +195,9 @@ class VistoriaController extends Controller
         if (in_array('alvara', $blocos, true)) {
             $rotulo = Vistoria::ALVARA[$v->alvara_situacao] ?? null;
             $dados['Alvará'] = $rotulo
-                ? $rotulo . ($v->alvara_numero ? " nº {$v->alvara_numero}" : '')
+                ? $rotulo
+                    . ($v->alvara_numero ? " nº {$v->alvara_numero}" : '')
+                    . ($v->alvara_vencimento ? ' — vencimento ' . $v->alvara_vencimento->format('d/m/Y') : '')
                 : null;
         }
         if (in_array('area', $blocos, true)) {
@@ -537,6 +539,7 @@ class VistoriaController extends Controller
             'acompanhante_qualificacao' => ['nullable', Rule::in(array_keys(Vistoria::QUALIFICACOES))],
             'alvara_situacao'    => ['nullable', Rule::in(array_keys(Vistoria::ALVARA))],
             'alvara_numero'      => ['nullable', 'string', 'max:40'],
+            'alvara_vencimento'  => ['nullable', 'date'],
             'area_construida_aferida_m2' => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'area_metodo'        => ['nullable', Rule::in(array_keys(Vistoria::METODOS_AREA))],
             'fase_obra'          => ['nullable', Rule::in(array_keys(Vistoria::FASES_OBRA))],
@@ -656,6 +659,7 @@ class VistoriaController extends Controller
                 'acompanhante_qualificacao' => $d['acompanhante_qualificacao'] ?? null,
                 'alvara_situacao'    => $d['alvara_situacao'] ?? null,
                 'alvara_numero'      => $d['alvara_numero'] ?? null,
+                'alvara_vencimento'  => $d['alvara_vencimento'] ?? null,
                 'area_construida_aferida_m2' => $d['area_construida_aferida_m2'] ?? null,
                 'area_metodo'        => $d['area_metodo'] ?? null,
                 'fase_obra'          => $d['fase_obra'] ?? null,

@@ -81,10 +81,10 @@ function cortarPorLinha(anelPai, linha) {
     return { erro: `A linha cruza o contorno ${cruz.length} vezes. Ela precisa entrar por um lado e sair pelo outro, sem voltar.` }
   }
 
+  // Um canto pertence à aresta que começa nele. Assim endpoint também é
+  // uma entrada válida e as duas partes compartilham a coordenada original.
   for (const c of cruz) {
-    if (c.emVertice || c.t < CORTE_EPS || c.t > 1 - CORTE_EPS) {
-      return { erro: 'A linha passa exatamente por um canto do lote, e aí não dá para saber de que lado ele fica. Desloque a linha alguns centímetros.' }
-    }
+    if (c.t > 1 - CORTE_EPS) { c.aresta = (c.aresta + 1) % R.length; c.t = 0 }
   }
 
   if (cruz[0].aresta === cruz[1].aresta) {
@@ -110,10 +110,10 @@ function cortarPorLinha(anelPai, linha) {
   const divisa = _trechoDaLinha(linha, ...(x.s <= y.s ? [x, y] : [y, x]))
   const divisaXY = x.s <= y.s ? divisa : [...divisa].reverse()
 
-  const a = [x.ponto, ..._fatia(R, x.aresta + 1, y.aresta), y.ponto, ...[...divisaXY].reverse().slice(1, -1)]
-  const b = [y.ponto, ..._fatia(R, y.aresta + 1, x.aresta), x.ponto, ...divisaXY.slice(1, -1)]
+  const a = _limparCorte([x.ponto, ..._fatia(R, x.aresta + 1, y.aresta), y.ponto, ...[...divisaXY].reverse().slice(1, -1)])
+  const b = _limparCorte([y.ponto, ..._fatia(R, y.aresta + 1, x.aresta), x.ponto, ...divisaXY.slice(1, -1)])
 
-  if (a.length < 3 || b.length < 3) {
+  if (a.length < 3 || b.length < 3 || Math.abs(_areaAssinada(a)) < 1e-16 || Math.abs(_areaAssinada(b)) < 1e-16) {
     return { erro: 'O corte não produziu duas partes com área.' }
   }
 
@@ -127,8 +127,8 @@ function cortarPorLinha(anelPai, linha) {
   }
 
   return {
-    a: { type: 'Polygon', coordinates: [[...a, a[0]].map(_arredondarPar)] },
-    b: { type: 'Polygon', coordinates: [[...b, b[0]].map(_arredondarPar)] },
+    a: { type: 'Polygon', coordinates: [[...a, a[0]]] },
+    b: { type: 'Polygon', coordinates: [[...b, b[0]]] },
   }
 }
 
@@ -147,9 +147,10 @@ function _semFechamento(anel) {
 /** Área assinada (positiva = anti-horário). Em graus², serve só de sinal e proporção. */
 function _areaAssinada(anel) {
   let s = 0
+  const [ox, oy] = anel[0]
   for (let i = 0; i < anel.length; i++) {
     const j = (i + 1) % anel.length
-    s += anel[i][0] * anel[j][1] - anel[j][0] * anel[i][1]
+    s += (anel[i][0] - ox) * (anel[j][1] - oy) - (anel[j][0] - ox) * (anel[i][1] - oy)
   }
   return s / 2
 }
@@ -178,7 +179,13 @@ function _trechoDaLinha(linha, de, ate) {
     if (k >= 0 && k < linha.length) { pontos.push([linha[k][0], linha[k][1]]) }
   }
   pontos.push(ate.ponto)
-  return pontos
+  return _limparCorte(pontos)
+}
+
+function _limparCorte(pontos) {
+  const r = pontos.filter((p, i) => !i || Math.hypot(p[0] - pontos[i - 1][0], p[1] - pontos[i - 1][1]) > 1e-12)
+  if (r.length > 1 && Math.hypot(r[0][0] - r.at(-1)[0], r[0][1] - r.at(-1)[1]) < 1e-12) r.pop()
+  return r
 }
 
 /** Vértices do anel de `de` até `ate`, dando a volta pelo índice 0 se preciso. */

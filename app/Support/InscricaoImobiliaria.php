@@ -37,6 +37,20 @@ final class InscricaoImobiliaria
     /** Setor urbano — o único que o sistema trata hoje. */
     public const URBANO = '01';
 
+    /** 001 → A, 026 → Z, 027 → AA, até 999. */
+    public static function apelidoDesmembrado(string $inscricaoPai, int $sufixo, bool $iniciaEmZero = false): string
+    {
+        $n = self::normalizar($inscricaoPai);
+        if (!$n || $sufixo < 0 || $sufixo > 999) {
+            throw new \InvalidArgumentException('Informe um sufixo entre 000 e 999.');
+        }
+        $letras = '';
+        for ($i = $sufixo + ($iniciaEmZero ? 1 : 0); $i > 0; $i = intdiv($i, 26)) {
+            $i--; $letras = chr(65 + $i % 26) . $letras;
+        }
+        return substr($n, 8, 4) . $letras;
+    }
+
     /** Quantos dígitos cada parte ocupa, na ordem. */
     private const TAMANHOS = [
         'setor'   => 2,

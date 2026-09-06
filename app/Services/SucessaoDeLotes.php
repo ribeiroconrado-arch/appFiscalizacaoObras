@@ -39,14 +39,26 @@ class SucessaoDeLotes
         ?Protocolo $protocolo = null,
         ?string $modo = null,
         ?string $observacao = null,
+        ?array $visualizacao = null,
     ): int {
-        return DB::transaction(function () use ($tipo, $anteriores, $posteriores, $protocolo, $modo, $observacao) {
+        return DB::transaction(function () use ($tipo, $anteriores, $posteriores, $protocolo, $modo, $observacao, $visualizacao) {
+            if ($visualizacao !== null) {
+                $feicoes = function (array $ids) {
+                    return DB::table('lotes')->whereIn('id', $ids)
+                        ->selectRaw('id, quadra, numero_lote, ST_AsGeoJSON(geom) AS geojson')->get()
+                        ->map(fn ($l) => ['type' => 'Feature', 'geometry' => json_decode($l->geojson, true),
+                            'properties' => ['id' => $l->id, 'quadra' => $l->quadra, 'numero_lote' => $l->numero_lote]])->all();
+                };
+                $visualizacao['originais'] = $feicoes($anteriores);
+                $visualizacao['resultantes'] = $feicoes($posteriores);
+            }
             $ato = DB::table('lote_atos')->insertGetId([
                 'tipo'         => $tipo,
                 'protocolo_id' => $protocolo?->id,
                 'user_id'      => Auth::id(),
                 'modo'         => $modo,
                 'observacao'   => $observacao,
+                'visualizacao' => $visualizacao === null ? null : json_encode($visualizacao, JSON_THROW_ON_ERROR),
                 'created_at'   => now(),
                 'updated_at'   => now(),
             ]);

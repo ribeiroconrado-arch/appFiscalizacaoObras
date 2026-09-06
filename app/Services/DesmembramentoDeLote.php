@@ -6,6 +6,7 @@ use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Repositories\LoteRepository;
 use App\Support\GeometriaPlana;
+use App\Support\InscricaoImobiliaria;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -31,10 +32,15 @@ use Illuminate\Support\Facades\DB;
  * área errada. Quem mede é App\Support\GeometriaPlana, conferida contra o
  * shapely (divergência máxima de 0,00005 m² em 60 lotes).
  *
- * Do banco vem só o que ele acerta: a validade de um polígono, a área de UM
- * polígono isolado — que alimenta `area_gis_m2`, para o lote novo ficar na
- * mesma régua dos 2.239 importados — e o `ST_Difference`, que foi conferido
- * (o complemento fechou exato: 663,58 + 748,50 = 1.412,08).
+ * Do banco vem só o que ele acerta: a validade de um polígono e o
+ * `ST_Difference`, que foi conferido (o complemento fechou exato:
+ * 663,58 + 748,50 = 1.412,08).
+ *
+ * A área de UM polígono isolado TAMBÉM saiu do banco: o `ST_Area` mede área
+ * geodésica, que é de terreno, enquanto os lotes importados foram gravados com
+ * área de GRADE. O lote novo nascia 0,126% mais leve que o vizinho, e a conta
+ * de "partes contra o pai" comparava as duas réguas. Hoje `area_gis_m2` sai da
+ * GeometriaPlana como todo o resto — ver LoteRepository::areaDoGeoJson.
  *
  * A ressalva do ST_Difference: os operandos têm de vir de FONTE PRIMÁRIA — a
  * coluna ou o desenho do usuário. Subtrair um polígono que é ele próprio saída
@@ -44,6 +50,31 @@ use Illuminate\Support\Facades\DB;
  */
 class DesmembramentoDeLote
 {
+    private function familia(Lote $pai)
+    {
+        $prefixo = substr($pai->inscricao() ?? '', 0, 12);
+        return Lote::query()->where(function ($q) use ($pai, $prefixo) {
+            $q->where(fn ($x) => $x->where('bairro', $pai->bairro)->where('quadra', $pai->quadra));
+            if ($prefixo) $q->orWhereRaw("REPLACE(inscricao_imobiliaria, '.', '') LIKE ?", [$prefixo.'%']);
+        });
+    }
+
+    public function identidade(Lote $pai): array
+    {
+        $inscricao = $pai->inscricao();
+        $prefixo = $inscricao ? substr($inscricao, 0, 12) : null;
+        $usados = [];
+        if ($prefixo) foreach ($this->familia($pai)->get() as $lote) {
+            $n = $lote->inscricao();
+            // Exceção para .000: o pai será inativado na mesma transação;
+            // registros históricos ficam preservados, sem bloquear o sucessor.
+            if ($n && (int) substr($n, 12) === 0 && ($lote->situacao === 'inativo' || $lote->id === $pai->id)) continue;
+            if ($n && substr($n, 0, 12) === $prefixo) $usados[] = (int) substr($n, 12);
+        }
+        return ['inscricao' => InscricaoImobiliaria::formatar($inscricao), 'prefixo' => $prefixo,
+            'base' => $inscricao ? substr($inscricao, 8, 4) : null, 'usados' => array_values(array_unique($usados))];
+    }
+
     public function __construct(
         private LoteRepository $lotes,
         private SucessaoDeLotes $sucessao,
@@ -111,6 +142,24 @@ class DesmembramentoDeLote
 
         if ($pai->situacao !== 'ativo') {
             return 'Este lote já foi inativado. Desmembre o sucessor dele.';
+        }
+
+        $identidade = $this->identidade($pai);
+        if (!$identidade['prefixo']) return 'O lote de origem precisa de uma inscrição válida antes do desmembramento.';
+        $usados = $identidade['usados'];
+        foreach ($partes as $i => $p) {
+            $sufixo = $p['desmembramento'] ?? null;
+            if (filter_var($sufixo, FILTER_VALIDATE_INT) === false || $sufixo < 0 || $sufixo > 999) {
+                return 'Informe um sufixo de 000 a 999 para a parte '.($i + 1).'. Apenas uma parte ativa pode usar cada inscrição.';
+            }
+            if (in_array((int) $sufixo, $usados, true)) return 'O sufixo '.str_pad($sufixo, 3, '0', STR_PAD_LEFT).' já foi utilizado nesta inscrição.';
+            $usados[] = (int) $sufixo;
+        }
+        if ($derivarUltima) {
+            $sufixo = $partes[count($partes)-1]['desmembramento_derivada'] ?? null;
+            if (filter_var($sufixo, FILTER_VALIDATE_INT) === false || $sufixo < 0 || $sufixo > 999 || in_array((int) $sufixo, $usados, true)) {
+                return 'Informe para a parte derivada um sufixo de 000 a 999 ainda não utilizado.';
+            }
         }
 
         $minimo = $derivarUltima ? 1 : 2;
@@ -244,10 +293,19 @@ class DesmembramentoDeLote
         bool $derivarUltima = true,
         ?string $modo = null,
         ?string $justificativa = null,
+        ?array $visualizacao = null,
     ): array {
-        $medidas = $this->medir($pai, $partes, $derivarUltima);
-
-        return DB::transaction(function () use ($protocolo, $pai, $medidas, $modo, $justificativa) {
+        return DB::transaction(function () use ($protocolo, $pai, $partes, $derivarUltima, $modo, $justificativa, $visualizacao) {
+            // Irmãos desmembrados simultaneamente compartilham a mesma família.
+            $this->familia($pai)->orderBy('id')->lockForUpdate()->get();
+            $pai = Lote::whereKey($pai->id)->lockForUpdate()->firstOrFail();
+            if ($protocolo) {
+                $protocolo = Protocolo::whereKey($protocolo->id)->lockForUpdate()->firstOrFail();
+            }
+            if ($erro = $this->impedimento($protocolo, $pai, $partes, $derivarUltima, direto: $protocolo === null)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['partes' => $erro]);
+            }
+            $medidas = $this->medir($pai, $partes, $derivarUltima);
             // A baixa vem ANTES da criação: o índice único de identificação só
             // ignora quem já está inativo, e uma das partes pode legitimamente
             // herdar o número do pai.
@@ -259,6 +317,7 @@ class DesmembramentoDeLote
                     'bairro'         => $pai->bairro,
                     'quadra'         => $pai->quadra,
                     'numero_lote'    => $p['numero_lote'],
+                    'inscricao_imobiliaria' => substr($pai->inscricao(), 0, 12).str_pad((string) $p['desmembramento'], 3, '0', STR_PAD_LEFT),
                     'desmembramento' => (int) ($p['desmembramento'] ?? 0),
                     'chave'          => $pai->bairro . '|' . $pai->quadra . '|' . $p['numero_lote'],
                     // Área pelo BANCO, para ficar na mesma régua dos lotes importados.
@@ -277,7 +336,7 @@ class DesmembramentoDeLote
                     'fundos_m'          => $p['fundos_m'] ?? null,
                     'lado_direito_m'    => $p['lado_direito_m'] ?? null,
                     'lado_esquerdo_m'   => $p['lado_esquerdo_m'] ?? null,
-                    'area_matricula_m2' => $p['area_matricula_m2'] ?? null,
+                    'area_matricula_m2' => $p['area_matricula_m2'] ?? round($p['area'], 2),
                 ];
 
                 $id = $this->lotes->criarComGeometria($atributos, $p['geojson']);
@@ -295,7 +354,7 @@ class DesmembramentoDeLote
 
             $this->sucessao->registrar(
                 'desmembramento', [$pai->id], array_map(fn ($l) => $l->id, $criados),
-                $protocolo, $modo, $justificativa
+                $protocolo, $modo, $justificativa, $visualizacao
             );
 
             // O ATO, uma linha só, no PAI — que é quem o identifica: as partes
@@ -325,6 +384,11 @@ class DesmembramentoDeLote
      */
     private function medir(Lote $pai, array $partes, bool $derivarUltima): array
     {
+        $iniciaEmZero = false;
+        foreach ($partes as $p) {
+            if (isset($p['desmembramento']) && (int) $p['desmembramento'] === 0) $iniciaEmZero = true;
+            if ($derivarUltima && isset($p['desmembramento_derivada']) && (int) $p['desmembramento_derivada'] === 0) $iniciaEmZero = true;
+        }
         $anelPai = $this->lotes->anel($pai->id) ?? [];
         if (! $anelPai) {
             return ['erro' => 'O lote de origem não tem geometria.', 'partes' => [],
@@ -342,7 +406,8 @@ class DesmembramentoDeLote
             $anel = $p['geometry']['coordinates'][0] ?? [];
             if (! $anel) { continue; }
             $lista[] = [
-                'numero_lote'    => $p['numero_lote'] ?? null,
+                'numero_lote'    => $pai->inscricao() && isset($p['desmembramento']) && (int) $p['desmembramento'] >= 0 && (int) $p['desmembramento'] <= 999
+                    ? InscricaoImobiliaria::apelidoDesmembrado($pai->inscricao(), (int) $p['desmembramento'], $iniciaEmZero) : null,
                 'desmembramento' => $p['desmembramento'] ?? null,
                 'geojson'        => json_encode($p['geometry']),
                 'anel'           => $anel,
@@ -379,7 +444,8 @@ class DesmembramentoDeLote
                 $lista[] = [
                     // O número da última parte vem do formulário como um item a
                     // mais, sem geometria — é a única que o operador não desenha.
-                    'numero_lote'    => $ultima['numero_lote_derivada'] ?? null,
+                    'numero_lote'    => $pai->inscricao() && isset($ultima['desmembramento_derivada']) && (int) $ultima['desmembramento_derivada'] >= 0 && (int) $ultima['desmembramento_derivada'] <= 999
+                        ? InscricaoImobiliaria::apelidoDesmembrado($pai->inscricao(), (int) $ultima['desmembramento_derivada'], $iniciaEmZero) : null,
                     'desmembramento' => $ultima['desmembramento_derivada'] ?? null,
                     'geojson'        => $resto['geojson'],
                     'anel'           => json_decode($resto['geojson'], true)['coordinates'][0],
@@ -461,11 +527,8 @@ class DesmembramentoDeLote
      */
     private function proximoSufixo(Lote $pai): int
     {
-        $max = DB::table('lotes')->where('bairro', $pai->bairro)
-            ->where('quadra', $pai->quadra)
-            ->whereRaw('CAST(numero_lote AS UNSIGNED) = ?', [(int) $pai->numero_lote])
-            ->max('desmembramento');
-
-        return (int) $max + 1;
+        $usados = $this->identidade($pai)['usados'];
+        for ($n = 1; $n <= 999; $n++) if (!in_array($n, $usados, true)) return $n;
+        return 1000; // Fora da faixa: impede finalizar quando a família esgotou.
     }
 }

@@ -45,7 +45,7 @@ const desenhoState = {
 const DESENHO_CASAS = 7
 
 /** Raio de encaixe em vértice vizinho, em pixels de tela. */
-const DESENHO_SNAP_PX = 12
+const DESENHO_SNAP_PX = 14
 
 /** Um clique a menos disto do anterior, em ms e px, é a metade de um duplo clique. */
 const DESENHO_DUPLO_MS = 320
@@ -84,8 +84,13 @@ function iniciarDesenho(opcoes) {
     // perpendicular a coisa nenhuma. `travaAngulo` na chamada manda em ambos.
     travaAngulo: opcoes.travaAngulo ?? (opcoes.modo !== 'linha'),
     shiftSolto: false,
+    snapInfo: '',
     fechado: false,
     onConcluir: opcoes.onConcluir,
+    onAlterar: opcoes.onAlterar || null,
+    validar: opcoes.validar || null,
+    snapAneis: opcoes.snapAneis || null,
+    snapTipos: opcoes.snapTipos || { endpoint: true, midpoint: true, perpendicular: true },
     onCancelar: opcoes.onCancelar || null,
     ultimoClique: { t: 0, x: 0, y: 0 },
   })
@@ -141,17 +146,18 @@ function _pintarBarraDesenho() {
   const ajustando = desenhoState.fechado
 
   document.getElementById('des-barra-modo').textContent = desenhoState.rotulo
-  document.getElementById('des-barra-passo').textContent = ajustando
+  const snap = desenhoState.snapInfo ? ` · Snap: ${desenhoState.snapInfo}` : ''
+  document.getElementById('des-barra-passo').textContent = (ajustando
     ? 'Arraste os cantos, toque numa medida para digitá-la, e confirme.'
     : n === 0 ? (linha ? 'Toque nos dois extremos da divisa.' : 'Toque nos cantos.')
       : n < minimo ? `${n} canto(s) — faltam ${minimo - n}.`
-        : `${n} cantos. Duplo toque fecha.`
+        : `${n} cantos. Duplo toque fecha.`) + snap
 
   // Fechar só aparece quando há o que fechar: um botão que recusa o próprio
   // clique ensina menos do que um botão que ainda não está lá.
   const fechar = document.getElementById('des-barra-fechar')
   fechar.hidden = n < minimo
-  fechar.textContent = ajustando ? 'Confirmar' : 'Fechar contorno'
+  fechar.textContent = ajustando ? 'Confirmar' : (linha ? 'Ajustar divisa' : 'Fechar contorno')
   fechar.setAttribute('onclick', ajustando ? 'confirmarDesenho()' : 'concluirDesenho()')
 
   // "Voltar a traçar" só existe no ajuste, e é o que devolve o gesto de
@@ -225,6 +231,8 @@ function confirmarDesenho() {
   if (!desenhoState.fechado) { concluirDesenho(); return }
 
   const g = geometriaDoDesenho()
+  const erro = desenhoState.validar?.(g)
+  if (erro) { toast(erro, 'err'); return }
   const cb = desenhoState.onConcluir
   _limpar()
   if (cb) cb(g)
@@ -244,7 +252,7 @@ function geometriaDoDesenho() {
   if (!v.length) { return null }
 
   if (desenhoState.modo === 'linha') {
-    return { type: 'LineString', coordinates: v }
+  return { type: 'LineString', coordinates: desenhoState.vertices.map(c => [...c]) }
   }
   return { type: 'Polygon', coordinates: [[...v, v[0]]] }
 }
@@ -295,11 +303,15 @@ function _aoDuploClique(ev) {
 
 /** @param {L.LeafletMouseEvent} ev */
 function _aoMover(ev) {
-  if (!desenhoState.ativo || desenhoState.fechado || !desenhoState.vertices.length) { return }
+  if (!desenhoState.ativo || desenhoState.fechado) { return }
+  if (!desenhoState.vertices.length) { if (desenhoState.snap) _encaixar(ev.latlng); _pintarBarraDesenho(); return }
 
   const ultimo = desenhoState.vertices[desenhoState.vertices.length - 1]
+  const snapAnterior = desenhoState.snapInfo
   const encaixado = desenhoState.snap ? _encaixar(ev.latlng) : ev.latlng
   const destino = encaixado === ev.latlng ? _travar(ev.latlng) : encaixado
+  if (!desenhoState.snap) desenhoState.snapInfo = ''
+  if (snapAnterior !== desenhoState.snapInfo) _pintarBarraDesenho()
   const traco = [[ultimo[1], ultimo[0]], [destino.lat, destino.lng]]
 
   if (desenhoState.elastico) {
@@ -326,7 +338,7 @@ function _aoMover(ev) {
   }
 }
 
-// ── O PLANO LOCAL EM METROS ──────────────────────────────────
+// ── O PLANO LOCAL EM METROS DE GRADE ─────────────────────────
 //
 // Ângulo reto e medida de lado só fazem sentido num plano projetado. Em graus,
 // um lado "de 90°" na tela sai torto no terreno, porque um grau de longitude
@@ -335,8 +347,13 @@ function _aoMover(ev) {
 // aparece na conferência da matrícula.
 //
 // É a mesma projeção do servidor (App\Support\GeometriaPlana::projetar), com o
-// raio meridional e o raio da grande normal do WGS84 — e não um raio médio de
-// esfera, que introduz viés sistemático de −0,25% em toda medida.
+// raio meridional e o raio da grande normal do elipsoide — e não um raio médio
+// de esfera, que introduz viés sistemático de −0,25% em toda medida.
+//
+// E o resultado é multiplicado pelo FATOR DE ESCALA DO UTM (`fatorEscalaUTM`,
+// em geo.js, onde está a explicação inteira): o plano tangente sozinho mede
+// TERRENO, e a régua do sistema é a GRADE, que é a do DWG e a da matrícula.
+// Sem esse fator, um lado projetado com 10,00 m era rotulado como 9,99 m.
 
 const GEO_A = 6378137.0
 const GEO_E2 = 0.00669437999014
@@ -347,10 +364,11 @@ function planoLocal(latRef, lonRef) {
   const w = 1 - GEO_E2 * sen * sen
   const m = GEO_A * (1 - GEO_E2) / (w * Math.sqrt(w))
   const n = GEO_A / Math.sqrt(w)
+  const k = fatorEscalaUTM(latRef, lonRef)
   return {
     latRef, lonRef,
-    porGrauLat: m * Math.PI / 180,
-    porGrauLon: n * Math.PI / 180 * Math.cos(latRef * Math.PI / 180),
+    porGrauLat: m * Math.PI / 180 * k,
+    porGrauLon: n * Math.PI / 180 * Math.cos(latRef * Math.PI / 180) * k,
   }
 }
 
@@ -818,25 +836,65 @@ function aplicarMedidaDoLado(i, metros) {
  */
 function _encaixar(alvo) {
   const mapa = mapaState.obj
-  const pAlvo = mapa.latLngToContainerPoint(alvo)
+  const cursor = mapa.latLngToContainerPoint(alvo)
   let melhor = null
   let menor = DESENHO_SNAP_PX
+  const considerar = (ll, tipo) => {
+    const chave = { Extremidade: 'endpoint', 'Ponto médio': 'midpoint', Perpendicular: 'perpendicular' }[tipo]
+    if (desenhoState.snapTipos?.[chave] === false) return
+    const p = mapa.latLngToContainerPoint(ll)
+    const d = Math.hypot(p.x - cursor.x, p.y - cursor.y)
+    if (d < menor) { menor = d; melhor = { ll, tipo } }
+  }
 
-  for (const camada of mapaState.camadas) {
+  const camadas = desenhoState.snapAneis
+    ? [{ getLatLngs: () => desenhoState.snapAneis.map(a => a.map(c => L.latLng(c[1], c[0]))) }]
+    : mapaState.camadas
+  for (const camada of camadas) {
     if (!camada.getLatLngs) { continue }
-    const aneis = camada.getLatLngs()
-    for (const anel of aneis) {
-      const pontos = Array.isArray(anel) ? anel : [anel]
-      for (const ll of pontos) {
-        if (!ll.lat) { continue }
-        const p = mapa.latLngToContainerPoint(ll)
-        const d = Math.hypot(p.x - pAlvo.x, p.y - pAlvo.y)
-        if (d < menor) { menor = d; melhor = ll }
+    for (const anel of _aneisDeCamada(camada.getLatLngs())) {
+      if (anel.length < 2) { continue }
+      for (let i = 0; i < anel.length; i++) {
+        const a = anel[i]
+        const b = anel[(i + 1) % anel.length]
+        if (!Number.isFinite(a?.lat) || !Number.isFinite(b?.lat)) { continue }
+        considerar(a, 'Extremidade')
+        considerar(L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2), 'Ponto médio')
+
+        const origem = desenhoState.vertices[desenhoState.arrastando != null ? Math.max(0, desenhoState.arrastando - 1) : desenhoState.vertices.length - 1]
+        if (origem) {
+          const op = aoPlano(...origem), ap = aoPlano(a.lng, a.lat), bp = aoPlano(b.lng, b.lat)
+          const o = { x: op[0], y: op[1] }, pa = { x: ap[0], y: ap[1] }, pb = { x: bp[0], y: bp[1] }
+          const dx = pb.x - pa.x, dy = pb.y - pa.y
+          const den = dx * dx + dy * dy
+          if (den > 0) {
+            const t = ((o.x - pa.x) * dx + (o.y - pa.y) * dy) / den
+            if (t < 0 || t > 1) continue
+            const pe = doPlano(pa.x + t * dx, pa.y + t * dy)
+            // Só captura quando o cursor está perto do pé da perpendicular.
+            considerar(L.latLng(pe[1], pe[0]), 'Perpendicular')
+          }
+        }
       }
     }
   }
 
-  return melhor || alvo
+  desenhoState.snapInfo = melhor?.tipo || ''
+  if (melhor) {
+    if (!desenhoState.snapMarcador) desenhoState.snapMarcador = L.circleMarker(melhor.ll, {
+      pane: 'desenho', radius: 8, color: '#16a34a', weight: 2, fillOpacity: 0, interactive: false,
+    }).addTo(mapa)
+    desenhoState.snapMarcador.setLatLng(melhor.ll)
+  } else if (desenhoState.snapMarcador) {
+    mapa.removeLayer(desenhoState.snapMarcador); desenhoState.snapMarcador = null
+  }
+  return melhor?.ll || alvo
+}
+
+function _aneisDeCamada(latlngs) {
+  if (!Array.isArray(latlngs)) { return [] }
+  if (latlngs.length && latlngs[0]?.lat !== undefined) { return [latlngs] }
+  return latlngs.flatMap(_aneisDeCamada)
 }
 
 // ── PINTURA ──────────────────────────────────────────────────
@@ -876,6 +934,7 @@ function _pintar() {
   _pintarMedidas()
   _pintarBarraDesenho()
 
+  desenhoState.onAlterar?.(geometriaDoDesenho())
   if (typeof aoDesenharVertice === 'function') {
     aoDesenharVertice(desenhoState.vertices.length)
   }
@@ -980,12 +1039,14 @@ function _armarArrasto(alca, i, novo) {
     }
 
     const mover = e => {
+      desenhoState.arrastando = indice
       const ll = desenhoState.snap ? _encaixar(e.latlng) : e.latlng
       desenhoState.vertices[indice] = [ll.lng, ll.lat]
       _pintar()
     }
 
     const soltar = () => {
+      desenhoState.arrastando = null
       mapa.off('mousemove', mover)
       mapa.off('mouseup', soltar)
       mapa.dragging.enable()
@@ -1016,7 +1077,7 @@ function _limpar() {
   const mapa = mapaState.obj
   if (mapa) {
     ;[desenhoState.rascunho, desenhoState.previa, desenhoState.elastico,
-      desenhoState.captura, desenhoState.rotuloArea, desenhoState.rotuloElastico]
+      desenhoState.captura, desenhoState.rotuloArea, desenhoState.rotuloElastico, desenhoState.snapMarcador]
       .forEach(c => { if (c) mapa.removeLayer(c) })
     desenhoState.marcadores.forEach(m => mapa.removeLayer(m))
     desenhoState.rotulos.forEach(r => mapa.removeLayer(r))
@@ -1042,7 +1103,7 @@ function _limpar() {
     ativo: false, modo: null, vertices: [], rascunho: null, previa: null,
     elastico: null, captura: null, marcadores: [], onConcluir: null, onCancelar: null,
     plano: null, rotulos: [], rotuloArea: null, rotuloElastico: null, shiftSolto: false,
-    rotulo: null, fechado: false,
+    rotulo: null, fechado: false, snapInfo: '', snapMarcador: null, onAlterar: null, validar: null, arrastando: null,
   })
 
   document.getElementById('map')?.classList.remove('desenhando')
