@@ -5,6 +5,7 @@ use App\Http\Controllers\BuscaController;
 use App\Http\Controllers\CadastroImobiliarioController;
 use App\Http\Controllers\CadastroLoteController;
 use App\Http\Controllers\DemandaController;
+use App\Http\Controllers\DeployWebhookController;
 use App\Http\Controllers\EdificacaoController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\LegislacaoController;
@@ -43,6 +44,14 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::post('/sair', [AuthController::class, 'sair'])->name('logout');
+
+// Webhook do GitHub: dispara o deploy automático (ver DeployWebhookController
+// e docs/deploy.md). Sem sessão e sem CSRF de propósito — quem chama é o
+// GitHub, não um navegador com cookie desta aplicação; a autenticação é a
+// assinatura HMAC do próprio GitHub, conferida dentro do controller. A
+// isenção de CSRF está em bootstrap/app.php.
+Route::post('/webhooks/deploy', [DeployWebhookController::class, 'receber'])
+    ->middleware('throttle:20,1');
 
 // ── Autenticado ──────────────────────────────────────────────
 Route::middleware('auth')->group(function () {

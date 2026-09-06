@@ -36,6 +36,15 @@ return Application::configure(basePath: dirname(__DIR__))
             | Request::HEADER_X_FORWARDED_HOST
             | Request::HEADER_X_FORWARDED_PORT
             | Request::HEADER_X_FORWARDED_PROTO);
+
+        /*
+         * O webhook do GitHub não tem cookie de sessão nem token CSRF — quem
+         * chama é o servidor do GitHub, autenticado pela assinatura HMAC que
+         * o DeployWebhookController confere sozinho. Excluído aqui, e não
+         * caindo no grupo `api` (stateless): este projeto não tem
+         * routes/api.php de verdade, ver o comentário no topo de web.php.
+         */
+        $middleware->validateCsrfTokens(except: ['webhooks/deploy']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
