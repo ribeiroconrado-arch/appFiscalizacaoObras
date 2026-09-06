@@ -246,6 +246,16 @@ async function montarGoogle(satelite) {
         // nativo. Ganha o bolso e ganha o aparelho fraco, que para de
         // decodificar tile a cada frame do gesto ainda em movimento.
         updateWhenZooming: false,
+        // O padrão do Leaflet é 2: pré-carrega um anel de tile DUAS fileiras
+        // além do que está visível, para o arrasto não mostrar vazio na
+        // borda. Isto é troca de rede/decodificação por suavidade — e aqui a
+        // imagem de alta resolução do Google é o que confirmadamente pesa
+        // (relatado: mesmo vindo do cache do navegador, sem nova rede, a
+        // segunda visita à mesma área continua mais lenta que num iPhone ou
+        // desktop — ou seja, o custo é DECODIFICAR a imagem, não buscá-la).
+        // Menos tile pré-carregado é menos decodificação por vez, ao custo
+        // de a borda aparecer em branco por um instante num arrasto rápido.
+        keepBuffer: 1,
       }
     )
 

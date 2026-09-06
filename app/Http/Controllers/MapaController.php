@@ -46,6 +46,14 @@ class MapaController extends Controller
                     'mapType'  => 'satellite',
                     'language' => 'pt-BR',
                     'region'   => 'BR',
+                    // Explícito, e não deixado para a escolha automática do Google:
+                    // esta camada é satélite opaco, sem sobreposição nenhuma, então
+                    // não há motivo para PNG (que a própria documentação recomenda só
+                    // para bloco com transparência) — e PNG sem perda tende a exigir
+                    // mais trabalho de descompressão que JPEG para foto contínua, que
+                    // é onde um aparelho fraco (relatado: Tab A9+) sente o carregamento
+                    // do tile depois de o zoom já ter assentado.
+                    'imageFormat' => 'jpeg',
                 ]);
 
             // Sem sessão não há tile. Devolver null mantém o mapa funcionando
