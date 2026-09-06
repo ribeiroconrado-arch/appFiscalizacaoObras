@@ -63,7 +63,17 @@ function iniciarMapa() {
   // amplia o tile de 17 em vez de pedir um que não existe.
   const satelite = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    { attribution: '© Esri', maxZoom: 20, maxNativeZoom: 17, className: 'tile-satelite' })
+    {
+      attribution: '© Esri', maxZoom: 20, maxNativeZoom: 17, className: 'tile-satelite',
+      // Sem isto, cada zoom intermediário do GESTO (não só o final) dispara
+      // pedido e decodificação de tile — trabalho de GPU/rede bem no meio do
+      // dedo ainda em movimento, que é onde um aparelho fraco engasga. Com
+      // `false`, o Leaflet só atualiza os tiles quando o zoom PARA
+      // (`zoomend`), e mostra a imagem antiga esticada durante o gesto — o
+      // mesmo efeito que já existe acima do zoom nativo, só que também no
+      // meio da animação.
+      updateWhenZooming: false,
+    })
 
   mapaState.obj = L.map('map', {
     zoomControl: false, layers: [satelite],
@@ -110,12 +120,22 @@ function iniciarMapa() {
   mapaState.obj.getPane('rotulos').style.zIndex = 650
   mapaState.obj.getPane('rotulos').style.pointerEvents = 'none'
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
-    { subdomains: 'abcd', maxZoom: 20, pane: 'rotulos' }).addTo(mapaState.obj)
+    { subdomains: 'abcd', maxZoom: 20, pane: 'rotulos', updateWhenZooming: false }).addTo(mapaState.obj)
 
   montarGoogle(satelite)
   ancorarControleCores()
 
-  mapaState.obj.on('zoomend', () => { rotulosPorZoom(); ajustarNitidezSatelite() })
+  // Adiado um quadro com requestAnimationFrame: `zoomend` dispara no instante
+  // em que o navegador ainda está assentando a transformação CSS do zoom, e
+  // `sincronizarRotulos` (dentro de rotulosPorZoom) percorre TODO lote já
+  // carregado na sessão para decidir rótulo — trabalho que cresce com a
+  // navegação e que, feito na mesma volta do zoomend, competia pela mesma
+  // thread num aparelho fraco (relatado: Tab A9+ engasgando no zoom, o mesmo
+  // gesto liso num iPhone 14). Um quadro de folga custa ~16 ms, imperceptível,
+  // e deixa o navegador terminar de pintar o zoom antes de recontar rótulo.
+  mapaState.obj.on('zoomend', () => {
+    requestAnimationFrame(() => { rotulosPorZoom(); ajustarNitidezSatelite() })
+  })
 
   // Arrastar também mexe nos rótulos: no zoom em que eles aparecem, cada
   // deslocamento traz lotes novos para a tela e leva outros embora.
@@ -219,6 +239,13 @@ async function montarGoogle(satelite) {
         // não gera uma requisição sequer.
         minZoom: 18,
         className: 'tile-satelite',
+        // Sem isto, cada zoom INTERMEDIÁRIO do gesto de pinça pede tile — e
+        // aqui cada tile é uma requisição PAGA. Com `false`, só o zoom em que
+        // o dedo para conta; o Leaflet mostra a imagem anterior esticada
+        // durante o gesto, que é o mesmo efeito que já existe acima do zoom
+        // nativo. Ganha o bolso e ganha o aparelho fraco, que para de
+        // decodificar tile a cada frame do gesto ainda em movimento.
+        updateWhenZooming: false,
       }
     )
 
@@ -591,6 +618,9 @@ function montarOrtofoto(satelite) {
     className: 'tile-satelite',
     // Fora da área coberta o tile simplesmente não é requisitado.
     bounds: alt.bounds ? L.latLngBounds(alt.bounds) : undefined,
+    // Mesmo motivo das outras camadas de imagem: só atualiza no zoom em que o
+    // gesto PARA, não em cada zoom intermediário do dedo em movimento.
+    updateWhenZooming: false,
   }
 
   const orto = L.tileLayer(alt.url, opcoes)
