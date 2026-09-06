@@ -9,3 +9,11 @@ test('trocar para outra aba fecha a mesa, voltar ao mapa não a reabre',()=>{
   const ctx={document:{querySelectorAll:()=>[],getElementById:()=>({classList:cl})},marcarModuloNoSubcabecalho(){},pintarBarraCadastral(){},fecharPaineisMapa(){},fecharMesaCadastral:()=>chamadas.push('fechar'),prepararBusca(){},carregarPainel(){},carregarDocumentos(){},carregarDemandas(){},setTimeout(){}};
   const ir=carregar('public/js/app.js','irPara',ctx);for(const destino of ['busca','painel','documentos','protocolos'])ir(destino);assert.equal(chamadas.length,4);ir('mapa');assert.equal(chamadas.length,4)
 })
+
+test('a navegação aguarda o rascunho e permanece na prancheta quando a saída falha',async()=>{
+  let ativa=true,autorizar=false,navegou=0;
+  const ctx={PranchetaCad:{ativa:()=>ativa,fechar:async()=>{if(autorizar)ativa=false;return autorizar}},document:{querySelectorAll:()=>[],getElementById:()=>({classList:{add(){},remove(){}}})},marcarModuloNoSubcabecalho(){},carregarDocumentos(){navegou++}};
+  const ir=carregar('public/js/app.js','irPara',ctx);
+  ir('documentos');await Promise.resolve();assert.equal(navegou,0);
+  autorizar=true;ir('documentos');await Promise.resolve();assert.equal(navegou,1)
+})

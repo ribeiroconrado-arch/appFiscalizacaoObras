@@ -666,6 +666,10 @@ document.addEventListener('DOMContentLoaded', bootstrap)
  * @param {'painel'|'mapa'|'documentos'|'protocolos'} destino
  */
 function irPara(destino) {
+  if (destino !== 'mapa' && typeof PranchetaCad !== 'undefined' && PranchetaCad.ativa()) {
+    PranchetaCad.fechar().then(fechou => { if (fechou) irPara(destino) })
+    return
+  }
   // Trocar de módulo abandona o contexto do imóvel: não há para onde voltar.
   fichaDeOrigem = null
 
@@ -676,8 +680,11 @@ function irPara(destino) {
   // qual aba fica marcada.
   const ordem = ['painel', 'busca', 'mapa', 'documentos', 'protocolos']
   const i = ordem.indexOf(destino)
-  document.querySelectorAll('.aba').forEach(a => a.classList.remove('at'))
-  document.querySelectorAll('.aba')[i]?.classList.add('at')
+  document.querySelectorAll('.aba').forEach((a, indice) => {
+    a.classList.toggle('at', indice === i)
+    if (indice === i) a.setAttribute('aria-current', 'page')
+    else a.removeAttribute('aria-current')
+  })
 
   marcarModuloNoSubcabecalho(destino)
 

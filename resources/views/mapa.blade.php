@@ -30,6 +30,7 @@
      isso que os dois temas convivem sem custo: um tema é um bloco de tokens,
      não uma segunda folha de componentes. --}}
 <link rel="stylesheet" href="@assetv('css/tema-institucional.css')">
+<link rel="stylesheet" href="@assetv('css/painel-responsivo.css')">
 <link rel="stylesheet" href="@assetv('css/prancheta-cadastral.css')">
 {{-- Sem defer: precisa rodar antes do primeiro pintar (ver js/tema.js). --}}
 <script src="@assetv('js/tema.js')"></script>
@@ -132,52 +133,57 @@
        por período, bairro ou agente. Deixá-los no topo dava a entender o
        contrário. --}}
 
-  {{-- FAIXA 1 — as TRÊS listas do dia, lado a lado.
-       Ficam juntas porque se leem juntas: uma é o que o sistema avisa, outra o
-       que ele cobra, a terceira o que já foi feito. Em monitor largo cabem as
-       três na mesma linha e a manhã inteira se lê sem rolar; em tela média a
-       atividade desce para baixo das duas (é a que menos urge), e no celular
-       empilham nesta mesma ordem. --}}
-  <div class="painel-duo">
-    <div class="bloco">
-      <div class="sec-simples">Avisos <span class="cont" id="pn-avisos-n">0</span></div>
-      {{-- A mesma lista do sino, e da mesma rota: duas fontes para o mesmo
-           aviso divergiriam no primeiro ajuste de regra. --}}
-      <div id="pn-avisos"></div>
-    </div>
-
-    <div class="bloco">
+  <header class="painel-cabecalho">
+    <h1>Painel</h1>
+    <p>Pendências e resultados da fiscalização.</p>
+  </header>
+  <div class="painel-operacional">
+    <div class="bloco painel-pendencias">
       <div class="sec-simples">Precisa de você <span class="cont" id="pn-atencao-n">0</span></div>
       {{-- Prazos de documento, ordens de serviço designadas a mim e
            protocolos sob minha responsabilidade — ver PainelController::atencao. --}}
       <div id="pn-atencao"></div>
     </div>
 
+    <div class="painel-lateral">
     <div class="bloco painel-feed">
       <div class="sec-simples">Atividade recente</div>
       {{-- Alimentada pela tabela de auditoria — a mesma trilha que responde
            "quem fez o quê" no processo administrativo, não um log paralelo. --}}
       <div class="feed" id="pn-recentes"></div>
+      <button type="button" class="painel-mais" id="pn-recentes-mais" hidden
+              aria-expanded="false" aria-controls="pn-recentes" onclick="alternarRecentesPainel()">Mostrar mais atividades</button>
+    </div>
+    <div class="bloco" id="pn-avisos-bloco" hidden>
+      <div class="sec-simples">Outros avisos <span class="cont" id="pn-avisos-n">0</span></div>
+      <div id="pn-avisos"></div>
+    </div>
+    <p class="painel-aviso-agrupado" id="pn-avisos-agrupados" hidden></p>
     </div>
   </div>
 
   {{-- FAIXA 3 — o dashboard, com os filtros que valem só para ele. --}}
   <div class="painel-dash">
     <div class="dash-tit">
-      <span class="sec-simples">Números do período</span>
+      <div>
+        <span class="sec-simples">Números do período</span>
+        <p class="painel-filtro-resumo" id="pn-filtro-resumo">Últimos 30 dias · Todos os bairros · Todos os agentes</p>
+      </div>
+      <button type="button" class="btn painel-filtros-btn" aria-expanded="false" aria-controls="pn-filtros"
+              onclick="alternarFiltrosPainel(this)">Filtros</button>
     </div>
 
-    <div class="linha-filtro">
-      <select onchange="filtrarPainel('dias', this.value)">
+    <div class="linha-filtro" id="pn-filtros" hidden>
+      <select aria-label="Período" onchange="filtrarPainel('dias', this.value)">
         <option value="30">Últimos 30 dias</option>
         <option value="7">Últimos 7 dias</option>
         <option value="90">Últimos 90 dias</option>
-        <option value="365">Este ano</option>
+        <option value="365">Últimos 365 dias</option>
       </select>
-      <select id="pn-bairro" onchange="filtrarPainel('bairro', this.value)">
+      <select id="pn-bairro" aria-label="Bairro" onchange="filtrarPainel('bairro', this.value)">
         <option value="">Todos os bairros</option>
       </select>
-      <select onchange="filtrarPainel('agente', this.value)">
+      <select aria-label="Agente" onchange="filtrarPainel('agente', this.value)">
         <option value="todos">Todos os agentes</option>
         <option value="eu">Meus registros</option>
       </select>
@@ -1046,8 +1052,8 @@
 @endif
 
 {{-- ══════ ABAS ══════ --}}
-<nav class="abas">
-  <button class="aba at" onclick="irPara('painel')">
+<nav class="abas" aria-label="Navegação principal">
+  <button class="aba at" aria-current="page" onclick="irPara('painel')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/>
       <rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>

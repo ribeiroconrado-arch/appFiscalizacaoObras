@@ -10,6 +10,10 @@
 const pState = {
   filtros: { dias: 30, bairro: '', agente: 'todos' },
   carregado: false,
+  atencao: [],
+  notificacoes: [],
+  recentes: [],
+  recentesExpandidos: false,
 }
 
 /** Busca e desenha o painel inteiro. */
@@ -35,10 +39,10 @@ async function carregarPainel() {
 
 /** @param {Object} d resposta de /api/painel */
 function renderPainel(d) {
+  pState.atencao = d.atencao
+  pState.recentes = d.recentes
   // ── métricas ──
-  // Número e rótulo lado a lado, não empilhados: com o rótulo embaixo, o card
-  // que tem detalhe extra ("não lavrados") ficava mais alto que os vizinhos e
-  // a fileira saía desalinhada.
+  // A grade mantém a altura dos indicadores, inclusive com detalhe extra.
   document.getElementById('pn-metricas').innerHTML = Object.values(d.metricas).map(m => `
     <div class="mc">
       <div class="n">${m.n}</div>
@@ -53,7 +57,7 @@ function renderPainel(d) {
   document.getElementById('pn-atencao-n').textContent = d.atencao.length
   at.innerHTML = d.atencao.length
     ? d.atencao.map(a => `
-        <div class="item" ${a.aba ? `onclick="irPara('${a.aba}')"` : ''}>
+        <${a.aba ? 'button type="button"' : 'div'} class="item" ${a.aba ? `onclick="irPara('${a.aba}')"` : ''}>
           <div class="ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                  stroke-linecap="round" stroke-linejoin="round">
@@ -64,7 +68,7 @@ function renderPainel(d) {
             <div class="s">${esc(a.detalhe)}</div>
             ${a.tag ? `<div class="m"><span class="badge ${esc(a.tag.classe)}">${esc(a.tag.texto)}</span></div>` : ''}
           </div>
-        </div>`).join('')
+        </${a.aba ? 'button' : 'div'}>`).join('')
     : '<div class="lista-vazia">Nada pendente no momento.</div>'
 
   // ── alterações recentes (vêm da auditoria) ──
@@ -76,8 +80,24 @@ function renderPainel(d) {
   // cópia com os mesmos valores, que voltaria a divergir na primeira vez que
   // alguém mexesse numa das duas. Antes a mesma servidora aparecia como
   // quadrado verde numa tela e círculo cinza na outra.
-  document.getElementById('pn-recentes').innerHTML = d.recentes.length
-    ? d.recentes.map(r => `
+  renderRecentesPainel()
+  renderAvisosPainel()
+
+  // ── barras ──
+  document.getElementById('pn-por-tipo').innerHTML = barras(d.por_tipo)
+  document.getElementById('pn-irregs').innerHTML = barras(d.irregularidades)
+
+  const sel = document.getElementById('pn-bairro')
+  if (sel && sel.options.length <= 1) {
+    sel.innerHTML = '<option value="">Todos os bairros</option>' +
+      d.bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')
+  }
+}
+
+function renderRecentesPainel() {
+  const recentes = pState.recentesExpandidos ? pState.recentes : pState.recentes.slice(0, 3)
+  document.getElementById('pn-recentes').innerHTML = recentes.length
+    ? recentes.map(r => `
         <div class="fd" title="${esc(r.hora)}">
           <div class="par-av">${esc(inicialDe(r.usuario))}</div>
           <div class="c">
@@ -90,16 +110,21 @@ function renderPainel(d) {
         </div>`).join('')
     : '<div class="lista-vazia">Sem movimentação registrada.</div>'
 
-  // ── barras ──
-  document.getElementById('pn-por-tipo').innerHTML = barras(d.por_tipo)
-  document.getElementById('pn-irregs').innerHTML = barras(d.irregularidades)
+  const botao = document.getElementById('pn-recentes-mais')
+  botao.hidden = pState.recentes.length <= 3
+  botao.setAttribute('aria-expanded', String(pState.recentesExpandidos))
+  botao.textContent = pState.recentesExpandidos ? 'Mostrar menos atividades' : 'Mostrar mais atividades'
+}
 
-  // ── filtro de bairro, preenchido com o que existe na base ──
-  const sel = document.getElementById('pn-bairro')
-  if (sel && sel.options.length <= 1) {
-    sel.innerHTML = '<option value="">Todos os bairros</option>' +
-      d.bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')
-  }
+function alternarRecentesPainel() {
+  pState.recentesExpandidos = !pState.recentesExpandidos
+  renderRecentesPainel()
+}
+
+function alternarFiltrosPainel(botao) {
+  const filtros = document.getElementById('pn-filtros')
+  filtros.hidden = !filtros.hidden
+  botao.setAttribute('aria-expanded', String(!filtros.hidden))
 }
 
 /**
@@ -133,6 +158,9 @@ function barras(itens) {
 /** @param {string} campo @param {string|number} valor */
 function filtrarPainel(campo, valor) {
   pState.filtros[campo] = valor
+  document.getElementById('pn-filtro-resumo').textContent = Array.from(
+    document.querySelectorAll('#pn-filtros select'), sel => sel.selectedOptions[0].textContent
+  ).join(' · ')
   carregarPainel()
 }
 
@@ -148,15 +176,15 @@ function filtrarPainel(campo, valor) {
 async function carregarNotificacoes() {
   try {
     const r = await fetch('/api/notificacoes', { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
+    pState.notificacoes = d.notificacoes
 
     const chip = document.getElementById('sino-n')
     chip.textContent = d.total
     chip.style.display = d.total ? '' : 'none'
 
-    // O MESMO HTML nos dois destinos: o modal do sino e o bloco do painel.
-    // Dois desenhos para o mesmo aviso divergiriam no primeiro ajuste — e são
-    // literalmente a mesma lista, vinda da mesma rota.
+    // O sino mantém todos os avisos. O painel agrupa os já presentes nas pendências.
     const html = d.total
       ? d.notificacoes.map(n => `
           <div class="notif"${n.aba ? ` onclick="fModalBtn('m-notif');irPara('${n.aba}')"` : ''}>
@@ -175,16 +203,31 @@ async function carregarNotificacoes() {
 
     document.getElementById('lista-notificacoes').innerHTML = html
 
-    // O bloco do painel só existe quando a tela está montada; o sino existe
-    // sempre. Por isso o segundo destino é opcional, e não obrigatório.
-    const noPainel = document.getElementById('pn-avisos')
-    if (noPainel) {
-      noPainel.innerHTML = html
-      document.getElementById('pn-avisos-n').textContent = d.total
-    }
+    renderAvisosPainel()
   } catch (e) {
     console.error(e)
   }
+}
+
+/** Só agrupa avisos com a mesma identidade, nunca por semelhança do texto. */
+function renderAvisosPainel() {
+  const alvo = document.getElementById('pn-avisos')
+  if (!alvo) return
+  const chaves = new Set(pState.atencao.map(a => a.chave).filter(Boolean))
+  const outros = pState.notificacoes.filter(n => !n.chave || !chaves.has(n.chave))
+  const agrupados = pState.notificacoes.length - outros.length
+  document.getElementById('pn-avisos-bloco').hidden = !outros.length
+  document.getElementById('pn-avisos-n').textContent = outros.length
+  alvo.innerHTML = outros.map(n => `
+    <${n.aba ? 'button type="button"' : 'div'} class="notif" ${n.aba ? `onclick="irPara('${n.aba}')"` : ''}>
+      <div class="c"><div class="t">${esc(n.titulo)}</div>
+      <div class="b">${esc(n.texto)}</div><div class="h">${esc(n.quando)}</div></div>
+    </${n.aba ? 'button' : 'div'}>`).join('')
+  const resumo = document.getElementById('pn-avisos-agrupados')
+  resumo.hidden = !agrupados
+  resumo.textContent = agrupados === 1
+    ? '1 aviso já está na lista “Precisa de você”. Todos os avisos continuam disponíveis no sino.'
+    : `${agrupados} avisos já estão na lista “Precisa de você”. Todos os avisos continuam disponíveis no sino.`
 }
 
 function abrirNotificacoes() {

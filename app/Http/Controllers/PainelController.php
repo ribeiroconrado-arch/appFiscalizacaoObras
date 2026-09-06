@@ -100,6 +100,7 @@ class PainelController extends Controller
             [$txt, $cls] = $doc->situacaoPrazo();
             $itens[] = [
                 'titulo'  => $doc->numeroFormatado(),
+                'chave'   => 'documento-prazo-' . $doc->id,
                 'detalhe' => sprintf('%s · Quadra %s · Lote %s',
                     $doc->rotuloTipo(), $doc->lote?->quadra ?? '—', $doc->lote?->numero_lote ?? '—'),
                 'tag'     => ['texto' => $txt, 'classe' => $cls],
@@ -390,6 +391,7 @@ class PainelController extends Controller
                 if ($cls !== 'bd-ok') {
                     $avisos[] = [
                         'titulo'  => $txt . ' — ' . $doc->numeroFormatado(),
+                        'chave'   => 'documento-prazo-' . $doc->id,
                         'texto'   => $doc->rotuloTipo() . ' — ' . $imovel,
                         'quando'  => $doc->data_lavratura?->diffForHumans() ?? '',
                         'aba'     => 'documentos',

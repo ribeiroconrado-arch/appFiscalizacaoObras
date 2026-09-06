@@ -1,7 +1,7 @@
 // Teste de interação isolado: navegador real, imóveis sintéticos, sem gravar no cadastro.
 const fs=require('node:fs'),http=require('node:http'),path=require('node:path'),os=require('node:os'),{spawn}=require('node:child_process'),assert=require('node:assert/strict')
 const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpdir(),'prancheta-browser-'))
-const fixture=`<!doctype html><html><head><meta charset="utf-8"><meta name="csrf-token" content="teste"><link rel="stylesheet" href="/public/css/prancheta-cadastral.css"><style>body{font-family:Arial}.btn{padding:8px;border:1px solid #ccd6df;border-radius:5px;background:white}.primary{background:#155a91;color:white}</style></head><body>
+const fixture=`<!doctype html><html><head><meta charset="utf-8"><meta name="csrf-token" content="teste"><link rel="stylesheet" href="/public/css/prancheta-cadastral.css"><style>body{font-family:Arial}.btn{padding:8px;border:1px solid #ccd6df;border-radius:5px;background:white}.primary{background:#155a91;color:white}#t-mapa{position:fixed;inset:110px 0 68px}#cad-regua button{width:42px;height:44px}@media(min-width:1280px){#t-mapa{left:184px;bottom:0}}</style></head><body><section id="t-mapa" class="tela at"></section><aside id="cad-mesa"><nav id="cad-regua" class="cad-regua"><button id="test-historico" onclick="window.historicoAberto=true">H</button></nav></aside>
 <script>
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmtNum(n){return Number(n).toLocaleString('pt-BR',{maximumFractionDigits:2})}
@@ -34,6 +34,9 @@ async function key(k){await send('Input.dispatchKeyEvent',{type:'keyDown',key:k,
   await send('Network.enable');await send('Network.setBlockedURLs',{urls:['https://tile.openstreetmap.org/*','https://*.basemaps.cartocdn.com/*']});
   await send('Page.navigate',{url:`http://127.0.0.1:${port}/`});for(let i=0;i<50;i++){if(await evaluate("typeof PranchetaCad !== 'undefined'"))break;await wait(100)}
   await evaluate("PranchetaCad.abrir('desmembramento',[1]);");await evaluate('PranchetaCad.mapa(false)')
+  assert.equal(await evaluate("document.querySelector('#pc-modal').tagName"),'SECTION');
+  assert.equal(await evaluate("document.querySelector('#pc-modal').parentElement.id"),'t-mapa');
+  assert.equal(await evaluate("!!document.querySelector(':modal')"),false);
   // Coordenadas de tela derivadas do contorno renderizado, não de estado privado.
   const frame=await evaluate(`(()=>{const svg=document.querySelector('#pc-svg'),b=svg.getBoundingClientRect();const p=[...svg.querySelectorAll('path')].find(p=>p.getAttribute('stroke')==='#243b4b');return {x:b.x,y:b.y,d:p.getAttribute('d')}})()`)
   const pts=[...frame.d.matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g)].map(m=>[+m[1]+frame.x,+m[2]+frame.y])
@@ -96,16 +99,30 @@ async function key(k){await send('Input.dispatchKeyEvent',{type:'keyDown',key:k,
   await evaluate('window.fetch=window.previewFetch');
   // Servidor devolvendo HTML: não prender o usuário e recuperar a cópia local.
   await evaluate(`window.goodFetch=window.fetch;window.fetch=async(url,opts)=>url.includes('/salvar')?new Response('<br><b>Falha PHP</b>',{status:500}):window.goodFetch(url,opts);`);
-  await evaluate('PranchetaCad.fechar()');assert.equal(await evaluate("document.querySelector('#pc-modal').open"),false);
+  await evaluate('PranchetaCad.fechar()');assert.equal(await evaluate("document.querySelector('#pc-modal').hidden"),true);
   await evaluate("PranchetaCad.abrir('desmembramento',[1])");assert.match(await evaluate("document.querySelector('#pc-salvo').textContent"),/local recuperada/);await evaluate('PranchetaCad.dados(true)');assert.equal(await evaluate("document.querySelector('.pc-parte-topo b').textContent"),'0001E');
   await evaluate('window.fetch=window.goodFetch;PranchetaCad.salvar()');
   // Sem espaço local e sem servidor: oferecer saída explícita, sem travar.
   await evaluate(`window.oldSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new Error('Quota')};window.fetch=async(url,opts)=>url.includes('/salvar')?new Response('<br>Falha',{status:500}):window.goodFetch(url,opts);`);
   await evaluate('PranchetaCad.fechar()');assert.equal(await evaluate("!!document.querySelector('.pc-falha')"),true);
-  await evaluate("document.querySelector('.pc-falha .out-vermelho').click()");assert.equal(await evaluate("document.querySelector('#pc-modal').open"),false);
+  await evaluate("document.querySelector('.pc-falha .out-vermelho').click()");assert.equal(await evaluate("document.querySelector('#pc-modal').hidden"),true);
   await evaluate("Storage.prototype.setItem=window.oldSetItem;window.fetch=window.goodFetch;PranchetaCad.abrir('desmembramento',[1])");
   const shot=await send('Page.captureScreenshot',{format:'png'});const output=path.join(profile,'prancheta-desmembramento.png');fs.writeFileSync(output,Buffer.from(shot.data,'base64'));console.log('Screenshot: '+output)
   assert.equal(errors.length,0,JSON.stringify(errors))
-  console.log('PASS: modal, linhas independentes, seleção, mover 3 m, perpendicular 60 m, rotação e rascunho; nenhum erro JavaScript.')
+  for(const width of [768,1024,1440]){
+    await send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:false});await wait(100);
+    const box=await evaluate(`(()=>{const p=document.querySelector('#pc-modal').getBoundingClientRect(),m=document.querySelector('#t-mapa').getBoundingClientRect();return {inside:p.left>=m.left&&p.top>=m.top&&p.right<=m.right&&p.bottom<=m.bottom,overflow:document.querySelector('.pc-janela').scrollWidth>document.querySelector('.pc-janela').clientWidth}})()`);
+    assert.ok(box.inside);assert.equal(box.overflow,false);
+  }
+  await evaluate("document.querySelector('#test-historico').click()");
+  for(let i=0;i<30&&!await evaluate('!!window.historicoAberto');i++)await wait(50);
+  assert.equal(await evaluate('!!window.historicoAberto'),true);
+  assert.equal(await evaluate("document.querySelector('#cad-regua').parentElement.id"),'cad-mesa');
+  await evaluate("__saved=null;PranchetaCad.abrir('unificacao',[1,2])");
+  assert.equal(await evaluate("document.querySelector('#pc-titulo').textContent"),'Unificação');
+  assert.equal(await evaluate("document.querySelector('#cad-regua').parentElement.className"),'pc-regua-slot');
+  assert.equal(await evaluate("!!document.querySelector(':modal')"),false);
+  await evaluate('PranchetaCad.fechar()');
+  console.log('PASS: expansão dentro do mapa, régua restaurada, linhas, mover 3 m, perpendicular 60 m, rotação e rascunho; nenhum erro JavaScript.')
  } finally {try{if(ws){await send('Browser.close');ws.close()}}catch{}if(browser)browser.kill();server.close()}
 })().catch(err=>{console.error(err);process.exitCode=1})

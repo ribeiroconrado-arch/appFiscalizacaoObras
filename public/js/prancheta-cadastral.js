@@ -2,12 +2,12 @@
 const PranchetaCad = (() => {
   const G=PranchetaGeo, cores=['#2563eb','#059669','#d97706','#7c3aed','#db2777','#0891b2']
   const copy=x=>structuredClone(x), $=id=>document.getElementById(id), e=x=>esc(String(x??''))
-  let s=null, svg=null, modal=null, resize=null, saveTimer=null, fila=Promise.resolve(), geracao=0
+  let s=null, svg=null, modal=null, resize=null, saveTimer=null, fila=Promise.resolve(), geracao=0, reguaOrigem=null, fechamento=null
   const icones={selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8'}
   function botao(k,t,atalho) {return `<button type="button" data-tool="${k}" title="${t}${atalho?' ('+atalho+')':''}" aria-label="${t}" onclick="PranchetaCad.ferramenta('${k}')"><svg viewBox="0 0 24 24"><path d="${icones[k]}"/></svg><span>${t}</span></button>`}
   function montar() {
     if(modal) return
-    modal=document.createElement('dialog');modal.id='pc-modal';modal.setAttribute('aria-label','Prancheta cadastral')
+    modal=document.createElement('section');modal.id='pc-modal';modal.hidden=true;modal.setAttribute('aria-label','Prancheta cadastral')
     modal.innerHTML=`<header class="pc-cab"><div><b id="pc-titulo">Prancheta cadastral</b><small id="pc-origem"></small></div><span id="pc-salvo" role="status"></span>
       <button type="button" class="btn sm" onclick="PranchetaCad.salvar().catch(()=>{})" id="pc-save">Salvar rascunho</button>
       <button type="button" class="btn sm" onclick="PranchetaCad.exportar()">Exportar SVG</button>
@@ -28,13 +28,23 @@ const PranchetaCad = (() => {
       <section id="pc-dados" hidden aria-label="Dados e conferência"><header><b>Dados dos imóveis</b><button type="button" class="modal-x pc-fechar-dados" onclick="PranchetaCad.dados(false)" aria-label="Fechar dados">✕</button></header><div id="pc-form"></div><div id="pc-conferencia" role="status" tabindex="-1"></div></section>
       <div class="pc-credito">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · Referência cartográfica</div></main>
       <footer class="pc-rodape"><span id="pc-dica" role="status"></span><span id="pc-resumo"></span><button type="button" class="btn primary" id="pc-continuar" onclick="PranchetaCad.dados(true)">Dados e finalizar →</button></footer>`
-    document.body.appendChild(modal);svg=$('pc-svg')
+    // A tela permanece inteira: apenas seu contêiner passa a ser a expansão da régua.
+    const janela=document.createElement('div');janela.className='pc-janela'
+    while(modal.firstChild)janela.appendChild(modal.firstChild)
+    const reguaSlot=document.createElement('div');reguaSlot.className='pc-regua-slot'
+    modal.append(reguaSlot,janela)
+    reguaSlot.addEventListener('click',async ev=>{
+      const botao=ev.target.closest('button');if(!botao||!s)return
+      ev.preventDefault();ev.stopImmediatePropagation()
+      if(await fechar())botao.click()
+    },true)
+    ;($('t-mapa')||document.body).appendChild(modal);svg=$('pc-svg')
     svg.addEventListener('pointerdown',down);svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',up)
     svg.addEventListener('pointercancel',()=>{if(s?.drag){s.linhas=s.drag.antes.linhas;s.drag=null;recalcular();render()}})
     svg.addEventListener('dblclick',ev=>{ev.preventDefault();terminar()})
     svg.addEventListener('contextmenu',ev=>{ev.preventDefault();terminar()})
     svg.addEventListener('wheel',wheel,{passive:false})
-    modal.addEventListener('keydown',tecla);modal.addEventListener('cancel',ev=>{ev.preventDefault();fechar()})
+    modal.addEventListener('keydown',ev=>{ev.stopPropagation();tecla(ev)})
     $('pc-valor').addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter'){ev.preventDefault();medida()}if(ev.key==='Escape'){$('pc-entrada').hidden=true;svg.focus()}})
     $('pc-valor').addEventListener('input',()=>{if(s){s.valor=$('pc-valor').value;render()}})
     svg.setAttribute('tabindex','0')
@@ -232,6 +242,7 @@ const PranchetaCad = (() => {
     const originais=salva?.originais||await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);if(f)return f;const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Não foi possível ler o contorno do imóvel.');const d=await r.json();return d.type==='Feature'?d:{type:'Feature',geometry:d.geometry||d,properties:{id}}}))
     if(token!==geracao)return
     if(originais.some(f=>f.geometry?.type!=='Polygon'||f.geometry.coordinates.length!==1)){toast('A prancheta atende polígonos sem vazios internos.', 'err');return}
+    if($('t-mapa')&&!$('t-mapa').classList.contains('at')&&typeof irPara==='function')irPara('mapa')
     const centroGeo=originais[0].geometry.coordinates[0][0]
     s={tipo,ids:ids.map(Number),protocoloId,originais,plano:G.plano(centroGeo),linhas:[],traco:[],anotacoes:[],contexto:[],angulo:0,centro:[0,0],escala:1,undo:[],redo:[],dados:{},numero:'',justificativa:atoState.justificativa||'',ferramenta:'selecionar',sel:null,ref:null,operacao:null,drag:null,mouse:null,mapa:true,valor:'',leitura:!!salva,resultado:{partes:[]},uniao:null,revisado:null}
     s.loading=!salva
@@ -239,7 +250,11 @@ const PranchetaCad = (() => {
     $('pc-titulo').textContent=(salva?'Prancha finalizada · ':'')+(tipo==='desmembramento'?'Desmembramento':'Unificação')
     $('pc-origem').textContent=originais.map(f=>`Q ${f.properties?.quadra||'—'} · Lote ${f.properties?.numero_lote||f.properties?.id}`).join(' + ')
     $('pc-salvo').textContent=salva?'Visualização preservada':'';$('pc-save').hidden=!!salva;$('pc-continuar').hidden=!!salva;$('pc-dados').hidden=true;$('pc-entrada').hidden=true
-    if(!modal.open)modal.showModal();dimensoes();enquadrar();svg.focus()
+    if(typeof montarReguaCadastral==='function')montarReguaCadastral()
+    const regua=$('cad-regua')
+    if(regua&&!reguaOrigem){reguaOrigem={parent:regua.parentNode,next:regua.nextSibling};modal.querySelector('.pc-regua-slot').appendChild(regua)}
+    modal.classList.toggle('pc-com-regua',!!regua)
+    modal.hidden=false;document.body.classList.add('prancheta-aberta');dimensoes();enquadrar();svg.focus()
     if(!salva){
       try{const d=await request('/api/pranchetas/carregar',payload());if(token!==geracao)return;s.identidade=d.identidade;if(d.estado){restaurar(d.estado);$('pc-salvo').textContent='Rascunho recuperado'}}catch(err){$('pc-salvo').textContent=err.message}
       const pts=originais.flatMap(f=>f.geometry.coordinates[0]),b=bounds(pts),m=.00035
@@ -337,15 +352,24 @@ const PranchetaCad = (() => {
   }
   async function conferir(){if(s.busy||!validarDados())return;const c=corpo();s.busy=true;$('pc-conferencia').textContent='Conferindo…';try{const d=await request(rota(true),c);if(JSON.stringify(c)!==JSON.stringify(corpo()))return;if(d.impedimento){exibirErro({message:d.impedimento});return}s.revisado=JSON.stringify(c);$('pc-conferencia').innerHTML=`<p>Geometria conferida. O ato preservará os imóveis de origem como inativos e criará os sucessores.</p>${(d.avisos||[]).map(a=>`<p>${e(a)}</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.finalizar()">Confirmar e finalizar ${s.tipo==='unificacao'?'unificação':'desmembramento'}</button>`}catch(err){exibirErro(err)}finally{s.busy=false}}
   async function finalizar(){if(!s||s.busy||!validarDados())return;const c=corpo();if(s.revisado!==JSON.stringify(c)){dica('Confira os dados novamente.');return}if(!s.protocoloId&&s.justificativa.trim().length<10){$('pc-conferencia').textContent='Informe a justificativa do ato direto (mínimo de 10 caracteres).';return}s.busy=true;clearTimeout(saveTimer);try{await fila.catch(()=>{});const d=await request(rota(),c);try{localStorage.removeItem(chaveLocal())}catch{}s.leitura=true;s.finalFeatures=(d.lotes||[{id:d.id,numero_lote:s.numero}]).map((p,i)=>({properties:p}));$('pc-dados').hidden=true;$('pc-save').hidden=true;$('pc-continuar').hidden=true;$('pc-titulo').textContent='Prancha finalizada · '+s.tipo;$('pc-salvo').textContent='Desenho e orientação salvos com o ato';toast(d.message);atoState.tipo=null;limparLotesDoMapa();carregarLotesVisiveis();render()}catch(err){exibirErro(err)}finally{s.busy=false}}
-  async function fechar(forcar=false){
-    if(!s||s.busy)return;
+  function fechar(forcar=false){
+    if(!fechamento)fechamento=fecharSessao(forcar).finally(()=>{fechamento=null})
+    return fechamento
+  }
+  async function fecharSessao(forcar=false){
+    if(!s)return true;if(s.busy)return false;
     if(!s.leitura&&!forcar){try{await salvar()}catch(err){
       if(!s.recuperacaoLocal){let aviso=modal.querySelector('.pc-falha');if(!aviso){aviso=document.createElement('section');aviso.className='pc-anotar pc-falha';aviso.innerHTML='<p>Não foi possível salvar no servidor nem neste navegador. Sair agora perde as alterações não salvas.</p><div class="pc-acoes"><button class="btn out-cinza" type="button" onclick="this.closest(\'.pc-falha\').remove()">Continuar editando</button><button class="btn out-vermelho" type="button" onclick="PranchetaCad.fechar(true)">Sair sem salvar</button></div>';svg.parentElement.appendChild(aviso)}return}
       toast('Prancheta fechada. Rascunho guardado apenas neste navegador; reabra os mesmos lotes para recuperá-lo.','aviso')
     }}
-    clearTimeout(saveTimer);geracao++;modal.querySelectorAll('.pc-anotar').forEach(n=>n.remove());modal.close();s=null;atoState.tipo=null;atoState.protocoloId=null;if(typeof pintarPainelCadastro==='function')pintarPainelCadastro()
+    clearTimeout(saveTimer);geracao++;modal.querySelectorAll('.pc-anotar').forEach(n=>n.remove());modal.hidden=true;s=null;atoState.tipo=null;atoState.protocoloId=null
+    if(reguaOrigem){reguaOrigem.parent.insertBefore($('cad-regua'),reguaOrigem.next);reguaOrigem=null}
+    document.body.classList.remove('prancheta-aberta')
+    if(typeof abrirMesaCadastral==='function')abrirMesaCadastral()
+    if(typeof pintarPainelCadastro==='function')pintarPainelCadastro()
+    return true
   }
   function exportar(){if(!s)return;const clone=svg.cloneNode(true);clone.querySelectorAll('image,[data-snap],.pc-snap').forEach(n=>n.remove());clone.removeAttribute('id');clone.setAttribute('width',s.w);clone.setAttribute('height',s.h);const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent='.pc-label,.pc-cota,.pc-confronto,.pc-vizinho{font:12px sans-serif;fill:#243b4b;paint-order:stroke;stroke:white;stroke-width:4px}.pc-hit{fill:none;stroke:transparent;stroke-width:14}.pc-confronto{font-weight:bold}.pc-snap{font:12px sans-serif;fill:#16803c}';clone.prepend(style);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=url;a.download=`${s.tipo}-${s.ids.join('-')}.svg`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   async function verSalvas(id){try{const r=await fetch(`/api/lotes/${id}/pranchas`,{headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.message);if(!d.pranchas.length){toast('Este imóvel ainda não possui prancha finalizada.', 'aviso');return}const p=d.pranchas[0];await abrir(p.tipo,p.visualizacao.originais.map(f=>f.properties.id),null,p.visualizacao)}catch(err){toast(err.message,'err')}}
-  return {ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {ativa:()=>!!s,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()
