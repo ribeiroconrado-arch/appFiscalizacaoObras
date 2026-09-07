@@ -671,11 +671,11 @@
        diferentes — quatro telas, quatro molduras. --}}
   <div class="busca-form lista-form">
     <div class="filtro-barra">
-      <div class="filtro-busca">
+      <div class="lista-campo lista-campo-busca"><label for="doc-busca">Busca</label><div class="filtro-busca">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
         <input type="text" id="doc-busca" placeholder="Buscar nº, imóvel ou autuado…"
-               oninput="filtrarDocumentos('busca', this.value)">
+               oninput="filtrarDocumentos('busca', this.value)"></div>
       </div>
       <button type="button" class="bs-mais" onclick="abrirFiltrosDoc()" title="Mais filtros">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
@@ -743,28 +743,28 @@
   <div class="busca-form lista-form">
     <div class="filtros-lista">
       <div class="linha-filtro">
-        <select id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
+        <div class="lista-campo"><label for="dm-tipo">Tipo</label><select id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
           <option value="">Protocolos e ordens</option>
           <option value="protocolo">Só protocolos</option>
           <option value="os">Só ordens de serviço</option>
-        </select>
+        </select></div>
         {{-- "Todos" e não "meus": protocolo chega SEM DONO, e abrir a fila
              filtrada pelo agente esconderia justamente o que ninguém assumiu.
              Vale para a lista inteira agora. --}}
-        <select id="dm-agente" onchange="filtrarDemandas('agente', this.value)">
+        <div class="lista-campo"><label for="dm-agente">Responsável</label><select id="dm-agente" onchange="filtrarDemandas('agente', this.value)">
           <option value="todos">Todos os responsáveis</option>
           <option value="eu">Meus</option>
           <option value="sem_dono">Não distribuídos</option>
-        </select>
+        </select></div>
       </div>
       <div class="linha-filtro">
-        <input type="text" id="dm-busca" placeholder="Buscar nº, requerente, objeto ou imóvel…"
-               oninput="filtrarDemandas('busca', this.value)">
+        <div class="lista-campo"><label for="dm-busca">Busca</label><input type="text" id="dm-busca" placeholder="Buscar nº, requerente, objeto ou imóvel…"
+               oninput="filtrarDemandas('busca', this.value)"></div>
         {{-- Agrupada por tipo: "Deferido" e "Concluída" não são alternativas
              da mesma pergunta. --}}
-        <select id="dm-situacao" onchange="filtrarDemandas('situacao', this.value)">
+        <div class="lista-campo"><label for="dm-situacao">Situação</label><select id="dm-situacao" onchange="filtrarDemandas('situacao', this.value)">
           <option value="">Todas as situações</option>
-        </select>
+        </select></div>
       </div>
     </div>
     <div class="btn-row lista-form-acoes">
@@ -2547,8 +2547,10 @@
 
 <div class="tela-carregando" id="tela-carregando">
   <div class="carregando-marca" aria-hidden="true">
-    <img class="marca-face" src="@assetv('img/logo-128.png')" alt="">
-    <img class="marca-face marca-verso" src="@assetv('img/logo-128-ambar.png')" alt="">
+    <img class="marca-face marca-verde" src="@assetv('img/logo-128.png')" alt="">
+    <img class="marca-face marca-verde marca-verso" src="@assetv('img/logo-128.png')" alt="">
+    <img class="marca-face marca-ambar" src="@assetv('img/logo-128-ambar.png')" alt="">
+    <img class="marca-face marca-ambar marca-verso" src="@assetv('img/logo-128-ambar.png')" alt="">
   </div>
   <div class="tela-carregando-txt" id="tela-carregando-txt" role="status"
        aria-live="polite">Carregando...</div>

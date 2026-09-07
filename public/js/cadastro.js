@@ -272,9 +272,10 @@ function sairModoCadastral(silencioso) {
 // dois sem aviso — o que a tela lê deixaria de ser o que o operador digitou,
 // e o erro só apareceria no lote gravado errado.
 
-/** A mesa é para tela de mesa. No celular, nada disto existe. */
+/** Régua compartilhada por desktop e tablet, independente das tabelas. */
+const TELA_CURADORIA = window.matchMedia('(min-width: 600px)')
 function ehMesaCadastral() {
-  return typeof ehTelaLarga === 'function' && ehTelaLarga()
+  return TELA_CURADORIA.matches
 }
 
 /**
@@ -759,11 +760,7 @@ function fecharMesaCadastral() {
 // tablet girado. Sem isto, o formulário ficaria numa mesa invisível (ou numa
 // janela que a largura já não usa), e o operador perderia de vista o que
 // estava preenchendo.
-// `TELA_LARGA` vem de ui.js, que é o primeiro script da página — não há guarda
-// de `typeof` aqui de propósito: `typeof` sobre um `const` ainda não avaliado
-// LANÇA, em vez de devolver "undefined", e a guarda seria um conforto falso
-// que esconderia uma troca de ordem dos scripts em vez de denunciá-la.
-TELA_LARGA.addEventListener('change', () => {
+TELA_CURADORIA.addEventListener('change', () => {
   montarMesaCadastral((cadModo || atoState.tipo) ? ehMesaCadastral() : false)
 })
 /** Abre a janela de dados no painel do modo corrente. */

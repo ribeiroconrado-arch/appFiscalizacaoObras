@@ -218,14 +218,14 @@ body{
 
 /* ── OVERLAY DE CARREGAMENTO ──────────────────────────────── */
 .tela-carregando{
-  position:fixed;inset:0;z-index:2500;background:rgba(242,245,242,.93);
+  position:fixed;inset:0;z-index:2500;background:color-mix(in srgb,var(--bg) 93%,transparent);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:14px;opacity:0;pointer-events:none;transition:opacity .2s;
 }
 .tela-carregando.show{opacity:1;pointer-events:all}
 
 /* ── A MARCA GIRANDO ──
-   Um cartão de duas faces: logo institucional na frente, âmbar no verso. O
+   Um cartão de duas faces, ambas com a marca do tema ativo. O
    `perspective` fica NO PALCO e o `preserve-3d` NO CARTÃO — perspectiva
    aplicada ao próprio elemento não afeta a transformação dele, só a dos
    filhos, e sem `preserve-3d` as faces são achatadas no plano do cartão e as
@@ -245,7 +245,7 @@ body{
   transform-style:preserve-3d;
 }
 /* Duas voltas defasadas de meia volta: quando a frente vira de costas e some,
-   o verso está chegando de frente. A troca das duas logos acontece POR CAUSA
+   o verso está chegando de frente. A alternância entre as faces acontece POR CAUSA
    do giro, e não por um segundo efeito piscando junto. */
 @keyframes giro3d{
   0%  {transform:rotateY(0);      opacity:.7}
@@ -270,7 +270,10 @@ body{
   .marca-verso{opacity:0}
 }
 
-.tela-carregando-txt{font-size:12.5px;font-weight:700;color:var(--tx2)}
+.carregando-marca > .marca-verde{display:none}
+html[data-tema="institucional"] .carregando-marca > .marca-verde{display:block}
+html[data-tema="institucional"] .carregando-marca > .marca-ambar{display:none}
+.tela-carregando-txt{font-size:12.5px;font-weight:700;color:var(--gd)}
 
 /* ── MARCADOR DE POSIÇÃO DO FISCAL ────────────────────────── */
 .eu-pin{

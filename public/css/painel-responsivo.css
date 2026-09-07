@@ -84,3 +84,27 @@
   .des-barra,.inativo-sair,.cad-barra{left:calc(50% + var(--menu-largura) / 2)}
   body.mesa-larga .des-barra{left:calc(50% + var(--menu-largura) / 2 + 170px)}
 }
+
+/* Filtros das listas seguem os campos externos da Consulta. */
+.lista-campo{display:flex;flex-direction:column;gap:4px;flex:1 1 180px;min-width:0}
+.lista-campo > label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.03em;color:var(--tx3)}
+.lista-form .lista-campo input,.lista-form .lista-campo select{
+  width:100%;min-width:0;flex:none;height:42px;padding:0 11px;font-size:14px;font-weight:400;
+  border:1.5px solid var(--f-bord);border-radius:var(--r);background:var(--f-fundo);color:var(--tx)
+}
+.lista-form .lista-campo input:focus,.lista-form .lista-campo select:focus{outline:none;border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.lista-form .filtro-busca{border:0;padding:0;background:none;box-shadow:none}
+.lista-form .filtro-busca > svg{display:none}
+.lista-form .filtro-barra{align-items:flex-end}
+.lista-form .bs-mais{align-self:flex-end;height:42px}
+.lista-form .linha-filtro{gap:12px}
+.lista-form .doc-filtro-larga{gap:12px}
+@media(min-width:1000px){
+  #t-busca,#t-documentos,#t-protocolos{max-width:none;margin:0;padding:20px clamp(16px,2vw,40px)}
+  .lista-form .filtros-lista{display:grid;grid-template-columns:1fr 1fr minmax(240px,1.5fr) 1fr;gap:12px}
+  .lista-form .filtros-lista .linha-filtro{display:contents}
+}
+@media(min-width:600px) and (max-width:1279px){
+  .cad-mesa{max-width:calc(100vw - 80px);max-height:calc(100dvh - 130px - var(--menu-altura))}
+  .cad-regua button{min-height:44px}
+}

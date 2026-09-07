@@ -1,4 +1,4 @@
-#pc-modal{position:absolute;inset:10px;margin:0;padding:0;border:1px solid #cbd5e1;border-radius:6px;width:auto;max-width:none;height:auto;max-height:none;background:#fff;color:#213547;box-shadow:0 2px 8px #0002;overflow:hidden;z-index:930;display:flex}
+#pc-modal{position:absolute;inset:10px 70px 10px 10px;margin:0;padding:0;border:1px solid #cbd5e1;border-radius:6px;width:auto;max-width:none;height:auto;max-height:none;background:#fff;color:#213547;box-shadow:0 2px 8px #0002;overflow:hidden;z-index:930;display:flex}
 #pc-modal[hidden]{display:none}
 .pc-janela{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0}
 .pc-regua-slot{display:none;flex:0 0 56px;min-height:0;border-right:1px solid var(--bord,#ddd);background:var(--sur,#fff)}
@@ -31,4 +31,15 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 #pc-dados{position:absolute;right:12px;top:12px;bottom:12px;width:min(420px,calc(100% - 24px));overflow:auto;background:#fffffff5;border:1px solid #cbd5e1;border-radius:9px;box-shadow:0 8px 24px #0002;padding:16px;z-index:4}#pc-dados[hidden]{display:none}#pc-dados header{display:flex;justify-content:space-between;margin-bottom:12px}#pc-dados label{display:block;font-size:11px;margin:9px 0}#pc-dados input,#pc-dados textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:4px;padding:7px;font:12px Inter,Arial}#pc-dados fieldset{border:1px solid #dde5eb;border-radius:6px;padding:10px;margin-bottom:10px}#pc-dados legend{font-size:12px;font-weight:700}.pc-campos{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}#pc-conferencia{font-size:12px;margin-top:14px;line-height:1.6}
 .pc-anotar{position:absolute;left:50%;top:25%;transform:translateX(-50%);width:min(420px,calc(100% - 48px));box-sizing:border-box;padding:24px;border:1px solid var(--bdr,#dce4ea);background:var(--sur,#fff);color:var(--tx,#213547);border-radius:16px;box-shadow:0 12px 40px #0003;z-index:5;display:flex;gap:16px;flex-wrap:wrap}.pc-anotar .field{width:100%;margin:0}.pc-anotar label{display:block;width:100%;font-size:12px;font-weight:600}.pc-anotar input{display:block;width:100%;min-width:0;padding:11px 12px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;margin-top:8px;font:inherit}.pc-anotar input:focus{outline:2px solid var(--g,#009b3a);outline-offset:2px}.pc-acoes{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;width:100%}.pc-faces select{display:block;width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;background:white;color:inherit}#pc-form p{font-size:12px;line-height:1.5}#pc-face-erro{color:#b91c1c}
 @media(max-width:1000px){.pc-cab{flex-wrap:wrap}.pc-cab>div{flex:1 1 100%}.pc-cab small{max-width:none;white-space:normal}.pc-tools{flex-wrap:wrap;overflow:visible}.pc-tools i{display:none}.pc-cab,.pc-opcoes,.pc-rodape{flex-shrink:0}}
-@media(max-width:700px){#pc-modal{inset:6px;width:auto;height:auto;max-width:none}.pc-cab{padding:8px;gap:6px}.pc-cab b{font-size:13px}#pc-salvo{display:none}.pc-tools{padding:4px}.pc-tools button{min-width:53px;padding:4px}.pc-rodape{flex-wrap:wrap;padding:6px;gap:5px}.pc-rodape #pc-resumo{max-width:40%}.pc-opcoes{padding:4px 8px;gap:8px}#pc-ref{display:none}.pc-janela{overflow-y:auto}.pc-canvas{flex:1 0 240px}}
+@media(max-width:700px){#pc-modal{inset:6px 70px 6px 6px;width:auto;height:auto;max-width:none}.pc-cab{padding:8px;gap:6px}.pc-cab b{font-size:13px}#pc-salvo{display:none}.pc-tools{padding:4px}.pc-tools button{min-width:53px;padding:4px}.pc-rodape{flex-wrap:wrap;padding:6px;gap:5px}.pc-rodape #pc-resumo{max-width:40%}.pc-opcoes{padding:4px 8px;gap:8px}#pc-ref{display:none}.pc-janela{overflow-y:auto}.pc-canvas{flex:1 0 240px}}
+
+/* No tablet, título e ações compartilham a primeira linha. */
+@media(min-width:600px) and (max-width:1279px){
+  .pc-cab{flex-wrap:wrap;padding:8px;gap:6px}
+  .pc-cab>div{flex:1 1 0;min-width:0;margin-right:auto}
+  .pc-cab b{font-size:13px}
+  .pc-cab small{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .pc-cab>.btn{flex:0 0 auto;white-space:nowrap;padding:8px 10px}
+  #pc-salvo{display:block;order:1;flex:1 1 100%;max-width:none}
+  #pc-salvo:empty{display:none}
+}

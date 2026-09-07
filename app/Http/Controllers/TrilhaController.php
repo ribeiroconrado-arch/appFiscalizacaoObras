@@ -232,7 +232,12 @@ class TrilhaController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return response()->json(['message' => $msg]);
+        return response()->json([
+            'message' => $msg,
+            'lote_restaurado_id' => $a->acao === 'excluiu'
+                ? DB::table('lotes_apagados')->where('lote_id', $a->registro_id)->value('restaurado_como')
+                : null,
+        ]);
     }
 
 

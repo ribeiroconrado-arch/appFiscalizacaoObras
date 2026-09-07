@@ -109,10 +109,11 @@ async function key(k){await send('Input.dispatchKeyEvent',{type:'keyDown',key:k,
   await evaluate("Storage.prototype.setItem=window.oldSetItem;window.fetch=window.goodFetch;PranchetaCad.abrir('desmembramento',[1])");
   const shot=await send('Page.captureScreenshot',{format:'png'});const output=path.join(profile,'prancheta-desmembramento.png');fs.writeFileSync(output,Buffer.from(shot.data,'base64'));console.log('Screenshot: '+output)
   assert.equal(errors.length,0,JSON.stringify(errors))
-  for(const width of [768,1024,1440]){
+  for(const width of [600,686,768,1024,1440]){
     await send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:false});await wait(100);
-    const box=await evaluate(`(()=>{const p=document.querySelector('#pc-modal').getBoundingClientRect(),m=document.querySelector('#t-mapa').getBoundingClientRect();return {inside:p.left>=m.left&&p.top>=m.top&&p.right<=m.right&&p.bottom<=m.bottom,overflow:document.querySelector('.pc-janela').scrollWidth>document.querySelector('.pc-janela').clientWidth}})()`);
+    const box=await evaluate(`(()=>{const p=document.querySelector('#pc-modal').getBoundingClientRect(),m=document.querySelector('#t-mapa').getBoundingClientRect();return {inside:p.left>=m.left&&p.top>=m.top&&p.right<=m.right-70&&p.bottom<=m.bottom,overflow:document.querySelector('.pc-janela').scrollWidth>document.querySelector('.pc-janela').clientWidth}})()`);
     assert.ok(box.inside);assert.equal(box.overflow,false);
+    if(width>=600&&width<1280) assert.equal(await evaluate("(()=>{const title=document.querySelector('.pc-cab>div').getBoundingClientRect();return [...document.querySelectorAll('.pc-cab>.btn')].filter(b=>!b.hidden).every(b=>{const r=b.getBoundingClientRect();return r.top<title.bottom&&r.bottom>title.top})})()"),true,'Título e botões na mesma linha em '+width);
   }
   await evaluate("document.querySelector('#test-historico').click()");
   for(let i=0;i<30&&!await evaluate('!!window.historicoAberto');i++)await wait(50);

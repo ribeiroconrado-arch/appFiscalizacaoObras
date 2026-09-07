@@ -2886,13 +2886,12 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .cont.selo-aviso{background:var(--alt,#FEF3C7);color:#92400E;border-color:#FCD34D}
 
 /* ── A MESA DE EDIÇÃO CADASTRAL ──
-   Só existe acima de 1000px: é uma coluna, e coluna ao lado de mapa em tela de
-   celular deixa os dois inutilizáveis. Abaixo disso continua valendo o painel
-   flutuante, que é o desenho original.
+   Disponível a partir de 600px, incluindo tablets em retrato. No celular
+   menor continua valendo o painel flutuante.
    `position:fixed` e não `absolute` porque ela acompanha a janela, não o mapa —
    o mapa rola e arrasta por baixo dela. */
 .cad-mesa{display:none}
-@media (min-width:1000px){
+@media (min-width:600px){
   .cad-mesa{
     display:flex; flex-direction:column; position:fixed; z-index:900;
     /* 120px é logo abaixo do sub-cabeçalho (que termina em 110px): com 82px a
@@ -3053,7 +3052,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 #editor-corte-ajuste{border-top:1px solid var(--gm);padding-top:12px;margin-top:12px}
 #editor-corte-previa{padding:10px;border-radius:6px;background:var(--bg,#fff)}
 .desm-mesa{display:none}
-@media (min-width:1000px){
+@media (min-width:600px){
   .desm-mesa{
     display:flex; flex-direction:column; position:fixed; z-index:901;
     left:12px; top:120px; max-height:calc(100vh - 200px); width:340px;

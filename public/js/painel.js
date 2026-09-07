@@ -21,6 +21,7 @@ async function carregarPainel() {
   const p = new URLSearchParams()
   for (const [k, v] of Object.entries(pState.filtros)) if (v) p.set(k, v)
 
+  mostrarCarregandoTela('Carregando painel...')
   try {
     const r = await fetch('/api/painel?' + p, { headers: { Accept: 'application/json' } })
     if (!r.ok) throw new Error('HTTP ' + r.status)
@@ -28,12 +29,14 @@ async function carregarPainel() {
     renderPainel(d)
     // Os avisos vêm de outra rota (a do sino) e por isso são pedidos aqui:
     // o painel não os recalcula, só os mostra num segundo lugar.
-    carregarNotificacoes()
+    await carregarNotificacoes()
     pState.carregado = true
   } catch (e) {
     console.error(e)
     document.getElementById('pn-metricas').innerHTML =
       '<div class="lista-vazia">Não foi possível carregar o painel.</div>'
+  } finally {
+    esconderCarregandoTela()
   }
 }
 

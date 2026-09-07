@@ -363,7 +363,13 @@ function montarFiltroLargoDoc() {
     const copia = origem.cloneNode(true)
     copia.id = 'doc-w-' + chave
     copia.onchange = () => filtrarDocumentos(chave, copia.value)
-    faixa.appendChild(copia)
+    const campo = document.createElement('div')
+    campo.className = 'lista-campo'
+    const label = document.createElement('label')
+    label.htmlFor = copia.id
+    label.textContent = ROTULOS_FILTRO[chave].nome
+    campo.append(label, copia)
+    faixa.appendChild(campo)
   }
   faixa.dataset.pronta = '1'
 }

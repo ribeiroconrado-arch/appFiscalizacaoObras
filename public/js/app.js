@@ -18,6 +18,7 @@ const state = {
   /** @type {{lat:number, lon:number, prec:number}|null} */ pos: null,
   /** @type {Object|null} */ selecionado: null,
   carregando: false,
+  versaoLotes: 0,
   truncado: false,
 }
 
@@ -39,7 +40,8 @@ const ZOOM_MINIMO = 12
  */
 async function carregarLotesVisiveis() {
   const mapa = mapaState.obj
-  if (!mapa || state.carregando) return
+  if (!mapa) return
+  if (state.carregando) return state.cargaLotes
 
   // Mapa escondido (o app abre no Painel) tem contêiner de tamanho zero, e
   // aí getBounds() devolve os quatro cantos no mesmo ponto — a API recusava
@@ -57,12 +59,16 @@ async function carregarLotesVisiveis() {
     .map(n => n.toFixed(6)).join(',')
 
   state.carregando = true
+  const versao = state.versaoLotes
+  state.cargaLotes = (async () => {
   try {
     const r = await fetch(`/api/mapa/lotes?bbox=${bbox}`, {
       headers: { 'Accept': 'application/json' },
     })
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const gj = await r.json()
+    // Uma edição invalidou esta resposta enquanto a consulta estava em trânsito.
+    if (versao !== state.versaoLotes) return
 
     let novos = 0
     for (const f of gj.features) {
@@ -75,11 +81,17 @@ async function carregarLotesVisiveis() {
 
     atualizarChip()
   } catch (e) {
+    if (versao !== state.versaoLotes) return
     console.error(e)
     toast('Falha ao carregar os lotes', 'err')
   } finally {
-    state.carregando = false
+    if (versao === state.versaoLotes) {
+      state.carregando = false
+      state.cargaLotes = null
+    }
   }
+  })()
+  return state.cargaLotes
 }
 
 /** Ids já desenhados no mapa, para não duplicar polígono ao arrastar de volta. */
@@ -98,6 +110,8 @@ const desenhados = new Set()
  * servidor — que é quem sabe quais lotes ainda estão ativos.
  */
 function limparLotesDoMapa() {
+  state.versaoLotes++
+  state.carregando = false
   const mapa = mapaState.obj
   if (mapa) {
     mapaState.camadas.forEach(c => mapa.removeLayer(c))
@@ -167,19 +181,18 @@ function mapaVisivel() {
  * tamanho zero não posiciona nada, e era isso que deixava a base pela metade.
  */
 async function prepararMapa() {
-  if (!mapaVisivel()) return
-  if (mapaState.pronto) { carregarLotesVisiveis(); return }
-  mapaState.pronto = true
-
-  // Abre enquadrando a BASE REAL, e não uma coordenada fixa no código: com
-  // coordenada fixa, tudo que estivesse fora daquele retângulo nunca era
-  // carregado até o usuário arrastar o mapa até lá.
-  await enquadrarBase()
-
-  mostrarCarregandoTela('Carregando lotes...')
+  if (!mapaVisivel() || mapaState.preparando) return
+  mapaState.preparando = true
+  mostrarCarregandoTela('Carregando mapa...')
   try {
+    if (!mapaState.pronto) {
+      await enquadrarBase()
+      mapaState.pronto = true
+    }
+    // Aguarda também a carga que o moveend iniciou durante o enquadramento.
     await carregarLotesVisiveis()
   } finally {
+    mapaState.preparando = false
     esconderCarregandoTela()
   }
 }

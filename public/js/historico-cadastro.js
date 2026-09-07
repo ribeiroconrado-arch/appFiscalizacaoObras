@@ -86,7 +86,7 @@ function renderHistoricoCadastral(truncou) {
       : ''
 
     const acao = l.desfazer?.pode
-      ? `<button class="btn out-cinza sm" onclick="desfazerNoCadastro(${l.id})">Desfazer</button>`
+      ? `<button type="button" class="btn out-vermelho sm" onclick="desfazerNoCadastro(${l.id})">Desfazer</button>`
       : l.desfazer?.motivo
         ? `<span class="hc-sem-volta" title="${esc(l.desfazer.motivo)}">sem volta</span>`
         : ''
@@ -153,7 +153,28 @@ function desfazerNoCadastro(id) {
       // mostrando o estado anterior ao lado de um histórico que já não bate.
       limparLotesDoMapa()
       await carregarLotesVisiveis()
-      carregarHistoricoCadastral()
+      if (d.lote_restaurado_id) await mostrarLoteRestaurado(Number(d.lote_restaurado_id))
+      await carregarHistoricoCadastral()
     },
   })
+}
+
+/** A restauração cria outro id; o registro apagado nunca é usado para localizar a volta. */
+async function mostrarLoteRestaurado(id) {
+  try {
+    if (!mapaState.porId.has(id)) {
+      const r = await fetch('/api/imoveis/' + id + '/geometria', { headers: { Accept: 'application/json' } })
+      const d = await r.json()
+      if (!r.ok || !d.geometry) throw new Error('Geometria indisponível')
+      mapaState.obj.fitBounds(L.geoJSON(d.geometry).getBounds(), { padding: [80, 80], maxZoom: 19, animate: false })
+      // Recarrega a feição completa, com os atributos usados nas cores e no balão.
+      limparLotesDoMapa()
+      await carregarLotesVisiveis()
+    }
+    if (!mapaState.porId.has(id)) throw new Error('Lote ausente após a recarga')
+    destacarPorId(id)
+  } catch (e) {
+    console.error(e)
+    toast('Lote restaurado no cadastro, mas não foi possível destacá-lo no mapa. Atualize a página.', 'aviso')
+  }
 }
