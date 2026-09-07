@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * PONTO DE ENTRADA DO GITHUB, e nada mais.
@@ -68,7 +67,19 @@ class DeployWebhookController extends Controller
             return response('ignorado: não é a branch main', 200);
         }
 
-        Storage::put('deploy.trigger', (string) $request->input('after', now()->toISOString()));
+        // file_put_contents direto, e não Storage::put: o disco 'local' padrão
+        // do Laravel 11 tem raiz em storage/app/private, não storage/app — o
+        // gatilho gravado por Storage::put(); ficava em
+        // storage/app/private/deploy.trigger, enquanto o cron (e docs/deploy.md)
+        // olham storage/app/deploy.trigger. Os dois nunca se encontravam:
+        // conferido em produção, o log registrava "Deploy solicitado" e o
+        // arquivo simplesmente não existia onde o cron procurava. Caminho
+        // absoluto elimina a ambiguidade — não importa o que `filesystems.php`
+        // definir como disco padrão amanhã.
+        file_put_contents(
+            storage_path('app/deploy.trigger'),
+            (string) $request->input('after', now()->toISOString())
+        );
 
         Log::info('Deploy solicitado via webhook.', [
             'commit' => $request->input('after'),

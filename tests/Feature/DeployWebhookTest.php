@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -12,10 +11,26 @@ use Tests\TestCase;
  * aplicação — e é exatamente por isso que cada caminho de recusa importa:
  * é a única coisa entre a internet e um arquivo que dispara `git pull` no
  * servidor de produção. Ver DeployWebhookController.
+ *
+ * NÃO usa `Storage::fake()`: foi exatamente esse fake que deixou passar o
+ * bug de produção. `Storage::fake('local')` troca o disco inteiro por um
+ * temporário isolado — ele confere a LÓGICA ("grava ou não grava"), mas
+ * nunca toca no caminho real, e foi ali que o Laravel 11 mudou a raiz do
+ * disco `local` para `storage/app/private` sem o cron (que olha
+ * `storage/app/deploy.trigger`, sem `/private`) saber. Os testes com fake
+ * passavam, e em produção o gatilho nunca era encontrado. Aqui o arquivo é
+ * conferido no caminho ABSOLUTO de verdade, o mesmo que o cron usa.
  */
 class DeployWebhookTest extends TestCase
 {
     private const SEGREDO = 'segredo-de-teste-nao-e-o-de-producao';
+
+    protected function tearDown(): void
+    {
+        @unlink(storage_path('app/deploy.trigger'));
+
+        parent::tearDown();
+    }
 
     private function assinar(string $corpo): string
     {
@@ -50,7 +65,6 @@ class DeployWebhookTest extends TestCase
 
     public function test_assinatura_certa_mas_evento_diferente_de_push_e_ignorado(): void
     {
-        Storage::fake('local');
         config(['deploy.webhook_secret' => self::SEGREDO]);
 
         $corpo = json_encode(['ref' => 'refs/heads/main']);
@@ -61,12 +75,11 @@ class DeployWebhookTest extends TestCase
             'CONTENT_TYPE'             => 'application/json',
         ], $corpo)->assertOk();
 
-        Storage::disk('local')->assertMissing('deploy.trigger');
+        $this->assertFileDoesNotExist(storage_path('app/deploy.trigger'));
     }
 
     public function test_assinatura_certa_mas_branch_diferente_de_main_e_ignorado(): void
     {
-        Storage::fake('local');
         config(['deploy.webhook_secret' => self::SEGREDO]);
 
         $corpo = json_encode(['ref' => 'refs/heads/uma-feature-qualquer']);
@@ -77,12 +90,11 @@ class DeployWebhookTest extends TestCase
             'CONTENT_TYPE'             => 'application/json',
         ], $corpo)->assertOk();
 
-        Storage::disk('local')->assertMissing('deploy.trigger');
+        $this->assertFileDoesNotExist(storage_path('app/deploy.trigger'));
     }
 
-    public function test_push_valido_em_main_grava_o_gatilho(): void
+    public function test_push_valido_em_main_grava_o_gatilho_no_caminho_que_o_cron_usa(): void
     {
-        Storage::fake('local');
         config(['deploy.webhook_secret' => self::SEGREDO]);
 
         $corpo = json_encode(['ref' => 'refs/heads/main', 'after' => 'abc123', 'pusher' => ['name' => 'fulano']]);
@@ -93,7 +105,9 @@ class DeployWebhookTest extends TestCase
             'CONTENT_TYPE'             => 'application/json',
         ], $corpo)->assertStatus(202);
 
-        Storage::disk('local')->assertExists('deploy.trigger');
-        $this->assertSame('abc123', Storage::disk('local')->get('deploy.trigger'));
+        // storage_path('app/deploy.trigger') — SEM '/private' — é o mesmo
+        // caminho literal que a linha de cron em docs/deploy.md verifica.
+        $this->assertFileExists(storage_path('app/deploy.trigger'));
+        $this->assertSame('abc123', file_get_contents(storage_path('app/deploy.trigger')));
     }
 }
