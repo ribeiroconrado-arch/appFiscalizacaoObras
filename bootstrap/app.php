@@ -49,6 +49,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // O que é da fiscalização, fechado para topógrafo, arquiteto e
         // contribuinte. Ver App\Http\Middleware\SoInterno e routes/web.php.
         $middleware->alias(['interno' => \App\Http\Middleware\SoInterno::class]);
+
+        // Desativado em Parâmetros = fora na próxima requisição, sem esperar a
+        // sessão expirar. Ver App\Http\Middleware\ContaAtiva.
+        $middleware->web(append: [\App\Http\Middleware\ContaAtiva::class]);
+
+        // Em toda resposta, inclusive /up e o webhook. Ver CabecalhosDeSeguranca.
+        $middleware->append(\App\Http\Middleware\CabecalhosDeSeguranca::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

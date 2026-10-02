@@ -250,6 +250,21 @@ function esc(s) {
   ))
 }
 
+/**
+ * Valor para virar ARGUMENTO de função dentro de um atributo de evento
+ * (`onclick="f(${jsArg(x)})"`). Gera o literal JS com JSON.stringify e escapa
+ * para HTML por cima.
+ *
+ * `esc()` sozinho NÃO serve aqui, nem `JSON.stringify(x).replace(/"/g,'&quot;')`:
+ * o navegador desfaz as entidades do atributo ANTES de rodar o JS, então um
+ * `&#39;` ou `&quot;` que já vinha no dado volta a ser aspa e fecha a string.
+ * Um nome de bairro como `x&quot;);alert(1);//` vindo do GeoJSON executaria.
+ * Aqui o HTML devolve exatamente o literal JSON, que o JS lê como texto.
+ */
+function jsArg(v) {
+  return esc(JSON.stringify(v ?? null))
+}
+
 /** Formata número com separador de milhar pt-BR. @param {number} n */
 function fmtNum(n) {
   return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 })

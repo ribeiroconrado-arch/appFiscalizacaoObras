@@ -85,7 +85,7 @@ function _carregarJsts() {
   if (window.jsts) return Promise.resolve()
   _jstsCarregando ||= new Promise((ok, falha) => {
     const s = document.createElement('script')
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsts/2.12.1/jsts.min.js'
+    s.src = '/vendor/jsts-2.12.1/jsts.min.js'   // local, não da CDN — ver mapa.blade.php (Leaflet)
     s.onload = ok
     s.onerror = () => { _jstsCarregando = null; falha(new Error('Não foi possível carregar a biblioteca de geometria (JSTS).')) }
     document.head.appendChild(s)
@@ -258,7 +258,7 @@ async function abrirContornosDosBairros() {
           ${l.p.isolados.map(id => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(id)})">nº ${Number(id)}</a>`).join(', ')}</div>` : ''}</td>
       <td>${situacao(l.p)}${l.p?.contorno_em ? `<div class="imp-sub">${esc(l.p.contorno_em)} · raio ${l.p.raio_m} m</div>` : ''}</td>
       <td class="num">${l.p ? l.p.area_ha.toLocaleString('pt-BR') + ' ha' : '—'}</td>
-      <td class="imp-abrir"><button class="btn sm" onclick="gerarDaLista(this, ${JSON.stringify(l.nome).replace(/"/g, '&quot;')})">${l.p ? 'Gerar de novo' : 'Gerar'}</button></td>
+      <td class="imp-abrir"><button class="btn sm" onclick="gerarDaLista(this, ${jsArg(l.nome)})">${l.p ? 'Gerar de novo' : 'Gerar'}</button></td>
     </tr>`).join('') || '<tr><td colspan="4">Nenhum bairro com lotes.</td></tr>'}
     </tbody></table>
     <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button></div>`, 'Contorno dos bairros')

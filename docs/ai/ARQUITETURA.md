@@ -10,7 +10,7 @@
 | PHP | 8.4 (mínimo declarado: 8.3) |
 | Laravel | 13.x |
 | Banco | MySQL 8.0.46 — **espacial**, base `fiscalizacao_obras` |
-| Mapa | Leaflet 1.9.4 (CDN unpkg) |
+| Mapa | Leaflet 1.9.4 (local, `public/vendor/`) · JSTS 2.12.1 sob demanda |
 | PDF | `barryvdh/laravel-dompdf` 3.1 |
 | Front | **JavaScript puro**, sem build, sem framework |
 | CRS | armazenamento **EPSG:4326** · origem EPSG:31981 (SIRGAS 2000 / UTM 21S) |

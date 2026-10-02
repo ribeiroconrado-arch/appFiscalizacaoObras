@@ -418,7 +418,7 @@ function renderFichaImportacao(i) {
     `<button class="btn" onclick="carregarListaImportacoes()">Voltar à lista</button>`,
     i.extensao && i.status !== 'excluida' ? `<button class="btn" onclick="verImportacaoNoMapa()">Ver no mapa</button>` : '',
     andamento ? `<button class="btn" onclick="fecharImportacoes(); entrarPreCuradoria()">Pré-curadoria</button>` : '',
-    i.status === 'publicada' ? `<button class="btn" onclick="gerarContornoDoBairro(${JSON.stringify(i.bairro).replace(/"/g, '&quot;')})">Gerar contorno do bairro</button>` : '',
+    i.status === 'publicada' ? `<button class="btn" onclick="gerarContornoDoBairro(${jsArg(i.bairro)})">Gerar contorno do bairro</button>` : '',
     podeExcluir ? `<button class="btn danger" onclick="pedirExclusaoImportacao()">Excluir importação</button>` : '',
     rascunho ? `<button class="btn danger" onclick="pedirDescarteImportacao()">Descartar rascunho</button>` : '',
     rascunho ? `<button class="btn primary" onclick="pedirSalvamentoImportacao()">Salvar importação</button>` : '',

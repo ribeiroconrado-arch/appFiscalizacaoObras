@@ -56,7 +56,10 @@ Route::post('/webhooks/deploy', [DeployWebhookController::class, 'receber'])
     ->middleware('throttle:20,1');
 
 // ── Autenticado ──────────────────────────────────────────────
-Route::middleware('auth')->group(function () {
+// `auth.session` guarda o hash da senha na sessão: trocar a senha (no Perfil
+// ou em Parâmetros) derruba as OUTRAS sessões e o "lembrar-me" daquele
+// usuário — inclusive a de quem a descobriu.
+Route::middleware(['auth', 'auth.session'])->group(function () {
 
     Route::get('/', function (LoteRepository $lotes) {
         return view('mapa', ['total' => $lotes->total()]);
@@ -72,7 +75,7 @@ Route::middleware('auth')->group(function () {
     // As permissões de escrita continuam decididas em cada controller
     // (podeCurarCadastro, isAdmin...): estar aqui só quer dizer que o externo
     // não é barrado ANTES de o controller decidir.
-    Route::prefix('api')->group(function () {
+    Route::prefix('api')->middleware('throttle:api')->group(function () {
         // Busca de imóveis sem abrir o mapa — a camada de satélite é paga por
         // requisição, e consulta de balcão não precisa de imagem aérea.
         // DOIS ENDPOINTS DE BAIRRO, de propósito.
@@ -175,14 +178,14 @@ Route::middleware('auth')->group(function () {
         // importação, como lista de pendências no mapa (só curador).
         Route::get('/conferencias', [\App\Http\Controllers\ConferenciaBairroController::class, 'index']);
         Route::get('/conferencias/bairro', [\App\Http\Controllers\ConferenciaBairroController::class, 'mostrar']);
-        Route::post('/conferencias/bairro', [\App\Http\Controllers\ConferenciaBairroController::class, 'conferir']);
+        Route::post('/conferencias/bairro', [\App\Http\Controllers\ConferenciaBairroController::class, 'conferir'])->middleware('throttle:pesado');
         Route::post('/conferencias/justificar', [\App\Http\Controllers\ConferenciaBairroController::class, 'justificar']);
 
         Route::get('/importacoes', [ImportacaoController::class, 'index']);
-        Route::post('/importacoes/conferir', [ImportacaoController::class, 'conferirArquivo']);
-        Route::post('/importacoes', [ImportacaoController::class, 'gravar']);
+        Route::post('/importacoes/conferir', [ImportacaoController::class, 'conferirArquivo'])->middleware('throttle:pesado');
+        Route::post('/importacoes', [ImportacaoController::class, 'gravar'])->middleware('throttle:pesado');
         Route::get('/importacoes/{importacao}', [ImportacaoController::class, 'mostrar']);
-        Route::post('/importacoes/{importacao}/conferir-cadastro', [ImportacaoController::class, 'conferirCadastro']);
+        Route::post('/importacoes/{importacao}/conferir-cadastro', [ImportacaoController::class, 'conferirCadastro'])->middleware('throttle:pesado');
         Route::get('/importacoes/{importacao}/divergencias.csv', [ImportacaoController::class, 'divergenciasCsv']);
         Route::post('/importacoes/{importacao}/bairro', [ImportacaoController::class, 'vincularBairro']);
         Route::post('/importacoes/{importacao}/lotes/{lote}/numero', [ImportacaoController::class, 'numerarLote']);
@@ -206,7 +209,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // ── SÓ A FISCALIZAÇÃO ────────────────────────────────────────
-    Route::prefix('api')->middleware('interno')->group(function () {
+    Route::prefix('api')->middleware(['interno', 'throttle:api'])->group(function () {
         // Painel e notificações
         Route::get('/painel', [PainelController::class, 'index']);
         Route::get('/notificacoes', [PainelController::class, 'notificacoes']);
@@ -320,8 +323,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/vistorias/{vistoria}/impressao', [VistoriaController::class, 'impressao'])
         ->name('vistoria.impressao');
     Route::get('/vistorias/{vistoria}/pdf', [VistoriaController::class, 'pdf'])
+        ->middleware('throttle:pesado')
         ->name('vistoria.pdf');
     Route::get('/documentos/{documento}/pdf', [DocumentoController::class, 'pdf'])
+        ->middleware('throttle:pesado')
         ->name('documento.pdf');
     // Página HTML que se imprime sozinha — é o caminho da bobina 80mm, que o
     // dompdf não consegue gerar (página de altura variável).

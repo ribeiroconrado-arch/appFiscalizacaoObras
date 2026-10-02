@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bci\BciImovel;
-use App\Models\Bci\BciProprietario;
 use App\Models\Bci\BciUnidade;
 use App\Cadastro\SincronizaBci;
 use App\Models\Lote;
@@ -49,7 +48,7 @@ class CadastroImobiliarioController extends Controller
     /** @return array<string,mixed> */
     private function retrato(Lote $lote): array
     {
-        $bci = BciImovel::with(['proprietarios', 'caracteristicas', 'unidades'])
+        $bci = BciImovel::with(['caracteristicas', 'unidades'])
             ->where('lote_id', $lote->id)->first();
 
         if (! $bci) {
@@ -82,11 +81,6 @@ class CadastroImobiliarioController extends Controller
                 'regiao_fiscal'         => $bci->regiao_fiscal,
                 'complemento'           => $bci->complemento,
             ],
-            'proprietarios' => $bci->proprietarios->map(fn (BciProprietario $p) => [
-                'nome'      => $p->nome,
-                'documento' => $p->documento,
-                'endereco'  => $p->enderecoLinha() ?: null,
-            ]),
             // Chave/valor na ordem em que o BCI as traz: a lista muda de
             // município para município, e a tela desenha o que vier.
             'caracteristicas' => $bci->caracteristicas->map(fn ($c) => [

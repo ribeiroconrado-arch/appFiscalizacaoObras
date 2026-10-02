@@ -97,6 +97,14 @@ do bairro, a inscrição imobiliária é **nula** — nunca `000`. Inventar núm
 de imóvel numa tela de onde se copia para dentro de auto de infração é pior do
 que não ter número nenhum.
 
+**O sistema não guarda dado pessoal de proprietário.** CPF/CNPJ só existe
+**digitado no documento** (notificação, auto de infração), no campo
+`autuado_documento`, quando a peça precisa dele, e não aparece em mais lugar
+nenhum. A exportação do cadastro é lida por uma lista fechada de colunas
+(`ColunasDaExportacao`) sem proprietário; coluna nova com dado pessoal não
+entra nessa lista. A antiga tabela `bci_proprietarios` foi removida
+(migração de 03/10/2026).
+
 ## Os dois nomes de cada bairro
 
 Um mesmo lugar tem dois nomes, e confundi-los já causou defeito em produção:

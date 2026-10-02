@@ -53,7 +53,9 @@ class LotesApagados
             'area_matricula_m2'     => $lote->area_matricula_m2,
             'fonte'                 => $lote->fonte,
             'origem'                => $lote->origem,
-            'geom'                  => DB::raw("ST_GeomFromText('{$geom->wkt}', 4326, 'axis-order=long-lat')"),
+            // `quote()` e não interpolação crua: o WKT vem do próprio banco, mas
+            // SQL montado com texto sem escape é brecha esperando a origem mudar.
+            'geom'                  => DB::raw('ST_GeomFromText(' . DB::getPdo()->quote($geom->wkt) . ", 4326, 'axis-order=long-lat')"),
             'user_id'               => Auth::id(),
             'usuario_nome'          => Auth::user()?->name ?? 'sistema',
             'motivo'                => $motivo,
