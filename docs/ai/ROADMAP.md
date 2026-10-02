@@ -2,7 +2,7 @@
 
 > O que vem pela frente, em ordem de dependência. Cada item diz **por que**
 > importa e **o que trava** se não for feito.
-> Atualizado em 04/09/2026.
+> Atualizado em 02/10/2026.
 
 ## Como ler
 
@@ -96,15 +96,10 @@ a "N lotes ficaram órfãos".
 
 Hoje quem não tem a máquina de desenvolvimento não consegue.
 
-### 🟡 Importar bairro pela tela
+### ✅ Importar bairro pela tela — feito em `bd34623` (02/10)
 
-O caminho é DWG → QGIS → GeoJSON → `lotes:importar`. A conversão é do domínio
-do técnico e continua fora do sistema; **a importação do GeoJSON deveria ter
-tela** — com prévia (quantos lotes, quais quadras, sobreposição com o que já
-existe) e confirmação.
-
-Depende de decidir o que fazer quando o bairro já tem lotes: substituir,
-completar ou recusar.
+Rascunho → salva → publicada, com pré-curadoria e conferência com o cadastro.
+A conversão DWG → GeoJSON continua fora do sistema, como planejado.
 
 ### 🟢 Carregar cadastro (XLSX) pela tela
 
@@ -152,27 +147,69 @@ o fiscal (o sino já existe; não há disparo por prazo).
 
 ---
 
-## 5 · Sustentação
+## 5 · Sustentação — refatoração planejada
 
-### 🟢 Testes que rodem
+Levantada na revisão de 02/10/2026. Nada aqui muda comportamento: é para o
+código continuar navegável e para um erro aparecer antes da produção. **Um PR
+por item**, nessa ordem, e cada um conferido no navegador (Herd) antes do
+merge. A suíte automatizada cobre pouco das telas.
 
-`phpunit.xml` aponta para SQLite em memória, incompatível com as migrações
-espaciais do MySQL. Ou se aponta para um MySQL de teste, ou se aceita que a
-verificação é manual — mas o arquivo hoje promete algo que não entrega.
+### 🟢 1. Função única para falar com o servidor — risco baixo
 
-Prioridade para: `InscricaoImobiliaria`, `GeometriaPlana`, os `impedimento()`
-dos serviços de sucessão. São regras puras, fáceis de testar e caras de
-quebrar.
+Cada `fetch` monta o próprio cabeçalho `X-CSRF-TOKEN` (23 lugares em
+`public/js`). Criar em `ui.js` uma função única (`api(url, {method, body})`)
+que ponha CSRF, `Accept: application/json` e trate 419/422/500 de um jeito só,
+e trocar as chamadas. Quando a sessão expira (419), hoje cada tela reage de
+um jeito.
 
-### 🟢 Quebrar `mapa.blade.php`
+### 🟢 2. CI no GitHub Actions — risco baixo
 
-A aplicação inteira numa view. Blade tem `@include`; separar por tela não muda
-comportamento e torna o arquivo navegável.
+Nada roda sozinho a cada push. Um workflow com PHP 8.4 rodando
+`php artisan test` e `npm test` (Node, sem dependências). Os
+`tests/*-backend.php` (MySQL real) e `tests/*-browser.cjs` (navegador local)
+ficam de fora.
 
-### 🟢 README do projeto
+Junto: decidir o que fazer com `phpunit.xml` em SQLite, que não roda as
+migrações espaciais — ou um MySQL de teste no CI, ou aceitar que a suíte PHP
+cobre só regra pura. Prioridade para regras puras e caras de quebrar:
+`InscricaoImobiliaria`, `GeometriaPlana` (já tem teste), os `impedimento()`
+dos serviços de sucessão.
 
-Ainda é o padrão do Laravel. `COMO-RODAR.md` já cobre o ambiente; falta a porta
-de entrada apontar para cá.
+### 🟢 3. Quebrar `mapa.blade.php` — risco baixo a médio
+
+3.592 linhas: a aplicação inteira numa view, com 37 blocos `<script>`.
+Separar em `resources/views/mapa/*.blade.php` por tela/painel com `@include`.
+Não muda o HTML gerado — conferir comparando a saída antes e depois.
+
+### 🟢 4. Organizar `tests/` — risco baixo
+
+Hoje convivem PHPUnit (`Feature/`, `Unit/`), testes Node (`*.test.cjs`),
+testes de navegador (`*-browser.cjs`) e diagnósticos contra o banco
+(`*-backend.php`). Separar em `tests/js/`, `tests/browser/` e
+`scripts/diagnostico/`, ajustando `package.json` e `COMO-RODAR.md`.
+
+### 🟢 5. Dividir `vistoria.js` e `cadastro.js` — risco médio
+
+2.958 e 2.147 linhas. Dividir por responsabilidade (formulário, fotos,
+relatório em itens, impressão / mesa, desfazer, curadoria). Sem módulos ES, a
+ordem dos `<script>` em `mapa.blade.php` passa a importar: documentar a ordem
+no topo de cada arquivo.
+
+### 🟢 6. Consolidar os três temas de CSS — risco médio
+
+`tema-institucional.css`, `tema-azul.css` e `tema-f.css` (3.346 linhas) são
+carregados juntos e cada um sobrescreve o anterior. Extrair o que é comum para
+`app.css` e deixar em cada tema só variáveis e diferenças reais. Exige
+conferência visual dos três temas em celular, tablet e desktop.
+
+### 🟢 7. Emagrecer os controllers grandes — risco médio
+
+`VistoriaController` (879 linhas), `CadastroLoteController` (793),
+`BuscaController` (771). Levar regra de negócio para `app/Services` — o padrão
+já existe e funciona (`LavraturaService`, `DesmembramentoDeLote`…) — e deixar
+no controller só validação, autorização e resposta.
+
+### ✅ README do projeto — feito em 02/10
 
 ---
 
