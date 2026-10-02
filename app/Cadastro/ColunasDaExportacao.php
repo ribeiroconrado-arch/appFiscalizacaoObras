@@ -65,6 +65,49 @@ final class ColunasDaExportacao
 
 
     /**
+     * Colunas do PROPRIETÁRIO. Cada campo aceita mais de um nome porque o
+     * cabeçalho exato da exportação ainda não foi conferido contra uma planilha
+     * real; vale o primeiro nome que existir. Quando o nome certo for
+     * confirmado, ele entra no topo da lista.
+     *
+     * Linha da planilha = unidade, não imóvel: o mesmo proprietário se repete
+     * em cada unidade do terreno. Quem carrega junta por inscrição e descarta
+     * a repetição (ver `CarregarCadastro`).
+     */
+    public const PROPRIETARIO = [
+        'nome'      => ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Contribuinte'],
+        'documento' => ['CPF/CNPJ do Proprietário', 'CPF/CNPJ', 'CPF/CNPJ do Contribuinte', 'CPF', 'CNPJ'],
+        'endereco'  => ['Endereço de Correspondência', 'Endereço do Proprietário', 'Endereço do Contribuinte'],
+    ];
+
+    /**
+     * O proprietário de uma linha, ou null se ela não traz nome.
+     *
+     * @param  callable(string): string  $ler  valor da célula pelo nome da coluna
+     * @return array{nome:string, documento:?string, endereco:?string}|null
+     */
+    public static function proprietario(callable $ler): ?array
+    {
+        $campo = function (string $qual) use ($ler): ?string {
+            foreach (self::PROPRIETARIO[$qual] as $coluna) {
+                $v = trim($ler($coluna));
+                if ($v !== '' && $v !== '-') {
+                    return $v;
+                }
+            }
+            return null;
+        };
+
+        $nome = $campo('nome');
+
+        return $nome === null ? null : [
+            'nome'      => mb_substr($nome, 0, 200),
+            'documento' => ($d = $campo('documento')) !== null ? mb_substr($d, 0, 24) : null,
+            'endereco'  => ($e = $campo('endereco')) !== null ? mb_substr($e, 0, 300) : null,
+        ];
+    }
+
+    /**
      * A linha de cabeçalho, ou null se esta não for ela.
      *
      * O cabeçalho não é necessariamente a primeira linha: estas exportações

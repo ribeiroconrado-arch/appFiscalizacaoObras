@@ -97,13 +97,14 @@ do bairro, a inscrição imobiliária é **nula** — nunca `000`. Inventar núm
 de imóvel numa tela de onde se copia para dentro de auto de infração é pior do
 que não ter número nenhum.
 
-**O sistema não guarda dado pessoal de proprietário.** CPF/CNPJ só existe
-**digitado no documento** (notificação, auto de infração), no campo
-`autuado_documento`, quando a peça precisa dele, e não aparece em mais lugar
-nenhum. A exportação do cadastro é lida por uma lista fechada de colunas
-(`ColunasDaExportacao`) sem proprietário; coluna nova com dado pessoal não
-entra nessa lista. A antiga tabela `bci_proprietarios` foi removida
-(migração de 03/10/2026).
+**Proprietário vem do cadastro municipal, e o CPF tem dono.** Nome, CPF/CNPJ e
+endereço do proprietário chegam pela planilha da prefeitura
+(`cadastro_proprietarios`, presa à inscrição) e aparecem na aba BCI assim:
+agente de fiscalização e administrador veem tudo; os demais servidores, só o
+nome; o usuário externo, nada. Quem decide é o servidor
+(`App\Cadastro\ProprietariosVisiveis`), nunca a tela. Na peça, o proprietário
+é só **sugestão** de autuado — o campo continua editável, e o que vale é o que
+foi lavrado. Dado pessoal não vai para auditoria nem para log.
 
 ## Os dois nomes de cada bairro
 

@@ -49,4 +49,14 @@ interface FonteDoCadastro
      * @return iterable<array<string,mixed>>
      */
     public function imoveisDoBairro(string $codigoBairro): iterable;
+
+    /**
+     * Os proprietários do imóvel, na ordem do cadastro — TODOS os campos.
+     *
+     * Quem decide o que cada usuário vê é App\Cadastro\ProprietariosVisiveis,
+     * e não a fonte: a fonte só sabe ler.
+     *
+     * @return list<array{nome:string, documento:?string, endereco:?string}>
+     */
+    public function proprietarios(Lote $lote): array;
 }

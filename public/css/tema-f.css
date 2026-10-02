@@ -1623,6 +1623,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    medida são para conferir dígito a dígito, e fonte proporcional atrapalha. */
 .bci-sec .fi-campo .fi-val.mono{font-size:12px;font-weight:500}
 
+/* Proprietário: nome em destaque, documento ao lado, endereço abaixo em
+   corpo menor. É a hierarquia com que se lê um ofício. */
+.bci-prop{padding:6px 0;border-bottom:1px solid var(--bord)}
+.bci-prop:last-child{border-bottom:0}
+.bci-prop-n{font-size:12.5px;font-weight:700;color:var(--chumbo);line-height:1.35}
+.bci-doc{font-size:11px;font-weight:600;color:var(--tx2)}
+.bci-prop-e{font-size:11.5px;color:var(--tx2);line-height:1.35;margin-top:1px}
+
 /* Duas colunas de pares. `auto-fit` com mínimo largo faz virar uma coluna
    sozinha quando o modal estreita, sem media query. */
 /* TRÊS colunas, medidas e não estimadas: com duas, as 22 características do

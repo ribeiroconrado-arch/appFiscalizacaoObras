@@ -274,11 +274,11 @@ function abrirFicha(feicao) {
   const sit = document.getElementById('fi-situacao')
   sit.className = 'badge bd-ok'
   sit.textContent = 'Ativo'
-  // Enquanto a integração com o cadastro da prefeitura não roda, não há data
-  // para mostrar — e inventar "hoje" faria o dado parecer conferido. O travessão
-  // é o vazio pedido: diz "nunca integrado" sem gastar uma frase no cabeçalho.
-  document.getElementById('fi-integracao').textContent =
-    p.integrado_em ? formatarDataHoraCurta(p.integrado_em) : '—'
+  // Data em que o cadastro da prefeitura foi lido para este imóvel. Antes ela
+  // vinha de `p.integrado_em`, que o servidor nunca mandou — o cabeçalho dizia
+  // "—" para todos. Agora vem do BCI (a mesma ida ao servidor serve à aba).
+  // Sem leitura, o travessão: inventar "hoje" faria o dado parecer conferido.
+  preencherIntegracao(p.id)
 
   document.getElementById('fi-area').textContent = fmtNum(p.area_gis_m2) + ' m²'
 
@@ -788,4 +788,20 @@ function marcarModuloNoSubcabecalho(destino) {
   const ico = document.getElementById('subcab-ico')
   if (nome) nome.textContent = botao.textContent.trim()
   if (ico) ico.innerHTML = botao.querySelector('svg')?.outerHTML || ''
+}
+
+/**
+ * "Últ. Integração" do cabeçalho da ficha.
+ * @param {number} loteId
+ */
+async function preencherIntegracao(loteId) {
+  const el = document.getElementById('fi-integracao')
+  el.textContent = '—'
+  if (!loteId || typeof obterBci !== 'function') { return }
+  try {
+    const d = await obterBci(loteId)
+    // Outro imóvel pode ter sido aberto enquanto a resposta vinha.
+    if (state.selecionado?.properties?.id !== loteId) { return }
+    if (d.consultado_em) { el.textContent = formatarDataHoraCurta(d.consultado_em) }
+  } catch { /* fica o travessão */ }
 }

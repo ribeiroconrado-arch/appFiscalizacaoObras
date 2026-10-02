@@ -64,6 +64,12 @@ class PlanilhaDoCadastro implements FonteDoCadastro
     /** A planilha tinha coluna de situação (ativo/inativo)? Só se sabe depois de ler. */
     public ?bool $temSituacao = null;
 
+    /** A planilha avulsa só serve à conferência; não alimenta a ficha. */
+    public function proprietarios(Lote $lote): array
+    {
+        return [];
+    }
+
     public function imoveisDoBairro(string $codigoBairro): iterable
     {
         $leitor = new LeitorXlsx($this->arquivo);

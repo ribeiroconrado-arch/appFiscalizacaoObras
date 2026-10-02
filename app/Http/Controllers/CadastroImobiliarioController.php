@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Bci\BciImovel;
 use App\Models\Bci\BciUnidade;
+use App\Cadastro\FonteDoCadastro;
+use App\Cadastro\ProprietariosVisiveis;
 use App\Cadastro\SincronizaBci;
 use App\Models\Lote;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +22,7 @@ use Illuminate\Http\JsonResponse;
  */
 class CadastroImobiliarioController extends Controller
 {
-    public function __construct(private SincronizaBci $sincroniza)
+    public function __construct(private SincronizaBci $sincroniza, private FonteDoCadastro $fonte)
     {
     }
 
@@ -45,8 +47,23 @@ class CadastroImobiliarioController extends Controller
         ]);
     }
 
-    /** @return array<string,mixed> */
+    /**
+     * O retrato do BCI mais os proprietários que ESTE usuário pode ver.
+     *
+     * Proprietário vem do cadastro carregado, ao vivo, e não da cópia por lote:
+     * aparece mesmo antes de alguém clicar em "Consultar o cadastro".
+     *
+     * @return array<string,mixed>
+     */
     private function retrato(Lote $lote): array
+    {
+        $donos = ProprietariosVisiveis::para(request()->user(), $this->fonte->proprietarios($lote));
+
+        return $this->retratoDoImovel($lote) + ($donos === null ? [] : ['proprietarios' => $donos]);
+    }
+
+    /** @return array<string,mixed> */
+    private function retratoDoImovel(Lote $lote): array
     {
         $bci = BciImovel::with(['caracteristicas', 'unidades'])
             ->where('lote_id', $lote->id)->first();

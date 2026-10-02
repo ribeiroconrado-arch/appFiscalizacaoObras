@@ -32,15 +32,31 @@ async function carregarBci(loteId) {
 
   caixa.innerHTML = '<div class="vazio-msg">Carregando cadastro…</div>'
   try {
-    const r = await fetch(`/api/imoveis/${loteId}/bci`, { headers: { Accept: 'application/json' } })
-    if (!r.ok) { throw new Error(r.status) }
-    const dados = await r.json()
-    bciCache.set(loteId, dados)
+    const dados = await obterBci(loteId)
     // Entre o pedido e a resposta o usuário pode ter aberto outro imóvel.
     if (bciLoteAtual === loteId) { desenharBci(caixa, dados) }
   } catch (e) {
     caixa.innerHTML = '<div class="vazio-msg">Não foi possível ler o cadastro agora.</div>'
   }
+}
+
+/**
+ * O BCI de um lote, do cache ou do servidor — sem desenhar nada.
+ *
+ * Usado pela aba, pelo cabeçalho da ficha ("Últ. Integração") e pelo
+ * formulário de documento (proprietário como autuado): uma ida ao servidor
+ * serve aos três.
+ *
+ * @param {number|string} loteId
+ * @returns {Promise<Object>}
+ */
+async function obterBci(loteId) {
+  if (bciCache.has(loteId)) { return bciCache.get(loteId) }
+  const r = await fetch(`/api/imoveis/${loteId}/bci`, { headers: { Accept: 'application/json' } })
+  if (!r.ok) { throw new Error(r.status) }
+  const dados = await r.json()
+  bciCache.set(loteId, dados)
+  return dados
 }
 
 /** Esquece o que está em cache de um lote — usar depois de reconsultar. */
@@ -63,7 +79,7 @@ function desenharBci(caixa, d) {
            construções vêm do cadastro da prefeitura. Esta aba fica vazia — e não
            em branco: o que falta é o dado de lá, não o imóvel.</p>
         ${botaoConsultar('Consultar o cadastro')}
-      </div>`
+      </div>${secProprietarios(d.proprietarios)}`
     return
   }
 
@@ -71,9 +87,26 @@ function desenharBci(caixa, d) {
   caixa.innerHTML = [
     cabecalhoBci(d),
     secImovel(i),
+    secProprietarios(d.proprietarios),
     secCaracteristicas(d.caracteristicas),
     secUnidades(d.unidades),
   ].filter(Boolean).join('')
+}
+
+/**
+ * Proprietários do imóvel. O servidor já mandou só o que este usuário pode ver
+ * (ver App\Cadastro\ProprietariosVisiveis): CPF/CNPJ e endereço chegam só para
+ * agente e administrador, e o externo não recebe o bloco.
+ */
+function secProprietarios(lista) {
+  if (!lista || !lista.length) { return '' }
+  const corpo = lista.map(p => `
+    <div class="bci-prop">
+      <div class="bci-prop-n">${esc(p.nome)}${p.documento
+        ? ` <span class="mono bci-doc">${esc(p.documento)}</span>` : ''}</div>
+      ${p.endereco ? `<div class="bci-prop-e">${esc(p.endereco)}</div>` : ''}
+    </div>`).join('')
+  return bciSecao(lista.length > 1 ? 'Proprietários' : 'Proprietário', corpo)
 }
 
 /** Linha de topo: quando foi consultado, e o botão de consultar de novo. */

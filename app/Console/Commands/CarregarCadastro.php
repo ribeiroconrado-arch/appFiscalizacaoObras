@@ -16,8 +16,8 @@ use Throwable;
  * não duplica. Reimportar o município é operação de rotina, e um comando que
  * duplica a cada execução é um comando que ninguém roda.
  *
- * NÃO carrega proprietário nem documento. A exportação traz o nome do
- * proprietário; por ora só se guarda dado cadastral do imóvel.
+ * Carrega também os proprietários (nome, CPF/CNPJ, endereço) em
+ * `cadastro_proprietarios`, presos à inscrição — ver ColunasDaExportacao::PROPRIETARIO.
  */
 class CarregarCadastro extends Command
 {
@@ -47,6 +47,8 @@ class CarregarCadastro extends Command
         $linhas = [];
         $semInscricao = 0;
         $bairros = [];
+        /** @var array<string, array<string, array>> $donos inscrição => (chave do dono => dono) */
+        $donos = [];
 
         foreach ($leitor->linhas() as $celulas) {
             // O cabeçalho não é necessariamente a primeira linha: estas
@@ -93,6 +95,12 @@ class CarregarCadastro extends Command
             $linha['created_at'] = now();
             $linha['updated_at'] = now();
 
+            // Uma linha por unidade: o mesmo dono se repete. A chave nome+documento
+            // junta as repetições e mantém donos diferentes (condomínio, espólio).
+            if ($dono = ColunasDaExportacao::proprietario($ler)) {
+                $donos[$linha['inscricao']][mb_strtolower($dono['nome'] . '|' . $dono['documento'])] = $dono;
+            }
+
             if ($linha['nome_bairro']) {
                 $bairros[$linha['nome_bairro']] = $linha['codigo_bairro'];
             }
@@ -135,6 +143,8 @@ class CarregarCadastro extends Command
         $barra->finish();
         $this->newLine(2);
 
+        $this->gravarProprietarios(array_unique(array_column($linhas, 'inscricao')), $donos);
+
         $this->info(sprintf('Carregados %d imóveis%s.', count($linhas),
             $semInscricao ? " ({$semInscricao} linhas sem inscrição, ignoradas)" : ''));
 
@@ -146,6 +156,47 @@ class CarregarCadastro extends Command
         $this->amarrarBairro($bairros);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Substitui os proprietários das inscrições que vieram no arquivo.
+     *
+     * Só destas: um arquivo de um bairro não pode apagar o dono do resto do
+     * município. Inscrição que veio sem dono fica sem dono — é o que a
+     * prefeitura diz hoje.
+     *
+     * @param  list<string>  $inscricoes
+     * @param  array<string, array<string, array>>  $donos
+     */
+    private function gravarProprietarios(array $inscricoes, array $donos): void
+    {
+        $total = 0;
+
+        DB::transaction(function () use ($inscricoes, $donos, &$total) {
+            foreach (array_chunk($inscricoes, 1000) as $bloco) {
+                DB::table('cadastro_proprietarios')->whereIn('inscricao', $bloco)->delete();
+            }
+
+            $linhas = [];
+            foreach ($donos as $inscricao => $lista) {
+                $ordem = 0;
+                foreach ($lista as $dono) {
+                    $linhas[] = $dono + ['inscricao' => $inscricao, 'ordem' => $ordem++,
+                        'created_at' => now(), 'updated_at' => now()];
+                }
+            }
+            foreach (array_chunk($linhas, self::LOTE_INSERCAO) as $bloco) {
+                DB::table('cadastro_proprietarios')->insert($bloco);
+            }
+            $total = count($linhas);
+        });
+
+        if ($total === 0) {
+            $this->warn('Nenhum proprietário lido. Colunas procuradas: '
+                . implode(' / ', ColunasDaExportacao::PROPRIETARIO['nome']) . '.');
+        } else {
+            $this->info("Proprietários: {$total}.");
+        }
     }
 
     /**

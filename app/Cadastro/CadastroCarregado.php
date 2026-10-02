@@ -131,6 +131,28 @@ class CadastroCarregado implements FonteDoCadastro
             ->all();
     }
 
+    public function proprietarios(Lote $lote): array
+    {
+        $inscricoes = array_column($this->linhasDoLote($lote), 'inscricao');
+        if (! $inscricoes) {
+            return [];
+        }
+
+        // Unificado no cadastro = várias inscrições no mesmo lote, e o mesmo
+        // dono em cada uma. Junta pela dupla nome+documento.
+        $donos = [];
+        foreach (DB::table('cadastro_proprietarios')->whereIn('inscricao', $inscricoes)
+                     ->orderBy('inscricao')->orderBy('ordem')->get() as $p) {
+            $donos[mb_strtolower($p->nome . '|' . $p->documento)] ??= [
+                'nome'      => $p->nome,
+                'documento' => $p->documento,
+                'endereco'  => $p->endereco,
+            ];
+        }
+
+        return array_values($donos);
+    }
+
     public function imoveisDoBairro(string $codigoBairro): iterable
     {
         // Mesma regra de zeros de `linhasDoLote`: o cadastro grava "000124",
