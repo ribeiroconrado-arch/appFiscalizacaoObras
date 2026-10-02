@@ -17,55 +17,147 @@ const state = {
   lotes: new Map(),
   /** @type {{lat:number, lon:number, prec:number}|null} */ pos: null,
   /** @type {Object|null} */ selecionado: null,
-  carregando: false,
   versaoLotes: 0,
   truncado: false,
+  /** Blocos já carregados: chave "x:y" → ids dos lotes que vieram nele. @type {Map<string, Set<number>>} */
+  blocos: new Map(),
+  /** Blocos com pedido em trânsito: chave → promessa. @type {Map<string, Promise>} */
+  pendentes: new Map(),
+  /** Blocos cuja resposta bateu no teto do servidor. @type {Set<string>} */
+  blocosTruncados: new Set(),
 }
 
 /**
- * Abaixo deste zoom não se pedem lotes.
- *
- * Era 15, o que travava a carga justamente ao afastar para ver a base
- * inteira — os dois bairros do piloto ficam a 4 km um do outro e só cabem
- * juntos por volta do zoom 13. Quem protege contra pedido absurdo é o teto
- * do servidor (MAPA_MAX_LOTES), que sinaliza `truncado` e faz o mapa avisar.
- *
- * Agora 13: nos dois zooms mais afastados (11 e 12) o lote é só uma mancha
- * branca, e o CONTORNO do bairro com o nome (bairros-contorno.js) já diz onde
- * cada um está — pedir e pintar milhares de polígonos ali era peso sem leitura.
- * Os lotes já carregados também somem abaixo dele (ver ocultarLotesAfastado).
+ * Abaixo deste zoom não se pedem lotes (e os carregados saem da pintura —
+ * ver ocultarLotesAfastado, em mapa.js). Nos zooms 11 e 12 o lote é uma mancha
+ * branca, e o contorno do bairro com o nome já diz onde cada um está.
  */
 const ZOOM_MINIMO = 13
 
-// ── CARGA POR BBOX ───────────────────────────────────────────
+// ── CARGA EM BLOCOS ──────────────────────────────────────────
+//
+// O município vai a ~50 mil lotes. Pedir "o que está na tela" de uma vez só
+// não escala: a cidade inteira são ~23 MB de GeoJSON e quase 1 s de banco
+// (medido com 50 mil lotes sintéticos no MySQL 8.0.46). Então:
+//
+// 1. NÍVEL DE DETALHE PELA ÁREA. Lote só é pedido quando a área visível cabe
+//    em AREA_MAX_GRAUS2 (~3,5 km²). Mais longe que isso o mapa mostra o
+//    contorno e o nome dos bairros (bairros-contorno.js) e o nome da cidade.
+//    É a área, e não o zoom, que decide: o mesmo zoom 16 cobre 0,8 km² no
+//    celular e 18 km² num monitor largo.
+// 2. BLOCOS FIXOS de BLOCO_GRAUS (~1,1 km). A tela vira uma lista de blocos;
+//    só se pede o que falta, em paralelo, e um bloco já carregado nunca é
+//    pedido de novo. Arrastar o mapa enquanto carrega não perde mais o pedido
+//    (antes, uma carga em andamento descartava a nova área).
+// 3. MEMÓRIA COM TETO. Passando de LIMITE_MEMORIA lotes, os blocos mais
+//    distantes da tela saem — menos os lotes em uso (ver lotesProtegidos).
+
+/** Lado do bloco, em graus (~1,1 km). Um bloco denso tem ~2.700 lotes. */
+const BLOCO_GRAUS = 0.01
+
+/** Maior área visível (graus²) em que os lotes são pedidos — ~3,5 km². */
+const AREA_MAX_GRAUS2 = 0.0003
 
 /**
- * Busca na API os lotes do retângulo visível e acrescenta ao mapa.
- * Só pede o que ainda não tem: `state.lotes` é o cache da sessão.
+ * Área maior (~14 km², um bairro inteiro numa tela larga) enquanto uma
+ * ferramenta de CURADORIA está no mapa: a importação, a pré-curadoria, a
+ * conferência com o cadastro e a mesa de correção enquadram o bairro inteiro
+ * e precisam ver os lotes dele — é o trabalho que o curador está fazendo.
+ */
+const AREA_MAX_CURADORIA_GRAUS2 = 0.0012
+
+/** Alguma ferramenta de curadoria está no mapa? */
+function curadoriaNoMapa() {
+  return (typeof impState !== 'undefined' && (impState.noMapa || !!impState.preCuradoria))
+    || (typeof confState !== 'undefined' && confState.noMapa)
+    || (typeof selState !== 'undefined' && selState.ativa)
+}
+
+/** Teto de lotes em memória antes de descartar os blocos distantes. */
+const LIMITE_MEMORIA = 15000
+
+/** Pedidos de bloco simultâneos. */
+const BLOCOS_EM_PARALELO = 4
+
+/** A área visível está na escala em que os lotes aparecem? @param {L.Map} mapa */
+function lotesNaEscala(mapa) {
+  if (!mapa || mapa.getZoom() < ZOOM_MINIMO) return false
+  const b = mapa.getBounds()
+  const teto = curadoriaNoMapa() ? AREA_MAX_CURADORIA_GRAUS2 : AREA_MAX_GRAUS2
+  return (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth()) <= teto
+}
+
+/**
+ * Chaves dos blocos que cobrem um retângulo.
+ * @param {{oeste:number, sul:number, leste:number, norte:number}} r
+ * @returns {string[]} "x:y", em ordem do centro para fora
+ */
+function blocosDoRetangulo(r) {
+  const x0 = Math.floor(r.oeste / BLOCO_GRAUS), x1 = Math.floor(r.leste / BLOCO_GRAUS)
+  const y0 = Math.floor(r.sul / BLOCO_GRAUS), y1 = Math.floor(r.norte / BLOCO_GRAUS)
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
+  const chaves = []
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) chaves.push([x, y])
+  // O bloco do meio da tela chega primeiro: é para onde o fiscal está olhando.
+  chaves.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy))
+  return chaves.map(([x, y]) => x + ':' + y)
+}
+
+/** bbox "oeste,sul,leste,norte" de um bloco. @param {string} chave */
+function bboxDoBloco(chave) {
+  const [x, y] = chave.split(':').map(Number)
+  return [x * BLOCO_GRAUS, y * BLOCO_GRAUS, (x + 1) * BLOCO_GRAUS, (y + 1) * BLOCO_GRAUS]
+    .map(n => n.toFixed(6)).join(',')
+}
+
+/**
+ * Pede ao servidor os lotes dos blocos que cobrem a tela e ainda não vieram.
+ * Devolve uma promessa que resolve quando TODOS os blocos da tela chegaram —
+ * inclusive os que outra chamada já tinha pedido (prepararMapa a aguarda).
  */
 async function carregarLotesVisiveis() {
   const mapa = mapaState.obj
   if (!mapa) return
-  if (state.carregando) return state.cargaLotes
 
   // Mapa escondido (o app abre no Painel) tem contêiner de tamanho zero, e
-  // aí getBounds() devolve os quatro cantos no mesmo ponto — a API recusava
-  // esse bbox degenerado com 422 e a base ficava vazia até o usuário
-  // arrastar o mapa. Quem entra na aba dispara a carga, em prepararMapa().
+  // aí getBounds() devolve os quatro cantos no mesmo ponto. Quem entra na aba
+  // dispara a carga, em prepararMapa().
   if (!mapaVisivel()) return
 
-  if (mapa.getZoom() < ZOOM_MINIMO) {
+  if (!lotesNaEscala(mapa)) {
     atualizarChip(`Aproxime o mapa para ver os lotes`)
     return
   }
 
-  const b = mapa.getBounds()
-  const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
-    .map(n => n.toFixed(6)).join(',')
-
-  state.carregando = true
+  const b = mapa.getBounds().pad(0.1)
+  const chaves = blocosDoRetangulo({ oeste: b.getWest(), sul: b.getSouth(), leste: b.getEast(), norte: b.getNorth() })
   const versao = state.versaoLotes
-  state.cargaLotes = (async () => {
+
+  const faltam = chaves.filter(k => !state.blocos.has(k) && !state.pendentes.has(k))
+  const fila = [...faltam]
+  const trabalhador = async () => {
+    while (fila.length) {
+      const k = fila.shift()
+      const p = carregarBloco(k, versao)
+      state.pendentes.set(k, p)
+      try { await p } finally { if (state.pendentes.get(k) === p) state.pendentes.delete(k) }
+    }
+  }
+  const trabalho = Promise.all(Array.from({ length: Math.min(BLOCOS_EM_PARALELO, fila.length) }, trabalhador))
+  // Espera também os blocos desta tela que uma chamada anterior já pediu.
+  const emTransito = chaves.filter(k => state.pendentes.has(k) && !faltam.includes(k)).map(k => state.pendentes.get(k))
+  await Promise.all([trabalho, ...emTransito])
+
+  if (versao !== state.versaoLotes) return
+  descartarLotesDistantes(chaves)
+  atualizarChip()
+}
+
+/**
+ * Carrega um bloco e acrescenta ao mapa o que ainda não estava desenhado.
+ * @param {string} chave @param {number} versao
+ */
+async function carregarBloco(chave, versao) {
   try {
     // Curador vê também os lotes de importação ainda não publicada, a menos
     // que desligue a camada "Lotes não publicados" (painel Camadas,
@@ -73,7 +165,7 @@ async function carregarLotesVisiveis() {
     // do navegador.)
     const revisao = typeof document !== 'undefined' && typeof window !== 'undefined' && window.USUARIO_CURADOR
       && (typeof camadaLigada !== 'function' || camadaLigada('nao-publicados')) ? '&revisao=1' : ''
-    const r = await fetch(`/api/mapa/lotes?bbox=${bbox}${revisao}`, {
+    const r = await fetch(`/api/mapa/lotes?bbox=${bboxDoBloco(chave)}${revisao}`, {
       headers: { 'Accept': 'application/json' },
     })
     if (!r.ok) throw new Error('HTTP ' + r.status)
@@ -81,28 +173,98 @@ async function carregarLotesVisiveis() {
     // Uma edição invalidou esta resposta enquanto a consulta estava em trânsito.
     if (versao !== state.versaoLotes) return
 
-    let novos = 0
+    const ids = new Set()
     for (const f of gj.features) {
-      if (state.lotes.has(f.properties.id)) continue
-      state.lotes.set(f.properties.id, f)
-      novos++
+      ids.add(f.properties.id)
+      if (!state.lotes.has(f.properties.id)) state.lotes.set(f.properties.id, f)
     }
-    state.truncado = !!gj.truncado
-    if (novos) acrescentarLotes(gj.features.filter(f => !desenhados.has(f.properties.id)))
+    state.blocos.set(chave, ids)
+    if (gj.truncado) { state.blocosTruncados.add(chave) } else { state.blocosTruncados.delete(chave) }
+    state.truncado = state.blocosTruncados.size > 0
 
-    atualizarChip()
+    const novos = gj.features.filter(f => !desenhados.has(f.properties.id))
+    if (novos.length) acrescentarLotes(novos)
   } catch (e) {
     if (versao !== state.versaoLotes) return
     console.error(e)
     toast('Falha ao carregar os lotes', 'err')
-  } finally {
-    if (versao === state.versaoLotes) {
-      state.carregando = false
-      state.cargaLotes = null
+  }
+}
+
+/**
+ * Lotes que não podem sair da memória: o aberto na ficha, os marcados na mesa
+ * do cadastro, o do desmembramento e os destacados. Descartá-los quebraria a
+ * ferramenta que está usando cada um.
+ * @returns {Set<number>}
+ */
+function lotesProtegidos() {
+  const ids = new Set()
+  const sel = state.selecionado?.properties?.id
+  if (sel != null) ids.add(sel)
+  if (typeof selState !== 'undefined') selState.ids?.forEach(i => ids.add(i))
+  if (typeof desmMesa !== 'undefined' && desmMesa.loteId != null) ids.add(desmMesa.loteId)
+  if (typeof desmState !== 'undefined' && desmState.loteId != null) ids.add(desmState.loteId)
+  if (typeof corState !== 'undefined') corState.destacados?.forEach(i => ids.add(i))
+  return ids
+}
+
+/**
+ * Passando do teto de memória, tira os blocos mais distantes da tela.
+ *
+ * Os blocos visíveis (`naTela`) ficam sempre. Um lote que está em dois
+ * blocos (o da divisa) só sai quando os dois saem; um lote protegido não sai.
+ *
+ * @param {string[]} naTela chaves dos blocos visíveis
+ */
+function descartarLotesDistantes(naTela) {
+  if (state.lotes.size <= LIMITE_MEMORIA) return
+
+  const visiveis = new Set(naTela)
+  const [cx, cy] = naTela.length
+    ? naTela.map(k => k.split(':').map(Number)).reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]).map(v => v / naTela.length)
+    : [0, 0]
+  const distantes = [...state.blocos.keys()].filter(k => !visiveis.has(k))
+    .sort((a, b) => {
+      const [ax, ay] = a.split(':').map(Number), [bx, by] = b.split(':').map(Number)
+      return Math.hypot(bx - cx, by - cy) - Math.hypot(ax - cx, ay - cy)
+    })
+
+  const protegidos = lotesProtegidos()
+  const alvo = Math.floor(LIMITE_MEMORIA * 0.7)
+  const sair = []
+  for (const k of distantes) {
+    if (state.lotes.size - sair.length <= alvo) break
+    const ids = state.blocos.get(k)
+    state.blocos.delete(k)
+    state.blocosTruncados.delete(k)
+    for (const id of ids) {
+      if (protegidos.has(id)) continue
+      let emOutro = false
+      for (const outros of state.blocos.values()) { if (outros.has(id)) { emOutro = true; break } }
+      if (!emOutro) sair.push(id)
     }
   }
-  })()
-  return state.cargaLotes
+  if (sair.length) removerLotesDoMapa(sair)
+}
+
+/**
+ * Tira lotes do mapa e da memória (o descarte por distância).
+ * @param {number[]} ids
+ */
+function removerLotesDoMapa(ids) {
+  const fora = new Set(ids)
+  for (const id of fora) {
+    const camada = mapaState.porId.get(id)
+    if (camada) mapaState.camadaLotes?.removeLayer(camada)
+    mapaState.porId.delete(id)
+    state.lotes.delete(id)
+    desenhados.delete(id)
+  }
+  const restam = mapaState.camadas.filter(c => !fora.has(c.feature?.properties?.id))
+  mapaState.camadas.length = 0
+  mapaState.camadas.push(...restam)
+  // Rótulos de bairro e quadra vêm dos lotes carregados: refaz sem os que saíram.
+  if (typeof agendarRepintura === 'function') agendarRepintura()
 }
 
 /** Ids já desenhados no mapa, para não duplicar polígono ao arrastar de volta. */
@@ -128,7 +290,10 @@ function limparLotesDoMapa() {
       && typeof CustomEvent !== 'undefined') {
     document.dispatchEvent(new CustomEvent('lotes-alterados'))
   }
-  state.carregando = false
+  state.blocos.clear()
+  state.pendentes.clear()
+  state.blocosTruncados.clear()
+  state.truncado = false
   const mapa = mapaState.obj
   if (mapa) {
     mapaState.camadas.forEach(c => mapa.removeLayer(c))
@@ -147,9 +312,22 @@ function acrescentarLotes(feicoes) {
   if (!novas.length) return
   novas.forEach(f => desenhados.add(f.properties.id))
   adicionarAoMapa({ type: 'FeatureCollection', features: novas }, abrirFicha)
-  // A vizinhança muda conforme novos lotes entram, então a coloração é
-  // recalculada a cada carga — não só na primeira.
-  aplicarCores()
+  // A vizinhança muda conforme novos lotes entram, então a coloração e os
+  // rótulos de grupo são refeitos — UMA vez por leva, e não por bloco: com a
+  // carga em blocos chegavam até 12 respostas seguidas, e refazer tudo a cada
+  // uma custava segundos de tela parada (medido no navegador com 50 mil lotes).
+  agendarRepintura()
+}
+
+let _repinturaAgendada = null
+
+/** Refaz cores e rótulos de grupo no próximo respiro do navegador, uma vez só. */
+function agendarRepintura() {
+  if (_repinturaAgendada) return
+  _repinturaAgendada = setTimeout(() => {
+    _repinturaAgendada = null
+    if (typeof atualizarCoresAposCarga === 'function') atualizarCoresAposCarga()
+  }, 60)
 }
 
 /** Atualiza o chip de estado no canto do mapa. @param {string} [texto] */

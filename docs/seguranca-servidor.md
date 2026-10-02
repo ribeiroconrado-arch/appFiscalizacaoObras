@@ -73,6 +73,12 @@ apaga planilhas esquecidas (`crontab -e` do usuário que roda o PHP):
 */10 * * * * cd /caminho/do/app && php artisan cadastro:processar-cargas >> storage/logs/cargas.log 2>&1
 ```
 
+**Compactação.** As respostas grandes do mapa já saem compactadas pela própria
+aplicação (`ComprimirResposta`). Se quiser que o Nginx compacte também o
+resto (CSS, JS), no bloco `http { }`: `gzip on; gzip_types text/css
+application/javascript application/json;` — ele não recompacta o que já vem
+com `Content-Encoding`.
+
 ## 3. fail2ban
 
 Bane no firewall o IP que insiste depois de bater no limite do Nginx.

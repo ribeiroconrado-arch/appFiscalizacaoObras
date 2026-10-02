@@ -48,7 +48,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // O que é da fiscalização, fechado para topógrafo, arquiteto e
         // contribuinte. Ver App\Http\Middleware\SoInterno e routes/web.php.
-        $middleware->alias(['interno' => \App\Http\Middleware\SoInterno::class]);
+        $middleware->alias([
+            'interno'   => \App\Http\Middleware\SoInterno::class,
+            // Respostas grandes do mapa vão compactadas — ver ComprimirResposta.
+            'comprimir' => \App\Http\Middleware\ComprimirResposta::class,
+        ]);
 
         // Desativado em Parâmetros = fora na próxima requisição, sem esperar a
         // sessão expirar. Ver App\Http\Middleware\ContaAtiva.

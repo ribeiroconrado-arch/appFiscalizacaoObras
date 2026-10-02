@@ -658,6 +658,10 @@ body.z-lote .leaflet-tooltip.rot.rot-lote{display:block}
   background:rgba(255,255,255,.82);padding:0 3px;border-radius:3px;line-height:1.35}
 body.z-quadra .leaflet-tooltip.rot.rot-quadra{display:block}
 body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
+.leaflet-tooltip.rot.rot-cidade{font-family:'Manrope',sans-serif;font-weight:800;font-size:17px;
+  color:var(--chumbo);text-transform:uppercase;letter-spacing:.12em;display:none;
+  text-shadow:0 0 5px #fff,0 0 5px #fff,0 0 10px #fff}
+body.z-cidade .leaflet-tooltip.rot.rot-cidade{display:block}
 
 @media(min-width:1024px){
   /* A pílula continua no rodapé também aqui, então as listas seguem parando

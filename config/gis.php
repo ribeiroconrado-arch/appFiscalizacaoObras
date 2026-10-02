@@ -22,12 +22,24 @@ return [
     | Teto de lotes por resposta do mapa
     |--------------------------------------------------------------------------
     | Rede de segurança de GET /api/mapa/lotes. Quem controla o volume de fato
-    | é o bbox somado ao zoom mínimo aplicado no cliente; este limite existe
-    | para o caso de um bbox absurdamente grande. Ao ser atingido, a resposta
+    | é o bloco de 0,01° pedido pelo cliente (o bloco mais denso medido tem
+    | ~2.700 lotes); este limite existe para o caso fora da curva. Ao ser atingido, a resposta
     | vem com `truncado: true` e o cliente avisa o fiscal — nunca truncar em
     | silêncio, que é a regra herdada do AppPOSTURAS.
     */
-    'max_lotes' => env('MAPA_MAX_LOTES', 3000),
+    'max_lotes' => env('MAPA_MAX_LOTES', 4000),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Maior lado aceito no bbox de GET /api/mapa/lotes, em graus
+    |--------------------------------------------------------------------------
+    | O mapa pede os lotes em BLOCOS de 0,01° (~1,1 km; ver app.js). Com 50 mil
+    | lotes, a cidade inteira numa resposta seriam ~23 MB e quase 1 s de banco;
+    | um bloco são ~100 ms e ~100 KB compactado. Este teto recusa o pedido
+    | grande demais em vez de devolvê-lo truncado — 0,05° (~5,5 km) cabe a
+    | prancheta e qualquer bloco com folga.
+    */
+    'bbox_max_graus' => env('MAPA_BBOX_MAX_GRAUS', 0.05),
 
     /*
     |--------------------------------------------------------------------------

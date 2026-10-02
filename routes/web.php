@@ -106,14 +106,14 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'criar']);
         Route::delete('/edificacoes/{edificacao}', [EdificacaoController::class, 'excluir']);
 
-        Route::get('/mapa/lotes', [MapaController::class, 'lotes']);
+        Route::get('/mapa/lotes', [MapaController::class, 'lotes'])->middleware('comprimir');
         Route::post('/pranchetas/carregar', [\App\Http\Controllers\PranchetaController::class, 'carregar']);
         Route::post('/pranchetas/salvar', [\App\Http\Controllers\PranchetaController::class, 'salvar']);
         Route::get('/lotes/{lote}/pranchas', [\App\Http\Controllers\PranchetaController::class, 'historico']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
         // Contorno de cada bairro: o mapa de todos lê; o curador gera e grava.
-        Route::get('/mapa/bairros', [BairroContornoController::class, 'index']);
-        Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes']);
+        Route::get('/mapa/bairros', [BairroContornoController::class, 'index'])->middleware('comprimir');
+        Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);
         Route::post('/localizacao/identificar', [MapaController::class, 'identificar']);

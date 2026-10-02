@@ -80,6 +80,14 @@ custo/benefício da lista.
 
 ### ✅ Unificar a colação de `lotes.bairro` e `cadastro_bairros.nome_gis` — feito em 10/2026
 
+### 🟡 [dado] Contorno de todos os bairros
+
+Com o mapa em camadas por escala (ARQUITETURA.md), de longe só aparece o
+CONTORNO do bairro — os lotes vêm ao aproximar. Bairro sem contorno gerado
+fica sem nada nessa escala. O contorno é gerado pelo curador ("Contorno dos
+bairros"); a importação publicada já gera o dela. Falta passar pelos bairros
+antigos.
+
 ### 🟢 Aviso quando a amarração não casa
 
 Ao salvar bairro com "nome no desenho" que não existe em `lotes`, dizer

@@ -186,6 +186,38 @@ Como o intervalo de busca precisa ser um `WHERE`, a mesma fórmula é escrita
 **também em SQL**, em `BuscaController::inscricaoEmSql()`. As duas têm de
 concordar.
 
+## Mapa em camadas por escala (50 mil lotes)
+
+O que o mapa desenha depende da ESCALA, e a escala é medida pela área
+visível, não pelo zoom (o mesmo zoom 16 cobre 0,8 km² no celular e 18 km² num
+monitor largo):
+
+| Escala | Mostra | De onde |
+|---|---|---|
+| zoom ≤ 12 | nome da cidade e contorno do município | `public/geo/primavera-do-leste.geojson` |
+| até ~3,5 km² visíveis | contorno e nome dos bairros | tabela `bairros` (bairros-contorno.js) |
+| até ~3,5 km² (14 km² com curadoria no mapa) | linhas dos lotes | `/api/mapa/lotes`, em blocos |
+| zoom ≥ 16 / 18 / 21 | número da quadra / do lote / medidas dos lados | lotes carregados |
+
+**Carga em blocos** (`app.js`, `carregarLotesVisiveis`): a tela vira blocos
+fixos de 0,01° (~1,1 km); só se pede o que falta, quatro em paralelo, do
+centro para fora; bloco carregado não é pedido de novo. Passando de 15 mil
+lotes em memória, os blocos mais distantes saem — nunca o lote aberto, os
+marcados na mesa, o do desmembramento ou os destacados (`lotesProtegidos`).
+Cores e rótulos de grupo são refeitos UMA vez por leva (`agendarRepintura`), e
+os rótulos de quadra existem só para o que está na tela.
+
+**Servidor**: bbox acima de 0,05° de lado é recusado (`gis.bbox_max_graus`);
+coordenadas com 8 casas (~1 mm); resposta compactada pela própria aplicação
+(`ComprimirResposta` — o Nginx padrão do Ubuntu não compacta JSON); total e
+extensão da base em cache de 10 minutos.
+
+Medido no Chromium com 50 mil lotes sintéticos (bloco denso: ~2.700 lotes,
+1,8 MB → 105 KB compactado; ~100 ms no MySQL 8.0.46): carga inicial ~1 s,
+arrasto típico 0,1 s no computador e 0,4 s num tablet com CPU 4× mais lenta,
+pior caso 1,5–1,8 s. Antes da repintura por leva, o pior caso passava de 18 s
+(computador) e 36 s (tablet).
+
 ## Cadastro municipal — duas famílias de dados
 
 Os dados do imóvel vêm de dois lugares que **se relacionam, mas não se

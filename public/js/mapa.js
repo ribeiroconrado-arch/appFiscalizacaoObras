@@ -50,17 +50,18 @@ function estiloDestaque() {
 const ZOOM_MAXIMO = 22
 
 /**
- * Abaixo do zoom mínimo dos lotes (ZOOM_MINIMO, em app.js), os que já estão
- * carregados SAEM da pintura: o canvas dos lotes vive no `overlayPane`, e
- * escondê-lo poupa o navegador de redesenhar milhares de polígonos a cada
- * arrasto, num zoom em que eles seriam só uma mancha. Continuam em memória —
- * ao aproximar, voltam sem novo pedido ao servidor.
+ * Fora da escala dos lotes (lotesNaEscala, em app.js: zoom mínimo e área
+ * visível de até ~3,5 km²), os que já estão carregados SAEM da pintura: o
+ * canvas dos lotes vive no `overlayPane`, e escondê-lo poupa o navegador de
+ * redesenhar milhares de polígonos a cada arrasto, numa escala em que eles
+ * seriam só uma mancha — ali quem fala é o contorno do bairro. Continuam em
+ * memória: ao aproximar, voltam sem novo pedido ao servidor.
  */
 function ocultarLotesAfastado() {
   const m = mapaState.obj
   const pane = m?.getPane('overlayPane')
-  if (!pane || typeof ZOOM_MINIMO === 'undefined') return
-  pane.style.display = m.getZoom() < ZOOM_MINIMO ? 'none' : ''
+  if (!pane || typeof lotesNaEscala !== 'function') return
+  pane.style.display = lotesNaEscala(m) ? '' : 'none'
 }
 
 /** Cria o mapa. Idempotente. */
@@ -161,8 +162,13 @@ function iniciarMapa() {
   // Arrastar também mexe nos rótulos: no zoom em que eles aparecem, cada
   // deslocamento traz lotes novos para a tela e leva outros embora.
   mapaState.obj.on('moveend', sincronizarRotulos)
+  // Rótulos de bairro/quadra existem só para o que está na tela: arrastar traz
+  // grupos novos para a vista (agendado, para não competir com o arrasto).
+  mapaState.obj.on('moveend', () => { if (typeof agendarRotulosDeGrupo === 'function') agendarRotulosDeGrupo() })
   mapaState.obj.on('baselayerchange', () => ajustarNitidezSatelite())
   mapaState.obj.on('zoomend', ocultarLotesAfastado)
+  // A área visível também muda ao girar o tablet ou recolher o menu lateral.
+  mapaState.obj.on('resize', ocultarLotesAfastado)
 
   // Duplo toque FORA de um lote larga a seleção — o mesmo gesto do Esc, para
   // quem tem o dedo no mapa e não no teclado. Cada lote consome o próprio
@@ -726,6 +732,16 @@ async function recortarMunicipio() {
     const contorno = L.polygon(aneis, {
       pane: 'rotulos', color: '#EA580C', weight: 1.6, opacity: .75,
       fill: false, interactive: false,
+    }).addTo(mapaState.obj)
+
+    // NOME DA CIDADE, no centro da malha — só no zoom mais afastado (CSS
+    // `z-cidade`, ver rotulosPorZoom). É o primeiro degrau do nível de
+    // detalhe: cidade → bairros → quadras → lotes → medidas.
+    L.marker(contorno.getBounds().getCenter(), {
+      interactive: false, keyboard: false,
+      icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }),
+    }).bindTooltip(f.properties?.nome || 'Primavera do Leste', {
+      permanent: true, direction: 'center', className: 'rot rot-cidade',
     }).addTo(mapaState.obj)
 
     // Limite de navegação = o próprio município, com uma folga pequena para

@@ -75,8 +75,23 @@ function colorirPorAdjacencia(chave) {
   // matriz de vizinhança
   const viz = {}
   nomes.forEach(n => viz[n] = new Set())
+  // Caixa de cada grupo, em metros aproximados: dois grupos cujas caixas
+  // estão a mais que a tolerância não podem ser vizinhos, e o laço lote a lote
+  // (o caro) nem começa. Com 15 mil lotes e centenas de quadras carregadas,
+  // é a diferença entre milissegundos e segundos de tela parada.
+  const caixa = {}
+  for (const n of nomes) {
+    const pts = grupos[n]
+    caixa[n] = pts.reduce((c, p) => [Math.min(c[0], p[0]), Math.max(c[1], p[0]), Math.min(c[2], p[1]), Math.max(c[3], p[1])],
+      [Infinity, -Infinity, Infinity, -Infinity])
+  }
+  const grausLat = tol / 111320
+  const longe = (a, b) => a[0] - grausLat > b[1] || b[0] - grausLat > a[1]
+    || a[2] - grausLat * 1.1 > b[3] || b[2] - grausLat * 1.1 > a[3]
+
   for (let i = 0; i < nomes.length; i++) {
     for (let j = i + 1; j < nomes.length; j++) {
+      if (longe(caixa[nomes[i]], caixa[nomes[j]])) continue
       const A = grupos[nomes[i]], B = grupos[nomes[j]]
       let perto = false
       for (const a of A) { for (const b of B) { if (distM(a, b) < tol) { perto = true; break } } if (perto) break }
@@ -233,7 +248,27 @@ function aplicarCores(chave) {
   desenharRotulosDeGrupo()
 }
 
+/**
+ * Depois de uma leva de lotes (ou de um descarte): só o que mudou de fato.
+ *
+ * Sem critério de cor, cada lote já nasce com o estilo certo (estiloColorido
+ * em adicionarAoMapa) — repintar os milhares já carregados era trabalho
+ * jogado fora. Com critério, a vizinhança mudou e as cores são recalculadas.
+ */
+function atualizarCoresAposCarga() {
+  if (corState.chave) { aplicarCores(); return }
+  desenharRotulosDeGrupo()
+}
+
 // ── RÓTULOS ──────────────────────────────────────────────────
+
+let _rotulosAgendados = null
+
+/** Refaz só os rótulos de grupo, depois que o arrasto assenta. */
+function agendarRotulosDeGrupo() {
+  clearTimeout(_rotulosAgendados)
+  _rotulosAgendados = setTimeout(desenharRotulosDeGrupo, 120)
+}
 
 /**
  * Rótulos de bairro e quadra, no centro de cada agrupamento.
@@ -242,6 +277,10 @@ function aplicarCores(chave) {
 function desenharRotulosDeGrupo() {
   corState.rotulos.forEach(m => m.remove())
   corState.rotulos = []
+  // Só os grupos cujo centro está na tela (com folga). Cada rótulo é um
+  // elemento que o Leaflet reposiciona a cada arrasto; com a cidade inteira
+  // eram centenas de quadras fora da vista. Refeito a cada moveend (mapa.js).
+  const area = mapaState.obj?.getBounds?.().pad(0.3)
 
   for (const chave of ['bairro', 'quadra']) {
     const g = {}
@@ -266,6 +305,7 @@ function desenharRotulosDeGrupo() {
 
       const lat = pts.reduce((a, p) => a + p[0], 0) / pts.length
       const lon = pts.reduce((a, p) => a + p[1], 0) / pts.length
+      if (area && !area.contains([lat, lon])) continue
       const m = L.marker([lat, lon], {
         interactive: false,
         icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }),
@@ -294,6 +334,7 @@ function rotulosPorZoom() {
   if (typeof sincronizarRotulos === 'function') { sincronizarRotulos() }
   document.body.classList.toggle('z-quadra', z >= 16)
   document.body.classList.toggle('z-bairro', z <= 17)
+  document.body.classList.toggle('z-cidade', z <= 12)
 
   const leg = document.getElementById('leg-zoom')
   if (leg) {
