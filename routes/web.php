@@ -295,6 +295,16 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // e vistoria — o curador externo tem o recorte do cadastro, acima.
         Route::get('/trilha', [TrilhaController::class, 'index']);
 
+        // Cadastro municipal: a planilha mensal da prefeitura (só admin) e o
+        // histórico do imóvel (servidores). Ver CadastroCargaController.
+        Route::get('/cadastro/cargas', [\App\Http\Controllers\CadastroCargaController::class, 'index']);
+        Route::post('/cadastro/cargas', [\App\Http\Controllers\CadastroCargaController::class, 'store'])->middleware('throttle:pesado');
+        Route::get('/cadastro/cargas/{carga}', [\App\Http\Controllers\CadastroCargaController::class, 'show']);
+        Route::post('/cadastro/cargas/{carga}/confirmar', [\App\Http\Controllers\CadastroCargaController::class, 'confirmar']);
+        Route::post('/cadastro/cargas/{carga}/reprocessar', [\App\Http\Controllers\CadastroCargaController::class, 'reprocessar']);
+        Route::get('/cadastro/cargas/{carga}/alteracoes', [\App\Http\Controllers\CadastroCargaController::class, 'alteracoes']);
+        Route::get('/imoveis/{lote}/cadastro/historico', [\App\Http\Controllers\CadastroCargaController::class, 'historico']);
+
         Route::get('/parametros', [ParametroController::class, 'index']);
         Route::post('/parametros/usuarios', [ParametroController::class, 'salvarUsuario']);
         Route::post('/parametros/geral', [ParametroController::class, 'salvarGeral']);

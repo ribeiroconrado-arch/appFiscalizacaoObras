@@ -2,201 +2,90 @@
 
 namespace App\Console\Commands;
 
-use App\Cadastro\ColunasDaExportacao;
-use App\Cadastro\LeitorXlsx;
+use App\Cadastro\CargaDoCadastro;
+use App\Models\CadastroCarga;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
- * Carrega uma exportação do cadastro imobiliário (.xlsx) na tabela
- * `cadastro_externo_imoveis` — o banco da prefeitura simulado.
+ * Carrega uma exportação do cadastro imobiliário (.xlsx) pelo terminal.
  *
- * Idempotente pela inscrição: recarregar a mesma exportação atualiza as linhas,
- * não duplica. Reimportar o município é operação de rotina, e um comando que
- * duplica a cada execução é um comando que ninguém roda.
+ * É a MESMA carga da tela (Parâmetros → Cadastro municipal): passa por
+ * App\Cadastro\CargaDoCadastro, grava só o que mudou, registra o histórico e
+ * marca como ausente o que sumiu dos bairros presentes no arquivo. Fica
+ * registrada em `cadastro_cargas` como qualquer outra.
  *
- * Carrega também os proprietários (nome, CPF/CNPJ, endereço) em
- * `cadastro_proprietarios`, presos à inscrição — ver ColunasDaExportacao::PROPRIETARIO.
+ * Diferente da tela, o arquivo é lido de onde está e não é copiado nem
+ * apagado — ele é seu, no seu disco.
  */
 class CarregarCadastro extends Command
 {
     protected $signature = 'cadastro:carregar
                             {arquivo : caminho da exportação .xlsx}
                             {--bairro= : nome do bairro no GIS, para amarrar ao bairro do cadastro}
-                            {--limpar : apaga antes o que já está carregado dos mesmos bairros}';
+                            {--confirmar : aceita as ausências mesmo acima de 20% dos imóveis dos bairros}';
 
-    protected $description = 'Carrega uma exportação do cadastro imobiliário (.xlsx)';
+    protected $description = 'Carrega uma exportação do cadastro imobiliário (.xlsx), gravando só o que mudou';
 
-    private const LOTE_INSERCAO = 200;
-
-    public function handle(): int
+    public function handle(CargaDoCadastro $servico): int
     {
         $arquivo = $this->argument('arquivo');
+        if (! is_file($arquivo)) {
+            $this->error("Planilha não encontrada: {$arquivo}");
+
+            return self::FAILURE;
+        }
+
+        $trava = Cache::lock('cadastro-carga', 3600);
+        if (! $trava->get()) {
+            $this->error('Há outra carga do cadastro em andamento. Tente de novo quando ela terminar.');
+
+            return self::FAILURE;
+        }
+
+        $carga = CadastroCarga::create([
+            'arquivo_nome'   => basename($arquivo),
+            'arquivo_bytes'  => filesize($arquivo),
+            'arquivo_sha256' => hash_file('sha256', $arquivo),
+            'status'         => 'na_fila',
+        ]);
 
         try {
-            $leitor = new LeitorXlsx($arquivo);
+            $servico->processar($carga, $arquivo, (bool) $this->option('confirmar'));
         } catch (Throwable $e) {
+            $carga->update(['status' => 'falhou', 'mensagem' => mb_substr($e->getMessage(), 0, 500)]);
             $this->error($e->getMessage());
 
             return self::FAILURE;
+        } finally {
+            $trava->release();
         }
 
-        $cabecalho = null;
-        $posicao = [];
-        $linhas = [];
-        $semInscricao = 0;
-        $bairros = [];
-        /** @var array<string, array<string, array>> $donos inscrição => (chave do dono => dono) */
-        $donos = [];
-
-        foreach ($leitor->linhas() as $celulas) {
-            // O cabeçalho não é necessariamente a primeira linha: estas
-            // exportações abrem com o nome do relatório. Procura-se a linha que
-            // traz "Inscrição", que é a coluna que sempre existe.
-            if ($cabecalho === null) {
-                if (! in_array('Inscrição', array_map('trim', $celulas), true)) {
-                    continue;
-                }
-                $cabecalho = array_map('trim', $celulas);
-                $posicao = array_flip($cabecalho);
-                continue;
-            }
-
-            $ler = fn (string $col) => isset($posicao[$col]) ? trim($celulas[$posicao[$col]] ?? '') : '';
-
-            if ($ler('Inscrição') === '') {
-                $semInscricao++;
-                continue;
-            }
-
-            $linha = [];
-            foreach (ColunasDaExportacao::CAMPOS as $coluna => $campo) {
-                $v = $ler($coluna);
-                $linha[$campo] = $v === '' ? null : $v;
-            }
-            foreach (ColunasDaExportacao::NUMERICOS as $campo) {
-                $linha[$campo] = $this->numero($linha[$campo]);
-            }
-
-            $linha['logradouro'] = trim($ler('Tipo de Logradouro') . ' ' . $ler('Nome do Logradouro')) ?: null;
-
-            $carac = [];
-            foreach (ColunasDaExportacao::CARACTERISTICAS as $col) {
-                $v = $ler($col);
-                if ($v !== '' && $v !== '-') {
-                    $carac[$col] = $v;
-                }
-            }
-            $linha['caracteristicas'] = $carac ? json_encode($carac, JSON_UNESCAPED_UNICODE) : null;
-
-            $linha['arquivo_origem'] = basename($arquivo);
-            $linha['importado_em'] = now();
-            $linha['created_at'] = now();
-            $linha['updated_at'] = now();
-
-            // Uma linha por unidade: o mesmo dono se repete. A chave nome+documento
-            // junta as repetições e mantém donos diferentes (condomínio, espólio).
-            if ($dono = ColunasDaExportacao::proprietario($ler)) {
-                $donos[$linha['inscricao']][mb_strtolower($dono['nome'] . '|' . $dono['documento'])] = $dono;
-            }
-
-            if ($linha['nome_bairro']) {
-                $bairros[$linha['nome_bairro']] = $linha['codigo_bairro'];
-            }
-
-            $linhas[] = $linha;
-        }
-
-        if ($cabecalho === null) {
-            $this->error('Não achei a linha de cabeçalho (a que tem a coluna "Inscrição").');
+        if ($carga->status === 'aguardando_confirmacao') {
+            $this->warn($carga->mensagem);
+            $this->warn('Rode de novo com --confirmar para aceitar.');
 
             return self::FAILURE;
         }
 
-        $faltando = array_diff(array_keys(ColunasDaExportacao::CAMPOS), $cabecalho);
-        if ($faltando) {
-            $this->warn('Colunas que a planilha não tem (ficam vazias): ' . implode(', ', $faltando));
+        $this->table(['Novos', 'Alterados', 'Iguais', 'Ausentes', 'Reapareceram', 'Linhas lidas'], [[
+            $carga->novos, $carga->alterados, $carga->iguais, $carga->ausentes, $carga->reaparecidos, $carga->linhas_lidas,
+        ]]);
+        if ($carga->primeira) {
+            $this->line('Primeira carga desta mecânica: as linhas antigas viraram base, sem histórico.');
+        }
+        if (DB::table('cadastro_proprietarios')->doesntExist()) {
+            $this->warn('Nenhum proprietário lido — confira os nomes das colunas em ColunasDaExportacao::PROPRIETARIO.');
         }
 
-        if (! $linhas) {
-            $this->error('Nenhuma linha com inscrição. A planilha está vazia ou é de outro formato.');
-
-            return self::FAILURE;
-        }
-
-        if ($this->option('limpar')) {
-            $codigos = array_values(array_filter(array_unique(array_column($linhas, 'codigo_bairro'))));
-            $apagadas = DB::table('cadastro_externo_imoveis')->whereIn('codigo_bairro', $codigos)->delete();
-            $this->line("Apagadas {$apagadas} linhas dos bairros " . implode(', ', $codigos));
-        }
-
-        $barra = $this->output->createProgressBar(count($linhas));
-        foreach (array_chunk($linhas, self::LOTE_INSERCAO) as $bloco) {
-            DB::table('cadastro_externo_imoveis')->upsert(
-                $bloco,
-                ['inscricao'],
-                array_values(array_diff(array_keys($bloco[0]), ['inscricao', 'created_at']))
-            );
-            $barra->advance(count($bloco));
-        }
-        $barra->finish();
-        $this->newLine(2);
-
-        $this->gravarProprietarios(array_unique(array_column($linhas, 'inscricao')), $donos);
-
-        $this->info(sprintf('Carregados %d imóveis%s.', count($linhas),
-            $semInscricao ? " ({$semInscricao} linhas sem inscrição, ignoradas)" : ''));
-
-        $this->line('Bairros na exportação:');
-        foreach ($bairros as $nome => $codigo) {
-            $this->line(sprintf('  %-8s %s', (string) $codigo, $nome));
-        }
-
+        $bairros = DB::table('cadastro_externo_imoveis')
+            ->whereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), $carga->bairros ?? [])
+            ->distinct()->pluck('codigo_bairro', 'nome_bairro')->all();
         $this->amarrarBairro($bairros);
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Substitui os proprietários das inscrições que vieram no arquivo.
-     *
-     * Só destas: um arquivo de um bairro não pode apagar o dono do resto do
-     * município. Inscrição que veio sem dono fica sem dono — é o que a
-     * prefeitura diz hoje.
-     *
-     * @param  list<string>  $inscricoes
-     * @param  array<string, array<string, array>>  $donos
-     */
-    private function gravarProprietarios(array $inscricoes, array $donos): void
-    {
-        $total = 0;
-
-        DB::transaction(function () use ($inscricoes, $donos, &$total) {
-            foreach (array_chunk($inscricoes, 1000) as $bloco) {
-                DB::table('cadastro_proprietarios')->whereIn('inscricao', $bloco)->delete();
-            }
-
-            $linhas = [];
-            foreach ($donos as $inscricao => $lista) {
-                $ordem = 0;
-                foreach ($lista as $dono) {
-                    $linhas[] = $dono + ['inscricao' => $inscricao, 'ordem' => $ordem++,
-                        'created_at' => now(), 'updated_at' => now()];
-                }
-            }
-            foreach (array_chunk($linhas, self::LOTE_INSERCAO) as $bloco) {
-                DB::table('cadastro_proprietarios')->insert($bloco);
-            }
-            $total = count($linhas);
-        });
-
-        if ($total === 0) {
-            $this->warn('Nenhum proprietário lido. Colunas procuradas: '
-                . implode(' / ', ColunasDaExportacao::PROPRIETARIO['nome']) . '.');
-        } else {
-            $this->info("Proprietários: {$total}.");
-        }
     }
 
     /**
@@ -251,18 +140,4 @@ class CarregarCadastro extends Command
     }
 
     /** "14891.33" e "14.891,33" viram 14891.33. Vazio vira null. */
-    private function numero(?string $v): ?float
-    {
-        if ($v === null || trim($v) === '') {
-            return null;
-        }
-
-        $v = trim($v);
-        // Vírgula decimal: só quando ela é o último separador da cadeia.
-        if (str_contains($v, ',') && strrpos($v, ',') > (strrpos($v, '.') ?: -1)) {
-            $v = str_replace(['.', ','], ['', '.'], $v);
-        }
-
-        return is_numeric($v) ? (float) $v : null;
-    }
 }

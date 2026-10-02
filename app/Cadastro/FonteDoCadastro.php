@@ -59,4 +59,15 @@ interface FonteDoCadastro
      * @return list<array{nome:string, documento:?string, endereco:?string}>
      */
     public function proprietarios(Lote $lote): array;
+
+    /**
+     * Onde o imóvel está nas cargas do cadastro.
+     *
+     * `em` é a "Últ. integração" (última carga em que ele veio, mudando ou
+     * não), `alterado_em` a "Últ. alteração", `ausente_desde` a carga em que
+     * ele sumiu da planilha (null se está presente). Datas em ISO 8601.
+     *
+     * @return array{inscricoes:list<string>, em:?string, alterado_em:?string, ausente_desde:?string}
+     */
+    public function situacao(Lote $lote): array;
 }

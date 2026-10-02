@@ -997,6 +997,7 @@
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
     <button data-sub="irregularidades" onclick="subParametros('irregularidades')">Irregularidades</button>
     <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
+    <button data-sub="cadastro" onclick="subParametros('cadastro')">Cadastro municipal</button>
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
 
@@ -1216,6 +1217,32 @@
   </div>
 
   {{-- ÓRGÃO --}}
+  {{-- CADASTRO MUNICIPAL — a planilha mensal da prefeitura. Grava só o que
+       mudou, marca o que sumiu e apaga o arquivo ao fim. Montado por
+       cadastro-municipal.js; ver CadastroCargaController. --}}
+  <div class="par-painel" id="par-cadastro">
+    <div class="par-sec"><span class="par-num">1</span>Enviar a planilha do mês</div>
+    <p class="aviso-legal">
+      A exportação do cadastro imobiliário do município inteiro (.xlsx). O sistema
+      compara com o que já tem e grava <b>só o que mudou</b>; imóvel que não vier
+      fica marcado como fora do cadastro, nunca apagado. O arquivo é
+      <b>apagado do servidor</b> assim que a carga termina.
+    </p>
+    <label class="imp-soltar" id="cm-soltar" for="cm-arquivo">
+      <input type="file" id="cm-arquivo" accept=".xlsx" onchange="cmArquivoEscolhido()">
+      <b>Solte a planilha .xlsx aqui</b>
+      <span>ou clique para escolher no computador</span>
+    </label>
+    <div class="btn-row" style="margin-top:8px">
+      <button class="btn primary sm" id="cm-enviar" onclick="enviarCargaDoCadastro()" disabled>Enviar e processar</button>
+    </div>
+    <div id="cm-andamento"></div>
+
+    <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Cargas<span class="cont" id="cont-cargas">0</span></div>
+    <div id="cm-lista"></div>
+    <div id="cm-detalhe"></div>
+  </div>
+
   <div class="par-painel" id="par-geral">
     <div class="par-sec"><span class="par-num">1</span>Brasão do município</div>
     {{-- É o brasão que torna o sistema replicável: instalar a mesma aplicação
@@ -3612,6 +3639,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 @endif
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
+  <script src="@assetv('js/cadastro-municipal.js')"></script>
 @endif
 <script src="@assetv('js/app.js')"></script>
 </body>

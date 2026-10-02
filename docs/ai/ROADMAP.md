@@ -101,9 +101,10 @@ Hoje quem não tem a máquina de desenvolvimento não consegue.
 Rascunho → salva → publicada, com pré-curadoria e conferência com o cadastro.
 A conversão DWG → GeoJSON continua fora do sistema, como planejado.
 
-### 🟢 Carregar cadastro (XLSX) pela tela
+### ✅ Carregar cadastro (XLSX) pela tela — feito em 10/2026
 
-Mesmo raciocínio, para `cadastro:carregar`.
+Parâmetros → Cadastro municipal. Grava só a diferença, guarda o histórico
+campo a campo e apaga o arquivo ao fim. Ver ARQUITETURA.md, "Cadastro municipal".
 
 ### 🟢 Rodar as conferências pela tela
 

@@ -45,6 +45,9 @@ function subParametros(nome) {
   // milhares em um ano — e trazê-la na abertura de Parâmetros faria toda
   // visita à tela pagar por um dado que quase ninguém vai olhar.
   if (nome === 'trilha' && typeof carregarTrilha === 'function') { carregarTrilha() }
+  // Cadastro municipal também carrega só quando abre: a lista de cargas é
+  // consultada de novo enquanto uma planilha processa.
+  if (nome === 'cadastro' && typeof carregarCargasDoCadastro === 'function') { carregarCargasDoCadastro() }
 }
 
 async function carregarParametros() {

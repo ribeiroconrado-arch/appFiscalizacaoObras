@@ -39,7 +39,7 @@ server_tokens off;   # não anuncia a versão do Nginx
 No `server { }` do site (HTTPS):
 
 ```nginx
-client_max_body_size 32m;   # maior upload aceito: 30 MB (planilha/GeoJSON)
+client_max_body_size 64m;   # maior upload: planilha do cadastro municipal (até 64 MB)
 limit_conn conexoes 30;
 
 # HTTPS sempre. Só depois de confirmar que o certificado renova sozinho.
@@ -60,6 +60,18 @@ location ~ /\.(?!well-known) { deny all; }
 ```
 
 Testar e recarregar: `sudo nginx -t && sudo systemctl reload nginx`.
+
+O PHP também precisa aceitar o tamanho, em `/etc/php/8.4/fpm/php.ini`:
+`upload_max_filesize = 64M` e `post_max_size = 64M`
+(depois `sudo systemctl reload php8.4-fpm`).
+
+**Rede de segurança da carga do cadastro (opcional).** A carga roda sozinha
+logo depois do envio; se o processo morrer no meio, este cron a retoma e
+apaga planilhas esquecidas (`crontab -e` do usuário que roda o PHP):
+
+```cron
+*/10 * * * * cd /caminho/do/app && php artisan cadastro:processar-cargas >> storage/logs/cargas.log 2>&1
+```
 
 ## 3. fail2ban
 

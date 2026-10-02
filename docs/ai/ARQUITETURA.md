@@ -183,6 +183,46 @@ Como o intervalo de busca precisa ser um `WHERE`, a mesma fórmula é escrita
 **também em SQL**, em `BuscaController::inscricaoEmSql()`. As duas têm de
 concordar.
 
+## Cadastro municipal — duas famílias de dados
+
+Os dados do imóvel vêm de dois lugares que **se relacionam, mas não se
+misturam**:
+
+| Família | Tabelas | Quem escreve | Muda |
+|---|---|---|---|
+| Aplicação | `lotes`, `vistorias`, `documentos`, `sinalizacoes`, `edificacoes`… | o sistema e os fiscais | a todo momento |
+| Cadastro municipal | `cadastro_externo_imoveis`, `cadastro_proprietarios`, `cadastro_cargas`, `cadastro_alteracoes` | só a carga da planilha | uma vez por mês |
+
+A ligação é a **inscrição imobiliária** (bairro + quadra + lote, ver
+`CadastroCarregado::linhasDoLote`). Nada da aplicação aponta para o cadastro
+por chave estrangeira, e nada do cadastro aponta para a aplicação.
+
+**A carga mensal grava só a diferença** (`App\Cadastro\CargaDoCadastro`).
+A prefeitura manda o município inteiro (~56 mil imóveis); cada imóvel tem um
+`hash` do registro + proprietários. Igual: só o ponteiro `vista_na_carga_id`
+anda ("Últ. integração"). Diferente: atualiza e grava em `cadastro_alteracoes`
+só os campos que mudaram, com antes e depois. O que não veio fica com
+`ausente_desde_carga_id` — **marcado, nunca apagado** —, e só nos bairros
+presentes no arquivo. Planilha cortada (mais de 20% ausentes) para em
+`aguardando_confirmacao`.
+
+Medido com 56 mil imóveis sintéticos no MySQL 8.0.46: primeira carga 25 s,
+carga mensal 16 s, pico de 217 MB; 2% de mudança grava ~1.100 linhas de
+histórico. Guardar a planilha inteira todo mês custaria ~40 MB/mês só na
+tabela; o histórico por diferença custa uma fração disso.
+
+**O arquivo é apagado** assim que a carga conclui (traz CPF de milhares de
+pessoas; os dados já estão no banco). Fica só o rastro em `cadastro_cargas`:
+nome, tamanho, SHA-256 (recusa a mesma planilha duas vezes), quem e quando.
+
+**Sem worker de fila.** O envio responde na hora e o processamento segue no
+mesmo processo PHP (`dispatchAfterResponse`). Se morrer no meio,
+`php artisan cadastro:processar-cargas` ou o "Tentar de novo" retomam — e
+retomar é seguro, porque o que já foi gravado passa a contar como igual.
+
+**Quem vê o proprietário** é decidido em `App\Cadastro\ProprietariosVisiveis`
+(ver CONTEXTO.md).
+
 ## Auditoria
 
 O trait `App\Models\Concerns\RegistraAuditoria` registra criação, alteração e
@@ -297,7 +337,8 @@ divergência de esquema continua lá, esperando uma migração.
 | Comando | Faz |
 |---|---|
 | `lotes:importar` | carrega o GeoJSON convertido do DWG |
-| `cadastro:carregar` | carrega a exportação XLSX do cadastro da prefeitura |
+| `cadastro:carregar` | carrega a exportação XLSX pelo terminal — mesma carga da tela (Parâmetros → Cadastro municipal), gravando só a diferença |
+| `cadastro:processar-cargas` | retoma carga do cadastro parada e apaga planilhas vencidas |
 | `gis:conferir` | procura defeito na base (sobreposição, sufixo solto, órfão) |
 | `inscricao:conferir` | prova a fórmula da inscrição contra os dados reais |
 | `quadras:corrigir` / `quadra:semente` | correção de quadra em massa |

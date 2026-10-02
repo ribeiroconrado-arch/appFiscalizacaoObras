@@ -109,12 +109,56 @@ function secProprietarios(lista) {
   return bciSecao(lista.length > 1 ? 'Proprietários' : 'Proprietário', corpo)
 }
 
-/** Linha de topo: quando foi consultado, e o botão de consultar de novo. */
+/**
+ * Linha de topo: quando foi consultado, o botão de consultar de novo, e a
+ * situação do imóvel nas cargas mensais do cadastro.
+ */
 function cabecalhoBci(d) {
   return `<div class="bci-topo">
     <span>Consultado em <b>${esc(dataHoraCurta(d.consultado_em))}</b></span>
     ${botaoConsultar('Atualizar')}
-  </div>`
+  </div>${linhaDasCargas(d)}`
+}
+
+/**
+ * "Últ. integração" e "Últ. alteração" do cadastro municipal, e o aviso de que
+ * a cópia desta aba ficou para trás de uma carga mais nova.
+ */
+function linhaDasCargas(d) {
+  const g = d.integracao || {}
+  if (!g.em && !g.ausente_desde) { return '' }
+  const desatualizada = g.alterado_em && d.consultado_em && new Date(g.alterado_em) > new Date(d.consultado_em)
+  return `<div class="bci-cargas imp-sub">
+      ${g.ausente_desde
+        ? `<b>Fora do cadastro</b> desde a carga de ${esc(dataHoraCurta(g.ausente_desde))}`
+        : `Últ. integração <b>${esc(dataHoraCurta(g.em))}</b>`}
+      ${g.alterado_em ? ` · Últ. alteração <b>${esc(dataHoraCurta(g.alterado_em))}</b>
+        · <a href="#" onclick="event.preventDefault(); verHistoricoDoCadastro()">ver o que mudou</a>` : ''}
+    </div>
+    ${desatualizada ? '<div class="cad-nota cad-aviso">O cadastro mudou desde a última consulta deste imóvel — clique em Atualizar.</div>' : ''}
+    <div id="bci-historico"></div>`
+}
+
+/** O que mudou no cadastro deste imóvel, carga a carga. */
+async function verHistoricoDoCadastro() {
+  const loteId = state.selecionado?.properties?.id
+  const caixa = document.getElementById('bci-historico')
+  if (!loteId || !caixa) { return }
+  caixa.innerHTML = '<div class="imp-sub">Carregando…</div>'
+  try {
+    const r = await fetch(`/api/imoveis/${loteId}/cadastro/historico`, { headers: { Accept: 'application/json' } })
+    if (!r.ok) { throw new Error(r.status) }
+    const itens = (await r.json()).itens
+    const tipo = { novo: 'Entrou no cadastro', ausente: 'Saiu do cadastro', reapareceu: 'Voltou ao cadastro' }
+    caixa.innerHTML = itens.length ? `<table class="imp-tabela"><tbody>${itens.map(a => `<tr>
+        <td class="imp-sub">${esc(dataHoraCurta(a.em))}</td>
+        <td>${esc(a.campo || tipo[a.tipo] || a.tipo)}</td>
+        <td>${a.campo ? `${esc(a.antes ?? '—')} → <b>${esc(a.depois ?? '—')}</b>` : ''}</td>
+      </tr>`).join('')}</tbody></table>`
+      : '<div class="imp-sub">Nenhuma alteração registrada.</div>'
+  } catch {
+    caixa.innerHTML = '<div class="imp-sub">Não foi possível carregar o histórico.</div>'
+  }
 }
 
 function botaoConsultar(rotulo) {

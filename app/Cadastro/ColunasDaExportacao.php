@@ -108,6 +108,93 @@ final class ColunasDaExportacao
     }
 
     /**
+     * Casas decimais de cada coluna numérica, iguais às da tabela. É o que faz
+     * "350" da planilha e "350.00" do banco serem o MESMO valor na comparação
+     * da carga mensal — sem isso todo imóvel pareceria alterado todo mês.
+     */
+    public const CASAS = [
+        'area_terreno_m2' => 2, 'area_edificada_m2' => 2, 'testada_m' => 2,
+        'medida_lado_direito' => 2, 'medida_lado_esquerdo' => 2, 'medida_fundo' => 2,
+        'unidade_area_m2' => 2, 'unidade_ano' => 0, 'unidade_pontos' => 0,
+    ];
+
+    /**
+     * Uma linha da planilha como registro do cadastro, já na forma CANÔNICA
+     * (texto aparado, vazio vira null, número com as casas da tabela), ou null
+     * se a linha não tem inscrição.
+     *
+     * As chaves são as colunas de `cadastro_externo_imoveis`: CAMPOS, mais
+     * `logradouro` e `caracteristicas` (JSON). O proprietário fica fora — sai
+     * por `proprietario()`, porque uma inscrição pode ter vários.
+     *
+     * @param  callable(string): string  $ler  valor da célula pelo nome da coluna
+     * @return array<string,?string>|null
+     */
+    public static function linha(callable $ler): ?array
+    {
+        if (trim($ler('Inscrição')) === '') {
+            return null;
+        }
+
+        $r = [];
+        foreach (self::CAMPOS as $coluna => $campo) {
+            $r[$campo] = self::canonico($campo, $ler($coluna));
+        }
+        $r['logradouro'] = self::canonico('logradouro',
+            trim(trim($ler('Tipo de Logradouro')) . ' ' . trim($ler('Nome do Logradouro'))));
+
+        $carac = [];
+        foreach (self::CARACTERISTICAS as $col) {
+            $v = trim($ler($col));
+            if ($v !== '' && $v !== '-') {
+                $carac[$col] = $v;
+            }
+        }
+        $r['caracteristicas'] = $carac ? json_encode($carac, JSON_UNESCAPED_UNICODE) : null;
+
+        return $r;
+    }
+
+    /**
+     * Um valor na forma em que é comparado e gravado. Serve tanto para o que
+     * vem da planilha quanto para o que já está no banco.
+     */
+    public static function canonico(string $campo, mixed $v): ?string
+    {
+        if ($v === null) {
+            return null;
+        }
+        $v = trim((string) $v);
+        if ($v === '') {
+            return null;
+        }
+
+        if (array_key_exists($campo, self::CASAS)) {
+            $n = self::numero($v);
+
+            return $n === null ? null : number_format($n, self::CASAS[$campo], '.', '');
+        }
+
+        return $v;
+    }
+
+    /** "1.234,56", "1234.56" ou "350" → float; o resto, null. */
+    public static function numero(?string $v): ?float
+    {
+        if ($v === null || trim($v) === '') {
+            return null;
+        }
+
+        $v = trim($v);
+        // Vírgula decimal: só quando ela é o último separador da cadeia.
+        if (str_contains($v, ',') && strrpos($v, ',') > (strrpos($v, '.') ?: -1)) {
+            $v = str_replace(['.', ','], ['', '.'], $v);
+        }
+
+        return is_numeric($v) ? (float) $v : null;
+    }
+
+    /**
      * A linha de cabeçalho, ou null se esta não for ela.
      *
      * O cabeçalho não é necessariamente a primeira linha: estas exportações

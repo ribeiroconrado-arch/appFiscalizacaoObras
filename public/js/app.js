@@ -802,6 +802,13 @@ async function preencherIntegracao(loteId) {
     const d = await obterBci(loteId)
     // Outro imóvel pode ter sido aberto enquanto a resposta vinha.
     if (state.selecionado?.properties?.id !== loteId) { return }
-    if (d.consultado_em) { el.textContent = formatarDataHoraCurta(d.consultado_em) }
+    // A data da CARGA em que o imóvel veio na planilha (mudando ou não); a
+    // leitura avulsa do BCI é só reserva, para cadastro de antes das cargas.
+    const g = d.integracao || {}
+    if (g.ausente_desde) {
+      el.textContent = 'fora do cadastro desde ' + formatarDataHoraCurta(g.ausente_desde).slice(0, 8)
+    } else if (g.em || d.consultado_em) {
+      el.textContent = formatarDataHoraCurta(g.em || d.consultado_em)
+    }
   } catch { /* fica o travessão */ }
 }

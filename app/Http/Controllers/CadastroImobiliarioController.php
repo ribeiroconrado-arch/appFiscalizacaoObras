@@ -59,7 +59,12 @@ class CadastroImobiliarioController extends Controller
     {
         $donos = ProprietariosVisiveis::para(request()->user(), $this->fonte->proprietarios($lote));
 
-        return $this->retratoDoImovel($lote) + ($donos === null ? [] : ['proprietarios' => $donos]);
+        $situacao = $this->fonte->situacao($lote);
+        unset($situacao['inscricoes']);
+
+        return $this->retratoDoImovel($lote)
+            + ['integracao' => $situacao]
+            + ($donos === null ? [] : ['proprietarios' => $donos]);
     }
 
     /** @return array<string,mixed> */

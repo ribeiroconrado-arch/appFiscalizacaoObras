@@ -1630,6 +1630,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .bci-prop-n{font-size:12.5px;font-weight:700;color:var(--chumbo);line-height:1.35}
 .bci-doc{font-size:11px;font-weight:600;color:var(--tx2)}
 .bci-prop-e{font-size:11.5px;color:var(--tx2);line-height:1.35;margin-top:1px}
+.bci-cargas{margin:2px 0 8px;line-height:1.5}
 
 /* Duas colunas de pares. `auto-fit` com mínimo largo faz virar uma coluna
    sozinha quando o modal estreita, sem media query. */
