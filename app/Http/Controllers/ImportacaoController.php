@@ -229,10 +229,16 @@ class ImportacaoController extends Controller
                       'fonte'    => ['nullable', 'in:ultima,carregado']]);
 
         try {
-            // Planilha anexada, a MESMA da última conferência (fonte=ultima,
-            // sem arquivo), ou o cadastro carregado.
-            [$fonte, $descricao] = $conferencia->fonteDoPedido($r, $importacao->conferencia_cadastro);
-            $resultado = $conferencia->conferir($importacao, $fonte, $descricao);
+            // fonte=ultima, sem arquivo: a planilha NÃO é guardada — revisam-se
+            // as divergências guardadas contra os lotes de agora. Se a última
+            // foi o cadastro carregado (que está no banco), ele roda de novo.
+            $anterior = $importacao->conferencia_cadastro;
+            if ($r->input('fonte') === 'ultima' && ! $r->hasFile('planilha') && ($anterior['fonte'] ?? null) === 'planilha') {
+                $resultado = $conferencia->revisarImportacao($importacao);
+            } else {
+                [$fonte, $descricao] = $conferencia->fonteDoPedido($r);
+                $resultado = $conferencia->conferir($importacao, $fonte, $descricao);
+            }
         } catch (RuntimeException $ex) {
             return response()->json(['message' => $ex->getMessage()], 422);
         }

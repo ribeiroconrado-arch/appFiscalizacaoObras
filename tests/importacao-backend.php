@@ -265,21 +265,34 @@ try {
     confere(isset($rb['centros_quadras']['1'], $rb['centros_quadras']['2']), 'cada quadra tem o seu centro, para o selo "sem lote"');
     confere($imp->fresh()->conferencia_cadastro['total_divergencias'] === 4, 'a conferência da importação não foi tocada');
 
-    echo "Reconferir sem anexar a planilha (retrato guardado)\n";
+    echo "Conferir de novo SEM planilha: revisa só as divergências guardadas\n";
     $svcConf = app(ConferenciaComCadastro::class);
-    // O que uma planilha diria do bairro: igual ao cadastro de teste, menos o Q01 L2 (agora ativo).
-    $linhasPlanilha = array_map(fn ($c) => $c['lote'] === '0002' ? ['isencao' => 'Normal'] + $c : $c,
-        iterator_to_array((function () use ($codigo) { yield from app(App\Cadastro\FonteDoCadastro::class)->imoveisDoBairro($codigo); })(), false));
-    $idRetrato = App\Cadastro\RetratoDoCadastro::guardar($codigo, 'Planilha teste.xlsx', $linhasPlanilha, true);
-    $rr = $svcConf->conferirBairro($bairro, App\Cadastro\RetratoDoCadastro::carregar($idRetrato), 'Planilha teste.xlsx');
-    confere($rr['retrato_id'] === $idRetrato && count($rr['inativos']) === 0, 'a conferência com o retrato usa as linhas guardadas');
-    $pedido = Illuminate\Http\Request::create('/x', 'POST', ['fonte' => 'ultima']);
-    [$fonteDeNovo, $descDeNovo] = $svcConf->fonteDoPedido($pedido, $rr);
-    confere($fonteDeNovo instanceof App\Cadastro\RetratoDoCadastro && $descDeNovo === 'Planilha teste.xlsx',
-        '"mesma fonte da última" reabre a planilha guardada, sem arquivo');
-    [$fonteCarregada] = $svcConf->fonteDoPedido($pedido, ['retrato_id' => null]);
-    confere(! $fonteCarregada instanceof App\Cadastro\RetratoDoCadastro, 'se a última foi o cadastro carregado, é ele de novo');
-    recusa(fn () => $svcConf->fonteDoPedido($pedido, null), 'conferência anterior', 'sem conferência anterior, não há o que repetir');
+    DB::beginTransaction();   // ponto de retorno: os testes seguintes contam com o bairro como estava
+    // Como se a última conferência tivesse sido com a PLANILHA (que não é guardada).
+    $comPlanilha = ['fonte' => 'planilha', 'fonte_descricao' => 'Planilha teste.xlsx'] + $rb;
+    DB::table('conferencias_bairro')->where('bairro', $bairro)->update(['resultado' => json_encode($comPlanilha)]);
+    // Correções no mapa: o "não encontrado" Q01 L3 vira Q03 L7 — que é o "cadastro sem lote";
+    // o lote sem quadra ganha a quadra 05, inscrição que a lista não conhece.
+    DB::table('lotes')->where('id', $idDe('01', '3'))->update(['quadra' => '03', 'numero_lote' => '7']);
+    DB::table('lotes')->where('id', $semQuadra)->update(['quadra' => '05']);
+    $rv = $svcConf->revisarBairro($bairro);
+    confere(count($rv['sem_lote']) === 0 && $rv['casaram'] === $rb['casaram'] + 1,
+        'lote renumerado para a inscrição do "cadastro sem lote": as duas pendências se resolvem');
+    confere(count($rv['sem_inscricao']) === 0 && count($rv['nao_encontrados']) === 1 && ! empty($rv['nao_encontrados'][0]['alterado']),
+        'lote que ganhou inscrição desconhecida fica pendente, marcado "alterado" (sem planilha não há como confirmar)');
+    confere(count($rv['inativos']) === 1, 'o inativo no cadastro, sem mudança no lote, continua pendente');
+    confere($rv['fonte'] === 'planilha' && ($rv['revisao']['resolvidas'] ?? null) === 1, 'a revisão diz quantas resolveu e mantém a fonte');
+    confere(! DB::getSchemaBuilder()->hasTable('cadastro_retratos'), 'a planilha não é guardada em lugar nenhum');
+    $fonteVazia = new class implements App\Cadastro\FonteDoCadastro {
+        public function consultar(App\Models\Lote $l): ?App\Cadastro\RetratoBci { return null; }
+        public function porQueVazio(App\Models\Lote $l): string { return ''; }
+        public function nome(): string { return 'exportacao'; }
+        public function imoveisDoBairro(string $c): iterable { return []; }
+    };
+    recusa(fn () => $svcConf->conferirBairro($bairro, $fonteVazia, 'Cadastro vazio'), 'não tem nenhum imóvel',
+        'fonte sem nenhum imóvel do bairro é recusada (não vira "todos não encontrados")');
+    DB::rollBack();
+    $rr = $rb;
     $conferidoEm = now()->subMinute()->toDateTimeString();
     DB::table('lotes')->where('importacao_id', $imp->id)->limit(1)->update(['updated_at' => now()]);
     confere(! $svcConf->bairroEmDia($rr, $conferidoEm), 'lote corrigido depois da conferência: ela não está mais em dia');

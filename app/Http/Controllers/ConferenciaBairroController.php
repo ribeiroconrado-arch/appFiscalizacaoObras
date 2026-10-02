@@ -93,10 +93,16 @@ class ConferenciaBairroController extends Controller
         $anterior = DB::table('conferencias_bairro')->where('bairro', $d['bairro'])->value('resultado');
 
         try {
-            // Planilha anexada, a MESMA da última conferência (fonte=ultima,
-            // sem arquivo), ou o cadastro carregado.
-            [$fonte, $descricao] = $conferencia->fonteDoPedido($r, $anterior ? json_decode($anterior, true) : null);
-            $resultado = $conferencia->conferirBairro($d['bairro'], $fonte, $descricao);
+            // fonte=ultima, sem arquivo: a planilha NÃO é guardada — revisam-se
+            // as divergências guardadas contra os lotes de agora. Se a última
+            // foi o cadastro carregado (que está no banco), ele roda de novo.
+            $ant = $anterior ? json_decode($anterior, true) : null;
+            if (($d['fonte'] ?? null) === 'ultima' && ! $r->hasFile('planilha') && ($ant['fonte'] ?? null) === 'planilha') {
+                $resultado = $conferencia->revisarBairro($d['bairro']);
+            } else {
+                [$fonte, $descricao] = $conferencia->fonteDoPedido($r);
+                $resultado = $conferencia->conferirBairro($d['bairro'], $fonte, $descricao);
+            }
         } catch (RuntimeException $ex) {
             return response()->json(['message' => $ex->getMessage()], 422);
         }

@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Cadastro\BairrosDoDesenho;
 use App\Cadastro\FonteDoCadastro;
 use App\Cadastro\PlanilhaDoCadastro;
-use App\Cadastro\RetratoDoCadastro;
 use Illuminate\Http\Request;
 use App\Models\Bci\BciImovel;
 use App\Models\ImportacaoLote;
@@ -43,17 +42,14 @@ class ConferenciaComCadastro
     public function __construct(private ImportacaoDeBairro $importacao) {}
 
     /**
-     * A fonte que o pedido escolheu, com a descrição para o carimbo.
+     * A fonte que o pedido escolheu, com a descrição para o carimbo: a
+     * planilha anexada (lida só em memória — ela NÃO é guardada) ou o cadastro
+     * carregado no sistema. "Revisar sem planilha" não passa por aqui: ver
+     * revisarImportacao / revisarBairro.
      *
-     *   planilha anexada   lida agora (e guardada como retrato do bairro);
-     *   fonte=ultima       a mesma da conferência anterior — o retrato da
-     *                      planilha, ou o cadastro carregado —, sem arquivo;
-     *   nada               o cadastro carregado no sistema.
-     *
-     * @param  array<string,mixed>|null  $anterior  o resultado da conferência anterior
      * @return array{0: FonteDoCadastro, 1: string}
      */
-    public function fonteDoPedido(Request $r, ?array $anterior): array
+    public function fonteDoPedido(Request $r): array
     {
         if ($r->hasFile('planilha')) {
             $p = $r->file('planilha');
@@ -65,29 +61,133 @@ class ConferenciaComCadastro
                 'Planilha ' . $p->getClientOriginalName()];
         }
 
-        if ($r->input('fonte') === 'ultima') {
-            if (! $anterior) {
-                throw new RuntimeException('Ainda não há conferência anterior para repetir. Escolha a fonte.');
-            }
-            if (! empty($anterior['retrato_id'])) {
-                $f = RetratoDoCadastro::carregar((int) $anterior['retrato_id']);
-
-                return [$f, $f->descricao];
-            }
-            // Planilha de antes de os retratos serem guardados: não há o que
-            // reabrir — e cair no cadastro carregado sem dizer trocaria a fonte
-            // por baixo da pessoa.
-            if (($anterior['fonte'] ?? null) === 'planilha') {
-                throw new RuntimeException('A planilha da última conferência não foi guardada (ela é de antes desta '
-                    . 'função). Anexe-a uma vez; daí em diante ela fica guardada para as próximas conferências.');
-            }
-            // A anterior foi com o cadastro carregado: é ele de novo.
-        }
-
         $quando = DB::table('cadastro_externo_imoveis')->max('importado_em');
 
         return [app(FonteDoCadastro::class),
             'Cadastro carregado' . ($quando ? ' · exportação de ' . date('d/m/Y', strtotime($quando)) : '')];
+    }
+
+    /**
+     * REVISAR AS DIVERGÊNCIAS, sem a planilha — o "Conferir de novo" sem anexo
+     * e a reconferência automática depois de cada correção no mapa.
+     *
+     * A planilha não é guardada (decisão do usuário): o que fica são só as
+     * divergências da última conferência. Revisar é olhar cada uma contra os
+     * lotes COMO ESTÃO AGORA:
+     *
+     *   cadastro sem lote   resolvida se algum lote ativo do bairro passou a
+     *                       ter aquela inscrição;
+     *   não encontrado /    resolvida se o lote saiu (excluído, inativado), ou
+     *   inativo             se a inscrição dele passou a ser uma das "sem lote"
+     *                       — as duas pontas se encontraram;
+     *   sem inscrição       resolvida se o lote saiu, ou se a inscrição que ele
+     *                       passou a ter é uma das "sem lote".
+     *
+     * O que mudou para uma inscrição que a lista não conhece fica PENDENTE e
+     * marcado `alterado`: sem a planilha não há como saber se ela existe no
+     * cadastro — isso pede uma conferência com a planilha.
+     *
+     * @param  array<string,mixed>  $anterior
+     * @return array<string,mixed>
+     */
+    private function revisar(array $anterior, string $bairro, ?int $importacaoId): array
+    {
+        $bairros = new BairrosDoDesenho();
+        $nomes = $anterior['nomes_do_desenho'] ?? [$bairro];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'importacao_id'];
+        $lotes = DB::table('lotes')->where('situacao', 'ativo')->whereIn('bairro', $nomes)->get($campos);
+
+        $porId = [];          // lote ativo => [inscrição atual (ou null), linha]
+        $comInscricao = [];   // inscrição => lote, bairro inteiro
+        $conferidos = 0;
+        foreach ($lotes as $l) {
+            $insc = InscricaoImobiliaria::normalizar($bairros->inscricaoDe($l));
+            $porId[(int) $l->id] = [$insc, $l];
+            if ($insc !== null) { $comInscricao[$insc] = $l; }
+            $conferidos += ($importacaoId === null || (int) $l->importacao_id === $importacaoId) ? 1 : 0;
+        }
+
+        $semLote = [];       // inscrição => item, os que continuam sem lote
+        foreach ($anterior['sem_lote'] ?? [] as $item) {
+            $semLote[InscricaoImobiliaria::normalizar($item['inscricao'])] = $item;
+        }
+        $resolvidas = 0;
+        $casaramAgora = 0;
+
+        // Lote da lista: saiu? continua igual? casou com um "sem lote"?
+        $revisaLote = function (array $item, string $tipo) use (&$porId, &$semLote, &$resolvidas, &$casaramAgora): ?array {
+            $atual = $porId[(int) ($item['lote_id'] ?? 0)] ?? null;
+            if (! $atual) { $resolvidas++; return null; }                  // excluído ou inativado
+            [$insc, $l] = $atual;
+            $antes = InscricaoImobiliaria::normalizar($item['inscricao'] ?? null);
+            if ($insc !== null && isset($semLote[$insc])) {                 // achou o par no cadastro
+                unset($semLote[$insc]);
+                $resolvidas++;
+                $casaramAgora++;
+                return null;
+            }
+            if ($insc === $antes) { return $item; }                         // nada mudou
+            return ['lote_id' => $l->id, 'inscricao' => InscricaoImobiliaria::formatar($insc),
+                'quadra' => $l->quadra, 'lote' => $l->numero_lote, 'alterado' => true]
+                + ($tipo === 'inativos' ? ['isencao' => $item['isencao'] ?? null] : []);
+        };
+
+        $naoEncontrados = [];
+        $inativos = [];
+        $semInscricao = [];
+        foreach ($anterior['nao_encontrados'] ?? [] as $i) { if ($r = $revisaLote($i, 'nao_encontrados')) { $naoEncontrados[] = $r; } }
+        foreach ($anterior['inativos'] ?? [] as $i) { if ($r = $revisaLote($i, 'inativos')) { $inativos[] = $r; } }
+        foreach ($anterior['sem_inscricao'] ?? [] as $i) {
+            $r = $revisaLote($i, 'sem_inscricao');
+            if (! $r) { continue; }
+            // Ganhou inscrição que a lista não conhece: deixa de ser "sem
+            // inscrição" e passa a "não confirmado no cadastro".
+            if (($r['alterado'] ?? false) && $r['inscricao'] !== null) { $naoEncontrados[] = $r; } else { $semInscricao[] = $r; }
+        }
+
+        // "Cadastro sem lote" que ganhou lote por outro caminho (desenhado).
+        foreach ($semLote as $insc => $item) {
+            if (isset($comInscricao[$insc])) { unset($semLote[$insc]); $resolvidas++; $casaramAgora++; }
+        }
+        $semLote = array_values($semLote);
+
+        return [
+            'nao_encontrados'   => $naoEncontrados,
+            'inativos'          => $inativos,
+            'sem_lote'          => $semLote,
+            'sem_inscricao'     => $semInscricao,
+            'casaram'           => (int) ($anterior['casaram'] ?? 0) + $casaramAgora,
+            'lotes_conferidos'  => $conferidos,
+            'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao),
+            'revisao'           => ['resolvidas' => $resolvidas, 'em' => now()->format('d/m/Y H:i'),
+                                    'por' => auth()->user()?->name],
+        ] + $anterior;
+    }
+
+    /** Revisa a conferência da IMPORTAÇÃO sem planilha (ver revisar). */
+    public function revisarImportacao(ImportacaoLote $imp): array
+    {
+        $anterior = $imp->conferencia_cadastro
+            ?? throw new RuntimeException('A importação ainda não foi conferida. Confira com a planilha ou com o cadastro carregado.');
+        $resultado = $this->revisar($anterior, $imp->bairro, $imp->id);
+        $imp->update(['conferencia_cadastro' => $resultado, 'conferido_em' => now()]);
+
+        return $resultado;
+    }
+
+    /** Revisa a conferência do BAIRRO sem planilha (ver revisar). */
+    public function revisarBairro(string $bairro): array
+    {
+        $json = DB::table('conferencias_bairro')->where('bairro', $bairro)->value('resultado')
+            ?? throw new RuntimeException('Este bairro ainda não foi conferido. Confira com a planilha ou com o cadastro carregado.');
+        $resultado = $this->revisar(json_decode($json, true), $bairro, null);
+        DB::table('conferencias_bairro')->where('bairro', $bairro)->update([
+            'resultado'    => json_encode($resultado, JSON_UNESCAPED_UNICODE),
+            'conferido_em' => now(),
+            'updated_at'   => now(),
+        ]);
+
+        return $resultado;
     }
 
     /**
@@ -119,9 +219,7 @@ class ConferenciaComCadastro
         $imp->update(['conferencia_cadastro' => $resultado, 'conferido_em' => now()]);
         // Conferência de rascunho fica só na própria importação: a trilha
         // começa quando ela é salva.
-        // Nem a reconferência com a planilha guardada: ela roda sozinha a cada
-        // correção, e encheria a trilha de linhas que só repetem a fonte.
-        if (! $imp->emRascunho() && ! $fonte instanceof RetratoDoCadastro) {
+        if (! $imp->emRascunho()) {
             $this->importacao->auditar('conferiu com cadastro', $imp, null, [
                 'fonte' => $descricaoFonte, 'divergencias' => $resultado['total_divergencias'],
                 'casaram' => $resultado['casaram'],
@@ -213,10 +311,8 @@ class ConferenciaComCadastro
         $casaram = 0;
         $noCadastro = 0;
         $vistos = [];
-        $linhasDaFonte = [];   // para o retrato, quando a fonte é planilha avulsa
 
         foreach ($fonte->imoveisDoBairro((string) $codigo) as $c) {
-            $linhasDaFonte[] = $c;
             $insc = $c['inscricao'];
             if (isset($vistos[$insc])) {
                 continue;   // linha repetida da mesma inscrição (várias construções)
@@ -243,28 +339,28 @@ class ConferenciaComCadastro
             }
         }
 
+        // Fonte SEM NENHUM imóvel do bairro não é base de comparação: conferir
+        // contra ela marcaria todo lote como "não encontrado" — e gravaria esse
+        // resultado por cima da última conferência boa. Foi o que aconteceu com
+        // o cadastro carregado, que não tem o Buritis: recusa, e diz o porquê.
+        if ($noCadastro === 0) {
+            throw new RuntimeException(($fonte instanceof PlanilhaDoCadastro
+                    ? 'A planilha' : 'O cadastro carregado no sistema')
+                . " não tem nenhum imóvel do bairro de código {$codigo}, então não há com o que comparar. "
+                . 'Confira com uma planilha .xlsx da exportação que traga esse bairro. A conferência anterior foi mantida.');
+        }
+
         foreach ($doArquivo as $insc => $l) {
             if (! isset($vistos[$insc])) {
                 $naoEncontrados[] = $this->lote($l, $insc);
             }
         }
 
-        // A planilha avulsa é guardada (só este bairro): a próxima conferência
-        // — pelo botão ou automática, depois de uma correção — usa a mesma, sem
-        // pedir o arquivo de novo. O retrato reusado mantém o próprio id.
-        $retratoId = match (true) {
-            $fonte instanceof RetratoDoCadastro => $fonte->id,
-            $fonte instanceof PlanilhaDoCadastro => RetratoDoCadastro::guardar(
-                (string) $codigo, $descricaoFonte, $linhasDaFonte, $fonte->temSituacao),
-            default => null,
-        };
-
         return [
             'bairro'            => $bairro,
             'nomes_do_desenho'  => $nomes,
             'fonte'             => $fonte->nome(),
             'fonte_descricao'   => $descricaoFonte,
-            'retrato_id'        => $retratoId,
             'codigo_bairro'     => (string) $codigo,
             'lotes_conferidos'  => $lotesConferidos,
             'imoveis_no_cadastro' => $noCadastro,

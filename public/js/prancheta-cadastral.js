@@ -406,6 +406,12 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   // LOTE NOVO: a prancheta só desenha. Bairro, quadra, número e medidas são do
   // formulário que o Desenhar lote já tinha — ele recebe o contorno pronto.
   async function entregarLoteNovo(){const g=geometriaLivre(),cb=s.opts?.aoConcluir;s.entregue=true;await fechar(true);cb?.(g)}
+  // O CARTÃO mostra por padrão só o essencial (apelido, área, ordem e a
+  // inscrição); identidade completa e medidas abrem no "Mostrar mais".
+  function botaoMais(){return `<button type="button" class="pc-mais" aria-expanded="false" onclick="PranchetaCad.mais(this)">Mostrar mais <span aria-hidden="true">▾</span></button>`}
+  function mais(b,abrir){const c=b.closest('fieldset')?.querySelector('.pc-parte-mais');if(!c)return;const v=abrir??c.hidden;c.hidden=!v;b.setAttribute('aria-expanded',String(v));b.innerHTML=v?'Mostrar menos <span aria-hidden="true">▴</span>':'Mostrar mais <span aria-hidden="true">▾</span>'}
+  // Campo com erro escondido no "mais": o cartão abre sozinho para mostrá-lo.
+  function abrirCartoesComErro(){for(const c of document.querySelectorAll('#pc-form .pc-parte-mais'))if(c.querySelector('[aria-invalid=true],.pc-erro-campo')){const b=c.closest('fieldset')?.querySelector('.pc-mais');if(b)mais(b,true)}}
   function formEdicao(){
     const o=s.originais[0]?.properties||{};s.dados.quadra??=o.quadra??s.opts.quadra??'';s.dados.numero_lote??=o.numero_lote??s.opts.numero_lote??''
     $('pc-dados').hidden=false
@@ -415,6 +421,63 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       <div class="pc-form-acoes"><button type="button" class="btn primary" onclick="PranchetaCad.conferirEdicao()">Conferir</button></div>`
     for(const [id,k] of [['pc-ed-quadra','quadra'],['pc-ed-numero','numero_lote']])$(id).addEventListener('input',ev=>{s.dados[k]=ev.target.value.trim();$('pc-conferencia').replaceChildren()})
     $('pc-conferencia').replaceChildren();enquadrar()
+  }
+  // LOTE NOVO: a finalização acontece AQUI, no mesmo cartão das partes do
+  // desmembramento — bairro, quadra e lote à vista; as medidas da matrícula no
+  // "Mostrar mais". Antes a prancheta fechava e o formulário ia para a mesa, que
+  // ficava com o lote pendente quando a pessoa largava a ferramenta.
+  const MEDIDAS_NOVO=[['frente_m','Frente (m)'],['fundos_m','Fundos (m)'],['lado_direito_m','Lado direito (m)'],['lado_esquerdo_m','Lado esquerdo (m)'],['area_matricula_m2','Área da matrícula (m²)']]
+  let bairrosNovo=null
+  async function formLoteNovo(){
+    s.dados.novo??={bairro:s.opts.bairroPadrao||'',quadra:'',numero_lote:''}
+    const d=s.dados.novo,area=Math.abs(G.area(s.resultado.partes[0]))
+    const titulo=()=>d.quadra||d.numero_lote?`Q ${d.quadra||'—'} · Lote ${d.numero_lote||'—'}`:'Lote novo'
+    $('pc-dados').hidden=false
+    $('pc-form').innerHTML=`<fieldset class="pc-parte-card" style="--parte-cor:${cores[0]}"><legend>Lote novo</legend>
+      <header class="pc-parte-topo"><div><b id="pc-nv-tit">${e(titulo())}</b><small>${fmtNum(area)} m² · NOVO</small></div></header>
+      <label>Bairro<select id="pc-nv-bairro"><option value="">— escolha —</option></select></label>
+      <div class="pc-campos"><label>Quadra<input id="pc-nv-quadra" maxlength="20" value="${e(d.quadra)}"></label><label>Lote<input id="pc-nv-lote" maxlength="20" value="${e(d.numero_lote)}"></label></div>
+      ${botaoMais()}<div class="pc-parte-mais" hidden><div class="pc-medidas"><b class="pc-medidas-tit">Medidas da matrícula</b>
+        <small class="pc-inscricao-ajuda">Opcional. Preencha o que a matrícula trouxer; o desenho confere.</small>
+        <div class="pc-campos">${MEDIDAS_NOVO.map(([k,t])=>`<label>${t}<input data-medida="${k}" type="number" step="0.01" min="0" value="${e(d[k])}"></label>`).join('')}</div></div></div>
+      </fieldset>
+      <div class="pc-form-acoes"><button type="button" class="btn primary" onclick="PranchetaCad.conferirLoteNovo()">Conferir e continuar</button></div>`
+    $('pc-conferencia').replaceChildren()
+    const muda=()=>{$('pc-nv-tit').textContent=titulo();$('pc-conferencia').replaceChildren();limparErros()}
+    $('pc-nv-bairro').addEventListener('change',ev=>{d.bairro=ev.target.value;muda()})
+    $('pc-nv-quadra').addEventListener('input',ev=>{d.quadra=ev.target.value.trim();muda()})
+    $('pc-nv-lote').addEventListener('input',ev=>{d.numero_lote=ev.target.value.trim();muda()})
+    for(const i of $('pc-form').querySelectorAll('[data-medida]'))i.addEventListener('input',()=>{d[i.dataset.medida]=i.value.trim()===''?null:Number(i.value.replace(',','.'));muda()})
+    // Os bairros do cadastro, como no formulário da mesa (popularBairrosDoDesenho).
+    try{if(!bairrosNovo){const r=await fetch('/api/bairros',{headers:{Accept:'application/json'}});bairrosNovo=(await r.json()).bairros||[]}}catch{bairrosNovo=[]}
+    const sel=$('pc-nv-bairro');if(!sel)return
+    sel.insertAdjacentHTML('beforeend',bairrosNovo.map(b=>`<option value="${e(b.valor)}">${b.codigo?e(b.codigo)+' · ':''}${e(b.nome)}</option>`).join(''))
+    if(d.bairro&&bairrosNovo.some(b=>b.valor===d.bairro))sel.value=d.bairro;else d.bairro=''
+    enquadrar()
+  }
+  function corpoLoteNovo(){const d=s.dados.novo;const m={};for(const [k] of MEDIDAS_NOVO)if(d[k]!=null&&Number.isFinite(d[k])&&d[k]>0)m[k]=d[k]
+    return {bairro:d.bairro,quadra:d.quadra,numero_lote:d.numero_lote,geometry:geometriaLivre(),...m}}
+  async function conferirLoteNovo(){
+    if(!s||s.busy)return;const d=s.dados.novo||{},campos={}
+    if(!d.bairro)campos.bairro='Escolha o bairro.';if(!d.quadra)campos.quadra='Informe a quadra.';if(!d.numero_lote)campos.numero_lote='Informe o número do lote.'
+    if(Object.keys(campos).length){limparErros();for(const [k,msg] of Object.entries(campos)){const el=$({bairro:'pc-nv-bairro',quadra:'pc-nv-quadra',numero_lote:'pc-nv-lote'}[k]);if(el){el.setAttribute('aria-invalid','true');const a=document.createElement('small');a.className='pc-erro-campo';a.textContent=msg;el.closest('label').appendChild(a)}}$('pc-conferencia').innerHTML='<div class="pc-erro-resumo" role="alert"><b>Revise os campos indicados</b></div>';return}
+    s.busy=true;$('pc-conferencia').innerHTML='<p>Conferindo…</p>'
+    try{
+      const r=await postCadastro('/api/lotes/previa',corpoLoteNovo());if(!r){$('pc-conferencia').replaceChildren();return}
+      if(r.impedimento){$('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(r.impedimento)}</b></div>`;return}
+      const t=r.retrato,dv=t.divergencia,encosta=(t.vizinhos||[]).filter(v=>v.area_comum===0).length
+      $('pc-conferencia').innerHTML=`<div class="pc-identidade"><span class="lote-tag-origem">NOVO</span>
+        <p>Lote de <b>${fmtNum(t.area_m2)} m²</b> com ${t.vertices} canto(s), em ${e(t.bairro)} · quadra ${e(t.quadra)} · lote ${e(t.lote)}.${encosta?` Encosta em ${encosta} lote(s) vizinho(s).`:''}</p>
+        ${dv===null||dv===undefined?'':`<p>Matrícula × desenho: <b>${dv>0?'+':''}${String(dv).replace('.',',')}%</b>${Math.abs(dv)>5?' — diferença grande; o lote é gravado assim mesmo, com as duas medidas.':''}</p>`}
+        ${(r.avisos||[]).map(a=>`<p>⚠ ${e(a)}</p>`).join('')}</div>
+        <div class="pc-form-acoes"><button type="button" class="btn primary" onclick="PranchetaCad.criarLoteNovo()">Criar lote</button></div>`
+      $('pc-conferencia').scrollIntoView({block:'nearest',behavior:'smooth'})
+    }finally{s.busy=false}
+  }
+  function criarLoteNovo(){
+    if(!s)return
+    confirmarAcao({titulo:'Criar lote',mensagem:'Vai inserir um imóvel novo no cadastro, com a geometria desenhada. A criação fica registrada com o seu nome, e o lote passa a ser protegido contra sobrescrita por reimportação do DWG.',textoBtn:'Criar',
+      onConfirm:async()=>{const d=await postCadastro('/api/lotes',corpoLoteNovo());if(!d)return;toast(d.message);const cb=s?.opts?.aoGravar;if(s)s.entregue=true;await fechar(true);cb?.()}})
   }
   function corpoEdicao(){return {quadra:s.dados.quadra,numero_lote:s.dados.numero_lote,geometry:geometriaLivre()}}
   async function conferirEdicao(){
@@ -433,7 +496,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function dados(abrir){
     if(!s)return;s.medindo=null;render();if(!abrir){$('pc-dados').hidden=true;enquadrar();return}
-    if(livre()){if(s.traco.length)terminar();if(s.resultado.erro){dica(s.resultado.erro);return}if(s.tipo==='novo'){entregarLoteNovo();return}formEdicao();return}
+    if(livre()){if(s.traco.length)terminar();if(s.resultado.erro){dica(s.resultado.erro);return}if(s.tipo==='novo'){formLoteNovo();return}formEdicao();return}
     if(s.tipo==='unificacao'&&!s.uniao){dica(s.erroUniao||'Aguarde o cálculo da unificação.');return}if(s.traco.length)terminar();if(s.operacao){dica('Conclua ou cancele o movimento primeiro.');return}
     if(s.tipo==='desmembramento'&&(s.resultado.erro||s.resultado.partes.length<2)){dica(s.resultado.erro||'Trace uma divisão completa antes de preencher as partes.');return}
     prepararIdentidades();$('pc-dados').hidden=false;
@@ -444,10 +507,10 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
         const d=s.dados[parteKey(r)]||{},prefixo=s.identidade?.inscricao?.slice(0,-3)||'Inscrição indisponível';
         return `<fieldset class="pc-parte-card" style="--parte-cor:${cores[i%cores.length]}"><legend>Parte ${i+1}</legend>
           <header class="pc-parte-topo"><div><b>${e(d.numero_lote||'Sem apelido')}</b><small>${fmtNum(Math.abs(G.area(r)))} m² · DESMEMBRADO</small></div><div class="pc-ordem-botoes"><button class="btn sm out-cinza" type="button" aria-label="Mover parte ${i+1} para cima" ${i===0?'disabled':''} onclick="PranchetaCad.ordenarParte(${i},-1)">↑</button><button class="btn sm out-cinza" type="button" aria-label="Mover parte ${i+1} para baixo" ${i===s.resultado.partes.length-1?'disabled':''} onclick="PranchetaCad.ordenarParte(${i},1)">↓</button></div></header>
-          <label class="pc-inscricao-label">Inscrição imobiliária<div class="pc-inscricao-editor"><span>${e(prefixo)}</span><input aria-label="Final da inscrição da parte ${i+1}" data-parte="${i}" data-campo="desmembramento" type="text" inputmode="numeric" maxlength="3" pattern="[0-9]{1,3}" value="${d.desmembramento==null?'':String(d.desmembramento).padStart(3,'0')}" placeholder="000"></div></label>
-          <small class="pc-inscricao-ajuda">Edite os três últimos dígitos, inclusive 000. O prefixo é herdado do original.</small>
+          <label class="pc-inscricao-label">Inscrição imobiliária<div class="pc-inscricao-editor"><span>${e(prefixo)}</span><input aria-label="Final da inscrição da parte ${i+1}" data-parte="${i}" data-campo="desmembramento" type="text" inputmode="numeric" maxlength="3" title="Os três últimos dígitos da inscrição (inclusive 000); o prefixo vem do lote original" pattern="[0-9]{1,3}" value="${d.desmembramento==null?'':String(d.desmembramento).padStart(3,'0')}" placeholder="000"></div></label>
+          ${botaoMais()}<div class="pc-parte-mais" hidden>
           <div class="pc-identidade" data-identidade="${i}">${identidadeTexto(d)}</div>
-          <details class="pc-medidas"><summary>Dimensões e área</summary><button class="btn sm out-verde" type="button" onclick="PranchetaCad.classificarFaces(${i})">Calcular medidas pelas faces</button><div class="pc-campos">${campos.map(([k,t])=>`<label>${t}<input data-parte="${i}" data-campo="${k}" type="number" step="0.01" min="0" value="${e(d[k])}"></label>`).join('')}</div></details></fieldset>`
+          <div class="pc-medidas"><b class="pc-medidas-tit">Dimensões e área</b><button class="btn sm out-verde" type="button" onclick="PranchetaCad.classificarFaces(${i})">Calcular medidas pelas faces</button><div class="pc-campos">${campos.map(([k,t])=>`<label>${t}<input data-parte="${i}" data-campo="${k}" type="number" step="0.01" min="0" value="${e(d[k])}"></label>`).join('')}</div></div></div></fieldset>`
       }).join('');
     if(!s.protocoloId)h+=`<label>Justificativa do ato direto<textarea id="pc-motivo" minlength="10" maxlength="500" placeholder="Descreva o motivo da alteração cadastral">${e(s.justificativa)}</textarea></label>`;
     h+='<div class="pc-form-acoes"><button type="button" class="btn out-cinza" onclick="PranchetaCad.salvar().catch(()=>{})">Salvar rascunho</button><button type="button" class="btn primary" onclick="PranchetaCad.conferir()">Conferir e continuar</button></div>';
@@ -468,6 +531,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     for(const [k,valor] of Object.entries(campos)){const msg=Array.isArray(valor)?valor.join(' '):String(valor),input=campoErro(k);mensagens.push(msg);
       if(input){const aviso=document.createElement('small');aviso.className='pc-erro-campo';aviso.id='pc-erro-'+mensagens.length;aviso.textContent=msg;input.setAttribute('aria-invalid','true');input.setAttribute('aria-describedby',aviso.id);input.closest('label').appendChild(aviso);const details=input.closest('details');if(details)details.open=true;primeiro||=input}
     }
+    abrirCartoesComErro()   // campo com erro no "Mostrar mais": o cartão abre
     $('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(mensagens.length?'Revise os campos indicados':err.message||'Não foi possível concluir.')}</b>${mensagens.length?'<ul>'+mensagens.map(m=>'<li>'+e(m)+'</li>').join('')+'</ul>':''}</div>`;
     const alvo=primeiro||$('pc-conferencia');alvo.focus();alvo.scrollIntoView({block:'nearest',behavior:'smooth'})
   }
@@ -512,5 +576,5 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function exportar(){if(!s)return;const clone=svg.cloneNode(true);clone.querySelectorAll('image,[data-snap],.pc-snap').forEach(n=>n.remove());clone.removeAttribute('id');clone.setAttribute('width',s.w);clone.setAttribute('height',s.h);const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent='.pc-label,.pc-cota,.pc-confronto,.pc-vizinho{font:12px sans-serif;fill:#243b4b;paint-order:stroke;stroke:white;stroke-width:4px}.pc-hit{fill:none;stroke:transparent;stroke-width:14}.pc-confronto{font-weight:bold}.pc-snap{font:12px sans-serif;fill:#16803c}';clone.prepend(style);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=url;a.download=`${s.tipo}-${s.ids.join('-')}.svg`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   async function verSalvas(id){try{const r=await fetch(`/api/lotes/${id}/pranchas`,{headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.message);if(!d.pranchas.length){toast('Este imóvel ainda não possui prancha finalizada.', 'aviso');return}const p=d.pranchas[0];await abrir(p.tipo,p.visualizacao.originais.map(f=>f.properties.id),null,p.visualizacao)}catch(err){toast(err.message,'err')}}
-  return {ativa:()=>!!s,opcoesSnap,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()

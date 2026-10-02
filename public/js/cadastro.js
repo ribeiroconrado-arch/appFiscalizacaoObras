@@ -1674,7 +1674,18 @@ function iniciarDesenhoDeLote(contorno) {
   PranchetaCad.abrir('novo', [], null, null, {
     centro: c,
     bairro: bairro ? 'Lote novo · ' + bairro : '',
+    // O bairro já vem escolhido no cartão de finalização (o do lote ao lado).
+    bairroPadrao: bairro,
     contorno,
+    // O lote é gravado DENTRO da prancheta (cartão "Lote novo"): aqui só se
+    // larga a ferramenta e se traz o lote novo para o mapa.
+    aoGravar: () => {
+      desenhoPendente = null
+      if (cadModo === 'desenho') { sairModoCadastral(true) }
+      pintarPainelCadastro()
+      limparLotesDoMapa()
+      carregarLotesVisiveis()
+    },
     // Fechou a prancheta sem entregar o contorno: larga a ferramenta. O
     // rascunho do traçado fica guardado no navegador (prancheta-cadastral.js),
     // e reabrir "Desenhar lote" o recupera.

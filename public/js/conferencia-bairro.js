@@ -190,7 +190,7 @@ function pintarJanelaConferencia() {
     const j = confState.justificativas[tipo + '|' + _confChave(tipo, l)]
     return `<tr${just ? ' class="conf-justificada"' : ''}>
       <td class="mono">${esc(l.inscricao || '—')}</td>
-      <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}${l.isencao ? ` <span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>` : ''}
+      <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}${l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''}${l.isencao ? ` <span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>` : ''}
         ${j ? `<div class="imp-sub">Justificado por ${esc(j.por || '—')} em ${esc(j.em)}: ${esc(j.motivo)}</div>` : ''}</td>
       <td class="imp-abrir">${ver}</td><td class="imp-abrir">${acao}</td></tr>`
   }
@@ -210,15 +210,15 @@ function pintarJanelaConferencia() {
     <div class="imp-fixo-topo">
       <div class="conf-topo">${sel}</div>
       <div class="imp-fonte">
-        ${r && (r.retrato_id || r.fonte !== 'planilha') ? `<label class="imp-opcao" title="${esc(r.fonte_descricao)}"><input type="radio" name="conf-fonte" value="ultima" checked
-          onchange="document.getElementById('conf-soltar').hidden = true"> Mesma fonte da última${r.retrato_id ? ' (planilha guardada)' : ''}</label>` : ''}
-        <label class="imp-opcao"><input type="radio" name="conf-fonte" value="carregado" ${r && (r.retrato_id || r.fonte !== 'planilha') ? '' : 'checked'}
+        ${r && (r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? `<label class="imp-opcao" title="${esc(r.fonte_descricao)}"><input type="radio" name="conf-fonte" value="ultima" checked
+          onchange="document.getElementById('conf-soltar').hidden = true"> ${r.fonte === 'planilha' ? 'Revisar as divergências (sem planilha)' : 'Mesma fonte da última (cadastro carregado)'}</label>` : ''}
+        <label class="imp-opcao"><input type="radio" name="conf-fonte" value="carregado" ${r ? '' : 'checked'}
           onchange="document.getElementById('conf-soltar').hidden = true"> Cadastro carregado</label>
-        <label class="imp-opcao"><input type="radio" name="conf-fonte" value="planilha"
+        <label class="imp-opcao"><input type="radio" name="conf-fonte" value="planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? 'checked' : ''}
           onchange="document.getElementById('conf-soltar').hidden = false"> Planilha .xlsx</label>
         <button class="btn primary sm" id="conf-btn" onclick="conferirBairroAgora()">${r ? 'Conferir de novo' : 'Conferir'}</button>
       </div>
-      <label class="imp-soltar compacta" id="conf-soltar" for="conf-planilha" hidden>
+      <label class="imp-soltar compacta" id="conf-soltar" for="conf-planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? '' : 'hidden'}>
         <input type="file" id="conf-planilha" accept=".xlsx"
           onchange="_mostrarEscolhido('conf-soltar', this.files[0], 'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário')">
         ${ICO_SOLTAR}<b>Solte a planilha .xlsx aqui</b><span>ou clique para escolher · exportação do cadastro imobiliário</span>
@@ -236,7 +236,7 @@ function pintarJanelaConferencia() {
       ${Object.keys(CONF_TIPOS).map(grupo).join('')}`
       : '<p class="imp-expl">Este bairro ainda não foi conferido. Escolha a fonte e confira.</p>'}
     <div class="imp-fixo-rodape">
-      ${r ? `<div class="imp-rodape-conf"><span class="imp-sub">${esc(r.fonte_descricao)} · conferido em ${esc(r.conferido_em)}
+      ${r ? `<div class="imp-rodape-conf"><span class="imp-sub">${esc(r.fonte_descricao)} · conferido em ${esc(r.conferido_em)}${r.revisao ? ` · revisado sem planilha em ${esc(r.revisao.em)} (${r.revisao.resolvidas} resolvida(s))` : ''}
         por ${esc(r.conferido_por || '—')} · código do bairro ${esc(r.codigo_bairro)}${nJust ? ` · ${nJust} justificada(s)` : ''}</span></div>` : ''}
       <div class="btn-row imp-acoes">
         <button class="btn" onclick="fModalBtn('m-conferencia')">Fechar</button>

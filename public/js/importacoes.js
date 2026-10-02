@@ -386,15 +386,15 @@ function renderFichaImportacao(i) {
   const controles = andamento ? `
     <div class="sec-title">Conferência com o cadastro da prefeitura</div>
     <div class="imp-fonte">
-      ${cc && (cc.retrato_id || cc.fonte !== 'planilha') ? `<label class="imp-opcao" title="${esc(cc.fonte_descricao)}"><input type="radio" name="imp-fonte" value="ultima" checked
-        onchange="alternarFonteConferencia()"> Mesma fonte da última conferência${cc.retrato_id ? ' (planilha guardada)' : ''}</label>` : ''}
-      <label class="imp-opcao"><input type="radio" name="imp-fonte" value="carregado" ${cc && (cc.retrato_id || cc.fonte !== 'planilha') ? '' : 'checked'}
+      ${cc && (cc.fonte === 'planilha' || cc.imoveis_no_cadastro > 0) ? `<label class="imp-opcao" title="${esc(cc.fonte_descricao)}"><input type="radio" name="imp-fonte" value="ultima" checked
+        onchange="alternarFonteConferencia()"> ${cc.fonte === 'planilha' ? 'Revisar as divergências (sem planilha)' : 'Mesma fonte da última (cadastro carregado)'}</label>` : ''}
+      <label class="imp-opcao"><input type="radio" name="imp-fonte" value="carregado" ${cc ? '' : 'checked'}
         onchange="alternarFonteConferencia()"> Cadastro carregado no sistema</label>
-      <label class="imp-opcao"><input type="radio" name="imp-fonte" value="planilha"
+      <label class="imp-opcao"><input type="radio" name="imp-fonte" value="planilha" ${cc && !(cc.fonte === 'planilha' || cc.imoveis_no_cadastro > 0) ? 'checked' : ''}
         onchange="alternarFonteConferencia()"> Planilha .xlsx enviada agora</label>
       <button class="btn primary sm" id="imp-btn-conferir" onclick="conferirComCadastro()">${cc ? 'Conferir de novo' : 'Conferir'}</button>
     </div>
-    <label class="imp-soltar compacta" id="imp-soltar-planilha" for="imp-planilha" hidden>
+    <label class="imp-soltar compacta" id="imp-soltar-planilha" for="imp-planilha" ${cc && !(cc.fonte === 'planilha' || cc.imoveis_no_cadastro > 0) ? '' : 'hidden'}>
       <input type="file" id="imp-planilha" accept=".xlsx"
         onchange="_mostrarEscolhido('imp-soltar-planilha', this.files[0], 'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário')">
       ${ICO_SOLTAR}
@@ -504,9 +504,9 @@ function _htmlConferenciaCadastro(i, c) {
         não deu para saber quais inscrições estão <b>inativas</b> no cadastro.</div>` : ''}
     ${c.total_divergencias === 0 ? '<div class="cad-nota imp-nota">Nenhuma divergência: todo lote do arquivo está ativo no cadastro, e todo imóvel ativo do cadastro tem lote.</div>' : ''}
     ${grupo('No arquivo, não encontrados no cadastro', 'bd-er', c.nao_encontrados, l => `
-      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra)} · L ${esc(l.lote)}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}
+      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra)} · L ${esc(l.lote)}${l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}
     ${grupo('Desenhados no mapa, inativos no cadastro', 'bd-er', c.inativos, l => `
-      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra)} · L ${esc(l.lote)}</td>
+      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra)} · L ${esc(l.lote)}${l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''}</td>
           <td><span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span></td><td class="imp-abrir">${verLote(l)}</td></tr>`)}
     ${grupo('No cadastro (ativos), sem lote no arquivo', 'bd-er', c.sem_lote, l => `
       <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td>
@@ -516,7 +516,7 @@ function _htmlConferenciaCadastro(i, c) {
       <tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}`,
     rodape: `
     <div class="imp-rodape-conf">
-      <span class="imp-sub">${esc(c.fonte_descricao)} · conferido em ${esc(c.conferido_em)} por ${esc(c.conferido_por || '—')}
+      <span class="imp-sub">${esc(c.fonte_descricao)} · conferido em ${esc(c.conferido_em)} por ${esc(c.conferido_por || '—')}${c.revisao ? ` · revisado sem planilha em ${esc(c.revisao.em)} (${c.revisao.resolvidas} resolvida(s))` : ''}
         · código do bairro ${esc(c.codigo_bairro)}</span>
       ${c.total_divergencias ? `<a class="btn sm" href="/api/importacoes/${i.id}/divergencias.csv">Baixar divergências (.csv)</a>` : ''}
     </div>`,

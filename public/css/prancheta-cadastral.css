@@ -20,6 +20,19 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 .pc-x{flex:none;width:34px;height:34px;border-radius:50%;border:0;background:#edf2f6;color:#32495b;font-size:15px;position:relative}
 .pc-x:hover{background:#fde8e8;color:#b91c1c}
 #pc-salvo{font-size:11px;color:#476452;max-width:260px}
+/* Cartão da parte / do lote novo: "Mostrar mais" abre identidade e medidas. */
+.pc-mais{display:inline-flex;align-items:center;gap:5px;margin-top:10px;padding:5px 10px;border:1px solid #c8d6e1;border-radius:999px;background:#fff;color:#32495b;font-size:11.5px;font-weight:600}
+.pc-mais:hover{background:#edf2f6}
+.pc-parte-mais{margin-top:10px}
+.pc-parte-mais[hidden]{display:none}
+.pc-medidas-tit{display:block;font-size:12px;margin-bottom:8px}
+/* Cartão mais enxuto: apelido e metragem NA MESMA LINHA, menos respiro. */
+#pc-dados .pc-parte-card{padding:10px 14px 12px;margin-bottom:12px}
+#pc-dados .pc-parte-topo{margin:0 0 8px}
+#pc-dados .pc-parte-topo>div:first-child{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;min-width:0}
+#pc-dados .pc-parte-topo>div:first-child small{display:inline;margin-top:0;font-size:11px}
+#pc-dados .pc-parte-card .pc-mais{margin-top:8px}
+#pc-dados select{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:4px;padding:7px;font:12px Inter,Arial;background:#fff}
 #pc-modal .pc-anotar .field{border:0;outline:0;box-shadow:none;padding:0;background:transparent;border-radius:0}#pc-modal .pc-anotar .field:focus-within{border:0;outline:0;box-shadow:none}#pc-modal .pc-anotar input{outline:0;box-shadow:none;border:1px solid #bacabd}#pc-modal .pc-anotar input:focus{outline:0;box-shadow:none;border:1px solid var(--g,#009b3a)}
 #pc-dados .pc-fechar-dados{position:static;flex:0 0 30px;width:30px;height:30px;border:0;border-radius:50%;background:var(--bg,#f1f3f2);color:var(--tx2,#66736b);display:inline-flex;align-items:center;justify-content:center;padding:0;font-size:16px}#pc-dados .pc-fechar-dados:hover{background:var(--bord,#dce4df)}#pc-dados .pc-fechar-dados:focus-visible{outline:2px solid var(--g,#009b3a);outline-offset:2px}#pc-dados [aria-invalid=true]{border:1px solid #bc3030;background:#fff7f7}.pc-erro-campo{display:block;color:#a82626;font-size:11px;line-height:1.4;margin-top:5px}.pc-erro-resumo{padding:12px;border:1px solid #e8b9b9;background:#fff5f5;color:#922525;border-radius:8px}.pc-erro-resumo ul{padding-left:18px;margin:8px 0 0}
 #pc-dados .pc-sequencia-acoes{flex-wrap:nowrap;gap:10px}#pc-dados .pc-sequencia-acoes label{margin:0;white-space:nowrap;font-weight:600}#pc-dados #pc-sequencia-inicio{width:50px;min-width:50px;flex:0 0 50px;padding:7px 4px}#pc-dados .pc-sequencia-acoes button{white-space:nowrap}
