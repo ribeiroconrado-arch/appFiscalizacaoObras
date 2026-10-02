@@ -1,58 +1,84 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Fiscalização de Obras — Primavera do Leste/MT
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistema municipal de fiscalização de obras. O fiscal localiza o imóvel no mapa
+cadastral, registra a vistoria (relatório em itens, fotos georreferenciadas,
+irregularidades com fundamento legal) e lavra os atos — notificação, embargo,
+auto de infração — com numeração, prazos e memória de cálculo da multa. O mesmo
+mapa serve à curadoria do cadastro imobiliário: desenho, desmembramento,
+unificação e importação de bairros, tudo auditado.
 
-## About Laravel
+Em produção: <https://fiscobras.duckdns.org>
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| | |
+|---|---|
+| Back-end | PHP 8.4 · Laravel 13 |
+| Banco | MySQL 8 Spatial (armazenamento em EPSG:4326; origem SIRGAS 2000 / UTM 21S) |
+| Front-end | JavaScript puro e CSS estáticos em `public/`, **sem build** · Leaflet |
+| Impressão | Blade (`resources/views/impressao/`) |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Começando
 
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Instalação, usuários de teste, comandos de importação e as armadilhas do MySQL
+Spatial estão em **[COMO-RODAR.md](COMO-RODAR.md)**.
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env && php artisan key:generate
+php artisan migrate
+php artisan db:seed --class=UsuariosSeeder
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Testes
 
-## Contributing
+```bash
+php artisan test   # PHPUnit: tests/Feature, tests/Unit
+npm test           # geometria do front-end: tests/*.test.cjs (Node, sem dependências)
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Os scripts `tests/*-backend.php` são diagnósticos contra o banco MySQL real
+(rodam numa transação desfeita no fim) e os `tests/*-browser.cjs` exigem um
+navegador local; ver o cabeçalho de cada um.
 
-## Code of Conduct
+## Estrutura
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+| Pasta | O quê |
+|---|---|
+| `app/Http/Controllers` | rotas da tela e da API interna (`routes/web.php`) |
+| `app/Services` | regras de negócio: lavratura, desmembramento, unificação, importação, desfazer |
+| `app/Repositories/LoteRepository.php` | **todo** o SQL espacial, concentrado |
+| `app/Cadastro` | leitura e conferência do cadastro imobiliário da prefeitura (BCI) |
+| `app/Support` | geometria plana na grade UTM, inscrição imobiliária |
+| `app/Console/Commands` | importação, conferências e correções da base GIS |
+| `public/js`, `public/css` | front-end (um arquivo por tela/ferramenta) |
+| `resources/views/mapa.blade.php` | a aplicação (todas as telas) |
+| `tools/` | utilitários de desenvolvimento (ícones) |
 
-## Security Vulnerabilities
+## Documentação
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+`docs/ai/` é a documentação viva do projeto:
 
-## License
+| Arquivo | Para quê |
+|---|---|
+| [CONTEXTO.md](docs/ai/CONTEXTO.md) | o que o sistema é e as regras que não se negociam |
+| [ESTADO-ATUAL.md](docs/ai/ESTADO-ATUAL.md) | o que funciona, o que falta, o que está quebrado |
+| [TAREFA-ATUAL.md](docs/ai/TAREFA-ATUAL.md) | onde o trabalho parou |
+| [ARQUITETURA.md](docs/ai/ARQUITETURA.md) | decisões técnicas e por quê |
+| [ROADMAP.md](docs/ai/ROADMAP.md) | o que vem a seguir |
+| [DECISOES-UX.md](docs/ai/DECISOES-UX.md) · [DESIGN-SYSTEM.md](docs/ai/DESIGN-SYSTEM.md) | telas e componentes |
+| [CHANGELOG-IA.md](docs/ai/CHANGELOG-IA.md) | histórico comentado das entregas |
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Documentos citados que ficam fora do repositório
+
+O código cita alguns documentos que **não estão versionados aqui** de
+propósito: diagnóstico da base e ADRs ficam na pasta de documentação do projeto
+(OneDrive), e o roteiro de deploy fica só no servidor, por descrever a
+infraestrutura (o `.gitignore` bloqueia `docs/deploy.md`).
+
+| Citação | Onde está |
+|---|---|
+| `docs/ADR-001-banco-espacial.md` | OneDrive — por que MySQL Spatial e não PostGIS |
+| `docs/etapa0-conclusoes.md`, `docs/etapa1-base-piloto.md` | OneDrive — diagnóstico da base GIS |
+| `gis/tools/dxf_para_geojson.py` | OneDrive — conversão DWG/DXF → GeoJSON |
+| `docs/deploy.md` | servidor de produção |
