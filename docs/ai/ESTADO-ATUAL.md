@@ -1,14 +1,16 @@
 # ESTADO ATUAL
 
 > O que funciona, o que falta e o que está quebrado — medido, não estimado.
-> Atualizado em **04/09/2026**, commit `fea0041`, contra o banco de produção.
+> Revisado em **02/10/2026** (commit `bd34623`) a partir do código.
+> Os **números da base** abaixo são os medidos em 04/09/2026 (commit `fea0041`)
+> contra o banco de produção e **não foram remedidos** desde então.
 
 ## Em produção
 
 <https://fiscobras.duckdns.org> · Oracle Always Free (Ubuntu 24.04) ·
 2 vCPU / 1 GB + 2 GB swap · PHP 8.4 · MySQL 8.0.46
 
-## Números da base
+## Números da base (medidos em 04/09/2026)
 
 | Tabela | Linhas | Observação |
 |---|---:|---|
@@ -50,7 +52,16 @@ legal, que é o que dá força à peça, está quase vazio.
 | Bairros e irregularidades em Parâmetros (CRUD) | ✅ |
 | Inscrição imobiliária derivada, exibida e buscável | ✅ |
 | Auditoria de tudo que altera identificação | ✅ |
-| Dois temas (institucional / F) | ✅ |
+| Três temas (institucional / F / azul) e menu lateral recolhível | ✅ |
+| Importação de bairro pela tela (rascunho → salva → publicada), com pré-curadoria | ✅ `bd34623` |
+| Conferência do bairro com a planilha do cadastro, nos dois sentidos, com justificativas | ✅ `bd34623` |
+| Painel Camadas, pesquisa em barra (inscrição, endereço, coordenada lat/long ou UTM) | ✅ `bd34623` |
+| Contorno de bairro gerado dos lotes | ✅ `bd34623` |
+| Prancheta em tela cheia (Snap, Ortho, Fillet) | ✅ `bd34623` |
+| Acesso externo (topógrafo, arquiteto, contribuinte) só a mapa e consulta | ✅ `bd34623` |
+| Trilha de alterações do cadastro e desfazer (incl. exclusão e desmembramento) | ✅ |
+| Layout responsivo (celular, tablet, desktop) | ✅ `9f44bbe` `8a25541` |
+| Deploy automático por webhook do GitHub | ✅ `f479da8` `db1d8bc` |
 
 ## O que está pendente ou quebrado
 
@@ -92,10 +103,12 @@ avisa. Depende de alimentar a legislação em Parâmetros.
 
 Os demais só entram quando o bairro for levantado (DWG → GeoJSON → importação).
 
-### 🟡 Importar bairro novo exige terminal
+### 🟡 Converter DWG → GeoJSON ainda exige terminal
 
-Converter DWG→GeoJSON (`gis/tools/dxf_para_geojson.py`) e rodar
-`lotes:importar` só funciona da máquina de desenvolvimento. **Não há tela.**
+A importação do GeoJSON **já tem tela** (`bd34623`: rascunho, pré-curadoria,
+conferência, publicação). O passo anterior — converter o DWG com
+`gis/tools/dxf_para_geojson.py`, que fica fora do repositório — continua só na
+máquina de desenvolvimento.
 
 ### 🟡 Colação divergente entre `lotes` e `cadastro_bairros`
 
@@ -126,8 +139,15 @@ está certo é a prefeitura** — o sistema não corrige.
 | `php artisan gis:conferir` | sobreposição, sufixo de desmembramento solto, órfão |
 | `php artisan inscricao:conferir` | a fórmula da inscrição contra os dados reais |
 
-**Não há suíte de testes automatizados.** `phpunit.xml` aponta para SQLite em
-memória, que não roda as migrações espaciais do MySQL. A verificação é feita no
+Testes automatizados existem, mas **não cobrem o banco espacial**:
+
+| Comando | Cobre |
+|---|---|
+| `php artisan test` | acesso anônimo, webhook de deploy, geometria plana (SQLite em memória) |
+| `npm test` | geometria do front-end em Node (`tests/*.test.cjs`, 55 casos) |
+| `php tests/importacao-backend.php` e afins | diagnóstico contra o MySQL real, numa transação desfeita |
+
+Não há CI: nada roda sozinho a cada push. O resto da verificação continua no
 navegador, contra o sistema real, com usuário temporário criado e removido ao
 fim.
 
@@ -137,4 +157,7 @@ fim.
   telas e modais). Funciona, mas é um arquivo muito grande.
 - `public/js/vistoria.js` passa de 2.900 linhas.
 - Front sem módulos ES: tudo em escopo global.
-- `README.md` ainda é o padrão do Laravel.
+- `public/css/tema-f.css` passa de 3.300 linhas: três temas empilhados, cada
+  um sobrescrevendo o anterior.
+- Cada `fetch` monta o próprio cabeçalho `X-CSRF-TOKEN` (23 lugares); falta um
+  utilitário único.

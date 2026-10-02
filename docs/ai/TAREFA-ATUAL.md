@@ -2,23 +2,23 @@
 
 > O que está em curso **agora**. Este arquivo é curto de propósito: ele responde
 > "onde eu parei?" para quem volta amanhã.
-> Atualizado em 04/09/2026.
+> Atualizado em 02/10/2026.
 
 ## Em curso
 
-**Nada em curso.** A última entrega foi concluída, verificada e publicada.
-
-Última coisa feita: a regra dos dois nomes de bairro — oficial fora do mapa,
-nome do desenho só no mapa (commit `fea0041`, em produção).
+**Nada em curso.** A última entrega de funcionalidade foi a importação de
+bairro pela tela, a conferência com o cadastro, o painel Camadas e a prancheta
+em tela cheia (commit `bd34623`, 02/10/2026). Depois dela veio só limpeza de
+repositório (protótipos, esqueleto do Vite, README próprio, docs revisados).
 
 ## Estado da árvore
 
 | | |
 |---|---|
-| Branch | `main` |
-| Último commit | `fea0041` |
-| Publicado | sim — produção está em `fea0041` |
-| Pendências não commitadas | nenhuma |
+| Branch principal | `main` |
+| Último commit de funcionalidade | `bd34623` |
+| Publicado | **conferir** — produção estava em `fea0041` em 04/09; o deploy automático (`f479da8`) publica cada push na `main` |
+| Migrações novas | 27/09 a 02/10 (importações, pré-curadoria, contorno, conferência, retratos, e-mail opcional) — o `deploy.sh` migra; conferir com `php artisan migrate:status` |
 
 ## O que fazer a seguir
 

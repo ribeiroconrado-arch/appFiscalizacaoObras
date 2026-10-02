@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * Cria o administrador inicial e um usuário de cada perfil, para que a matriz
@@ -12,12 +13,16 @@ use Illuminate\Support\Facades\Hash;
  *
  * Idempotente (`updateOrCreate` por e-mail): rodar de novo não duplica nem
  * apaga senha alterada depois, exceto a do admin, que é sempre reposta.
+ *
+ * A senha vem de `SEED_SENHA_ADMIN`. Sem ela, é sorteada a cada execução: o
+ * repositório é público, e uma senha padrão escrita aqui valeria para qualquer
+ * base semeada sem configurar o `.env`.
  */
 class UsuariosSeeder extends Seeder
 {
     public function run(): void
     {
-        $senha = env('SEED_SENHA_ADMIN', 'Trocar@2026');
+        $senha = env('SEED_SENHA_ADMIN') ?: Str::password(16, symbols: false);
 
         $usuarios = [
             [

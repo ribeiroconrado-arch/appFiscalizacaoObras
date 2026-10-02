@@ -1,7 +1,8 @@
 # Fiscalização de Obras — como rodar
 
 Sistema municipal de fiscalização de obras de Primavera do Leste/MT.
-Documentação do projeto (diagnóstico GIS, decisões, plano) fica em
+Documentação versionada: `docs/ai/` (ver `README.md`). Os documentos de
+diagnóstico GIS, ADRs e deploy ficam fora do repositório, em
 `OneDrive\Programação\Apps\appFiscalizaçãoObras\docs\`.
 
 ## Endereço
@@ -20,8 +21,8 @@ automaticamente qualquer pasta em `%USERPROFILE%\Herd`.
 
 ## Usuários de teste
 
-Criados por `UsuariosSeeder`. Senha de todos: **`Trocar@2026`**
-(sobrescrevível por `SEED_SENHA_ADMIN` no `.env`).
+Criados por `UsuariosSeeder`, todos com a senha de `SEED_SENHA_ADMIN` no `.env`.
+Sem essa variável a senha é sorteada a cada execução e mostrada no terminal.
 
 | E-mail | Perfil gravado | Cargo | Perfil **aplicado** |
 |---|---|---|---|
@@ -34,7 +35,7 @@ A terceira linha não é erro de cadastro: é o caso de teste da trava. Só
 cargo é rebaixado por `User::perfilEfetivo()`, mesmo que o banco diga outra
 coisa. Se essa linha um dia aparecer como "Comum", a regra quebrou.
 
-> **Trocar essas senhas antes de qualquer uso fora da rede local.**
+> **Esses usuários são de teste. Em produção, troque as senhas ou desative-os.**
 
 ## Comandos
 
@@ -56,7 +57,7 @@ muito pior de diagnosticar.
 
 ```bash
 php artisan test
-node --test tests/prancheta-geo.test.cjs tests/editor-cortes.test.cjs tests/desenho-medidas.test.cjs
+npm test        # = node --test tests/*.test.cjs (sem dependências)
 ```
 
 Os `.cjs` rodam a geometria fora do navegador, carregando os arquivos de
@@ -133,7 +134,8 @@ sem ganho. Quando houver consumidor externo, aí entra Sanctum.
 
 ## Armadilhas do MySQL Spatial já mapeadas
 
-Estão documentadas em `docs/ADR-001-banco-espacial.md` do projeto. As três que
+Estão documentadas na ADR-001 (`docs/ADR-001-banco-espacial.md`, fora do
+repositório). As três que
 mordem em silêncio:
 
 1. **Ordem dos eixos.** Em SRID 4326 o MySQL usa lat/long. Todo WKT precisa de
@@ -154,7 +156,5 @@ resultado esperado, não um bug.
 
 ## Pendências
 
-- **Chave `bairro|quadra|lote` ainda não é única** (~5% de repetição, por erro
-  de atribuição de quadra). Ver `docs/etapa1-base-piloto.md`. Só trava a Etapa 4.
-- Cadastro de usuários pela interface (hoje só por seeder).
-- Auditoria, vistorias, documentos: Etapas 5 a 7.
+O que está pendente fica em `docs/ai/ESTADO-ATUAL.md` e
+`docs/ai/TAREFA-ATUAL.md` — não repetido aqui para não divergir.
