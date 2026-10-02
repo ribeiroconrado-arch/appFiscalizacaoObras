@@ -1000,216 +1000,106 @@
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
 
-  {{-- USUÁRIOS — desenho do painel administrativo do AppPOSTURAS: seção
-       numerada, botão de contorno para criar, e um cartão por usuário com
-       avatar, identificação e o Editar à direita. --}}
-  <div class="par-painel at" id="par-usuarios">
-    <div class="par-sec"><span class="par-num">1</span>Usuários<span class="cont" id="cont-usuarios">0</span></div>
-    <button class="btn out-verde sm" onclick="novoUsuario()">+ Novo usuário</button>
-    <div id="lista-usuarios" style="margin-top:12px"></div>
+  {{-- PADRÃO DE TODAS AS ABAS (o do AppPOSTURAS): no topo só a busca e o
+       "+ Novo"; cada item da lista tem o próprio Editar, que abre os campos
+       dentro da linha. Os cartões são desenhados por parametros.js. --}}
+
+  {{-- USUÁRIOS — o Editar abre a janela do usuário (senha e permissões). --}}
+  <div class="par-painel par-fixo at" id="par-usuarios">
+    <div class="par-fixo-topo">
+      <div class="sec-simples">Usuários <span class="cont" id="cont-usuarios">0</span></div>
+      <div class="par-busca">
+        <input type="search" id="busca-usuarios" placeholder="Procurar por nome, login ou matrícula" oninput="renderUsuarios()">
+        <button class="btn out-verde sm" onclick="novoUsuario()">+ Novo usuário</button>
+      </div>
+    </div>
+    <div class="par-fixo-lista" id="lista-usuarios"></div>
   </div>
 
-  {{-- LEGISLAÇÃO — lista de leis → detalhe da lei, como no AppPOSTURAS.
-       Aninhar os artigos dentro da lista virava uma árvore longa demais
-       para achar qualquer coisa. --}}
-  <div class="par-painel" id="par-legislacao">
-
-    {{-- SUB-TELA: LISTA DE LEIS --}}
-    <div id="leg-lista">
-      <div id="par-legislacao-aviso"></div>
-      <div class="par-sec"><span class="par-num">1</span>Leis<span class="cont" id="cont-leis">0</span></div>
-
-      {{-- Busca e criação na mesma linha, como no AppPOSTURAS. O campo serve
-           aos dois: filtra a lista enquanto se digita e, se nada casar, o
-           texto vira o nome da lei nova — quem procurou e não achou está,
-           quase sempre, prestes a cadastrar. --}}
+  {{-- LEGISLAÇÃO — lista de leis → detalhe da lei (artigos e textos de
+       ciência). Aninhar os artigos dentro da lista virava uma árvore longa
+       demais para achar qualquer coisa. --}}
+  <div class="par-painel par-fixo" id="par-legislacao">
+    <div class="par-fixo-topo" id="leg-topo-lista">
+      <div class="sec-simples">Leis <span class="cont" id="cont-leis">0</span>
+        <span class="pil pil-off" id="leg-sem-enquadramento" hidden></span></div>
       <div class="par-busca">
-        <input type="text" id="lei-busca" placeholder="Nome da lei (ex: Lei Complementar 1.234/2020)…"
-               oninput="filtrarLeis()" onkeydown="if(event.key==='Enter')novaLei()">
-        <button class="btn out-verde sm" onclick="novaLei()">+ Nova lei</button>
+        <input type="search" id="lei-busca" placeholder="Procurar lei por número ou nome" oninput="renderLeis()">
+        <button class="btn out-verde sm" onclick="parNovo('leis')">+ Nova lei</button>
       </div>
-      <div class="cad-dica">Toque numa lei para ver os artigos e os textos de ciência.</div>
-      <div id="lista-leis"></div>
     </div>
-
-    {{-- SUB-TELA: DETALHE DA LEI --}}
-    <div id="leg-detalhe" style="display:none">
+    <div class="par-fixo-topo" id="leg-topo-detalhe" style="display:none">
       <div class="sub-topo">
         <button class="btn sm" onclick="voltarLeis()">← Voltar</button>
         <div class="titulo" id="leg-detalhe-titulo">—</div>
       </div>
-
       <div class="sub-abas">
-        <button class="at" data-leg="dados" onclick="subLei('dados')">Dados</button>
+        <button class="at" data-leg="artigos" onclick="subLei('artigos')">Artigos</button>
         <button data-leg="textos" onclick="subLei('textos')">Textos de ciência</button>
-        <button data-leg="artigos" onclick="subLei('artigos')">Artigos</button>
       </div>
-
-      <div class="leg-painel at" id="leg-dados">
-        <input type="hidden" id="lei-id">
-        <div class="field"><label for="lei-numero">Número</label><input type="text" id="lei-numero" class="mono" maxlength="40"></div>
-        <div class="field"><label for="lei-nome">Nome</label><input type="text" id="lei-nome" maxlength="160"></div>
-        <div class="field"><label for="lei-ano">Ano</label><input type="number" id="lei-ano" min="1900" max="2100"></div>
-        <div class="field"><label for="lei-ementa">Ementa</label>
-          <textarea id="lei-ementa" rows="2" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea></div>
-        <div class="field">
-          {{-- Prazo de defesa é DA LEI, não do documento: o auto não tem esse
-               campo no formulário, o sistema calcula a data a partir daqui. --}}
-          <label for="lei-prazo-defesa">Prazo de defesa (dias úteis)</label>
-          <input type="number" id="lei-prazo-defesa" min="1" max="120">
-        </div>
-        <div class="field">
-          <label for="lei-prazo-cumprimento">Prazo de cumprimento sugerido (dias corridos)</label>
-          <input type="number" id="lei-prazo-cumprimento" min="0" max="365">
-        </div>
-        <label class="lembrar"><input type="checkbox" id="lei-ativa"> Lei ativa</label>
-        <div class="btn-row"><button class="btn primary" onclick="salvarLei()">Salvar lei</button></div>
-      </div>
-
-      <div class="leg-painel" id="leg-textos">
-        <div class="field">
-          <label for="lei-ciencia-notif">Ciência da notificação (aceita {prazo})</label>
-          <textarea id="lei-ciencia-notif" rows="8" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
-        </div>
-        <div class="field">
-          <label for="lei-ciencia-auto">Ciência do auto de infração</label>
-          <textarea id="lei-ciencia-auto" rows="8" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea>
-        </div>
-        <div class="btn-row"><button class="btn primary" onclick="salvarLei()">Salvar textos</button></div>
-      </div>
-
-      <div class="leg-painel" id="leg-artigos">
-        <div class="topo-lista">
-          <div class="sec-simples">Artigos <span class="cont" id="cont-artigos">0</span></div>
-          <button class="btn primary sm" onclick="novoArtigoDaLei()">+ Novo artigo</button>
-        </div>
-        <div id="lista-artigos"></div>
+      <div class="par-busca" id="leg-busca-artigos">
+        <input type="search" id="busca-artigos" placeholder="Procurar artigo por número ou apelido" oninput="renderLeis()">
+        <button class="btn out-verde sm" onclick="parNovo('artigos')">+ Novo artigo</button>
       </div>
     </div>
+    <div class="par-fixo-lista" id="lista-leis"></div>
   </div>
 
-  {{-- UPF — cadastro direto na linha, sem modal (padrão AppPOSTURAS) --}}
-  <div class="par-painel" id="par-upf">
-    <div class="sec-simples">UPF por exercício <span class="cont" id="cont-upf">0</span></div>
-    <p class="aviso-legal">
-      <b>Por que por exercício:</b> um documento lavrado em 2026 tem de continuar
-      valendo a UPF de 2026 mesmo depois que o decreto do ano seguinte entrar —
-      o valor em reais de um auto já emitido não pode mudar sozinho.
-    </p>
-    <div class="cad-row">
-      <input type="number" id="novo-upf-ano" placeholder="Ano (2026)" min="2020" max="2100">
-      <input type="number" id="novo-upf-valor" placeholder="Valor (5,8234)" step="0.0001" min="0">
-      <input type="text" id="novo-upf-norma" placeholder="Norma (Decreto 1.234/2025)"
-             onkeydown="if(event.key==='Enter')salvarUpf()">
-      <button class="btn primary sm" onclick="salvarUpf()">+ Nova UPF</button>
+  {{-- UPF — por exercício: um documento lavrado em 2026 continua valendo a
+       UPF de 2026 depois que o decreto do ano seguinte entra. --}}
+  <div class="par-painel par-fixo" id="par-upf">
+    <div class="par-fixo-topo">
+      <div class="sec-simples">UPF por exercício <span class="cont" id="cont-upf">0</span></div>
+      <div class="par-busca">
+        <input type="search" id="busca-upf" placeholder="Procurar por ano ou norma" oninput="renderUpfs()">
+        <button class="btn out-verde sm" onclick="parNovo('upf')">+ Nova UPF</button>
+      </div>
     </div>
-    <div id="lista-upf"></div>
+    <div class="par-fixo-lista" id="lista-upf"></div>
   </div>
 
-  {{-- FERIADOS — lista de anos → feriados do ano --}}
-  <div class="par-painel" id="par-feriados">
-
-    {{-- SUB-TELA: ANOS --}}
-    <div id="fer-anos">
+  {{-- FERIADOS — lista de anos → feriados do ano. Usados para contar o prazo
+       de defesa em dias úteis. --}}
+  <div class="par-painel par-fixo" id="par-feriados">
+    <div class="par-fixo-topo" id="fer-topo-anos">
       <div class="sec-simples">Calendário de feriados <span class="cont" id="cont-feriados">0</span></div>
-      <p class="aviso-legal">
-        Usado para contar o prazo de defesa em <b>dias úteis</b>. Feriado errado
-        ou faltando encurta o prazo real do autuado e vicia o processo.
-      </p>
-      <div class="cad-row">
-        <input type="number" id="novo-ano-feriados" placeholder="Ano (2026)" min="1900" max="2200"
-               onkeydown="if(event.key==='Enter')novoAnoFeriados()">
-        <button class="btn primary sm" onclick="novoAnoFeriados()">+ Novo ano</button>
+      <div class="par-busca">
+        <input type="search" id="busca-anos" placeholder="Procurar ano" oninput="renderFeriados()">
+        <button class="btn out-verde sm" onclick="parNovo('anos')">+ Novo ano</button>
       </div>
-      <div class="cad-dica">Toque num ano para ver os feriados cadastrados.</div>
-      <div id="lista-anos-feriados"></div>
     </div>
-
-    {{-- SUB-TELA: FERIADOS DO ANO --}}
-    <div id="fer-lista" style="display:none">
+    <div class="par-fixo-topo" id="fer-topo-ano" style="display:none">
       <div class="sub-topo">
         <button class="btn sm" onclick="voltarAnosFeriados()">← Voltar</button>
         <div class="titulo" id="fer-ano-titulo">—</div>
       </div>
-      <div class="cad-row">
-        {{-- min/max presos ao ano aberto: evita cadastrar 2027 dentro de 2026. --}}
-        <label class="date-ov" style="flex:1;min-width:130px">
-          <input type="date" id="novo-feriado-data" onchange="atualizarDisplayData(this)">
-          <span class="date-ov-txt vazio">dd/mm/aaaa</span>
-        </label>
-        <input type="text" id="novo-feriado-nome" placeholder="Nome (Natal)"
-               onkeydown="if(event.key==='Enter')salvarFeriado()">
-        <select id="novo-feriado-tipo">
-          <option value="municipal">Municipal</option>
-          <option value="nacional">Nacional</option>
-          <option value="estadual">Estadual</option>
-          <option value="facultativo">Facultativo</option>
-        </select>
-        <label class="lembrar" style="margin:0"><input type="checkbox" id="novo-feriado-recorrente"> Repete todo ano</label>
-        <button class="btn primary sm" onclick="salvarFeriado()">+ Novo feriado</button>
+      <div class="par-busca">
+        <input type="search" id="busca-feriados" placeholder="Procurar feriado" oninput="renderFeriados()">
+        <button class="btn out-verde sm" onclick="parNovo('feriados')">+ Novo feriado</button>
       </div>
-      <div id="lista-feriados"></div>
     </div>
+    <div class="par-fixo-lista" id="lista-feriados"></div>
   </div>
 
-  {{-- BAIRROS — cadastro direto na linha, como a UPF: são três campos curtos,
-       e abrir uma janela para digitar um código e um nome custa mais do que o
-       dado vale. --}}
-
+  {{-- BAIRROS --}}
   <div class="par-painel par-fixo" id="par-bairros">
     <div class="par-fixo-topo">
       <div class="sec-simples">Bairros do município <span class="cont" id="cont-bairros">0</span></div>
-      <p class="aviso-legal">
-        <b>Três nomes, de propósito.</b> O <b>código</b> e o <b>nome do cadastro</b>
-        são os da prefeitura. O <b>nome no desenho</b> é como o bairro aparece no
-        DWG convertido — é ele que amarra os lotes ao código, e fica vazio
-        enquanto aquele bairro não tiver sido levantado.
-      </p>
-      <div class="cad-row">
-        <input type="number" id="novo-bairro-codigo" placeholder="Código" min="1" style="max-width:110px">
-        <input type="text" id="novo-bairro-nome" placeholder="Nome no cadastro (JARDIM EUROPA IV)">
-        <input type="text" id="novo-bairro-gis" placeholder="Nome no desenho (opcional)"
-               onkeydown="if(event.key==='Enter')salvarBairro()">
-        <button class="btn primary sm" onclick="salvarBairro()">+ Novo bairro</button>
-      </div>
-      <div class="cad-row">
-        <input type="search" id="filtro-bairros" placeholder="Procurar por código ou nome"
-               oninput="renderBairros()" style="flex:1">
+      <div class="par-busca">
+        <input type="search" id="filtro-bairros" placeholder="Procurar por código ou nome" oninput="renderBairros()">
+        <button class="btn out-verde sm" onclick="parNovo('bairros')">+ Novo bairro</button>
       </div>
     </div>
     <div class="par-fixo-lista" id="lista-bairros"></div>
   </div>
 
-  {{-- IRREGULARIDADES — o catálogo que a vistoria oferece. Excluir é recusado
-       quando alguma vistoria já constatou; desativar (a caixa "Ativa") tira
-       da lista sem apagar o histórico. --}}
+  {{-- IRREGULARIDADES — o catálogo que a vistoria oferece. --}}
   <div class="par-painel par-fixo" id="par-irregularidades">
     <div class="par-fixo-topo">
       <div class="sec-simples">Catálogo de irregularidades <span class="cont" id="cont-irregularidades">0</span></div>
-      <p class="aviso-legal">
-        É o que a lei chama de infração — o que o fiscal marca na vistoria, e
-        de onde saem os artigos sugeridos. Desativada, ela some das próximas
-        vistorias mas continua legível nas já lavradas.
-      </p>
-      <div class="cad-row">
-        <input type="text" id="irr-codigo" class="mono" placeholder="Código" style="max-width:90px">
-        <input type="text" id="irr-descricao" placeholder="Descrição da irregularidade" style="flex:2">
-        <select id="irr-gravidade">
-          <option value="leve">Leve</option>
-          <option value="media" selected>Média</option>
-          <option value="grave">Grave</option>
-        </select>
-      </div>
-      <div class="cad-row">
-        <input type="text" id="irr-base-legal" placeholder="Base legal (opcional)" style="flex:1">
-        <input type="number" id="irr-ordem" class="mono" placeholder="Ordem" min="0" style="max-width:90px">
-        <label class="lembrar" style="margin:0">
-          <input type="checkbox" id="irr-ativo" checked> Ativa</label>
-        <button class="btn primary sm" onclick="salvarIrregularidade()">+ Nova irregularidade</button>
-      </div>
-      <div class="cad-row">
-        <input type="search" id="filtro-irregularidades" placeholder="Procurar por código ou descrição"
-               oninput="renderIrregularidades()" style="flex:1">
+      <div class="par-busca">
+        <input type="search" id="filtro-irregularidades" placeholder="Procurar por código ou descrição" oninput="renderIrregularidades()">
+        <button class="btn out-verde sm" onclick="parNovo('irregularidades')">+ Nova irregularidade</button>
       </div>
     </div>
     <div class="par-fixo-lista" id="lista-irregularidades"></div>
@@ -1221,10 +1111,6 @@
     {{-- É o brasão que torna o sistema replicável: instalar a mesma aplicação
          em outra prefeitura passa a ser trocar dois cadastros, em vez de mexer
          no código. Por isso ele é enviado aqui, e não embutido em public/img. --}}
-    <p class="aviso-legal">
-      Aparece no sub-cabeçalho da tela e no cabeçalho dos documentos impressos.
-      O fundo branco de fora do desenho é removido automaticamente no envio.
-    </p>
     <div class="brasao-caixa">
       <div class="brasao-previa" id="brasao-previa"></div>
       <div class="brasao-acoes">
@@ -1240,11 +1126,7 @@
     </div>
 
     <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Dados do órgão<span class="cont" id="cont-geral">0</span></div>
-    <p class="aviso-legal">Impressos no cabeçalho e rodapé dos documentos emitidos.</p>
     <div id="lista-geral"></div>
-    <div class="btn-row" style="margin-top:14px">
-      <button class="btn primary" onclick="salvarGeral()">Salvar</button>
-    </div>
   </div>
   </div>
 </div>
@@ -3269,65 +3151,6 @@
   </div>
 </div>
 
-{{-- NOVA/EDITAR LEI --}}
-
-{{-- NOVO/EDITAR ARTIGO --}}
-<div class="modal-bg" id="m-artigo" onclick="fModal()">
-  <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-x" onclick="fModalBtn('m-artigo')">&#10005;</button>
-    <h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-      <span id="art-titulo">Novo artigo</span>
-    </h3>
-    <div class="sub" id="art-lei">—</div>
-    <input type="hidden" id="art-id"><input type="hidden" id="art-legislacao-id">
-
-    <div class="field"><label for="art-numero">Número</label><input type="text" id="art-numero" class="mono" placeholder="Art. 42, par. 1, II" maxlength="30"></div>
-    <div class="field"><label for="art-apelido">Apelido (rótulo curto na lista)</label><input type="text" id="art-apelido" maxlength="60"></div>
-    <div class="field"><label for="art-conduta">Conduta (o que a norma proíbe)</label><textarea id="art-conduta" rows="2" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea></div>
-    <div class="field"><label for="art-sancao">Sanção prevista</label><textarea id="art-sancao" rows="2" style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"></textarea></div>
-
-    <div class="sec-title">Base de cálculo da multa</div>
-    {{-- A maioria das multas de obras é por ÁREA, diferente de posturas, onde
-         quase tudo é fixo. Por isso o formulário troca de campos conforme a
-         base escolhida — mistura os dois formatos é o que confunde o fiscal
-         na hora de lançar o valor. --}}
-    <div class="field">
-      <label for="art-base">Como a multa é calculada</label>
-      <select id="art-base" onchange="trocarBaseMulta()">
-        <option value="fixa">Valor fixo</option>
-        <option value="area_construida">Por m² construído</option>
-        <option value="area_terreno">Por m² de terreno</option>
-        <option value="sem_multa">Sem multa (só notificação/embargo)</option>
-      </select>
-    </div>
-    <div id="art-bloco-fixa" class="field">
-      <label for="art-multa-upf">Multa (UPF)</label>
-      <input type="number" id="art-multa-upf" min="0" step="0.01">
-    </div>
-    <div id="art-bloco-area" style="display:none">
-      <div class="field"><label for="art-multa-m2">UPF por m²</label><input type="number" id="art-multa-m2" min="0" step="0.0001"></div>
-      <div class="field"><label for="art-multa-min">Piso da multa (UPF)</label><input type="number" id="art-multa-min" min="0" step="0.01"></div>
-      <div class="field"><label for="art-multa-max">Teto da multa (UPF)</label><input type="number" id="art-multa-max" min="0" step="0.01"></div>
-    </div>
-
-    <div class="sec-title">Irregularidades enquadradas</div>
-    <div id="art-irregularidades" class="checklist"></div>
-    <label class="lembrar"><input type="checkbox" id="art-ativo" checked> Artigo ativo</label>
-
-    <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-artigo')">Cancelar</button>
-      <button class="btn primary" onclick="salvarArtigo()">Salvar</button>
-    </div>
-  </div>
-</div>
-
-{{-- NOVA UPF --}}
-
-{{-- NOVO FERIADO --}}
 @endif
 
 {{-- MEU PERFIL — senha e assinatura do próprio usuário --}}

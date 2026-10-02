@@ -305,6 +305,47 @@
 .par-linha .principal.clicavel:hover b{color:var(--tx)}
 .par-linha.at{border-color:var(--tx3);background:var(--blt)}
 
+/* EDIÇÃO NA LINHA (Parâmetros, padrão AppPOSTURAS): o Editar de cada item abre
+   os campos dentro do próprio cartão. Mesmas bordas, raios e campos do
+   .cad-row; o que muda é o anel de foco, que diz qual item está aberto. */
+.par-linha .par-acoes{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.par-linha.editando{flex-direction:column;align-items:stretch;gap:8px;
+  border-color:var(--gm);background:var(--sur);box-shadow:0 0 0 3px var(--f-anel)}
+.par-linha.editando .ed-tit{font-size:11px;font-weight:700;color:var(--gd);
+  text-transform:uppercase;letter-spacing:.08em}
+.par-linha.editando .cad-row{margin-bottom:0;align-items:flex-end}
+.ed-campo{display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px}
+.ed-campo > span{font-size:10.5px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em}
+.ed-campo input:not([type=checkbox]),.ed-campo select{width:100%;min-width:0}
+.ed-campo .checklist{max-height:220px;overflow-y:auto}
+.ed-campo textarea,.orgao-grade input{width:100%;font-size:13.5px;padding:9px 12px;
+  border:1.5px solid var(--f-bord);border-radius:var(--r);background:#fff;color:var(--chumbo);
+  font-family:inherit;outline:none;resize:vertical}
+.ed-campo textarea:focus,.orgao-grade input:focus{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.cad-row > textarea{flex:1;min-width:120px;font-size:13.5px;padding:9px 12px;border:1.5px solid var(--f-bord);
+  border-radius:var(--r);background:#fff;color:var(--chumbo);font-family:inherit;outline:none;resize:vertical}
+.cad-row > textarea:focus{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.cad-row .lembrar{flex:0 0 auto;display:flex;align-items:center;gap:6px;white-space:nowrap;margin:0;padding-bottom:9px}
+.cad-row .lembrar input{flex:none;min-width:0;width:auto;padding:0}
+.ed-botoes{display:flex;gap:8px;justify-content:flex-end}
+.par-busca input[type=search]{background:#fff}
+.texto-longo{white-space:pre-wrap;display:block}
+.par-linha .principal b.texto-longo,.orgao-grade b.texto-longo{font-weight:600}
+/* Órgão: dados fixos lado a lado, num bloco só com um Editar. */
+.orgao-grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 18px;flex:1;min-width:0}
+.orgao-grade b{font-size:13.5px;color:var(--chumbo)}
+/* Quadro de marcadores — só nos textos que aceitam marcador. Cinza claro: é
+   ajuda, não alerta, por isso não usa o vermelho do .aviso-legal. */
+.dica-tags{background:var(--blt);border:1.5px solid var(--bord);border-radius:var(--r);
+  padding:10px 12px;font-size:12px;color:var(--tx2);line-height:1.5}
+.dica-tags b{color:var(--chumbo)}
+.dica-tags .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center}
+.dica-tags .tag{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--sur);
+  border:1.5px solid var(--bord);border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--chumbo)}
+.dica-tags .tag:hover{border-color:var(--tx3)}
+.dica-tags .tag-desc{font-size:11.5px;color:var(--tx3)}
+#leg-sem-enquadramento{margin-left:6px;text-transform:none;letter-spacing:0}
+
 .par-secao{margin-bottom:18px}
 .par-secao-tit{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 

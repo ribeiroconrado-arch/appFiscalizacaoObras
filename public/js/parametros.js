@@ -1,14 +1,20 @@
 // ══════════════════════════════════════════════
 // MÓDULO: PARÂMETROS DO SISTEMA (só administrador)
 //
-// Usuários, legislação, UPF e feriados. A navegação segue o padrão do
-// AppPOSTURAS: onde há hierarquia (lei → artigos, ano → feriados), a lista
-// do pai ocupa a tela inteira e tocar num item leva ao detalhe, com
-// "← Voltar". Aninhar tudo numa árvore só produzia uma página longa demais
-// para achar qualquer coisa.
+// Usuários, legislação, UPF, feriados, irregularidades, bairros e órgão.
 //
-// Cadastros simples entram direto na linha (.cad-row), sem modal: abrir uma
-// janela para digitar um ano e um valor custa mais cliques do que o dado vale.
+// O padrão de gravação é o do AppPOSTURAS, igual em todas as abas:
+//   - no topo, SÓ a busca e o "+ Novo …" — a busca filtra e nada mais;
+//   - cada item da lista tem o próprio Editar, que abre os campos DENTRO da
+//     linha, com Salvar e Cancelar; o "+ Novo" abre um cartão em branco no
+//     topo da lista, no mesmo formato.
+// Antes, tocar numa linha trazia os valores para os campos fixos do cabeçalho
+// — e não dava para saber se aqueles campos estavam criando um item novo ou
+// alterando o que se tinha tocado.
+//
+// Uma edição por vez (`parState.ed`): abrir outra fecha a anterior sem gravar.
+// Onde há hierarquia (lei → artigos, ano → feriados) a lista do pai ocupa a
+// tela e o detalhe abre com "← Voltar".
 // ══════════════════════════════════════════════
 
 /** Estado carregado de uma vez em /api/parametros. */
@@ -25,9 +31,10 @@ const parState = {
   catalogoIrregularidades: [],
   geral: [],
   /** id da lei aberta no detalhe */   leiAberta: null,
+  /** aba do detalhe da lei */          subLei: 'artigos',
   /** ano aberto na lista de feriados */ anoAberto: null,
-  /** id do bairro em edição na linha de cadastro */ bairroEditando: null,
-  /** id da irregularidade em edição na linha de cadastro */ irregularidadeEditando: null,
+  /** @type {{lista: string, id: (number|string)}|null} o item em edição; id 'novo' é o cartão em branco */
+  ed: null,
 }
 
 function abrirParametros() {
@@ -37,8 +44,12 @@ function abrirParametros() {
 
 /** @param {string} nome */
 function subParametros(nome) {
-  document.querySelectorAll('.sub-abas > button[data-sub]').forEach(b => b.classList.toggle('at', b.dataset.sub === nome))
+  document.querySelectorAll('#m-parametros > .modal > .sub-abas > button[data-sub]')
+    .forEach(b => b.classList.toggle('at', b.dataset.sub === nome))
   document.querySelectorAll('.par-painel').forEach(p => p.classList.toggle('at', p.id === 'par-' + nome))
+  // Trocar de aba abandona a edição aberta — ela ficaria escondida, viva, e
+  // reapareceria ao voltar como se nada tivesse acontecido.
+  if (parState.ed) { parState.ed = null; renderTudoPar() }
 
   // A TRILHA CARREGA SÓ QUANDO ABRE, e não junto de `carregarParametros`.
   // Ela é a única aba cujo conteúdo cresce sem parar — 244 linhas hoje,
@@ -62,7 +73,7 @@ async function carregarParametros() {
     parState.carregado = true
     renderUsuarios()
     renderUpfs()
-    renderAnosFeriados()
+    renderFeriados()
     renderBairros()
     renderIrregularidades()
     renderGeral()
@@ -79,18 +90,139 @@ async function carregarParametros() {
   }
 }
 
+function renderTudoPar() {
+  if (!parState.carregado) return
+  renderUsuarios(); renderLeis(); renderUpfs(); renderFeriados()
+  renderBairros(); renderIrregularidades(); renderGeral()
+}
+
+// ── EDIÇÃO NA LINHA (o motor comum de todas as abas) ─────────
+
+/** Qual render redesenha cada lista editável. */
+const PAR_RENDER = {
+  leis: () => renderLeis(), artigos: () => renderLeis(), textos: () => renderLeis(),
+  upf: () => renderUpfs(), anos: () => renderFeriados(), feriados: () => renderFeriados(),
+  bairros: () => renderBairros(), irregularidades: () => renderIrregularidades(), geral: () => renderGeral(),
+}
+
+/** Abre a edição de um item. @param {string} lista @param {number|string} id */
+function parEditar(lista, id) {
+  const anterior = parState.ed?.lista
+  parState.ed = { lista, id }
+  if (anterior && anterior !== lista) PAR_RENDER[anterior]?.()
+  PAR_RENDER[lista]()
+  parFocarEdicao()
+}
+
+/** Abre o cartão em branco no topo da lista. @param {string} lista */
+function parNovo(lista) {
+  // A busca é limpa: o cartão novo entra no topo, e um filtro ativo poderia
+  // escondê-lo — ou esconder a lista inteira, deixando o cartão sozinho.
+  const busca = document.querySelector('.par-painel.at .par-busca input')
+  if (busca) busca.value = ''
+  parEditar(lista, 'novo')
+}
+
+function parCancelar() {
+  const lista = parState.ed?.lista
+  parState.ed = null
+  if (lista) PAR_RENDER[lista]()
+}
+
+/** @returns {boolean} se este item é o que está em edição */
+function parEditando(lista, id) { return !!parState.ed && parState.ed.lista === lista && parState.ed.id === id }
+
+function parFocarEdicao() {
+  setTimeout(() => {
+    const el = document.querySelector('#m-parametros .par-linha.editando')
+    el?.querySelector('input:not([type=checkbox]):not([type=hidden]), textarea, select')?.focus()
+    el?.scrollIntoView({ block: 'nearest' })
+  }, 0)
+}
+
+/** Valor de um campo do cartão em edição. Caixa de marcar devolve booleano. */
+function parCampo(nome) {
+  const el = document.querySelector(`#m-parametros .par-linha.editando [name="${nome}"]`)
+  if (!el) return ''
+  return el.type === 'checkbox' ? el.checked : el.value.trim()
+}
+
+/** Termo da busca de uma lista, já em minúsculas. */
+function parBusca(id) { return (document.getElementById(id)?.value || '').trim().toLowerCase() }
+
+function parContador(id, mostrados, total) {
+  document.getElementById(id).textContent = mostrados === total ? total : `${mostrados}/${total}`
+}
+
+// Peças de HTML do cartão em edição. `onclick` com aspas simples dentro de
+// template: os ids são números ou chaves sem aspas, então não há o que escapar.
+const parId = id => typeof id === 'number' ? id : `'${id}'`
+
+function parAcoes(lista, id, extra = '') {
+  return `<div class="par-acoes">${extra}
+    <button type="button" class="btn edit-verde sm" onclick="parEditar('${lista}', ${parId(id)})">${ICO_EDITAR}Editar</button>
+    <button type="button" class="btn out-vermelho sm" onclick="parExcluir('${lista}', ${parId(id)})">Excluir</button>
+  </div>`
+}
+
+/** Cartão aberto: título, campos e Cancelar/Salvar. */
+function parFormLinha(titulo, corpo, aoSalvar) {
+  return `<div class="par-linha editando">
+    <div class="ed-tit">${titulo}</div>
+    ${corpo}
+    <div class="ed-botoes">
+      <button type="button" class="btn sm" onclick="parCancelar()">Cancelar</button>
+      <button type="button" class="btn primary sm" onclick="${aoSalvar}">Salvar</button>
+    </div>
+  </div>`
+}
+
+const parRot = (rot, html, estilo = '') => `<label class="ed-campo"${estilo ? ` style="${estilo}"` : ''}><span>${rot}</span>${html}</label>`
+const parInp = (nome, valor, extra = '') => `<input name="${nome}" value="${esc(valor ?? '')}" ${extra}>`
+const parTxt = (nome, valor, linhas = 2) => `<textarea name="${nome}" rows="${linhas}">${esc(valor ?? '')}</textarea>`
+const parSel = (nome, valor, opcoes, extra = '') =>
+  `<select name="${nome}" ${extra}>${opcoes.map(([k, r]) => `<option value="${k}"${k === valor ? ' selected' : ''}>${r}</option>`).join('')}</select>`
+const parChk = (nome, marcado, rot) =>
+  `<label class="lembrar"><input type="checkbox" name="${nome}"${marcado ? ' checked' : ''}> ${rot}</label>`
+
+/** Grava o cartão aberto; fecha a edição só se o servidor aceitou. */
+async function parGravar(url, corpo, aoTerminar) {
+  const d = await postParametro(url, corpo, null, async () => { parState.ed = null; await aoTerminar() })
+  return d
+}
+
+/** Excluir, com a confirmação de cada lista. */
+function parExcluir(lista, id) {
+  ({ leis: excluirLei, artigos: excluirArtigo, upf: excluirUpf, feriados: excluirFeriado,
+     bairros: excluirBairro, irregularidades: excluirIrregularidade })[lista](id)
+}
+
+// Enter salva e Esc cancela o cartão aberto. Em textarea o Enter é quebra de linha.
+document.addEventListener('keydown', e => {
+  const cartao = e.target.closest?.('#m-parametros .par-linha.editando')
+  if (!cartao) return
+  if (e.key === 'Escape') { e.stopPropagation(); parCancelar() }
+  if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+    e.preventDefault()
+    cartao.querySelector('.ed-botoes .btn.primary')?.click()
+  }
+})
+
 // ── USUÁRIOS ─────────────────────────────────────────────────
 
 /**
  * Cartão de usuário — desenho do painel administrativo do AppPOSTURAS:
  * avatar com a inicial, nome, e uma linha de identificação com login,
- * matrícula, situação e perfil. O "Editar" fica à direita, cheio de verde,
- * porque é a única ação do cartão.
+ * matrícula, situação e perfil. O "Editar" abre a janela do usuário (e não a
+ * linha), porque ela tem senha e permissões — campos demais para um cartão.
  */
 function renderUsuarios() {
-  document.getElementById('cont-usuarios').textContent = parState.usuarios.length
+  const termo = parBusca('busca-usuarios')
+  const lista = parState.usuarios.filter(u => !termo
+    || [u.name, u.email, u.matricula].filter(Boolean).join(' ').toLowerCase().includes(termo))
+  parContador('cont-usuarios', lista.length, parState.usuarios.length)
 
-  document.getElementById('lista-usuarios').innerHTML = parState.usuarios.map(u => {
+  document.getElementById('lista-usuarios').innerHTML = lista.map(u => {
     const inicial = (u.name || '?').trim().charAt(0).toUpperCase()
     // Sem e-mail, o login é a matrícula — e ela já aparece logo ao lado.
     const login = u.email ? '@' + u.email.split('@')[0] : ''
@@ -112,94 +244,9 @@ function renderUsuarios() {
         </div>
         <button class="btn edit-verde sm" onclick="editarUsuario(${u.id})">${ICO_EDITAR}Editar</button>
       </div>`
-  }).join('') || '<div class="lista-vazia">Nenhum usuário cadastrado.</div>'
+  }).join('') || `<div class="lista-vazia">${termo ? 'Nenhum usuário encontrado.' : 'Nenhum usuário cadastrado.'}</div>`
 }
 
-/**
- * Lista de leis — cartão com nome, contagem de artigos e as duas ações.
- *
- * O cartão inteiro abre os artigos; os botões param a propagação, senão
- * clicar em "Excluir" abriria o detalhe por baixo do modal de confirmação.
- */
-function renderLeis() {
-  document.getElementById('cont-leis').textContent = parState.leis.length
-
-  document.getElementById('par-legislacao-aviso').innerHTML = parState.semEnquadramento
-    ? `<p class="aviso-legal"><b>${parState.semEnquadramento} irregularidade(s) sem artigo vinculado.</b>
-       Enquanto isso, o sistema recusa lavrar o auto correspondente.</p>` : ''
-
-  const termo = (document.getElementById('lei-busca')?.value || '').trim().toLowerCase()
-  const leis = termo
-    ? parState.leis.filter(l => (l.nome + ' ' + l.numero).toLowerCase().includes(termo))
-    : parState.leis
-
-  document.getElementById('lista-leis').innerHTML = leis.map(l => `
-    <div class="par-card clicavel" onclick="abrirLei(${l.id})">
-      <div class="par-card-txt">
-        <div class="par-card-nome">${esc(l.numero)} - ${esc(l.nome)}</div>
-        <div class="par-card-meta">${l.artigos.length} artigo(s)${l.ativa ? '' : ' · inativa'}</div>
-      </div>
-      <div class="par-card-acoes" onclick="event.stopPropagation()">
-        <button class="btn edit-verde sm" onclick="abrirLei(${l.id})">${ICO_EDITAR}Editar</button>
-        <button class="btn out-vermelho sm" onclick="excluirLei(${l.id})">Excluir</button>
-      </div>
-    </div>`).join('')
-    || `<div class="lista-vazia">${termo ? 'Nenhuma lei com esse nome.' : 'Nenhuma lei cadastrada.'}</div>`
-}
-
-/** Refiltra sem ir ao servidor: a lista inteira já está em memória. */
-function filtrarLeis() { renderLeis() }
-
-/**
- * Cria a lei com o mínimo e já abre o detalhe para completar o resto.
- *
- * O nome vem do próprio campo de busca: quem procurou e não achou está, quase
- * sempre, prestes a cadastrar o que procurava. O número entra depois, no
- * detalhe, junto dos prazos e dos textos de ciência.
- */
-async function novaLei() {
-  const campo = document.getElementById('lei-busca')
-  const nome = campo.value.trim()
-  if (!nome) { exigirCampo('lei-busca', 'Digite o nome da lei no campo ao lado.'); return }
-
-  const d = await postParametro('/api/legislacao', {
-    numero: nome,
-    nome,
-    ano: new Date().getFullYear(),
-    // Padrões da praxe; o detalhe da lei permite ajustar.
-    prazo_defesa_dias: 5,
-    prazo_cumprimento_dias: 10,
-    ativa: true,
-  }, null, recarregarLegislacao)
-
-  if (d) {
-    campo.value = ''
-    if (d.id) abrirLei(d.id)
-  }
-}
-
-/**
- * Exclui a lei. O servidor recusa quando algum documento a cita — nesse caso
- * o caminho é desativá-la, e a mensagem de erro diz isso.
- *
- * @param {number} id
- */
-function excluirLei(id) {
-  const l = parState.leis.find(x => x.id === id)
-  if (!l) return
-
-  confirmarAcao({
-    titulo: 'Excluir lei',
-    mensagem: `"${l.nome}" e seus ${l.artigos.length} artigo(s) serão apagados. `
-            + 'Documentos já lavrados guardam cópia da redação e não mudam.',
-    textoBtn: 'Excluir',
-    perigo: true,
-    onConfirm: async () => {
-      await excluirParametro('/api/legislacao/' + id)
-      await recarregarLegislacao()
-    },
-  })
-}
 function novoUsuario() {
   document.getElementById('us-titulo').textContent = 'Novo usuário'
   document.getElementById('us-id').value = ''
@@ -271,7 +318,7 @@ async function salvarUsuario() {
   }, 'm-usuario', carregarParametros)
 }
 
-// ── LEGISLAÇÃO: LISTA DE LEIS ────────────────────────────────
+// ── LEGISLAÇÃO ───────────────────────────────────────────────
 
 async function recarregarLegislacao() {
   const r = await fetch('/api/legislacao', { headers: { Accept: 'application/json' } })
@@ -279,81 +326,150 @@ async function recarregarLegislacao() {
   parState.leis = d.leis
   parState.irregularidades = d.irregularidades
   parState.semEnquadramento = d.sem_enquadramento
+  if (parState.leiAberta && !parState.leis.some(l => l.id === parState.leiAberta)) parState.leiAberta = null
   renderLeis()
-  if (parState.leiAberta) { renderArtigosDaLei() }
 }
 
+/** A aba Legislação desenha a lista de leis OU o detalhe da lei aberta. */
+function renderLeis() {
+  const aberta = parState.leis.find(l => l.id === parState.leiAberta)
+  document.getElementById('leg-topo-lista').style.display = aberta ? 'none' : ''
+  document.getElementById('leg-topo-detalhe').style.display = aberta ? '' : 'none'
+  if (aberta) { renderDetalheLei(aberta); return }
 
-// ── LEGISLAÇÃO: DETALHE DA LEI ───────────────────────────────
+  // Irregularidade sem artigo: o sistema recusa lavrar o auto dela. Fica uma
+  // etiqueta ao lado do título — aviso, sem o quadro que ocupava a tela.
+  const sem = parState.semEnquadramento
+  const etiqueta = document.getElementById('leg-sem-enquadramento')
+  etiqueta.hidden = !sem
+  etiqueta.textContent = sem ? `${sem} irregularidade(s) sem artigo` : ''
+  etiqueta.title = sem ? 'Enquanto não houver artigo vinculado, o sistema recusa lavrar o auto correspondente.' : ''
+
+  const termo = parBusca('lei-busca')
+  const leis = parState.leis.filter(l => !termo || (l.numero + ' ' + l.nome).toLowerCase().includes(termo))
+  parContador('cont-leis', leis.length, parState.leis.length)
+
+  document.getElementById('lista-leis').innerHTML =
+    (parEditando('leis', 'novo') ? formLei({}) : '')
+    + (leis.map(l => parEditando('leis', l.id) ? formLei(l) : `
+      <div class="par-linha${l.ativa ? '' : ' par-linha-inativa'}">
+        <div class="principal">
+          <b>${esc(l.numero)} · ${esc(l.nome)}</b>
+          <span>${l.artigos.length} artigo(s) · defesa em ${esc(l.prazo_defesa_dias)} dia(s) úteis${l.ativa ? '' : ' · inativa'}</span>
+        </div>
+        ${parAcoes('leis', l.id, `<button type="button" class="btn sm" onclick="abrirLei(${l.id})">Artigos ›</button>`)}
+      </div>`).join('')
+    || `<div class="lista-vazia">${termo ? 'Nenhuma lei encontrada.' : 'Nenhuma lei cadastrada.'}</div>`)
+}
+
+/** @param {Object} l lei ({} para nova) */
+function formLei(l) {
+  return parFormLinha(l.id ? 'Editando lei' : 'Nova lei', `
+    <div class="cad-row">
+      ${parRot('Número', parInp('numero', l.numero, 'class="mono" maxlength="40"'), 'max-width:190px')}
+      ${parRot('Nome', parInp('nome', l.nome, 'maxlength="160"'), 'flex:2')}
+      ${parRot('Ano', parInp('ano', l.ano ?? new Date().getFullYear(), 'type="number" min="1900" max="2100"'), 'max-width:110px')}
+    </div>
+    <div class="cad-row">${parRot('Ementa', parTxt('ementa', l.ementa))}</div>
+    <div class="cad-row">
+      ${parRot('Prazo de defesa (dias úteis)', parInp('prazo_defesa_dias', l.prazo_defesa_dias ?? 5, 'type="number" min="1" max="120"'))}
+      ${parRot('Prazo de cumprimento sugerido (dias corridos)', parInp('prazo_cumprimento_dias', l.prazo_cumprimento_dias ?? 10, 'type="number" min="0" max="365"'))}
+      ${parChk('ativa', l.ativa ?? true, 'Lei ativa')}
+    </div>`, 'salvarLei()')
+}
+
+/** O corpo inteiro da lei vai junto: o servidor grava o que receber. */
+function corpoDaLei(l) {
+  return {
+    id: l.id ?? null, numero: l.numero, nome: l.nome, ano: l.ano || null, ementa: l.ementa || null,
+    prazo_defesa_dias: l.prazo_defesa_dias, prazo_cumprimento_dias: l.prazo_cumprimento_dias,
+    ciencia_notificacao: l.ciencia_notificacao || null, ciencia_auto: l.ciencia_auto || null,
+    ativa: !!l.ativa,
+  }
+}
+
+async function salvarLei() {
+  const atual = parState.leis.find(l => l.id === parState.ed?.id) || {}
+  const numero = parCampo('numero'), nome = parCampo('nome')
+  if (!numero || !nome) { toast('Informe o número e o nome da lei', 'err'); return }
+  await parGravar('/api/legislacao', corpoDaLei({
+    ...atual, numero, nome,
+    ano: parCampo('ano'), ementa: parCampo('ementa'),
+    prazo_defesa_dias: parCampo('prazo_defesa_dias'),
+    prazo_cumprimento_dias: parCampo('prazo_cumprimento_dias'),
+    ativa: parCampo('ativa'),
+  }), recarregarLegislacao)
+}
+
+/**
+ * Exclui a lei. O servidor recusa quando algum documento a cita — nesse caso
+ * o caminho é desativá-la, e a mensagem de erro diz isso.
+ *
+ * @param {number} id
+ */
+function excluirLei(id) {
+  const l = parState.leis.find(x => x.id === id)
+  if (!l) return
+
+  confirmarAcao({
+    titulo: 'Excluir lei',
+    mensagem: `"${l.nome}" e seus ${l.artigos.length} artigo(s) serão apagados. `
+            + 'Documentos já lavrados guardam cópia da redação e não mudam.',
+    textoBtn: 'Excluir',
+    perigo: true,
+    onConfirm: async () => {
+      await excluirParametro('/api/legislacao/' + id)
+      await recarregarLegislacao()
+    },
+  })
+}
 
 /** @param {number} id */
 function abrirLei(id) {
-  const l = parState.leis.find(x => x.id === id)
-  if (!l) return
   parState.leiAberta = id
-
-  document.getElementById('leg-lista').style.display = 'none'
-  document.getElementById('leg-detalhe').style.display = ''
-  document.getElementById('leg-detalhe-titulo').textContent = l.nome
-  subLei('dados')
-
-  document.getElementById('lei-id').value = l.id
-  document.getElementById('lei-numero').value = l.numero
-  document.getElementById('lei-nome').value = l.nome
-  document.getElementById('lei-ano').value = l.ano || ''
-  document.getElementById('lei-ementa').value = l.ementa || ''
-  document.getElementById('lei-prazo-defesa').value = l.prazo_defesa_dias
-  document.getElementById('lei-prazo-cumprimento').value = l.prazo_cumprimento_dias
-  document.getElementById('lei-ciencia-notif').value = l.ciencia_notificacao || ''
-  document.getElementById('lei-ciencia-auto').value = l.ciencia_auto || ''
-  document.getElementById('lei-ativa').checked = !!l.ativa
-
-  renderArtigosDaLei()
+  parState.subLei = 'artigos'
+  parState.ed = null
+  const busca = document.getElementById('busca-artigos')
+  if (busca) busca.value = ''
+  renderLeis()
 }
 
 function voltarLeis() {
   parState.leiAberta = null
-  document.getElementById('leg-detalhe').style.display = 'none'
-  document.getElementById('leg-lista').style.display = ''
+  parState.ed = null
+  renderLeis()
 }
 
-/** @param {string} nome */
+/** @param {string} nome 'artigos' | 'textos' */
 function subLei(nome) {
-  document.querySelectorAll('#leg-detalhe .sub-abas button').forEach(b => b.classList.toggle('at', b.dataset.leg === nome))
-  document.querySelectorAll('.leg-painel').forEach(p => p.classList.toggle('at', p.id === 'leg-' + nome))
+  parState.subLei = nome
+  parState.ed = null
+  renderLeis()
 }
 
-async function salvarLei() {
-  await postParametro('/api/legislacao', {
-    id: document.getElementById('lei-id').value || null,
-    numero: document.getElementById('lei-numero').value.trim(),
-    nome: document.getElementById('lei-nome').value.trim(),
-    ano: document.getElementById('lei-ano').value || null,
-    ementa: document.getElementById('lei-ementa').value.trim() || null,
-    prazo_defesa_dias: document.getElementById('lei-prazo-defesa').value,
-    prazo_cumprimento_dias: document.getElementById('lei-prazo-cumprimento').value,
-    ciencia_notificacao: document.getElementById('lei-ciencia-notif').value.trim() || null,
-    ciencia_auto: document.getElementById('lei-ciencia-auto').value.trim() || null,
-    ativa: document.getElementById('lei-ativa').checked,
-  }, null, recarregarLegislacao)
-}
+function renderDetalheLei(l) {
+  document.getElementById('leg-detalhe-titulo').textContent = l.numero + ' · ' + l.nome
+  document.querySelectorAll('#leg-topo-detalhe .sub-abas button')
+    .forEach(b => b.classList.toggle('at', b.dataset.leg === parState.subLei))
+  document.getElementById('leg-busca-artigos').style.display = parState.subLei === 'artigos' ? '' : 'none'
 
-function renderArtigosDaLei() {
-  const l = parState.leis.find(x => x.id === parState.leiAberta)
-  if (!l) return
-  document.getElementById('leg-detalhe-titulo').textContent = l.nome
-  document.getElementById('cont-artigos').textContent = l.artigos.length
+  if (parState.subLei === 'textos') { renderTextosDaLei(l); return }
 
-  document.getElementById('lista-artigos').innerHTML = l.artigos.map(a => `
-    <div class="par-linha clicavel" onclick="editarArtigo(${a.id})">
-      <div class="principal">
-        <b>${esc(a.apelido || a.numero)}</b>
-        <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.irregularidades.length
-          ? ' · ' + a.irregularidades.length + ' irregularidade(s)'
-          : ' · <span style="color:var(--red)">sem irregularidade vinculada</span>'}${a.ativo ? '' : ' · inativo'}</span>
-      </div>
-      <span class="seta">›</span>
-    </div>`).join('') || '<div class="lista-vazia">Nenhum artigo cadastrado nesta lei.</div>'
+  const termo = parBusca('busca-artigos')
+  const artigos = l.artigos.filter(a => !termo || ((a.numero || '') + ' ' + (a.apelido || '')).toLowerCase().includes(termo))
+  document.getElementById('lista-leis').innerHTML =
+    (parEditando('artigos', 'novo') ? formArtigo({}) : '')
+    + (artigos.map(a => parEditando('artigos', a.id) ? formArtigo(a) : `
+      <div class="par-linha${a.ativo ? '' : ' par-linha-inativa'}">
+        <div class="principal">
+          <b>${esc(a.apelido || a.numero)}</b>
+          <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.irregularidades.length
+            ? ' · ' + a.irregularidades.length + ' irregularidade(s)'
+            : ' · <span style="color:var(--red)">sem irregularidade vinculada</span>'}${a.ativo ? '' : ' · inativo'}</span>
+        </div>
+        ${parAcoes('artigos', a.id)}
+      </div>`).join('')
+    || `<div class="lista-vazia">${termo ? 'Nenhum artigo encontrado.' : 'Nenhum artigo cadastrado nesta lei.'}</div>`)
 }
 
 /** @param {Object} a */
@@ -364,122 +480,182 @@ function rotuloBaseMulta(a) {
   return fmtNum(a.multa_upf_m2 || 0) + ' UPF/m² · ' + alvo
 }
 
-// ── ARTIGOS (modal: tem campos demais para caber numa linha) ──
+// ── ARTIGOS ──────────────────────────────────────────────────
 
-function novoArtigoDaLei() {
-  const l = parState.leis.find(x => x.id === parState.leiAberta)
-  if (!l) return
-  document.getElementById('art-titulo').textContent = 'Novo artigo'
-  document.getElementById('art-lei').textContent = l.nome
-  document.getElementById('art-id').value = ''
-  document.getElementById('art-legislacao-id').value = l.id
-  document.getElementById('art-numero').value = ''
-  document.getElementById('art-apelido').value = ''
-  document.getElementById('art-conduta').value = ''
-  document.getElementById('art-sancao').value = ''
-  document.getElementById('art-base').value = 'fixa'
-  document.getElementById('art-multa-upf').value = ''
-  document.getElementById('art-multa-m2').value = ''
-  document.getElementById('art-multa-min').value = ''
-  document.getElementById('art-multa-max').value = ''
-  document.getElementById('art-ativo').checked = true
-  trocarBaseMulta()
-  renderIrregularidadesChecklist([])
-  openModal('m-artigo')
+/** @param {Object} a artigo ({} para novo) */
+function formArtigo(a) {
+  const base = a.base_multa || 'fixa'
+  const marcadas = a.irregularidade_ids || []
+  return parFormLinha(a.id ? 'Editando artigo' : 'Novo artigo', `
+    <div class="cad-row">
+      ${parRot('Número', parInp('numero', a.numero, 'class="mono" maxlength="30" placeholder="Art. 42, par. 1, II"'), 'max-width:220px')}
+      ${parRot('Apelido (rótulo curto na lista)', parInp('apelido', a.apelido, 'maxlength="60"'), 'flex:2')}
+    </div>
+    <div class="cad-row">${parRot('Conduta (o que a norma proíbe)', parTxt('conduta', a.conduta))}</div>
+    <div class="cad-row">${parRot('Sanção prevista', parTxt('sancao', a.sancao))}</div>
+    <div class="cad-row">
+      ${parRot('Como a multa é calculada', parSel('base_multa', base, [
+        ['fixa', 'Valor fixo'], ['area_construida', 'Por m² construído'],
+        ['area_terreno', 'Por m² de terreno'], ['sem_multa', 'Sem multa (só notificação/embargo)'],
+      ], 'onchange="trocarBaseMulta(this)"'))}
+      <span class="art-bloco-fixa" style="display:${base === 'fixa' ? 'contents' : 'none'}">
+        ${parRot('Multa (UPF)', parInp('multa_upf', a.multa_upf, 'type="number" min="0" step="0.01"'))}</span>
+      <span class="art-bloco-area" style="display:${base.startsWith('area') ? 'contents' : 'none'}">
+        ${parRot('UPF por m²', parInp('multa_upf_m2', a.multa_upf_m2, 'type="number" min="0" step="0.0001"'))}
+        ${parRot('Piso (UPF)', parInp('multa_min_upf', a.multa_min_upf, 'type="number" min="0" step="0.01"'))}
+        ${parRot('Teto (UPF)', parInp('multa_max_upf', a.multa_max_upf, 'type="number" min="0" step="0.01"'))}</span>
+    </div>
+    <div class="ed-campo"><span>Irregularidades enquadradas</span>
+      <div class="checklist">${parState.irregularidades.map(i => `
+        <label class="chk-item ${marcadas.includes(i.id) ? 'marcado' : ''}"
+               onclick="setTimeout(()=>this.classList.toggle('marcado', this.querySelector('input').checked),0)">
+          <input type="checkbox" name="irr-${i.id}" value="${i.id}" ${marcadas.includes(i.id) ? 'checked' : ''}>
+          <span class="desc">${esc(i.descricao)}<br><span class="cod">${esc(i.codigo)} · ${esc(i.gravidade)}</span></span>
+        </label>`).join('') || '<div class="lista-vazia">Nenhuma irregularidade cadastrada.</div>'}
+      </div>
+    </div>
+    <div class="cad-row">${parChk('ativo', a.ativo ?? true, 'Artigo ativo')}</div>`, 'salvarArtigo()')
 }
 
-/** @param {number} artigoId */
-function editarArtigo(artigoId) {
-  const l = parState.leis.find(x => x.id === parState.leiAberta)
-  const a = l?.artigos.find(x => x.id === artigoId)
-  if (!a) return
-  document.getElementById('art-titulo').textContent = a.apelido || a.numero
-  document.getElementById('art-lei').textContent = l.nome
-  document.getElementById('art-id').value = a.id
-  document.getElementById('art-legislacao-id').value = l.id
-  document.getElementById('art-numero').value = a.numero
-  document.getElementById('art-apelido').value = a.apelido || ''
-  document.getElementById('art-conduta').value = a.conduta || ''
-  document.getElementById('art-sancao').value = a.sancao || ''
-  document.getElementById('art-base').value = a.base_multa || 'fixa'
-  document.getElementById('art-multa-upf').value = a.multa_upf ?? ''
-  document.getElementById('art-multa-m2').value = a.multa_upf_m2 ?? ''
-  document.getElementById('art-multa-min').value = a.multa_min_upf ?? ''
-  document.getElementById('art-multa-max').value = a.multa_max_upf ?? ''
-  document.getElementById('art-ativo').checked = !!a.ativo
-  trocarBaseMulta()
-  renderIrregularidadesChecklist(a.irregularidade_ids || [])
-  openModal('m-artigo')
-}
-
-function trocarBaseMulta() {
-  const base = document.getElementById('art-base').value
-  document.getElementById('art-bloco-fixa').style.display = base === 'fixa' ? '' : 'none'
-  document.getElementById('art-bloco-area').style.display =
-    (base === 'area_construida' || base === 'area_terreno') ? '' : 'none'
-}
-
-/** @param {Array<number>} marcadas */
-function renderIrregularidadesChecklist(marcadas) {
-  document.getElementById('art-irregularidades').innerHTML = parState.irregularidades.map(i => `
-    <label class="chk-item ${marcadas.includes(i.id) ? 'marcado' : ''}"
-           onclick="setTimeout(()=>this.classList.toggle('marcado', this.querySelector('input').checked),0)">
-      <input type="checkbox" value="${i.id}" ${marcadas.includes(i.id) ? 'checked' : ''}>
-      <span class="desc">${esc(i.descricao)}<br><span class="cod">${esc(i.codigo)} · ${esc(i.gravidade)}</span></span>
-    </label>`).join('') || '<div class="lista-vazia">Nenhuma irregularidade cadastrada.</div>'
+/** Mostra só os campos de valor da base escolhida. @param {HTMLSelectElement} sel */
+function trocarBaseMulta(sel) {
+  const cartao = sel.closest('.par-linha')
+  cartao.querySelector('.art-bloco-fixa').style.display = sel.value === 'fixa' ? 'contents' : 'none'
+  cartao.querySelector('.art-bloco-area').style.display = sel.value.startsWith('area') ? 'contents' : 'none'
 }
 
 async function salvarArtigo() {
-  const irregularidades = [...document.querySelectorAll('#art-irregularidades input:checked')].map(i => Number(i.value))
-  await postParametro('/api/legislacao/artigos', {
-    id: document.getElementById('art-id').value || null,
-    legislacao_id: document.getElementById('art-legislacao-id').value,
-    numero: document.getElementById('art-numero').value.trim(),
-    apelido: document.getElementById('art-apelido').value.trim() || null,
-    conduta: document.getElementById('art-conduta').value.trim() || null,
-    sancao: document.getElementById('art-sancao').value.trim() || null,
-    base_multa: document.getElementById('art-base').value,
-    multa_upf: document.getElementById('art-multa-upf').value || null,
-    multa_upf_m2: document.getElementById('art-multa-m2').value || null,
-    multa_min_upf: document.getElementById('art-multa-min').value || null,
-    multa_max_upf: document.getElementById('art-multa-max').value || null,
-    ativo: document.getElementById('art-ativo').checked,
+  const numero = parCampo('numero')
+  if (!numero) { toast('Informe o número do artigo', 'err'); return }
+  const irregularidades = [...document.querySelectorAll('#m-parametros .par-linha.editando .checklist input:checked')]
+    .map(i => Number(i.value))
+  await parGravar('/api/legislacao/artigos', {
+    id: parState.ed.id === 'novo' ? null : parState.ed.id,
+    legislacao_id: parState.leiAberta,
+    numero,
+    apelido: parCampo('apelido') || null,
+    conduta: parCampo('conduta') || null,
+    sancao: parCampo('sancao') || null,
+    base_multa: parCampo('base_multa'),
+    multa_upf: parCampo('multa_upf') || null,
+    multa_upf_m2: parCampo('multa_upf_m2') || null,
+    multa_min_upf: parCampo('multa_min_upf') || null,
+    multa_max_upf: parCampo('multa_max_upf') || null,
+    ativo: parCampo('ativo'),
     irregularidades,
-  }, 'm-artigo', recarregarLegislacao)
+  }, recarregarLegislacao)
+}
+
+/** @param {number} id */
+function excluirArtigo(id) {
+  const a = parState.leis.find(l => l.id === parState.leiAberta)?.artigos.find(x => x.id === id)
+  confirmarAcao({
+    titulo: 'Excluir artigo',
+    mensagem: `"${a?.apelido || a?.numero || 'Artigo'}" sai da lei. Documentos já lavrados guardam cópia da redação e não mudam.`,
+    textoBtn: 'Excluir',
+    perigo: true,
+    onConfirm: async () => {
+      await excluirParametro('/api/legislacao/artigos/' + id)
+      await recarregarLegislacao()
+    },
+  })
+}
+
+// ── TEXTOS DE CIÊNCIA ────────────────────────────────────────
+
+/**
+ * Marcadores que o sistema troca na hora de emitir (Legislacao::ciencia).
+ * Texto sem marcador não ganha quadro de dica — ele só aparece onde ajuda.
+ */
+const MARCADORES = {
+  ciencia_notificacao: [['{prazo}', 'vira "no prazo de N dias" ou "de imediato", conforme o prazo do documento']],
+  ciencia_auto: [],
+}
+
+const TEXTOS_DA_LEI = [
+  ['ciencia_notificacao', 'Ciência da notificação'],
+  ['ciencia_auto', 'Ciência do auto de infração'],
+]
+
+function renderTextosDaLei(l) {
+  document.getElementById('lista-leis').innerHTML = TEXTOS_DA_LEI.map(([chave, rotulo]) =>
+    parEditando('textos', chave)
+      ? parFormLinha(rotulo, `<div class="cad-row">${parTxt('valor', l[chave], 8)}</div>${dicaMarcadores(MARCADORES[chave])}`,
+          `salvarTextoDaLei('${chave}')`)
+      : `<div class="par-linha" style="align-items:flex-start">
+          <div class="principal"><b>${rotulo}</b>
+            <span class="texto-longo">${l[chave] ? esc(l[chave]) : '<em>— vazio —</em>'}</span></div>
+          <div class="par-acoes"><button type="button" class="btn edit-verde sm" onclick="parEditar('textos', '${chave}')">${ICO_EDITAR}Editar</button></div>
+        </div>`).join('')
+}
+
+/** Quadro cinza com os marcadores do texto; clicar insere no cursor. */
+function dicaMarcadores(marcadores) {
+  if (!marcadores?.length) return ''
+  return `<div class="dica-tags"><b>Marcadores deste texto</b> — clique para inserir onde está o cursor. Na emissão, o sistema troca pelo valor do documento.
+    <div class="tags">${marcadores.map(([m, desc]) => `
+      <button type="button" class="tag" onmousedown="event.preventDefault()" onclick="inserirMarcador('${m}')">${m}</button>
+      <span class="tag-desc">${esc(desc)}</span>`).join('')}</div></div>`
+}
+
+/** @param {string} m */
+function inserirMarcador(m) {
+  const ta = document.querySelector('#m-parametros .par-linha.editando textarea')
+  if (!ta) return
+  const ini = ta.selectionStart ?? ta.value.length, fim = ta.selectionEnd ?? ini
+  ta.value = ta.value.slice(0, ini) + m + ta.value.slice(fim)
+  ta.focus()
+  ta.selectionStart = ta.selectionEnd = ini + m.length
+}
+
+/** @param {string} chave */
+async function salvarTextoDaLei(chave) {
+  const l = parState.leis.find(x => x.id === parState.leiAberta)
+  if (!l) return
+  await parGravar('/api/legislacao', corpoDaLei({ ...l, [chave]: parCampo('valor') }), recarregarLegislacao)
 }
 
 // ── UPF ──────────────────────────────────────────────────────
 
 function renderUpfs() {
-  document.getElementById('cont-upf').textContent = parState.upfs.length
-  document.getElementById('lista-upf').innerHTML = parState.upfs.map(u => `
-    <div class="par-linha">
-      <div class="principal">
-        <b>${u.exercicio} · ${fmtNum(u.valor)}</b>
-        <span>Vigente desde ${formatarDataBR(u.vigencia_inicio)}${u.norma ? ' · ' + esc(u.norma) : ''}</span>
-      </div>
-      <button class="acao-x" onclick="excluirUpf(${u.id})" title="Excluir">${ICO_LIXO}</button>
-    </div>`).join('') || '<div class="lista-vazia">Nenhuma UPF cadastrada.</div>'
+  const termo = parBusca('busca-upf')
+  const lista = parState.upfs.filter(u => !termo || (u.exercicio + ' ' + (u.norma || '')).toLowerCase().includes(termo))
+  parContador('cont-upf', lista.length, parState.upfs.length)
+  document.getElementById('lista-upf').innerHTML =
+    (parEditando('upf', 'novo') ? formUpf({}) : '')
+    + (lista.map(u => parEditando('upf', u.id) ? formUpf(u) : `
+      <div class="par-linha">
+        <div class="principal">
+          <b>${u.exercicio} · ${fmtNum(u.valor)}</b>
+          <span>Vigente desde ${formatarDataBR(u.vigencia_inicio)}${u.norma ? ' · ' + esc(u.norma) : ''}</span>
+        </div>
+        ${parAcoes('upf', u.id)}
+      </div>`).join('')
+    || `<div class="lista-vazia">${termo ? 'Nenhuma UPF encontrada.' : 'Nenhuma UPF cadastrada.'}</div>`)
+}
+
+/** @param {Object} u UPF ({} para nova) */
+function formUpf(u) {
+  return parFormLinha(u.id ? 'Editando UPF ' + u.exercicio : 'Nova UPF', `
+    <div class="cad-row">
+      ${parRot('Exercício', parInp('exercicio', u.exercicio ?? new Date().getFullYear() + 1, 'type="number" min="2020" max="2100"'), 'max-width:120px')}
+      ${parRot('Valor (R$)', parInp('valor', u.valor, 'type="number" step="0.0001" min="0"'))}
+      ${parRot('Vigente desde', parInp('vigencia_inicio', u.vigencia_inicio, 'type="date"'))}
+      ${parRot('Norma', parInp('norma', u.norma, 'maxlength="80" placeholder="Decreto 1.234/2025"'), 'flex:2')}
+    </div>`, 'salvarUpf()')
 }
 
 async function salvarUpf() {
-  const exercicio = document.getElementById('novo-upf-ano').value
-  const valor = document.getElementById('novo-upf-valor').value
-  if (!exercicio || !valor) { toast('Informe o ano e o valor da UPF', 'err'); return }
-
-  const d = await postParametro('/api/parametros/upf', {
+  const exercicio = parCampo('exercicio'), valor = parCampo('valor')
+  if (!exercicio || !valor) { toast('Informe o exercício e o valor da UPF', 'err'); return }
+  await parGravar('/api/parametros/upf', {
+    id: parState.ed.id === 'novo' ? null : parState.ed.id,
     exercicio, valor,
-    // A vigência começa em 1º de janeiro do exercício, que é a regra: a UPF
-    // é anual. Decreto que muda no meio do ano é a exceção, e aí se edita.
-    vigencia_inicio: exercicio + '-01-01',
-    norma: document.getElementById('novo-upf-norma').value.trim() || null,
-  }, null, carregarParametros)
-
-  if (d) {
-    document.getElementById('novo-upf-ano').value = ''
-    document.getElementById('novo-upf-valor').value = ''
-    document.getElementById('novo-upf-norma').value = ''
-  }
+    // Sem data, a vigência começa em 1º de janeiro do exercício, que é a regra:
+    // a UPF é anual. Decreto que muda no meio do ano é a exceção.
+    vigencia_inicio: parCampo('vigencia_inicio') || exercicio + '-01-01',
+    norma: parCampo('norma') || null,
+  }, carregarParametros)
 }
 
 /** @param {number} id */
@@ -492,7 +668,7 @@ function excluirUpf(id) {
   })
 }
 
-// ── FERIADOS: ANOS ───────────────────────────────────────────
+// ── FERIADOS ─────────────────────────────────────────────────
 
 /** Anos existentes, deduzidos das datas cadastradas. */
 function anosDeFeriados() {
@@ -504,17 +680,60 @@ function anosDeFeriados() {
   return Object.entries(porAno).sort((a, b) => b[0].localeCompare(a[0]))
 }
 
-function renderAnosFeriados() {
-  const anos = anosDeFeriados()
+/** A aba Feriados desenha a lista de anos OU os feriados do ano aberto. */
+function renderFeriados() {
+  const ano = parState.anoAberto
+  document.getElementById('fer-topo-anos').style.display = ano ? 'none' : ''
+  document.getElementById('fer-topo-ano').style.display = ano ? '' : 'none'
   document.getElementById('cont-feriados').textContent = parState.feriados.length
-  document.getElementById('lista-anos-feriados').innerHTML = anos.map(([ano, n]) => `
-    <div class="par-linha clicavel" onclick="abrirAnoFeriados('${ano}')">
-      <div class="principal">
-        <b>${ano}</b>
-        <span>${n} feriado(s) cadastrado(s)</span>
-      </div>
-      <span class="seta">›</span>
-    </div>`).join('') || '<div class="lista-vazia">Nenhum ano com feriados cadastrados.</div>'
+  const lista = document.getElementById('lista-feriados')
+
+  if (!ano) {
+    const termo = parBusca('busca-anos')
+    const anos = anosDeFeriados().filter(([a]) => !termo || a.includes(termo))
+    lista.innerHTML =
+      (parEditando('anos', 'novo') ? parFormLinha('Novo ano', `<div class="cad-row">
+          ${parRot('Ano', parInp('ano', new Date().getFullYear() + 1, 'type="number" min="1900" max="2200"'), 'max-width:140px')}</div>`,
+          'novoAnoFeriados()') : '')
+      + (anos.map(([a, n]) => `
+        <div class="par-linha clicavel" onclick="abrirAnoFeriados('${a}')">
+          <div class="principal"><b>${a}</b><span>${n} feriado(s) cadastrado(s)</span></div>
+          <span class="seta">›</span>
+        </div>`).join('')
+      || `<div class="lista-vazia">${termo ? 'Nenhum ano encontrado.' : 'Nenhum ano com feriados cadastrados.'}</div>`)
+    return
+  }
+
+  document.getElementById('fer-ano-titulo').textContent = 'Feriados de ' + ano
+  const termo = parBusca('busca-feriados')
+  const doAno = parState.feriados
+    .filter(f => f.data.startsWith(ano) && (!termo || f.nome.toLowerCase().includes(termo)))
+    .sort((a, b) => a.data.localeCompare(b.data))
+  lista.innerHTML =
+    (parEditando('feriados', 'novo') ? formFeriado({}) : '')
+    + (doAno.map(f => parEditando('feriados', f.id) ? formFeriado(f) : `
+      <div class="par-linha">
+        <div class="principal">
+          <b>${formatarDataBR(f.data)} — ${esc(f.nome)}</b>
+          <span>${esc(f.tipo)}${f.recorrente ? ' · repete todo ano' : ''}</span>
+        </div>
+        ${parAcoes('feriados', f.id)}
+      </div>`).join('')
+    || `<div class="lista-vazia">${termo ? 'Nenhum feriado encontrado.' : 'Nenhum feriado neste ano.'}</div>`)
+}
+
+/** @param {Object} f feriado ({} para novo) */
+function formFeriado(f) {
+  const ano = parState.anoAberto
+  // min/max presos ao ano aberto: evita cadastrar 2027 dentro de 2026.
+  return parFormLinha(f.id ? 'Editando feriado' : 'Novo feriado em ' + ano, `
+    <div class="cad-row">
+      ${parRot('Data', parInp('data', f.data, `type="date" min="${ano}-01-01" max="${ano}-12-31"`), 'max-width:180px')}
+      ${parRot('Nome', parInp('nome', f.nome, 'maxlength="80" placeholder="Natal"'), 'flex:2')}
+      ${parRot('Tipo', parSel('tipo', f.tipo || 'municipal', [
+        ['municipal', 'Municipal'], ['nacional', 'Nacional'], ['estadual', 'Estadual'], ['facultativo', 'Facultativo']]))}
+      ${parChk('recorrente', f.recorrente, 'Repete todo ano')}
+    </div>`, 'salvarFeriado()')
 }
 
 /**
@@ -523,76 +742,38 @@ function renderAnosFeriados() {
  * seria uma linha sem significado no banco.
  */
 function novoAnoFeriados() {
-  const inp = document.getElementById('novo-ano-feriados')
-  const ano = parseInt(inp.value, 10)
+  const ano = parseInt(parCampo('ano'), 10)
   if (!ano || ano < 1900 || ano > 2200) { toast('Informe um ano válido', 'err'); return }
-  inp.value = ''
   abrirAnoFeriados(String(ano))
+  // Ano novo está vazio por definição: o cartão do primeiro feriado já vem aberto.
+  if (!parState.feriados.some(f => f.data.startsWith(String(ano)))) parNovo('feriados')
 }
 
 /** @param {string} ano */
 function abrirAnoFeriados(ano) {
   parState.anoAberto = ano
-  document.getElementById('fer-anos').style.display = 'none'
-  document.getElementById('fer-lista').style.display = ''
-  document.getElementById('fer-ano-titulo').textContent = ano
-
-  // Trava a data ao ano aberto: sem isso é fácil cadastrar 2027 dentro de 2026.
-  const data = document.getElementById('novo-feriado-data')
-  data.min = ano + '-01-01'
-  data.max = ano + '-12-31'
-  data.value = ''
-  atualizarDisplayData(data)
-  document.getElementById('novo-feriado-nome').value = ''
-
-  renderFeriadosDoAno()
+  parState.ed = null
+  const busca = document.getElementById('busca-feriados')
+  if (busca) busca.value = ''
+  renderFeriados()
 }
 
 function voltarAnosFeriados() {
   parState.anoAberto = null
-  document.getElementById('fer-lista').style.display = 'none'
-  document.getElementById('fer-anos').style.display = ''
-  renderAnosFeriados()
-}
-
-function renderFeriadosDoAno() {
-  const doAno = parState.feriados
-    .filter(f => f.data.startsWith(parState.anoAberto))
-    .sort((a, b) => a.data.localeCompare(b.data))
-
-  document.getElementById('lista-feriados').innerHTML = doAno.map(f => `
-    <div class="par-linha">
-      <div class="principal">
-        <b>${formatarDataBR(f.data)} — ${esc(f.nome)}</b>
-        <span>${esc(f.tipo)}${f.recorrente ? ' · repete todo ano' : ''}</span>
-      </div>
-      <button class="acao-x" onclick="excluirFeriado(${f.id})" title="Excluir">${ICO_LIXO}</button>
-    </div>`).join('') || '<div class="lista-vazia">Nenhum feriado neste ano.</div>'
+  parState.ed = null
+  renderFeriados()
 }
 
 async function salvarFeriado() {
-  const data = document.getElementById('novo-feriado-data').value
-  const nome = document.getElementById('novo-feriado-nome').value.trim()
+  const data = parCampo('data'), nome = parCampo('nome')
   if (!data || !nome) { toast('Informe a data e o nome do feriado', 'err'); return }
-  if (parState.anoAberto && !data.startsWith(parState.anoAberto)) {
-    toast('A data precisa ser do ano ' + parState.anoAberto, 'err'); return
-  }
-
-  const d = await postParametro('/api/parametros/feriados', {
+  if (!data.startsWith(parState.anoAberto)) { toast('A data precisa ser do ano ' + parState.anoAberto, 'err'); return }
+  await parGravar('/api/parametros/feriados', {
+    id: parState.ed.id === 'novo' ? null : parState.ed.id,
     data, nome,
-    tipo: document.getElementById('novo-feriado-tipo').value,
-    recorrente: document.getElementById('novo-feriado-recorrente').checked,
-  }, null, async () => {
-    await carregarParametros()
-    if (parState.anoAberto) renderFeriadosDoAno()
-  })
-
-  if (d) {
-    document.getElementById('novo-feriado-data').value = ''
-    atualizarDisplayData(document.getElementById('novo-feriado-data'))
-    document.getElementById('novo-feriado-nome').value = ''
-    document.getElementById('novo-feriado-recorrente').checked = false
-  }
+    tipo: parCampo('tipo'),
+    recorrente: parCampo('recorrente'),
+  }, carregarParametros)
 }
 
 /** @param {number} id */
@@ -601,28 +782,41 @@ function excluirFeriado(id) {
     titulo: 'Excluir feriado',
     mensagem: 'Prazos já calculados não mudam retroativamente. Excluir mesmo assim?',
     perigo: true,
-    onConfirm: async () => {
-      await excluirParametro('/api/parametros/feriados/' + id)
-      if (parState.anoAberto) renderFeriadosDoAno()
-    },
+    onConfirm: () => excluirParametro('/api/parametros/feriados/' + id),
   })
 }
 
 // ── DADOS DO ÓRGÃO ───────────────────────────────────────────
+//
+// Não é lista: são campos fixos. Por isso um bloco só, lido como ficha, com
+// UM Editar que abre todos os campos de uma vez.
+
+/** O brasão tem tela própria (envio de imagem) e não aparece como texto. */
+const geralEditaveis = () => parState.geral.filter(p => p.chave !== 'brasao_url')
+/** Textos longos ocupam a linha inteira e editam em caixa de várias linhas. */
+const GERAL_LONGOS = ['termo_recusa']
 
 function renderGeral() {
-  document.getElementById('cont-geral').textContent = parState.geral.length
-  document.getElementById('lista-geral').innerHTML = parState.geral.map(p => `
-    <div class="field">
-      <label for="geral-${esc(p.chave)}">${esc(p.descricao)}</label>
-      <input type="text" id="geral-${esc(p.chave)}" data-chave="${esc(p.chave)}" value="${esc(p.valor)}">
-    </div>`).join('')
+  const campos = geralEditaveis()
+  document.getElementById('cont-geral').textContent = campos.length
+  const largo = p => GERAL_LONGOS.includes(p.chave) ? ' style="grid-column:1/-1"' : ''
+
+  document.getElementById('lista-geral').innerHTML = parEditando('geral', 'todos')
+    ? parFormLinha('Editando dados do órgão', `<div class="orgao-grade">${campos.map(p => `
+        <label class="ed-campo"${largo(p)}><span>${esc(p.descricao)}</span>${GERAL_LONGOS.includes(p.chave)
+          ? parTxt(p.chave, p.valor, 4) : parInp(p.chave, p.valor)}</label>`).join('')}</div>`, 'salvarGeral()')
+    : `<div class="par-linha" style="align-items:flex-start">
+        <div class="orgao-grade">${campos.map(p => `
+          <div class="ed-campo"${largo(p)}><span>${esc(p.descricao)}</span>
+            <b class="texto-longo">${p.valor ? esc(p.valor) : '<em>— vazio —</em>'}</b></div>`).join('')}</div>
+        <div class="par-acoes"><button type="button" class="btn edit-verde sm" onclick="parEditar('geral', 'todos')">${ICO_EDITAR}Editar</button></div>
+      </div>`
 }
 
 async function salvarGeral() {
   const valores = {}
-  document.querySelectorAll('#lista-geral [data-chave]').forEach(i => { valores[i.dataset.chave] = i.value })
-  await postParametro('/api/parametros/geral', { valores }, null, async () => {})
+  geralEditaveis().forEach(p => { valores[p.chave] = parCampo(p.chave) })
+  await parGravar('/api/parametros/geral', { valores }, carregarParametros)
 }
 
 // ── HELPERS COMUNS ───────────────────────────────────────────
@@ -631,10 +825,6 @@ const ICO_EDITAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
   <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`
-
-const ICO_LIXO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-  stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
-  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>`
 
 /**
  * POST dos formulários desta tela. `modalId` nulo quando o cadastro é feito
@@ -674,6 +864,7 @@ async function excluirParametro(url) {
   })
   const d = await r.json()
   if (!r.ok) { toast(d.message || 'Não foi possível excluir', 'err'); return }
+  parState.ed = null
   toast(d.message)
   await carregarParametros()
 }
@@ -685,98 +876,56 @@ function primeiroErroPar(d) {
 
 // ── BAIRROS ──────────────────────────────────────────────────
 //
-// A lista tem 125 linhas — é a única do painel que não cabe na tela —, por isso
-// tem campo de procura e o cadastro fica fixo no topo, e não no fim.
-//
-// Alterar reaproveita a MESMA linha de cadastro: tocar num bairro traz os
-// valores dele para cima, e o botão troca de "Novo bairro" para "Salvar". Um
-// modal para três campos curtos seria uma janela para conferir o que já está
-// visível dois centímetros acima.
-
-/** @returns {Array<Object>} os bairros que passam pelo campo de procura. */
-function bairrosFiltrados() {
-  const q = (document.getElementById('filtro-bairros')?.value || '').trim().toLowerCase()
-  if (!q) return parState.bairros
-  return parState.bairros.filter(b =>
-    String(b.codigo).includes(q)
-    || (b.nome_cadastro || '').toLowerCase().includes(q)
-    || (b.nome_gis || '').toLowerCase().includes(q))
-}
+// A lista tem 125 linhas, por isso a busca e o "+ Novo" ficam fixos no topo e
+// só a lista rola.
 
 function renderBairros() {
-  const todos = parState.bairros
-  const lista = bairrosFiltrados()
-  document.getElementById('cont-bairros').textContent =
-    lista.length === todos.length ? todos.length : `${lista.length}/${todos.length}`
+  const termo = parBusca('filtro-bairros')
+  const lista = parState.bairros.filter(b => !termo
+    || String(b.codigo).includes(termo)
+    || (b.nome_cadastro || '').toLowerCase().includes(termo)
+    || (b.nome_gis || '').toLowerCase().includes(termo))
+  parContador('cont-bairros', lista.length, parState.bairros.length)
 
-  document.getElementById('lista-bairros').innerHTML = lista.map(b => `
-    <div class="par-linha${b.id === parState.bairroEditando ? ' at' : ''}">
-      <div class="principal clicavel" onclick="editarBairro(${b.id})">
-        <b>${esc(b.codigo)} · ${esc(b.nome_cadastro || b.nome_gis || '(sem nome)')}</b>
-        <span>${b.nome_gis
-          ? 'No desenho: ' + esc(b.nome_gis) + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
-          : 'Ainda sem desenho convertido'}</span>
-      </div>
-      <button type="button" class="btn sm danger" onclick="excluirBairro(${b.id})">Excluir</button>
-    </div>`).join('')
-    || '<div class="lista-vazia">Nenhum bairro encontrado.</div>'
+  document.getElementById('lista-bairros').innerHTML =
+    (parEditando('bairros', 'novo') ? formBairro({}) : '')
+    + (lista.map(b => parEditando('bairros', b.id) ? formBairro(b) : `
+      <div class="par-linha">
+        <div class="principal">
+          <b>${esc(b.codigo)} · ${esc(b.nome_cadastro || b.nome_gis || '(sem nome)')}</b>
+          <span>${b.nome_gis
+            ? 'No desenho: ' + esc(b.nome_gis) + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
+            : 'Ainda sem desenho convertido'}</span>
+        </div>
+        ${parAcoes('bairros', b.id)}
+      </div>`).join('')
+    || '<div class="lista-vazia">Nenhum bairro encontrado.</div>')
 }
 
-/** Traz o bairro para a linha de cadastro. @param {number} id */
-function editarBairro(id) {
-  const b = parState.bairros.find(x => x.id === id)
-  if (!b) return
-
-  parState.bairroEditando = id
-  document.getElementById('novo-bairro-codigo').value = b.codigo ?? ''
-  document.getElementById('novo-bairro-nome').value = b.nome_cadastro ?? ''
-  document.getElementById('novo-bairro-gis').value = b.nome_gis ?? ''
-  pintarBotaoBairro()
-  renderBairros()
-  document.getElementById('novo-bairro-nome').focus()
-}
-
-function cancelarEdicaoBairro() {
-  parState.bairroEditando = null
-  ;['codigo', 'nome', 'gis'].forEach(c => { document.getElementById('novo-bairro-' + c).value = '' })
-  pintarBotaoBairro()
-  renderBairros()
-}
-
-/** O botão diz o que vai acontecer, e some o "cancelar" quando não há edição. */
-function pintarBotaoBairro() {
-  const editando = parState.bairroEditando !== null
-  const btn = document.querySelector('#par-bairros .cad-row .btn.primary')
-  if (btn) btn.textContent = editando ? 'Salvar alteração' : '+ Novo bairro'
-
-  let cancelar = document.getElementById('btn-cancelar-bairro')
-  if (editando && !cancelar) {
-    cancelar = document.createElement('button')
-    cancelar.id = 'btn-cancelar-bairro'
-    cancelar.className = 'btn sm'
-    cancelar.textContent = 'Cancelar'
-    cancelar.onclick = cancelarEdicaoBairro
-    btn?.after(cancelar)
-  } else if (!editando && cancelar) {
-    cancelar.remove()
-  }
+/** @param {Object} b bairro ({} para novo) */
+function formBairro(b) {
+  // Três nomes, de propósito: o código e o nome do cadastro são os da
+  // prefeitura; o nome no desenho é como o bairro aparece no DWG convertido —
+  // é ele que amarra os lotes ao código, e fica vazio até o bairro ser levantado.
+  return parFormLinha(b.id ? 'Editando bairro' : 'Novo bairro', `
+    <div class="cad-row">
+      ${parRot('Código', parInp('codigo', b.codigo, 'type="number" min="1"'), 'max-width:110px')}
+      ${parRot('Nome no cadastro', parInp('nome_cadastro', b.nome_cadastro, 'placeholder="JARDIM EUROPA IV"'), 'flex:2')}
+      ${parRot('Nome no desenho (apelido)', parInp('nome_gis', b.nome_gis, 'placeholder="opcional"'), 'flex:2')}
+    </div>`, 'salvarBairro()')
 }
 
 async function salvarBairro() {
-  const codigo = document.getElementById('novo-bairro-codigo').value.trim()
-  const nome = document.getElementById('novo-bairro-nome').value.trim()
+  const codigo = parCampo('codigo'), nome = parCampo('nome_cadastro')
   if (!codigo || !nome) { toast('Informe o código e o nome do bairro', 'err'); return }
-
-  const d = await postParametro('/api/parametros/bairros', {
-    id: parState.bairroEditando,
+  await parGravar('/api/parametros/bairros', {
+    id: parState.ed.id === 'novo' ? null : parState.ed.id,
     codigo,
     nome_cadastro: nome,
     // Vazio vira nulo no servidor: bairro sem desenho convertido não tem nome
     // de GIS, e string vazia colidiria com a próxima no índice único.
-    nome_gis: document.getElementById('novo-bairro-gis').value.trim() || null,
-  }, null, carregarParametros)
-
-  if (d) cancelarEdicaoBairro()
+    nome_gis: parCampo('nome_gis') || null,
+  }, carregarParametros)
 }
 
 /** @param {number} id */
@@ -794,93 +943,56 @@ function excluirBairro(id) {
 
 // ── IRREGULARIDADES ───────────────────────────────────────────
 //
-// Mesmo desenho do bairro: cadastro rápido fixo no topo, lista embaixo, e
-// tocar numa linha traz ela para cima para editar.
-
-function irregularidadesFiltradas() {
-  const q = (document.getElementById('filtro-irregularidades')?.value || '').trim().toLowerCase()
-  if (!q) { return parState.catalogoIrregularidades }
-  return parState.catalogoIrregularidades.filter(i =>
-    String(i.codigo).toLowerCase().includes(q) || i.descricao.toLowerCase().includes(q))
-}
+// O catálogo que a vistoria oferece. Excluir é recusado quando alguma vistoria
+// já constatou; desmarcar "Ativa" tira da lista sem apagar o histórico.
 
 function renderIrregularidades() {
+  const termo = parBusca('filtro-irregularidades')
   const todos = parState.catalogoIrregularidades
-  const lista = irregularidadesFiltradas()
-  document.getElementById('cont-irregularidades').textContent =
-    lista.length === todos.length ? todos.length : `${lista.length}/${todos.length}`
+  const lista = todos.filter(i => !termo
+    || String(i.codigo).toLowerCase().includes(termo) || i.descricao.toLowerCase().includes(termo))
+  parContador('cont-irregularidades', lista.length, todos.length)
 
-  document.getElementById('lista-irregularidades').innerHTML = lista.map(i => `
-    <div class="par-linha${i.id === parState.irregularidadeEditando ? ' at' : ''}${i.ativo ? '' : ' par-linha-inativa'}">
-      <div class="principal clicavel" onclick="editarIrregularidade(${i.id})">
-        <b>${esc(i.codigo)} · ${esc(i.descricao)}</b>
-        <span>${esc(i.gravidade)}${i.base_legal ? ' · ' + esc(i.base_legal) : ''}${
-          i.ativo ? '' : ' · desativada'}${i.em_uso ? ` · usada em ${i.em_uso} vistoria(s)` : ''}</span>
-      </div>
-      <button type="button" class="btn sm danger" onclick="excluirIrregularidade(${i.id})">Excluir</button>
-    </div>`).join('')
-    || '<div class="lista-vazia">Nenhuma irregularidade encontrada.</div>'
+  document.getElementById('lista-irregularidades').innerHTML =
+    (parEditando('irregularidades', 'novo') ? formIrregularidade({}) : '')
+    + (lista.map(i => parEditando('irregularidades', i.id) ? formIrregularidade(i) : `
+      <div class="par-linha${i.ativo ? '' : ' par-linha-inativa'}">
+        <div class="principal">
+          <b>${esc(i.codigo)} · ${esc(i.descricao)}</b>
+          <span>${esc(i.gravidade)}${i.base_legal ? ' · ' + esc(i.base_legal) : ''}${
+            i.ativo ? '' : ' · desativada'}${i.em_uso ? ` · usada em ${i.em_uso} vistoria(s)` : ''}</span>
+        </div>
+        ${parAcoes('irregularidades', i.id)}
+      </div>`).join('')
+    || '<div class="lista-vazia">Nenhuma irregularidade encontrada.</div>')
 }
 
-/** @param {number} id */
-function editarIrregularidade(id) {
-  const i = parState.catalogoIrregularidades.find(x => x.id === id)
-  if (!i) { return }
-
-  parState.irregularidadeEditando = id
-  document.getElementById('irr-codigo').value = i.codigo ?? ''
-  document.getElementById('irr-descricao').value = i.descricao ?? ''
-  document.getElementById('irr-gravidade').value = i.gravidade ?? 'media'
-  document.getElementById('irr-base-legal').value = i.base_legal ?? ''
-  document.getElementById('irr-ordem').value = i.ordem ?? ''
-  document.getElementById('irr-ativo').checked = !!i.ativo
-  pintarBotaoIrregularidade()
-  renderIrregularidades()
-  document.getElementById('irr-descricao').focus()
-}
-
-function cancelarEdicaoIrregularidade() {
-  parState.irregularidadeEditando = null
-  ;['codigo', 'descricao', 'base-legal', 'ordem'].forEach(c => { document.getElementById('irr-' + c).value = '' })
-  document.getElementById('irr-gravidade').value = 'media'
-  document.getElementById('irr-ativo').checked = true
-  pintarBotaoIrregularidade()
-  renderIrregularidades()
-}
-
-function pintarBotaoIrregularidade() {
-  const editando = parState.irregularidadeEditando !== null
-  const btn = document.querySelector('#par-irregularidades .cad-row .btn.primary')
-  if (btn) { btn.textContent = editando ? 'Salvar alteração' : '+ Nova irregularidade' }
-
-  let cancelar = document.getElementById('btn-cancelar-irregularidade')
-  if (editando && !cancelar) {
-    cancelar = document.createElement('button')
-    cancelar.id = 'btn-cancelar-irregularidade'
-    cancelar.className = 'btn sm'
-    cancelar.textContent = 'Cancelar'
-    cancelar.onclick = cancelarEdicaoIrregularidade
-    btn?.after(cancelar)
-  } else if (!editando && cancelar) {
-    cancelar.remove()
-  }
+/** @param {Object} i irregularidade ({} para nova) */
+function formIrregularidade(i) {
+  return parFormLinha(i.id ? 'Editando irregularidade' : 'Nova irregularidade', `
+    <div class="cad-row">
+      ${parRot('Código', parInp('codigo', i.codigo, 'class="mono" maxlength="20"'), 'max-width:110px')}
+      ${parRot('Descrição', parInp('descricao', i.descricao, 'maxlength="200"'), 'flex:3')}
+      ${parRot('Gravidade', parSel('gravidade', i.gravidade || 'media', [['leve', 'Leve'], ['media', 'Média'], ['grave', 'Grave']]), 'max-width:140px')}
+    </div>
+    <div class="cad-row">
+      ${parRot('Base legal (opcional)', parInp('base_legal', i.base_legal, 'maxlength="200"'), 'flex:3')}
+      ${parRot('Ordem', parInp('ordem', i.ordem, 'type="number" class="mono" min="0"'), 'max-width:100px')}
+      ${parChk('ativo', i.ativo ?? true, 'Ativa')}
+    </div>`, 'salvarIrregularidade()')
 }
 
 async function salvarIrregularidade() {
-  const codigo = document.getElementById('irr-codigo').value.trim()
-  const descricao = document.getElementById('irr-descricao').value.trim()
+  const codigo = parCampo('codigo'), descricao = parCampo('descricao')
   if (!codigo || !descricao) { toast('Informe o código e a descrição', 'err'); return }
-
-  const d = await postParametro('/api/parametros/irregularidades', {
-    id: parState.irregularidadeEditando,
+  await parGravar('/api/parametros/irregularidades', {
+    id: parState.ed.id === 'novo' ? null : parState.ed.id,
     codigo, descricao,
-    gravidade: document.getElementById('irr-gravidade').value,
-    base_legal: document.getElementById('irr-base-legal').value.trim() || null,
-    ordem: document.getElementById('irr-ordem').value || null,
-    ativo: document.getElementById('irr-ativo').checked,
-  }, null, carregarParametros)
-
-  if (d) { cancelarEdicaoIrregularidade() }
+    gravidade: parCampo('gravidade'),
+    base_legal: parCampo('base_legal') || null,
+    ordem: parCampo('ordem') || null,
+    ativo: parCampo('ativo'),
+  }, carregarParametros)
 }
 
 /** @param {number} id */

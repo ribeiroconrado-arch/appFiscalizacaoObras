@@ -178,14 +178,18 @@ class ParametroController extends Controller
     {
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
 
+        // Editar vem com o id; "+ Nova UPF" de um exercício que já existe é
+        // recusado, em vez de sobrescrever em silêncio o valor de outro ano.
         $d = $r->validate([
-            'exercicio'       => ['required', 'integer', 'min:2020', 'max:2100'],
+            'id'              => ['nullable', 'exists:upfs,id'],
+            'exercicio'       => ['required', 'integer', 'min:2020', 'max:2100',
+                Rule::unique('upfs', 'exercicio')->ignore($r->input('id'))],
             'valor'           => ['required', 'numeric', 'min:0.0001'],
             'vigencia_inicio' => ['required', 'date'],
             'norma'           => ['nullable', 'string', 'max:80'],
-        ]);
+        ], ['exercicio.unique' => 'Já existe UPF para este exercício — use o Editar dela.']);
 
-        Upf::updateOrCreate(['exercicio' => $d['exercicio']], $d);
+        Upf::updateOrCreate(['id' => $d['id'] ?? null], collect($d)->except('id')->all());
 
         return response()->json(['message' => 'UPF gravada.']);
     }
