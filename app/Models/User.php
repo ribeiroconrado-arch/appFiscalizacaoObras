@@ -24,7 +24,17 @@ class User extends Authenticatable
     public const PERFIS = ['admin', 'comum', 'viewer'];
 
     /** Cargos. Só `agente` pode ter perfil acima de `viewer`. */
-    public const CARGOS = ['agente', 'coordenador', 'secretario'];
+    public const CARGOS = ['agente', 'coordenador', 'secretario', 'topografo', 'arquiteto', 'contribuinte'];
+
+    /**
+     * Quem usa o mapa sem ser servidor da fiscalização.
+     *
+     * Vê lote, cadastro e a EXISTÊNCIA de vistorias e autos — nunca o conteúdo.
+     * A trava de escrita já vem de `perfilEfetivo()` (não é agente, é
+     * visualizador); esta lista acrescenta a trava de LEITURA, que o perfil
+     * sozinho não dá: um coordenador visualizador lê auto, um topógrafo não.
+     */
+    public const EXTERNOS = ['topografo', 'arquiteto', 'contribuinte'];
 
     protected function casts(): array
     {
@@ -77,7 +87,30 @@ class User extends Authenticatable
 
     public function podeCurarCadastro(): bool
     {
-        return $this->canEdit() && (bool) $this->curador_cadastral;
+        // O externo é visualizador por força do cargo, e por isso não passaria
+        // em `canEdit`. Para ele, a marcação de curador é a permissão inteira:
+        // corrige o DESENHO do cadastro, e nada da fiscalização — os atos que
+        // dependem de protocolo e vistoria continuam exigindo `canEdit`.
+        return $this->ativo && (bool) $this->curador_cadastral
+            && ($this->canEdit() || $this->isExterno());
+    }
+
+    /** Topógrafo, arquiteto ou contribuinte — ver EXTERNOS. */
+    public function isExterno(): bool
+    {
+        return in_array($this->tipo_usuario, self::EXTERNOS, true);
+    }
+
+    /**
+     * Pode ABRIR vistoria, auto, notificação, protocolo e ordem de serviço?
+     *
+     * Saber que existem, todos sabem — a ficha do lote lista. Ler o conteúdo é
+     * da fiscalização. Negado também a usuário desativado, pela mesma razão
+     * de `isViewer()`.
+     */
+    public function podeVerDocumentos(): bool
+    {
+        return $this->ativo && ! $this->isExterno();
     }
 
     public function canEdit(): bool

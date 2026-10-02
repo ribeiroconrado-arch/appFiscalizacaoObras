@@ -282,7 +282,11 @@ class VistoriaController extends Controller
             ];
         }
 
-        foreach (Documento::where('lote_id', $lote->id)->get() as $d) {
+        // Rascunho é trabalho em curso do fiscal, não ato: quem é de fora só
+        // fica sabendo do documento depois de lavrado.
+        $externo = ! auth()->user()?->podeVerDocumentos();
+        foreach (Documento::where('lote_id', $lote->id)
+                     ->when($externo, fn ($q) => $q->where('status', '<>', 'rascunho'))->get() as $d) {
             [$sTxt, $sCls] = $d->statusBadge();
             $eventos[] = [
                 'tipo'    => 'documento',
@@ -314,6 +318,26 @@ class VistoriaController extends Controller
         usort($eventos, fn ($a, $b) => strcmp(
             $this->chaveOrdem($b['quando']), $this->chaveOrdem($a['quando'])
         ));
+
+        // QUEM É DE FORA SABE QUE HOUVE, NÃO O QUE HOUVE.
+        //
+        // Topógrafo, arquiteto e contribuinte veem a linha do tempo com o tipo,
+        // o número, a data e a situação — o bastante para saber que o imóvel
+        // tem processo. Sai o id (sem ele não há o que abrir), o fiscal, o
+        // autuado, o requerente, as irregularidades e a descrição. As rotas de
+        // abertura estão fechadas de qualquer forma (middleware `interno`);
+        // cortar aqui é não mandar ao navegador o que ele não vai mostrar.
+        if ($externo) {
+            $eventos = array_map(fn ($e) => [
+                'tipo'     => $e['tipo'],
+                'quando'   => $e['quando'] ? substr($e['quando'], 0, 10) : null,
+                'titulo'   => $e['titulo'],
+                'badge'    => $e['badge'],
+                'itens'    => [],
+                'restrito' => true,
+            ], $eventos);
+            $vistorias = collect();
+        }
 
         return response()->json([
             'lote'      => $lote->only(['id', 'bairro', 'quadra', 'numero_lote', 'chave']),

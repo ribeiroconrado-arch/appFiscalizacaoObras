@@ -92,6 +92,9 @@ class UnificacaoDeLotes
         if ($erro = $this->sucessao->impedimentoDoProtocolo($protocolo, 'unificacao', $direto)) {
             return $erro;
         }
+        if ($mistura = ImportacaoDeBairro::misturaRevisao($ids)) {
+            return $mistura;
+        }
 
         $ids = array_values(array_unique($ids));
         if (count($ids) < 2) {
@@ -233,7 +236,7 @@ class UnificacaoDeLotes
                     : 'Unificação direta — sem protocolo',
                 'origem'         => 'unificacao',
                 'situacao'       => 'ativo',
-            ];
+            ] + ImportacaoDeBairro::emRevisaoNoBairro($primeiro->bairro);
 
             foreach (Lote::whereIn('id', $ids)->get() as $lote) {
                 $lote->update(['situacao' => 'inativo', 'inativado_em' => now()]);

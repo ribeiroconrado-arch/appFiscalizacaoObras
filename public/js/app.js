@@ -29,8 +29,13 @@ const state = {
  * inteira — os dois bairros do piloto ficam a 4 km um do outro e só cabem
  * juntos por volta do zoom 13. Quem protege contra pedido absurdo é o teto
  * do servidor (MAPA_MAX_LOTES), que sinaliza `truncado` e faz o mapa avisar.
+ *
+ * Agora 13: nos dois zooms mais afastados (11 e 12) o lote é só uma mancha
+ * branca, e o CONTORNO do bairro com o nome (bairros-contorno.js) já diz onde
+ * cada um está — pedir e pintar milhares de polígonos ali era peso sem leitura.
+ * Os lotes já carregados também somem abaixo dele (ver ocultarLotesAfastado).
  */
-const ZOOM_MINIMO = 12
+const ZOOM_MINIMO = 13
 
 // ── CARGA POR BBOX ───────────────────────────────────────────
 
@@ -62,7 +67,13 @@ async function carregarLotesVisiveis() {
   const versao = state.versaoLotes
   state.cargaLotes = (async () => {
   try {
-    const r = await fetch(`/api/mapa/lotes?bbox=${bbox}`, {
+    // Curador vê também os lotes de importação ainda não publicada, a menos
+    // que desligue a camada "Lotes não publicados" (painel Camadas,
+    // camadas-mapa.js). (`typeof document`: os testes rodam esta função fora
+    // do navegador.)
+    const revisao = typeof document !== 'undefined' && typeof window !== 'undefined' && window.USUARIO_CURADOR
+      && (typeof camadaLigada !== 'function' || camadaLigada('nao-publicados')) ? '&revisao=1' : ''
+    const r = await fetch(`/api/mapa/lotes?bbox=${bbox}${revisao}`, {
       headers: { 'Accept': 'application/json' },
     })
     if (!r.ok) throw new Error('HTTP ' + r.status)
@@ -111,6 +122,12 @@ const desenhados = new Set()
  */
 function limparLotesDoMapa() {
   state.versaoLotes++
+  // Toda correção do cadastro passa por aqui. Quem acompanha os lotes — a
+  // conferência com o cadastro, que se refaz sozinha — fica sabendo.
+  if (typeof document !== 'undefined' && typeof document.dispatchEvent === 'function'
+      && typeof CustomEvent !== 'undefined') {
+    document.dispatchEvent(new CustomEvent('lotes-alterados'))
+  }
   state.carregando = false
   const mapa = mapaState.obj
   if (mapa) {
@@ -188,6 +205,10 @@ async function prepararMapa() {
     if (!mapaState.pronto) {
       await enquadrarBase()
       mapaState.pronto = true
+      // O contorno dos bairros entra depois do enquadramento: os rótulos
+      // permanentes precisam de um mapa já com centro e zoom. Sem await —
+      // ele não segura a carga dos lotes.
+      if (typeof carregarContornosDosBairros === 'function') { carregarContornosDosBairros() }
     }
     // Aguarda também a carga que o moveend iniciou durante o enquadramento.
     await carregarLotesVisiveis()
@@ -202,8 +223,13 @@ async function bootstrap() {
   iniciarMapa()
   mapaState.obj.on('moveend', carregarLotesVisiveis)
 
-  carregarNotificacoes()
-  carregarPainel()
+  if (window.PODE_VER_DOCUMENTOS) {
+    carregarNotificacoes()
+    carregarPainel()
+  } else {
+    // Externo: não há Painel para ele; o sistema abre no mapa.
+    irPara('mapa')
+  }
   prepararMapa()   // sem efeito se a aba Mapa ainda não estiver visível
 
   // Enter = Buscar nos campos de texto dos três filtros. As listas não buscam
@@ -689,13 +715,13 @@ function irPara(destino) {
   document.querySelectorAll('.tela').forEach(t => t.classList.remove('at'))
   document.getElementById('t-' + destino).classList.add('at')
 
-  // A ordem tem de acompanhar a dos botões no rodapé: é o índice que decide
-  // qual aba fica marcada.
-  const ordem = ['painel', 'busca', 'mapa', 'documentos', 'protocolos']
-  const i = ordem.indexOf(destino)
-  document.querySelectorAll('.aba').forEach((a, indice) => {
-    a.classList.toggle('at', indice === i)
-    if (indice === i) a.setAttribute('aria-current', 'page')
+  // A aba marcada é a do DESTINO, e não a da posição: o externo não tem
+  // Painel, Documentos nem Protocolo, e contar por índice marcaria a aba
+  // errada assim que faltasse uma.
+  document.querySelectorAll('.aba').forEach(a => {
+    const esta = a.dataset.destino === destino
+    a.classList.toggle('at', esta)
+    if (esta) a.setAttribute('aria-current', 'page')
     else a.removeAttribute('aria-current')
   })
 
@@ -754,8 +780,8 @@ function rotuloGps(texto) {
  * primeira vez que alguém renomear um só deles.
  */
 function marcarModuloNoSubcabecalho(destino) {
-  const ordem = ['painel', 'busca', 'mapa', 'documentos', 'protocolos']
-  const botao = document.querySelectorAll('.aba')[ordem.indexOf(destino)]
+  // Pelo destino, e não pela posição: o externo tem menos abas.
+  const botao = document.querySelector(`.aba[data-destino="${destino}"]`)
   if (!botao) return
 
   const nome = document.getElementById('subcab-nome')

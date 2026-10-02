@@ -555,6 +555,10 @@ class CadastroLoteController extends Controller
             ], 422);
         }
 
+        if ($mistura = \App\Services\ImportacaoDeBairro::misturaRevisao($d['ids'])) {
+            return response()->json(['message' => $mistura], 422);
+        }
+
         $lotes = Lote::whereIn('id', $d['ids'])->get();
 
         // TUDO OU NADA.
@@ -665,6 +669,52 @@ class CadastroLoteController extends Controller
     }
 
     /** @return array<string,mixed> */
+    /** POST /api/lotes/{lote}/edicao/previa — Editar lote (pré-curadoria), sem gravar. */
+    public function previaEdicao(Request $request, Lote $lote, \App\Services\EdicaoDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+        $d = $this->validarEdicao($request);
+
+        return response()->json([
+            'impedimento' => $svc->impedimento($lote, $d),
+            'retrato'     => $svc->retrato($lote, $d),
+        ]);
+    }
+
+    /** POST /api/lotes/{lote}/edicao — grava contorno, quadra e número. */
+    public function editar(Request $request, Lote $lote, \App\Services\EdicaoDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+        $d = $this->validarEdicao($request);
+        if ($impedimento = $svc->impedimento($lote, $d)) {
+            return response()->json(['message' => $impedimento], 422);
+        }
+
+        $novo = $svc->aplicar($lote, $d);
+
+        return response()->json([
+            'id'      => $novo->id,
+            'message' => sprintf('Lote %s da quadra %s salvo com %s m².', $novo->numero_lote, $novo->quadra,
+                number_format((float) $novo->area_gis_m2, 2, ',', '.')),
+        ]);
+    }
+
+    /** @return array<string,mixed> */
+    private function validarEdicao(Request $request): array
+    {
+        return $request->validate([
+            'quadra'               => ['required', 'string', 'max:20'],
+            'numero_lote'          => ['required', 'string', 'max:20'],
+            'geometry'             => ['required', 'array'],
+            'geometry.type'        => ['required', 'string'],
+            'geometry.coordinates' => ['required', 'array'],
+        ]);
+    }
+
     private function validarDesenho(Request $request): array
     {
         /** @var array<string,mixed> $d */

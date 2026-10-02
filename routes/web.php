@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BairroContornoController;
 use App\Http\Controllers\BuscaController;
 use App\Http\Controllers\CadastroImobiliarioController;
 use App\Http\Controllers\CadastroLoteController;
 use App\Http\Controllers\DemandaController;
 use App\Http\Controllers\DeployWebhookController;
 use App\Http\Controllers\EdificacaoController;
+use App\Http\Controllers\ImportacaoController;
 use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\LegislacaoController;
 use App\Http\Controllers\MapaController;
@@ -60,11 +62,17 @@ Route::middleware('auth')->group(function () {
         return view('mapa', ['total' => $lotes->total()]);
     })->name('mapa');
 
+    // ── ABERTO TAMBÉM A EXTERNOS ─────────────────────────────────
+    // Topógrafo, arquiteto e contribuinte (User::EXTERNOS) usam o mapa, a busca
+    // e a ficha do lote; o curador entre eles usa também a correção do desenho.
+    // TUDO o que não está neste grupo cai no grupo `interno`, logo abaixo —
+    // rota nova que ninguém classificar nasce fechada para quem é de fora. Ver
+    // App\Http\Middleware\SoInterno.
+    //
+    // As permissões de escrita continuam decididas em cada controller
+    // (podeCurarCadastro, isAdmin...): estar aqui só quer dizer que o externo
+    // não é barrado ANTES de o controller decidir.
     Route::prefix('api')->group(function () {
-        // Painel e notificações
-        Route::get('/painel', [PainelController::class, 'index']);
-        Route::get('/notificacoes', [PainelController::class, 'notificacoes']);
-
         // Busca de imóveis sem abrir o mapa — a camada de satélite é paga por
         // requisição, e consulta de balcão não precisa de imagem aérea.
         // DOIS ENDPOINTS DE BAIRRO, de propósito.
@@ -90,7 +98,6 @@ Route::middleware('auth')->group(function () {
         // O contorno de um imóvel, sob demanda — ver BuscaController::geometria.
         Route::get('/imoveis/{lote}/geometria', [BuscaController::class, 'geometria']);
         Route::get('/imoveis/{lote}/bci', [CadastroImobiliarioController::class, 'mostrar']);
-        Route::post('/imoveis/{lote}/bci/atualizar', [CadastroImobiliarioController::class, 'atualizar']);
         // Edificações desenhadas dentro do lote — o croqui e a área construída.
         Route::get('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'listar']);
         Route::post('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'criar']);
@@ -101,13 +108,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/pranchetas/salvar', [\App\Http\Controllers\PranchetaController::class, 'salvar']);
         Route::get('/lotes/{lote}/pranchas', [\App\Http\Controllers\PranchetaController::class, 'historico']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
+        // Contorno de cada bairro: o mapa de todos lê; o curador gera e grava.
+        Route::get('/mapa/bairros', [BairroContornoController::class, 'index']);
+        Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes']);
+        Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);
         Route::post('/localizacao/identificar', [MapaController::class, 'identificar']);
 
-        // Fiscalização
-        Route::get('/irregularidades', [VistoriaController::class, 'catalogo']);
-        // O enquadramento conferido em CAMPO, antes de a vistoria existir.
-        Route::get('/artigos-sugeridos', [VistoriaController::class, 'artigosSugeridos']);
         // Quadra vazia e uma pendencia de importacao, nao um defeito eterno:
         // o extrator prefere deixar em branco a chutar. Estas duas rotas sao
         // como se corrige — de uma vez, o quarteirao inteiro.
@@ -145,6 +152,63 @@ Route::middleware('auth')->group(function () {
         Route::post('/lotes/previa', [CadastroLoteController::class, 'previaDesenho']);
         Route::post('/lotes', [CadastroLoteController::class, 'criarDesenho']);
 
+        // Editar lote — só na pré-curadoria (lote de importação em revisão).
+        Route::post('/lotes/{lote}/edicao/previa', [CadastroLoteController::class, 'previaEdicao']);
+        Route::post('/lotes/{lote}/edicao', [CadastroLoteController::class, 'editar']);
+
+        // O histórico do lote: para o externo sai só O QUE houve e QUANDO, sem
+        // o conteúdo — a redação é feita em VistoriaController::historico.
+        Route::get('/lotes/{lote}/historico', [VistoriaController::class, 'historico']);
+
+        // Importação de bairro com revisão. Quem pode o quê (curador importa e
+        // confere; só administrador publica) está em ImportacaoController.
+        // Conferência do BAIRRO com o cadastro — a que fica depois da
+        // importação, como lista de pendências no mapa (só curador).
+        Route::get('/conferencias', [\App\Http\Controllers\ConferenciaBairroController::class, 'index']);
+        Route::get('/conferencias/bairro', [\App\Http\Controllers\ConferenciaBairroController::class, 'mostrar']);
+        Route::post('/conferencias/bairro', [\App\Http\Controllers\ConferenciaBairroController::class, 'conferir']);
+        Route::post('/conferencias/justificar', [\App\Http\Controllers\ConferenciaBairroController::class, 'justificar']);
+
+        Route::get('/importacoes', [ImportacaoController::class, 'index']);
+        Route::post('/importacoes/conferir', [ImportacaoController::class, 'conferirArquivo']);
+        Route::post('/importacoes', [ImportacaoController::class, 'gravar']);
+        Route::get('/importacoes/{importacao}', [ImportacaoController::class, 'mostrar']);
+        Route::post('/importacoes/{importacao}/conferir-cadastro', [ImportacaoController::class, 'conferirCadastro']);
+        Route::get('/importacoes/{importacao}/divergencias.csv', [ImportacaoController::class, 'divergenciasCsv']);
+        Route::post('/importacoes/{importacao}/bairro', [ImportacaoController::class, 'vincularBairro']);
+        Route::post('/importacoes/{importacao}/lotes/{lote}/numero', [ImportacaoController::class, 'numerarLote']);
+        Route::post('/importacoes/{importacao}/lotes/excluir', [ImportacaoController::class, 'excluirLotes']);
+        Route::post('/importacoes/{importacao}/salvar', [ImportacaoController::class, 'salvar']);
+        Route::post('/importacoes/{importacao}/descartar', [ImportacaoController::class, 'descartar']);
+        Route::post('/importacoes/{importacao}/publicar', [ImportacaoController::class, 'publicar']);
+        Route::post('/importacoes/{importacao}/excluir', [ImportacaoController::class, 'excluir']);
+
+        // Meu perfil — qualquer usuário autenticado, só sobre si mesmo
+        Route::get('/perfil', [PerfilController::class, 'index']);
+        Route::post('/perfil/senha', [PerfilController::class, 'trocarSenha']);
+        Route::post('/perfil/assinatura', [PerfilController::class, 'salvarAssinatura']);
+        Route::delete('/perfil/assinatura', [PerfilController::class, 'excluirAssinatura']);
+
+        // O histórico DO MAPA — recorte do cadastro, para a mesa de curadoria,
+        // e o desfazer que mora nele. A permissão é decidida no controller
+        // (administrador OU curador do cadastro).
+        Route::get('/cadastro/historico', [TrilhaController::class, 'cadastro']);
+        Route::post('/trilha/{id}/desfazer', [TrilhaController::class, 'desfazer']);
+    });
+
+    // ── SÓ A FISCALIZAÇÃO ────────────────────────────────────────
+    Route::prefix('api')->middleware('interno')->group(function () {
+        // Painel e notificações
+        Route::get('/painel', [PainelController::class, 'index']);
+        Route::get('/notificacoes', [PainelController::class, 'notificacoes']);
+
+        Route::post('/imoveis/{lote}/bci/atualizar', [CadastroImobiliarioController::class, 'atualizar']);
+
+        // Fiscalização
+        Route::get('/irregularidades', [VistoriaController::class, 'catalogo']);
+        // O enquadramento conferido em CAMPO, antes de a vistoria existir.
+        Route::get('/artigos-sugeridos', [VistoriaController::class, 'artigosSugeridos']);
+
         // Atos cadastrais. O portao NAO e o perfil: e a VISTORIA regular
         // amarrada ao protocolo deferido. O deferimento diz que o pedido
         // procede no papel; a vistoria diz que o papel bate com o chao.
@@ -160,7 +224,6 @@ Route::middleware('auth')->group(function () {
         // vistoria e o portao do ato cadastral: o deferimento diz que o pedido
         // procede no papel, a vistoria diz que o papel bate com o chao.
         Route::get('/lotes/{lote}/protocolos-cadastrais', [VistoriaController::class, 'protocolosCadastrais']);
-        Route::get('/lotes/{lote}/historico', [VistoriaController::class, 'historico']);
         Route::get('/vistorias/{vistoria}', [VistoriaController::class, 'mostrar']);
         Route::post('/lotes/{lote}/vistorias', [VistoriaController::class, 'store']);
         Route::delete('/evidencias/{evidencia}', [VistoriaController::class, 'excluirEvidencia']);
@@ -210,26 +273,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/protocolos/{protocolo}', [ProtocoloController::class, 'mostrar']);
         Route::patch('/protocolos/{protocolo}', [ProtocoloController::class, 'update']);
 
-        // Meu perfil — qualquer usuário autenticado, só sobre si mesmo
-        Route::get('/perfil', [PerfilController::class, 'index']);
-        Route::post('/perfil/senha', [PerfilController::class, 'trocarSenha']);
-        Route::post('/perfil/assinatura', [PerfilController::class, 'salvarAssinatura']);
-        Route::delete('/perfil/assinatura', [PerfilController::class, 'excluirAssinatura']);
-
         // Parâmetros do sistema (só administrador — trava no controller)
         // A TRILHA DE ALTERAÇÕES — quem mexeu no quê, e o que mudou.
         //
         // Fica no grupo de parâmetros porque é onde ela mora na tela, mas a
         // permissão é decidida no controller e não aqui: ela vale para
         // administrador OU curador do cadastro, e o middleware do grupo não
-        // distingue os dois.
+        // distingue os dois. Interna porque a trilha inteira inclui documento
+        // e vistoria — o curador externo tem o recorte do cadastro, acima.
         Route::get('/trilha', [TrilhaController::class, 'index']);
-        Route::post('/trilha/{id}/desfazer', [TrilhaController::class, 'desfazer']);
-
-        // O histórico DO MAPA — recorte do cadastro, para a mesa de curadoria.
-        // Separado de `/trilha` porque a regra de quem vê é outra: aqui é o
-        // curador, o mesmo que a mesa já exige para as ferramentas vizinhas.
-        Route::get('/cadastro/historico', [TrilhaController::class, 'cadastro']);
 
         Route::get('/parametros', [ParametroController::class, 'index']);
         Route::post('/parametros/usuarios', [ParametroController::class, 'salvarUsuario']);
@@ -248,6 +300,8 @@ Route::middleware('auth')->group(function () {
         Route::delete('/parametros/irregularidades/{irregularidade}', [ParametroController::class, 'excluirIrregularidade']);
     });
 
+    // Vias em papel e arquivos da fiscalização: conteúdo, logo interno.
+    Route::middleware('interno')->group(function () {
     // Fora do prefixo /api: é download de arquivo, não JSON.
     Route::get('/evidencias/{evidencia}/arquivo', [VistoriaController::class, 'arquivo'])
         ->name('evidencia.arquivo');
@@ -268,4 +322,5 @@ Route::middleware('auth')->group(function () {
     // devolve HTML para a impressora, e a tela abre com window.open.
     Route::get('/os/{ordem}/impressao', [OrdemServicoController::class, 'impressao'])
         ->name('os.impressao');
+    });
 });

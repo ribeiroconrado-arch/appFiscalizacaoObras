@@ -14,12 +14,15 @@
 // aqui devolveria o arquivo do cache depois de uma regeração de ícones.
 // ══════════════════════════════════════════════
 
+// `dataset` é o nome do data-src-* de cada tema, já no formato do JavaScript
+// (data-src-azul → srcAzul).
 const TEMAS = {
-  institucional: { cor: '#00451A' },
-  f:             { cor: '#B4470D' },
+  institucional: { cor: '#00451A', dataset: 'srcInstitucional' },
+  f:             { cor: '#B4470D', dataset: 'srcF' },
+  azul:          { cor: '#1E3A8A', dataset: 'srcAzul' },
 }
 
-/** Tema salvo, ou o institucional. @returns {'institucional'|'f'} */
+/** Tema salvo, ou o institucional. @returns {'institucional'|'f'|'azul'} */
 function temaSalvo() {
   try {
     const t = localStorage.getItem('tema')
@@ -30,7 +33,7 @@ function temaSalvo() {
 }
 
 /**
- * @param {'institucional'|'f'} tema
+ * @param {'institucional'|'f'|'azul'} tema
  * @param {boolean} [salvar=false] false na carga inicial — não há o que gravar.
  */
 function aplicarTema(tema, salvar = false) {
@@ -41,7 +44,7 @@ function aplicarTema(tema, salvar = false) {
   if (m) m.content = TEMAS[tema].cor
 
   for (const el of document.querySelectorAll('[data-src-institucional]')) {
-    const url = el.dataset['src' + (tema === 'f' ? 'F' : 'Institucional')]
+    const url = el.dataset[TEMAS[tema].dataset]
     if (!url) continue
     if (el.tagName === 'LINK') el.href = url
     else el.src = url
@@ -53,3 +56,8 @@ function aplicarTema(tema, salvar = false) {
 }
 
 aplicarTema(temaSalvo())
+
+// No <head> só existem ainda os ícones da aba; o logo do cabeçalho e o da tela
+// de entrada chegam depois. Sem esta segunda passada eles abriam sempre no
+// verde, e só trocavam quando o tema era escolhido de novo em Meu perfil.
+document.addEventListener('DOMContentLoaded', () => aplicarTema(temaSalvo()))

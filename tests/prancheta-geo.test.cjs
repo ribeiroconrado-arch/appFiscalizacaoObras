@@ -45,3 +45,15 @@ test('lote real do Buritis mede o que o projeto diz',()=>{
   lados.forEach((m,i)=>assert.ok(Math.abs(m-esperado[i])<0.01,`lado ${i}: ${m}`))
   assert.ok(Math.abs(Math.abs(G.area(p))-215)<0.05,`area: ${G.area(p)}`)
 })
+
+test('faces da quadra 27 absorvem resíduos de até 2 cm com ângulo abaixo de 0,25 grau',()=>{
+  const geo=[[-54.30676040437099,-15.518855004385603],[-54.30659151676048,-15.518707700002555],[-54.30670859865207,-15.51861964745017],[-54.30684561698051,-15.518790919402605],[-54.30684969453763,-15.518787852833562],[-54.30692032373973,-15.51873432823438],[-54.30705000108637,-15.518893969215364],[-54.3069781494044,-15.518948420251474],[-54.30691873672775,-15.518993102160254],[-54.30676040437099,-15.518855004385603]];
+  const r=geo.map(G.plano(geo[0]).para),original=JSON.stringify(r);
+  for(const ang of [0,.75]){const u=G.juntarFaces(r.map(p=>G.rot(p,ang)),.02);assert.equal(u.length,7)}
+  assert.equal(JSON.stringify(r),original);
+});
+test('tolerância visual não apaga quinas curtas nem desvios acima de 2 cm',()=>{
+  const quina=[[0,0],[.01,.01],[20,0],[20,24],[0,24],[0,0]];
+  assert.equal(G.juntarFaces(quina,.02).length,6);
+  assert.equal(G.juntarFaces([[0,0],[10,.03],[20,0],[20,24],[0,24],[0,0]],.02).length,6);
+});

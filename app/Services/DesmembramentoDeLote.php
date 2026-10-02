@@ -337,7 +337,7 @@ class DesmembramentoDeLote
                     'lado_direito_m'    => $p['lado_direito_m'] ?? null,
                     'lado_esquerdo_m'   => $p['lado_esquerdo_m'] ?? null,
                     'area_matricula_m2' => $p['area_matricula_m2'] ?? round($p['area'], 2),
-                ];
+                ] + ImportacaoDeBairro::emRevisaoNoBairro($pai->bairro);
 
                 $id = $this->lotes->criarComGeometria($atributos, $p['geojson']);
                 $novo = Lote::find($id);

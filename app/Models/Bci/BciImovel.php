@@ -55,8 +55,19 @@ class BciImovel extends Model
      */
     public function ativo(): ?bool
     {
-        return $this->isencao === null || $this->isencao === ''
+        return self::isencaoAtiva($this->isencao);
+    }
+
+    /**
+     * A mesma regra, para quem tem só o texto da Isenção — a conferência de
+     * importação lê o cadastro inteiro de um bairro e não monta um BciImovel
+     * por linha. Uma regra só: se a prefeitura criar outro valor que signifique
+     * inativo, muda aqui e vale para a ficha e para a conferência.
+     */
+    public static function isencaoAtiva(?string $isencao): ?bool
+    {
+        return $isencao === null || trim($isencao) === ''
             ? null
-            : mb_strtolower(trim($this->isencao)) !== 'inativo';
+            : mb_strtolower(trim($isencao)) !== 'inativo';
     }
 }

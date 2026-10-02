@@ -100,6 +100,12 @@ function limparEdificacoes() {
  * custaria o desenho inteiro.
  */
 function desenharEdificacao() {
+  // Fecha busca, pinos e cores. A curadoria CONVIVE: a edificação também se
+  // desenha de dentro da mesa, sobre o lote marcado nela (ferramentas-mapa.js).
+  pedirFerramenta('desenho', _desenharEdificacao, { convive: ['curadoria'] })
+}
+
+function _desenharEdificacao() {
   // DUAS SELEÇÕES, e a edificação aceita as duas.
   //
   // Na mesa o lote chega MARCADO (selState.ids, um só) — lá o clique no mapa

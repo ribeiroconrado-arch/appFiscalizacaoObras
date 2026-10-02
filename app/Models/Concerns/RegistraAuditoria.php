@@ -66,6 +66,21 @@ trait RegistraAuditoria
     }
 
     /**
+     * Sob que nome a alteração entra na trilha. Por padrão, a tabela do
+     * registro; o Lote em revisão usa outro (ver Lote::tabelaDaAuditoria).
+     */
+    protected function tabelaDaAuditoria(): string
+    {
+        return $this->getTable();
+    }
+
+    /** A importação de bairro a que a alteração pertence, quando houver. */
+    protected function importacaoDaAuditoria(): ?int
+    {
+        return null;
+    }
+
+    /**
      * @param  array<string,mixed>|null  $anteriores
      * @param  array<string,mixed>|null  $novos
      */
@@ -78,8 +93,9 @@ trait RegistraAuditoria
             'usuario_nome'     => $u?->name ?? $this->autorDeConsole(),
             'matricula'        => $u?->matricula,
             'acao'             => $acao,
-            'tabela'           => $this->getTable(),
+            'tabela'           => $this->tabelaDaAuditoria(),
             'registro_id'      => $this->getKey(),
+            'importacao_id'    => $this->importacaoDaAuditoria(),
             'descricao'        => $this->descricaoAuditoria(),
             'dados_anteriores' => $anteriores ? json_encode($this->limparAuditoria($anteriores), JSON_UNESCAPED_UNICODE) : null,
             'dados_novos'      => $novos ? json_encode($this->limparAuditoria($novos), JSON_UNESCAPED_UNICODE) : null,

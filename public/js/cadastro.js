@@ -153,6 +153,13 @@ function alternarSelecao(feicao, camada) {
       toast(`Máximo de ${selState.max} lotes por correção.`, 'aviso')
       return
     }
+    // Na PRÉ-CURADORIA as ferramentas só alcançam os lotes da importação aberta
+    // (o servidor recusa a mistura de qualquer jeito — ImportacaoDeBairro::misturaRevisao).
+    const pre = typeof impState !== 'undefined' ? impState.preCuradoria : null
+    if (pre && Number(feicao.properties.importacao_id) !== pre.id) {
+      toast(`Na pré-curadoria só entram os lotes da importação nº ${pre.id}.`, 'aviso')
+      return
+    }
     selState.ids.add(id)
   }
 
@@ -195,6 +202,13 @@ let cadModo = null
  * @param {'quadra'|'desenho'|'coordenadas'} modo
  */
 function modoCadastral(modo) {
+  // A correção cadastral pede a vez: busca, pinos ou cores abertos fecham, e
+  // um contorno começado em outro desenho pergunta antes (ferramentas-mapa.js).
+  pedirFerramenta('curadoria', () => _entrarModoCadastral(modo))
+}
+
+/** @param {'quadra'|'apagar'|'desenho'|'coordenadas'} modo */
+function _entrarModoCadastral(modo) {
   sairModoCadastral(true)
   cadModo = modo
 
@@ -324,6 +338,9 @@ function montarMesaCadastral(abrir) {
 
   document.body.classList.toggle('com-mesa', ehMesaCadastral() && !mesa.hidden)
   pintarMesaCadastral()
+  // A mesa abriu ou fechou: a barra de modo some (ou volta) junto. Sem isto,
+  // reabrir a mesa com "Corrigir quadra" em curso deixava as duas na tela.
+  pintarBarraCadastral()
 }
 
 /**
@@ -423,6 +440,19 @@ function pintarMesaCadastral() {
 // a este arquivo. Lendo do lançador, quem não pode curar não vê os três botões
 // de curadoria na régua pelo mesmo motivo que não os vê no painel.
 
+// DICA DA RÉGUA. A dica é `position:fixed` (a régua rola e cortaria uma dica
+// absoluta): a posição sai do botão sob o ponteiro ou com o foco do teclado.
+for (const ev of ['mouseover', 'focusin']) {
+  document.addEventListener(ev, e => {
+    const b = e.target instanceof Element ? e.target.closest('.cad-fer, .cad-selo-sel') : null
+    const dica = b?.querySelector('.cad-dica-fer')
+    if (!dica) { return }
+    const r = b.getBoundingClientRect()
+    dica.style.setProperty('--dica-x', (r.right + 12) + 'px')
+    dica.style.setProperty('--dica-y', (r.top + r.height / 2) + 'px')
+  })
+}
+
 /** Escapa para atributo/HTML. Local: `esc` de ui.js já faz isso, e é ele que uso. */
 function montarReguaCadastral() {
   const regua = document.getElementById('cad-regua')
@@ -430,16 +460,19 @@ function montarReguaCadastral() {
   if (!regua || !geral) { return }
 
   // Idempotente: chamada em toda troca de modo e em todo redimensionamento.
-  if (regua.dataset.pronta === String(geral.querySelectorAll('.cad-lanca').length)) { return }
+  if (regua.dataset.pronta === String(geral.querySelectorAll('.cad-lanca:not([hidden])').length)) { return }
 
   const grupos = []
   let atual = null
   for (const el of geral.children) {
     if (el.classList.contains('cad-sep')) { atual = { nome: el.textContent.trim(), itens: [] }; grupos.push(atual) }
-    else if (el.classList.contains('cad-lanca') && atual) { atual.itens.push(el) }
+    else if (el.classList.contains('cad-lanca') && !el.hidden && atual) { atual.itens.push(el) }
   }
 
-  let h = ''
+  // As ferramentas ROLAM; o pé (contador e fechar) fica fora do rolo, sempre à
+  // vista. Com as ferramentas da pré-curadoria e da conferência a régua passou
+  // da altura de um notebook, e o "fechar" do pé era o primeiro a sumir.
+  let h = '<div class="cad-regua-rolo">'
   for (const g of grupos) {
     if (!g.itens.length) { continue }
     h += '<div class="cad-regua-gp">'
@@ -461,22 +494,22 @@ function montarReguaCadastral() {
   // O contador e o fechar ficam NA RÉGUA porque ela é a única parte da mesa
   // que está sempre na tela: sem ferramenta ativa o lado direito some, e um
   // "fechar" que some junto deixa a mesa sem saída.
-  h += '<div class="cad-regua-pe">'
+  h += '</div><div class="cad-regua-pe">'
     + '<button type="button" class="cad-selo-sel" id="cad-selo-sel"'
     + ' title="Limpar seleção" aria-label="Limpar seleção" onclick="limparSelecaoCadastral()">0'
     + '<span class="cad-dica-fer"><b>Lotes marcados</b>'
     + '<span>Clique para desmarcar todos. Esc faz o mesmo.</span></span>'
     + '</button>'
-    + '<button type="button" class="cad-fer cad-fechar" onclick="fecharMesaCadastral()"'
+    + '<button type="button" class="cad-fer cad-fechar" onclick="fecharMesaPeloUsuario()"'
     + ' aria-label="Fechar a mesa" title="Fechar a mesa">'
     + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
     + ' stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
     + '<span class="cad-dica-fer"><b>Fechar a mesa</b>'
-    + '<span>O que estiver marcado ou desenhado continua no mapa.</span></span>'
+    + '<span>Encerra a ferramenta em uso. Um lote desenhado e ainda não gravado é perguntado antes.</span></span>'
     + '</button></div>'
 
   regua.innerHTML = h
-  regua.dataset.pronta = String(geral.querySelectorAll('.cad-lanca').length)
+  regua.dataset.pronta = String(geral.querySelectorAll('.cad-lanca:not([hidden])').length)
 
   // `[data-fer]`, e não `.cad-fer` inteiro.
   //
@@ -726,6 +759,7 @@ function voltarAsFerramentas() {
  * deixava de dizer onde a pessoa estava.
  */
 function abrirMesaCadastral() {
+  if (typeof curadoriaApareceu === 'function') { curadoriaApareceu() }   // ferramentas-mapa.js
   montarMesaCadastral(true)
   // Abrir a mesa JÁ ARMA a marcação. É isto que inverte a ordem do trabalho:
   // chega-se marcando os lotes no mapa, e a régua responde com o que aquela
@@ -754,6 +788,37 @@ function fecharMesaCadastral() {
   // dizendo por quê.
   if (selState.modo === 'livre') { desligarSelecao() }
   pintarPainelCadastro()
+}
+
+/**
+ * O ✕ da mesa (e o ícone da curadoria com a mesa aberta): FECHAR É LARGAR.
+ *
+ * fecharMesaCadastral, acima, fecha sem desfazer — é o que as outras telas
+ * usam quando a mesa só precisa sair da frente por um instante (o
+ * desmembramento, a prancheta). Mas quando é a PESSOA que fecha, ela está
+ * encerrando o trabalho: deixar o lote desenhado pendurado no formulário fazia
+ * ele reaparecer ao reabrir a curadoria, como um resquício de ferramenta. Agora
+ * a ferramenta é largada junto — e o que se perderia (um lote desenhado e não
+ * gravado) é perguntado antes.
+ */
+function fecharMesaPeloUsuario() {
+  const largar = () => {
+    if (atoState.tipo) { cancelarAtoCadastral() }
+    if (cadModo) { sairModoCadastral(true) }
+    desenhoPendente = null
+    limparSelecaoCadastral()
+    fecharMesaCadastral()
+  }
+  if (desenhoPendente) {
+    confirmarAcao({
+      titulo: 'Descartar o lote desenhado?',
+      mensagem: 'O contorno desenhado ainda não foi gravado. Fechar a ferramenta descarta o desenho.',
+      textoBtn: 'Descartar e fechar', perigo: true,
+      onConfirm: largar,
+    })
+    return
+  }
+  largar()
 }
 
 // A tela pode mudar de tamanho com trabalho em curso — janela redimensionada,
@@ -868,14 +933,11 @@ function pintarBarraCadastral() {
     }
   } else if (cadModo === 'desenho') {
     modo.textContent = 'Desenhar lote'
-    passo.textContent = desenhando
-      ? 'Toque nos cantos do lote. Duplo toque fecha.'
-      : desenhoPendente ? 'Desenho pronto.' : 'Toque no mapa para começar.'
-    if (desenhoPendente) {
-      ok.hidden = false
-      ok.textContent = 'Informar os dados'
-      ok.onclick = abrirModalCad
-    }
+    // O traçado acontece na prancheta; aqui só o antes e o depois dela.
+    passo.textContent = desenhoPendente ? 'Desenho pronto.' : 'Desenhe o contorno na prancheta.'
+    ok.hidden = false
+    ok.textContent = desenhoPendente ? 'Informar os dados' : 'Abrir a prancheta'
+    ok.onclick = desenhoPendente ? abrirModalCad : () => iniciarDesenhoDeLote()
   } else if (cadModo === 'coordenadas') {
     modo.textContent = 'Lote por coordenadas'
     passo.textContent = desenhoPendente
@@ -895,8 +957,14 @@ function pintarBarraCadastral() {
  */
 function pintarPainelCadastro() {
   conferirDisponibilidadeUnificacao()
-  pintarBarraCadastral()
+  // A mesa PRIMEIRO: a barra decide se aparece olhando se a mesa está aberta,
+  // e na ordem inversa lia o estado de antes — e ficava na tela junto com a
+  // mesa, as duas dizendo "Corrigir quadra".
   pintarMesaCadastral()
+  pintarBarraCadastral()
+  // A barra da importação some enquanto uma ferramenta comum está em uso
+  // (ver pintarBarraImportacao): uma barra de contexto por vez.
+  if (typeof pintarBarraImportacao === 'function') { pintarBarraImportacao() }
 
   const cont = document.getElementById('cadp-quadra')
   if (!cont) { return }
@@ -973,6 +1041,13 @@ function pintarPainelCadastro() {
   // O formulário só aparece com o contorno FECHADO: pedir bairro e quadra no
   // meio do traçado seria disputar a atenção com o mapa.
   document.getElementById('des-dados').hidden = !desenhoPendente
+  const espera = document.getElementById('des-espera')
+  if (espera) {
+    espera.hidden = cadModo !== 'desenho' || !!desenhoPendente
+      || (typeof PranchetaCad !== 'undefined' && PranchetaCad.ativa())
+  }
+  const redesenhar = document.getElementById('des-redesenhar')
+  if (redesenhar) { redesenhar.hidden = cadModo !== 'desenho' }
   if (!desenhoPendente) { document.getElementById('des-previa').innerHTML = '' }
 }
 
@@ -1105,6 +1180,12 @@ function corpoDoAto(extra) {
 }
 
 function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
+  // Vem também de fora da mesa (o protocolo na vistoria): pede a vez como os
+  // modos — ver ferramentas-mapa.js.
+  pedirFerramenta('curadoria', () => _iniciarAtoCadastral(protocoloId, tipo, loteId))
+}
+
+function _iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
   clearTimeout(timerRascunhoDesm)
   const ids = tipo === 'desmembramento'
     ? [loteId || (selState.ids.size === 1 ? [...selState.ids][0] : state.selecionado?.properties?.id)].filter(Boolean)
@@ -1572,26 +1653,52 @@ async function gravarDesmembramento() {
 /** Geometria do último desenho concluído, à espera dos dados do lote. */
 let desenhoPendente = null
 
-function iniciarDesenhoDeLote() {
+/**
+ * O lote novo é desenhado na PRANCHETA, com as mesmas ferramentas do
+ * desmembramento (linha, perpendicular, offset, medida digitada, capturas,
+ * Concordância). Fechado o contorno, ele volta para cá e segue o caminho de
+ * sempre: bairro, quadra, número, medidas, prévia e gravação.
+ *
+ * @param {Object} [contorno] geometria já desenhada, para reabrir e corrigir
+ */
+function iniciarDesenhoDeLote(contorno) {
   // Seleção e desenho disputariam o mesmo clique.
   if (selState.ativa) { desligarSelecao() }
 
-  iniciarDesenho({
-    modo: 'poligono',
-    rotulo: 'Lote novo',
-    snap: true,
-    onConcluir: g => {
+  const f = state.selecionado
+  const bairro = f?.bairro || f?.properties?.bairro || ''
+  const c = contorno?.coordinates?.[0]?.[0]
+    || (mapaState.obj ? [mapaState.obj.getCenter().lng, mapaState.obj.getCenter().lat] : null)
+  if (!c) { toast('Abra o mapa antes de desenhar.', 'aviso'); return }
+
+  PranchetaCad.abrir('novo', [], null, null, {
+    centro: c,
+    bairro: bairro ? 'Lote novo · ' + bairro : '',
+    contorno,
+    // Fechou a prancheta sem entregar o contorno: larga a ferramenta. O
+    // rascunho do traçado fica guardado no navegador (prancheta-cadastral.js),
+    // e reabrir "Desenhar lote" o recupera.
+    aoDesistir: () => {
+      if (cadModo === 'desenho' && !desenhoPendente) { sairModoCadastral(true); pintarPainelCadastro() }
+    },
+    aoConcluir: g => {
       desenhoPendente = g
       pintarPainelCadastro()
-      const f = state.selecionado
-      popularBairrosDoDesenho(f?.bairro || f?.properties?.bairro || '')
+      popularBairrosDoDesenho(bairro)
       conferirMedidas()
+      if (typeof abrirModalCad === 'function') { abrirModalCad() }
       document.getElementById('des-quadra')?.focus()
     },
-    onCancelar: () => { desenhoPendente = null; pintarPainelCadastro() },
   })
 
   pintarPainelCadastro()
+}
+
+/** "Voltar a traçar" do formulário: reabre a prancheta com o contorno pronto. */
+function voltarAoDesenhoDoLote() {
+  const g = desenhoPendente
+  desenhoPendente = null
+  iniciarDesenhoDeLote(g || undefined)
 }
 
 // ── LOTE POR COORDENADAS ─────────────────────────────────────

@@ -165,7 +165,50 @@ function _pintarBarraDesenho() {
   const voltar = document.getElementById('des-barra-voltar')
   if (voltar) { voltar.hidden = !ajustando }
 
+  // A Concordância trabalha sobre cantos prontos: só no ajuste.
+  const conc = document.getElementById('des-barra-concord')
+  const raio = document.getElementById('des-raio')
+  if (!ajustando) desenhoState.concordancia = false
+  if (conc) {
+    conc.hidden = !ajustando
+    conc.classList.toggle('at', !!desenhoState.concordancia)
+    conc.setAttribute('aria-pressed', String(!!desenhoState.concordancia))
+  }
+  if (raio) raio.hidden = !desenhoState.concordancia
+  if (desenhoState.concordancia) {
+    document.getElementById('des-barra-passo').textContent = 'Concordância: informe o raio e toque no canto que vai arredondar.'
+  }
+
   _pintarTrava()
+}
+
+// ── CONCORDÂNCIA (o "fillet" do AutoCAD) ─────────────────────
+//
+// No contorno já fechado, arredonda um canto com o raio informado — a esquina
+// de lote de esquina, a curva da edificação. A conta é a mesma da prancheta
+// (PranchetaGeo.arcoNoCanto), feita no plano métrico deste desenho.
+
+function alternarConcordanciaDesenho() {
+  desenhoState.concordancia = !desenhoState.concordancia
+  _pintarBarraDesenho()
+}
+
+/** @param {number} i índice do canto */
+function _concordanciaNoCanto(i) {
+  const r = Number(String(document.getElementById('des-raio')?.value || '').replace(',', '.'))
+  if (!(r > 0)) { toast('Informe um raio maior que zero, em metros.', 'err'); return }
+  const v = desenhoState.vertices, m = v.length
+  if (desenhoState.modo !== 'poligono' && (i === 0 || i === m - 1)) {
+    toast('A ponta solta de uma linha não é canto.', 'err'); return
+  }
+  try {
+    const pl = c => aoPlano(c[0], c[1])
+    const arco = PranchetaGeo.arcoNoCanto(pl(v[(i - 1 + m) % m]), pl(v[i]), pl(v[(i + 1) % m]), r, 8)
+    v.splice(i, 1, ...arco.map(p => doPlano(p[0], p[1])))
+    _pintar()
+  } catch (e) {
+    toast(e.message, 'err')
+  }
 }
 
 function cancelarDesenho() {
@@ -1025,6 +1068,8 @@ function _armarArrasto(alca, i, novo) {
 
   alca.on('mousedown', ev => {
     L.DomEvent.stop(ev)
+    // Com a Concordância ligada, o clique no canto arredonda em vez de arrastar.
+    if (desenhoState.concordancia && !novo) { _concordanciaNoCanto(i); return }
     mapa.dragging.disable()
 
     let indice = i
@@ -1103,7 +1148,7 @@ function _limpar() {
     ativo: false, modo: null, vertices: [], rascunho: null, previa: null,
     elastico: null, captura: null, marcadores: [], onConcluir: null, onCancelar: null,
     plano: null, rotulos: [], rotuloArea: null, rotuloElastico: null, shiftSolto: false,
-    rotulo: null, fechado: false, snapInfo: '', snapMarcador: null, onAlterar: null, validar: null, arrastando: null,
+    rotulo: null, fechado: false, concordancia: false, snapInfo: '', snapMarcador: null, onAlterar: null, validar: null, arrastando: null,
   })
 
   document.getElementById('map')?.classList.remove('desenhando')

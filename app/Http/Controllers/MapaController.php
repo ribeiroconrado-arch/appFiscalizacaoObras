@@ -153,7 +153,14 @@ class MapaController extends Controller
         }
 
         $limite = (int) config('gis.max_lotes');
-        $linhas = $this->lotes->porBbox($oeste, $sul, $leste, $norte, $limite);
+        // O bairro importado e ainda em revisão só é pintado para o curador,
+        // e só quando ele pede — o pedido vem do filtro "mostrar lotes em
+        // revisão" do painel de correção cadastral.
+        $revisao = $request->boolean('revisao') && $request->user()->podeCurarCadastro();
+        // Rascunho de importação é de quem o carregou: outro curador não o vê.
+        $u = $request->user();
+        $linhas = $this->lotes->porBbox($oeste, $sul, $leste, $norte, $limite, $revisao,
+            $u->isAdmin() ? null : $u->id);
 
         // A tradução bairro-do-desenho → código-do-cadastro é lida UMA VEZ:
         // são milhares de feições por requisição, e uma consulta por lote
@@ -185,6 +192,8 @@ class MapaController extends Controller
                 // bairro que ele não tinha como conhecer.
                 'inscricao'   => $bairros->inscricaoDe($l),
                 'area_gis_m2' => (float) $l->area_gis_m2,
+                'em_revisao'    => (bool) $l->em_revisao,
+                'importacao_id' => $l->importacao_id,
             ],
         ], $linhas);
 

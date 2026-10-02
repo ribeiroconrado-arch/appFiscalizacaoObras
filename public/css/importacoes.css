@@ -1,0 +1,134 @@
+/* ══════ IMPORTAÇÃO DE BAIRRO E ACESSO EXTERNO ══════
+   Só componentes novos; botões, badges, campos e notas são os de sempre
+   (app.css / tema-f.css). Ver public/js/importacoes.js. */
+
+/* ── Lista e ficha da importação ── */
+.imp-topo-lista{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.imp-topo-lista .btn{flex:none}
+.imp-expl{font-size:12.5px;color:var(--tx2);margin:4px 0 10px;line-height:1.5}
+.imp-sub{font-size:11.5px;color:var(--tx3)}
+.imp-diverge{color:var(--red)}
+.imp-tabela-rolagem{overflow-x:auto}
+.imp-tabela{width:100%;border-collapse:collapse;font-size:12.5px;margin:4px 0 8px}
+.imp-tabela th{font-size:11px;font-weight:600;color:var(--tx3);text-align:left;padding:6px;border-bottom:1px solid var(--bord)}
+.imp-tabela td{padding:7px 6px;border-bottom:1px solid var(--blt);vertical-align:top}
+.imp-tabela tbody tr[onclick]{cursor:pointer}
+.imp-tabela tbody tr[onclick]:hover{background:var(--gl)}
+.imp-tabela .num{text-align:right;font-variant-numeric:tabular-nums}
+.imp-abrir{text-align:right;white-space:nowrap;color:var(--gd);font-size:12px}
+.imp-abrir a{color:var(--gd);text-decoration:none}
+/* Área de arrastar e soltar o arquivo — nas cores do tema (--g / --gl). */
+.imp-soltar{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  min-height:150px;padding:22px 16px;margin:4px 0 10px;text-align:center;cursor:pointer;
+  border:2px dashed var(--g);border-radius:12px;background:var(--gl);color:var(--gd);
+  transition:background .15s,border-color .15s,box-shadow .15s}
+.imp-soltar input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.imp-soltar svg{width:30px;height:30px;margin-bottom:6px}
+.imp-soltar b{font-size:14px;color:var(--tx);font-weight:700;word-break:break-all}
+.imp-soltar span{font-size:12px;color:var(--tx2)}
+.imp-soltar:hover,.imp-soltar.arrastando{border-color:var(--gd);box-shadow:0 0 0 4px var(--gl);background:#fff}
+.imp-soltar.arrastando{border-style:solid}
+.imp-soltar.escolhido{min-height:96px;border-style:solid}
+.imp-soltar:focus-within{outline:2px solid var(--gd);outline-offset:2px}
+.imp-soltar[hidden]{display:none}
+/* Versão baixa, para dentro de uma seção (planilha da conferência). */
+.imp-soltar.compacta{min-height:84px;padding:12px 14px;margin:0 0 10px}
+.imp-soltar.compacta svg{width:24px;height:24px;margin-bottom:2px}
+.imp-soltar.compacta b{font-size:13px}
+
+/* Ficha: cabeçalho e rodapé FIXOS dentro do modal, que é quem rola
+   (.modal{overflow-y:auto}). As margens negativas cobrem o padding do modal
+   (22px 20px), para a faixa ir de borda a borda e o conteúdo rolar por baixo
+   sem aparecer pelas laterais. */
+.imp-fixo-topo,.imp-fixo-rodape{position:sticky;z-index:3;background:var(--sur,#fff);margin-left:-20px;margin-right:-20px;padding-left:20px;padding-right:20px}
+.imp-fixo-topo{top:-22px;padding-top:2px;padding-bottom:4px;border-bottom:1px solid var(--blt)}
+.imp-fixo-rodape{bottom:-22px;margin-top:10px;margin-bottom:-22px;padding-top:8px;padding-bottom:16px;
+  border-top:1px solid var(--bord);box-shadow:0 -8px 16px -10px rgba(0,0,0,.18)}
+.imp-fixo-rodape .imp-rodape-conf{margin-top:0}
+.imp-fixo-rodape .imp-acoes{margin-top:8px}
+@media (max-width:420px){
+  .imp-fixo-topo,.imp-fixo-rodape{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+  .imp-fixo-topo{top:-20px}.imp-fixo-rodape{bottom:-20px;margin-bottom:-20px}
+}
+/* Tela baixa: o cabeçalho (vínculo + conferência + números) tomaria a janela
+   quase inteira. Ali ele rola junto, e só o rodapé fica preso. */
+@media (max-height:700px){ .imp-fixo-topo{position:static;border-bottom:0} }
+
+.imp-passos{font-size:11.5px;color:var(--tx3);margin-bottom:10px}
+.imp-passos b{color:var(--gd)}
+.imp-cabeca{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;font-size:13px}
+
+.imp-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:6px 0 10px}
+.imp-kpi{background:var(--blt);border-radius:8px;padding:8px 10px}
+.imp-kpi small{display:block;font-size:11px;color:var(--tx3)}
+.imp-kpi b{font-size:19px;font-family:'Manrope',sans-serif}
+.imp-kpi.aviso{background:var(--wlt)}   .imp-kpi.aviso small,.imp-kpi.aviso b{color:var(--warn)}
+.imp-kpi.erro{background:var(--rlt)}    .imp-kpi.erro small,.imp-kpi.erro b{color:var(--red)}
+.imp-kpi.ok{background:#E7F6EC}         .imp-kpi.ok small,.imp-kpi.ok b{color:#2E7D32}
+@media (max-width:560px){ .imp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* Bairro no cadastro: a ligação de hoje e o select para ligar/trocar. */
+.imp-vinculo{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:13px;margin:4px 0 10px}
+.imp-vinculo a{color:var(--gd);font-size:12px}
+.imp-vinculo-escolha{display:flex;gap:8px;align-items:center;margin:4px 0 8px}
+.imp-vinculo-escolha[hidden]{display:none}
+.imp-vinculo-escolha select{flex:1;min-width:0;padding:8px 10px;border:1.5px solid var(--f-bord,#ccc);
+  border-radius:var(--r,8px);font-size:13px;background:#fff;color:var(--tx)}
+.imp-vinculo-escolha .btn{flex:none}
+
+.imp-nota{border-left-color:var(--g);background:var(--gl);color:var(--gxd)}
+.imp-grupo{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;margin:12px 0 2px}
+.imp-fonte{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:4px 0 10px}
+.imp-opcao{font-size:12.5px;display:flex;gap:6px;align-items:center}
+.imp-fonte .btn{margin-left:auto}
+.imp-rodape-conf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:10px}
+.imp-publicar{border-top:1px dashed var(--bord);margin-top:12px;padding-top:8px}
+.imp-acoes{flex-wrap:wrap}
+
+/* ── Painel de correção cadastral ── */
+.imp-contador{display:inline-block;margin-left:4px;padding:0 7px;border-radius:10px;
+  background:var(--wlt);color:var(--warn);font-size:10.5px;font-weight:600}
+.imp-mostrar{font-size:12px;margin:6px 0 2px}
+
+/* ── Barra da importação sobre o mapa ── */
+.imp-barra{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;
+  max-width:calc(100% - 120px);display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;
+  background:var(--wlt);color:var(--gold-dk,#B45309);border:1px solid var(--gm);border-radius:10px;
+  padding:7px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.14)}
+.imp-barra[hidden]{display:none}
+/* Em pré-curadoria a barra fica mais forte: é um modo, e o que se faz nele
+   só vale para esta importação. */
+.imp-barra.pre{background:var(--gd);color:#fff;border-color:var(--gd)}
+.imp-barra.pre .btn:not(.primary){background:#fff}
+/* O botão principal ganha contorno branco para não sumir no fundo verde. */
+.imp-barra.pre .btn.primary{box-shadow:0 0 0 2px #fff}
+.imp-barra b{font-weight:700}
+.imp-barra-acoes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.imp-barra{min-width:0}
+.imp-barra-x{padding:4px 8px}
+@media (max-width:720px){ .imp-barra{left:8px;right:8px;transform:none;max-width:none;top:8px} }
+
+/* ── Conferência do bairro com o cadastro (conferencia-bairro.js) ── */
+.conf-barra{background:var(--sur);color:var(--tx);border-color:var(--g)}
+.conf-atual{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
+.conf-cor{display:inline-block;width:11px;height:11px;border-radius:3px;flex:none}
+.conf-topo select{width:100%;padding:8px 10px;border:1.5px solid var(--f-bord,#ccc);border-radius:var(--r,8px);
+  font-size:13px;background:#fff;color:var(--tx);margin:2px 0 6px}
+.imp-tabela tr.conf-justificada td{color:var(--tx3)}
+/* Selo "N sem lote · Q x" no centro da quadra. */
+.conf-selo span{display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;
+  background:#FCEBEB;color:#791F1F;border:1.5px dashed #E24B4A;border-radius:999px;
+  padding:2px 8px;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+
+/* ── Raio da Concordância na barra do desenho ── */
+.des-raio{width:74px;padding:5px 7px;border:1.5px solid var(--f-bord,#ccc);border-radius:var(--r,6px);font-size:12px}
+#des-barra-concord.at{background:var(--gl);border-color:var(--gd);color:var(--gd)}
+
+/* ── Balão do lote em revisão ── */
+.balao-revisao{margin:4px 0;padding:3px 7px;border-radius:6px;background:var(--wlt);
+  color:var(--gold-dk,#B45309);font-size:11.5px;font-weight:600}
+.balao-revisao a{color:var(--gd);margin-left:4px}
+
+/* ── Conteúdo restrito (usuário externo) ── */
+.lt-restrito{display:inline-flex;align-items:center;gap:4px;color:var(--tx3)}
+.ico-cadeado{width:12px;height:12px;flex:none}

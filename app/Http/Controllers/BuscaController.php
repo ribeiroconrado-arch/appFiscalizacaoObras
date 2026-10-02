@@ -62,7 +62,7 @@ class BuscaController extends Controller
         // acha o lote que foi unificado ou desmembrado e leva à história dele.
         // Sem ele, um imóvel com processo em curso desaparecia do sistema no
         // instante em que o ato cadastral era executado.
-        $q = empty($d['incluir_inativos']) ? Lote::query()->ativos() : Lote::query();
+        $q = empty($d['incluir_inativos']) ? Lote::query()->publicados() : Lote::query()->where('lotes.em_revisao', false);
         $usou = $this->aplicarFiltros($q, $d);
 
         if (! $usou) {
@@ -486,7 +486,7 @@ class BuscaController extends Controller
         $b = new BairrosDoDesenho();
 
         $nomes = DB::table('lotes')
-            ->where('situacao', 'ativo')
+            ->where('situacao', 'ativo')->where('em_revisao', false)
             ->whereNotNull('bairro')->where('bairro', '<>', '')
             ->distinct()->pluck('bairro')
             ->map(fn ($n) => $b->oficial($n))
@@ -600,7 +600,7 @@ class BuscaController extends Controller
         // Lote inativo (unificado ou desmembrado) nao e mais um imovel que
         // existe: fica na base para o historico, mas nao se busca nem se marca
         // no mapa. A ficha dele continua abrindo — ver ficha().
-        $q = Lote::query()->ativos();
+        $q = Lote::query()->publicados();
         if (! $this->aplicarFiltros($q, $d)) {
             return response()->json(['message' => 'Escolha ao menos um filtro.'], 422);
         }
@@ -650,6 +650,9 @@ class BuscaController extends Controller
      */
     public function ficha(Lote $lote): JsonResponse
     {
+        // Lote de importação em revisão ainda não existe para quem não revisa.
+        abort_if($lote->em_revisao && ! auth()->user()?->podeCurarCadastro(), 404);
+
         // Primeiro vértice do anel externo, como em LoteRepository::extensao():
         // ST_Centroid não é implementado para SRS geográfico no MySQL. Para
         // centralizar o mapa num lote de 12 m, o erro é irrelevante.
@@ -662,6 +665,8 @@ class BuscaController extends Controller
         );
 
         $documentos = Documento::where('lote_id', $lote->id)
+            // Rascunho não é ato: quem é de fora não fica sabendo dele.
+            ->when(! auth()->user()?->podeVerDocumentos(), fn ($q) => $q->where('status', '<>', 'rascunho'))
             ->with('agente:id,name')
             ->latest('created_at')->limit(20)->get()
             ->map(function (Documento $doc) {
@@ -685,6 +690,14 @@ class BuscaController extends Controller
                 'fiscal'   => $v->fiscal?->name,
                 'situacao' => $v->situacao,
             ]);
+
+        // Externo: a lista fica — é por ela que se sabe que há processo —,
+        // mas sem id para abrir e sem o nome de quem lavrou. Mesma regra da
+        // linha do tempo, em VistoriaController::historico.
+        if (! auth()->user()?->podeVerDocumentos()) {
+            $documentos = $documentos->map(fn ($d) => ['id' => null, 'agente' => null, 'restrito' => true] + $d);
+            $vistorias  = $vistorias->map(fn ($v) => ['id' => null, 'fiscal' => null, 'restrito' => true] + $v);
+        }
 
         return response()->json([
             'id'        => $lote->id,

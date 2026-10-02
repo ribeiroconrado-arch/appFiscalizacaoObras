@@ -52,7 +52,7 @@ class PainelController extends Controller
             'irregularidades' => $this->irregularidadesFrequentes($desde),
             // So bairros com imovel ativo: bairro que so tem lote inativo nao
             // existe mais como opcao de filtro.
-            'bairros'   => DB::table('lotes')->where('situacao', 'ativo')
+            'bairros'   => DB::table('lotes')->where('situacao', 'ativo')->where('em_revisao', false)
                 ->distinct()->orderBy('bairro')->pluck('bairro'),
         ]);
     }

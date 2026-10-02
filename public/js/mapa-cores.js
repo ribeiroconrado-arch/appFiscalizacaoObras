@@ -108,6 +108,9 @@ function colorirPorAdjacencia(chave) {
 /** Lote marcado para correção cadastral. */
 const COR_SELECAO = '#EA580C'
 
+/** Lote de importação em revisão (ver importacoes.js). */
+const COR_REVISAO = '#FDBA8C'
+
 /**
  * Estilo de um lote conforme a coloração corrente.
  *
@@ -131,6 +134,23 @@ const COR_SELECAO = '#EA580C'
 function estiloColorido(f) {
   if (typeof selState !== 'undefined' && selState.ids.has(f.properties.id)) {
     return { color: COR_SELECAO, weight: 3, opacity: 1, fillColor: COR_SELECAO, fillOpacity: .5 }
+  }
+
+  // Conferência do bairro com o cadastro aberta no mapa (conferencia-bairro.js):
+  // o lote do bairro conferido é pintado pelo resultado. Vem antes de tudo
+  // menos da seleção — quem percorre as pendências precisa ver a cor delas, e
+  // ainda assim marcar o lote para corrigi-lo.
+  if (typeof corDaConferencia === 'function') {
+    const conf = corDaConferencia(f)
+    if (conf) return conf
+  }
+
+  // Lote de importação EM REVISÃO: tracejado, para o curador distinguir o que
+  // ainda não foi publicado do que todos já veem. Vem antes da coloração
+  // porque é o que decide se o lote "existe" para os outros.
+  if (f.properties.em_revisao) {
+    return { color: COR_REVISAO, weight: 1.6, opacity: 1, dashArray: '5 4',
+             fillColor: COR_REVISAO, fillOpacity: .18 }
   }
 
   if (corState.destacados) {
@@ -239,6 +259,10 @@ function desenharRotulosDeGrupo() {
     for (const [k, pts] of Object.entries(g)) {
       const rotulo = chave === 'quadra' ? k.split('|')[1] : k
       if (!rotulo || rotulo === '?' || rotulo === 'null') continue
+      // Bairro com CONTORNO já tem o nome no centro dele, em qualquer zoom
+      // (bairros-contorno.js). Um segundo rótulo aqui sairia sobreposto.
+      if (chave === 'bairro' && typeof contornoState !== 'undefined'
+          && contornoState.dados?.features?.some(f => f.properties.nome === k)) continue
 
       const lat = pts.reduce((a, p) => a + p[0], 0) / pts.length
       const lon = pts.reduce((a, p) => a + p[1], 0) / pts.length

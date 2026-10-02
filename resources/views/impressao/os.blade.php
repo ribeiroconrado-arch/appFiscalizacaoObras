@@ -144,7 +144,8 @@
           <div class="sec-tit">{{ $sec('Referências') }}</div>
           @if ($os->lote)
             <div>Imóvel: Quadra {{ $os->lote->quadra ?? '—' }} · Lote {{ $os->lote->numero_lote ?? '—' }}
-                 — {{ $os->lote->bairro }}</div>
+                 — {{ $os->lote->bairroOficial() }}</div>
+            {{-- Documento: o nome OFICIAL do bairro; o do desenho é só do mapa. --}}
           @endif
           @if ($os->protocolo)
             <div>Protocolo: {{ $os->protocolo->numero }}</div>

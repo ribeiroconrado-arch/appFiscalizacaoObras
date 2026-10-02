@@ -38,7 +38,7 @@ class DesenhoDeLote
      *
      * @return array<string,mixed>
      */
-    public function retrato(array $d): array
+    public function retrato(array $d, ?int $ignorar = null): array
     {
         $geojson = json_encode($d['geometry']);
         $area = $this->lotes->areaDoGeoJson($geojson);
@@ -49,7 +49,7 @@ class DesenhoDeLote
             'bairro'    => $d['bairro'],
             'quadra'    => $d['quadra'],
             'lote'      => $d['numero_lote'],
-            'vizinhos'  => $this->vizinhos($geojson, $d['bairro']),
+            'vizinhos'  => $this->vizinhos($geojson, $d['bairro'], $ignorar),
             'divergencia' => $this->divergencia($d, $area),
         ];
     }
@@ -83,7 +83,12 @@ class DesenhoDeLote
      * espaciais, para o usuário receber a mensagem mais específica possível em
      * vez da primeira que der errado.
      */
-    public function impedimento(array $d): ?string
+    /**
+     * `$ignorar` é o lote que está sendo REDESENHADO (Editar lote, na
+     * pré-curadoria): ele não pode acusar a si mesmo de ocupar o mesmo chão
+     * nem de já ter o mesmo número. Ver EdicaoDeLote.
+     */
+    public function impedimento(array $d, ?int $ignorar = null): ?string
     {
         $g = $d['geometry'] ?? null;
 
@@ -146,7 +151,8 @@ class DesenhoDeLote
         // lote já existe em vez de devolver uma QueryException crua.
         $existe = DB::table('lotes')->where('bairro', $d['bairro'])
             ->where('quadra', $d['quadra'])->where('numero_lote', $d['numero_lote'])
-            ->where('situacao', 'ativo')->exists();
+            ->where('situacao', 'ativo')
+            ->when($ignorar, fn ($q) => $q->where('id', '<>', $ignorar))->exists();
 
         if ($existe) {
             return "A quadra {$d['quadra']} do {$d['bairro']} já tem o lote {$d['numero_lote']}.";
@@ -165,7 +171,7 @@ class DesenhoDeLote
         }
 
         // ── não invade lote existente ──
-        $sobre = $this->vizinhos($geojson, $d['bairro']);
+        $sobre = $this->vizinhos($geojson, $d['bairro'], $ignorar);
         $invadidos = array_filter($sobre, fn ($v) => $v['area_comum'] > $this->toleradoM2());
 
         if ($invadidos) {
@@ -240,7 +246,7 @@ class DesenhoDeLote
                 'fonte'       => 'Desenho manual — ' . $usuarioNome,
                 'origem'      => 'desenho',
                 'situacao'    => 'ativo',
-            ];
+            ] + ImportacaoDeBairro::emRevisaoNoBairro($d['bairro']);
 
             $id = $this->lotes->criarComGeometria($atributos, $geojson);
 
@@ -259,7 +265,7 @@ class DesenhoDeLote
      *
      * @return list<array<string,mixed>>
      */
-    private function vizinhos(string $geojson, string $bairro): array
+    private function vizinhos(string $geojson, string $bairro, ?int $ignorar = null): array
     {
         $anel = json_decode($geojson, true)['coordinates'][0] ?? [];
         if (! $anel) {
@@ -271,7 +277,7 @@ class DesenhoDeLote
         $meu = GeometriaPlana::projetar($anel, $lat, $lon);
 
         $saida = [];
-        foreach ($this->lotes->candidatosASobrepor($geojson, $bairro) as $c) {
+        foreach ($this->lotes->candidatosASobrepor($geojson, $bairro, $ignorar ? [$ignorar] : []) as $c) {
             if (! $c->anel) {
                 continue;
             }

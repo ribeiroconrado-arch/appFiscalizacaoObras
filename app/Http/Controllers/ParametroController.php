@@ -80,6 +80,7 @@ class ParametroController extends Controller
                 ]),
             'perfis' => User::PERFIS,
             'cargos' => User::CARGOS,
+            'cargos_externos' => User::EXTERNOS,
             'tipos_feriado' => collect(Feriado::TIPOS)->map(fn ($r, $v) => ['valor' => $v, 'rotulo' => $r])->values(),
         ]);
     }
@@ -94,11 +95,14 @@ class ParametroController extends Controller
         $d = $r->validate([
             'id'           => ['nullable', 'exists:users,id'],
             'name'         => ['required', 'string', 'max:160'],
-            'email'        => ['required', 'email', 'max:160', Rule::unique('users', 'email')->ignore($r->input('id'))],
+            // UM DOS DOIS basta: o login aceita matrícula ou e-mail, e servidor
+            // de campo nem sempre tem e-mail. Sem nenhum, ninguém entraria.
+            'email'        => ['nullable', 'required_without:matricula', 'email', 'max:160',
+                Rule::unique('users', 'email')->ignore($r->input('id'))],
             // Única desde que a matrícula virou identificador de login: sem
             // isto, cadastrar uma repetida só falharia lá no banco, com erro
             // 500 e sem dizer ao usuário qual campo está errado.
-            'matricula'    => ['nullable', 'string', 'max:30',
+            'matricula'    => ['nullable', 'required_without:email', 'string', 'max:30',
                 Rule::unique('users', 'matricula')->ignore($r->input('id'))],
             'perfil'       => ['required', Rule::in(User::PERFIS)],
             'tipo_usuario' => ['required', Rule::in(User::CARGOS)],
@@ -107,7 +111,17 @@ class ParametroController extends Controller
             // 2026_08_27_000100 para por que ela não é um perfil.
             'curador_cadastral' => ['nullable', 'boolean'],
             'senha'        => ['nullable', 'string', Password::min(8), 'confirmed'],
+        ], [
+            'email.required_without'     => 'Informe a matrícula ou o e-mail — é por um deles que o usuário entra.',
+            'matricula.required_without' => 'Informe a matrícula ou o e-mail — é por um deles que o usuário entra.',
         ]);
+
+        // Externo é visualizador, sempre. `perfilEfetivo()` já garantiria isso
+        // na leitura; gravar o que vale evita a tela mostrar "Comum" para um
+        // topógrafo que, na prática, não escreve nada.
+        if (in_array($d['tipo_usuario'], User::EXTERNOS, true)) {
+            $d['perfil'] = 'viewer';
+        }
 
         // Não deixar o admin se rebaixar ou desativar sozinho: travaria o
         // acesso ao próprio módulo de parâmetros sem ninguém para reverter.
@@ -116,21 +130,26 @@ class ParametroController extends Controller
             return response()->json(['message' => 'Você não pode remover seu próprio acesso de administrador.'], 422);
         }
 
-        $usuario = User::updateOrCreate(
-            ['id' => $d['id'] ?? null],
-            [
-                // Vazio vira NULO: '' não é distinto num índice único, então
-                // dois usuários sem matrícula colidiriam entre si.
-                'name' => $d['name'], 'email' => $d['email'],
-                'matricula' => ($d['matricula'] ?? '') !== '' ? $d['matricula'] : null,
-                'perfil' => $d['perfil'], 'tipo_usuario' => $d['tipo_usuario'], 'ativo' => $d['ativo'] ?? true,
-                'curador_cadastral' => $d['curador_cadastral'] ?? false,
-            ]
-        );
-
-        if (! empty($d['senha'])) {
-            $usuario->update(['password' => Hash::make($d['senha'])]);
+        // Usuário NOVO nasce com senha. Antes a senha era gravada num segundo
+        // passo, depois do INSERT — e `password` não tem valor padrão, então
+        // o MySQL em modo estrito recusava todo cadastro novo.
+        if (empty($d['id']) && empty($d['senha'])) {
+            return response()->json(['message' => 'Defina a senha do novo usuário.'], 422);
         }
+
+        $atributos = [
+            // Vazio vira NULO: '' não é distinto num índice único, então
+            // dois usuários sem matrícula (ou sem e-mail) colidiriam entre si.
+            'name' => $d['name'], 'email' => ($d['email'] ?? '') !== '' ? $d['email'] : null,
+            'matricula' => ($d['matricula'] ?? '') !== '' ? $d['matricula'] : null,
+            'perfil' => $d['perfil'], 'tipo_usuario' => $d['tipo_usuario'], 'ativo' => $d['ativo'] ?? true,
+            'curador_cadastral' => $d['curador_cadastral'] ?? false,
+        ];
+        if (! empty($d['senha'])) {
+            $atributos['password'] = Hash::make($d['senha']);
+        }
+
+        $usuario = User::updateOrCreate(['id' => $d['id'] ?? null], $atributos);
 
         return response()->json(['message' => 'Usuário gravado.', 'id' => $usuario->id]);
     }

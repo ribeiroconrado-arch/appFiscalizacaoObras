@@ -11,11 +11,11 @@
      montados no JavaScript, para não perder o ?v= do @assetv — sem ele, uma
      regeração de ícones sairia do cache do navegador. --}}
 <link rel="icon" type="image/png" sizes="32x32" href="@assetv('img/favicon-32.png')"
-      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')">
+      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')" data-src-azul="@assetv('img/favicon-32-azul.png')">
 <link rel="icon" type="image/png" sizes="16x16" href="@assetv('img/favicon-16.png')"
-      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')">
+      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')" data-src-azul="@assetv('img/favicon-16-azul.png')">
 <link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')"
-      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')">
+      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')" data-src-azul="@assetv('img/apple-touch-icon-azul.png')">
 <link rel="manifest" href="@assetv('manifest.json')">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,11 +25,13 @@
 {{-- Tema em camada separada: o design ainda está em avaliação (seis
      variantes). Trocar de proposta é trocar esta linha, não refazer o CSS. --}}
 <link rel="stylesheet" href="@assetv('css/tema-f.css')">
+<link rel="stylesheet" href="@assetv('css/importacoes.css')">
 {{-- Camada institucional (verde do município). Só pinta quando o <html> traz
      data-tema="institucional" — sem o atributo este arquivo é inerte, e é por
      isso que os dois temas convivem sem custo: um tema é um bloco de tokens,
      não uma segunda folha de componentes. --}}
 <link rel="stylesheet" href="@assetv('css/tema-institucional.css')">
+<link rel="stylesheet" href="@assetv('css/tema-azul.css')">
 <link rel="stylesheet" href="@assetv('css/painel-responsivo.css')">
 <link rel="stylesheet" href="@assetv('css/prancheta-cadastral.css')">
 {{-- Sem defer: precisa rodar antes do primeiro pintar (ver js/tema.js). --}}
@@ -44,11 +46,16 @@
   modais que não fecham por clique no fundo, ícone sempre em SVG de linha.
 --}}
 
+@php
+  // Topógrafo, arquiteto ou contribuinte: mapa, consulta e ficha, sem o que é
+  // da fiscalização. Ver User::EXTERNOS.
+  $externo = auth()->user()->isExterno();
+@endphp
 <header class="topo">
   {{-- Ícone oficial, sem o fundo de fora do squircle. Troca junto com o tema
        (ver js/tema.js): verde no institucional, âmbar no Tema F. --}}
   <img class="topo-marca" src="@assetv('img/logo-64.png')" alt=""
-       data-src-institucional="@assetv('img/logo-64.png')" data-src-f="@assetv('img/logo-64-ambar.png')">
+       data-src-institucional="@assetv('img/logo-64.png')" data-src-f="@assetv('img/logo-64-ambar.png')" data-src-azul="@assetv('img/logo-64-azul.png')">
   <div>
     <h1>Fiscalização de Obras</h1>
     <div class="sub">{{ number_format($total, 0, ',', '.') }} lotes na base</div>
@@ -70,12 +77,15 @@
         </svg>
       </button>
     @endif
+    {{-- Os avisos são prazos de documento e demandas da fiscalização. --}}
+    @unless ($externo)
     <button class="sino" onclick="abrirNotificacoes()" title="Avisos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       <span class="n" id="sino-n" style="display:none">0</span>
     </button>
+    @endunless
     {{-- Avatar e identificação num alvo só: são a mesma coisa para quem
          clica — "meus dados". No celular o texto sai e sobra o avatar. --}}
     <button class="perfil-btn" onclick="abrirPerfil()" title="Meu perfil">
@@ -209,6 +219,92 @@
 
 <div id="map"></div>
 
+{{-- ══════ FAIXA DAS BARRAS DO MAPA ══════
+     Todas as barras que aparecem no alto do mapa moram AQUI, uma embaixo da
+     outra: a da importação em revisão, a do desenho, a do modo de correção e a
+     do contorno de inativo. Antes cada uma tinha o seu "top" fixo, calculado
+     contra as outras — e bastava duas aparecerem juntas para uma cobrir a
+     outra. Empilhadas num só lugar, não há altura a recalcular.
+
+     Dentro de #t-mapa, para sumirem junto com o mapa ao trocar de aba. --}}
+<div class="mapa-barras" id="mapa-barras">
+
+{{-- A barra da PESQUISA (pesquisa-mapa.js): é a primeira, no topo. --}}
+<div class="pesq-barra" id="pesq-barra" hidden></div>
+
+{{-- A importação em revisão que se está olhando: publicar, conferir, excluir.
+     Dentro de #t-mapa, e não fixa na página, para sumir junto com o mapa ao
+     trocar de aba. Montada por importacoes.js. --}}
+@if (auth()->user()->podeCurarCadastro())
+  <div class="imp-barra" id="imp-barra" hidden></div>
+  {{-- As pendências da conferência do bairro com o cadastro (conferencia-bairro.js). --}}
+  <div class="imp-barra conf-barra" id="conf-barra" hidden></div>
+@endif
+
+{{-- ══════ BARRA DE DESENHO ══════
+
+     UMA barra para todo desenho no mapa. Ela é do motor de desenho
+     (public/js/desenho.js), não do cadastro: aparece sozinha sempre que um
+     traçado começa, seja lote novo, edificação ou a divisa de um
+     desmembramento, e some quando ele termina.
+
+     Antes estes controles moravam dentro do painel "desenhar lote faltante" —
+     então desenhar uma edificação era o mesmo motor sem trava de esquadro e
+     sem desfazer, e a divisa do desmembramento idem. Mesmo gesto, três
+     experiências diferentes. --}}
+<div class="des-barra" id="des-barra" hidden>
+  <span class="des-barra-modo" id="des-barra-modo">Desenhando</span>
+  <span class="des-barra-passo" id="des-barra-passo">Toque nos cantos.</span>
+
+  <button type="button" class="btn sm at" id="des-trava" aria-pressed="true"
+          onclick="alternarTravaAngulo()"
+          title="Trava cada lado em múltiplo de 45° do anterior. Segure Shift para soltar num canto.">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 4v16h16"/><path d="M4 12h8v8"/>
+    </svg>
+    90°
+  </button>
+
+  <button type="button" class="btn sm" onclick="desfazerVertice()"
+          title="Ctrl+Z">Desfazer canto</button>
+  <button type="button" class="btn sm" id="des-barra-voltar" hidden
+          onclick="voltarATracar()">Voltar a traçar</button>
+  {{-- Concordância (fillet): arredonda um canto do contorno já fechado. --}}
+  <button type="button" class="btn sm" id="des-barra-concord" hidden aria-pressed="false"
+          onclick="alternarConcordanciaDesenho()" title="Arredonda um canto com o raio informado">⌒ Concordância</button>
+  <input type="number" id="des-raio" class="des-raio" hidden min="0" step="0.1" value="3"
+         aria-label="Raio da concordância, em metros" title="Raio (m)">
+
+  <button type="button" class="btn primary sm" id="des-barra-fechar"
+          onclick="concluirDesenho()" title="Enter">Fechar contorno</button>
+  <button type="button" class="btn sm" onclick="cancelarDesenho()"
+          title="Esc">Cancelar</button>
+</div>
+
+{{-- ══════ CORREÇÃO CADASTRAL — BARRA DE MODO ══════
+     Fica sobre o mapa, fina, dizendo o passo em que se está e quantos lotes já
+     foram marcados. É o que substitui o painel lateral durante o trabalho: o
+     gesto acontece no mapa, e o mapa continua inteiro à vista. --}}
+<div class="cad-barra" id="cad-barra" hidden>
+  <span class="cad-barra-modo" id="cad-barra-modo">Corrigir quadra</span>
+  <span class="cad-barra-passo" id="cad-barra-passo">Marque os lotes no mapa.</span>
+  <div class="cad-barra-acoes">
+    <button type="button" class="btn sm" id="cad-barra-extra" hidden></button>
+    <button type="button" class="btn sm primary" id="cad-barra-ok" hidden></button>
+    <button type="button" class="btn sm" onclick="sairModoCadastral()">Sair</button>
+  </div>
+</div>
+
+{{-- O contorno de um imóvel INATIVO fica por cima do mapa até alguém tirá-lo.
+     Sem este botão, sair dele exigiria recarregar a página — e um traço cinza
+     que não sai vira ruído em cima do trabalho seguinte. --}}
+<button type="button" class="btn sm inativo-sair" id="btn-tirar-inativo" hidden
+        onclick="tirarInativoDoMapa()">Tirar o contorno antigo do mapa</button>
+
+</div>
+
+
 <div class="chip-estado">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
        stroke-linecap="round" stroke-linejoin="round">
@@ -281,28 +377,34 @@
     </div>
   </div>
 
-  {{-- LOCALIZAR IMÓVEL
-       Campo único: bairro, inscrição imobiliária, chave ou "quadra lote". Quem
-       procura não deveria ter de decidir antes em qual campo o que sabe se
-       encaixa. Consulta o cadastro do próprio município — nenhum
+  {{-- CAMADAS — liga e desliga cada coisa que o mapa desenha. A lista é
+       montada por camadas-mapa.js a partir do registro: camada nova aparece
+       aqui sozinha. Não é ferramenta: abrir não fecha a curadoria. --}}
+  <div class="ctrl-grupo" id="grupo-camadas">
+    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-camadas')"
+            title="Camadas" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 18 10 5 10-5" opacity=".55"/></svg>
+    </button>
+    <div class="ctrl-corpo ctrl-camadas">
+      <b>Camadas</b>
+      <div id="camadas-lista"></div>
+    </div>
+  </div>
+
+  {{-- PESQUISAR NO MAPA — a lupa abre a BARRA de pesquisa no alto do mapa
+       (#pesq-barra, montada por pesquisa-mapa.js), e não mais um painel aqui:
+       com tipo (inscrição, quadra e lote, endereço, bairro, coordenada) e
+       limite por bairro. Consulta o cadastro do próprio município — nenhum
        geocodificador externo, nenhum custo por consulta. --}}
   <div class="ctrl-grupo" id="grupo-busca">
-    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-busca')"
-            title="Localizar imóvel" aria-expanded="false">
+    <button class="ctrl-btn" onclick="alternarPesquisaMapa()"
+            title="Pesquisar no mapa" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
     </button>
-    <div class="ctrl-corpo">
-      <b>Localizar imóvel</b>
-      <input type="text" id="mb-termo" class="ctrl-input" placeholder="Bairro, inscrição ou quadra/lote"
-             aria-label="Bairro, inscrição imobiliária ou quadra e lote"
-             onkeydown="if(event.key==='Enter')buscarNoMapa()">
-      <div class="seg" style="margin:8px 0 0">
-        <button type="button" onclick="buscarNoMapa()">Localizar</button>
-      </div>
-      <div class="leg" id="mb-resultado">Digite bairro, inscrição imobiliária ou “quadra lote”.</div>
-    </div>
   </div>
 
   {{-- PINOS POR FILTRO
@@ -392,7 +494,50 @@
             <path d="M13.5 4H20v6.5"/>
           </svg>
           <span class="cad-lanca-txt">Desenhar lote faltante
-            <span class="cad-lanca-obs">Com medida, esquadro e encaixe no vizinho.</span>
+            <span class="cad-lanca-obs">Na prancheta: medida, perpendicular, offset, concordância.</span>
+          </span>
+        </button>
+
+        {{-- EDITAR LOTE — só na pré-curadoria: lote publicado muda por
+             unificação, desmembramento ou correção de quadra, com prova e
+             histórico. Aparece quando importacoes.js entra no modo. --}}
+        <button type="button" class="btn sm cad-lanca so-pre" id="cad-editar-lote" hidden
+                data-fer="editar" data-tecla="L" data-min="1" data-max="1" data-exige="exatamente 1 lote"
+                onclick="editarLoteDaPreCuradoria()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 4h10l6 6v10H4z"/><circle cx="4" cy="4" r="1.6"/><circle cx="14" cy="4" r="1.6"/>
+            <circle cx="20" cy="10" r="1.6"/><circle cx="20" cy="20" r="1.6"/><circle cx="4" cy="20" r="1.6"/>
+          </svg>
+          <span class="cad-lanca-txt">Editar lote
+            <span class="cad-lanca-obs">Vértices, número e quadra — só na pré-curadoria.</span>
+          </span>
+        </button>
+
+        {{-- INFORMAR NÚMERO e EXCLUIR LOTES — também só na pré-curadoria
+             (PreCuradoriaDeLotes): o número que a conversão do DWG errou e o
+             polígono que sobrou. Lote publicado tem caminho próprio. --}}
+        <button type="button" class="btn sm cad-lanca so-pre" hidden
+                data-fer="numero" data-tecla="N" data-min="1" data-max="1" data-exige="exatamente 1 lote"
+                onclick="numerarLoteDaPreCuradoria()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 4 7 20M17 4l-2 16M4 9h16M3 15h16"/>
+          </svg>
+          <span class="cad-lanca-txt">Informar número do lote
+            <span class="cad-lanca-obs">Marque 1 lote e digite o número — só na pré-curadoria.</span>
+          </span>
+        </button>
+
+        <button type="button" class="btn sm cad-lanca cad-lanca-perigo so-pre" hidden
+                data-fer="excluir-pre" data-tecla="X" data-min="1" data-exige="1 lote ou mais"
+                onclick="excluirLotesDaPreCuradoria()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="1.4"/><path d="m9 9 6 6M15 9l-6 6"/>
+          </svg>
+          <span class="cad-lanca-txt">Excluir lotes
+            <span class="cad-lanca-obs">Marque um ou vários lotes da importação — só na pré-curadoria.</span>
           </span>
         </button>
 
@@ -493,6 +638,49 @@
 
         @endif
 
+        {{-- BASE DE LOTES — bairro novo entra por aqui, em revisão, e só vale
+             para todos depois que o administrador publica. Ver
+             ImportacaoController e public/js/importacoes.js. --}}
+        <div class="cad-sep">Base de lotes</div>
+
+        <button type="button" class="btn sm cad-lanca" data-fer="importacoes" data-min="0"
+                data-exige="nenhuma seleção" onclick="abrirImportacoes()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/>
+          </svg>
+          <span class="cad-lanca-txt">Importações de bairro
+            <span class="cad-lanca-obs">Carregar GeoJSON, revisar e publicar.
+              <span class="imp-contador" id="imp-contador" hidden></span></span>
+          </span>
+        </button>
+
+        {{-- Contorno de cada bairro, derivado dos lotes — ver bairros-contorno.js. --}}
+        <button type="button" class="btn sm cad-lanca" data-fer="contornos" data-min="0"
+                data-exige="nenhuma seleção" onclick="abrirContornosDosBairros()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.5" aria-hidden="true">
+            <path d="M4 7l6-3 10 4-2 10-9 2-5-6z"/>
+          </svg>
+          <span class="cad-lanca-txt">Contorno dos bairros
+            <span class="cad-lanca-obs">Gerar e atualizar a linha de cada bairro.</span>
+          </span>
+        </button>
+
+        {{-- Conferência do bairro com o cadastro — a que fica depois da
+             importação: pendências no mapa, justificar o que não dá agora. --}}
+        <button type="button" class="btn sm cad-lanca" data-fer="conferencia" data-min="0"
+                data-exige="nenhuma seleção" onclick="abrirConferenciaBairro()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>
+          </svg>
+          <span class="cad-lanca-txt">Conferência com o cadastro
+            <span class="cad-lanca-obs">Pendências do bairro no mapa; justificar o que não dá agora.</span>
+          </span>
+        </button>
+
+        {{-- "Mostrar lotes não publicados" mudou-se para o painel Camadas. --}}
 
         <div class="cad-dica">O trabalho acontece no mapa; o que a ferramenta
           pede aparece aqui nesta coluna.</div>
@@ -1052,40 +1240,55 @@
 @endif
 
 {{-- ══════ ABAS ══════ --}}
+{{-- Menu lateral recolhido (só ícones)? Antes do primeiro pintar, para a tela não
+     abrir larga e depois encolher. Ver alternarMenuLateral (ui.js). --}}
+<script>try{if(localStorage.getItem('menu-recolhido')==='1')document.documentElement.classList.add('menu-recolhido')}catch(e){}</script>
 <nav class="abas" aria-label="Navegação principal">
-  <button class="aba at" aria-current="page" onclick="irPara('painel')">
+  {{-- ☰ Recolher/expandir — só existe quando o menu é LATERAL (tela larga); na
+       barra de baixo do celular ele fica escondido (painel-responsivo.css). --}}
+  <button type="button" class="aba-recolher" onclick="alternarMenuLateral()" aria-label="Recolher menu" title="Recolher menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  @unless ($externo)
+  <button class="aba at" aria-current="page" data-destino="painel" title="Painel" onclick="irPara('painel')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/>
       <rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-    Painel
+    <span class="aba-txt">Painel</span>
   </button>
+  @endunless
   {{-- Busca antes do Mapa de propósito: a camada de satélite é paga por
        requisição, e conferir a situação de um lote — que é a maior parte das
        consultas — não precisa de imagem aérea. O caminho mais barato vem
        primeiro. --}}
-  <button class="aba" onclick="irPara('busca')">
+  <button class="aba" data-destino="busca" title="Consulta" onclick="irPara('busca')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round">
       <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
-    Consulta
+    <span class="aba-txt">Consulta</span>
   </button>
-  <button class="aba" onclick="irPara('mapa')">
+  <button class="aba" data-destino="mapa" title="Mapa" onclick="irPara('mapa')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M9 20l-6 3V6l6-3 6 3 6-3v17l-6 3z"/><path d="M9 3v17M15 6v17"/></svg>
-    Mapa
+    <span class="aba-txt">Mapa</span>
   </button>
-  <button class="aba" onclick="irPara('documentos')">
+  {{-- Painel, Documentos e Protocolo são da fiscalização. O externo
+       (User::EXTERNOS) não os vê — e o servidor recusa as rotas deles de
+       qualquer jeito (middleware `interno`). --}}
+  @unless ($externo)
+  <button class="aba" data-destino="documentos" title="Documentos" onclick="irPara('documentos')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
       <path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
-    Documentos
+    <span class="aba-txt">Documentos</span>
   </button>
-  <button class="aba" onclick="irPara('protocolos')">
+  <button class="aba" data-destino="protocolos" title="Protocolo e OS" onclick="irPara('protocolos')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
       <rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 12h8M8 16h5"/></svg>
-    Protocolo &amp; OS
+    <span class="aba-txt">Protocolo &amp; OS</span>
   </button>
+  @endunless
 </nav>
 
 {{-- CENTRAL DE NOTIFICAÇÕES DO SISTEMA --}}
@@ -1151,8 +1354,12 @@
       <button class="at" data-fi="dados" onclick="subFicha('dados')">Dados</button>
       <button data-fi="historico" onclick="subFicha('historico')">Histórico</button>
       <button data-fi="cadastro" onclick="subFicha('cadastro')">BCI</button>
+      {{-- Croquis, anexos e fotos saem das vistorias: são conteúdo da
+           fiscalização, e o externo não os vê. --}}
+      @unless ($externo)
       <button data-fi="croquis" onclick="subFicha('croquis')">Croquis</button>
       <button data-fi="anexos" onclick="subFicha('anexos')">Anexos</button>
+      @endunless
     </div>
 
     {{-- DADOS --}}
@@ -1176,7 +1383,7 @@
            imagem espremida em 90px não responde nada. A data de cada uma vai no
            rótulo — foto de dois anos atrás e foto de ontem valem coisas
            diferentes numa fiscalização. --}}
-      <div class="fi-midias">
+      <div class="fi-midias" @if ($externo) style="display:none" @endif>
         <figure class="fi-midia" id="fi-fachada">
           <figcaption>Fachada mais recente
             <span class="fi-midia-data" id="fi-fachada-data"></span></figcaption>
@@ -1235,9 +1442,10 @@
                stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
           Opções
         </button>
-      @else
+      @elseif (! $externo)
         {{-- Visualizador não registra: esconder o botão evita a ida ao
-             servidor só para receber 403. A regra real está no controller. --}}
+             servidor só para receber 403. A regra real está no controller.
+             Ao externo nem se mostra: lavrar não é assunto dele. --}}
         <button class="btn opcoes" disabled title="Seu perfil permite apenas consulta">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -2189,19 +2397,6 @@
 
      `aria-hidden` na marca e `aria-live` no texto: para quem usa leitor de
      tela, o que informa é a frase, não o desenho. --}}
-{{-- ══════ CORREÇÃO CADASTRAL — BARRA DE MODO ══════
-     Fica sobre o mapa, fina, dizendo o passo em que se está e quantos lotes já
-     foram marcados. É o que substitui o painel lateral durante o trabalho: o
-     gesto acontece no mapa, e o mapa continua inteiro à vista. --}}
-<div class="cad-barra" id="cad-barra" hidden>
-  <span class="cad-barra-modo" id="cad-barra-modo">Corrigir quadra</span>
-  <span class="cad-barra-passo" id="cad-barra-passo">Marque os lotes no mapa.</span>
-  <div class="cad-barra-acoes">
-    <button type="button" class="btn sm" id="cad-barra-extra" hidden></button>
-    <button type="button" class="btn sm primary" id="cad-barra-ok" hidden></button>
-    <button type="button" class="btn sm" onclick="sairModoCadastral()">Sair</button>
-  </div>
-</div>
 
 {{-- ══════ PEDIR UM TEXTO ══════
      O primo do modal de confirmação para quando a confirmação exige MOTIVO
@@ -2326,6 +2521,16 @@
     {{-- DESENHO / COORDENADAS — os dois terminam no mesmo formulário, porque
          o que muda é como a geometria foi obtida, não o que se pede depois. --}}
     <div class="cad-painel" id="cadp-desenho" hidden>
+      {{-- Saiu da prancheta sem fechar o contorno: sem isto o painel ficava
+           com o título "Desenhar lote" e nada embaixo — nem como voltar à
+           prancheta, nem como largar a ferramenta. --}}
+      <div id="des-espera" hidden>
+        <div class="cad-nota">O contorno do lote é traçado na prancheta. O rascunho do traçado fica guardado neste navegador.</div>
+        <div class="btn-row">
+          <button type="button" class="btn" onclick="sairModoCadastral()">Largar a ferramenta</button>
+          <button type="button" class="btn primary" onclick="iniciarDesenhoDeLote()">Abrir a prancheta</button>
+        </div>
+      </div>
       <div id="coo-caixa" hidden>
         <div class="leg">
           Um vértice por linha, como vem no memorial. Exemplo:<br>
@@ -2407,6 +2612,9 @@
         <div id="des-conferencia"></div>
         <div class="seg" style="margin:0">
           <button type="button" onclick="largarDesenho()">Descartar</button>
+          {{-- Só para o lote desenhado na prancheta: o das coordenadas se
+               corrige no memorial. --}}
+          <button type="button" id="des-redesenhar" onclick="voltarAoDesenhoDoLote()">Redesenhar</button>
           <button type="button" onclick="conferirDesenho()">Conferir</button>
         </div>
         <div id="des-previa"></div>
@@ -2484,40 +2692,6 @@
   </div>
 </aside>
 
-{{-- ══════ BARRA DE DESENHO ══════
-
-     UMA barra para todo desenho no mapa. Ela é do motor de desenho
-     (public/js/desenho.js), não do cadastro: aparece sozinha sempre que um
-     traçado começa, seja lote novo, edificação ou a divisa de um
-     desmembramento, e some quando ele termina.
-
-     Antes estes controles moravam dentro do painel "desenhar lote faltante" —
-     então desenhar uma edificação era o mesmo motor sem trava de esquadro e
-     sem desfazer, e a divisa do desmembramento idem. Mesmo gesto, três
-     experiências diferentes. --}}
-<div class="des-barra" id="des-barra" hidden>
-  <span class="des-barra-modo" id="des-barra-modo">Desenhando</span>
-  <span class="des-barra-passo" id="des-barra-passo">Toque nos cantos.</span>
-
-  <button type="button" class="btn sm at" id="des-trava" aria-pressed="true"
-          onclick="alternarTravaAngulo()"
-          title="Trava cada lado em múltiplo de 45° do anterior. Segure Shift para soltar num canto.">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M4 4v16h16"/><path d="M4 12h8v8"/>
-    </svg>
-    90°
-  </button>
-
-  <button type="button" class="btn sm" onclick="desfazerVertice()"
-          title="Ctrl+Z">Desfazer canto</button>
-  <button type="button" class="btn sm" id="des-barra-voltar" hidden
-          onclick="voltarATracar()">Voltar a traçar</button>
-  <button type="button" class="btn primary sm" id="des-barra-fechar"
-          onclick="concluirDesenho()" title="Enter">Fechar contorno</button>
-  <button type="button" class="btn sm" onclick="cancelarDesenho()"
-          title="Esc">Cancelar</button>
-</div>
 
 {{-- ══════ MESA DE DESMEMBRAMENTO ══════
 
@@ -2528,11 +2702,6 @@
      Não há "desenhar as partes à mão": só o corte por linha, que preserva o
      contorno externo do lote. Um ato que divide não pode mudar a divisa com o
      vizinho, e o desenho livre permitia exatamente isso. --}}
-{{-- O contorno de um imóvel INATIVO fica por cima do mapa até alguém tirá-lo.
-     Sem este botão, sair dele exigiria recarregar a página — e um traço cinza
-     que não sai vira ruído em cima do trabalho seguinte. --}}
-<button type="button" class="btn sm inativo-sair" id="btn-tirar-inativo" hidden
-        onclick="tirarInativoDoMapa()">Tirar o contorno antigo do mapa</button>
 
 <aside class="desm-mesa" id="desm-mesa" hidden aria-label="Desmembramento">
   <div class="cad-mesa-topo">
@@ -2551,6 +2720,8 @@
     <img class="marca-face marca-verde marca-verso" src="@assetv('img/logo-128.png')" alt="">
     <img class="marca-face marca-ambar" src="@assetv('img/logo-128-ambar.png')" alt="">
     <img class="marca-face marca-ambar marca-verso" src="@assetv('img/logo-128-ambar.png')" alt="">
+    <img class="marca-face marca-azul" src="@assetv('img/logo-128-azul.png')" alt="">
+    <img class="marca-face marca-azul marca-verso" src="@assetv('img/logo-128-azul.png')" alt="">
   </div>
   <div class="tela-carregando-txt" id="tela-carregando-txt" role="status"
        aria-live="polite">Carregando...</div>
@@ -2965,6 +3136,40 @@
   </div>
 </div>
 
+@if (auth()->user()->podeCurarCadastro())
+{{-- IMPORTAÇÕES DE BAIRRO — lista, envio com conferência do arquivo, e a
+     ficha de cada importação (conferência com o cadastro, publicar, excluir).
+     Um modal só, com três vistas trocadas por importacoes.js: é o mesmo
+     assunto, e empilhar três modais para ele seria perder o caminho de volta. --}}
+<div class="modal-bg" id="m-importacoes" onclick="fModal()">
+  <div class="modal largo imp-modal" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharImportacoes()">&#10005;</button>
+    <h3>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
+      <span id="imp-titulo">Importações de bairro</span>
+    </h3>
+    <div id="imp-corpo"><div class="vazio-msg">Carregando…</div></div>
+  </div>
+</div>
+
+{{-- CONFERÊNCIA DO BAIRRO COM O CADASTRO — a que fica depois da importação
+     (conferencia-bairro.js, ConferenciaBairroController). --}}
+<div class="modal-bg" id="m-conferencia" onclick="fModal()">
+  <div class="modal largo imp-modal" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fModalBtn('m-conferencia')">&#10005;</button>
+    <h3>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+      <span>Conferência do bairro com o cadastro</span>
+    </h3>
+    <div id="conf-corpo"><div class="vazio-msg">Carregando…</div></div>
+  </div>
+</div>
+@endif
+
 @if (auth()->user()->isAdmin())
 {{-- NOVO/EDITAR USUÁRIO --}}
 <div class="modal-bg" id="m-usuario" onclick="fModal()">
@@ -2980,16 +3185,24 @@
 
     <div class="sec-title">Identificação</div>
     <div class="field"><label for="us-nome">Nome</label><input type="text" id="us-nome" maxlength="160"></div>
-    <div class="field"><label for="us-email">E-mail</label><input type="email" id="us-email" maxlength="160"></div>
+    {{-- Um dos dois basta: é por um deles que o usuário entra. --}}
     <div class="field"><label for="us-matricula">Matrícula</label><input type="text" id="us-matricula" maxlength="30"></div>
+    <div class="field"><label for="us-email">E-mail <span class="lembrar-obs">— opcional se houver matrícula</span></label><input type="email" id="us-email" maxlength="160"></div>
 
     <div class="sec-title">Acesso</div>
     <div class="field">
       <label for="us-cargo">Cargo</label>
-      <select id="us-cargo">
+      <select id="us-cargo" onchange="ajustarPerfilDoCargo()">
         <option value="agente">Agente de fiscalização</option>
         <option value="coordenador">Coordenador</option>
         <option value="secretario">Secretário</option>
+        {{-- Externos: veem mapa e cadastro, e só a EXISTÊNCIA de vistorias e
+             autos. Ver User::EXTERNOS. --}}
+        <optgroup label="Externos — só mapa">
+          <option value="topografo">Topógrafo</option>
+          <option value="arquiteto">Arquiteto</option>
+          <option value="contribuinte">Contribuinte</option>
+        </optgroup>
       </select>
     </div>
     <div class="field">
@@ -3009,8 +3222,12 @@
          administra o sistema não é, por isso, quem responde pelo cadastro. --}}
     <label class="lembrar">
       <input type="checkbox" id="us-curador"> Curadoria cadastral
-      <span class="lembrar-obs">— pode corrigir quadra e desenhar lote direto no mapa</span>
+      <span class="lembrar-obs">— pode corrigir quadra, desenhar lote e importar bairro; publicar é do administrador</span>
     </label>
+    <p class="lembrar-obs" id="us-externo-obs" hidden>
+      Externo vê mapa, busca e ficha do lote. Vistorias, autos e notificações
+      aparecem na lista, sem abrir. O perfil fica em Visualizador.
+    </p>
 
     <div class="sec-title">Senha</div>
     <div class="field">
@@ -3154,6 +3371,13 @@
           <span>
             <span class="nome">Âmbar</span>
             <span class="obs">Tema anterior</span>
+          </span>
+        </button>
+        <button type="button" class="tema-op" id="tema-op-azul" onclick="escolherTema('azul')">
+          <span class="amostra" style="background:linear-gradient(160deg,#1E3A8A,#2563EB)"></span>
+          <span>
+            <span class="nome">Azul</span>
+            <span class="obs">Azul corporativo</span>
           </span>
         </button>
       </div>
@@ -3302,10 +3526,20 @@ window.USUARIO_NOME = {{ Js::from(auth()->user()->name) }}
 {{-- A tela usa isto so para ESCONDER o que o usuario nao pode fazer. Quem
      autoriza de verdade e o servidor, em QuarteiraoController::aplicar(). --}}
 window.USUARIO_ADMIN = {{ Js::from(auth()->user()->isAdmin()) }}
+{{-- Falso para topógrafo, arquiteto e contribuinte: a ficha lista vistorias e
+     autos, mas sem abrir. Quem recusa de verdade é o middleware `interno`. --}}
+window.PODE_VER_DOCUMENTOS = {{ Js::from(auth()->user()->podeVerDocumentos()) }}
+{{-- Curador do cadastro: vê lotes não publicados e a conferência com o cadastro. --}}
+window.USUARIO_CURADOR = {{ Js::from(auth()->user()->podeCurarCadastro()) }}
 window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="@assetv('js/ui.js')"></script>
+{{-- O registro das camadas vem cedo: os módulos seguintes registram as suas. --}}
+<script src="@assetv('js/camadas-mapa.js')"></script>
+<script src="@assetv('js/pesquisa-mapa.js')"></script>
+{{-- Uma ferramenta do mapa por vez: busca, pinos, cores, curadoria, desenho. --}}
+<script src="@assetv('js/ferramentas-mapa.js')"></script>
 <script src="@assetv('js/geo.js')"></script>
 {{-- O perímetro urbano vem do servidor porque é configuração de município,
      e não constante de código: outra prefeitura muda o retângulo sem tocar no
@@ -3332,6 +3566,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/desmembramento.js')"></script>
 <script src="@assetv('js/editor-cortes.js')"></script>
 <script src="@assetv('js/prancheta-geo.js')"></script>
+{{-- Depois de prancheta-geo.js: o cálculo do contorno usa a mesma régua (PranchetaGeo.plano). --}}
+<script src="@assetv('js/bairros-contorno.js')"></script>
 <script src="@assetv('js/prancheta-cadastral.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>
 <script src="@assetv('js/painel.js')"></script>
@@ -3343,6 +3579,11 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 {{-- Depois dos dois: a fila lê as duas fontes e abre a ficha de cada uma. --}}
 <script src="@assetv('js/demandas.js')"></script>
 <script src="@assetv('js/perfil.js')"></script>
+@if (auth()->user()->podeCurarCadastro())
+  <script src="@assetv('js/importacoes.js')"></script>
+  {{-- Depois de importacoes.js: usa a área de soltar a planilha de lá. --}}
+  <script src="@assetv('js/conferencia-bairro.js')"></script>
+@endif
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
 @endif

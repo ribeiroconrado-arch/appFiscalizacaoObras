@@ -42,6 +42,27 @@ function estiloDestaque() {
   return { color: COR.destaque, weight: 3, opacity: 1, fillColor: COR.destaque, fillOpacity: .38 }
 }
 
+/**
+ * Até onde o mapa aproxima. Passa do último zoom do Google (20) de propósito:
+ * a imagem não melhora — o Leaflet amplia o tile de 20 (`maxNativeZoom`) —,
+ * mas o DESENHO melhora: vértice, divisa curta e medida de lado ficam legíveis.
+ */
+const ZOOM_MAXIMO = 22
+
+/**
+ * Abaixo do zoom mínimo dos lotes (ZOOM_MINIMO, em app.js), os que já estão
+ * carregados SAEM da pintura: o canvas dos lotes vive no `overlayPane`, e
+ * escondê-lo poupa o navegador de redesenhar milhares de polígonos a cada
+ * arrasto, num zoom em que eles seriam só uma mancha. Continuam em memória —
+ * ao aproximar, voltam sem novo pedido ao servidor.
+ */
+function ocultarLotesAfastado() {
+  const m = mapaState.obj
+  const pane = m?.getPane('overlayPane')
+  if (!pane || typeof ZOOM_MINIMO === 'undefined') return
+  pane.style.display = m.getZoom() < ZOOM_MINIMO ? 'none' : ''
+}
+
 /** Cria o mapa. Idempotente. */
 function iniciarMapa() {
   if (mapaState.obj) return
@@ -64,7 +85,7 @@ function iniciarMapa() {
   const satelite = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     {
-      attribution: '© Esri', maxZoom: 20, maxNativeZoom: 17, className: 'tile-satelite',
+      attribution: '© Esri', maxZoom: ZOOM_MAXIMO, maxNativeZoom: 17, className: 'tile-satelite',
       // Sem isto, cada zoom intermediário do GESTO (não só o final) dispara
       // pedido e decodificação de tile — trabalho de GPU/rede bem no meio do
       // dedo ainda em movimento, que é onde um aparelho fraco engasga. Com
@@ -94,7 +115,7 @@ function iniciarMapa() {
     preferCanvas: true,
     // Prende a navegação ao município: viscosity 1 faz a borda não ceder,
     // então arrastar para fora simplesmente não sai do lugar.
-    maxBounds: LIMITE_MUNICIPIO, maxBoundsViscosity: 1, minZoom: 11,
+    maxBounds: LIMITE_MUNICIPIO, maxBoundsViscosity: 1, minZoom: 11, maxZoom: ZOOM_MAXIMO,
   })
   L.control.zoom({ position: 'topright' }).addTo(mapaState.obj)
 
@@ -120,7 +141,7 @@ function iniciarMapa() {
   mapaState.obj.getPane('rotulos').style.zIndex = 650
   mapaState.obj.getPane('rotulos').style.pointerEvents = 'none'
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
-    { subdomains: 'abcd', maxZoom: 20, pane: 'rotulos', updateWhenZooming: false }).addTo(mapaState.obj)
+    { subdomains: 'abcd', maxZoom: ZOOM_MAXIMO, maxNativeZoom: 20, pane: 'rotulos', updateWhenZooming: false }).addTo(mapaState.obj)
 
   montarGoogle(satelite)
   ancorarControleCores()
@@ -141,6 +162,7 @@ function iniciarMapa() {
   // deslocamento traz lotes novos para a tela e leva outros embora.
   mapaState.obj.on('moveend', sincronizarRotulos)
   mapaState.obj.on('baselayerchange', () => ajustarNitidezSatelite())
+  mapaState.obj.on('zoomend', ocultarLotesAfastado)
 
   // Duplo toque FORA de um lote larga a seleção — o mesmo gesto do Esc, para
   // quem tem o dedo no mapa e não no teclado. Cada lote consome o próprio
@@ -176,11 +198,12 @@ function ajustarNitidezSatelite() {
 
   const z = m.getZoom()
 
-  // Com o Google no ar acima do zoom 18, a imagem no topo é nativa e não
-  // precisa de realce nenhum — aplicá-lo ali só degradaria uma foto boa.
+  // Com o Google no ar entre o zoom 18 e o nativo dele (20), a imagem no topo
+  // é nativa e não precisa de realce — aplicá-lo ali só degradaria uma foto
+  // boa. Acima do 20 (até ZOOM_MAXIMO) ela também é ampliada, e o realce vale.
   const g = mapaState.googleTiles
   if (g && m.hasLayer(g) && z >= (g.options.minZoom ?? 18)) {
-    document.getElementById('map')?.classList.remove('sat-ampliado')
+    document.getElementById('map')?.classList.toggle('sat-ampliado', z > (g.options.maxNativeZoom ?? 20))
     return
   }
 
@@ -227,7 +250,7 @@ async function montarGoogle(satelite) {
         // Technologies". É a única informação de tempo que a API expõe: data
         // de captura, dia e mês, ela não devolve. Exibi-lo também é exigência
         // dos termos de uso, que o "© Google" fixo não cumpria.
-        attribution: creditos || '© Google', maxZoom: 20, maxNativeZoom: 20,
+        attribution: creditos || '© Google', maxZoom: ZOOM_MAXIMO, maxNativeZoom: 20,
         // ── O PONTO DE ECONOMIA ──
         // minZoom 18: abaixo disso o Leaflet nem pede o tile, e a Esri (que é
         // gratuita) cobre sozinha. Como o acervo da Esri aqui para no 17, do
@@ -337,10 +360,12 @@ function alternarPainelMapa(idGrupo) {
     if (mesa) {
       fecharPaineisMapa()
       if (mesa.hidden) {
-        limparSelecao()
-        limparSelecaoCadastral()
-        abrirMesaCadastral()
-      } else { fecharMesaCadastral() }
+        pedirFerramenta('curadoria', () => {
+          limparSelecao()
+          limparSelecaoCadastral()
+          abrirMesaCadastral()
+        })
+      } else { fecharMesaPeloUsuario() }   // fechar pelo ícone é largar (cadastro.js)
       return
     }
   }
@@ -352,18 +377,33 @@ function alternarPainelMapa(idGrupo) {
   fecharPaineisMapa()
   if (!abrindo) return
 
-  if (idGrupo === 'grupo-cadastro') {
-    limparSelecao()
-    limparSelecaoCadastral()
-  }
+  // Um painel é uma ferramenta como as outras: abrir a busca encerra a
+  // curadoria em curso (perguntando, se houver lote marcado), e vice-versa.
+  // Ver ferramentas-mapa.js.
+  const ferramenta = { 'grupo-busca': 'busca', 'grupo-pins': 'pinos',
+    'grupo-cores': 'cores', 'grupo-cadastro': 'curadoria' }[idGrupo]
 
-  grupo.classList.add('aberto')
-  grupo.querySelector('.ctrl-btn')?.setAttribute('aria-expanded', 'true')
+  // Painel que não é ferramenta (Camadas) só abre: não disputa o mapa.
+  const pedir = ferramenta ? pedirFerramenta : (_n, abrir) => abrir()
+  pedir(ferramenta, () => {
+    if (idGrupo === 'grupo-cadastro') {
+      limparSelecao()
+      limparSelecaoCadastral()
+    }
 
-  // Ao abrir a busca o cursor já entra no campo — quem clicou na lupa quer
-  // digitar, não clicar de novo.
-  if (idGrupo === 'grupo-busca') setTimeout(() => document.getElementById('mb-termo')?.focus(), 20)
-  if (idGrupo === 'grupo-pins') popularBairrosPins()
+    grupo.classList.add('aberto')
+    grupo.querySelector('.ctrl-btn')?.setAttribute('aria-expanded', 'true')
+
+    // O painel abre no lugar do ícone e cresce para baixo: em tela de
+    // notebook o de Camadas passava do rodapé. Cabe no que sobra, e rola.
+    const corpo = grupo.querySelector('.ctrl-corpo')
+    if (corpo) {
+      corpo.style.maxHeight = Math.max(160, window.innerHeight - corpo.getBoundingClientRect().top - 14) + 'px'
+      corpo.style.overflowY = 'auto'
+    }
+
+    if (idGrupo === 'grupo-pins') popularBairrosPins()
+  })
 }
 
 /**
@@ -418,50 +458,57 @@ document.addEventListener('click', ev => {
 })
 
 /**
- * Localiza um imóvel e leva o mapa até ele.
+ * Leva o mapa até um lote e o DESTACA.
  *
- * Campo único de propósito: aceita bairro, inscrição imobiliária, chave ou
- * "quadra lote", e quem decide o que é cada coisa é o servidor (ver
- * BuscaController::aplicarFiltros). Obrigar o usuário a escolher antes em qual
- * campo o que ele sabe se encaixa é transferir a ele um trabalho que a
- * consulta faz sozinha.
+ * Centralizar só não basta: no zoom 19 cabem dezenas de lotes iguais, e quem
+ * veio de uma lista (pesquisa, conferência com o cadastro) precisa achar O
+ * lote sem ler número por número. Usado pela pesquisa do mapa
+ * (pesquisa-mapa.js) e pela conferência da importação (importacoes.js).
+ *
+ * @param {number} id
  */
-async function buscarNoMapa() {
-  const termo = document.getElementById('mb-termo').value.trim()
-  const saida = document.getElementById('mb-resultado')
-  if (!termo) { saida.textContent = 'Digite bairro, inscrição imobiliária ou “quadra lote”.'; return }
-
-  saida.textContent = 'Procurando…'
-
+async function irAoLoteNoMapa(id) {
   try {
-    const p = new URLSearchParams({ termo })
-    const r = await fetch('/api/imoveis/busca?' + p, { headers: { Accept: 'application/json' } })
-    const d = await r.json()
-    if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
-    if (!d.imoveis.length) { saida.textContent = 'Nenhum imóvel encontrado.'; return }
-
-    // Vários acertos NÃO viram pino. O pino é a resposta do filtro, que é uma
-    // pergunta sobre situação ("onde estão os embargados"); a busca é uma
-    // pergunta sobre identidade ("cadê este imóvel"), e enfileirar alfinetes
-    // por um termo genérico só suja o mapa. Aqui o resultado é pintado: os
-    // lotes que casam ganham destaque, os demais recuam.
-    if (d.imoveis.length > 1) {
-      destacarLotes(d.imoveis.map(i => i.id))
-      saida.innerHTML = `${d.total} imóveis destacados. `
-        + '<a href="#" onclick="limparDestaqueMapa();return false">Limpar</a>'
-      return
-    }
-
-    const f = await fetch('/api/imoveis/' + d.imoveis[0].id, { headers: { Accept: 'application/json' } })
-    const ficha = await f.json()
-    if (!ficha.lat) { saida.textContent = 'Imóvel sem geometria cadastrada.'; return }
-
-    mapaState.obj?.setView([ficha.lat, ficha.lon], 19)
-    saida.innerHTML = `${esc(ficha.bairro || '')} · Q ${esc(ficha.quadra ?? '—')} · Lt ${esc(ficha.lote ?? '—')}`
+    const r = await fetch('/api/imoveis/' + id, { headers: { Accept: 'application/json' } })
+    const ficha = await r.json()
+    if (!r.ok) throw new Error(ficha.message || 'Imóvel não encontrado.')
+    if (!ficha.lat) { toast('Imóvel sem geometria cadastrada.', 'aviso'); return }
+    if (typeof irPara === 'function') irPara('mapa')
+    setTimeout(() => mapaState.obj?.setView([ficha.lat, ficha.lon], 19), 120)
+    destacarLoteQuandoCarregar(Number(id))
   } catch (e) {
-    console.error(e)
-    saida.textContent = e.message || 'Falha na busca.'
+    toast(e.message, 'err')
   }
+}
+
+/** Contorno piscante do lote procurado. @type {L.GeoJSON|null} */
+let realceDoLote = null
+
+/**
+ * Destaca o lote assim que ele chegar ao mapa. Os lotes do novo enquadramento
+ * chegam depois do movimento, por isso a espera; e o contorno piscante fica
+ * numa camada própria, que sobrevive à recarga dos lotes (que redesenha as
+ * camadas e levaria o destaque junto).
+ *
+ * @param {number} id
+ */
+async function destacarLoteQuandoCarregar(id) {
+  for (let t = 0; t < 40; t++) {
+    await new Promise(r => setTimeout(r, 200))
+    const c = mapaState.porId?.get(id)
+    if (!c) continue
+    destacar(c)
+    realceDoLote?.remove()
+    realceDoLote = L.geoJSON(c.feature, {
+      interactive: false,
+      // SVG de propósito: o piscar é animação CSS, e caminho em canvas não tem classe.
+      renderer: L.svg(),
+      style: { color: '#facc15', weight: 5, fill: false, className: 'lote-realce' },
+    }).addTo(mapaState.obj)
+    setTimeout(() => { realceDoLote?.remove(); realceDoLote = null }, 6000)
+    return
+  }
+  toast('O lote não apareceu no mapa. Confira as camadas ligadas.', 'aviso')
 }
 
 // ── PINOS POR FILTRO ─────────────────────────────────────────
@@ -567,13 +614,6 @@ function plotarPins(pins) {
   mapaState.obj.fitBounds(grupo.getBounds().pad(0.15))
 }
 
-/** Limpa só a pintura de destaque, mantendo os pinos (usado pela busca). */
-function limparDestaqueMapa() {
-  destacarLotes(null)
-  const saida = document.getElementById('mb-resultado')
-  if (saida) saida.textContent = 'Digite bairro, inscrição imobiliária ou “quadra lote”.'
-}
-
 function limparPins() {
   marcarIndicadorControle('grupo-pins', null)
   destacarLotes(null)
@@ -617,7 +657,7 @@ function montarOrtofoto(satelite) {
 
   const opcoes = {
     attribution: alt.atribuicao || '',
-    maxZoom: 20,
+    maxZoom: ZOOM_MAXIMO,
     maxNativeZoom: Number(alt.maxNativeZoom) || 19,
     // Só pede tile a partir do zoom em que o satélite já não ajuda.
     minZoom: Number(alt.minZoom) || 17,
@@ -783,6 +823,97 @@ function sincronizarRotulos() {
       camada.unbindTooltip()
     }
   }
+
+  sincronizarMedidas()
+}
+
+// ── MEDIDAS DOS LADOS ────────────────────────────────────────
+
+/** Lado mais curto que isso não leva rótulo: é quina de desenho, não divisa. */
+const MEDIDA_MINIMA_M = 0.5
+
+/** Comprimento mínimo do lado NA TELA para caber "00,00 m" sem invadir o vizinho. */
+const MEDIDA_CABE_PX = 62
+
+/** Quanto o rótulo entra no lote, a partir do lado, em pixels. */
+const MEDIDA_RECUO_PX = 12
+
+/**
+ * O zoom em que as medidas aparecem: UM acima do último zoom de imagem do
+ * Google (20 + 1 = 21), e daí até ZOOM_MAXIMO. No 20 os rótulos ainda se
+ * apertavam nos lotes pequenos; um zoom a mais dá espaço ao texto maior.
+ */
+function zoomDasMedidas() {
+  return (mapaState.googleTiles?.options?.maxNativeZoom ?? 20) + 1
+}
+
+/**
+ * Escreve, DENTRO de cada lote visível, o comprimento de cada um dos seus lados.
+ *
+ * A régua é a da prancheta (PranchetaGeo.plano): a GRADE do UTM, a mesma das
+ * medidas do DWG e da matrícula. Medir no terreno daria alguns centímetros a
+ * mais, e o número na tela discordaria do documento.
+ *
+ * Por lote, e não por divisa: cada imóvel mostra as suas medidas do seu lado
+ * da linha. Dois vizinhos que dividem um lado mostram o mesmo número, um de
+ * cada lado — é o que se lê numa planta de loteamento.
+ */
+function sincronizarMedidas() {
+  const mapa = mapaState.obj
+  if (!mapa) { return }
+  mapaState.camadaMedidas ||= L.layerGroup().addTo(mapa)
+  mapaState.camadaMedidas.clearLayers()
+
+  // `!(>=)`, e não `<`: antes de o mapa ser posicionado o zoom é indefinido, e
+  // `undefined < 20` é falso — seguir adiante pediria getBounds() de um mapa
+  // sem centro, que lança e interrompe o enquadramento inicial.
+  if (!(mapa.getZoom() >= zoomDasMedidas()) || typeof PranchetaGeo === 'undefined') { return }
+
+  const vista = mapa.getBounds().pad(0.1)
+
+  for (const camada of mapaState.camadas) {
+    const anel = camada.feature?.geometry?.coordinates?.[0]
+    if (!anel || !vista.intersects(camada.getBounds())) { continue }
+
+    const plano = PranchetaGeo.plano(anel[0])
+    // O lote em pixels: é na tela que se decide para que lado fica o "dentro".
+    const tela = anel.map(c => { const p = mapa.latLngToContainerPoint([c[1], c[0]]); return [p.x, p.y] })
+
+    for (let i = 1; i < anel.length; i++) {
+      const a = anel[i - 1], b = anel[i]
+      const m = PranchetaGeo.len(PranchetaGeo.sub(plano.para(b), plano.para(a)))
+      if (m < MEDIDA_MINIMA_M) { continue }
+
+      const pa = tela[i - 1], pb = tela[i]
+      const comp = Math.hypot(pb[0] - pa[0], pb[1] - pa[1])
+      // Rótulo maior que o lado encavala com o do canto vizinho: só onde cabe.
+      if (comp < MEDIDA_CABE_PX) { continue }
+
+      // Recuo para DENTRO do lote: das duas normais, a que cai no polígono.
+      const meio = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2]
+      const n = [-(pb[1] - pa[1]) / comp, (pb[0] - pa[0]) / comp]
+      const teste = [meio[0] + n[0] * 2, meio[1] + n[1] * 2]
+      const sinal = PranchetaGeo.dentro(teste, tela) ? 1 : -1
+      const alvo = [meio[0] + n[0] * MEDIDA_RECUO_PX * sinal, meio[1] + n[1] * MEDIDA_RECUO_PX * sinal]
+      const pos = mapa.containerPointToLatLng(alvo)
+      if (!vista.contains(pos)) { continue }
+
+      // Ângulo do lado NA TELA, com o texto sempre de pé (entre -90° e 90°).
+      let ang = Math.atan2(pb[1] - pa[1], pb[0] - pa[0]) * 180 / Math.PI
+      if (ang > 90) ang -= 180
+      if (ang < -90) ang += 180
+
+      const texto = m.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' m'
+      L.marker(pos, {
+        pane: 'rotulos', interactive: false, keyboard: false,
+        icon: L.divIcon({
+          className: 'rot-medida',
+          html: `<span style="transform:translate(-50%,-50%) rotate(${ang.toFixed(1)}deg)">${texto}</span>`,
+          iconSize: [0, 0],
+        }),
+      }).addTo(mapaState.camadaMedidas)
+    }
+  }
 }
 
 /**
@@ -812,6 +943,8 @@ function abrirBalao(feicao, camada) {
       <div class="balao-tit">Quadra ${esc(p.quadra ?? '—')} · Lote ${esc(p.numero_lote ?? '—')}</div>
       <div class="balao-sub">${esc(bairroDe(p))}</div>
       <span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span>
+      ${p.em_revisao ? `<div class="balao-revisao">Em revisão · importação nº ${esc(p.importacao_id)}
+         <a href="#" onclick="event.preventDefault(); abrirImportacao(${Number(p.importacao_id)})">abrir</a></div>` : ''}
       ${p.inscricao ? `<div class="balao-chip">${esc(p.inscricao)}</div>` : ''}
       <div class="balao-area">${area}</div>
       <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Ver ficha completa</button>

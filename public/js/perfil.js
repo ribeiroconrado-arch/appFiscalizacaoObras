@@ -227,17 +227,19 @@ async function postPerfil(url, corpo) {
 // A aplicação em si (paleta, ícones, cor da barra do sistema) mora em
 // js/tema.js, que roda no <head>; aqui fica só o que é da tela de perfil.
 
-/** @param {'institucional'|'f'} tema */
+const NOME_TEMA = { institucional: 'institucional', f: 'âmbar', azul: 'azul' }
+
+/** @param {'institucional'|'f'|'azul'} tema */
 function escolherTema(tema) {
   aplicarTema(tema, true)
   marcarTemaAtivo()
-  toast(tema === 'institucional' ? 'Tema institucional aplicado' : 'Tema âmbar aplicado')
+  toast(`Tema ${NOME_TEMA[tema] || tema} aplicado`)
 }
 
 /** Deixa selecionado o botão do tema em uso. */
 function marcarTemaAtivo() {
   const atual = document.documentElement.getAttribute('data-tema') || 'institucional'
-  for (const t of ['institucional', 'f']) {
+  for (const t of Object.keys(NOME_TEMA)) {
     document.getElementById('tema-op-' + t)?.classList.toggle('sel', t === atual)
   }
 }

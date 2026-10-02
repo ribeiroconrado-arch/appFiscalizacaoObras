@@ -216,6 +216,12 @@ class TrilhaController extends Controller
             return response()->json(['message' => 'Este registro não existe.'], 404);
         }
 
+        // O curador EXTERNO desfaz o que é do desenho, e só isso: a rota fica
+        // aberta a ele por causa do histórico do cadastro, não da trilha toda.
+        if ($request->user()->isExterno() && $a->tabela !== 'lotes') {
+            return response()->json(['message' => 'Este conteúdo é restrito à Fiscalização.'], 403);
+        }
+
         // O MESMO teste que apagou o botão na tela, refeito aqui. A tela decide
         // o que mostrar; o servidor decide o que acontece — e quem chamar a rota
         // direto tem de encontrar a mesma regra.

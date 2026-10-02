@@ -3,6 +3,7 @@
 namespace App\Cadastro;
 
 use App\Models\Lote;
+use App\Support\InscricaoImobiliaria;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -128,6 +129,27 @@ class CadastroCarregado implements FonteDoCadastro
             ->orderBy('inscricao')
             ->get()
             ->all();
+    }
+
+    public function imoveisDoBairro(string $codigoBairro): iterable
+    {
+        // Mesma regra de zeros de `linhasDoLote`: o cadastro grava "000124",
+        // a amarração de Parâmetros guarda "124".
+        $linhas = DB::table('cadastro_externo_imoveis')
+            ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim($codigoBairro, '0')])
+            ->orderBy('inscricao')
+            ->cursor();
+
+        foreach ($linhas as $l) {
+            yield [
+                'inscricao'       => preg_replace('/\D/', '', (string) $l->inscricao),
+                'quadra'          => $l->quadra ?? (string) (InscricaoImobiliaria::partes($l->inscricao)['quadra'] ?? ''),
+                'lote'            => $l->lote ?? (string) (InscricaoImobiliaria::partes($l->inscricao)['lote'] ?? ''),
+                'isencao'         => $l->isencao,
+                'area_terreno_m2' => $l->area_terreno_m2 !== null ? (float) $l->area_terreno_m2 : null,
+                'endereco'        => trim(($l->logradouro ?? '') . ' ' . ($l->numero_predial ?? '')) ?: null,
+            ];
+        }
     }
 
     private function codigoDoBairro(Lote $lote): ?string

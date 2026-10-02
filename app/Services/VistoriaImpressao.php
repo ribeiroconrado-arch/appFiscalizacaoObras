@@ -59,7 +59,8 @@ class VistoriaImpressao
             'Quadra %s, Lote %s — %s',
             $v->lote->quadra ?? '—',
             $v->lote->numero_lote ?? '—',
-            $v->lote->bairro ?? '—'
+            // Documento: o nome OFICIAL do bairro (o do desenho é só do mapa).
+            $v->lote->bairroOficial() ?? '—'
         ));
     }
 

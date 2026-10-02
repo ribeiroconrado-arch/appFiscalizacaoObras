@@ -2,9 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ImportacaoDeBairro;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 /**
  * Importa lotes de um GeoJSON (EPSG:4326) gerado pelo pipeline da Etapa 1
@@ -25,55 +26,24 @@ class ImportarLotes extends Command
     /** Linhas por INSERT. 200 mantém o pacote longe do max_allowed_packet. */
     private const LOTE_INSERCAO = 200;
 
-    public function handle(): int
+    public function handle(ImportacaoDeBairro $importacao): int
     {
         $arquivo = $this->argument('arquivo');
-        if (! is_file($arquivo)) {
-            $this->error("Arquivo não encontrado: {$arquivo}");
-            return self::FAILURE;
-        }
-
-        $gj = json_decode(file_get_contents($arquivo), true);
-        if (! is_array($gj) || ($gj['type'] ?? null) !== 'FeatureCollection') {
-            $this->error('O arquivo não é uma FeatureCollection GeoJSON.');
-            return self::FAILURE;
-        }
-
-        $feicoes = $gj['features'] ?? [];
-        $this->info(sprintf('Feições no arquivo: %d', count($feicoes)));
 
         // ── preparo das linhas ──
-        $linhas = [];
-        $bairros = [];
-        $ignoradas = 0;
-        $agora = now();
-
-        foreach ($feicoes as $f) {
-            $geom = $f['geometry'] ?? null;
-            // A tabela declara POLYGON. MultiPolygon entraria como geometria de
-            // tipo incompatível e o INSERT falharia no meio da importação —
-            // melhor recusar aqui, contando, do que abortar no meio.
-            if (! $geom || ($geom['type'] ?? null) !== 'Polygon') {
-                $ignoradas++;
-                continue;
-            }
-
-            $p = $f['properties'] ?? [];
-            $bairro = $p['bairro'] ?? null;
-            if (! $bairro) { $ignoradas++; continue; }
-
-            $bairros[$bairro] = true;
-            $linhas[] = [
-                'bairro'      => $bairro,
-                'quadra'      => $p['quadra'] ?? null,
-                'numero_lote' => $p['numero_lote'] ?? null,
-                'chave'       => $p['chave'] ?? ($bairro . '|?|?'),
-                'area_gis_m2' => $p['area_gis_m2'] ?? null,
-                'fonte'       => $p['fonte'] ?? basename($arquivo),
-                'geojson'     => json_encode($geom),
-                'ts'          => $agora,
-            ];
+        // A leitura é a mesma da importação pela tela (ImportacaoDeBairro):
+        // um arquivo não pode valer de um jeito no terminal e de outro na tela.
+        try {
+            $lido = $importacao->lerArquivo($arquivo);
+        } catch (RuntimeException $e) {
+            $this->error($e->getMessage());
+            return self::FAILURE;
         }
+
+        $this->info(sprintf('Feições no arquivo: %d', $lido['feicoes']));
+        $linhas = $lido['linhas'];
+        $bairros = array_fill_keys($lido['bairros'], true);
+        $ignoradas = $lido['ignoradas'];
 
         if ($ignoradas > 0) {
             $this->warn("Feições ignoradas (sem polígono ou sem bairro): {$ignoradas}");
@@ -147,7 +117,9 @@ class ImportarLotes extends Command
         // destrava o índice é a que acabou de acontecer acima; conferir antes
         // trancaria a porta pelo lado de dentro — a importação que corrige o
         // problema seria recusada por causa do problema que ela corrige.
-        if (! $this->garantirIndice()) {
+        if ($problema = $importacao->problemaNoIndice()) {
+            $this->error('ABORTADO: ' . $problema);
+            $this->line('  Sem o índice esta importação DUPLICARIA os lotes em vez de atualizá-los.');
             return self::FAILURE;
         }
 
@@ -158,7 +130,7 @@ class ImportarLotes extends Command
         // exigiria o 'axis-order=long-lat' e abriria espaço para erro silencioso.
         // Contado ANTES de gravar: depois do INSERT já não dá para distinguir
         // quem foi preservado de quem simplesmente não mudou.
-        $preservados = $this->contarPreservados($linhas);
+        $preservados = $importacao->contarPreservados($linhas);
 
         $barra = $this->output->createProgressBar(count($linhas));
         $barra->start();
@@ -260,97 +232,5 @@ class ImportarLotes extends Command
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Quantos lotes do arquivo já existem na base com geometria feita à mão.
-     *
-     * São os que o `IF(origem = 'importacao', ...)` da gravação vai preservar.
-     * Contar aqui é o que permite RELATAR a preservação: sem isso ela seria
-     * silenciosa, e silêncio é exatamente o defeito que ela veio corrigir —
-     * quem reimporta o bairro precisa saber que o DWG não venceu em N lotes.
-     *
-     * @param  list<array<string,mixed>>  $linhas
-     */
-    private function contarPreservados(array $linhas): int
-    {
-        if (! Schema::hasColumn('lotes', 'origem')) {
-            return 0;   // base ainda sem a migração da sucessão
-        }
-
-        $n = 0;
-        // Em blocos: um `whereIn` com 23 mil triplas estoura o max_allowed_packet.
-        foreach (array_chunk($linhas, 500) as $bloco) {
-            $n += DB::table('lotes')
-                ->where('origem', '<>', 'importacao')
-                ->where('situacao', 'ativo')
-                ->where(function ($q) use ($bloco) {
-                    foreach ($bloco as $l) {
-                        $q->orWhere(fn ($w) => $w
-                            ->where('bairro', $l['bairro'])
-                            ->where('quadra', $l['quadra'])
-                            ->where('numero_lote', $l['numero_lote']));
-                    }
-                })
-                ->count();
-        }
-
-        return $n;
-    }
-
-    /**
-     * Garante que existe um índice único de identificação, criando o antigo se
-     * a base ainda não migrou. Devolve false — e explica — quando a
-     * duplicidade impede.
-     *
-     * Dois índices podem ocupar este papel, e qualquer um dos dois serve para
-     * o ON DUPLICATE KEY UPDATE funcionar:
-     *
-     *   uk_lotes_identificacao         (bairro, quadra, numero_lote) — o antigo
-     *   uk_lotes_identificacao_ativos  sobre a coluna gerada `chave_identidade`,
-     *                                  que só tem valor quando o lote está ativo
-     *
-     * O segundo veio com a sucessão (migração 2026_08_21_000100): sem ele,
-     * unificar os lotes 05 e 06 e chamar o resultado de "05" colidiria com o
-     * 05 recém-inativado, que é o caminho normal da unificação.
-     *
-     * Quadra nula não atrapalha em nenhum dos dois: no MySQL o índice único
-     * trata cada NULL como distinto, então lote cuja quadra o desenho não
-     * permitiu provar entra sem travar a identidade dos demais. Ele aparece na
-     * conferência (php artisan gis:conferir) para correção manual.
-     */
-    private function garantirIndice(): bool
-    {
-        $existe = fn (string $nome) => (bool) DB::selectOne(
-            'SELECT COUNT(*) n FROM information_schema.statistics
-              WHERE table_schema = DATABASE() AND table_name = "lotes"
-                AND index_name = ?',
-            [$nome]
-        )->n;
-
-        if ($existe('uk_lotes_identificacao_ativos') || $existe('uk_lotes_identificacao')) {
-            return true;
-        }
-
-        // Só entre ATIVOS: lote inativo não disputa identidade com ninguém.
-        $duplicadas = DB::selectOne('SELECT COUNT(*) n FROM (
-            SELECT 1 FROM lotes
-             WHERE situacao = "ativo" AND quadra IS NOT NULL AND numero_lote IS NOT NULL
-             GROUP BY bairro, quadra, numero_lote
-            HAVING COUNT(*) > 1
-        ) t')->n;
-
-        if ($duplicadas > 0) {
-            $this->error('ABORTADO: não há índice único de identificação, e ele não pode ser criado.');
-            $this->line("  {$duplicadas} combinações bairro|quadra|lote estão repetidas entre lotes ativos.");
-            $this->line('  Sem o índice esta importação DUPLICARIA os lotes em vez de atualizá-los.');
-            $this->line('  Diagnóstico: php artisan gis:conferir');
-            return false;
-        }
-
-        DB::statement('ALTER TABLE lotes ADD UNIQUE KEY uk_lotes_identificacao (bairro, quadra, numero_lote)');
-        $this->info('Índice único uk_lotes_identificacao criado.');
-
-        return true;
     }
 }

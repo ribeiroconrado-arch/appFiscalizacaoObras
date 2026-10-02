@@ -297,13 +297,18 @@ function renderFichaImovel(d) {
     ? `<button class="btn" onclick="renderTabelaBusca({imoveis:bState.resultado,total:bState.resultado.length,truncado:false})">Voltar à lista</button>`
     : ''
 
+  // Linha RESTRITA (externo): a lista mostra que o documento existe, sem id
+  // para abrir — o servidor já não o manda. Ver BuscaController::ficha.
+  const restrito = `<span class="bs-linha-data lt-restrito">${ICO_CADEADO} restrito</span>`
+
   const docs = d.documentos.length
     ? d.documentos.map(x => `
-        <div class="bs-linha" onclick="abrirDocumento(${x.id})">
+        <div class="bs-linha"${x.id ? ` onclick="abrirDocumento(${x.id})"` : ''}>
           <span class="proto-badge">${esc(x.numero)}</span>
           <span class="bs-linha-tit">${esc(x.tipo)}</span>
           <span class="badge ${esc(x.status.classe)}">${esc(x.status.texto)}</span>
           <span class="bs-linha-data">${esc(x.data || '')}</span>
+          ${x.restrito ? restrito : ''}
         </div>`).join('')
     : '<div class="lista-vazia">Nenhum documento neste imóvel.</div>'
 
@@ -311,8 +316,9 @@ function renderFichaImovel(d) {
     ? d.vistorias.map(x => `
         <div class="bs-linha">
           <span class="bs-linha-tit">${esc(x.data || '—')}</span>
-          <span class="bs-linha-sub">${esc(x.fiscal || '—')}</span>
+          <span class="bs-linha-sub">${esc(x.fiscal || (x.restrito ? '' : '—'))}</span>
           <span class="bs-linha-data">${esc(x.situacao || '')}</span>
+          ${x.restrito ? restrito : ''}
         </div>`).join('')
     : '<div class="lista-vazia">Nenhuma vistoria neste imóvel.</div>'
 

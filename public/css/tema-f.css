@@ -650,6 +650,12 @@ body.login-bg{
   color:var(--chumbo);text-transform:uppercase;letter-spacing:.08em;display:none;
   text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 4px #fff,0 0 8px #fff}
 body.z-lote .leaflet-tooltip.rot.rot-lote{display:block}
+/* Medida de cada lado do lote — só no último zoom (ver sincronizarMedidas). A
+   caixa do ícone tem tamanho zero; o texto se centra e gira sobre o meio do lado. */
+.rot-medida{background:none;border:0}
+.rot-medida span{position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;
+  font-family:'JetBrains Mono','Courier New',monospace;font-size:12px;font-weight:600;color:#0f172a;
+  background:rgba(255,255,255,.82);padding:0 3px;border-radius:3px;line-height:1.35}
 body.z-quadra .leaflet-tooltip.rot.rot-quadra{display:block}
 body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 
@@ -954,7 +960,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    tema-institucional.css), então as ações voltam a acompanhar a largura
    toda — continuam alinhadas ao rodapé, que é o que se pediu. */
 @media (min-width: 900px){
-  html[data-tema="institucional"] .acoes{
+  html[data-tema="institucional"] .acoes,html[data-tema="azul"] .acoes{
     left:0;right:0;transform:none;width:100%;padding-left:12px;padding-right:12px;
   }
 }
@@ -2900,7 +2906,7 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
        Com `bottom` fixo, a ferramenta ativa — quatro linhas — ficava dentro de
        uma caixa branca de 660px de altura, quase toda vazia, tapando o mapa
        sem motivo. O teto continua existindo para o menu não passar do rodapé. */
-    left:12px; top:120px; max-height:calc(100vh - 200px); width:326px;
+    left:12px; top:120px; max-height:calc(100vh - 136px); width:326px;
     background:rgba(255,255,255,.97); border:1.5px solid var(--bord);
     border-radius:var(--rl); box-shadow:0 10px 32px rgba(0,0,0,.14);
     /* DUAS COLUNAS: régua encostada na borda, propriedades ao lado. A largura
@@ -2973,8 +2979,108 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
     justify-content:flex-start;padding:8px 10px}
   .des-barra-passo{border-right:none;width:100%;order:9}
 }
+
+/* ══════════════════════════════════════════════
+   FAIXA DAS BARRAS DO MAPA (#mapa-barras)
+
+   Importação, desenho, modo de correção e "tirar o contorno antigo" moram numa
+   coluna só, uma embaixo da outra. Cada barra tinha o seu `top` fixo calculado
+   contra as outras, e duas juntas se cobriam. Aqui dentro elas perdem a
+   posição própria e só o CONTÊINER se posiciona.
+
+   Absoluta em #t-mapa (que já desconta o menu lateral): centraliza no mapa sem
+   conta nenhuma. 50px = a linha do chip de contagem, abaixo do sub-cabeçalho. */
+.mapa-barras{position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:920;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  width:max-content;max-width:calc(100% - 120px);pointer-events:none}
+.mapa-barras > *{pointer-events:auto}
+.mapa-barras > .imp-barra,.mapa-barras > .des-barra,
+.mapa-barras > .cad-barra,.mapa-barras > .inativo-sair{
+  position:static;transform:none;top:auto;left:auto;right:auto;max-width:100%}
+@media (min-width:1000px){
+  /* Com a mesa larga aberta, centraliza no que sobra do mapa (ver .des-barra). */
+  body.mesa-larga .mapa-barras{left:calc(50% + 170px);max-width:calc(100% - 460px)}
+}
+/* No celular a faixa ocupa a largura, desce para baixo do chip de contagem e
+   para antes da coluna de controles da direita (34px + margens). */
+@media (max-width:999px){
+  .mapa-barras{top:84px;left:8px;right:56px;transform:none;width:auto;max-width:none;align-items:stretch}
+  .mapa-barras > .cad-barra{width:auto}
+}
+/* A prancheta cobre a tela inteira: a barra da importação some com as outras. */
+body.prancheta-aberta .mapa-barras{visibility:hidden}
+
+/* ══════════════════════════════════════════════
+   CAMADAS (camadas-mapa.js)
+
+   Cada camada desligada põe `cam-sem-<id>` no #map, e a regra aqui esconde o
+   que ela desenha. Pela classe, e não removendo a camada no JavaScript: os
+   rótulos e lotes são recriados o tempo todo, e o que nasce depois de
+   desligado já nasce escondido. */
+#map.cam-sem-lotes .leaflet-overlay-pane canvas{visibility:hidden}
+#map.cam-sem-rot-lote .rot-lote,
+#map.cam-sem-medidas .rot-medida,
+#map.cam-sem-rot-quadra .rot-quadra,
+#map.cam-sem-rot-bairro .rot-bairro{display:none}
+#map.cam-sem-bairro-contorno .leaflet-contornos-pane,
+#map.cam-sem-ruas .leaflet-rotulos-pane,
+#map.cam-sem-edificacoes .leaflet-edificacoes-pane{display:none}
+/* Pinos do filtro: o ícone padrão do Leaflet (img); o "você está aqui" é div e fica. */
+#map.cam-sem-pinos .leaflet-marker-pane img.leaflet-marker-icon,
+#map.cam-sem-pinos .leaflet-shadow-pane{display:none}
+#map.cam-sem-satelite .tile-satelite{visibility:hidden}
+/* Escuro, e não claro: o contorno dos lotes é branco, pensado para a foto. */
+#map.cam-sem-satelite{background:#3a463e}
+
+/* ══════════════════════════════════════════════
+   PESQUISA DO MAPA (pesquisa-mapa.js) — barra horizontal, primeira da faixa. */
+.pesq-barra{width:min(620px, 100%);background:var(--sur);border:1.5px solid var(--gm);border-radius:14px;
+  padding:8px 10px;box-shadow:0 8px 24px rgba(22,33,28,.18)}
+.pesq-barra[hidden]{display:none}
+.pesq-linha{display:flex;align-items:center;gap:8px}
+.pesq-ico{width:17px;height:17px;color:var(--tx3);flex:none}
+.pesq-termo{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:14px;padding:6px 2px;color:var(--tx)}
+.pesq-x{padding:5px 9px}
+.pesq-opcoes{flex-wrap:wrap;gap:6px;margin-top:6px;padding-top:7px;border-top:1px solid var(--blt)}
+.pesq-chip{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--bord);
+  background:var(--sur);color:var(--tx2);cursor:pointer}
+.pesq-chip.at{background:var(--gl);border-color:var(--g);color:var(--gd)}
+.pesq-escopo{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx3)}
+.pesq-escopo select{max-width:210px;font-size:12px;padding:4px 6px;border:1px solid var(--bord);border-radius:8px;background:var(--sur)}
+.pesq-resultado{margin-top:7px;padding-top:6px;border-top:1px solid var(--blt);max-height:min(46vh, 340px);overflow-y:auto}
+.pesq-resultado[hidden]{display:none}
+.pesq-msg{font-size:12px;color:var(--tx2);padding:3px 2px}
+.pesq-msg a{color:var(--gd)}
+.pesq-erro{color:var(--red)}
+.pesq-tabela{width:100%;border-collapse:collapse;font-size:12.5px}
+.pesq-tabela td{padding:6px 4px;border-bottom:1px solid var(--blt)}
+.pesq-tabela tr{cursor:pointer}
+.pesq-tabela tr:hover{background:var(--gl)}
+.pesq-ver{text-align:right;color:var(--gd);white-space:nowrap}
+#grupo-busca .ctrl-btn.at{background:var(--gl);color:var(--gd)}
+@media (max-width:620px){ .pesq-escopo{margin-left:0;width:100%} .pesq-escopo select{max-width:none;flex:1} .pesq-tabela td:nth-child(3){display:none} }
+
+/* O lote procurado (pesquisa, conferência): contorno amarelo piscando. */
+.lote-realce{animation:lote-pisca 1s ease-in-out 6}
+@keyframes lote-pisca{0%,100%{stroke-opacity:1}50%{stroke-opacity:.15}}
+
+/* No padrão dos outros painéis da coluna (.ctrl-corpo): mesmo título, mesma
+   letra das legendas, caixa de marcar na cor do tema (.lembrar). A altura é
+   limitada ao que sobra da tela (alternarPainelMapa) e o resto rola. */
+.ctrl-camadas{width:196px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.ctrl-camadas .cam-grupo{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--tx3);margin:8px 0 2px}
+.ctrl-camadas .cam-grupo:first-child{margin-top:0}
+.ctrl-camadas .cam-item{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:500;
+  color:var(--tx2);padding:2px 0;cursor:pointer;line-height:1.35}
+.ctrl-camadas .cam-item input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--g)}
 .cad-mesa-x:hover{color:var(--red)}
-.cad-mesa-rolo{flex:1;min-height:0;overflow-y:auto;padding:12px}
+.cad-mesa-rolo{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px}
+/* Duas colunas de campo (frente/fundos, lados) cabendo na mesa: sem
+   `minmax(0,…)` o campo numérico impunha a largura mínima dele e a mesa
+   ganhava rolagem lateral, com o "Lado esquerdo" cortado. */
+.cad-mesa .g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.cad-mesa .field input,.cad-mesa .field select{min-width:0;width:100%}
 /* Menu e ferramenta nunca aparecem juntos (ver pintarMesaCadastral), então não
    há separador entre eles — havia um traço aqui de quando conviviam. */
 .cad-mesa #mesa-lanca[hidden], .cad-mesa #mesa-props[hidden]{display:none}
@@ -2988,7 +3094,18 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
   flex:0 0 56px; display:flex; flex-direction:column;
   background:var(--sur); border-right:1.5px solid var(--bord); padding:7px 0;
 }
+/* As ferramentas rolam dentro da régua; o pé (contador e fechar) fica fora do
+   rolo e não sai da tela, qualquer que seja a altura do notebook. */
+.cad-regua{min-height:0;overflow:hidden}
+.cad-regua-rolo{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.cad-regua-pe{flex:none}
 .cad-regua-gp{display:flex;flex-direction:column;gap:3px;padding:4px 7px}
+/* Tela baixa (notebook de 768px): botões mais baixos, para caber mais sem rolar. */
+@media (max-height:820px){
+  .cad-regua-gp{gap:1px;padding:3px 7px}
+  .cad-fer{height:36px}
+  .cad-selo-sel{height:34px}
+}
 .cad-regua-gp + .cad-regua-gp{border-top:1px solid var(--blt)}
 .cad-fer{
   width:42px;height:42px;border-radius:9px;border:1px solid transparent;
@@ -3003,10 +3120,11 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    ocupar o quadrado inteiro. */
 .cad-fer .cad-ico{width:21px;height:21px;flex:none}
 
-/* A dica sai POR FORA da mesa, à direita, e por isso a régua não pode recortar
-   o que transborda — é o único motivo de ela não ter overflow próprio. */
+/* A dica sai POR FORA da mesa, à direita. Agora que a régua ROLA (e recorta o
+   que transborda), a dica é `fixed`: a posição vem do botão sob o ponteiro
+   (cadastro.js, "dica da régua"), e nenhum overflow a corta. */
 .cad-dica-fer{
-  position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);
+  position:fixed;left:var(--dica-x,-9999px);top:var(--dica-y,0);transform:translateY(-50%);
   width:236px;background:var(--tx);color:var(--sur);padding:9px 12px;
   border-radius:9px;box-shadow:0 8px 26px rgba(0,0,0,.22);text-align:left;
   opacity:0;visibility:hidden;transition:opacity .13s;pointer-events:none;z-index:60;

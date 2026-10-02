@@ -53,6 +53,7 @@ async function carregarParametros() {
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
     parState.usuarios = d.usuarios
+    parState.cargosExternos = d.cargos_externos
     parState.upfs = d.upfs
     parState.feriados = d.feriados
     parState.bairros = d.bairros
@@ -91,7 +92,8 @@ function renderUsuarios() {
 
   document.getElementById('lista-usuarios').innerHTML = parState.usuarios.map(u => {
     const inicial = (u.name || '?').trim().charAt(0).toUpperCase()
-    const login = (u.email || '').split('@')[0]
+    // Sem e-mail, o login é a matrícula — e ela já aparece logo ao lado.
+    const login = u.email ? '@' + u.email.split('@')[0] : ''
     const admin = u.perfil === 'admin'
 
     return `
@@ -101,7 +103,7 @@ function renderUsuarios() {
           <div class="par-card-txt">
             <div class="par-card-nome">${esc(u.name)}</div>
             <div class="par-card-meta">
-              @${esc(login)}${u.matricula ? ' · ' + esc(u.matricula) : ''} ·
+              ${[login, u.matricula].filter(Boolean).map(esc).join(' · ')} ·
               <span class="pil ${u.ativo ? 'pil-ok' : 'pil-off'}">${u.ativo ? 'Ativo' : 'Inativo'}</span>
               <span class="badge ${admin ? 'bd-cx' : 'bd-in'}">${esc(u.perfil_rotulo)}</span>
               ${u.tipo_usuario ? `<span class="par-card-cargo">${esc(u.tipo_usuario)}</span>` : ''}
@@ -213,7 +215,22 @@ function novoUsuario() {
   document.getElementById('us-curador').checked = false
   document.getElementById('us-senha').value = ''
   document.getElementById('us-senha2').value = ''
+  ajustarPerfilDoCargo()
   openModal('m-usuario')
+}
+
+/**
+ * Cargo externo trava o perfil em Visualizador. O servidor grava assim de
+ * qualquer jeito (ParametroController::salvarUsuario); aqui é para a tela não
+ * oferecer uma escolha que seria ignorada.
+ */
+function ajustarPerfilDoCargo() {
+  const externos = parState.cargosExternos || ['topografo', 'arquiteto', 'contribuinte']
+  const externo = externos.includes(document.getElementById('us-cargo').value)
+  const perfil = document.getElementById('us-perfil')
+  if (externo) perfil.value = 'viewer'
+  perfil.disabled = externo
+  document.getElementById('us-externo-obs').hidden = !externo
 }
 
 /** @param {number} id */
@@ -223,7 +240,7 @@ function editarUsuario(id) {
   document.getElementById('us-titulo').textContent = u.name
   document.getElementById('us-id').value = u.id
   document.getElementById('us-nome').value = u.name
-  document.getElementById('us-email').value = u.email
+  document.getElementById('us-email').value = u.email || ''
   document.getElementById('us-matricula').value = u.matricula || ''
   document.getElementById('us-cargo').value = u.tipo_usuario || 'agente'
   document.getElementById('us-perfil').value = u.perfil
@@ -231,6 +248,7 @@ function editarUsuario(id) {
   document.getElementById('us-curador').checked = !!u.curador_cadastral
   document.getElementById('us-senha').value = ''
   document.getElementById('us-senha2').value = ''
+  ajustarPerfilDoCargo()
   openModal('m-usuario')
 }
 

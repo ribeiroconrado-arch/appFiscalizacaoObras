@@ -607,15 +607,18 @@ let _textoOk = null
  * @param {number} [o.minimo]  tamanho mínimo aceito
  * @param {string} [o.textoBtn]
  * @param {Function} o.onOk    recebe o texto digitado
+ * @param {string} [o.valor]   texto já preenchido (ex.: o número atual)
+ * @param {number} [o.linhas]  altura do campo; 1 para um valor curto, como um número
  */
-function pedirTexto({ titulo, rotulo, dica = '', minimo = 0, textoBtn = 'Confirmar', onOk }) {
+function pedirTexto({ titulo, rotulo, dica = '', minimo = 0, textoBtn = 'Confirmar', onOk, valor = '', linhas = 4 }) {
   document.getElementById('mtx-titulo').textContent = titulo
   document.getElementById('mtx-rotulo').textContent = rotulo
   document.getElementById('mtx-dica').textContent = dica
   document.getElementById('mtx-dica').hidden = !dica
 
   const campo = document.getElementById('mtx-campo')
-  campo.value = ''
+  campo.value = valor
+  campo.rows = linhas
   campo.dataset.minimo = String(minimo)
 
   document.getElementById('mtx-btn').textContent = textoBtn
@@ -644,3 +647,32 @@ async function _mtxConfirmar() {
   fModalBtn('m-texto')
   if (acao) { await acao(texto) }
 }
+
+/**
+ * ☰ Recolhe (só ícones) ou expande o menu lateral da tela larga.
+ *
+ * A largura mora em --menu-largura (painel-responsivo.css), e é dela que o
+ * mapa, as listas e as mesas da curadoria tiram a margem — então recolher é
+ * trocar uma classe. A escolha fica neste navegador; ela é aplicada antes do
+ * primeiro pintar por um script ao lado do menu (mapa.blade.php).
+ */
+function alternarMenuLateral() {
+  const recolhido = document.documentElement.classList.toggle('menu-recolhido')
+  try { localStorage.setItem('menu-recolhido', recolhido ? '1' : '0') } catch { /* vale até recarregar */ }
+  const b = document.querySelector('.aba-recolher')
+  if (b) {
+    b.title = recolhido ? 'Expandir menu' : 'Recolher menu'
+    b.setAttribute('aria-label', b.title)
+  }
+  // O mapa mede o próprio contêiner: sem avisar, ficaria com a largura antiga.
+  if (typeof mapaState !== 'undefined' && mapaState.obj) mapaState.obj.invalidateSize()
+  window.dispatchEvent(new Event('resize'))
+}
+// Aberto já recolhido (preferência guardada): o ☰ diz "Expandir".
+document.addEventListener('DOMContentLoaded', () => {
+  const b = document.querySelector('.aba-recolher')
+  if (b && document.documentElement.classList.contains('menu-recolhido')) {
+    b.title = 'Expandir menu'
+    b.setAttribute('aria-label', b.title)
+  }
+})

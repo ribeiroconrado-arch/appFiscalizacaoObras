@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Cadastro\ColunasDaExportacao;
 use App\Cadastro\LeitorXlsx;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -28,55 +29,6 @@ class CarregarCadastro extends Command
     protected $description = 'Carrega uma exportação do cadastro imobiliário (.xlsx)';
 
     private const LOTE_INSERCAO = 200;
-
-    /**
-     * Colunas do cabeçalho que viram campo. A chave é o nome EXATO da coluna na
-     * exportação; o valor, a coluna da tabela.
-     *
-     * Coluna ausente não quebra a carga: o campo fica nulo e o comando avisa no
-     * fim o que não encontrou. É assim porque a exportação de outro município
-     * terá outro conjunto de colunas, e o importador precisa DIZER o que faltou
-     * em vez de morrer na primeira linha.
-     */
-    private const CAMPOS = [
-        'Inscrição'               => 'inscricao',
-        'Código'                  => 'codigo_cadastro',
-        'Inscrição Alternativa'   => 'inscricao_alternativa',
-        'Código do Bairro'        => 'codigo_bairro',
-        'Nome do Bairro'          => 'nome_bairro',
-        'Quadra'                  => 'quadra',
-        'Lote'                    => 'lote',
-        'Número do Endereço'      => 'numero_predial',
-        'Complemento do Endereço' => 'complemento',
-        'Isenção ou Imunidade'    => 'isencao',
-        'Área Terreno'            => 'area_terreno_m2',
-        'Área Edificada'          => 'area_edificada_m2',
-        'Testada Principal'       => 'testada_m',
-        'LADO DIR.'               => 'medida_lado_direito',
-        'LADO ESQ.'               => 'medida_lado_esquerdo',
-        'FUNDO'                   => 'medida_fundo',
-        'SETOR'                   => 'setor',
-        'REGIAO FISCAL'           => 'regiao_fiscal',
-        'AREA EDIFICADA'          => 'unidade_area_m2',
-        'ANO CONSTRUÇÃO'          => 'unidade_ano',
-        'PONTOS'                  => 'unidade_pontos',
-    ];
-
-    /** Colunas numéricas — o resto entra como texto, como veio. */
-    private const NUMERICOS = [
-        'area_terreno_m2', 'area_edificada_m2', 'testada_m', 'medida_lado_direito',
-        'medida_lado_esquerdo', 'medida_fundo', 'unidade_area_m2', 'unidade_ano',
-        'unidade_pontos',
-    ];
-
-    /** Colunas que descrevem o imóvel e viram o quadro de características. */
-    private const CARACTERISTICAS = [
-        'OCUPACAO DO LOTE', 'UTILIZACAO', 'TIPO DE IMOVEL', 'BEM IMOV. PATRIMONIO',
-        'SITUACAO', 'TOPOGRAFIA', 'PEDOLOGIA', 'ELEMENTO DE PROTECAO',
-        'ENERGIA', 'AGUA', 'COLETA DE LIXO', 'ASFALTO', 'CALCADA',
-        'REDE DE ESGOTO', 'REDE TELEFONICA', 'GALERIAS', 'ILUMINAÇÃO PUBL',
-        'CONSERVACAO DE',
-    ];
 
     public function handle(): int
     {
@@ -117,18 +69,18 @@ class CarregarCadastro extends Command
             }
 
             $linha = [];
-            foreach (self::CAMPOS as $coluna => $campo) {
+            foreach (ColunasDaExportacao::CAMPOS as $coluna => $campo) {
                 $v = $ler($coluna);
                 $linha[$campo] = $v === '' ? null : $v;
             }
-            foreach (self::NUMERICOS as $campo) {
+            foreach (ColunasDaExportacao::NUMERICOS as $campo) {
                 $linha[$campo] = $this->numero($linha[$campo]);
             }
 
             $linha['logradouro'] = trim($ler('Tipo de Logradouro') . ' ' . $ler('Nome do Logradouro')) ?: null;
 
             $carac = [];
-            foreach (self::CARACTERISTICAS as $col) {
+            foreach (ColunasDaExportacao::CARACTERISTICAS as $col) {
                 $v = $ler($col);
                 if ($v !== '' && $v !== '-') {
                     $carac[$col] = $v;
@@ -154,7 +106,7 @@ class CarregarCadastro extends Command
             return self::FAILURE;
         }
 
-        $faltando = array_diff(array_keys(self::CAMPOS), $cabecalho);
+        $faltando = array_diff(array_keys(ColunasDaExportacao::CAMPOS), $cabecalho);
         if ($faltando) {
             $this->warn('Colunas que a planilha não tem (ficam vazias): ' . implode(', ', $faltando));
         }

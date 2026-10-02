@@ -45,6 +45,10 @@ return Application::configure(basePath: dirname(__DIR__))
          * routes/api.php de verdade, ver o comentário no topo de web.php.
          */
         $middleware->validateCsrfTokens(except: ['webhooks/deploy']);
+
+        // O que é da fiscalização, fechado para topógrafo, arquiteto e
+        // contribuinte. Ver App\Http\Middleware\SoInterno e routes/web.php.
+        $middleware->alias(['interno' => \App\Http\Middleware\SoInterno::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

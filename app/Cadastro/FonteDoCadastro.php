@@ -36,4 +36,17 @@ interface FonteDoCadastro
      * sobre um dado que veio de planilha.
      */
     public function nome(): string;
+
+    /**
+     * Todos os imóveis de um bairro do cadastro, de uma vez.
+     *
+     * É a leitura da conferência de importação: comparar um bairro inteiro
+     * lote a lote, por `consultar()`, seria uma ida ao banco por lote. Cada
+     * item traz `inscricao` (15 dígitos, sem pontos), `quadra`, `lote`,
+     * `isencao`, `area_terreno_m2` e `endereco`.
+     *
+     * @param  string  $codigoBairro  o código do cadastro, com ou sem zeros à esquerda
+     * @return iterable<array<string,mixed>>
+     */
+    public function imoveisDoBairro(string $codigoBairro): iterable;
 }

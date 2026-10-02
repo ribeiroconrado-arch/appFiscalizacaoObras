@@ -270,9 +270,11 @@ body{
   .marca-verso{opacity:0}
 }
 
-.carregando-marca > .marca-verde{display:none}
+.carregando-marca > .marca-verde,.carregando-marca > .marca-azul{display:none}
 html[data-tema="institucional"] .carregando-marca > .marca-verde{display:block}
-html[data-tema="institucional"] .carregando-marca > .marca-ambar{display:none}
+html[data-tema="azul"] .carregando-marca > .marca-azul{display:block}
+html[data-tema="institucional"] .carregando-marca > .marca-ambar,
+html[data-tema="azul"] .carregando-marca > .marca-ambar{display:none}
 .tela-carregando-txt{font-size:12.5px;font-weight:700;color:var(--gd)}
 
 /* ── MARCADOR DE POSIÇÃO DO FISCAL ────────────────────────── */

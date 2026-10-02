@@ -99,6 +99,9 @@ class QuadraDeLotesSelecionados
         if (! $ids) {
             return 'Selecione ao menos um lote no mapa.';
         }
+        if ($mistura = ImportacaoDeBairro::misturaRevisao($ids)) {
+            return $mistura;
+        }
 
         if (count($ids) > self::MAXIMO) {
             return sprintf('Seleção de %d lotes: o máximo por operação é %d. '

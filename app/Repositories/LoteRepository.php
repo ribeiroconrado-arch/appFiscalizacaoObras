@@ -28,7 +28,7 @@ class LoteRepository
      * todos os lotes, então a falta não aparecia; apareceria na primeira parte
      * de desmembramento desenhada, com a variação saindo 000 em vez de 001.
      */
-    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria, origem';
+    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria, origem, importacao_id, em_revisao';
 
     /**
      * Recorte padrão de TODA consulta de mapa, GPS e busca.
@@ -45,6 +45,68 @@ class LoteRepository
     private const SO_ATIVOS = "situacao = 'ativo'";
 
     /**
+     * Ativo E liberado a todos: o recorte das leituras de quem não revisa.
+     *
+     * Lote de importação em revisão (`em_revisao`) só aparece para o curador,
+     * que é quem o confere antes de o administrador publicar. Mapa, GPS, busca
+     * e contagem usam ESTE; as consultas das ferramentas de desenho continuam
+     * com SO_ATIVOS, porque desenhar por cima de um lote em revisão também é
+     * sobreposição.
+     */
+    private const SO_PUBLICADOS = "situacao = 'ativo' AND em_revisao = 0";
+
+    /**
+     * Retângulo de uma importação — para a tela de revisão levar o mapa até ela.
+     *
+     * @return array{sul:float,oeste:float,norte:float,leste:float}|null
+     */
+    public function extensaoDaImportacao(int $importacaoId): ?array
+    {
+        $r = DB::selectOne('SELECT MIN(ST_X(p)) AS sul, MAX(ST_X(p)) AS norte,
+                                   MIN(ST_Y(p)) AS oeste, MAX(ST_Y(p)) AS leste
+                              FROM (SELECT ST_PointN(ST_ExteriorRing(geom), 1) AS p
+                                      FROM lotes WHERE importacao_id = ?) t', [$importacaoId]);
+
+        return $r && $r->sul !== null
+            ? ['sul' => (float) $r->sul, 'norte' => (float) $r->norte,
+               'oeste' => (float) $r->oeste, 'leste' => (float) $r->leste]
+            : null;
+    }
+
+    /**
+     * O "centro" de cada quadra de um bairro — a média do primeiro vértice dos
+     * lotes dela. É onde a conferência com o cadastro põe o selo "N sem lote":
+     * o imóvel do cadastro sem desenho não tem lugar no mapa, mas a quadra
+     * dele tem. Mesma aproximação de extensaoDaImportacao (ST_Centroid não
+     * vale em SRID geográfico): para pôr um selo, sobra.
+     *
+     * Chave: a quadra SEM zero à esquerda ("05" e "5" são a mesma).
+     *
+     * @param  list<string>  $nomes  os nomes de desenho do bairro
+     * @return array<string, array{0: float, 1: float}>  quadra => [lat, lon]
+     */
+    public function centrosDasQuadras(array $nomes): array
+    {
+        if (! $nomes) {
+            return [];
+        }
+        $marcas = implode(',', array_fill(0, count($nomes), '?'));
+        $linhas = DB::select("SELECT quadra, AVG(ST_X(p)) AS lat, AVG(ST_Y(p)) AS lon
+                                FROM (SELECT quadra, ST_PointN(ST_ExteriorRing(geom), 1) AS p
+                                        FROM lotes
+                                       WHERE situacao = 'ativo' AND quadra IS NOT NULL AND bairro IN ({$marcas})) t
+                               GROUP BY quadra", $nomes);
+
+        $centros = [];
+        foreach ($linhas as $l) {
+            $k = ltrim((string) $l->quadra, '0') ?: '0';
+            $centros[$k] = [round((float) $l->lat, 7), round((float) $l->lon, 7)];
+        }
+
+        return $centros;
+    }
+
+    /**
      * Lote que CONTÉM a coordenada. É o caminho feliz do fluxo de GPS.
      * Usa o índice espacial via ST_Contains.
      */
@@ -52,7 +114,7 @@ class LoteRepository
     {
         $sql = 'SELECT ' . self::CAMPOS . '
                   FROM lotes
-                 WHERE ' . self::SO_ATIVOS . '
+                 WHERE ' . self::SO_PUBLICADOS . '
                    AND ST_Contains(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
                  LIMIT 1';
 
@@ -97,7 +159,7 @@ class LoteRepository
                        ST_Distance(geom,
                            ST_GeomFromText(?, 4326, \'axis-order=long-lat\')) AS dist_m
                   FROM lotes
-                 WHERE ' . self::SO_ATIVOS . '
+                 WHERE ' . self::SO_PUBLICADOS . '
                    AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
                 HAVING dist_m <= ?
               ORDER BY dist_m
@@ -116,21 +178,34 @@ class LoteRepository
      *
      * @return array<int,object> cada item traz `geojson` (string)
      */
-    public function porBbox(float $oeste, float $sul, float $leste, float $norte, int $limite): array
+    /**
+     * @param  int|null  $rascunhosDe  com revisão: além dos lotes em revisão,
+     *         só os RASCUNHOS deste usuário (null = de todos, o administrador).
+     */
+    public function porBbox(float $oeste, float $sul, float $leste, float $norte, int $limite,
+                            bool $incluirRevisao = false, ?int $rascunhosDe = null): array
     {
+        $params = [$this->retangulo($oeste, $sul, $leste, $norte)];
+        $alheios = '';
+        if ($incluirRevisao && $rascunhosDe !== null) {
+            $alheios = " AND (em_revisao = 0 OR importacao_id NOT IN (
+                            SELECT id FROM importacoes_lotes WHERE status = 'rascunho' AND user_id <> ?))";
+            $params[] = $rascunhosDe;
+        }
+
         $sql = 'SELECT ' . self::CAMPOS . ', ST_AsGeoJSON(geom) AS geojson
                   FROM lotes
-                 WHERE ' . self::SO_ATIVOS . '
-                   AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
+                 WHERE ' . ($incluirRevisao ? self::SO_ATIVOS : self::SO_PUBLICADOS) . '
+                   AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))' . $alheios . '
                  LIMIT ' . (int) $limite;
 
-        return DB::select($sql, [$this->retangulo($oeste, $sul, $leste, $norte)]);
+        return DB::select($sql, $params);
     }
 
     /** Total de lotes carregados. Usado pelo cabeçalho do mapa e pela conferência. */
     public function total(): int
     {
-        return (int) DB::scalar('SELECT COUNT(*) FROM lotes WHERE ' . self::SO_ATIVOS);
+        return (int) DB::scalar('SELECT COUNT(*) FROM lotes WHERE ' . self::SO_PUBLICADOS);
     }
 
     /**
@@ -443,6 +518,112 @@ class LoteRepository
      *
      * @param  array<string,mixed>  $atributos
      */
+    // ── CONTORNO DOS BAIRROS ─────────────────────────────────────
+    //
+    // O contorno é CALCULADO no navegador do curador (união + fechamento, com
+    // JSTS): o ST_Buffer negativo do MySQL corrompe multipolígono grande — no
+    // Buritis V a área caiu de 37 ha para 1,6 ha. Aqui só se lê, confere e grava.
+
+    /**
+     * Os lotes ativos de um bairro, em GeoJSON, para o cálculo do contorno.
+     *
+     * @return array<int,object> id, geojson
+     */
+    public function lotesDoBairro(string $bairro): array
+    {
+        return DB::select('SELECT id, ST_AsGeoJSON(geom) AS geojson FROM lotes
+                            WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$bairro]);
+    }
+
+    /**
+     * Lotes de OUTROS bairros em volta deste — o que a fusão do contorno não
+     * pode engolir. O recorte é a extensão do bairro com folga de ~300 m.
+     *
+     * @return array<int,object> geojson
+     */
+    public function lotesVizinhos(string $bairro): array
+    {
+        $e = $this->extensao($bairro);
+        if (! $e) {
+            return [];
+        }
+        $f = 0.003;   // ~300 m
+        $sql = 'SELECT ST_AsGeoJSON(geom) AS geojson FROM lotes
+                 WHERE ' . self::SO_ATIVOS . ' AND bairro <> ?
+                   AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))';
+
+        return DB::select($sql, [$bairro, $this->retangulo($e['oeste'] - $f, $e['sul'] - $f, $e['leste'] + $f, $e['norte'] + $f)]);
+    }
+
+    /**
+     * Os contornos gravados, já em GeoJSON, com a área medida pelo banco.
+     *
+     * @return array<int,object>
+     */
+    public function contornosDosBairros(): array
+    {
+        return DB::select('SELECT nome, codigo, raio_m, lotes_contados, contorno_em, isolados,
+                                  ST_Area(geom) AS area_m2, ST_AsGeoJSON(geom) AS geojson
+                             FROM bairros');
+    }
+
+    /**
+     * Situação dos lotes de cada bairro hoje: quantos ativos, quantos publicados
+     * e a alteração mais recente — o que diz se o contorno ainda vale.
+     *
+     * @return array<string,object> por nome do bairro
+     */
+    public function situacaoDosBairros(): array
+    {
+        $r = DB::select("SELECT bairro, COUNT(*) AS ativos, SUM(em_revisao = 0) AS publicados,
+                                MAX(updated_at) AS alterado_em
+                           FROM lotes WHERE situacao = 'ativo' AND bairro IS NOT NULL GROUP BY bairro");
+
+        return collect($r)->keyBy('bairro')->all();
+    }
+
+    /**
+     * Confere um contorno antes de gravar: válido, multipolígono em 4326, e
+     * quantos lotes ativos do bairro ele NÃO toca.
+     *
+     * @return array{valido:bool, tipo:string, area_m2:float, fora:int, total:int}
+     */
+    public function conferirContorno(string $bairro, string $geojson): array
+    {
+        $g = DB::selectOne('SELECT ST_IsValid(g) AS valido, ST_GeometryType(g) AS tipo, ST_Area(g) AS area
+                              FROM (SELECT ST_GeomFromGeoJSON(?, 1, 4326) g) t', [$geojson]);
+        $c = DB::selectOne('SELECT COUNT(*) AS total,
+                                   SUM(NOT ST_Intersects(geom, ST_GeomFromGeoJSON(?, 1, 4326))) AS fora
+                              FROM lotes WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$geojson, $bairro]);
+
+        return [
+            'valido'  => (bool) $g->valido,
+            'tipo'    => (string) $g->tipo,
+            'area_m2' => (float) $g->area,
+            'fora'    => (int) $c->fora,
+            'total'   => (int) $c->total,
+        ];
+    }
+
+    /**
+     * Grava (ou substitui) o contorno de um bairro.
+     *
+     * A hora vem da APLICAÇÃO, e não do NOW() do MySQL: é com o `updated_at`
+     * dos lotes — escrito pela aplicação — que ela é comparada para dizer se o
+     * contorno ficou desatualizado, e os dois relógios podem estar em fusos
+     * diferentes.
+     */
+    public function gravarContorno(string $bairro, ?string $codigo, string $geojson, float $raio, int $lotes, array $isolados, ?int $usuario): void
+    {
+        $agora = now()->toDateTimeString();
+        DB::statement('INSERT INTO bairros (nome, codigo, geom, raio_m, lotes_contados, contorno_em, gerado_por, isolados, created_at, updated_at)
+                       VALUES (?, ?, ST_GeomFromGeoJSON(?, 1, 4326), ?, ?, ?, ?, ?, ?, ?)
+                       ON DUPLICATE KEY UPDATE codigo = VALUES(codigo), geom = VALUES(geom), raio_m = VALUES(raio_m),
+                              lotes_contados = VALUES(lotes_contados), contorno_em = VALUES(contorno_em),
+                              gerado_por = VALUES(gerado_por), isolados = VALUES(isolados), updated_at = VALUES(updated_at)',
+            [$bairro, $codigo, $geojson, $raio, $lotes, $agora, $usuario, json_encode($isolados), $agora, $agora]);
+    }
+
     public function criarComGeometria(array $atributos, string $geojson): int
     {
         $colunas = array_keys($atributos);

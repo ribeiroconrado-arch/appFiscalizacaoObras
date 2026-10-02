@@ -46,7 +46,7 @@ class Lote extends Model
      */
     protected function casts(): array
     {
-        return ['inativado_em' => 'datetime', 'area_gis_m2' => 'float'];
+        return ['inativado_em' => 'datetime', 'area_gis_m2' => 'float', 'em_revisao' => 'boolean'];
     }
 
     /**
@@ -60,7 +60,7 @@ class Lote extends Model
     public const COLUNAS = [
         'id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'chave',
         'inscricao_imobiliaria', 'area_gis_m2', 'fonte', 'origem',
-        'situacao', 'inativado_em',
+        'situacao', 'inativado_em', 'importacao_id', 'em_revisao',
         'created_at', 'updated_at',
     ];
 
@@ -94,6 +94,20 @@ class Lote extends Model
     public function scopeAtivos(Builder $q): Builder
     {
         return $q->where('lotes.situacao', 'ativo');
+    }
+
+    /**
+     * Imóveis que existem hoje E já foram liberados a todos.
+     *
+     * Lote de importação em revisão é ativo — o curador corrige quadra, desenha
+     * e unifica sobre ele como sobre qualquer outro —, mas ainda não é um
+     * imóvel do município para a busca, o painel e o GPS. É ESTE o filtro das
+     * leituras de quem não está revisando; `ativos()` continua sendo o das
+     * ferramentas de curadoria, que precisam enxergar o bairro em revisão.
+     */
+    public function scopePublicados(Builder $q): Builder
+    {
+        return $q->where('lotes.situacao', 'ativo')->where('lotes.em_revisao', false);
     }
 
     /** Imóveis que deixaram de existir por desmembramento ou unificação. */
@@ -143,6 +157,22 @@ class Lote extends Model
         }
 
         return $this->acaoAuditoriaPadrao($novos);
+    }
+
+    /**
+     * PRÉ-CURADORIA: o que se faz num lote de importação em revisão não entra
+     * no Histórico do cadastro, que lê só `tabela = 'lotes'`. Entra sob outro
+     * nome e amarrado à importação — é a ficha dela que mostra esses ajustes.
+     * Ver a migração 2026_09_28_000100_pre_curadoria.
+     */
+    protected function tabelaDaAuditoria(): string
+    {
+        return $this->em_revisao ? 'lotes_em_revisao' : 'lotes';
+    }
+
+    protected function importacaoDaAuditoria(): ?int
+    {
+        return $this->em_revisao ? $this->importacao_id : null;
     }
 
     /** Rótulo curto usado em listas e títulos de modal. */
