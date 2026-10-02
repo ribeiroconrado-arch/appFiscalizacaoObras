@@ -110,6 +110,41 @@ A conversão DWG → GeoJSON continua fora do sistema, como planejado.
 Parâmetros → Cadastro municipal. Grava só a diferença, guarda o histórico
 campo a campo e apaga o arquivo ao fim. Ver ARQUITETURA.md, "Cadastro municipal".
 
+### 🟢 Cadastro tratado fora do sistema (app desktop → JSON de diferenças) — ideia registrada, adiada
+
+Decisão de rumo, ainda sem data. A planilha do município deixa de entrar no
+sistema: um **app desktop**, na prefeitura, lê o Excel e gera um **JSON só com
+as diferenças em relação à importação anterior**. Esse JSON é **anexado dentro
+da aplicação** (não há envio automático do app para o servidor), e a
+integração parte dele.
+
+Motivos (todos de segurança):
+- a planilha bruta, com todas as colunas, não passa mais pelo servidor;
+- CPF/CNPJ e colunas sem uso podem ser descartados antes, no próprio PC;
+- o que entra é pequeno e verificável, não um arquivo de 12 MB;
+- reduz o efeito de alguém anexar uma planilha errada ou adulterada.
+
+A decidir quando for feito:
+- **"Importação anterior" sem cópia da base no PC.** Guardar a planilha
+  anterior no computador cria uma segunda cópia com dados pessoais e pode
+  dessincronizar do servidor (JSON perdido, aplicado duas vezes ou fora de
+  ordem). Alternativa: o sistema exporta um arquivo só com `inscrição → hash`
+  (sem dado pessoal; o hash já existe em `cadastro_externo_imoveis.hash`),
+  o app compara o Excel contra ele e gera o JSON.
+- **Mesma regra de normalização dos dois lados**, senão o hash não bate. De
+  preferência o app normaliza e calcula, e o servidor grava o hash recebido.
+- **Conferência do JSON ao anexar:** versão do formato, a qual carga anterior
+  ele se refere (recusar fora de ordem ou repetido) e, se possível, assinatura
+  do app.
+- **Onde fica o CPF/CNPJ**: hoje é mostrado a agentes e administradores e
+  usado na lavratura.
+- O servidor reaproveita `CargaDoCadastro` (diferença, ausência por bairro,
+  trava de 20%, histórico), trocando só a leitura do Excel pela do JSON. O JSON
+  precisa trazer a lista de inscrições presentes para marcar as ausentes.
+- Linguagem e distribuição do app.
+
+Até lá vale o envio do `.xlsx` por Parâmetros → Cadastro municipal.
+
 ### 🟢 Rodar as conferências pela tela
 
 `gis:conferir` e `inscricao:conferir` produzem informação de curadoria que hoje
