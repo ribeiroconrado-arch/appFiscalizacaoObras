@@ -938,21 +938,54 @@ function abrirBalao(feicao, camada) {
   // balão IDENTIFICA o imóvel — é dele que se abre a ficha e se lavra peça —,
   // e a inscrição logo abaixo é oficial. Os dois têm de concordar. O nome do
   // desenho fica para o rótulo escrito sobre o mapa.
+  // MODELO D4: cabeçalho verde com quadra e lote; tabela de rótulo e valor;
+  // três atalhos quadrados; "Abrir ficha". Frente × fundos só quando o lote
+  // tem as medidas (os vindos do DWG não têm); Vistoria só para quem registra.
+  const m = n => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+  const medidas = p.frente_m && p.fundos_m ? `${m(p.frente_m)} × ${m(p.fundos_m)} m` : null
+  const ico = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`
+  const atalhos = [
+    `<button type="button" class="balao-q" onclick="sinalizarDoBalao()">${ico('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>')}Sinalizar</button>`,
+    `<button type="button" class="balao-q" onclick="historicoDoBalao()">${ico('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4M12 8v4l3 2"/>')}Histórico</button>`,
+    window.PODE_EDITAR
+      ? `<button type="button" class="balao-q" onclick="vistoriaDoBalao()">${ico('<path d="M4 20h4L19 9l-4-4L4 16v4z"/>')}Vistoria</button>` : '',
+  ].filter(Boolean)
+
   const html = `
-    <div class="balao">
-      <div class="balao-tit">Quadra ${esc(p.quadra ?? '—')} · Lote ${esc(p.numero_lote ?? '—')}</div>
-      <div class="balao-sub">${esc(bairroDe(p))}</div>
-      <span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span>
-      ${p.em_revisao ? `<div class="balao-revisao">Em revisão · importação nº ${esc(p.importacao_id)}
-         <a href="#" onclick="event.preventDefault(); abrirImportacao(${Number(p.importacao_id)})">abrir</a></div>` : ''}
-      ${p.inscricao ? `<div class="balao-chip">${esc(p.inscricao)}</div>` : ''}
-      <div class="balao-area">${area}</div>
-      <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Ver ficha completa</button>
+    <div class="balao4">
+      <div class="balao4-cab"><b>Q ${esc(p.quadra ?? '—')} · Lote ${esc(p.numero_lote ?? '—')}</b></div>
+      <div class="balao4-corpo">
+        ${p.em_revisao ? `<div class="balao-revisao">Em revisão · importação nº ${esc(p.importacao_id)}
+           <a href="#" onclick="event.preventDefault(); abrirImportacao(${Number(p.importacao_id)})">abrir</a></div>` : ''}
+        <table class="balao4-tab">
+          <tr><td>Bairro</td><td>${esc(bairroDe(p))}</td></tr>
+          <tr><td>Inscrição</td><td class="balao4-mono">${esc(p.inscricao || '—')}</td></tr>
+          <tr><td>Área GIS</td><td><b>${area}</b></td></tr>
+          ${medidas ? `<tr><td>Frente × fundos</td><td>${medidas}</td></tr>` : ''}
+          <tr><td>Origem</td><td><span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span></td></tr>
+        </table>
+        <div class="balao4-acoes" style="grid-template-columns:repeat(${atalhos.length},1fr)">${atalhos.join('')}</div>
+        <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Abrir ficha</button>
+      </div>
     </div>`
 
   camada.bindPopup(html, {
-    className: 'popup-lote', closeButton: true, maxWidth: 260, autoPan: true,
+    className: 'popup-lote', closeButton: true, maxWidth: 300, minWidth: 270, autoPan: true,
   }).openPopup()
+}
+
+/** Atalhos do balão: o lote já está em `state.selecionado`. */
+function sinalizarDoBalao() {
+  mapaState.obj?.closePopup()
+  if (state.selecionado && typeof abrirSinalizar === 'function') abrirSinalizar(state.selecionado.properties)
+}
+function historicoDoBalao() {
+  abrirFichaDoBalao()
+  if (typeof subFicha === 'function') subFicha('historico')
+}
+function vistoriaDoBalao() {
+  mapaState.obj?.closePopup()
+  if (typeof novaVistoria === 'function') novaVistoria()
 }
 
 /** Ponte do balão para a ficha: o lote já está em `state.selecionado`. */

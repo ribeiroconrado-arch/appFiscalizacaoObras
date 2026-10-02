@@ -34,6 +34,9 @@
 <link rel="stylesheet" href="@assetv('css/tema-azul.css')">
 <link rel="stylesheet" href="@assetv('css/painel-responsivo.css')">
 <link rel="stylesheet" href="@assetv('css/prancheta-cadastral.css')">
+{{-- Por último entre as de lista: o padrão de tabela vale por cima dos temas. --}}
+<link rel="stylesheet" href="@assetv('css/tabelas.css')">
+<link rel="stylesheet" href="@assetv('css/sinalizacoes.css')">
 {{-- Sem defer: precisa rodar antes do primeiro pintar (ver js/tema.js). --}}
 <script src="@assetv('js/tema.js')"></script>
 </head>
@@ -156,6 +159,12 @@
     </div>
 
     <div class="painel-lateral">
+    {{-- PARA HOJE — sinalizações em aberto e lembretes de revistoria que
+         venceram. Montado por sinalizacoes.js; some quando não há nada. --}}
+    <div class="bloco" id="pn-hoje-bloco" hidden>
+      <div class="sec-simples">Para hoje <span class="cont" id="pn-hoje-n">0</span></div>
+      <div id="pn-hoje"></div>
+    </div>
     <div class="bloco painel-feed">
       <div class="sec-simples">Atividade recente</div>
       {{-- Alimentada pela tabela de auditoria — a mesma trilha que responde
@@ -946,7 +955,7 @@
         </select></div>
       </div>
       <div class="linha-filtro">
-        <div class="lista-campo"><label for="dm-busca">Busca</label><input type="text" id="dm-busca" placeholder="Buscar nº, requerente, objeto ou imóvel…"
+        <div class="lista-campo lista-campo-busca"><label for="dm-busca">Busca</label><input type="text" id="dm-busca" placeholder="Buscar nº, requerente, objeto ou imóvel…"
                oninput="filtrarDemandas('busca', this.value)"></div>
         {{-- Agrupada por tipo: "Deferido" e "Concluída" não são alternativas
              da mesma pergunta. --}}
@@ -1364,6 +1373,8 @@
 
     {{-- DADOS --}}
     <div class="fi-painel at" id="fi-dados">
+      {{-- Sinalizações pendentes do lote (sinalizacoes.js). Âmbar: é aviso. --}}
+      <div id="fi-sinal-aviso" hidden></div>
       {{-- O que muda o que o fiscal faz HOJE: em que pé está o imóvel, quantas
            vistorias já teve e quando foi a última. Tudo derivado do que está
            registrado — ver resumoDoImovel() em VistoriaController. --}}
@@ -1429,6 +1440,13 @@
 
     <div class="btn-row">
       <button class="btn" onclick="fModalBtn('m-ficha')">Fechar</button>
+      {{-- Sinalizar: o aviso rápido sobre o imóvel (sinalizacoes.js). Para
+           todos, inclusive quem é de fora. --}}
+      <button class="btn" style="margin-left:auto" onclick="sinalizarDaFicha()">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>
+        Sinalizar
+      </button>
       @if (auth()->user()->canEdit())
         {{-- As mesmas peças do botão da tela de Documentos, e não só vistoria:
              estando na ficha, o fiscal já sabe sobre qual imóvel vai lavrar —
@@ -1781,6 +1799,9 @@
       <div class="leg">Confira antes de gravar. A vistoria é ato: depois de
         gravada, ela fundamenta notificação, auto e embargo.</div>
       <div id="nv-revisao"></div>
+      {{-- Sinalizações do lote que esta vistoria atende, e o lembrete de
+           voltar (sinalizacoes.js). --}}
+      <div id="nv-sinal"></div>
     </div>
 
     </div>{{-- /vs-corpo --}}
@@ -3579,6 +3600,9 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 {{-- Depois dos dois: a fila lê as duas fontes e abre a ficha de cada uma. --}}
 <script src="@assetv('js/demandas.js')"></script>
 <script src="@assetv('js/perfil.js')"></script>
+{{-- Sinalização e lembrete de revistoria: bandeiras no mapa, aviso na ficha,
+     "Para hoje" no Painel. Depois de camadas-mapa.js (registra a camada). --}}
+<script src="@assetv('js/sinalizacoes.js')"></script>
 @if (auth()->user()->podeCurarCadastro())
   <script src="@assetv('js/importacoes.js')"></script>
   {{-- Depois de importacoes.js: usa a área de soltar a planilha de lá. --}}

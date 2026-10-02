@@ -339,11 +339,46 @@ class VistoriaController extends Controller
             $vistorias = collect();
         }
 
+        // SINALIZAÇÕES — abertas e resolvidas: é aqui que ficam registradas
+        // depois de sair do mapa e do Painel. Entram DEPOIS da redação acima
+        // porque não são conteúdo da fiscalização: quem é de fora vê as dele
+        // por inteiro (e só as dele — scopeVisiveisPara). O lembrete ainda
+        // não vencido não entra: ele não aconteceu.
+        $pendentes = [];
+        $sins = \App\Models\Sinalizacao::where('lote_id', $lote->id)
+            ->visiveisPara(auth()->user())
+            ->where(fn ($q) => $q->whereNull('lembrar_em')->orWhere('lembrar_em', '<=', now()->toDateString())
+                ->orWhere('status', 'resolvida'))
+            ->with(['autor:id,name', 'resolvedor:id,name'])->get();
+        foreach ($sins as $s) {
+            $aberta = $s->status === 'aberta';
+            $eventos[] = [
+                'tipo'     => 'sinalizacao',
+                'quando'   => ($s->lembrar_em && $s->tipo === 'lembrete' ? $s->lembrar_em : $s->created_at)?->format('d/m/Y H:i'),
+                'titulo'   => ($s->tipo === 'lembrete' ? 'Lembrete' : 'Sinalização · ' . $s->rotulo()),
+                'detalhe'  => 'Aberta em ' . $s->created_at?->format('d/m/Y') . ' por ' . ($s->autor?->name ?? '—')
+                    . ($aberta ? '' : ' · resolvida por ' . ($s->resolvedor?->name ?? '—') . ': ' . $s->resolucao),
+                'badge'    => $aberta ? ['texto' => 'Pendente', 'classe' => 'bd-pe']
+                    : ['texto' => 'Resolvida ' . $s->resolvida_em?->format('d/m'), 'classe' => 'bd-ok'],
+                'itens'    => [],
+                'obs'      => $s->comentario,
+            ];
+            if ($aberta) {
+                $pendentes[] = ['id' => $s->id, 'rotulo' => $s->rotulo(), 'comentario' => $s->comentario,
+                    'autor' => $s->autor?->name, 'criada_em' => $s->created_at?->format('d/m/Y')];
+            }
+        }
+        usort($eventos, fn ($a, $b) => strcmp(
+            $this->chaveOrdem($b['quando']), $this->chaveOrdem($a['quando'])
+        ));
+
         return response()->json([
             'lote'      => $lote->only(['id', 'bairro', 'quadra', 'numero_lote', 'chave']),
             'vistorias' => $vistorias,
             'eventos'   => $eventos,
             'resumo'    => $this->resumoDoImovel($lote),
+            // Para o aviso âmbar da ficha.
+            'sinalizacoes_pendentes' => $pendentes,
         ]);
     }
 
@@ -600,6 +635,15 @@ class VistoriaController extends Controller
             // E o vinculo que, mais tarde, libera o ato cadastral — ver
             // App\Services\SucessaoDeLotes::atoDaVistoria().
             'protocolo_id'       => ['nullable', 'integer', 'exists:protocolos,id'],
+            // SINALIZAÇÕES: as pendências do lote que esta vistoria atende (o
+            // formulário as traz marcadas) e o lembrete de voltar. O sinal
+            // `sinalizacoes_enviadas` distingue "desmarcou todas" de "o
+            // formulário não mandou a lista" — ver SinalizacaoController.
+            'sinalizacoes_enviadas'   => ['nullable', 'boolean'],
+            'resolver_sinalizacoes'   => ['array'],
+            'resolver_sinalizacoes.*' => ['integer'],
+            'lembrar_em'              => ['nullable', 'date', 'after:today'],
+            'lembrete_motivo'         => ['nullable', 'string', 'max:300'],
         ], [
             'data_hora.date_format' => 'Informe data e hora da vistoria.',
             'evidencias.*.max'      => 'Cada arquivo deve ter no máximo 12 MB.',
@@ -825,6 +869,16 @@ class VistoriaController extends Controller
                     'criado_por'    => $u->id,
                 ]);
             }
+
+            // A vistoria ATENDE as sinalizações do lote, e pode deixar o
+            // lembrete de voltar. Na mesma transação: vistoria gravada com a
+            // pendência ainda aberta seria a bandeira que não sai do mapa.
+            SinalizacaoController::aoRegistrarVistoria(
+                $v,
+                ! empty($d['sinalizacoes_enviadas']) ? ($d['resolver_sinalizacoes'] ?? []) : null,
+                $d['lembrar_em'] ?? null,
+                $d['lembrete_motivo'] ?? null,
+            );
 
             return $v;
         });

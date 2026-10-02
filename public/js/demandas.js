@@ -121,16 +121,14 @@ function seloDeTipo(d) {
 function tabelaDemandas() {
   const linhas = dmState.lista.map(d => `
     <tr class="${d.alerta ? 'st-alta' : ''}" onclick="abrirDemanda('${esc(d.tipo)}', ${d.id})">
+      <td><span class="tl-cod">${esc(d.numero)}</span></td>
       <td>${seloDeTipo(d)}</td>
-      <td>
-        <div class="tl-num"><span class="proto-badge">${esc(d.numero)}</span></div>
-        <span class="tl-sub">${esc(d.assunto ?? '')}</span>
-      </td>
-      <td class="tl-fraco">${esc(d.quem ?? '—')}</td>
-      <td class="tl-fraco">${esc(d.imovel ?? 'Não vinculado a lote')}</td>
-      <td class="tl-fraco">${d.responsavel
+      <td title="${esc(d.assunto ?? '')}">${esc(d.assunto ?? '—')}</td>
+      <td title="${esc(d.imovel ?? '')}">${esc(d.imovel ?? 'Sem lote')}</td>
+      <td class="tl-cinza" title="${esc(d.quem ?? '')}">${esc(d.quem ?? '—')}</td>
+      <td class="tl-cinza">${d.responsavel
         ? esc(d.responsavel) : '<span class="tl-falta">não distribuído</span>'}</td>
-      <td class="tl-fraco">${esc(d.data ?? '—')}</td>
+      <td>${esc((d.data ?? '—').slice(0, 5))}</td>
       <td>
         <div class="tl-tags">
           <span class="badge ${esc(d.situacao.classe)}">${esc(d.situacao.texto)}</span>
@@ -147,11 +145,12 @@ function tabelaDemandas() {
   return `<div class="tabela-wrap">
       <table class="tabela-lista tl-dem">
         <thead><tr>
-          <th>Tipo</th><th>Número</th><th>Quem</th><th>Imóvel</th>
+          <th>Nº</th><th>Tipo</th><th>Assunto</th><th>Imóvel</th><th>Quem</th>
           <th>Responsável</th><th>Data</th><th>Situação</th><th class="tl-acao"></th>
         </tr></thead>
         <tbody>${linhas}</tbody>
       </table>
+      <div class="tl-rodape"><span>Mostrando ${dmState.lista.length} demanda(s)</span></div>
     </div>`
 }
 

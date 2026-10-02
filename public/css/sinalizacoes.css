@@ -1,0 +1,73 @@
+/* ══════ BALÃO DO MAPA (modelo D4) E SINALIZAÇÃO ══════
+   Cores pelos tokens do tema: o cabeçalho acompanha o institucional (verde),
+   o azul ou o âmbar. Âmbar fixo só no AVISO de pendência — é sinal, não marca. */
+
+/* ── O balão ── */
+.balao4{width:280px;font-family:'Inter',sans-serif;font-size:12px;color:var(--tx);overflow:hidden;border-radius:var(--rl,10px)}
+.balao4-cab{background:var(--gd);color:#fff;padding:10px 34px 10px 12px;display:flex;align-items:center;gap:7px}
+.balao4-cab b{font-size:14px;font-weight:700}
+.balao4-cab svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.balao4-cab.sinal{background:#9A3412}
+.balao4-cab.lembrete{background:#1D4ED8}
+.balao4-corpo{padding:9px 12px 12px}
+.balao4-tab{width:100%;border-collapse:collapse;margin-bottom:10px}
+.balao4-tab td{padding:4px 0;vertical-align:top}
+.balao4-tab td:first-child{color:var(--tx3);white-space:nowrap;padding-right:10px}
+.balao4-tab td:last-child{text-align:right}
+.balao4-tab tr+tr td{border-top:1px solid var(--blt)}
+.balao4-mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px}
+.balao4-quebra{white-space:normal}
+.balao4-acoes{display:grid;gap:6px;margin-bottom:8px}
+.balao-q{border:1px solid var(--bord);border-radius:8px;background:var(--sur);color:var(--gd);
+  font:inherit;font-size:11px;padding:6px 0 5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.balao-q svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.balao-q:hover{background:var(--gl);border-color:var(--gm)}
+.balao4 .balao-btn{width:100%;justify-content:center;margin:0}
+/* O X do Leaflet sobre o cabeçalho colorido. */
+.popup-lote:has(.balao4) .leaflet-popup-close-button{color:#fff!important;top:6px!important;right:6px!important}
+.popup-lote:has(.balao4) .leaflet-popup-content{margin:0}
+
+/* ── A bandeira no mapa ── */
+.sin-pino{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+  background:#9A3412;box-shadow:0 2px 6px rgba(0,0,0,.35);display:grid;place-items:center;border:2px solid #fff}
+.sin-pino.lembrete{background:#1D4ED8}
+.sin-pino .sin-ico{transform:rotate(45deg);width:13px;height:13px;stroke:#fff;stroke-width:2.2}
+#map.cam-sem-sinalizacoes .leaflet-sinalizacoes-pane{display:none}
+
+/* ── Ícones de linha ── */
+.sin-ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ── O formulário "O que você viu?" ── */
+.sin-modal{max-width:440px}
+.sin-modal h3 .sin-ico{color:var(--gd)}
+.sin-sub{font-size:11px;font-weight:600;color:var(--tx3);margin:4px 0 6px;text-transform:uppercase;letter-spacing:.03em}
+.sin-grade{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:10px}
+.sin-op{position:relative;border:1.5px solid var(--bord);border-radius:9px;background:var(--sur);padding:9px 3px 7px;
+  display:flex;flex-direction:column;align-items:center;gap:4px;font:inherit;font-size:11px;color:var(--tx2);cursor:pointer;text-align:center}
+.sin-op .sin-ico{width:22px;height:22px;color:var(--gd)}
+.sin-op:hover{border-color:var(--gm)}
+.sin-op.on{border-color:var(--gd);background:var(--gl);color:var(--tx);font-weight:600}
+.sin-ja-marca{position:absolute;top:2px;right:6px;color:#B45309;font-style:normal;font-size:18px;line-height:1}
+.sin-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.sin-chip{border:1px solid var(--f-bord,#ccc);border-radius:20px;padding:4px 11px;background:var(--sur);font:inherit;font-size:12px;cursor:pointer}
+.sin-chip.on{background:var(--gl);border-color:var(--gd);color:var(--gd);font-weight:600}
+.sin-data{border:1px solid var(--f-bord,#ccc);border-radius:20px;padding:3px 9px;font:inherit;font-size:12px}
+
+/* ── O aviso (âmbar): na ficha e no "já sinalizado" ── */
+.sin-aviso{display:flex;gap:8px;align-items:flex-start;background:#FFF8E6;border:1px solid #F1D597;
+  border-radius:8px;padding:8px 10px;color:#8A5A00;font-size:12px;margin-bottom:10px}
+.sin-aviso .sin-ico{width:16px;height:16px;margin-top:1px}
+
+/* ── O "Para hoje" do Painel ── */
+.sin-linha{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid var(--blt)}
+.sin-linha:first-child{border-top:0}
+.sin-linha-ico{color:#9A3412}.sin-linha-ico.lembrete{color:#1D4ED8}
+.sin-linha-txt{flex:1;min-width:0;cursor:pointer;font-size:12.5px}
+.sin-linha-sub{color:var(--tx3);font-size:11px}
+.sin-linha-ok{border:1px solid var(--bord);border-radius:7px;background:var(--sur);color:var(--gd);width:30px;height:30px;
+  display:grid;place-items:center;cursor:pointer}
+.sin-resolver{display:flex;gap:6px;width:100%}
+.sin-resolver input{flex:1;min-width:0;border:1px solid var(--f-bord,#ccc);border-radius:6px;padding:5px 8px;font:inherit;font-size:12px}
+
+/* ── Na vistoria ── */
+.sin-check{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12.5px}

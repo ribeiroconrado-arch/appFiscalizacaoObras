@@ -155,29 +155,23 @@ function renderDocumentos() {
  */
 function tabelaDocumentos() {
   const linhas = dState.lista.map(d => {
-    const fund = fundamentacaoDe(d)
-
-    // SEM ÍCONE NA TABELA, a pedido. Ele faz falta no cartão, onde cada item é
-    // um bloco solto e o desenho é o que diz de que peça se trata antes de ler.
-    // Numa tabela a coluna já diz isso, e o ícone repetido vinte vezes na
-    // margem só some com o espaço do número.
+    // PADRÃO M1 (ver css/tabelas.css): uma coluna por informação, nada
+    // empilhado. A fundamentação saiu da tabela — repetia "sem artigo citado"
+    // em quase toda linha — e continua na ficha da peça e no cartão do celular.
+    // O título do Tipo traz a lei e os artigos, para quem passar o mouse.
+    // Na vistoria o rótulo é a FINALIDADE ("Fiscalização de obras"): na
+    // coluna Tipo vai "Vistoria", e a finalidade fica na dica.
+    const tipo = d.registro === 'vistoria' ? 'Vistoria' : d.tipo_rotulo
+    const dica = d.lei && d.lei !== '—' ? `${d.lei} · ${d.artigos} artigo(s)` : d.tipo_rotulo
     return `
       <tr class="st-${esc(d.status.valor ?? '')}" onclick="${esc(aberturaDe(d))}">
-        <td>
-          <span class="tl-num">${d.numero
-            ? `<span class="proto-badge">${esc(d.numero)}</span>`
-            : `<span class="tl-forte">Vistoria</span>`}</span>
-          <span class="tl-sub">${esc(d.tipo_rotulo)}</span>
-        </td>
-        <td class="tl-forte" title="${esc(d.autuado)}">${esc(d.autuado)}</td>
-        <td class="tl-fraco" title="${esc(d.imovel)}">${esc(d.imovel)}</td>
-        <td class="tl-fraco">
-          ${fund}
-          ${d.lei && d.lei !== '—'
-            ? `<span class="tl-sub">${esc(d.lei)}</span>`
-            : (d.registro === 'vistoria' ? '' : '<span class="tl-sub">sem legislação</span>')}
-        </td>
-        <td class="tl-fraco">${esc(d.data)}</td>
+        <td><span class="tl-cod">${esc(d.numero || '—')}</span></td>
+        <td title="${esc(dica)}">${esc(tipo)}</td>
+        <td>${esc(d.lote_curto ?? d.imovel)}</td>
+        <td class="tl-cinza" title="${esc(d.bairro ?? '')}">${esc(d.bairro ?? '—')}</td>
+        <td title="${esc(d.autuado)}">${esc(d.autuado)}</td>
+        <td class="tl-cinza" title="${esc(d.agente ?? '')}">${esc(d.agente ?? '—')}</td>
+        <td>${esc((d.data || '').slice(0, 5))}</td>
         <td>
           <span class="tl-tags">
             <span class="badge ${esc(d.status.classe)}">${esc(d.status.texto)}</span>
@@ -195,11 +189,12 @@ function tabelaDocumentos() {
     <div class="tabela-wrap">
       <table class="tabela-lista tl-doc">
         <thead><tr>
-          <th>Documento</th><th>Autuado</th><th>Imóvel</th>
-          <th>Fundamentação</th><th>Data</th><th>Situação</th><th class="tl-acao"></th>
+          <th>Nº</th><th>Tipo</th><th>Imóvel</th><th>Bairro</th><th>Autuado</th>
+          <th>Agente</th><th>Data</th><th>Situação</th><th class="tl-acao"></th>
         </tr></thead>
         <tbody>${linhas}</tbody>
       </table>
+      <div class="tl-rodape"><span>Mostrando ${dState.lista.length} documento(s)</span></div>
     </div>`
 }
 

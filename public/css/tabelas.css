@@ -1,0 +1,155 @@
+/* ══════ TABELAS — o padrão "M1" ══════
+   Uma linha por registro, colunas alinhadas, cor só nos selos de situação.
+
+   Só em tela LARGA (≥ 1000px, o mesmo corte de `ehTelaLarga` em ui.js): no
+   celular as listas continuam em cartão, que é o que cabe na mão. Este arquivo
+   vem depois dos temas e só mexe na ROUPA — a marcação de cada lista continua
+   sendo dela (documentos.js, demandas.js, busca.js, importacoes.js...).
+
+   Vale para todas as tabelas de dados do sistema, pelos seletores abaixo. Uma
+   tabela nova entra no padrão ganhando a classe `tabela-lista` (lista
+   principal) ou `tabela-m1` (tabela secundária, dentro de janela ou painel). */
+
+@media (min-width: 1000px){
+
+  /* ── O CONTÊINER ── */
+  .tabela-wrap,
+  .bs-tabela-rolagem,
+  .imp-tabela-rolagem{
+    background:var(--sur);border:1px solid var(--bord);border-radius:8px;
+    overflow:hidden;overflow-x:auto;box-shadow:none}
+
+  /* ── A TABELA ── */
+  .tabela-lista,
+  .bs-tabela,
+  .imp-tabela,
+  .tabela-m1,
+  .pesq-tabela,
+  .bci-tab,
+  .conf-tabela{
+    width:100%;border-collapse:collapse;font-family:'Inter',sans-serif;
+    font-size:12.5px;color:var(--tx)}
+
+  /* Cabeçalho discreto: rótulo, não título. Sem caixa alta — "Nº, Tipo,
+     Imóvel" se lê mais rápido que "Nº, TIPO, IMÓVEL". */
+  .tabela-lista thead th,
+  .bs-tabela th,
+  .imp-tabela th,
+  .tabela-m1 th,
+  .bci-tab th,
+  .conf-tabela th{
+    background:#FAFAFA;color:var(--tx3);font-size:11px;font-weight:600;
+    letter-spacing:.01em;text-transform:none;text-align:left;
+    padding:8px 10px;border-bottom:1px solid var(--bord);white-space:nowrap}
+
+  .tabela-lista tbody td,
+  .bs-tabela td,
+  .imp-tabela td,
+  .tabela-m1 td,
+  .pesq-tabela td,
+  .bci-tab td,
+  .conf-tabela td{
+    padding:7px 10px;border-bottom:1px solid #F0F0F0;vertical-align:middle;
+    color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* Zebra leve: com doze linhas iguais, é ela que leva o olho até a coluna certa. */
+  .tabela-lista tbody tr:nth-child(even) td,
+  .bs-tabela tbody tr:nth-child(even) td,
+  .imp-tabela tbody tr:nth-child(even) td,
+  .tabela-m1 tbody tr:nth-child(even) td,
+  .conf-tabela tbody tr:nth-child(even) td{background:#FCFCFC}
+
+  .tabela-lista tbody tr:hover td,
+  .bs-tabela tbody tr:hover td,
+  .imp-tabela tbody tr[onclick]:hover td,
+  .tabela-m1 tbody tr[onclick]:hover td,
+  .pesq-tabela tbody tr:hover td{background:var(--gl)}
+
+  .tabela-lista tbody tr:last-child td,
+  .bs-tabela tbody tr:last-child td,
+  .imp-tabela tbody tr:last-child td,
+  .tabela-m1 tbody tr:last-child td{border-bottom:0}
+
+  /* Sem a barra lateral de status: no M1 a situação tem coluna própria. */
+  .tabela-lista tbody td:first-child{border-left:0}
+
+  /* ── O CONTEÚDO DAS CÉLULAS ── */
+  /* Número do documento em fonte de código, sem caixinha. */
+  .tabela-lista .proto-badge,
+  .tabela-m1 .proto-badge{
+    background:none;border:0;padding:0;border-radius:0;color:var(--tx);
+    font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;font-weight:500}
+  .tl-cod{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px}
+  /* O que é apoio (bairro, agente) em cinza; o resto no preto do texto. */
+  .tl-cinza{color:var(--tx3)}
+  .tl-fraco{color:var(--tx)}
+  .tabela-lista .tl-sub{display:none}
+  .tl-forte{font-weight:500}
+
+  /* Selos retangulares e baixos, uma linha só. */
+  .tabela-lista .badge,
+  .bs-tabela .badge,
+  .imp-tabela .badge,
+  .tabela-m1 .badge{
+    border-radius:4px;padding:1px 7px;font-size:10.5px;font-weight:600;
+    background-image:none;box-shadow:none;border:0}
+  .tabela-lista .badge:before,.tabela-m1 .badge:before{display:none}
+  /* Cor SÓLIDA por situação: o selo do tema é degradê com ícone, e aqui ele
+     fica só o retângulo baixo do M1 — sem perder o código de cores. */
+  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge.bd-ok{background:#E7F6EC;color:#2E7D32}
+  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge:is(.bd-pe,.bd-al){background:#FFF6DD;color:#8A6100}
+  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge:is(.bd-er,.bd-cx){background:#FCEAE9;color:#C62828}
+  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge.bd-in{background:#F1F5F9;color:#6B7280}
+  .tl-tags{flex-direction:row;flex-wrap:nowrap;gap:4px;align-items:center}
+
+  /* O menu ⋮ ocupa só o necessário. */
+  .tabela-lista td.tl-acao,.tabela-lista th.tl-acao{width:40px;padding:2px 4px}
+  .tabela-lista .card-opcoes-btn{width:28px;height:28px}
+
+  /* ── O RODAPÉ: quantos e paginação ── */
+  .tl-rodape{display:flex;justify-content:space-between;align-items:center;
+    padding:7px 10px;background:#FAFAFA;border-top:1px solid var(--bord);
+    color:var(--tx3);font-size:11px}
+
+  /* ── LARGURA DAS COLUNAS (table-layout:fixed vem do tema) ── */
+  /* Documentos: Nº · Tipo · Imóvel · Bairro · Autuado · Agente · Data · Situação · ⋮ */
+  .tl-doc th:nth-child(1){width:12%} .tl-doc th:nth-child(2){width:11%}
+  .tl-doc th:nth-child(3){width:10%} .tl-doc th:nth-child(4){width:13%}
+  .tl-doc th:nth-child(5){width:15%} .tl-doc th:nth-child(6){width:11%}
+  .tl-doc th:nth-child(7){width:6%}  .tl-doc th:nth-child(8){width:19%}
+
+  /* Demandas: Nº · Tipo · Assunto · Imóvel · Quem · Responsável · Data · Situação · ⋮ */
+  .tl-dem th:nth-child(1){width:12%} .tl-dem th:nth-child(2){width:9%}
+  .tl-dem th:nth-child(3){width:15%} .tl-dem th:nth-child(4){width:15%}
+  .tl-dem th:nth-child(5){width:13%} .tl-dem th:nth-child(6){width:12%}
+  .tl-dem th:nth-child(7){width:7%}  .tl-dem th:nth-child(8){width:13%}
+  .tl-dem .dm-tipo{background:none;border:0;padding:0;font-weight:400;color:var(--tx);
+    text-transform:none;letter-spacing:0;font-size:12.5px}
+
+  /* ══════ CABEÇALHO E FILTROS DAS LISTAS ══════
+     Título com a contagem ao lado e o botão de novo à direita; logo abaixo,
+     UMA linha de filtro: busca larga, as listas curtas e o Buscar. Os rótulos
+     saem — cada lista já diz o que filtra no próprio texto ("Todos os status",
+     "Meus documentos"). */
+  .topo-lista{margin-bottom:10px}
+  .topo-lista .sec-simples{font-size:14px;text-transform:none;letter-spacing:0;font-weight:600}
+
+  .lista-form{
+    flex-direction:row;align-items:center;flex-wrap:nowrap;gap:8px;
+    background:none;border:0;box-shadow:none;padding:0;margin-bottom:10px}
+  .lista-form .filtro-barra,
+  .lista-form .filtros-lista,
+  .lista-form .linha-filtro,
+  .lista-form .doc-filtro-larga{display:contents}
+  .lista-form .lista-campo{flex:1 1 0;min-width:0}
+  .lista-form .lista-campo-busca{flex:2.2 1 0;order:-1}
+  .lista-form .lista-campo > label{
+    position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .lista-form .lista-campo input,
+  .lista-form .lista-campo select{height:34px;padding:6px 10px;font-size:12.5px;border-radius:6px}
+  /* Todos os filtros já estão à vista: o "mais filtros" e as etiquetas sobram. */
+  .lista-form .bs-mais,
+  .lista-form .filtro-chips{display:none}
+  .lista-form .lista-form-acoes{order:9;flex:0 0 auto;gap:6px}
+  .lista-form .lista-form-acoes .btn{height:34px;padding:0 14px}
+}

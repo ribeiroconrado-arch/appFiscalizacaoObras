@@ -113,6 +113,16 @@ class User extends Authenticatable
         return $this->ativo && ! $this->isExterno();
     }
 
+    /**
+     * Vê TODAS as sinalizações pendentes? Só quem as atende: o agente de
+     * fiscalização e o administrador. Os demais — coordenação, secretário e
+     * os de fora — veem as que eles mesmos criaram (Sinalizacao::visiveisPara).
+     */
+    public function veTodasSinalizacoes(): bool
+    {
+        return $this->ativo && ($this->isAdmin() || $this->tipo_usuario === 'agente');
+    }
+
     public function canEdit(): bool
     {
         return $this->ativo && in_array($this->perfilEfetivo(), ['admin', 'comum'], true);

@@ -192,6 +192,10 @@ class MapaController extends Controller
                 // bairro que ele não tinha como conhecer.
                 'inscricao'   => $bairros->inscricaoDe($l),
                 'area_gis_m2' => (float) $l->area_gis_m2,
+                // Medidas da matrícula, para o balão. Nulas na maioria dos lotes
+                // vindos do DWG — o balão só mostra a linha quando há as duas.
+                'frente_m'    => $l->frente_m !== null ? (float) $l->frente_m : null,
+                'fundos_m'    => $l->fundos_m !== null ? (float) $l->fundos_m : null,
                 'em_revisao'    => (bool) $l->em_revisao,
                 'importacao_id' => $l->importacao_id,
             ],

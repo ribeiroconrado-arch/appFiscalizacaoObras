@@ -160,6 +160,15 @@ Route::middleware('auth')->group(function () {
         // o conteúdo — a redação é feita em VistoriaController::historico.
         Route::get('/lotes/{lote}/historico', [VistoriaController::class, 'historico']);
 
+        // Sinalização (aviso rápido) e lembrete de revistoria. Aberta a
+        // externos: é o canal deles; cada um vê só as próprias — ver
+        // Sinalizacao::scopeVisiveisPara.
+        Route::get('/sinalizacoes', [\App\Http\Controllers\SinalizacaoController::class, 'index']);
+        Route::get('/sinalizacoes/hoje', [\App\Http\Controllers\SinalizacaoController::class, 'hoje']);
+        Route::get('/lotes/{lote}/sinalizacoes', [\App\Http\Controllers\SinalizacaoController::class, 'doLote']);
+        Route::post('/lotes/{lote}/sinalizacoes', [\App\Http\Controllers\SinalizacaoController::class, 'store']);
+        Route::post('/sinalizacoes/{sinalizacao}/resolver', [\App\Http\Controllers\SinalizacaoController::class, 'resolver']);
+
         // Importação de bairro com revisão. Quem pode o quê (curador importa e
         // confere; só administrador publica) está em ImportacaoController.
         // Conferência do BAIRRO com o cadastro — a que fica depois da

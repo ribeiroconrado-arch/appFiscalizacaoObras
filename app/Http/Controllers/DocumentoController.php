@@ -87,6 +87,11 @@ class DocumentoController extends Controller
                 // `rotuloCompleto` traz o bairro pelo NOME OFICIAL: peça e
                 // lista de peça citam o bairro como o registro o chama.
                 'imovel'      => $doc->lote?->rotuloCompleto() ?? '—',
+                // As mesmas partes, separadas: a tabela da lista tem uma coluna
+                // para o lote e outra para o bairro.
+                'lote_curto'  => $this->loteCurto($doc->lote),
+                'bairro'      => $doc->lote?->bairroOficial() ?? '—',
+                'agente'      => $doc->agente?->name ?? '—',
                 'autuado'     => $doc->autuado_nome ?: '—',
                 'lei'         => $doc->legislacao?->rotulo() ?: '—',
                 'artigos'     => $doc->artigos_count,
@@ -124,6 +129,12 @@ class DocumentoController extends Controller
      * @param  array<string, mixed> $d filtros já validados
      * @return \Illuminate\Support\Collection<int, array>
      */
+    /** "Qd 35 · Lt 1" — o lote sem o bairro, que na tabela tem coluna própria. */
+    private function loteCurto(?Lote $l): string
+    {
+        return $l ? sprintf('Qd %s · Lt %s', $l->quadra ?? '—', $l->numero_lote ?? '—') : '—';
+    }
+
     private function vistoriasNaLista(Request $request, array $d)
     {
         $tipo = $d['tipo'] ?? '';
@@ -157,6 +168,9 @@ class DocumentoController extends Controller
             ],
             'prazo'       => null,
             'imovel'      => $v->lote?->rotuloCompleto() ?? '—',
+            'lote_curto'  => $this->loteCurto($v->lote),
+            'bairro'      => $v->lote?->bairroOficial() ?? '—',
+            'agente'      => $v->fiscal?->name ?? '—',
             'autuado'     => '—',
             'lei'         => '—',
             'artigos'     => $v->artigos_count,

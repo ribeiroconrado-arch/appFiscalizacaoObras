@@ -30,6 +30,8 @@ async function carregarPainel() {
     // Os avisos vêm de outra rota (a do sino) e por isso são pedidos aqui:
     // o painel não os recalcula, só os mostra num segundo lugar.
     await carregarNotificacoes()
+    // "Para hoje": sinalizações e lembretes (sinalizacoes.js).
+    if (typeof carregarParaHoje === 'function') { carregarParaHoje() }
     pState.carregado = true
   } catch (e) {
     console.error(e)

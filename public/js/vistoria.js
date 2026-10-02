@@ -77,6 +77,7 @@ async function carregarHistorico(loteId) {
     const d = await r.json()
     renderHistorico(d.eventos ?? [])
     renderResumo(d.resumo ?? null)
+    if (typeof pintarAvisoSinalizacao === 'function') { pintarAvisoSinalizacao(d.sinalizacoes_pendentes ?? []) }
   } catch (e) {
     console.error(e)
     alvo.innerHTML = '<div class="vazio-msg">Não foi possível carregar o histórico.</div>'
@@ -168,6 +169,7 @@ const ICO_EVENTO = {
   vistoria: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/>',
   documento: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
   protocolo: '<path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/><rect x="9" y="2" width="6" height="4" rx="1"/>',
+  sinalizacao: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
 }
 
 /**
@@ -901,7 +903,10 @@ function irPasso(k) {
   if (corpo) { corpo.scrollTop = 0 }
 
   if (k === 'rel') { sugerirArtigos() }
-  if (k === 'rev') { renderRevisao() }
+  if (k === 'rev') {
+    renderRevisao()
+    if (typeof pintarSinalNaVistoria === 'function') { pintarSinalNaVistoria(vState.lote?.id) }
+  }
 }
 
 /** A barra do topo — montada, e não fixa, porque os passos variam. */
@@ -2819,6 +2824,8 @@ async function enviarVistoria() {
   // O vínculo com o protocolo é o que, mais tarde, libera o ato cadastral.
   const proto = document.getElementById('nv-protocolo')?.value
   if (proto) { fd.append('protocolo_id', proto) }
+  // Sinalizações que a vistoria atende e o lembrete de voltar (sinalizacoes.js).
+  if (typeof anexarSinalNaVistoria === 'function') { anexarSinalNaVistoria(fd) }
   // `irregularidades[]` NÃO vai mais no topo: cada uma pertence ao item onde
   // foi constatada, e o servidor deriva a lista da vistoria somando os itens.
   // Mandar as duas coisas abriria espaço para elas discordarem.
@@ -2930,6 +2937,8 @@ async function enviarVistoria() {
     // A área volta no eco do servidor: é o número que a multa vai usar, e
     // confirmá-lo aqui evita descobrir semanas depois que ele ficou de fora.
     toast(d.vistoria?.area ? 'Vistoria registrada · ' + d.vistoria.area : 'Vistoria registrada')
+    // A vistoria resolve as bandeiras do lote: o mapa precisa saber.
+    if (typeof recarregarSinalizacoes === 'function') { recarregarSinalizacoes() }
 
     // Reabre a ficha já com o histórico atualizado — o fiscal confere o que
     // acabou de gravar sem ter que procurar o lote de novo. `voltarAFicha`
