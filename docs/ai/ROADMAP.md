@@ -78,11 +78,7 @@ de `lotes`. São 2 hoje; serão dezenas.
 **Custo baixo, elimina uma classe inteira de erro.** É o melhor item de
 custo/benefício da lista.
 
-### 🟡 Unificar a colação de `lotes.bairro` e `cadastro_bairros.nome_gis`
-
-Migração `ALTER TABLE … CONVERT TO CHARACTER SET utf8mb4 COLLATE
-utf8mb4_unicode_ci`. Hoje o código contorna resolvendo nomes em PHP; a
-divergência continua esperando a próxima consulta que junte as tabelas.
+### ✅ Unificar a colação de `lotes.bairro` e `cadastro_bairros.nome_gis` — feito em 10/2026
 
 ### 🟢 Aviso quando a amarração não casa
 

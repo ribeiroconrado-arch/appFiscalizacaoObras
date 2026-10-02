@@ -403,7 +403,6 @@ class ImportacaoDeBairro
             'protocolos'     => $conta('protocolos'),
             'ordens_servico' => $conta('ordens_servico'),
             'obras'          => $conta('obras'),
-            'bci'            => $conta('bci_imoveis'),
             // Só a sucessão que SAI da importação prende: desmembrar ou
             // unificar lotes do próprio bairro em revisão é pré-curadoria, e
             // some junto com ele.

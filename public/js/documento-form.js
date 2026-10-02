@@ -262,9 +262,9 @@ function preencherFormDoc(d) {
     carimbo.hidden = !d.cadastro
     if (d.cadastro) {
       carimbo.textContent = d.cadastro.consultado_em
-        ? 'Cadastro do imóvel consultado em ' + d.cadastro.consultado_em
-          + (d.cadastro.fonte === 'exportacao' ? ', por exportação do cadastro imobiliário.' : '.')
-        : 'Lavrado sem consulta ao cadastro imobiliário.'
+        ? 'Dados do imóvel conforme o cadastro municipal integrado em ' + d.cadastro.consultado_em
+          + (d.cadastro.fonte === 'exportacao' ? ' (exportação da prefeitura).' : '.')
+        : 'Lavrado sem dado do cadastro municipal.'
     }
   }
   document.getElementById('nd-endereco').value = d.imovel.endereco || ''

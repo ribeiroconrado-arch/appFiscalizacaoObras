@@ -38,6 +38,11 @@ class CadastroCarregado implements FonteDoCadastro
         if (! $linhas) {
             return null;
         }
+        // Lote unificado no cadastro: se só parte das inscrições saiu da
+        // planilha, o retrato é o das que continuam. Todas ausentes: mostra o
+        // que se sabia — a ficha marca "fora do cadastro desde…".
+        $presentes = array_values(array_filter($linhas, fn ($l) => ($l->ausente_desde_carga_id ?? null) === null));
+        $linhas = $presentes ?: $linhas;
 
         // Várias linhas para o mesmo lote são as várias construções dele. Os
         // campos do terreno vêm da primeira: elas repetem o mesmo terreno.
@@ -83,7 +88,7 @@ class CadastroCarregado implements FonteDoCadastro
     public function porQueVazio(Lote $lote): string
     {
         if (DB::table('cadastro_externo_imoveis')->limit(1)->doesntExist()) {
-            return 'Nenhuma exportação do cadastro foi carregada ainda.';
+            return 'Nenhuma planilha do cadastro municipal foi carregada ainda (Parâmetros → Cadastro municipal).';
         }
 
         $codigo = $this->codigoDoBairro($lote);
@@ -94,7 +99,7 @@ class CadastroCarregado implements FonteDoCadastro
 
         if ($lote->quadra === null || $lote->numero_lote === null) {
             return 'Este lote está sem quadra ou sem número, e é por eles que o cadastro '
-                 . 'identifica o imóvel. Corrija o lote no mapa e consulte de novo.';
+                 . 'identifica o imóvel. Corrija o lote no mapa.';
         }
 
         return sprintf(
@@ -134,7 +139,7 @@ class CadastroCarregado implements FonteDoCadastro
     public function situacao(Lote $lote): array
     {
         $linhas = $this->linhasDoLote($lote);
-        $vazio = ['inscricoes' => array_column($linhas, 'inscricao'), 'em' => null, 'alterado_em' => null, 'ausente_desde' => null];
+        $vazio = ['inscricoes' => array_column($linhas, 'inscricao'), 'carga_id' => null, 'em' => null, 'alterado_em' => null, 'ausente_desde' => null];
         if (! $linhas) {
             return $vazio;
         }
@@ -153,6 +158,7 @@ class CadastroCarregado implements FonteDoCadastro
 
         return [
             'inscricoes'    => $vazio['inscricoes'],
+            'carga_id'      => $vista,
             'em'            => $vista ? ($datas[$vista] ?? null) : null,
             'alterado_em'   => $alterada ? ($datas[$alterada] ?? null) : null,
             'ausente_desde' => $ausente ? ($datas[$ausente] ?? null) : null,

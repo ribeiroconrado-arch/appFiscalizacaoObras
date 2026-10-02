@@ -214,7 +214,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/painel', [PainelController::class, 'index']);
         Route::get('/notificacoes', [PainelController::class, 'notificacoes']);
 
-        Route::post('/imoveis/{lote}/bci/atualizar', [CadastroImobiliarioController::class, 'atualizar']);
 
         // Fiscalização
         Route::get('/irregularidades', [VistoriaController::class, 'catalogo']);

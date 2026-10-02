@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Artigo;
-use App\Models\Bci\BciImovel;
+use App\Cadastro\FonteDoCadastro;
 use App\Models\Documento;
 use App\Models\DocumentoArtigo;
 use App\Models\Feriado;
@@ -127,13 +127,19 @@ class LavraturaService
             // pés dele. Na lavratura o conteúdo congela — mesmo momento do
             // prazo de defesa e da rubrica, pela mesma razão.
             //
-            // CÓPIA, e não referência: a linha do BCI é substituída inteira a
-            // cada integração, então apontar para ela faria o documento citar o
-            // retrato de hoje em vez do que ele usou. Nulo quando o imóvel
-            // nunca foi integrado — e nulo é informação, não ausência.
-            $bci = BciImovel::where('lote_id', $doc->lote_id)->first();
-            $doc->cadastro_consultado_em = $bci?->consultado_em;
-            $doc->cadastro_fonte         = $bci?->fonte;
+            // CÓPIA, e não referência: o cadastro municipal muda a cada carga
+            // mensal, então apontar para ele faria o documento citar o dado de
+            // hoje em vez do que ele usou. Guarda a carga (dá para refazer o
+            // caminho pelo histórico) e o retrato do terreno naquele momento.
+            // Nulo quando o imóvel não está no cadastro — e nulo é informação.
+            $fonte = app(FonteDoCadastro::class);
+            $lote = $doc->lote;
+            $situacao = $lote ? $fonte->situacao($lote) : null;
+            $retrato = $lote ? $fonte->consultar($lote) : null;
+            $doc->cadastro_consultado_em = $situacao['em'] ?? null;
+            $doc->cadastro_fonte         = ($situacao['em'] ?? null) ? $fonte->nome() : null;
+            $doc->cadastro_carga_id      = $situacao['carga_id'] ?? null;
+            $doc->cadastro_retrato       = $retrato?->imovel;
 
             $doc->save();
 

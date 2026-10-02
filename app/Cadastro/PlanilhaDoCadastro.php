@@ -66,7 +66,7 @@ class PlanilhaDoCadastro implements FonteDoCadastro
 
     public function situacao(Lote $lote): array
     {
-        return ['inscricoes' => [], 'em' => null, 'alterado_em' => null, 'ausente_desde' => null];
+        return ['inscricoes' => [], 'carga_id' => null, 'em' => null, 'alterado_em' => null, 'ausente_desde' => null];
     }
 
     /** A planilha avulsa só serve à conferência; não alimenta a ficha. */

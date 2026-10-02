@@ -288,6 +288,8 @@ try {
         public function porQueVazio(App\Models\Lote $l): string { return ''; }
         public function nome(): string { return 'exportacao'; }
         public function imoveisDoBairro(string $c): iterable { return []; }
+        public function proprietarios(App\Models\Lote $l): array { return []; }
+        public function situacao(App\Models\Lote $l): array { return ['inscricoes' => [], 'carga_id' => null, 'em' => null, 'alterado_em' => null, 'ausente_desde' => null]; }
     };
     recusa(fn () => $svcConf->conferirBairro($bairro, $fonteVazia, 'Cadastro vazio'), 'não tem nenhum imóvel',
         'fonte sem nenhum imóvel do bairro é recusada (não vira "todos não encontrados")');

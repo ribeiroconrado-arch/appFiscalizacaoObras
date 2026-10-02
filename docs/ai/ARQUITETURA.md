@@ -47,12 +47,15 @@ app/
 │   ├── FonteDoCadastro.php      (contrato)
 │   ├── CadastroCarregado.php    (implementação: exportação XLSX carregada)
 │   ├── BairrosDoDesenho.php     (nome do desenho ↔ código/nome oficial)
-│   ├── RetratoBci.php           (o que a consulta devolve)
-│   ├── SincronizaBci.php
+│   ├── RetratoBci.php           (o que a consulta devolve; regra da isenção)
+│   ├── CargaDoCadastro.php      (carga mensal: grava só a diferença)
+│   ├── DiferencaDoCadastro.php  (o que conta como mudança; hash)
+│   ├── ProprietariosVisiveis.php (quem vê o quê do proprietário)
+│   ├── ColunasDaExportacao.php  (colunas da planilha → campos)
 │   └── LeitorXlsx.php
 ├── Console/Commands/  7 comandos de manutenção da base
 ├── Http/Controllers/  16 controllers, todos finos
-├── Models/            22 modelos + Bci/ + Concerns/
+├── Models/            modelos + Concerns/
 ├── Providers/
 ├── Repositories/
 │   └── LoteRepository.php       TODA consulta espacial passa por aqui
@@ -219,6 +222,12 @@ nome, tamanho, SHA-256 (recusa a mesma planilha duas vezes), quem e quando.
 mesmo processo PHP (`dispatchAfterResponse`). Se morrer no meio,
 `php artisan cadastro:processar-cargas` ou o "Tentar de novo" retomam — e
 retomar é seguro, porque o que já foi gravado passa a contar como igual.
+
+**A ficha lê o cadastro ao vivo.** A aba BCI consulta `cadastro_externo_imoveis`
+direto (`CadastroCarregado::consultar`); não existe mais cópia por lote nem
+botão "Atualizar" (as tabelas `bci_*` saíram em 10/2026). O documento lavrado
+congela o que usou: data e fonte, a carga (`cadastro_carga_id`) e o retrato do
+terreno (`cadastro_retrato`).
 
 **Quem vê o proprietário** é decidido em `App\Cadastro\ProprietariosVisiveis`
 (ver CONTEXTO.md).

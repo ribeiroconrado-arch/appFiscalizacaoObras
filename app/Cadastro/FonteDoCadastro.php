@@ -67,7 +67,9 @@ interface FonteDoCadastro
      * não), `alterado_em` a "Últ. alteração", `ausente_desde` a carga em que
      * ele sumiu da planilha (null se está presente). Datas em ISO 8601.
      *
-     * @return array{inscricoes:list<string>, em:?string, alterado_em:?string, ausente_desde:?string}
+     * `carga_id` é a carga de `em` — é ela que o documento lavrado guarda.
+     *
+     * @return array{inscricoes:list<string>, carga_id:?int, em:?string, alterado_em:?string, ausente_desde:?string}
      */
     public function situacao(Lote $lote): array;
 }

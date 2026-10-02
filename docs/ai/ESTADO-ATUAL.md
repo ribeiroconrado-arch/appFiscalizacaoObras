@@ -65,19 +65,12 @@ legal, que é o que dá força à peça, está quase vazio.
 
 ## O que está pendente ou quebrado
 
-### 🔴 O BCI não resolve para nenhum lote existente
+### 🔴 O BCI só aparece depois da primeira carga da planilha
 
-A aba BCI da ficha continua vazia — e agora por um motivo **correto e dito**: a
-única exportação carregada é do bairro **124 (Residencial Buritis Primavera
-VI)**, que ainda não tem desenho importado. Os dois bairros que têm desenho
-(105 e 90) não têm exportação carregada.
-
-Para resolver: carregar a exportação XLSX dos bairros 105 e 90 com
-`cadastro:carregar`.
-
-*(O defeito que impedia o casamento — comparação do código do bairro sem tirar
-o zero à esquerda — foi corrigido em `5adc833`. A consulta antiga achava 0
-linhas; a corrigida acha 990.)*
+A aba BCI lê o cadastro municipal **ao vivo** (não há mais "Consultar" nem
+cópia por lote). Ela fica vazia até a planilha do município ser enviada por
+Parâmetros → Cadastro municipal, e o motivo do vazio é dito na tela. A
+planilha da prefeitura tem ~12 MB.
 
 ### ✅ Os 101 lotes sem quadra — resolvido
 
@@ -110,12 +103,11 @@ conferência, publicação). O passo anterior — converter o DWG com
 `gis/tools/dxf_para_geojson.py`, que fica fora do repositório — continua só na
 máquina de desenvolvimento.
 
-### 🟡 Colação divergente entre `lotes` e `cadastro_bairros`
+### ✅ Colação de `lotes` e `cadastro_bairros` — unificada em 10/2026
 
-`lotes.bairro` é `utf8mb4_0900_ai_ci`; `cadastro_bairros.nome_gis` é
-`utf8mb4_unicode_ci`. Juntar as duas em SQL falha ("Illegal mix of
-collations"). O código contorna resolvendo nomes em PHP. **Arrumar de verdade
-pede migração.**
+`cadastro_bairros.nome_gis` passou a `utf8mb4_0900_ai_ci`, a mesma de
+`lotes.bairro`; juntar as duas em SQL voltou a funcionar. O contorno antigo em
+PHP (BuscaController) continua válido e pode ser simplificado quando convier.
 
 ### 🟡 "Nome no desenho" é texto livre
 

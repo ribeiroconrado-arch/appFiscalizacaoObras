@@ -274,7 +274,7 @@ function abrirFicha(feicao) {
   const sit = document.getElementById('fi-situacao')
   sit.className = 'badge bd-ok'
   sit.textContent = 'Ativo'
-  // Data em que o cadastro da prefeitura foi lido para este imóvel. Antes ela
+  // Data da última carga do cadastro municipal em que este imóvel veio. Antes
   // vinha de `p.integrado_em`, que o servidor nunca mandou — o cabeçalho dizia
   // "—" para todos. Agora vem do BCI (a mesma ida ao servidor serve à aba).
   // Sem leitura, o travessão: inventar "hoje" faria o dado parecer conferido.
@@ -802,13 +802,12 @@ async function preencherIntegracao(loteId) {
     const d = await obterBci(loteId)
     // Outro imóvel pode ter sido aberto enquanto a resposta vinha.
     if (state.selecionado?.properties?.id !== loteId) { return }
-    // A data da CARGA em que o imóvel veio na planilha (mudando ou não); a
-    // leitura avulsa do BCI é só reserva, para cadastro de antes das cargas.
+    // A data da CARGA em que o imóvel veio na planilha, mudando ou não.
     const g = d.integracao || {}
     if (g.ausente_desde) {
       el.textContent = 'fora do cadastro desde ' + formatarDataHoraCurta(g.ausente_desde).slice(0, 8)
-    } else if (g.em || d.consultado_em) {
-      el.textContent = formatarDataHoraCurta(g.em || d.consultado_em)
+    } else if (g.em) {
+      el.textContent = formatarDataHoraCurta(g.em)
     }
   } catch { /* fica o travessão */ }
 }

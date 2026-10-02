@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════
 // ABA "CADASTRO IMOBILIÁRIO" DA FICHA
 //
-// Mostra a cópia local do BCI da prefeitura. Três regras que explicam a forma
-// desta tela:
+// Mostra o cadastro municipal do imóvel, lido ao vivo da última carga mensal
+// da planilha da prefeitura. Três regras que explicam a forma desta tela:
 //
 // 1. CARREGA SÓ QUANDO A ABA ABRE. O mapa traz até 3.000 lotes; buscar o
 //    cadastro de todos seria pagar caro por um dado que quase ninguém olha.
@@ -78,7 +78,6 @@ function desenharBci(caixa, d) {
         <p class="bci-vazio-p">Área de terreno, medidas, características e
            construções vêm do cadastro da prefeitura. Esta aba fica vazia — e não
            em branco: o que falta é o dado de lá, não o imóvel.</p>
-        ${botaoConsultar('Consultar o cadastro')}
       </div>${secProprietarios(d.proprietarios)}`
     return
   }
@@ -110,24 +109,18 @@ function secProprietarios(lista) {
 }
 
 /**
- * Linha de topo: quando foi consultado, o botão de consultar de novo, e a
- * situação do imóvel nas cargas mensais do cadastro.
+ * Linha de topo: a situação do imóvel nas cargas mensais do cadastro. O dado
+ * desta aba é sempre o da última carga — não há o que "atualizar" aqui; a
+ * planilha nova entra por Parâmetros → Cadastro municipal.
  */
 function cabecalhoBci(d) {
-  return `<div class="bci-topo">
-    <span>Consultado em <b>${esc(dataHoraCurta(d.consultado_em))}</b></span>
-    ${botaoConsultar('Atualizar')}
-  </div>${linhaDasCargas(d)}`
+  return linhaDasCargas(d)
 }
 
-/**
- * "Últ. integração" e "Últ. alteração" do cadastro municipal, e o aviso de que
- * a cópia desta aba ficou para trás de uma carga mais nova.
- */
+/** "Últ. integração" e "Últ. alteração" do cadastro municipal. */
 function linhaDasCargas(d) {
   const g = d.integracao || {}
   if (!g.em && !g.ausente_desde) { return '' }
-  const desatualizada = g.alterado_em && d.consultado_em && new Date(g.alterado_em) > new Date(d.consultado_em)
   return `<div class="bci-cargas imp-sub">
       ${g.ausente_desde
         ? `<b>Fora do cadastro</b> desde a carga de ${esc(dataHoraCurta(g.ausente_desde))}`
@@ -135,7 +128,6 @@ function linhaDasCargas(d) {
       ${g.alterado_em ? ` · Últ. alteração <b>${esc(dataHoraCurta(g.alterado_em))}</b>
         · <a href="#" onclick="event.preventDefault(); verHistoricoDoCadastro()">ver o que mudou</a>` : ''}
     </div>
-    ${desatualizada ? '<div class="cad-nota cad-aviso">O cadastro mudou desde a última consulta deste imóvel — clique em Atualizar.</div>' : ''}
     <div id="bci-historico"></div>`
 }
 
@@ -158,44 +150,6 @@ async function verHistoricoDoCadastro() {
       : '<div class="imp-sub">Nenhuma alteração registrada.</div>'
   } catch {
     caixa.innerHTML = '<div class="imp-sub">Não foi possível carregar o histórico.</div>'
-  }
-}
-
-function botaoConsultar(rotulo) {
-  return `<button class="btn sm out-green" onclick="atualizarBci(this)">${esc(rotulo)}</button>`
-}
-
-/**
- * Consulta o cadastro AGORA e regrava a cópia local.
- *
- * É um ato do usuário, e não algo que a ficha faça sozinha ao abrir: a consulta
- * depende do cadastro da prefeitura estar de pé, e o fiscal em campo precisa
- * que a ficha abra mesmo quando ele não está.
- */
-async function atualizarBci(botao) {
-  const loteId = state.selecionado?.properties?.id
-  if (!loteId) { return }
-
-  const rotulo = botao.textContent
-  botao.disabled = true
-  botao.textContent = 'Consultando...'
-  try {
-    const r = await fetch(`/api/imoveis/${loteId}/bci/atualizar`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-      },
-    })
-    if (!r.ok) { throw new Error(r.status) }
-    const dados = await r.json()
-    bciCache.set(loteId, dados)
-    desenharBci(document.getElementById('fi-bci'), dados)
-    toast(dados.tem ? 'Cadastro atualizado' : 'O cadastro não tem este imóvel', dados.tem ? '' : 'err')
-  } catch (e) {
-    botao.disabled = false
-    botao.textContent = rotulo
-    toast('Não foi possível consultar o cadastro agora', 'err')
   }
 }
 
