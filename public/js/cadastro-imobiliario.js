@@ -71,7 +71,6 @@ function desenharBci(caixa, d) {
   caixa.innerHTML = [
     cabecalhoBci(d),
     secImovel(i),
-    secProprietarios(d.proprietarios),
     secCaracteristicas(d.caracteristicas),
     secUnidades(d.unidades),
   ].filter(Boolean).join('')
@@ -168,17 +167,6 @@ function secImovel(i) {
   ].join('')
 
   return faixas ? bciSecao('Imóvel', `<div class="fi-linhas">${faixas}</div>`) : ''
-}
-
-function secProprietarios(lista) {
-  if (!lista || !lista.length) { return '' }
-  const corpo = lista.map(p => `
-    <div class="bci-prop">
-      <div class="bci-prop-n">${esc(p.nome)}${p.documento
-        ? ` <span class="mono bci-doc">${esc(p.documento)}</span>` : ''}</div>
-      ${p.endereco ? `<div class="bci-prop-e">${esc(p.endereco)}</div>` : ''}
-    </div>`).join('')
-  return bciSecao(lista.length > 1 ? 'Proprietários' : 'Proprietário', corpo)
 }
 
 /**

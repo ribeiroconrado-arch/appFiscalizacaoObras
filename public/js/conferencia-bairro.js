@@ -182,11 +182,11 @@ function pintarJanelaConferencia() {
   const linha = (tipo, l) => {
     const just = _confJustificada(tipo, l)
     const ver = l.lote_id
-      ? `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${JSON.stringify({ tipo, ...l }).replace(/"/g, '&quot;')})">ver no mapa ›</a>`
-      : `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${JSON.stringify({ tipo, ...l }).replace(/"/g, '&quot;')})">na quadra ›</a>`
+      ? `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${jsArg({ tipo, ...l })})">ver no mapa ›</a>`
+      : `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${jsArg({ tipo, ...l })})">na quadra ›</a>`
     const acao = just
-      ? `<a href="#" onclick="event.preventDefault(); _confDesjustificar('${tipo}', '${esc(_confChave(tipo, l))}')">desfazer</a>`
-      : `<a href="#" onclick="event.preventDefault(); _confJustificar('${tipo}', '${esc(_confChave(tipo, l))}')">justificar</a>`
+      ? `<a href="#" onclick="event.preventDefault(); _confDesjustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">desfazer</a>`
+      : `<a href="#" onclick="event.preventDefault(); _confJustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">justificar</a>`
     const j = confState.justificativas[tipo + '|' + _confChave(tipo, l)]
     return `<tr${just ? ' class="conf-justificada"' : ''}>
       <td class="mono">${esc(l.inscricao || '—')}</td>
@@ -388,7 +388,7 @@ function pintarBarraConferencia() {
       <span class="conf-atual"><span class="conf-cor" style="background:${CONF_TIPOS[it.tipo].cor}"></span>
         ${confState.idx + 1} de ${n}: Q ${esc(it.quadra ?? '—')} · L ${esc(it.lote ?? '—')} — ${esc(CONF_TIPOS[it.tipo].curto)}</span>
       <button class="btn sm" onclick="_confPasso(1)" title="Próxima pendência">›</button>
-      <button class="btn sm" onclick="_confJustificar('${it.tipo}', '${esc(_confChave(it.tipo, it))}')">Justificar</button>` : ''}
+      <button class="btn sm" onclick="_confJustificar(${jsArg(it.tipo)}, ${jsArg(_confChave(it.tipo, it))})">Justificar</button>` : ''}
     <button class="btn sm" onclick="abrirConferenciaBairro()">Lista</button>
     <button class="btn sm imp-barra-x" title="Tirar a conferência do mapa" onclick="fecharConferenciaNoMapa()">&#10005;</button>`
 }

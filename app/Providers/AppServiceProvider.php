@@ -51,6 +51,24 @@ class AppServiceProvider extends ServiceProvider
         });
 
         /*
+         * API da tela (/api/*), por usuário logado. Folgado para o uso normal
+         * (arrastar o mapa dispara uma consulta por movimento), e baixo o
+         * bastante para um script com a sessão de alguém não ocupar todos os
+         * processos do PHP — o servidor tem 1 GB de memória.
+         */
+        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(300)
+            ->by('u' . ($request->user()?->id ?? $request->ip())));
+
+        /*
+         * O que lê arquivo grande ou gera PDF: importação de bairro, conferência
+         * com a planilha do cadastro, PDF de vistoria e de documento. Cada uma
+         * dessas pode levar segundos e centenas de MB; ninguém faz trinta por
+         * minuto trabalhando.
+         */
+        RateLimiter::for('pesado', fn (Request $request) => Limit::perMinute(20)
+            ->by('u' . ($request->user()?->id ?? $request->ip())));
+
+        /*
          * @assetv('css/app.css') — asset com versão pela data de modificação.
          *
          * Este projeto serve CSS e JS estáticos de `public/`, sem Vite (o

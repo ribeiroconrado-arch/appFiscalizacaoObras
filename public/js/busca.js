@@ -81,7 +81,7 @@ async function buscarLogradouro(texto) {
 
   alvo.classList.toggle('open', achados.length > 0)
   alvo.innerHTML = achados.map(r =>
-    `<button type="button" class="ac-item" onclick="escolherLogradouro(${JSON.stringify(r).replace(/"/g, '&quot;')})">
+    `<button type="button" class="ac-item" onclick="escolherLogradouro(${jsArg(r)})">
        <b>${esc(r)}</b></button>`).join('')
 }
 

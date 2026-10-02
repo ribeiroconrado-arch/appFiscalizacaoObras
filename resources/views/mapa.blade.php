@@ -17,7 +17,9 @@
 <link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')"
       data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')" data-src-azul="@assetv('img/apple-touch-icon-azul.png')">
 <link rel="manifest" href="@assetv('manifest.json')">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{{-- Leaflet servido daqui (public/vendor), não da CDN: script de terceiro roda
+     com a sessão do fiscal, e uma CDN comprometida seria o sistema comprometido. --}}
+<link rel="stylesheet" href="{{ asset('vendor/leaflet-1.9.4/leaflet.css') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -3554,7 +3556,7 @@ window.PODE_VER_DOCUMENTOS = {{ Js::from(auth()->user()->podeVerDocumentos()) }}
 window.USUARIO_CURADOR = {{ Js::from(auth()->user()->podeCurarCadastro()) }}
 window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ asset('vendor/leaflet-1.9.4/leaflet.js') }}"></script>
 <script src="@assetv('js/ui.js')"></script>
 {{-- O registro das camadas vem cedo: os módulos seguintes registram as suas. --}}
 <script src="@assetv('js/camadas-mapa.js')"></script>

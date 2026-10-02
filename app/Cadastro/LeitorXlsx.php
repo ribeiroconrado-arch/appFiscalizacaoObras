@@ -34,6 +34,16 @@ class LeitorXlsx
 
     private ZipArchive $zip;
 
+    /**
+     * Teto do tamanho DESCOMPACTADO de cada parte lida da planilha.
+     *
+     * `getFromName()` descompacta a parte inteira na memória, e o tamanho
+     * compactado (o que a validação do upload enxerga) não diz nada sobre
+     * isso: um .xlsx de poucos MB pode se abrir em gigabytes — o "zip bomb".
+     * A exportação real do município (56 mil linhas) fica muito abaixo daqui.
+     */
+    private const TETO_DESCOMPACTADO = 200 * 1024 * 1024;
+
     public function __construct(private string $arquivo)
     {
         if (! is_file($arquivo)) {
@@ -53,6 +63,23 @@ class LeitorXlsx
         $this->carregarTextos();
     }
 
+    /** Uma parte do ZIP, recusando a que se descompactaria além do teto. */
+    private function ler(string $nome): string|false
+    {
+        $info = $this->zip->statName($nome);
+        if ($info === false) {
+            return false;
+        }
+        if ($info['size'] > self::TETO_DESCOMPACTADO) {
+            throw new RuntimeException(
+                'A planilha é grande demais para ser lida (' . round($info['size'] / 1048576)
+                . ' MB descompactada). Exporte só os bairros necessários.'
+            );
+        }
+
+        return $this->zip->getFromName($nome);
+    }
+
     public function __destruct()
     {
         @$this->zip->close();
@@ -65,7 +92,7 @@ class LeitorXlsx
      */
     public function linhas(): \Generator
     {
-        $xml = $this->zip->getFromName($this->caminhoDaPrimeiraAba());
+        $xml = $this->ler($this->caminhoDaPrimeiraAba());
         if ($xml === false) {
             throw new RuntimeException('A planilha não tem aba legível.');
         }
@@ -152,7 +179,7 @@ class LeitorXlsx
      */
     private function carregarTextos(): void
     {
-        $xml = $this->zip->getFromName('xl/sharedStrings.xml');
+        $xml = $this->ler('xl/sharedStrings.xml');
         if ($xml === false) {
             return;   // planilha só de números — existe, e é válida
         }
@@ -174,8 +201,8 @@ class LeitorXlsx
     /** Caminho interno da primeira aba, seguindo o relacionamento do workbook. */
     private function caminhoDaPrimeiraAba(): string
     {
-        $wb = @simplexml_load_string((string) $this->zip->getFromName('xl/workbook.xml'));
-        $rels = @simplexml_load_string((string) $this->zip->getFromName('xl/_rels/workbook.xml.rels'));
+        $wb = @simplexml_load_string((string) $this->ler('xl/workbook.xml'));
+        $rels = @simplexml_load_string((string) $this->ler('xl/_rels/workbook.xml.rels'));
 
         if ($wb !== false && $rels !== false) {
             $id = (string) $wb->sheets->sheet[0]->attributes('r', true)->id;

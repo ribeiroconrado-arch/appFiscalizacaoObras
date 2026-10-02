@@ -28,7 +28,14 @@ class LotesApagados
         // A geometria vem por SQL porque o escopo global `sem_geometria` a tira
         // de qualquer consulta do Eloquent — é justamente por isso que ela
         // nunca chegou à auditoria. Aqui ela é pedida explicitamente.
-        $geom = DB::selectOne('SELECT ST_AsText(geom) AS wkt FROM lotes WHERE id = ?', [$lote->id]);
+        //
+        // `axis-order=long-lat` na LEITURA, igual à gravação logo abaixo. Sem
+        // ele o MySQL escreve o WKT na ordem do EPSG:4326 (latitude primeiro),
+        // a gravação lia o primeiro número como longitude, e o lote restaurado
+        // voltava com os eixos trocados — no meio do Atlântico Sul. Corrigido
+        // em 03/10/2026; a migração `corrige_eixos_dos_lotes_apagados` desvira
+        // o que já tinha sido guardado assim.
+        $geom = DB::selectOne("SELECT ST_AsText(geom, 'axis-order=long-lat') AS wkt FROM lotes WHERE id = ?", [$lote->id]);
 
         if (! $geom?->wkt) {
             throw new RuntimeException(
@@ -53,7 +60,9 @@ class LotesApagados
             'area_matricula_m2'     => $lote->area_matricula_m2,
             'fonte'                 => $lote->fonte,
             'origem'                => $lote->origem,
-            'geom'                  => DB::raw("ST_GeomFromText('{$geom->wkt}', 4326, 'axis-order=long-lat')"),
+            // `quote()` e não interpolação crua: o WKT vem do próprio banco, mas
+            // SQL montado com texto sem escape é brecha esperando a origem mudar.
+            'geom'                  => DB::raw('ST_GeomFromText(' . DB::getPdo()->quote($geom->wkt) . ", 4326, 'axis-order=long-lat')"),
             'user_id'               => Auth::id(),
             'usuario_nome'          => Auth::user()?->name ?? 'sistema',
             'motivo'                => $motivo,

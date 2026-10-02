@@ -68,6 +68,7 @@ navegador local; ver o cabeçalho de cada um.
 | [ROADMAP.md](docs/ai/ROADMAP.md) | o que vem a seguir |
 | [DECISOES-UX.md](docs/ai/DECISOES-UX.md) · [DESIGN-SYSTEM.md](docs/ai/DESIGN-SYSTEM.md) | telas e componentes |
 | [CHANGELOG-IA.md](docs/ai/CHANGELOG-IA.md) | histórico comentado das entregas |
+| [seguranca-servidor.md](docs/seguranca-servidor.md) | `.env`, Nginx, fail2ban, firewall e backup da produção |
 
 ### Documentos citados que ficam fora do repositório
 

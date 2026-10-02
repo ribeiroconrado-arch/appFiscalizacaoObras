@@ -36,7 +36,6 @@ class BciImovel extends Model
     }
 
     public function lote(): BelongsTo             { return $this->belongsTo(Lote::class); }
-    public function proprietarios(): HasMany      { return $this->hasMany(BciProprietario::class, 'bci_imovel_id'); }
     public function unidades(): HasMany           { return $this->hasMany(BciUnidade::class, 'bci_imovel_id'); }
 
     public function caracteristicas(): HasMany
