@@ -1,0 +1,41 @@
+# Compila o app desktop do cadastro (ferramentas/cadastro-desktop) num Windows
+# de verdade e publica o .zip como artefato da execução.
+#
+# Para baixar: aba Actions › "App do cadastro (Windows)" › a execução mais
+# recente › Artifacts › FiscObras-Cadastro-win-x64. Também roda à mão pelo
+# botão "Run workflow".
+name: App do cadastro (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ferramentas/cadastro-desktop/**'
+      - 'tests/cadastro-desktop.test.cjs'
+      - 'tests/fixtures/cadastro-dificil*'
+      - '.github/workflows/cadastro-desktop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ferramentas/cadastro-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # O código de conferência tem de bater com o do PHP do sistema.
+      - run: node --test ../../tests/cadastro-desktop.test.cjs
+      - run: npm run empacotar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FiscObras-Cadastro-win-x64
+          path: ferramentas/cadastro-desktop/dist/FiscObras Cadastro-win32-x64
+          retention-days: 90

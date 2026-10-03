@@ -306,6 +306,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Cadastro municipal: a planilha mensal da prefeitura (só admin) e o
         // histórico do imóvel (servidores). Ver CadastroCargaController.
         Route::get('/cadastro/cargas', [\App\Http\Controllers\CadastroCargaController::class, 'index']);
+        Route::get('/cadastro/referencia', [\App\Http\Controllers\CadastroCargaController::class, 'referencia'])->middleware('throttle:pesado');
         Route::post('/cadastro/cargas', [\App\Http\Controllers\CadastroCargaController::class, 'store'])->middleware('throttle:pesado');
         Route::get('/cadastro/cargas/{carga}', [\App\Http\Controllers\CadastroCargaController::class, 'show']);
         Route::post('/cadastro/cargas/{carga}/confirmar', [\App\Http\Controllers\CadastroCargaController::class, 'confirmar']);

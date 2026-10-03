@@ -1,0 +1,183 @@
+{
+    "imoveis": {
+        "01.124.004.0020.000": {
+            "registro": {
+                "inscricao": "01.124.004.0020.000",
+                "codigo_cadastro": null,
+                "inscricao_alternativa": null,
+                "codigo_bairro": "000124",
+                "nome_bairro": null,
+                "quadra": "4",
+                "lote": "0020",
+                "numero_predial": null,
+                "complemento": null,
+                "isencao": null,
+                "area_terreno_m2": "1234.56",
+                "area_edificada_m2": null,
+                "testada_m": null,
+                "medida_lado_direito": null,
+                "medida_lado_esquerdo": null,
+                "medida_fundo": null,
+                "setor": null,
+                "regiao_fiscal": null,
+                "unidade_area_m2": null,
+                "unidade_ano": null,
+                "unidade_pontos": null,
+                "logradouro": "Rua das Acácias",
+                "caracteristicas": null
+            },
+            "donos": [
+                {
+                    "nome": "maria d'ávila & filhos",
+                    "documento": "123.456.789-00",
+                    "endereco": null
+                },
+                {
+                    "nome": "JOÃO PEREIRA",
+                    "documento": null,
+                    "endereco": null
+                }
+            ],
+            "hash": "dd720e4919cbec7629f5d5cc8e910658069d2bcf"
+        },
+        "01.124.004.0021.000": {
+            "registro": {
+                "inscricao": "01.124.004.0021.000",
+                "codigo_cadastro": "777",
+                "inscricao_alternativa": null,
+                "codigo_bairro": "124",
+                "nome_bairro": null,
+                "quadra": "4",
+                "lote": "21",
+                "numero_predial": null,
+                "complemento": null,
+                "isencao": null,
+                "area_terreno_m2": "0.50",
+                "area_edificada_m2": "1000.00",
+                "testada_m": null,
+                "medida_lado_direito": null,
+                "medida_lado_esquerdo": null,
+                "medida_fundo": "0.00",
+                "setor": null,
+                "regiao_fiscal": null,
+                "unidade_area_m2": null,
+                "unidade_ano": "2009",
+                "unidade_pontos": null,
+                "logradouro": "Travessa\u2028Nova",
+                "caracteristicas": "{\"AGUA\":\"POÇO\",\"ILUMINAÇÃO PUBL\":\"<SIM>\"}"
+            },
+            "donos": [
+                {
+                    "nome": "EMPRESA & CIA AB",
+                    "documento": "12.345.678\/0001-90",
+                    "endereco": null
+                }
+            ],
+            "hash": "b734da74241c6e5362206dd26c48330f5d2c080b"
+        },
+        "01.125.010.0001.000": {
+            "registro": {
+                "inscricao": "01.125.010.0001.000",
+                "codigo_cadastro": null,
+                "inscricao_alternativa": null,
+                "codigo_bairro": "000125",
+                "nome_bairro": "CENTRO",
+                "quadra": null,
+                "lote": "0001",
+                "numero_predial": null,
+                "complemento": null,
+                "isencao": null,
+                "area_terreno_m2": "350.00",
+                "area_edificada_m2": null,
+                "testada_m": null,
+                "medida_lado_direito": null,
+                "medida_lado_esquerdo": null,
+                "medida_fundo": null,
+                "setor": null,
+                "regiao_fiscal": null,
+                "unidade_area_m2": null,
+                "unidade_ano": null,
+                "unidade_pontos": null,
+                "logradouro": null,
+                "caracteristicas": "{\"ASFALTO\":\"NÃO\"}"
+            },
+            "donos": [
+                {
+                    "nome": "XÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁÁ",
+                    "documento": null,
+                    "endereco": null
+                }
+            ],
+            "hash": "c771eba367bf73cc6afb1f312f608f16573d0799"
+        },
+        "01.125.010.0002.000": {
+            "registro": {
+                "inscricao": "01.125.010.0002.000",
+                "codigo_cadastro": null,
+                "inscricao_alternativa": null,
+                "codigo_bairro": "000125",
+                "nome_bairro": null,
+                "quadra": null,
+                "lote": "0002",
+                "numero_predial": null,
+                "complemento": null,
+                "isencao": null,
+                "area_terreno_m2": "1000001.00",
+                "area_edificada_m2": "1000000000000.00",
+                "testada_m": null,
+                "medida_lado_direito": null,
+                "medida_lado_esquerdo": null,
+                "medida_fundo": null,
+                "setor": null,
+                "regiao_fiscal": null,
+                "unidade_area_m2": null,
+                "unidade_ano": null,
+                "unidade_pontos": null,
+                "logradouro": null,
+                "caracteristicas": null
+            },
+            "donos": [
+                {
+                    "nome": "BEATRIZ",
+                    "documento": "999999999999999999999999",
+                    "endereco": null
+                }
+            ],
+            "hash": "4acbdd6d3b153cc80317089ceab0dd66dd51dc45"
+        },
+        "01.125.010.0003.000": {
+            "registro": {
+                "inscricao": "01.125.010.0003.000",
+                "codigo_cadastro": null,
+                "inscricao_alternativa": null,
+                "codigo_bairro": null,
+                "nome_bairro": null,
+                "quadra": null,
+                "lote": "0003",
+                "numero_predial": null,
+                "complemento": null,
+                "isencao": null,
+                "area_terreno_m2": null,
+                "area_edificada_m2": null,
+                "testada_m": null,
+                "medida_lado_direito": null,
+                "medida_lado_esquerdo": null,
+                "medida_fundo": null,
+                "setor": null,
+                "regiao_fiscal": null,
+                "unidade_area_m2": null,
+                "unidade_ano": null,
+                "unidade_pontos": null,
+                "logradouro": null,
+                "caracteristicas": "{\"ASFALTO\":\"_x0001_ctrl \"}"
+            },
+            "donos": [],
+            "hash": "728c194baf2fb2f31381289d5589043606b2e138"
+        }
+    },
+    "bairros": [
+        "124",
+        "125"
+    ],
+    "lidas": 7
+}

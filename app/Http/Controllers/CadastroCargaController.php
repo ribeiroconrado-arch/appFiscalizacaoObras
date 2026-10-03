@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Cadastro\CargaDoCadastro;
 use App\Cadastro\FonteDoCadastro;
+use App\Cadastro\ReferenciaDoCadastro;
 use App\Cadastro\ProprietariosVisiveis;
 use App\Jobs\ProcessarCargaDoCadastro;
 use App\Models\CadastroCarga;
@@ -45,7 +47,28 @@ class CadastroCargaController extends Controller
         ]);
     }
 
-    /** POST /api/cadastro/cargas — recebe a planilha e processa logo depois da resposta. */
+    /**
+     * GET /api/cadastro/referencia — o arquivo que o app desktop usa para saber
+     * o que o sistema já tem. Só inscrição, código de conferência, bairro e
+     * ausência: nenhum dado pessoal (ver ReferenciaDoCadastro).
+     */
+    public function referencia(Request $r)
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        @ini_set('memory_limit', '512M');
+        $nome = 'referencia-cadastro-' . now()->format('Y-m-d-His') . '.json';
+
+        return response()->json(ReferenciaDoCadastro::gerar(), 200, [
+            'Content-Disposition' => 'attachment; filename="' . $nome . '"',
+            'Cache-Control'       => 'no-store',
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * POST /api/cadastro/cargas — recebe a planilha (.xlsx) ou o JSON do app
+     * desktop e processa logo depois da resposta.
+     */
     public function store(Request $r): JsonResponse
     {
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
@@ -54,8 +77,15 @@ class CadastroCargaController extends Controller
             'arquivo.max' => 'A planilha passa de 64 MB.',
         ]);
         $arq = $r->file('arquivo');
-        if (strtolower($arq->getClientOriginalExtension()) !== 'xlsx') {
-            return response()->json(['message' => 'A planilha precisa ser .xlsx (Excel).'], 422);
+        $ext = strtolower($arq->getClientOriginalExtension());
+        if (! in_array($ext, ['xlsx', 'json'], true)) {
+            return response()->json(['message' => 'Envie a planilha .xlsx (Excel) ou o .json gerado pelo app do cadastro.'], 422);
+        }
+        // O JSON é conferido JÁ, e não só na hora de processar: arquivo de
+        // referência velha é o erro mais provável, e quem anexou precisa saber
+        // agora, não minutos depois numa linha "falhou" da lista.
+        if ($ext === 'json' && ($recusa = $this->conferirJson($arq->getRealPath()))) {
+            return response()->json(['message' => $recusa], 422);
         }
 
         CadastroCarga::limparArquivosVencidos();
@@ -72,7 +102,7 @@ class CadastroCargaController extends Controller
         $ultima = CadastroCarga::where('status', 'concluida')->latest('id')->first();
         if ($ultima && $ultima->arquivo_sha256 === $sha && ! $r->boolean('forcar')) {
             return response()->json([
-                'message' => 'Esta é a mesma planilha da última carga (' . $ultima->arquivo_nome . '). Nada mudaria.',
+                'message' => 'Este é o mesmo arquivo da última carga (' . $ultima->arquivo_nome . '). Nada mudaria.',
                 'repetida' => true,
             ], 422);
         }
@@ -84,11 +114,33 @@ class CadastroCargaController extends Controller
             'user_id'        => $r->user()->id,
             'status'         => 'na_fila',
         ]);
-        Storage::disk('private')->putFileAs('cargas', $arq, "{$carga->id}.xlsx");
+        Storage::disk('private')->putFileAs('cargas', $arq, basename($carga->caminhoDoArquivo()));
 
         ProcessarCargaDoCadastro::dispatchAfterResponse($carga->id);
 
         return response()->json(['carga' => $carga->resumo()], 202);
+    }
+
+    /** A frase de recusa do JSON do app, ou null se ele pode seguir. */
+    private function conferirJson(string $caminho): ?string
+    {
+        @ini_set('memory_limit', '512M');
+        $d = json_decode((string) file_get_contents($caminho), true);
+        if (! is_array($d) || ($d['formato'] ?? null) !== CargaDoCadastro::FORMATO_JSON) {
+            return 'Este arquivo não foi gerado pelo app do cadastro.';
+        }
+        if (($d['versao'] ?? null) !== CargaDoCadastro::VERSAO_JSON) {
+            return 'Este arquivo é de outra versão do app do cadastro. Atualize o app.';
+        }
+        $ref = $d['referencia'] ?? [];
+        if (($ref['base_carga_id'] ?? null) !== ReferenciaDoCadastro::baseCargaId()
+            || ! is_string($ref['conferencia'] ?? null)
+            || ! hash_equals(ReferenciaDoCadastro::conferenciaAtual(), $ref['conferencia'])) {
+            return 'Este arquivo foi gerado sobre uma referência que não é mais a atual — já houve outra '
+                . 'carga depois dela, ou ele já foi aplicado. Baixe a referência de novo e gere outro JSON no app.';
+        }
+
+        return null;
     }
 
     /** GET /api/cadastro/cargas/{carga} — a tela consulta enquanto processa. */
@@ -124,7 +176,7 @@ class CadastroCargaController extends Controller
             return response()->json(['message' => 'Esta carga não está parada.'], 422);
         }
         if (! Storage::disk('private')->exists($carga->caminhoDoArquivo())) {
-            return response()->json(['message' => 'O arquivo desta carga já foi apagado. Envie a planilha de novo.'], 422);
+            return response()->json(['message' => 'O arquivo desta carga já foi apagado. Envie o arquivo de novo.'], 422);
         }
 
         $carga->update(['status' => 'na_fila', 'mensagem' => null]);

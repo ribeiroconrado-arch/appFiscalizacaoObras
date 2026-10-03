@@ -117,40 +117,32 @@ A conversão DWG → GeoJSON continua fora do sistema, como planejado.
 Parâmetros → Cadastro municipal. Grava só a diferença, guarda o histórico
 campo a campo e apaga o arquivo ao fim. Ver ARQUITETURA.md, "Cadastro municipal".
 
-### 🟢 Cadastro tratado fora do sistema (app desktop → JSON de diferenças) — ideia registrada, adiada
+### ✅ Cadastro tratado fora do sistema (app desktop → JSON de diferenças) — feito
 
-Decisão de rumo, ainda sem data. A planilha do município deixa de entrar no
-sistema: um **app desktop**, na prefeitura, lê o Excel e gera um **JSON só com
-as diferenças em relação à importação anterior**. Esse JSON é **anexado dentro
-da aplicação** (não há envio automático do app para o servidor), e a
-integração parte dele.
+A planilha do município pode não passar mais pelo servidor: o app desktop
+**FiscObras Cadastro** (`ferramentas/cadastro-desktop`, Electron, .exe para
+Windows) lê o Excel no PC da prefeitura e gera um **JSON só com as
+diferenças**, que é **anexado** em Parâmetros → Cadastro municipal. O `.xlsx`
+direto continua aceito; os dois caminhos deixam o banco idêntico.
 
-Motivos (todos de segurança):
-- a planilha bruta, com todas as colunas, não passa mais pelo servidor;
-- CPF/CNPJ e colunas sem uso podem ser descartados antes, no próprio PC;
-- o que entra é pequeno e verificável, não um arquivo de 12 MB;
-- reduz o efeito de alguém anexar uma planilha errada ou adulterada.
-
-A decidir quando for feito:
-- **"Importação anterior" sem cópia da base no PC.** Guardar a planilha
-  anterior no computador cria uma segunda cópia com dados pessoais e pode
-  dessincronizar do servidor (JSON perdido, aplicado duas vezes ou fora de
-  ordem). Alternativa: o sistema exporta um arquivo só com `inscrição → hash`
-  (sem dado pessoal; o hash já existe em `cadastro_externo_imoveis.hash`),
-  o app compara o Excel contra ele e gera o JSON.
-- **Mesma regra de normalização dos dois lados**, senão o hash não bate. De
-  preferência o app normaliza e calcula, e o servidor grava o hash recebido.
-- **Conferência do JSON ao anexar:** versão do formato, a qual carga anterior
-  ele se refere (recusar fora de ordem ou repetido) e, se possível, assinatura
-  do app.
-- **Onde fica o CPF/CNPJ**: hoje é mostrado a agentes e administradores e
-  usado na lavratura.
-- O servidor reaproveita `CargaDoCadastro` (diferença, ausência por bairro,
-  trava de 20%, histórico), trocando só a leitura do Excel pela do JSON. O JSON
-  precisa trazer a lista de inscrições presentes para marcar as ausentes.
-- Linguagem e distribuição do app.
-
-Até lá vale o envio do `.xlsx` por Parâmetros → Cadastro municipal.
+Como ficaram as decisões que estavam em aberto:
+- **"Importação anterior" sem cópia da base no PC:** o sistema exporta a
+  **referência** (`GET /api/cadastro/referencia`, `ReferenciaDoCadastro`): por
+  imóvel, inscrição, código de conferência (`hash`), bairro e ausência. Nenhum
+  dado pessoal.
+- **Mesma normalização dos dois lados:** `src/nucleo.js` espelha `LeitorXlsx`,
+  `ColunasDaExportacao` e `DiferencaDoCadastro::hash`; o teste
+  `tests/cadastro-desktop.test.cjs` confere os códigos contra o PHP. O servidor
+  recalcula o código de todo registro recebido e avisa se divergir.
+- **Conferência do JSON ao anexar:** formato e versão; a referência traz a
+  última carga concluída e uma impressão digital (sha256) do estado do
+  cadastro. JSON repetido, de referência velha ou fora de ordem é recusado
+  no envio e de novo antes de gravar.
+- **CPF/CNPJ:** continua indo, só nos imóveis novos ou alterados.
+- **Reaproveitamento:** `CargaDoCadastro` ganhou só a leitura do JSON
+  (`lerJson`); diferença, trava de 20%, histórico e ausências são os mesmos.
+- **Distribuição:** o workflow "App do cadastro (Windows)" testa e empacota
+  num Windows e publica o `.zip` como artefato.
 
 ### 🟢 Rodar as conferências pela tela
 

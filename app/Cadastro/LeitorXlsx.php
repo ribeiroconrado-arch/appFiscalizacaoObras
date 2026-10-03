@@ -191,10 +191,12 @@ class LeitorXlsx
 
         foreach ($sst->si as $si) {
             // Texto com formatação vem partido em vários <r><t>; juntar os
-            // pedaços é o que devolve a palavra inteira.
+            // pedaços é o que devolve a palavra inteira. O `false` é o que
+            // junta TODOS: todos os filhos se chamam "r", e preservando a
+            // chave cada um sobrescrevia o anterior — sobrava só o último.
             $this->textos[] = isset($si->t)
                 ? (string) $si->t
-                : implode('', array_map(fn ($r) => (string) $r->t, iterator_to_array($si->r ?? [])));
+                : implode('', array_map(fn ($r) => (string) $r->t, iterator_to_array($si->r ?? [], false)));
         }
     }
 

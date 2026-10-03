@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FiscObras Cadastro</title>
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header>
+    <div class="marca">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+      </span>
+      <div>
+        <h1>FiscObras · Cadastro municipal</h1>
+        <p>Planilha da prefeitura → arquivo de diferenças para o sistema</p>
+      </div>
+    </div>
+    <span class="selo" title="O app não usa a internet: toda conexão é bloqueada.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      Sem internet — nada sai deste computador
+    </span>
+  </header>
+
+  <main>
+    <section class="passo" id="p1">
+      <div class="num">1</div>
+      <div class="corpo">
+        <h2>Referência do sistema</h2>
+        <p class="ajuda">No sistema, em <b>Parâmetros › Cadastro municipal</b>, clique em <b>Baixar referência</b>.
+          Ela diz o que o sistema já tem — só inscrições e códigos de conferência, sem nome nem CPF.</p>
+        <div class="linha">
+          <button type="button" class="btn" id="b-ref">Escolher referência…</button>
+          <div class="arquivo" id="ref-info">Nenhuma escolhida</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="passo" id="p2">
+      <div class="num">2</div>
+      <div class="corpo">
+        <h2>Planilha da prefeitura</h2>
+        <p class="ajuda">A exportação do cadastro imobiliário, em <b>.xlsx</b> (Excel).</p>
+        <div class="linha">
+          <button type="button" class="btn" id="b-planilha">Escolher planilha…</button>
+          <div class="arquivo" id="planilha-info">Nenhuma escolhida</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="passo" id="p3">
+      <div class="num">3</div>
+      <div class="corpo">
+        <h2>Gerar o arquivo</h2>
+        <p class="ajuda">Compara a planilha com a referência e separa o que é novo, o que mudou e o que sumiu.</p>
+        <div class="linha">
+          <button type="button" class="btn primario" id="b-gerar" disabled>Gerar</button>
+          <div class="arquivo" id="andamento"></div>
+        </div>
+        <div id="erro" class="aviso erro" hidden></div>
+        <div id="resultado" hidden>
+          <div class="numeros" id="numeros"></div>
+          <div id="avisos"></div>
+          <div class="linha final">
+            <button type="button" class="btn primario" id="b-salvar">Salvar arquivo…</button>
+            <div class="arquivo" id="salvo-info"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="passo" id="p4" hidden>
+      <div class="num">4</div>
+      <div class="corpo">
+        <h2>Anexar no sistema</h2>
+        <p class="ajuda">Em <b>Parâmetros › Cadastro municipal</b>, use <b>Anexar arquivo</b> e escolha o arquivo salvo.
+          Anexe <b>antes</b> de qualquer outra carga: o sistema recusa o arquivo se o cadastro tiver mudado depois da referência.</p>
+        <div class="aviso">O arquivo traz nome e CPF/CNPJ dos proprietários novos ou alterados. Depois de anexar, apague-o deste computador.</div>
+        <div class="linha"><button type="button" class="btn" id="b-pasta">Mostrar na pasta</button></div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="rodape"></footer>
+  <script src="tela.js"></script>
+</body>
+</html>

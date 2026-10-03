@@ -1074,16 +1074,30 @@
        mudou, marca o que sumiu e apaga o arquivo ao fim. Montado por
        cadastro-municipal.js; ver CadastroCargaController. --}}
   <div class="par-painel" id="par-cadastro">
-    <div class="par-sec"><span class="par-num">1</span>Enviar a planilha do mês</div>
+    <div class="par-sec"><span class="par-num">1</span>Enviar o cadastro do mês</div>
+    {{-- DOIS CAMINHOS, o mesmo resultado no banco. O recomendado é o app
+         desktop (ferramentas/cadastro-desktop): a planilha bruta, com o CPF de
+         todo o município, nem chega ao servidor — o app lê no PC e gera um
+         JSON só com o que mudou. Para saber o que mudou ele precisa da
+         REFERÊNCIA, que não tem dado pessoal (App\Cadastro\ReferenciaDoCadastro).
+         A planilha .xlsx direta continua aceita. --}}
     <p class="aviso-legal">
-      A exportação do cadastro imobiliário do município inteiro (.xlsx). O sistema
-      compara com o que já tem e grava <b>só o que mudou</b>; imóvel que não vier
-      fica marcado como fora do cadastro, nunca apagado. O arquivo é
-      <b>apagado do servidor</b> assim que a carga termina.
+      <b>Pelo app do cadastro (recomendado):</b> baixe a referência, gere o arquivo no
+      app <b>FiscObras Cadastro</b> com a planilha da prefeitura e anexe aqui o
+      <b>.json</b> que ele salvar. A planilha completa não sai do computador.
+      Anexe antes de qualquer outra carga: o arquivo só vale sobre a referência de que saiu.<br>
+      <b>Ou</b> envie direto a exportação do município inteiro (<b>.xlsx</b>).<br>
+      Nos dois casos o sistema grava <b>só o que mudou</b>; imóvel que não vier fica marcado
+      como fora do cadastro, nunca apagado, e o arquivo é <b>apagado do servidor</b> assim
+      que a carga termina.
     </p>
+    <div class="btn-row" style="margin-bottom:8px;justify-content:flex-start;align-items:center">
+      <a class="btn out-verde sm" style="text-decoration:none" href="/api/cadastro/referencia" download>Baixar referência</a>
+      <span class="imp-sub">Só inscrições e códigos de conferência — sem nome nem CPF.</span>
+    </div>
     <label class="imp-soltar" id="cm-soltar" for="cm-arquivo">
-      <input type="file" id="cm-arquivo" accept=".xlsx" onchange="cmArquivoEscolhido()">
-      <b>Solte a planilha .xlsx aqui</b>
+      <input type="file" id="cm-arquivo" accept=".json,.xlsx" onchange="cmArquivoEscolhido()">
+      <b>Solte aqui o .json do app ou a planilha .xlsx</b>
       <span>ou clique para escolher no computador</span>
     </label>
     <div class="btn-row" style="margin-top:8px">
