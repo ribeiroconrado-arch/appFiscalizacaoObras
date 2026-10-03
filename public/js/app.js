@@ -29,7 +29,7 @@ const state = {
 
 /**
  * Abaixo deste zoom não se pedem lotes (e os carregados saem da pintura —
- * ver ocultarLotesAfastado, em mapa.js). Nos zooms 11 e 12 o lote é uma mancha
+ * ver aplicarNivelDoMapa, em mapa.js). Nos zooms 11 e 12 o lote é uma mancha
  * branca, e o contorno do bairro com o nome já diz onde cada um está.
  */
 const ZOOM_MINIMO = 13
@@ -40,11 +40,14 @@ const ZOOM_MINIMO = 13
 // não escala: a cidade inteira são ~23 MB de GeoJSON e quase 1 s de banco
 // (medido com 50 mil lotes sintéticos no MySQL 8.0.46). Então:
 //
-// 1. NÍVEL DE DETALHE PELA ÁREA. Lote só é pedido quando a área visível cabe
-//    em AREA_MAX_GRAUS2 (~3,5 km²). Mais longe que isso o mapa mostra o
-//    contorno e o nome dos bairros (bairros-contorno.js) e o nome da cidade.
-//    É a área, e não o zoom, que decide: o mesmo zoom 16 cobre 0,8 km² no
-//    celular e 18 km² num monitor largo.
+// 1. NÍVEL DE DETALHE PELA ÁREA (nivelDoMapa). Do mais longe ao mais perto:
+//      municipio  só o nome da cidade
+//      bairros    contorno e nome dos bairros (bairros-contorno.js)
+//      quadras    contorno e número das quadras, gravados junto com o do
+//                 bairro — ~100 formas no lugar de ~2.000 lotes
+//      lotes      as linhas e os números dos lotes (e, mais perto, as medidas)
+//    Lote só é pedido no último nível. É a área, e não o zoom, que decide:
+//    o mesmo zoom 16 cobre 0,8 km² no celular e 18 km² num monitor largo.
 // 2. BLOCOS FIXOS de BLOCO_GRAUS (~1,1 km). A tela vira uma lista de blocos;
 //    só se pede o que falta, em paralelo, e um bloco já carregado nunca é
 //    pedido de novo. Arrastar o mapa enquanto carrega não perde mais o pedido
@@ -55,8 +58,17 @@ const ZOOM_MINIMO = 13
 /** Lado do bloco, em graus (~1,1 km). Um bloco denso tem ~2.700 lotes. */
 const BLOCO_GRAUS = 0.01
 
-/** Maior área visível (graus²) em que os lotes são pedidos — ~3,5 km². */
-const AREA_MAX_GRAUS2 = 0.0003
+/**
+ * Maior área visível (graus²) em que os lotes são pedidos — ~1,2 km²: no
+ * monitor largo, o zoom em que os números dos lotes também aparecem.
+ */
+const AREA_MAX_GRAUS2 = 0.0001
+
+/** Maior área (graus²) em que as quadras aparecem — ~10 km², um bairro grande. */
+const AREA_MAX_QUADRAS_GRAUS2 = 0.0008
+
+/** Maior área (graus²) em que os bairros aparecem — ~370 km², a cidade com folga. */
+const AREA_MAX_BAIRROS_GRAUS2 = 0.03
 
 /**
  * Área maior (~14 km², um bairro inteiro numa tela larga) enquanto uma
@@ -79,12 +91,23 @@ const LIMITE_MEMORIA = 15000
 /** Pedidos de bloco simultâneos. */
 const BLOCOS_EM_PARALELO = 4
 
+/**
+ * O nível de detalhe da área visível.
+ * @param {L.Map} mapa @returns {'municipio'|'bairros'|'quadras'|'lotes'}
+ */
+function nivelDoMapa(mapa) {
+  if (!mapa) return 'municipio'
+  const b = mapa.getBounds()
+  const area = (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth())
+  const tetoLotes = curadoriaNoMapa() ? AREA_MAX_CURADORIA_GRAUS2 : AREA_MAX_GRAUS2
+  if (mapa.getZoom() >= ZOOM_MINIMO && area <= tetoLotes) return 'lotes'
+  if (area <= AREA_MAX_QUADRAS_GRAUS2) return 'quadras'
+  return area <= AREA_MAX_BAIRROS_GRAUS2 ? 'bairros' : 'municipio'
+}
+
 /** A área visível está na escala em que os lotes aparecem? @param {L.Map} mapa */
 function lotesNaEscala(mapa) {
-  if (!mapa || mapa.getZoom() < ZOOM_MINIMO) return false
-  const b = mapa.getBounds()
-  const teto = curadoriaNoMapa() ? AREA_MAX_CURADORIA_GRAUS2 : AREA_MAX_GRAUS2
-  return (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth()) <= teto
+  return nivelDoMapa(mapa) === 'lotes'
 }
 
 /**

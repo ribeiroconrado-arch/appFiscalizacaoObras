@@ -281,8 +281,12 @@ function desenharRotulosDeGrupo() {
   // elemento que o Leaflet reposiciona a cada arrasto; com a cidade inteira
   // eram centenas de quadras fora da vista. Refeito a cada moveend (mapa.js).
   const area = mapaState.obj?.getBounds?.().pad(0.3)
+  // O número da quadra tirado dos lotes é do nível dos LOTES. Mais longe, quem
+  // rotula a quadra é o contorno gravado (carregarQuadrasVisiveis) — e lotes
+  // de uma visita anterior, ainda em memória, não podem duplicá-lo.
+  const nivel = typeof nivelDoMapa === 'function' && mapaState.obj ? nivelDoMapa(mapaState.obj) : 'lotes'
 
-  for (const chave of ['bairro', 'quadra']) {
+  for (const chave of nivel === 'lotes' ? ['bairro', 'quadra'] : ['bairro']) {
     const g = {}
     const apelidos = {}   // nome do desenho => apelido do mapa (Parâmetros › Bairros)
     for (const f of state.lotes.values()) {
@@ -336,7 +340,6 @@ function rotulosPorZoom() {
   if (typeof sincronizarRotulos === 'function') { sincronizarRotulos() }
   document.body.classList.toggle('z-quadra', z >= 16)
   document.body.classList.toggle('z-bairro', z <= 17)
-  document.body.classList.toggle('z-cidade', z <= 12)
 
   const leg = document.getElementById('leg-zoom')
   if (leg) {

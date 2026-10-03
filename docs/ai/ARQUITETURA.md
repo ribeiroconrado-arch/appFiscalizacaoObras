@@ -190,14 +190,25 @@ concordar.
 
 O que o mapa desenha depende da ESCALA, e a escala é medida pela área
 visível, não pelo zoom (o mesmo zoom 16 cobre 0,8 km² no celular e 18 km² num
-monitor largo):
+monitor largo). `nivelDoMapa` (app.js) decide o nível; `aplicarNivelDoMapa`
+(mapa.js) põe a classe `nivel-*` no `<body>` e mostra só as camadas dele:
 
-| Escala | Mostra | De onde |
-|---|---|---|
-| zoom ≤ 12 | nome da cidade e contorno do município | `public/geo/primavera-do-leste.geojson` |
-| até ~3,5 km² visíveis | contorno e nome dos bairros | tabela `bairros` (bairros-contorno.js) |
-| até ~3,5 km² (14 km² com curadoria no mapa) | linhas dos lotes | `/api/mapa/lotes`, em blocos |
-| zoom ≥ 16 / 18 / 21 | número da quadra / do lote / medidas dos lados | lotes carregados |
+| Nível | Área visível | Mostra | De onde |
+|---|---|---|---|
+| município | acima de ~370 km² | só "Primavera do Leste - MT", sobre a cidade | `public/geo/primavera-do-leste.geojson` |
+| bairros | até ~370 km² | contorno e nome dos bairros | tabela `bairros` (`/api/mapa/bairros`) |
+| quadras | até ~10 km² | contorno e número das quadras, sem lote | tabela `quadras` (`/api/mapa/quadras?bairro=`) |
+| lotes | até ~1,2 km² (14 km² com curadoria no mapa) | linhas e números dos lotes; medidas no zoom 21 | `/api/mapa/lotes`, em blocos |
+
+**Contorno do bairro e das quadras**: calculados juntos no navegador do
+curador (`bairros-contorno.js`, JSTS), na mesma leitura dos lotes, e gravados
+juntos (`BairroContornoController::gravar`, numa transação). A quadra é a
+união dos lotes com o mesmo número, com fechamento de 1 m para costurar as
+frestas do desenho; o número vai no ponto interno do maior pedaço. Quadra que
+o banco recusa (desenho inválido) fica de fora sem barrar o bairro. O mapa
+pede as quadras por bairro, uma vez, quando o bairro entra na tela no nível
+das quadras — um bairro de 1.500 lotes são ~50 quadras, 13 KB (1 KB
+compactado), contra ~1 MB dos lotes.
 
 **Carga em blocos** (`app.js`, `carregarLotesVisiveis`): a tela vira blocos
 fixos de 0,01° (~1,1 km); só se pede o que falta, quatro em paralelo, do

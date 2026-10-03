@@ -546,13 +546,14 @@ class LoteRepository
     // Buritis V a área caiu de 37 ha para 1,6 ha. Aqui só se lê, confere e grava.
 
     /**
-     * Os lotes ativos de um bairro, em GeoJSON, para o cálculo do contorno.
+     * Os lotes ativos de um bairro, em GeoJSON, para o cálculo do contorno do
+     * bairro e das quadras dele.
      *
-     * @return array<int,object> id, geojson
+     * @return array<int,object> id, quadra, geojson
      */
     public function lotesDoBairro(string $bairro): array
     {
-        return DB::select('SELECT id, ST_AsGeoJSON(geom) AS geojson FROM lotes
+        return DB::select('SELECT id, quadra, ST_AsGeoJSON(geom) AS geojson FROM lotes
                             WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$bairro]);
     }
 
@@ -643,6 +644,61 @@ class LoteRepository
                               lotes_contados = VALUES(lotes_contados), contorno_em = VALUES(contorno_em),
                               gerado_por = VALUES(gerado_por), isolados = VALUES(isolados), updated_at = VALUES(updated_at)',
             [$bairro, $codigo, $geojson, $raio, $lotes, $agora, $usuario, json_encode($isolados), $agora, $agora]);
+    }
+
+    /**
+     * Substitui as quadras de um bairro pelas recém-calculadas. Quadra que
+     * sumiu (unificada, renumerada) sai junto: o bairro inteiro é regravado.
+     *
+     * Cada quadra passa pelo ST_IsValid antes de entrar. A inválida (ou que o
+     * banco nem consegue ler) fica de fora e é contada — uma quadra ruim não pode impedir o contorno do
+     * bairro, que é o que o mapa afastado mais precisa.
+     *
+     * @param  list<array{numero:string, geojson:string, lat:float, lon:float, lotes:int}>  $quadras
+     * @return array{gravadas:int, invalidas:list<string>}
+     */
+    public function gravarQuadras(string $bairro, array $quadras): array
+    {
+        $agora = now()->toDateTimeString();
+        $bairroId = DB::table('bairros')->where('nome', $bairro)->value('id');
+        DB::table('quadras')->where('bairro', $bairro)->delete();
+
+        $invalidas = [];
+        foreach ($quadras as $q) {
+            try {
+                $valida = DB::selectOne('SELECT ST_IsValid(ST_GeomFromGeoJSON(?, 1, 4326)) AS v', [$q['geojson']])->v ?? 0;
+            } catch (\Illuminate\Database\QueryException) {
+                $valida = 0;   // coordenada fora de faixa ou documento malformado
+            }
+            if (! $valida) {
+                $invalidas[] = $q['numero'];
+                continue;
+            }
+            DB::insert('INSERT INTO quadras (bairro_id, bairro, numero, geom, rotulo_lat, rotulo_lon, lotes_contados, created_at, updated_at)
+                        VALUES (?, ?, ?, ST_GeomFromGeoJSON(?, 1, 4326), ?, ?, ?, ?, ?)',
+                [$bairroId, $bairro, $q['numero'], $q['geojson'], $q['lat'], $q['lon'], $q['lotes'], $agora, $agora]);
+        }
+
+        return ['gravadas' => count($quadras) - count($invalidas), 'invalidas' => $invalidas];
+    }
+
+    /**
+     * As quadras de um bairro, para o mapa na escala do bairro. Precisão de
+     * 7 casas (~1 cm): o desenho é de contorno, e cada casa a mais é peso.
+     *
+     * @return array<int,object> numero, lat, lon, geojson
+     */
+    public function quadrasDoBairro(string $bairro): array
+    {
+        return DB::select('SELECT numero, rotulo_lat AS lat, rotulo_lon AS lon, ST_AsGeoJSON(geom, 7) AS geojson
+                             FROM quadras WHERE bairro = ? ORDER BY numero', [$bairro]);
+    }
+
+    /** Quantas quadras cada bairro tem gravadas. @return array<string,int> */
+    public function quadrasPorBairro(): array
+    {
+        return collect(DB::select('SELECT bairro, COUNT(*) AS n FROM quadras GROUP BY bairro'))
+            ->mapWithKeys(fn ($l) => [$l->bairro => (int) $l->n])->all();
     }
 
     public function criarComGeometria(array $atributos, string $geojson): int
