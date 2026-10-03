@@ -76,6 +76,8 @@ class CadastroImobiliarioController extends Controller
                 'setor'                 => $i['setor'] ?? null,
                 'regiao_fiscal'         => $i['regiao_fiscal'] ?? null,
                 'complemento'           => $i['complemento'] ?? null,
+                'logradouro'            => $i['logradouro'] ?? null,
+                'numero_predial'        => $i['numero_predial'] ?? null,
             ],
             // Na ordem das colunas da exportação: a coluna JSON do MySQL
             // reordena as chaves, e a ficha leria "AGUA" antes de "OCUPACAO".

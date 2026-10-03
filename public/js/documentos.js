@@ -410,12 +410,60 @@ async function carregarOpcoes() {
   return dState.opcoes
 }
 
-/** Mantém o campo escondido com aaaa-mm-ddThh:mm. */
+// ── DATA E HORA DO FATO ──────────────────────────────────────
+//
+// Dois campos de TEXTO com máscara (dd/mm/aaaa e hh:mm), no lugar dos
+// seletores nativos do navegador. Os valores que o resto do sistema usa ficam
+// nos campos escondidos: nd-data (aaaa-mm-dd), nd-hora (hh:mm) e nd-datahora.
+
+/** Dos campos escondidos para o que se vê, e para o aaaa-mm-ddThh:mm. */
 function syncDataDoc() {
   const d = document.getElementById('nd-data').value
   const h = document.getElementById('nd-hora').value || '00:00'
   document.getElementById('nd-datahora').value = d ? `${d}T${h}` : ''
-  atualizarDisplayData(document.getElementById('nd-data'))
+  document.getElementById('nd-data-txt').value = d ? d.split('-').reverse().join('/') : ''
+  document.getElementById('nd-hora-txt').value = document.getElementById('nd-hora').value || ''
+}
+
+/** Põe as barras enquanto se digita: 03102026 → 03/10/2026. */
+function mascararDataDoc(inp) {
+  const n = inp.value.replace(/\D/g, '').slice(0, 8)
+  inp.value = [n.slice(0, 2), n.slice(2, 4), n.slice(4)].filter(Boolean).join('/')
+}
+
+/** Põe os dois-pontos enquanto se digita: 1257 → 12:57. */
+function mascararHoraDoc(inp) {
+  const n = inp.value.replace(/\D/g, '').slice(0, 4)
+  inp.value = n.length > 2 ? n.slice(0, 2) + ':' + n.slice(2) : n
+}
+
+/**
+ * Do que foi digitado para os campos escondidos. Data ou hora que não existe
+ * (31/02, 25:00) é recusada na saída do campo, com o motivo — e o valor
+ * anterior continua valendo.
+ */
+function lerDataHoraDoc() {
+  const dt = document.getElementById('nd-data-txt').value.trim()
+  const hr = document.getElementById('nd-hora-txt').value.trim()
+
+  if (dt) {
+    const m = dt.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    const data = m ? new Date(+m[3], +m[2] - 1, +m[1]) : null
+    const valida = data && data.getDate() === +m[1] && data.getMonth() === +m[2] - 1 && +m[3] >= 1990
+    if (!valida) { exigirCampo('nd-data-txt', 'Data inválida. Use dd/mm/aaaa.'); return }
+    document.getElementById('nd-data').value = `${m[3]}-${m[2]}-${m[1]}`
+  } else {
+    document.getElementById('nd-data').value = ''
+  }
+
+  if (hr) {
+    const m = hr.match(/^(\d{1,2}):?(\d{2})$/)
+    if (!m || +m[1] > 23 || +m[2] > 59) { exigirCampo('nd-hora-txt', 'Hora inválida. Use hh:mm.'); return }
+    document.getElementById('nd-hora').value = m[1].padStart(2, '0') + ':' + m[2]
+  } else {
+    document.getElementById('nd-hora').value = ''
+  }
+  syncDataDoc()
 }
 
 /**
@@ -450,44 +498,153 @@ function trocarTipoDoc() {
   if (rot) rot.textContent = sel.options[sel.selectedIndex]?.textContent || 'Documento'
 }
 
-/** Renderiza os artigos da lei escolhida, marcando os sugeridos. */
-function trocarLeiDoc() {
-  const id = document.getElementById('nd-lei').value
-  const lei = dState.opcoes.leis.find(l => String(l.id) === id)
-  const alvo = document.getElementById('nd-artigos')
+// ── LEI E ARTIGOS (padrão do AppPOSTURAS) ────────────────────
+//
+// A lei é um campo pesquisável, que TRAVA enquanto houver artigo na lista: um
+// documento cita artigos de uma lei só. O artigo é procurado por número,
+// apelido, texto ou termo de busca; escolhido, entra na lista pelo "+add". Os
+// artigos da lista aparecem em quadros cinzas, cada um com o seu X.
+// `fdState.artigos` guarda os ids, na ordem em que entraram; a lei fica no
+// campo escondido #nd-lei, que é de onde o resto do formulário a lê.
 
-  if (!lei) { alvo.innerHTML = '<div class="lista-vazia">Escolha a lei para ver os artigos.</div>'; trocarTipoDoc(); return }
+/** O artigo escolhido na busca, à espera do "+add". */
+let artigoEscolhidoDoc = null
 
-  if (!lei.artigos.length) {
-    // Este é o caso real hoje: leis cadastradas, artigos não. Dizer o que
-    // falta e onde resolver é melhor do que mostrar lista vazia.
-    alvo.innerHTML = `<div class="aviso-legal"><b>Esta lei ainda não tem artigos cadastrados.</b><br>
-      A fundamentação legal precisa ser cadastrada em Parâmetros &gt; Legislação, com
-      validação jurídica. Sem artigo, o sistema não permite lavrar o documento.</div>`
-    trocarTipoDoc(); return
-  }
+const leiDoDoc = () => dState.opcoes?.leis.find(l => String(l.id) === document.getElementById('nd-lei').value) || null
+const leiDoArtigoDoc = id => dState.opcoes?.leis.find(l => l.artigos.some(a => a.id === id)) || null
+const artigoDoc = id => leiDoArtigoDoc(id)?.artigos.find(a => a.id === id) || null
+const docTravado = () => fdState.estado !== 'novo' && !fdState.editando
+const semAcentoDoc = t => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
-  alvo.innerHTML = lei.artigos.map(a => `
-    <label class="chk-item ${fdState.artigos.includes(a.id) ? 'marcado' : ''}">
-      <input type="checkbox" value="${a.id}" ${fdState.artigos.includes(a.id) ? 'checked' : ''}
-             onchange="marcarArtigo(${a.id}, this.checked); this.closest('.chk-item').classList.toggle('marcado', this.checked)">
-      <span class="desc">${esc(a.rotulo)} · ${a.base_multa === 'fixa' ? fmtNum(a.multa_upf || 0) + ' UPF'
-          : a.base_multa === 'sem_multa' ? 'sem multa'
-          : fmtNum(a.multa_upf_m2 || 0) + ' UPF/m² · ' + (a.base_multa === 'area_terreno' ? 'terreno' : 'construído')}
-        <br><span class="cod">${esc(a.conduta ?? '')}</span></span>
-    </label>`).join('')
-
-  trocarTipoDoc()
-  recalcularMultaDoc()
-  // Artigo recém-renderizado nasce habilitado; o estado do documento manda.
-  travarCamposDoc(fdState.estado !== 'novo' && !fdState.editando)
+/** "Art. 12 - Obra sem alvará": número e apelido, sem repetir quando são iguais. */
+function rotuloArtigoDoc(a) {
+  if (!a) return ''
+  return a.rotulo && a.rotulo !== a.numero ? `${a.numero} - ${a.rotulo}` : a.numero
 }
 
-/** @param {number} id @param {boolean} marcado */
-function marcarArtigo(id, marcado) {
-  const i = fdState.artigos.indexOf(id)
-  if (marcado && i < 0) fdState.artigos.push(id)
-  if (!marcado && i >= 0) fdState.artigos.splice(i, 1)
+function fecharAcDoc(id) { setTimeout(() => document.getElementById(id)?.classList.remove('open'), 150) }
+
+/** Lista as leis que casam com o que foi digitado. */
+function buscarLeiDoc(inp) {
+  const lista = document.getElementById('ac-nd-lei')
+  if (docTravado() || fdState.artigos.length) { lista.classList.remove('open'); return }
+  const q = semAcentoDoc(inp.value.trim())
+  const leis = dState.opcoes.leis.filter(l => !q || semAcentoDoc(l.rotulo).includes(q))
+  lista.innerHTML = leis.length
+    ? leis.map(l => `<div class="ac-item" onmousedown="event.preventDefault(); selLeiDoc(${l.id})">${esc(l.rotulo)}</div>`).join('')
+    : '<div class="ac-empty">Nenhuma lei encontrada</div>'
+  lista.classList.add('open')
+}
+
+/** @param {number} id */
+function selLeiDoc(id) {
+  if (docTravado()) return
+  document.getElementById('nd-lei').value = id
+  document.getElementById('ac-nd-lei').classList.remove('open')
+  trocarLeiDoc()
+}
+
+function limparLeiDoc() {
+  if (docTravado()) return
+  if (fdState.artigos.length) { toast('Remova os artigos da lista para trocar a lei', 'err'); return }
+  document.getElementById('nd-lei').value = ''
+  trocarLeiDoc()
+  document.getElementById('nd-lei-busca').focus()
+}
+
+/** Lista os artigos que casam: da lei escolhida, ou de todas se não há lei. */
+function buscarArtigoDoc(inp) {
+  const lista = document.getElementById('ac-nd-artigo')
+  if (docTravado()) { lista.classList.remove('open'); return }
+  artigoEscolhidoDoc = null
+  const lei = leiDoDoc()
+  const q = semAcentoDoc(inp.value.trim())
+  const pool = (lei ? [lei] : dState.opcoes.leis)
+    .flatMap(l => l.artigos.map(a => ({ a, lei: lei ? '' : l.rotulo })))
+    .filter(({ a }) => !fdState.artigos.includes(a.id))
+    .filter(({ a }) => !q || semAcentoDoc([a.numero, a.rotulo, a.conduta, ...(a.termos || [])].join(' ')).includes(q))
+
+  lista.innerHTML = pool.length
+    ? pool.slice(0, 60).map(({ a, lei }) => `<div class="ac-item" onmousedown="event.preventDefault(); selArtigoDoc(${a.id})">
+        ${esc(rotuloArtigoDoc(a))}${lei ? ` <span class="ac-sub">· ${esc(lei)}</span>` : ''}</div>`).join('')
+    : `<div class="ac-empty">${lei && !lei.artigos.length
+        ? 'Esta lei ainda não tem artigos cadastrados (Parâmetros › Legislação).' : 'Nenhum artigo encontrado'}</div>`
+  lista.classList.add('open')
+}
+
+/** Escolhe o artigo na busca; ele só entra na lista com o "+add". */
+function selArtigoDoc(id) {
+  if (docTravado()) return
+  artigoEscolhidoDoc = id
+  document.getElementById('nd-artigo-busca').value = rotuloArtigoDoc(artigoDoc(id))
+  document.getElementById('ac-nd-artigo').classList.remove('open')
+}
+
+function limparArtigoBuscaDoc() {
+  artigoEscolhidoDoc = null
+  const inp = document.getElementById('nd-artigo-busca')
+  inp.value = ''
+  if (!docTravado()) inp.focus()
+}
+
+function addArtigoDoc() {
+  if (docTravado()) return
+  const id = artigoEscolhidoDoc
+  if (!id) { exigirCampo('nd-artigo-busca', 'Escolha um artigo na lista de sugestões.'); return }
+  const lei = leiDoArtigoDoc(id)
+  if (!lei) return
+  const atual = document.getElementById('nd-lei').value
+  if (atual && String(lei.id) !== atual) { toast('Só é possível adicionar artigos da mesma lei', 'err'); return }
+  // Escolher o artigo antes da lei já define a lei.
+  if (!atual) document.getElementById('nd-lei').value = lei.id
+  if (!fdState.artigos.includes(id)) fdState.artigos.push(id)
+  limparArtigoBuscaDoc()
+  trocarLeiDoc()
+}
+
+/** @param {number} id */
+function removerArtigoDoc(id) {
+  if (docTravado()) return
+  fdState.artigos = fdState.artigos.filter(a => a !== id)
+  trocarLeiDoc()
+}
+
+/** O que cada artigo cobra, para a linha de cima do quadro. */
+function multaDoArtigoDoc(a) {
+  if (a.base_multa === 'fixa') return fmtNum(a.multa_upf || 0) + ' UPF'
+  if (a.base_multa === 'sem_multa') return 'sem multa'
+  return fmtNum(a.multa_upf_m2 || 0) + ' UPF/m² · ' + (a.base_multa === 'area_terreno' ? 'terreno' : 'construído')
+}
+
+/**
+ * Redesenha a lei, a trava e os quadros dos artigos a partir do estado
+ * (#nd-lei e fdState.artigos). É o ponto único de atualização: quem muda a
+ * lei ou a lista — a busca, o "+add", o X, a sugestão da vistoria — chama isto.
+ */
+function trocarLeiDoc() {
+  const lei = leiDoDoc()
+  const travado = docTravado()
+  const busca = document.getElementById('nd-lei-busca')
+  busca.value = lei ? lei.rotulo : ''
+  // Com artigo na lista, a lei não se troca: o campo vira leitura.
+  busca.readOnly = fdState.artigos.length > 0
+  document.getElementById('nd-lei-trava').hidden = !fdState.artigos.length || travado
+
+  document.getElementById('nd-artigos').innerHTML = fdState.artigos.length
+    ? fdState.artigos.map(id => {
+        const a = artigoDoc(id)
+        if (!a) return ''
+        return `<div class="artigo-tag">
+          <div class="artigo-tag-topo">
+            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')} <span class="artigo-tag-multa">· ${multaDoArtigoDoc(a)}</span></span>
+            ${travado ? '' : `<button type="button" class="artigo-tag-x" title="Remover" onclick="removerArtigoDoc(${a.id})">&times;</button>`}
+          </div>
+          ${a.conduta ? `<div class="artigo-tag-texto">${esc(a.conduta)}</div>` : ''}
+        </div>`
+      }).join('')
+    : '<div class="ac-dica">Nenhum artigo adicionado.</div>'
+
+  trocarTipoDoc()
   recalcularMultaDoc()
 }
 

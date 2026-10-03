@@ -19,7 +19,7 @@
 // ══════════════════════════════════════════════
 
 /** Ordem das abas. É ela que define o que «/‹/›/» percorrem. */
-const ABAS_DOC = ['autuado', 'imovel', 'infracao', 'anexos', 'resumo']
+const ABAS_DOC = ['autuado', 'infracao', 'anexos', 'resumo']
 
 const fdState = {
   /** @type {'novo'|'rascunho'|'lavrado'} */ estado: 'novo',
@@ -148,10 +148,12 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   if (documento) {
     fdState.estado = documento.status.valor === 'rascunho' ? 'rascunho' : 'lavrado'
     fdState.id = documento.id
-    fdState.artigos = []
+    // Os artigos e a lei da peça voltam ao formulário pelos ids: sem isto,
+    // gravar um rascunho reaberto apagava o enquadramento dele.
+    fdState.artigos = (documento.artigos || []).map(a => a.artigo_id).filter(Boolean)
     fdState.anexos = documento.anexos || 0
     fdState.lote = {
-      id: null,
+      id: documento.imovel.lote_id ?? null,
       inscricao: documento.imovel.inscricao,
       bairro: documento.imovel.bairro,
       quadra: documento.imovel.quadra,
@@ -170,9 +172,9 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   // Tipos: os quatro de obras. A lista vem do servidor, não fixa aqui.
   document.getElementById('nd-tipo').innerHTML =
     o.tipos.map(t => `<option value="${t.valor}">${esc(t.rotulo)}</option>`).join('')
-  document.getElementById('nd-lei').innerHTML =
-    '<option value="">— selecione —</option>' +
-    o.leis.map(l => `<option value="${l.id}">${esc(l.rotulo)}</option>`).join('')
+  document.getElementById('nd-lei').value = documento?.legislacao_id ?? ''
+  artigoEscolhidoDoc = null
+  document.getElementById('nd-artigo-busca').value = ''
 
   if (documento) {
     preencherFormDoc(documento)
@@ -190,9 +192,11 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   // documento com o que tem em campo e amarra o lote depois, pela aba Imóvel
   // (ver DocumentoController::storeSemLote). Sem imóvel não há última vistoria
   // a consultar, e a função já trata o id ausente limpando a caixa.
-  if (documento) { return }
+  // O cadastro municipal do imóvel: sempre mostrado; em peça nova, também
+  // sugere o autuado, os endereços e a área do terreno.
+  renderBciDoc({ sugerir: !documento })
 
-  preencherAutuadoDoCadastro(fdState.lote?.id ?? null)
+  if (documento) { return }
 
   if (vistoria) {
     await sugerirDaVistoria(vistoria)
@@ -201,32 +205,109 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   }
 }
 
+/** Rótulo e formato de cada dado do BCI, na ordem em que aparecem. */
+const BCI_CAMPOS_DOC = [
+  ['codigo_cadastro', 'Código no cadastro'],
+  ['inscricao_alternativa', 'Inscrição alternativa'],
+  ['isencao', 'Situação / isenção'],
+  ['area_terreno_m2', 'Área do terreno', 'm²'],
+  ['area_edificada_m2', 'Área edificada', 'm²'],
+  ['fracao_ideal', 'Fração ideal'],
+  ['testada_m', 'Testada', 'm'],
+  ['medida_lado_direito', 'Lado direito', 'm'],
+  ['medida_lado_esquerdo', 'Lado esquerdo', 'm'],
+  ['medida_fundo', 'Fundo', 'm'],
+  ['setor', 'Setor'],
+  ['regiao_fiscal', 'Região fiscal'],
+  ['logradouro', 'Logradouro'],
+  ['numero_predial', 'Número'],
+  ['complemento', 'Complemento'],
+]
+
 /**
- * Sugere como autuado o (primeiro) proprietário do cadastro municipal.
+ * O que o cadastro municipal (BCI) diz do imóvel da peça, dentro do
+ * formulário — e, em peça NOVA, a sugestão dos campos que saem dele.
  *
- * Só sugere: o campo continua editável, porque quem responde pela obra nem
- * sempre é o dono que consta no cadastro. Não sobrescreve o que já foi
- * digitado, e o CPF só vem se o servidor o mandou para este usuário (agente
- * ou administrador — ver App\Cadastro\ProprietariosVisiveis).
+ * O BCI aqui é LEITURA: código, medidas, áreas, características, unidades e
+ * proprietários aparecem como constam no cadastro. O que a peça pode alterar
+ * são os campos dela, que nascem sugeridos: nome, CPF/CNPJ e endereço
+ * domiciliar do autuado (do proprietário) e endereço da obra (do logradouro).
+ * A ÁREA DO TERRENO não é editável: é a do cadastro, ou a do desenho quando o
+ * cadastro não a traz, e é base de multa.
  *
- * @param {number|null} loteId
+ * Só preenche campo vazio — o que o fiscal digitou é decisão dele. O CPF e o
+ * endereço do proprietário só chegam a quem pode vê-los
+ * (App\Cadastro\ProprietariosVisiveis).
+ *
+ * @param {{sugerir?: boolean}} [o] sugerir: preencher os campos vazios da peça
  */
-async function preencherAutuadoDoCadastro(loteId) {
-  if (!loteId || typeof obterBci !== 'function') { return }
-  try {
-    const dono = (await obterBci(loteId)).proprietarios?.[0]
-    if (!dono || fdState.lote?.id !== loteId) { return }
-    const nome = document.getElementById('nd-autuado')
-    const doc = document.getElementById('nd-autuado-doc')
-    if (!nome.value.trim()) { nome.value = dono.nome || '' }
-    if (!doc.value.trim() && dono.documento) { doc.value = dono.documento }
-  } catch { /* sem cadastro: o fiscal digita, como antes */ }
+async function renderBciDoc({ sugerir = false } = {}) {
+  const alvo = document.getElementById('nd-bci')
+  const loteId = fdState.lote?.id ?? null
+  const rotArea = document.getElementById('nd-area-terreno-rot')
+  rotArea.textContent = 'Área do terreno (m²)'
+
+  if (!loteId || typeof obterBci !== 'function') {
+    alvo.innerHTML = `<div class="lista-vazia">${loteId ? 'Cadastro municipal indisponível.' : 'Identifique o imóvel para ver o cadastro municipal.'}</div>`
+    return
+  }
+
+  alvo.innerHTML = '<div class="lista-vazia">Lendo o cadastro municipal…</div>'
+  let bci
+  try { bci = await obterBci(loteId) } catch {
+    alvo.innerHTML = '<div class="lista-vazia">Não foi possível ler o cadastro municipal.</div>'
+    return
+  }
+  if (fdState.lote?.id !== loteId) return      // o imóvel mudou enquanto se lia
+
+  const im = bci.tem ? bci.imovel : null
+  const donos = bci.proprietarios || []
+
+  if (sugerir) {
+    const por = (id, valor) => { const el = document.getElementById(id); if (valor && !el.value.trim()) el.value = valor }
+    por('nd-autuado', donos[0]?.nome)
+    por('nd-autuado-doc', donos[0]?.documento)
+    por('nd-autuado-endereco', donos[0]?.endereco)
+    if (im) {
+      por('nd-endereco', [[im.logradouro, im.numero_predial && String(im.numero_predial).replace(/^0+/, '')].filter(Boolean).join(', '),
+        im.complemento].filter(Boolean).join(' — '))
+    }
+  }
+  // A área do terreno da peça: a do cadastro tem precedência sobre a do desenho.
+  if (im?.area_terreno_m2 && (sugerir || !document.getElementById('nd-area-terreno').value)) {
+    document.getElementById('nd-area-terreno').value = Number(im.area_terreno_m2).toFixed(2)
+    recalcularMultaDoc()
+  }
+  if (document.getElementById('nd-area-terreno').value) {
+    rotArea.textContent = 'Área do terreno (m²) — ' + (im?.area_terreno_m2 ? 'do cadastro municipal' : 'do desenho')
+  }
+
+  if (!bci.tem) {
+    alvo.innerHTML = `<div class="lista-vazia">${esc(bci.motivo || 'Este imóvel não está no cadastro municipal.')}</div>`
+    return
+  }
+
+  const par = (r, v) => `<div><span class="df-rot">${esc(r)}</span><span class="df-val">${esc(v)}</span></div>`
+  const dados = BCI_CAMPOS_DOC
+    .filter(([k]) => im[k] !== null && im[k] !== undefined && im[k] !== '')
+    .map(([k, rot, un]) => par(rot, typeof im[k] === 'number' ? fmtNum(im[k]) + (un ? ' ' + un : '') : im[k]))
+  const carac = (bci.caracteristicas || []).filter(c => c.valor !== null && c.valor !== '')
+
+  alvo.innerHTML = `
+    <div class="df-grade">${dados.join('') || par('Cadastro', 'sem dados')}</div>
+    ${donos.length ? `<div class="bci-sub">Proprietário(s)</div><div class="df-grade">${donos.map(d =>
+      par(d.nome || '—', [d.documento, d.endereco].filter(Boolean).join(' · ') || '—')).join('')}</div>` : ''}
+    ${carac.length ? `<div class="bci-sub">Características</div><div class="df-grade">${carac.map(c =>
+      par(String(c.chave).replace(/_/g, ' '), c.valor)).join('')}</div>` : ''}
+    ${(bci.unidades || []).length ? `<div class="bci-sub">Unidades edificadas</div><div class="df-grade">${bci.unidades.map(u =>
+      par('Unidade ' + (u.numero ?? '—'), [u.area ? fmtNum(u.area) + ' m²' : null, u.ano, u.padrao].filter(Boolean).join(' · ') || '—')).join('')}</div>` : ''}`
 }
 
 /** Campos em branco, com os padrões de um documento novo. */
 function limparFormDoc() {
   document.getElementById('nd-autuado').value = ''
   document.getElementById('nd-autuado-doc').value = ''
+  document.getElementById('nd-autuado-endereco').value = ''
   document.getElementById('nd-endereco').value = ''
   document.getElementById('nd-descricao').value = ''
   document.getElementById('nd-data').value = dataHojeLocal()
@@ -241,11 +322,9 @@ function limparFormDoc() {
   document.getElementById('nd-area-construida').value = ''
   document.getElementById('nd-bloco-area').style.display = 'none'
   document.getElementById('nd-memoria-calculo').innerHTML = ''
-  document.getElementById('nd-artigos').innerHTML =
-    '<div class="lista-vazia">Escolha a lei para ver os artigos.</div>'
 
   renderImovelDoc()
-  trocarTipoDoc()
+  trocarLeiDoc()
 }
 
 /** @param {Object} d ficha vinda de /api/documentos/{id} */
@@ -253,6 +332,7 @@ function preencherFormDoc(d) {
   document.getElementById('nd-tipo').value = d.tipo
   document.getElementById('nd-autuado').value = d.autuado.nome || ''
   document.getElementById('nd-autuado-doc').value = d.autuado.documento || ''
+  document.getElementById('nd-autuado-endereco').value = d.autuado.endereco || ''
 
   // De quando é o dado cadastral desta peça. `d.cadastro` vem nulo no
   // rascunho — lá o carimbo ainda não existe, porque o conteúdo ainda pode
@@ -281,7 +361,7 @@ function preencherFormDoc(d) {
   syncDataDoc()
 
   renderImovelDoc()
-  trocarTipoDoc()
+  trocarLeiDoc()
   renderAnexosDoc()
 }
 
@@ -318,7 +398,6 @@ function renderImovelDoc() {
     ['Inscrição imobiliária', p.inscricao || 'sem inscrição'],
     ['Bairro', bairroDe(p)],
     ['Quadra / Lote', `${p.quadra ?? '—'} / ${p.numero_lote ?? '—'}`],
-    ['Área do terreno', p.area_gis_m2 ? fmtNum(p.area_gis_m2) + ' m²' : null],
   ].filter(([, v]) => v)
 
   alvo.innerHTML = linhas.map(([r, v]) =>
@@ -365,10 +444,11 @@ async function vincularImovelDoc(id) {
     renderImovelDoc()
 
     // A área do terreno acompanha o imóvel: ela é base de multa, e deixá-la
-    // com o valor de outro lote produziria conta errada.
-    const campoArea = document.getElementById('nd-area-terreno')
-    if (f.area && !campoArea.value) campoArea.value = Number(f.area).toFixed(2)
+    // com o valor de outro lote produziria conta errada. Entra a do desenho,
+    // e o cadastro municipal (renderBciDoc) a troca pela dele, se tiver.
+    document.getElementById('nd-area-terreno').value = f.area ? Number(f.area).toFixed(2) : ''
     recalcularMultaDoc()
+    renderBciDoc({ sugerir: true })
 
     toast('Imóvel vinculado ao documento')
   } catch (e) {
@@ -429,9 +509,10 @@ function aplicarEstadoDoc() {
  */
 function travarCamposDoc(travar) {
   document.querySelectorAll('#m-doc [data-lock]').forEach(el => { el.disabled = travar })
-  // Os checkboxes de artigo são gerados a cada render, fora do data-lock.
-  document.querySelectorAll('#nd-artigos input[type=checkbox]').forEach(el => { el.disabled = travar })
   document.getElementById('m-doc').classList.toggle('so-leitura', travar)
+  // Os quadros dos artigos são redesenhados: o X de cada um só existe
+  // quando a peça pode ser alterada.
+  trocarLeiDoc()
 }
 
 /** Cabeçalho: tipo, número, selo de estado, data de registro e agente. */
@@ -515,11 +596,15 @@ async function gravarDoc() {
   const tipo = document.getElementById('nd-tipo').value
   const t = dState.opcoes.tipos.find(x => x.valor === tipo)
 
+  // O que está digitado em data e hora vale mesmo sem ter saído do campo.
+  lerDataHoraDoc()
+
   const corpo = {
     tipo,
     data_fato: document.getElementById('nd-datahora').value,
     autuado_nome: document.getElementById('nd-autuado').value,
     autuado_documento: document.getElementById('nd-autuado-doc').value,
+    autuado_endereco: document.getElementById('nd-autuado-endereco').value,
     endereco: document.getElementById('nd-endereco').value,
     descricao: document.getElementById('nd-descricao').value,
     artigos: fdState.artigos,
@@ -575,13 +660,13 @@ function lavrarDocumento() {
   // A aba entra em cena ANTES do aviso: o campo que falta pode estar noutra
   // aba, e marcar um campo escondido não ajuda ninguém.
   if (!fdState.lote?.id) {
-    irAbaDoc('imovel')
+    irAbaDoc('autuado')
     exigirCampo('nd-imovel-termo', 'Informe o imóvel: a lavratura exige o lote identificado.')
     return
   }
   if (t?.exige_artigos && !fdState.artigos.length) {
     irAbaDoc('infracao')
-    exigirCampo('nd-lei', 'Selecione ao menos um artigo — documento sem fundamentação não pode ser lavrado.')
+    exigirCampo('nd-artigo-busca', 'Adicione ao menos um artigo — documento sem fundamentação não pode ser lavrado.')
     return
   }
 
@@ -666,12 +751,13 @@ function renderResumoDoc() {
     ${sec('Autuado')}
     ${linha('Nome', document.getElementById('nd-autuado').value) || '<div class="rs-linha"><span>Nome</span><b>—</b></div>'}
     ${linha('CPF/CNPJ', document.getElementById('nd-autuado-doc').value)}
+    ${linha('Endereço', document.getElementById('nd-autuado-endereco').value)}
 
     ${sec('Imóvel')}
     ${linha('Inscrição', p.inscricao || 'sem inscrição')}
     ${linha('Bairro', bairroDe(p))}
     ${linha('Quadra / Lote', `${p.quadra ?? '—'} / ${p.numero_lote ?? '—'}`)}
-    ${linha('Endereço', document.getElementById('nd-endereco').value)}
+    ${linha('Endereço da obra', document.getElementById('nd-endereco').value)}
 
     ${document.getElementById('nd-descricao').value
       ? sec('Constatação') + `<p class="rs-texto">${esc(document.getElementById('nd-descricao').value)}</p>` : ''}

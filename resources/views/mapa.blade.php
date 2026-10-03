@@ -2031,8 +2031,9 @@
     </div>
 
     <div class="doc-tabs" id="fd-tabs">
-      <button class="doc-tab ativa" data-aba="autuado"  onclick="irAbaDoc('autuado')">Autuado</button>
-      <button class="doc-tab" data-aba="imovel"   onclick="irAbaDoc('imovel')">Imóvel/Origem</button>
+      {{-- Autuado e imóvel numa aba só: são as duas metades de "contra quem e
+           sobre o quê", e em campo se preenche uma olhando a outra. --}}
+      <button class="doc-tab ativa" data-aba="autuado"  onclick="irAbaDoc('autuado')">Autuado/Imóvel</button>
       <button class="doc-tab" data-aba="infracao" onclick="irAbaDoc('infracao')">Infração</button>
       <button class="doc-tab" data-aba="anexos"   onclick="irAbaDoc('anexos')">Anexos</button>
       <button class="doc-tab" data-aba="resumo"   onclick="irAbaDoc('resumo')">Resumo</button>
@@ -2045,7 +2046,7 @@
   {{-- ── CORPO ROLÁVEL ── --}}
   <div class="doc-body" id="fd-body">
 
-    {{-- AUTUADO --}}
+    {{-- AUTUADO / IMÓVEL --}}
     <div class="doc-painel ativa" id="fdp-autuado">
       <div class="sec-title">Dados do autuado</div>
       <div class="field">
@@ -2058,6 +2059,14 @@
         <input type="text" id="nd-autuado" maxlength="160" data-lock
                placeholder="Como consta no cadastro">
       </div>
+      {{-- O DOMICÍLIO do autuado, e não o endereço da obra (que fica abaixo, no
+           imóvel): é para onde a peça é entregue ou enviada. Vem sugerido do
+           endereço de correspondência do cadastro municipal. --}}
+      <div class="field">
+        <label for="nd-autuado-endereco">Endereço domiciliar do autuado</label>
+        <input type="text" id="nd-autuado-endereco" maxlength="300" data-lock
+               placeholder="Rua, número, bairro, cidade — onde ele recebe correspondência">
+      </div>
       <p class="aviso-legal">
         Sem autuado identificado o documento ainda pode ser lavrado — a
         fiscalização encontra obra sem responsável no local o tempo todo. O
@@ -2067,10 +2076,7 @@
            carimbo, porque o dado ainda pode mudar. Discreto de propósito — é
            conferência, e quem abre a peça quase nunca está atrás dele. --}}
       <p class="doc-carimbo" id="nd-carimbo" hidden></p>
-    </div>
 
-    {{-- IMÓVEL / ORIGEM --}}
-    <div class="doc-painel" id="fdp-imovel">
       <div class="sec-title">Imóvel</div>
       {{-- Só leitura: o imóvel vem do mapa ou da busca, e trocá-lo aqui
            faria o documento mudar de objeto no meio da lavratura. --}}
@@ -2082,6 +2088,18 @@
         <input type="text" id="nd-endereco" maxlength="200" data-lock
                placeholder="Rua, número — complemento">
       </div>
+      {{-- Não editável: é a área do cadastro municipal (ou a do desenho,
+           quando o cadastro não a traz), e é base de multa. --}}
+      <div class="field">
+        <label for="nd-area-terreno" id="nd-area-terreno-rot">Área do terreno (m²)</label>
+        <input id="nd-area-terreno" type="number" readonly tabindex="-1" class="so-leitura-campo">
+      </div>
+
+      {{-- O QUE O CADASTRO MUNICIPAL (BCI) DIZ DESTE IMÓVEL — desenhado por
+           documento-form.js (renderBciDoc). Leitura: o que a peça pode
+           alterar são os campos dela, acima, que nascem sugeridos daqui. --}}
+      <div class="sec-title">Cadastro municipal (BCI)</div>
+      <div id="nd-bci"></div>
 
       <div class="sec-title">Origem</div>
       <div class="field">
@@ -2094,37 +2112,70 @@
 
     {{-- INFRAÇÃO --}}
     <div class="doc-painel" id="fdp-infracao">
-      <div class="sec-title">Tipo e data</div>
-      <div class="field">
-        <label for="nd-tipo">Tipo de documento</label>
-        <select id="nd-tipo" data-lock onchange="trocarTipoDoc()"></select>
-      </div>
-      <div class="field">
-        <label for="nd-data">Data e hora do fato</label>
-        <div class="data-hora-combo">
-          <input type="date" id="nd-data" data-lock onchange="syncDataDoc()" onfocus="preencherDataHojeSeVazio(this)">
-          <input type="time" id="nd-hora" data-lock onchange="syncDataDoc()" onfocus="preencherHoraAgoraSeVazio(this)">
+      {{-- O TIPO não aparece: foi escolhido antes de o formulário abrir, e
+           está no cabeçalho. O <select> continua existindo, escondido, porque
+           o resto do formulário lê dele. --}}
+      <select id="nd-tipo" hidden onchange="trocarTipoDoc()"></select>
+
+      <div class="sec-title">Data do fato</div>
+      {{-- Data e hora em TEXTO, com máscara: dd/mm/aaaa e hh:mm. Os seletores
+           nativos do navegador mudavam de cara a cada aparelho. Os valores que
+           o sistema usa ficam nos campos escondidos (syncDataDoc). --}}
+      <div class="g2">
+        <div class="field">
+          <label for="nd-data-txt">Data</label>
+          <input type="text" id="nd-data-txt" class="mono" inputmode="numeric" maxlength="10" data-lock
+                 placeholder="dd/mm/aaaa" autocomplete="off" oninput="mascararDataDoc(this)" onblur="lerDataHoraDoc()">
+        </div>
+        <div class="field">
+          <label for="nd-hora-txt">Hora</label>
+          <input type="text" id="nd-hora-txt" class="mono" inputmode="numeric" maxlength="5" data-lock
+                 placeholder="hh:mm" autocomplete="off" oninput="mascararHoraDoc(this)" onblur="lerDataHoraDoc()">
         </div>
       </div>
+      <input type="hidden" id="nd-data">
+      <input type="hidden" id="nd-hora">
       <input type="hidden" id="nd-datahora">
 
       <div id="bloco-fundamentacao">
         <div class="sec-title">Legislação infringida</div>
         <div id="nd-sugestao" style="margin-bottom:10px"></div>
+
+        {{-- LEI E ARTIGO NO PADRÃO DO APPPOSTURAS: lei pesquisável, que trava
+             enquanto houver artigo na lista; artigo pesquisável por número,
+             apelido, texto ou termo, somado à lista pelo "+add"; e os artigos
+             escolhidos em quadros cinzas, cada um com o seu X. --}}
+        <input type="hidden" id="nd-lei">
         <div class="field">
-          <label for="nd-lei">Lei</label>
-          <select id="nd-lei" data-lock onchange="trocarLeiDoc()"></select>
+          <label for="nd-lei-busca">Lei infringida *</label>
+          <div class="ac-wrap">
+            <input type="text" id="nd-lei-busca" placeholder="Digite para buscar a lei..." autocomplete="off" data-lock
+                   oninput="buscarLeiDoc(this)" onfocus="buscarLeiDoc(this)" onblur="fecharAcDoc('ac-nd-lei')">
+            <button class="clr-btn" type="button" onclick="limparLeiDoc()" tabindex="-1" title="Limpar a lei">&times;</button>
+            <div class="ac-list" id="ac-nd-lei"></div>
+          </div>
         </div>
-        <div class="checklist" id="nd-artigos"></div>
+        <div class="ac-dica" id="nd-lei-trava" hidden>Remova os artigos da lista para trocar a lei.</div>
+
+        <div class="field">
+          <label for="nd-artigo-busca">Artigo infringido</label>
+          <div class="ac-linha">
+            <div class="ac-wrap">
+              <input type="text" id="nd-artigo-busca" placeholder="Digite para buscar o artigo..." autocomplete="off" data-lock
+                     oninput="buscarArtigoDoc(this)" onfocus="buscarArtigoDoc(this)" onblur="fecharAcDoc('ac-nd-artigo')"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();addArtigoDoc()}">
+              <button class="clr-btn" type="button" onclick="limparArtigoBuscaDoc()" tabindex="-1" title="Limpar">&times;</button>
+              <div class="ac-list" id="ac-nd-artigo"></div>
+            </div>
+            <button type="button" class="btn out-verde sm" onclick="addArtigoDoc()" data-lock>+add</button>
+          </div>
+        </div>
+        <div id="nd-artigos"></div>
 
         {{-- Áreas: a base da multa em obras. Aparece só quando algum artigo
              escolhido cobra por metro quadrado. --}}
         <div id="nd-bloco-area" style="display:none">
           <div class="sec-title">Áreas para cálculo</div>
-          <div class="field">
-            <label for="nd-area-terreno">Área do terreno (m²)</label>
-            <input id="nd-area-terreno" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
-          </div>
           <div class="field">
             <label for="nd-area-construida">Área construída aferida (m²)</label>
             <input id="nd-area-construida" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">

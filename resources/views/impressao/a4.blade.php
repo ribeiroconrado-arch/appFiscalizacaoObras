@@ -152,6 +152,11 @@
             <td colspan="2"><span class="lbl">Nome / Razão social</span>{{ $doc->autuado_nome ?: '—' }}</td>
             <td><span class="lbl">CPF / CNPJ</span>{{ $doc->autuado_documento ?: '—' }}</td>
           </tr>
+          @if ($doc->autuado_endereco)
+          <tr>
+            <td colspan="3"><span class="lbl">Endereço do autuado</span>{{ $doc->autuado_endereco }}</td>
+          </tr>
+          @endif
         </table>
       </div>
 

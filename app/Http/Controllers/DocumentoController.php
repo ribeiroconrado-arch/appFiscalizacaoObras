@@ -205,6 +205,9 @@ class DocumentoController extends Controller
                     'artigos'            => $l->artigos->map(fn ($a) => [
                         'id' => $a->id, 'numero' => $a->numero, 'rotulo' => $a->rotulo(),
                         'conduta' => $a->conduta,
+                        // Os termos de busca do artigo: o campo de artigo do
+                        // documento também acha por eles.
+                        'termos'  => $a->termos ?? [],
                         'base_multa'    => $a->base_multa,
                         'multa_upf'     => $a->multa_upf,
                         'multa_upf_m2'  => $a->multa_upf_m2,
@@ -293,6 +296,7 @@ class DocumentoController extends Controller
             'prazo_dias'     => ['nullable', 'integer', 'min:0', 'max:365'],
             'autuado_nome'   => ['nullable', 'string', 'max:160'],
             'autuado_documento' => ['nullable', 'string', 'max:20'],
+            'autuado_endereco'  => ['nullable', 'string', 'max:300'],
             'endereco'       => ['nullable', 'string', 'max:200'],
             'descricao'      => ['nullable', 'string', 'max:5000'],
             'observacoes'    => ['nullable', 'string', 'max:5000'],
@@ -316,6 +320,7 @@ class DocumentoController extends Controller
             'prazo_dias'    => $d['prazo_dias'] ?? null,
             'autuado_nome'  => $d['autuado_nome'] ?? null,
             'autuado_documento' => $d['autuado_documento'] ?? null,
+            'autuado_endereco'  => $d['autuado_endereco'] ?? null,
             'endereco'      => $d['endereco'] ?? null,
             'descricao'     => $d['descricao'] ?? null,
             'observacoes'   => $d['observacoes'] ?? null,
@@ -391,6 +396,9 @@ class DocumentoController extends Controller
             'origem'         => $documento->origem?->numeroFormatado(),
 
             'imovel' => [
+                // O id do lote: é por ele que o formulário lê o cadastro
+                // municipal (BCI) do imóvel da peça.
+                'lote_id'   => $documento->lote_id,
                 // Derivada, e bairro pelo nome OFICIAL: é esta a identificação
                 // que entra na peça.
                 'inscricao' => $documento->lote?->inscricaoFormatada(),
@@ -402,7 +410,10 @@ class DocumentoController extends Controller
                 'construida'=> $documento->area_construida_m2,
             ],
 
-            'autuado'   => ['nome' => $documento->autuado_nome, 'documento' => $documento->autuado_documento],
+            'autuado'   => [
+                'nome' => $documento->autuado_nome, 'documento' => $documento->autuado_documento,
+                'endereco' => $documento->autuado_endereco,
+            ],
 
             // De quando é o dado cadastral que esta peça usou. Vai para a ficha
             // e para o PDF, e para lugar nenhum mais: é dado de conferência,
@@ -416,7 +427,11 @@ class DocumentoController extends Controller
             'observacoes' => $documento->observacoes,
 
             'lei'     => $documento->legislacao?->rotulo(),
+            // Os ids: sem eles o formulário reabria a peça sem lei e sem
+            // artigos, e gravar de novo apagava o enquadramento.
+            'legislacao_id' => $documento->legislacao_id,
             'artigos' => $documento->artigos->map(fn ($a) => [
+                'artigo_id' => $a->artigo_id,
                 'numero'  => $a->numero,
                 'conduta' => $a->conduta,
                 'sancao'  => $a->sancao,
@@ -509,6 +524,7 @@ class DocumentoController extends Controller
             'origem_id'          => ['nullable', 'exists:documentos,id'],
             'autuado_nome'       => ['nullable', 'string', 'max:160'],
             'autuado_documento'  => ['nullable', 'string', 'max:20'],
+            'autuado_endereco'   => ['nullable', 'string', 'max:300'],
             'endereco'           => ['nullable', 'string', 'max:200'],
             'descricao'          => ['nullable', 'string', 'max:5000'],
             'observacoes'        => ['nullable', 'string', 'max:5000'],

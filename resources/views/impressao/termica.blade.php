@@ -129,6 +129,12 @@
   <div class="lbl">CPF / CNPJ</div>
   <div class="val">{{ $doc->autuado_documento ?: '—' }}</div>
 </div>
+@if ($doc->autuado_endereco)
+<div class="campo">
+  <div class="lbl">Endereço do autuado</div>
+  <div class="val">{{ $doc->autuado_endereco }}</div>
+</div>
+@endif
 
 <div class="faixa">Imóvel</div>
 <div class="campo">
