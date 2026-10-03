@@ -164,6 +164,7 @@ final class CargaDoCadastro
         if (! $this->registros) {
             throw new RuntimeException('Nenhuma linha com inscrição. A planilha está vazia ou é de outro formato.');
         }
+        $this->exigirLocalizacao();
 
         $carga->update(['linhas_lidas' => $lidas]);
     }
@@ -248,6 +249,9 @@ final class CargaDoCadastro
         }
         // Sem proprietário = sem entrada, como na leitura da planilha.
         $this->donos = array_filter($this->donos);
+        if ($this->registros) {
+            $this->exigirLocalizacao();
+        }
 
         foreach ($d['iguais'] as $insc) {
             if (! is_string($insc) || $insc === '') {
@@ -264,6 +268,32 @@ final class CargaDoCadastro
         $carga->update(['linhas_lidas' => (int) ($d['planilha']['linhas'] ?? 0)]);
 
         return ['base' => $ref['base_carga_id'], 'conferencia' => $ref['conferencia']];
+    }
+
+    /**
+     * A carga só serve se os imóveis puderem ser ACHADOS: bairro, quadra e
+     * lote. Planilha de outro relatório, com outros nomes de coluna, chegava a
+     * ser gravada inteira só com inscrição e código — "concluída", e inútil,
+     * por cima do que já estava carregado. Agora é recusada, dizendo por quê.
+     */
+    private function exigirLocalizacao(): void
+    {
+        $localizaveis = 0;
+        foreach ($this->registros as $json) {
+            $r = json_decode($json, true);
+            if (($r['codigo_bairro'] ?? null) !== null && ($r['quadra'] ?? null) !== null && ($r['lote'] ?? null) !== null) {
+                $localizaveis++;
+            }
+        }
+        // Meia dúzia de linhas tortas não derrubam a carga; a maioria sem
+        // localização é planilha de outro formato.
+        if ($localizaveis * 2 < count($this->registros)) {
+            throw new RuntimeException(sprintf(
+                'A carga foi recusada: só %s de %s imóveis trazem bairro, quadra e lote, e sem eles a ficha não acha o imóvel. '
+                . 'A planilha parece ser de outro relatório (nomes de coluna diferentes). Nada foi gravado.',
+                number_format($localizaveis, 0, ',', '.'), number_format(count($this->registros), 0, ',', '.')
+            ));
+        }
     }
 
     /** Características como a planilha as grava: objeto de textos, na ordem em que vieram. */

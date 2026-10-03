@@ -82,7 +82,7 @@
                 "inscricao_alternativa": null,
                 "codigo_bairro": "000125",
                 "nome_bairro": "CENTRO",
-                "quadra": null,
+                "quadra": "010",
                 "lote": "0001",
                 "numero_predial": null,
                 "complemento": null,
@@ -108,7 +108,7 @@
                     "endereco": null
                 }
             ],
-            "hash": "c771eba367bf73cc6afb1f312f608f16573d0799"
+            "hash": "93a6a2fd2618512fab895cd5546f74351c68ed26"
         },
         "01.125.010.0002.000": {
             "registro": {
@@ -117,7 +117,7 @@
                 "inscricao_alternativa": null,
                 "codigo_bairro": "000125",
                 "nome_bairro": null,
-                "quadra": null,
+                "quadra": "010",
                 "lote": "0002",
                 "numero_predial": null,
                 "complemento": null,
@@ -143,16 +143,16 @@
                     "endereco": null
                 }
             ],
-            "hash": "4acbdd6d3b153cc80317089ceab0dd66dd51dc45"
+            "hash": "c243992ab413829eefd1329e089b83c920b4d43c"
         },
         "01.125.010.0003.000": {
             "registro": {
                 "inscricao": "01.125.010.0003.000",
                 "codigo_cadastro": null,
                 "inscricao_alternativa": null,
-                "codigo_bairro": null,
+                "codigo_bairro": "125",
                 "nome_bairro": null,
-                "quadra": null,
+                "quadra": "010",
                 "lote": "0003",
                 "numero_predial": null,
                 "complemento": null,
@@ -172,7 +172,7 @@
                 "caracteristicas": "{\"ASFALTO\":\"_x0001_ctrl \"}"
             },
             "donos": [],
-            "hash": "728c194baf2fb2f31381289d5589043606b2e138"
+            "hash": "97bb398bd6acf5a386de9469ef5ce190357f212a"
         }
     },
     "bairros": [

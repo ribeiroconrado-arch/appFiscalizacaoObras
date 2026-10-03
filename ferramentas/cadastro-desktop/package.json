@@ -1,7 +1,7 @@
 {
   "name": "fiscobras-cadastro",
   "productName": "FiscObras Cadastro",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Gera, no PC da prefeitura, o JSON de diferenças do cadastro municipal a partir da planilha .xlsx.",
   "private": true,
   "main": "main.js",

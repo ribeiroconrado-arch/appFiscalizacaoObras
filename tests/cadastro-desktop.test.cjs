@@ -100,9 +100,10 @@ test('recusa planilha sem cabeçalho, sem linhas, com XML inválido ou que não 
 })
 
 test('diferença: novo, alterado, sem código, igual, reaparecido e ausente', () => {
-  const cab = ['Inscrição', 'Código do Bairro', 'Área Terreno', 'Nome do Proprietário', 'CPF/CNPJ']
-  const xml = '<sheetData>' + [cab, ['A1', '000900', '100', 'ANA', '1'], ['A2', '900', '200', 'BIA', '2'],
-    ['A3', '900', '300', '', ''], ['A4', '900', '400', 'CAU', '4'], ['A5', '000900', '500', '', ''], ['B1', '901', '1', '', '']]
+  const cab = ['Inscrição', 'Código do Bairro', 'Área Terreno', 'Nome do Proprietário', 'CPF/CNPJ', 'Quadra', 'Lote']
+  const xml = '<sheetData>' + [cab, ['A1', '000900', '100', 'ANA', '1', '1', '1'], ['A2', '900', '200', 'BIA', '2', '1', '2'],
+    ['A3', '900', '300', '', '', '1', '3'], ['A4', '900', '400', 'CAU', '4', '1', '4'], ['A5', '000900', '500', '', '', '1', '5'],
+    ['B1', '901', '1', '', '', '2', '1']]
     .map((l, i) => linha(i + 1, l)).join('') + '</sheetData>'
   const cad = N.lerCadastro(N.linhasDaPlanilha(xlsxMinimo(xml)))
   const h = insc => N.codigoDeConferencia(cad.registros.get(insc), [...(cad.donos.get(insc)?.values() ?? [])])
@@ -126,6 +127,55 @@ test('diferença: novo, alterado, sem código, igual, reaparecido e ausente', ()
   const a2 = json.registros.find(r => r.inscricao === 'A2')
   assert.equal(a2.hash, h('A2'))
   assert.deepEqual(a2.proprietarios, [{ nome: 'BIA', documento: '2', endereco: null }])
+})
+
+// O RELATÓRIO "IMOBILIÁRIO URBANO" da prefeitura tem outros nomes de coluna e
+// não traz o código do bairro. Em 03/10/2026 uma carga feita com ele gravou
+// 56.587 imóveis só com inscrição e código. Agora os nomes dele são aceitos, e
+// bairro, quadra e lote saem da inscrição quando a planilha não os dá.
+test('relatório "Imobiliário Urbano": outros nomes de coluna, e bairro/quadra/lote pela inscrição', () => {
+  const titulo = ['Imóvel', '', '', '', '', '', '', '', '', '', '', '']
+  const cab = ['Código', 'Situação', 'Inscrição', 'Nome', 'Área m²', 'Edificada', 'Logradouro (cadastro)',
+    'Número (cadastro)', 'Bairro (cadastro)', 'Complemento (cadastro)', 'Quadra (cadastro)', 'Lote (cadastro)']
+  const xml = '<sheetData>' + [titulo, cab,
+    ['1', 'Ativo', '010010080019000', 'FULANO DE TAL', '600', '321.89999999999998', 'CUIABA', '156', 'CIDADE PRIMAVERA I', '', '008', '0019'],
+    ['2', 'Inativo', '011050350001000', '', '16885,27', '', 'RUA DAS ACÁCIAS', '', 'JARDIM EUROPA IV', 'Casa B', '', ''],
+  ].map((l, i) => linha(i + 1, l)).join('') + '</sheetData>'
+  const cad = N.lerCadastro(N.linhasDaPlanilha(xlsxMinimo(xml)))
+
+  const a = cad.registros.get('010010080019000')
+  assert.equal(a.codigo_cadastro, '1')
+  assert.equal(a.codigo_bairro, '001')            // da inscrição
+  assert.equal(a.quadra, '008')                    // da coluna "Quadra (cadastro)"
+  assert.equal(a.lote, '0019')
+  assert.equal(a.nome_bairro, 'CIDADE PRIMAVERA I')
+  assert.equal(a.isencao, 'Ativo')
+  assert.equal(a.area_terreno_m2, '600.00')
+  assert.equal(a.area_edificada_m2, '321.90')
+  assert.equal(a.logradouro, 'CUIABA')
+  assert.equal(a.numero_predial, '156')
+  assert.deepEqual([...cad.donos.get('010010080019000').values()], [{ nome: 'FULANO DE TAL', documento: null, endereco: null }])
+
+  const b = cad.registros.get('011050350001000')
+  assert.equal(b.codigo_bairro, '105')             // sem quadra e lote na planilha:
+  assert.equal(b.quadra, '035')                    // saem todos da inscrição
+  assert.equal(b.lote, '0001')
+  assert.equal(b.area_terreno_m2, '16885.27')
+  assert.equal(b.complemento, 'Casa B')
+  assert.equal(cad.donos.has('011050350001000'), false)   // sem nome, sem proprietário: não é obrigatório
+  assert.deepEqual([...cad.bairros].sort(), ['1', '105'])
+  // conferido com DiferencaDoCadastro::hash do PHP (tests/Unit/RelatorioImobiliarioUrbanoTest.php)
+  assert.equal(N.codigoDeConferencia(a, [...cad.donos.get('010010080019000').values()]), '79b47cb5c57134164ad69a7123750d8c48a44cf9')
+  assert.equal(N.codigoDeConferencia(b, []), '36a62bbbfee9c6fe8ce23b20b512c36d11774119')
+  // do que o importador conhece, este relatório só não tem o que ele de fato não traz
+  assert.ok(!cad.faltando.includes('Quadra') && !cad.faltando.includes('Área Terreno') && !cad.faltando.includes('Logradouro'))
+  assert.ok(cad.faltando.includes('Testada Principal'))
+})
+
+test('planilha que não localiza os imóveis (sem bairro, quadra e lote) é recusada', () => {
+  const cab = ['Inscrição', 'Código', 'Coluna Estranha']
+  const xml = '<sheetData>' + [cab, ['A1', '1', 'x'], ['A2', '2', 'y']].map((l, i) => linha(i + 1, l)).join('') + '</sheetData>'
+  assert.throws(() => N.lerCadastro(N.linhasDaPlanilha(xlsxMinimo(xml))), /recusada: só 0 de 2/)
 })
 
 test('referência: recusa arquivo que não é a referência do sistema', () => {

@@ -26,7 +26,7 @@
 const zlib = require('node:zlib')
 const crypto = require('node:crypto')
 
-const VERSAO_APP = '1.0.0'
+const VERSAO_APP = '1.0.1'
 const FORMATO_REFERENCIA = 'fiscobras-cadastro-referencia'
 const FORMATO_DIFERENCA = 'fiscobras-cadastro-diferenca'
 const VERSAO_FORMATO = 1
@@ -63,6 +63,26 @@ const CAMPOS = [
   ['PONTOS', 'unidade_pontos'],
 ]
 
+/**
+ * ColunasDaExportacao::SINONIMOS — outros nomes da mesma coluna, no relatório
+ * "Imobiliário Urbano". Vale a coluna de CAMPOS; vazia ou ausente, a primeira
+ * destas que tiver valor. ESPELHO do PHP: mudar aqui é mudar lá.
+ */
+const SINONIMOS = {
+  'Nome do Bairro': ['Bairro (cadastro)'],
+  'Quadra': ['Quadra (cadastro)'],
+  'Lote': ['Lote (cadastro)'],
+  'Número do Endereço': ['Número (cadastro)'],
+  'Complemento do Endereço': ['Complemento (cadastro)'],
+  'Isenção ou Imunidade': ['Situação'],
+  'Área Terreno': ['Área m²'],
+  'Área Edificada': ['Edificada'],
+  'SETOR': ['Setor (cadastro)'],
+}
+
+/** ColunasDaExportacao::LOGRADOURO_UNICO */
+const LOGRADOURO_UNICO = 'Logradouro (cadastro)'
+
 const CARACTERISTICAS = [
   'OCUPACAO DO LOTE', 'UTILIZACAO', 'TIPO DE IMOVEL', 'BEM IMOV. PATRIMONIO',
   'SITUACAO', 'TOPOGRAFIA', 'PEDOLOGIA', 'ELEMENTO DE PROTECAO',
@@ -72,7 +92,7 @@ const CARACTERISTICAS = [
 ]
 
 const PROPRIETARIO = {
-  nome: ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Contribuinte'],
+  nome: ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Contribuinte', 'Nome'],
   documento: ['CPF/CNPJ do Proprietário', 'CPF/CNPJ', 'CPF/CNPJ do Contribuinte', 'CPF', 'CNPJ'],
   endereco: ['Endereço de Correspondência', 'Endereço do Proprietário', 'Endereço do Contribuinte'],
 }
@@ -423,8 +443,28 @@ function cabecalho(celulas) {
 function registroDaLinha(lerCol) {
   if (trimPhp(lerCol('Inscrição')) === '') return null
   const r = {}
-  for (const [col, campo] of CAMPOS) r[campo] = canonico(campo, lerCol(col))
-  r.logradouro = canonico('logradouro', trimPhp(trimPhp(lerCol('Tipo de Logradouro')) + ' ' + trimPhp(lerCol('Nome do Logradouro'))))
+  for (const [col, campo] of CAMPOS) {
+    let valor = lerCol(col)
+    // Coluna vazia ou ausente: tenta os outros nomes dela.
+    if (trimPhp(valor) === '') {
+      for (const outra of SINONIMOS[col] || []) {
+        valor = lerCol(outra)
+        if (trimPhp(valor) !== '') break
+      }
+    }
+    r[campo] = canonico(campo, valor)
+  }
+  const logradouro = trimPhp(trimPhp(lerCol('Tipo de Logradouro')) + ' ' + trimPhp(lerCol('Nome do Logradouro')))
+  r.logradouro = canonico('logradouro', logradouro !== '' ? logradouro : lerCol(LOGRADOURO_UNICO))
+
+  // Bairro, quadra e lote pela INSCRIÇÃO, quando a planilha não os traz:
+  // setor(2) + bairro(3) + quadra(3) + lote(4) + unidade(3).
+  const digitos = String(r.inscricao ?? '').replace(/\D/g, '')
+  if (digitos.length === 15) {
+    r.codigo_bairro ??= digitos.slice(2, 5)
+    r.quadra ??= digitos.slice(5, 8)
+    r.lote ??= digitos.slice(8, 12)
+  }
   const carac = {}
   for (const col of CARACTERISTICAS) {
     const v = trimPhp(lerCol(col))
@@ -486,10 +526,22 @@ function lerCadastro(linhas, progresso) {
   if (pos === null) throw new Error('Não achei a linha de cabeçalho (a que tem a coluna "Inscrição").')
   if (!registros.size) throw new Error('Nenhuma linha com inscrição. A planilha está vazia ou é de outro formato.')
 
+  // A carga só serve se os imóveis puderem ser ACHADOS (bairro, quadra e
+  // lote). Planilha de outro relatório é recusada aqui, antes de gerar o JSON
+  // — igual ao que o sistema faz (CargaDoCadastro::exigirLocalizacao).
+  let localizaveis = 0
+  for (const r of registros.values()) if (r.codigo_bairro !== null && r.quadra !== null && r.lote !== null) localizaveis++
+  if (localizaveis * 2 < registros.size) {
+    throw new Error(`A planilha foi recusada: só ${localizaveis} de ${registros.size} imóveis trazem bairro, quadra e lote, `
+      + 'e sem eles a ficha não acha o imóvel. Ela parece ser de outro relatório (nomes de coluna diferentes).')
+  }
+
+  // ColunasDaExportacao::faltando — o que a planilha não tem por nenhum nome.
   const colunas = new Set(pos.keys())
-  const faltando = [
-    ...CAMPOS.map(c => c[0]), 'Tipo de Logradouro', 'Nome do Logradouro',
-  ].filter(c => !colunas.has(c))
+  const daInscricao = ['Código do Bairro', 'Quadra', 'Lote']
+  const faltando = CAMPOS.map(c => c[0]).filter(c =>
+    !colunas.has(c) && !(SINONIMOS[c] || []).some(o => colunas.has(o)) && !daInscricao.includes(c))
+  if (!['Tipo de Logradouro', 'Nome do Logradouro', LOGRADOURO_UNICO].some(c => colunas.has(c))) faltando.push('Logradouro')
   if (!PROPRIETARIO.nome.some(c => colunas.has(c))) faltando.push('proprietário (nome)')
   if (!PROPRIETARIO.documento.some(c => colunas.has(c))) faltando.push('proprietário (CPF/CNPJ)')
 

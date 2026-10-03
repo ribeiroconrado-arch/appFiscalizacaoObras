@@ -47,6 +47,37 @@ final class ColunasDaExportacao
         'PONTOS'                  => 'unidade_pontos',
     ];
 
+    /**
+     * OUTROS NOMES da mesma coluna, no relatório "Imobiliário Urbano" da
+     * prefeitura — que não é a exportação para a qual a lista acima foi feita.
+     * Vale a coluna de CAMPOS; vazia ou ausente, a primeira destas que tiver
+     * valor.
+     *
+     * Esse relatório não traz o CÓDIGO do bairro (só o nome), e por isso o
+     * código, a quadra e o lote também saem da própria inscrição quando a
+     * planilha não os dá — ver linha(). Sem isto, uma carga feita com ele em
+     * 03/10/2026 gravou 56.587 imóveis só com inscrição e código, e a ficha
+     * deixou de achar qualquer um.
+     *
+     * ESPELHADO em ferramentas/cadastro-desktop/src/nucleo.js: o app e o
+     * sistema têm de ler a planilha do mesmo jeito, senão o código de
+     * conferência não bate.
+     */
+    public const SINONIMOS = [
+        'Nome do Bairro'          => ['Bairro (cadastro)'],
+        'Quadra'                  => ['Quadra (cadastro)'],
+        'Lote'                    => ['Lote (cadastro)'],
+        'Número do Endereço'      => ['Número (cadastro)'],
+        'Complemento do Endereço' => ['Complemento (cadastro)'],
+        'Isenção ou Imunidade'    => ['Situação'],
+        'Área Terreno'            => ['Área m²'],
+        'Área Edificada'          => ['Edificada'],
+        'SETOR'                   => ['Setor (cadastro)'],
+    ];
+
+    /** O logradouro numa coluna só, quando não vem em "Tipo" + "Nome". */
+    public const LOGRADOURO_UNICO = 'Logradouro (cadastro)';
+
     /** Colunas numéricas — o resto entra como texto, como veio. */
     public const NUMERICOS = [
         'area_terreno_m2', 'area_edificada_m2', 'testada_m', 'medida_lado_direito',
@@ -75,7 +106,7 @@ final class ColunasDaExportacao
      * a repetição (ver `CarregarCadastro`).
      */
     public const PROPRIETARIO = [
-        'nome'      => ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Contribuinte'],
+        'nome'      => ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Contribuinte', 'Nome'],
         'documento' => ['CPF/CNPJ do Proprietário', 'CPF/CNPJ', 'CPF/CNPJ do Contribuinte', 'CPF', 'CNPJ'],
         'endereco'  => ['Endereço de Correspondência', 'Endereço do Proprietário', 'Endereço do Contribuinte'],
     ];
@@ -138,10 +169,29 @@ final class ColunasDaExportacao
 
         $r = [];
         foreach (self::CAMPOS as $coluna => $campo) {
-            $r[$campo] = self::canonico($campo, $ler($coluna));
+            $valor = $ler($coluna);
+            // Coluna vazia ou ausente: tenta os outros nomes dela.
+            foreach (trim($valor) === '' ? (self::SINONIMOS[$coluna] ?? []) : [] as $outra) {
+                $valor = $ler($outra);
+                if (trim($valor) !== '') {
+                    break;
+                }
+            }
+            $r[$campo] = self::canonico($campo, $valor);
         }
-        $r['logradouro'] = self::canonico('logradouro',
-            trim(trim($ler('Tipo de Logradouro')) . ' ' . trim($ler('Nome do Logradouro'))));
+        $logradouro = trim(trim($ler('Tipo de Logradouro')) . ' ' . trim($ler('Nome do Logradouro')));
+        $r['logradouro'] = self::canonico('logradouro', $logradouro !== '' ? $logradouro : $ler(self::LOGRADOURO_UNICO));
+
+        // BAIRRO, QUADRA E LOTE PELA INSCRIÇÃO, quando a planilha não os traz:
+        // a inscrição É setor(2) + bairro(3) + quadra(3) + lote(4) + unidade(3).
+        // É por esses três que a ficha acha o imóvel; sem eles a linha fica
+        // gravada e inalcançável.
+        $digitos = preg_replace('/\D/', '', (string) $r['inscricao']);
+        if (strlen($digitos) === 15) {
+            $r['codigo_bairro'] ??= substr($digitos, 2, 3);
+            $r['quadra']        ??= substr($digitos, 5, 3);
+            $r['lote']          ??= substr($digitos, 8, 4);
+        }
 
         $carac = [];
         foreach (self::CARACTERISTICAS as $col) {
@@ -192,6 +242,33 @@ final class ColunasDaExportacao
         }
 
         return is_numeric($v) ? (float) $v : null;
+    }
+
+    /**
+     * As colunas que a planilha NÃO tem, por nenhum dos nomes aceitos — para o
+     * aviso de quem carrega. Bairro, quadra e lote não entram quando saem da
+     * inscrição.
+     *
+     * @param  array<string,int>  $cabecalho  nome da coluna => posição
+     * @return list<string>
+     */
+    public static function faltando(array $cabecalho): array
+    {
+        $tem = fn (string $coluna) => isset($cabecalho[$coluna]);
+        $daInscricao = ['Código do Bairro', 'Quadra', 'Lote'];
+
+        $falta = [];
+        foreach (array_keys(self::CAMPOS) as $coluna) {
+            $achou = $tem($coluna) || array_filter(self::SINONIMOS[$coluna] ?? [], $tem);
+            if (! $achou && ! in_array($coluna, $daInscricao, true)) {
+                $falta[] = $coluna;
+            }
+        }
+        if (! ($tem('Tipo de Logradouro') || $tem('Nome do Logradouro') || $tem(self::LOGRADOURO_UNICO))) {
+            $falta[] = 'Logradouro';
+        }
+
+        return $falta;
     }
 
     /**
