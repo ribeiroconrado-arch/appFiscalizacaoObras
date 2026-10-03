@@ -17,7 +17,6 @@
 | `lotes` | **2.235** | 2 bairros levantados; 0 inativos; **0 sem quadra** |
 | `cadastro_bairros` | 125 | **só 2 amarrados ao desenho** |
 | `cadastro_externo_imoveis` | 990 | exportação da prefeitura, **só do bairro 124** |
-| `irregularidades` | 20 | **18 sem artigo vinculado** |
 | `legislacoes` / `artigos` | 4 / 4 | catálogo legal ainda raso |
 | `vistorias` | 12 | uso ainda de teste |
 | `documentos` | 4 | |
@@ -39,7 +38,8 @@ legal, que é o que dá força à peça, está quase vazio.
 | Mapa, seleção, ficha do imóvel | ✅ |
 | Consulta de imóveis (bairro, quadra/lote, inscrição, intervalo, filtros) | ✅ |
 | Vistoria completa (finalidade, obra, relatório em itens, fotos, revisão) | ✅ |
-| Relatório em itens (irregularidade, relato, artigos, exigências, fotos) | ✅ |
+| Relatório em itens (artigos, relato, exigências, fotos) | ✅ |
+| Busca de artigo por termo ("escavação" → artigos que tratam disso) | ✅ |
 | Foto com data/hora e coordenada **próprias**, marcação e visualizador | ✅ |
 | Impressão de vistoria (HTML e PDF, numerada) | ✅ |
 | Documentos: notificação, not. embargo, auto de embargo, auto de infração | ✅ |
@@ -49,7 +49,7 @@ legal, que é o que dá força à peça, está quase vazio.
 | Desenho de lote com medidas, esquadro e encaixe no vizinho | ✅ |
 | Desmembramento por corte de linha (preserva o contorno) e unificação | ✅ |
 | Curadoria: correção de quadra em massa, exclusão de resíduo | ✅ |
-| Bairros e irregularidades em Parâmetros (CRUD) | ✅ |
+| Bairros e termos de busca dos artigos em Parâmetros | ✅ |
 | Inscrição imobiliária derivada, exibida e buscável | ✅ |
 | Auditoria de tudo que altera identificação | ✅ |
 | Três temas (institucional / âmbar / cinza), só tokens em `temas.css`, e menu lateral recolhível | ✅ |
@@ -80,10 +80,13 @@ tela**, em 04–05/09, com a ferramenta de correção em massa.
 
 Hoje a base tem **zero** lotes sem quadra e zero sem número.
 
-### 🟡 18 das 20 irregularidades não têm artigo vinculado
+### 🟡 Catálogo legal raso e termos de busca a completar
 
-Sem fundamentação legal o sistema **bloqueia a lavratura do auto**. O painel já
-avisa. Depende de alimentar a legislação em Parâmetros.
+A irregularidade deixou de ser catálogo à parte (migration `2026_10_09`): o
+nome de cada irregularidade ligada a artigo virou **termo de busca** dele, e as
+sem artigo foram descartadas. Falta conferir e completar os termos em
+Parâmetros › Legislação — artigo sem termo só é achado pelo número, apelido ou
+conduta.
 
 ### 🟡 Só 2 dos 125 bairros estão amarrados
 

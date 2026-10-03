@@ -2,7 +2,7 @@
 
 Sistema municipal de fiscalização de obras. O fiscal localiza o imóvel no mapa
 cadastral, registra a vistoria (relatório em itens, fotos georreferenciadas,
-irregularidades com fundamento legal) e lavra os atos — notificação, embargo,
+irregularidades enquadradas direto no artigo da lei) e lavra os atos — notificação, embargo,
 auto de infração — com numeração, prazos e memória de cálculo da multa. O mesmo
 mapa serve à curadoria do cadastro imobiliário: desenho, desmembramento,
 unificação e importação de bairros, tudo auditado.

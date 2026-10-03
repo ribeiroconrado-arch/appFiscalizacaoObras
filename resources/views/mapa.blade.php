@@ -213,8 +213,8 @@
         <div id="pn-por-tipo"></div>
       </div>
       <div class="bloco">
-        <div class="sec-simples">Irregularidades frequentes</div>
-        <div id="pn-irregs"></div>
+        <div class="sec-simples">Infrações mais frequentes</div>
+        <div id="pn-infracoes"></div>
       </div>
     </div>
   </div>
@@ -972,7 +972,6 @@
     <button data-sub="legislacao" onclick="subParametros('legislacao')">Legislação</button>
     <button data-sub="upf" onclick="subParametros('upf')">UPF</button>
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
-    <button data-sub="irregularidades" onclick="subParametros('irregularidades')">Irregularidades</button>
     <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
     <button data-sub="cadastro" onclick="subParametros('cadastro')">Cadastro municipal</button>
     <button data-sub="geral" onclick="subParametros('geral')">Formulário</button>
@@ -999,8 +998,7 @@
        demais para achar qualquer coisa. --}}
   <div class="par-painel par-fixo" id="par-legislacao">
     <div class="par-fixo-topo" id="leg-topo-lista">
-      <div class="sec-simples">Leis <span class="cont" id="cont-leis">0</span>
-        <span class="pil pil-off" id="leg-sem-enquadramento" hidden></span></div>
+      <div class="sec-simples">Leis <span class="cont" id="cont-leis">0</span></div>
       <div class="par-busca">
         <input type="search" id="lei-busca" placeholder="Procurar lei por número ou nome" oninput="renderLeis()">
         <button class="btn out-verde sm" onclick="parNovo('leis')">+ Nova lei</button>
@@ -1016,7 +1014,7 @@
         <button data-leg="textos" onclick="subLei('textos')">Textos de ciência</button>
       </div>
       <div class="par-busca" id="leg-busca-artigos">
-        <input type="search" id="busca-artigos" placeholder="Procurar artigo por número ou apelido" oninput="renderLeis()">
+        <input type="search" id="busca-artigos" placeholder="Procurar artigo por número, apelido ou termo" oninput="renderLeis()">
         <button class="btn out-verde sm" onclick="parNovo('artigos')">+ Novo artigo</button>
       </div>
     </div>
@@ -1069,18 +1067,6 @@
       </div>
     </div>
     <div class="par-fixo-lista" id="lista-bairros"></div>
-  </div>
-
-  {{-- IRREGULARIDADES — o catálogo que a vistoria oferece. --}}
-  <div class="par-painel par-fixo" id="par-irregularidades">
-    <div class="par-fixo-topo">
-      <div class="sec-simples">Catálogo de irregularidades <span class="cont" id="cont-irregularidades">0</span></div>
-      <div class="par-busca">
-        <input type="search" id="filtro-irregularidades" placeholder="Procurar por código ou descrição" oninput="renderIrregularidades()">
-        <button class="btn out-verde sm" onclick="parNovo('irregularidades')">+ Nova irregularidade</button>
-      </div>
-    </div>
-    <div class="par-fixo-lista" id="lista-irregularidades"></div>
   </div>
 
   {{-- ÓRGÃO --}}
@@ -1669,9 +1655,8 @@
              style="display:none" onchange="anexarArquivos(this)">
 
       {{-- O CHECKLIST SAIU DAQUI. Ele era uma lista única da vistoria, num
-           bloco recolhido ao pé da tela; agora a irregularidade pertence ao
-           ITEM onde foi constatada, e é escolhida dentro dele. Os artigos que
-           ela sugere alimentam o seletor da mesma janela. --}}
+           bloco recolhido ao pé da tela; agora o artigo infringido pertence
+           ao ITEM onde foi constatado, e é buscado dentro dele. --}}
 
       {{-- "OBSERVAÇÕES GERAIS" SAIU DAQUI. Era um segundo lugar para escrever
            a mesma coisa: tudo que se observa numa obra pertence a um ponto
@@ -1732,13 +1717,13 @@
      que se escreve num item é texto de peça, e merece o espaço de um
      formulário. A lista fica legível porque cada linha é só o resumo. --}}
 {{-- ══════ UM ITEM DO RELATÓRIO ══════
-     Os CINCO BLOCOS numa janela só, na mesma ordem em que sairão no papel:
-     irregularidades, texto livre, artigos, exigências e fotos. É a ordem do
-     raciocínio de uma peça — o fato, a narrativa, a lei, a providência e a
-     prova —, e por isso ela é fixa: deixá-la à escolha faria cada relatório
+     Os QUATRO BLOCOS numa janela só, na mesma ordem em que sairão no papel:
+     artigos, texto livre, exigências e fotos. É a ordem do raciocínio de uma
+     peça — a infração, a narrativa, a providência e a prova —, e por isso ela
+     é fixa: deixá-la à escolha faria cada relatório
      sair diferente, e quem lê vinte por semana perde o hábito de leitura.
 
-     Editar em cinco telas separadas quebraria justamente o que o item existe
+     Editar em quatro telas separadas quebraria justamente o que o item existe
      para juntar. --}}
 <div class="modal-bg" id="m-vs-item" onclick="fModal()">
   <div class="modal modal-flex" onclick="event.stopPropagation()">
@@ -1754,9 +1739,9 @@
       </div>
     </div>
 
-    {{-- OS CINCO BLOCOS VIRAM CINCO BOTÕES.
+    {{-- OS QUATRO BLOCOS VIRAM QUATRO BOTÕES.
          Antes eles vinham empilhados numa janela só: abrir um item despejava
-         o catálogo inteiro de irregularidades, mais um formulário de artigo
+         um catálogo inteiro, mais um formulário de artigo
          com três campos, mais um de exigência com dois, mais as fotos — tudo
          de uma vez, para preencher talvez um deles. A janela dizia o que ela
          PODE ter, quando o que o fiscal precisa ver é o que ela TEM.
@@ -1764,12 +1749,10 @@
     {{-- Mesmo padrão de aba do resto do sistema (Parâmetros, o formulário de
          documento): trilho cinza, aba ativa em pílula branca com texto verde. --}}
     <div class="sub-abas" id="vsi-abas">
-      <button type="button" data-bloco="irreg" onclick="abaDoItem('irreg')">
-        Irregularidades <span class="vsi-conta" id="vsi-n-irreg"></span></button>
-      <button type="button" data-bloco="texto" onclick="abaDoItem('texto')">
-        O que você viu <span class="vsi-conta" id="vsi-n-texto"></span></button>
       <button type="button" data-bloco="artigos" onclick="abaDoItem('artigos')">
         Artigos <span class="vsi-conta" id="vsi-n-artigos"></span></button>
+      <button type="button" data-bloco="texto" onclick="abaDoItem('texto')">
+        O que você viu <span class="vsi-conta" id="vsi-n-texto"></span></button>
       <button type="button" data-bloco="exigencias" onclick="abaDoItem('exigencias')">
         Exigências <span class="vsi-conta" id="vsi-n-exigencias"></span></button>
       <button type="button" data-bloco="fotos" onclick="abaDoItem('fotos')">
@@ -1790,42 +1773,45 @@
              tela principal. --}}
     <div class="doc-body">
 
-      {{-- 1 — IRREGULARIDADES: um combo, não mais um catálogo inteiro. As já
-           marcadas aparecem no resumo, não como caixa marcada aqui. --}}
-      <div class="vsi-bloco" data-bloco="irreg">
-        <div class="vsi-busca">
-          {{-- COMBOBOX DE VERDADE: a lista FLUTUA sobre o conteúdo, ancorada
-               no campo (`.ac-wrap`/`.ac-list`, o mesmo do AppPOSTURAS). Antes
-               ela era um bloco no fluxo: abrir o combo empurrava tudo para
-               baixo e a própria lista ganhava uma barra de rolagem no meio do
-               formulário — que é o oposto do que um combo faz. --}}
+      {{-- 1 — ARTIGOS. A irregularidade é só o NOME POPULAR do problema, e
+           por isso não tem aba própria: é termo de busca do artigo. O fiscal
+           digita "escavação" e o combo mostra os artigos que tratam disso, de
+           qualquer lei — cada um com a lei e o termo que casou. Por isso o
+           seletor de lei saiu: a busca já diz de que lei é cada artigo. --}}
+      <div class="vsi-bloco" data-bloco="artigos">
+        <div class="vsi-linha-lei">
           <div class="ac-wrap" style="flex:1;min-width:0">
             <div class="field campo-add" style="margin:0">
               <div class="campo-add-corpo">
-                <label for="vsi-irreg-busca">Irregularidade</label>
-                {{-- Escolher na lista só PREENCHE o campo — quem põe no item é
-                     o "+add" (ou o Enter). --}}
-                <input type="text" id="vsi-irreg-busca" autocomplete="off"
-                       placeholder="Digite para buscar…"
-                       oninput="buscarIrregularidade(this.value)"
-                       onfocus="buscarIrregularidade(this.value)"
-                       onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarIrregularidadeAoItem()}">
+                <label for="vsi-artigo-busca">Problema ou artigo</label>
+                <input type="text" id="vsi-artigo-busca" autocomplete="off"
+                       placeholder="Ex.: escavação, calçada, art. 12…"
+                       oninput="buscarArtigo(this.value)"
+                       onfocus="buscarArtigo(this.value)"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
               </div>
               <button type="button" class="btn out-verde sm"
-                      onclick="adicionarIrregularidadeAoItem()">+add</button>
+                      onclick="adicionarArtigoAoItem()">+add</button>
             </div>
-            <div class="ac-list" id="vsi-irreg-sugestoes"></div>
+            <div class="ac-list" id="vsi-artigo-sugestoes"></div>
+          </div>
+          <div class="field vsi-campo-curto" style="margin:0">
+            <label for="vsi-artigo-tipo">Como entra</label>
+            {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
+            <select id="vsi-artigo-tipo">
+              <option value="citacao">Citação</option>
+              <option value="parecer">Parecer</option>
+            </select>
           </div>
         </div>
-        <div class="vsi-nota" id="vsi-irreg-nota">O que a lei chama de infração. É daqui que saem
-          os artigos sugeridos — e é o que o auto de infração vai usar.</div>
+        <div class="vsi-nota" id="vsi-artigo-nota">Digite o problema que você viu ("escavação", "sem alvará") ou o número do artigo.</div>
       </div>
 
       {{-- 2 — O QUE VOCÊ VIU: também uma LISTA, e não um campo só.
            Um item da obra costuma render mais de uma constatação, e escrever
            tudo num bloco corrido obrigava a reescrever o parágrafo inteiro
            para tirar uma frase. Cada relato entra pelo "+add" e sai sozinho
-           do resumo, como irregularidade e artigo. --}}
+           do resumo, como o artigo. --}}
       <div class="vsi-bloco" data-bloco="texto" hidden>
         <div class="field campo-add campo-add-alto" style="margin:0">
           <div class="campo-add-corpo">
@@ -1839,55 +1825,7 @@
         <div class="vsi-nota">Um parágrafo por constatação. Ctrl+Enter também adiciona.</div>
       </div>
 
-      {{-- 3 — ARTIGOS --}}
-      {{-- A ORDEM DOS CAMPOS É A DA PERGUNTA: primeiro QUAL LEI e COMO o
-           dispositivo entra na peça, depois QUAL ARTIGO dela — porque a lei
-           filtra a busca do artigo, e perguntar o artigo antes obriga a
-           procurar no bolo de todas as leis. --}}
-      <div class="vsi-bloco" data-bloco="artigos" hidden>
-        {{-- "Como entra" tem duas respostas de uma palavra: ocupar metade da
-             linha era desperdiçar largura de que a LEI precisa — nome de lei
-             não cabe em meia linha e vinha cortado com reticências. --}}
-        <div class="vsi-linha-lei">
-          <div class="field" style="flex:1;min-width:0;margin:0">
-            <label for="vsi-artigo-lei">Lei infringida</label>
-            <select id="vsi-artigo-lei" onchange="buscarArtigo(document.getElementById('vsi-artigo-busca').value)">
-              <option value="">— todas as leis —</option>
-            </select>
-          </div>
-          <div class="field vsi-campo-curto" style="margin:0">
-            <label for="vsi-artigo-tipo">Como entra</label>
-            {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
-            <select id="vsi-artigo-tipo">
-              <option value="citacao">Citação</option>
-              <option value="parecer">Parecer</option>
-            </select>
-          </div>
-        </div>
-        <div class="vsi-busca" style="margin-top:8px">
-          <div class="ac-wrap" style="flex:1;min-width:0">
-            <div class="field campo-add" style="margin:0">
-              <div class="campo-add-corpo">
-                <label for="vsi-artigo-busca">Artigo infringido</label>
-                <input type="text" id="vsi-artigo-busca" autocomplete="off"
-                       placeholder="Digite para buscar o artigo…"
-                       oninput="buscarArtigo(this.value)"
-                       onfocus="buscarArtigo(this.value)"
-                       onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
-              </div>
-              <button type="button" class="btn out-verde sm"
-                      onclick="adicionarArtigoAoItem()">+add</button>
-            </div>
-            <div class="ac-list" id="vsi-artigo-sugestoes"></div>
-          </div>
-        </div>
-        {{-- O campo "Observação" saiu: o que se tem a dizer sobre o artigo é o
-             relato do item, e um segundo lugar para escrever a mesma coisa só
-             espalhava o texto da peça por dois campos. --}}
-        <div class="vsi-nota" id="vsi-artigo-nota" hidden></div>
-      </div>
-
-      {{-- 4 — EXIGÊNCIAS.
+      {{-- 3 — EXIGÊNCIAS.
            Os dois campos e o "+add" NUMA LINHA SÓ. O botão cinza embaixo, com
            a largura do próprio texto, sobrava no canto esquerdo sem se ligar a
            nada — e era o único "+ add" do sistema fora do padrão dos outros
@@ -1914,7 +1852,7 @@
         <div class="vsi-nota">O prazo é opcional — sem ele, a exigência entra sem contagem.</div>
       </div>
 
-      {{-- 5 — FOTOS. A ABA SÓ ADICIONA, como as outras quatro: a lista do que
+      {{-- 4 — FOTOS. A ABA SÓ ADICIONA, como as outras três: a lista do que
            já foi anexado é a MESMA do resumo, e por isso aparece igual em
            qualquer aba. Escolher o arquivo não anexa nada ainda — abre a
            ficha da foto (legenda, fachada) e o "+ add" é que a põe no item.

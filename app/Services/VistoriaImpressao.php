@@ -28,8 +28,8 @@ class VistoriaImpressao
     public function montar(Vistoria $v, bool $paraPdf = false): array
     {
         $v->loadMissing([
-            'lote', 'fiscal', 'documentos', 'irregularidades',
-            'itens.irregularidades', 'itens.artigos.artigo',
+            'lote', 'fiscal', 'documentos',
+            'itens.artigos.artigo',
             'itens.exigencias', 'itens.evidencias',
         ]);
 

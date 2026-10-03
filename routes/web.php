@@ -225,9 +225,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
 
 
         // Fiscalização
-        Route::get('/irregularidades', [VistoriaController::class, 'catalogo']);
-        // O enquadramento conferido em CAMPO, antes de a vistoria existir.
-        Route::get('/artigos-sugeridos', [VistoriaController::class, 'artigosSugeridos']);
+        // O artigo pelo problema que o fiscal viu ("escav" → escavação), em
+        // todas as leis — ver VistoriaController::buscarArtigos.
+        Route::get('/artigos/busca', [VistoriaController::class, 'buscarArtigos']);
 
         // Atos cadastrais. O portao NAO e o perfil: e a VISTORIA regular
         // amarrada ao protocolo deferido. O deferimento diz que o pedido
@@ -326,8 +326,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::delete('/parametros/feriados/{feriado}', [ParametroController::class, 'excluirFeriado']);
         Route::post('/parametros/bairros', [ParametroController::class, 'salvarBairro']);
         Route::delete('/parametros/bairros/{bairro}', [ParametroController::class, 'excluirBairro']);
-        Route::post('/parametros/irregularidades', [ParametroController::class, 'salvarIrregularidade']);
-        Route::delete('/parametros/irregularidades/{irregularidade}', [ParametroController::class, 'excluirIrregularidade']);
     });
 
     // Vias em papel e arquivos da fiscalização: conteúdo, logo interno.

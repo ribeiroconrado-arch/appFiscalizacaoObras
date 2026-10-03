@@ -6,7 +6,6 @@ use App\Models\Artigo;
 use App\Models\Documento;
 use App\Models\Obra;
 use App\Models\Evidencia;
-use App\Models\Irregularidade;
 use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
@@ -111,9 +110,8 @@ class VistoriaController extends Controller
     {
         $vistoria->load([
             'fiscal:id,name', 'lote:id,bairro,quadra,numero_lote,inscricao_imobiliaria',
-            'itens.irregularidades', 'itens.artigos.artigo', 'itens.exigencias', 'itens.evidencias',
-            'evidencias', 'itensDeArtigo.artigo', 'exigencias',
-            'irregularidades:id,codigo,descricao,gravidade', 'artigos',
+            'itens.artigos.artigo', 'itens.exigencias', 'itens.evidencias',
+            'evidencias', 'itensDeArtigo.artigo', 'exigencias', 'artigos',
             'documentos:id,vistoria_id,tipo,numero,exercicio,status,data_lavratura',
         ]);
 
@@ -163,9 +161,6 @@ class VistoriaController extends Controller
                 'lon'  => (float) $vistoria->longitude,
                 'prec' => $vistoria->accuracy,
             ] : null,
-            'irregularidades' => $vistoria->irregularidades->map(fn ($i) => [
-                'codigo' => $i->codigo, 'descricao' => $i->descricao, 'gravidade' => $i->gravidade,
-            ])->all(),
             'artigos'     => $vistoria->artigos->map(fn ($a) => [
                 'numero' => $a->numero, 'texto' => $a->texto ?? null,
             ])->all(),
@@ -236,7 +231,7 @@ class VistoriaController extends Controller
     public function historico(Lote $lote): JsonResponse
     {
         $vistorias = $lote->vistorias()
-            ->with(['fiscal:id,name', 'irregularidades:id,codigo,descricao,gravidade'])
+            ->with(['fiscal:id,name', 'itensDeArtigo.artigo:id,numero,apelido'])
             ->withCount('evidencias')
             ->get()
             ->map(fn (Vistoria $v) => [
@@ -252,9 +247,12 @@ class VistoriaController extends Controller
                 'fiscal'           => $v->fiscal?->name,
                 'observacoes'      => $v->observacoes,
                 'evidencias'       => $v->evidencias_count,
-                'irregularidades'  => $v->irregularidades->map(fn ($i) => [
-                    'codigo' => $i->codigo, 'descricao' => $i->descricao, 'gravidade' => $i->gravidade,
-                ]),
+                // As infrações são os artigos CITADOS (o parecer do fiscal
+                // não é enquadramento), um por linha, sem repetir.
+                'artigos'          => $v->itensDeArtigo->where('tipo', 'citacao')
+                    ->map(fn ($a) => $a->artigo ? 'Art. ' . $a->artigo->numero
+                        . ($a->artigo->apelido ? ' — ' . $a->artigo->apelido : '') : null)
+                    ->filter()->unique()->values()->all(),
             ]);
 
         // Linha do tempo: vistoria não é o único fato da vida do imóvel. O que
@@ -277,7 +275,7 @@ class VistoriaController extends Controller
                 'detalhe' => $v['fiscal'] ? 'Fiscal: ' . $v['fiscal'] : null,
                 'badge'   => ['texto' => $v['situacao_rotulo'], 'classe' => $v['situacao_badge']],
                 'ato_cadastral' => $v['ato_cadastral'],
-                'itens'   => collect($v['irregularidades'])->pluck('descricao')->all(),
+                'itens'   => $v['artigos'],
                 'obs'     => $v['observacoes'],
             ];
         }
@@ -324,7 +322,7 @@ class VistoriaController extends Controller
         // Topógrafo, arquiteto e contribuinte veem a linha do tempo com o tipo,
         // o número, a data e a situação — o bastante para saber que o imóvel
         // tem processo. Sai o id (sem ele não há o que abrir), o fiscal, o
-        // autuado, o requerente, as irregularidades e a descrição. As rotas de
+        // autuado, o requerente, os artigos citados e a descrição. As rotas de
         // abertura estão fechadas de qualquer forma (middleware `interno`);
         // cortar aqui é não mandar ao navegador o que ele não vai mostrar.
         if ($externo) {
@@ -483,64 +481,63 @@ class VistoriaController extends Controller
         return $boas ?: null;
     }
 
-    /** GET /api/irregularidades — catálogo para montar o checklist. */
-    public function catalogo(): JsonResponse
-    {
-        return response()->json(
-            Irregularidade::ativas()->get(['id', 'codigo', 'descricao', 'gravidade', 'base_legal'])
-        );
-    }
+    /** Teto de artigos numa busca: o que passa disso é busca vaga demais para ler. */
+    private const MAX_BUSCA_ARTIGOS = 30;
 
     /**
-     * GET /api/artigos-sugeridos?irregularidades=1,2,3
+     * GET /api/artigos/busca?q=escav — os artigos que tratam do que o fiscal viu.
+     * GET /api/artigos/busca?ids=3,7 — os mesmos dados, pelos ids (rascunho
+     * retomado: o item já cita artigos que a tela ainda não conhece).
      *
-     * Os artigos que enquadram as irregularidades marcadas — a mesma consulta
-     * de LavraturaService::artigosSugeridos(), mas por IDS e não por vistoria,
-     * porque aqui a vistoria ainda não existe: o fiscal está diante da obra,
-     * marcando o checklist, e é esse o momento de conferir o enquadramento —
-     * com os fatos à vista, e não semanas depois, na mesa.
+     * O fiscal procura o PROBLEMA, não o número do dispositivo: casa com os
+     * termos de busca do artigo ("escavação", "terraplenagem"…), com número,
+     * apelido e conduta, sem acento e sem caixa (Artigo::casaCom). Busca em
+     * TODAS as leis — antes só aparecia artigo sugerido por irregularidade
+     * marcada, e sem marcação a lista ficava vazia.
+     *
+     * A comparação é feita aqui, sobre os artigos ativos, e não em SQL: o
+     * catálogo é de dezenas a poucas centenas de linhas, e "sem acento" em
+     * SQL dependeria da colação de cada servidor.
      */
-    public function artigosSugeridos(Request $request): JsonResponse
+    public function buscarArtigos(Request $request): JsonResponse
     {
-        $ids = array_filter(array_map(
-            'intval',
-            explode(',', (string) $request->query('irregularidades'))
-        ));
+        $ids = array_filter(array_map('intval', explode(',', (string) $request->query('ids'))));
+        $q = (string) $request->query('q', '');
 
-        if (! $ids) {
-            return response()->json(['artigos' => [], 'sem_artigo' => []]);
-        }
-
-        $artigos = Artigo::query()->ativos()
-            ->with('legislacao:id,numero,nome')
-            ->whereHas('irregularidades', fn ($q) => $q->whereIn('irregularidades.id', $ids))
+        $artigos = Artigo::query()->with('legislacao:id,numero,nome')
+            ->when($ids, fn ($b) => $b->whereIn('id', $ids), fn ($b) => $b->ativos())
             ->get();
 
-        // As irregularidades que NENHUM artigo enquadra. Escondê-las faria a
-        // tela mentir por omissão: o fiscal veria três artigos e concluiria
-        // que as cinco marcações estão fundamentadas. Hoje são 18 no catálogo.
-        $cobertas = DB::table('artigo_irregularidade')
-            ->whereIn('irregularidade_id', $ids)
-            ->distinct()->pluck('irregularidade_id')->all();
+        $achados = [];
+        foreach ($artigos as $a) {
+            $casou = $ids ? null : $a->casaCom($q);
+            if (! $ids && $casou === null) {
+                continue;
+            }
+            $achados[] = [
+                'id'            => $a->id,
+                'numero'        => $a->numero,
+                'rotulo'        => $a->rotulo(),
+                'conduta'       => $a->conduta,
+                'base'          => Artigo::BASES_MULTA[$a->base_multa] ?? null,
+                'por_m2'        => $a->base_multa === 'area_construida',
+                'lei'           => $a->legislacao?->numero,
+                'legislacao_id' => $a->legislacao_id,
+                'termos'        => $a->termos ?? [],
+                'casou'         => $casou,
+            ];
+            if (count($achados) >= self::MAX_BUSCA_ARTIGOS) {
+                break;
+            }
+        }
 
-        return response()->json([
-            'artigos' => $artigos->map(fn ($a) => [
-                'id'      => $a->id,
-                'numero'  => $a->numero,
-                'conduta' => $a->conduta,
-                'base'    => Artigo::BASES_MULTA[$a->base_multa] ?? null,
-                'por_m2'  => $a->base_multa === 'area_construida',
-                'lei'     => $a->legislacao?->numero,
-            ]),
-            'sem_artigo' => Irregularidade::whereIn('id', array_diff($ids, $cobertas))
-                ->pluck('descricao'),
-        ]);
+        return response()->json(['artigos' => $achados]);
     }
 
     /**
      * POST /api/lotes/{lote}/vistorias
      *
-     * Grava a vistoria, as irregularidades marcadas e as fotos, tudo numa
+     * Grava a vistoria, os itens (com os artigos citados) e as fotos, tudo numa
      * transação: uma vistoria salva pela metade — sem as fotos que a
      * fundamentam — é pior do que vistoria nenhuma, porque parece completa.
      */
@@ -562,8 +559,6 @@ class VistoriaController extends Controller
             'latitude'           => ['nullable', 'numeric', 'between:-90,90'],
             'longitude'          => ['nullable', 'numeric', 'between:-180,180'],
             'accuracy'           => ['nullable', 'numeric', 'min:0'],
-            'irregularidades'    => ['array'],
-            'irregularidades.*'  => ['integer', 'exists:irregularidades,id'],
             'evidencias'         => ['array', 'max:20'],
             'evidencias.*'       => ['file', 'max:' . self::MAX_KB, 'mimetypes:' . implode(',', self::MIMES)],
             'titulos'            => ['array'],
@@ -610,18 +605,14 @@ class VistoriaController extends Controller
             // `artigos[]` continua sendo o CONJUNTO de dispositivos que a
             // vistoria envolve — é o que a lavratura consulta. Os itens
             // abaixo são o TEXTO que o fiscal escreveu sobre cada um.
-            'artigos'            => ['array'],
-            'artigos.*'          => ['integer', 'exists:artigos,id'],
             // ── O RELATÓRIO EM ITENS ──
             //
-            // Cada item é um grupo: irregularidades, texto livre, artigos,
+            // Cada item é um grupo: artigos, texto livre,
             // exigências e fotos. As FOTOS não vêm aninhadas aqui — arquivo
             // sobe na remessa achatada `evidencias[]`, que é como upload
             // funciona; o item aponta para elas pelo índice.
             'itens'                          => ['array', 'max:60'],
             'itens.*.texto'                  => ['nullable', 'string', 'max:5000'],
-            'itens.*.irregularidades'        => ['array'],
-            'itens.*.irregularidades.*'      => ['integer', 'exists:irregularidades,id'],
             'itens.*.artigos'                => ['array', 'max:50'],
             'itens.*.artigos.*.artigo_id'    => ['required', 'integer', 'exists:artigos,id'],
             'itens.*.artigos.*.tipo'         => ['required', Rule::in(array_keys(VistoriaArtigo::TIPOS))],
@@ -664,39 +655,18 @@ class VistoriaController extends Controller
             ], 422);
         }
 
-        // Uma vistoria irregular sem nenhuma irregularidade marcada é um
-        // registro que não sustenta documento nenhum depois. Barrar aqui evita
-        // descobrir isso na hora de lavrar a notificação.
-        // A vistoria "tem" as irregularidades de todos os itens somadas. Era um
-        // checklist único; agora cada uma pertence ao item onde foi constatada,
-        // e a soma é o que a regra da situação e a sugestão de artigos leem.
-        $irregularidades = collect($d['itens'] ?? [])
-            ->flatMap(fn ($i) => $i['irregularidades'] ?? [])
-            ->map(fn ($id) => (int) $id)
-            ->values();
-
-        // O índice único de `vistoria_irregularidades` é (vistoria, irregularidade):
-        // a mesma não pode ser constatada em dois itens. Dito aqui, com o nome do
-        // que repetiu, em vez de estourar como violação de chave lá embaixo.
-        $repetidas = $irregularidades->duplicates();
-        if ($repetidas->isNotEmpty()) {
-            $nomes = Irregularidade::whereIn('id', $repetidas->unique())->pluck('descricao')->implode('; ');
-
+        // Uma vistoria irregular sem nenhum artigo CITADO é um registro que
+        // não sustenta documento nenhum depois: só se atua no que está fora da
+        // lei, e é o artigo que diz o que está. Barrar aqui evita descobrir
+        // isso na hora de lavrar a notificação. (Parecer não conta: é a
+        // opinião do fiscal sobre o artigo, não o enquadramento.)
+        $citados = collect($d['itens'] ?? [])
+            ->flatMap(fn ($i) => $i['artigos'] ?? [])
+            ->where('tipo', 'citacao');
+        if ($d['situacao'] === 'irregular' && $citados->isEmpty()) {
             return response()->json([
-                'message' => 'A mesma irregularidade está em mais de um item: ' . $nomes
-                    . '. Cada uma pertence a um item só — o que se repete em vários '
-                    . 'pontos da obra é o texto e a foto, não o enquadramento.',
-                'errors'  => ['itens' => ['Irregularidade repetida entre itens.']],
-            ], 422);
-        }
-
-        $irregularidades = $irregularidades->unique()->values()->all();
-        $d['irregularidades'] = $irregularidades;
-
-        if ($d['situacao'] === 'irregular' && empty($irregularidades)) {
-            return response()->json([
-                'message' => 'Marque ao menos uma irregularidade para uma vistoria irregular.',
-                'errors'  => ['irregularidades' => ['Selecione ao menos uma.']],
+                'message' => 'Cite ao menos um artigo para uma vistoria irregular.',
+                'errors'  => ['itens' => ['Cite ao menos um artigo.']],
             ], 422);
         }
 
@@ -745,10 +715,6 @@ class VistoriaController extends Controller
                 $v->forceFill(array_fill_keys($fora, null))->save();
             }
 
-            if (! empty($d['irregularidades'])) {
-                $v->irregularidades()->sync($d['irregularidades']);
-            }
-
             // ── OS ITENS DO RELATÓRIO ──
             //
             // A ordem entre itens é a que o fiscal montou — é a sequência em
@@ -762,17 +728,6 @@ class VistoriaController extends Controller
                     'texto' => isset($bloco['texto']) ? (trim($bloco['texto']) ?: null) : null,
                 ]);
                 $itensCriados[$n] = $item;
-
-                // A linha da irregularidade carrega os DOIS vínculos: a vistoria
-                // (que já existia, e é o que a lavratura lê) e o item onde ela
-                // foi constatada. Por isso é escrita aqui, e não por `attach`
-                // do lado do item — ele sozinho não conhece a vistoria.
-                foreach ($bloco['irregularidades'] ?? [] as $irregId) {
-                    DB::table('vistoria_irregularidades')
-                        ->where('vistoria_id', $v->id)
-                        ->where('irregularidade_id', $irregId)
-                        ->update(['item_id' => $item->id]);
-                }
 
                 foreach ($bloco['artigos'] ?? [] as $j => $art) {
                     $item->artigos()->create([
@@ -804,19 +759,10 @@ class VistoriaController extends Controller
                 }
             }
 
-            // Enquadramento constatado em campo. Ver a relação `artigos()` em
-            // Vistoria para por que ele não divide tabela com o do documento.
-            //
-            // Os artigos e as exigências agora nascem DENTRO do item, no laço
-            // acima — cada um já com o texto que o fiscal escreveu sobre ele e
-            // com a posição do grupo a que pertence.
-            //
-            // `artigos[]` continua aceito para quem só marca o dispositivo sem
-            // escrever nada: é o que a sugestão automática devolve, e ele
-            // alimenta a relação que a LAVRATURA lê.
-            if (! empty($d['artigos'])) {
-                $v->artigos()->sync($d['artigos']);
-            }
+            // Enquadramento constatado em campo: os artigos nascem DENTRO do
+            // item, no laço acima, cada um com o texto que o fiscal escreveu
+            // sobre ele. (Havia um `artigos[]` achatado, sincronizado à parte,
+            // que podia apagar o que os itens gravaram; saiu.)
 
             // Amarra a vistoria ao protocolo que ela atende.
             //

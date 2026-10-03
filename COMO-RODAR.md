@@ -92,7 +92,7 @@ tocados.
 | GET | `/` | autenticado — o mapa |
 | GET | `/api/mapa/lotes?bbox=O,S,L,N` | autenticado |
 | POST | `/api/localizacao/identificar` | autenticado + CSRF |
-| GET | `/api/irregularidades` | autenticado |
+| GET | `/api/artigos/busca?q=` | autenticado — artigo pelo termo de busca, número, apelido ou conduta |
 | GET | `/api/lotes/{lote}/historico` | autenticado |
 | POST | `/api/lotes/{lote}/vistorias` | autenticado + `canEdit()` |
 | DELETE | `/api/evidencias/{evidencia}` | autenticado + **autor** |
@@ -105,8 +105,10 @@ tocados.
 - **Evidência só pode ser excluída por quem a cadastrou** — e **admin não é
   exceção**: a regra é de autoria, não de perfil. Quem lavra responde pelo que
   anexou.
-- **Vistoria "irregular" exige ao menos uma irregularidade marcada** — sem isso
-  o registro não sustenta documento nenhum na Etapa 6.
+- **Vistoria "irregular" exige ao menos um artigo citado** — sem isso o
+  registro não sustenta documento nenhum na Etapa 6. A irregularidade não é
+  mais um catálogo à parte: é **termo de busca do artigo** ("escavação",
+  "sem alvará"), cadastrado em Parâmetros › Legislação.
 
 ### Evidências ficam em disco privado
 

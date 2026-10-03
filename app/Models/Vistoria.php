@@ -232,9 +232,9 @@ class Vistoria extends Model
     /**
      * O RELATÓRIO EM GRUPOS.
      *
-     * Cada item é um bloco de raciocínio — a irregularidade, o que o fiscal
-     * escreveu, os artigos, o que se exige e as fotos que provam —, e dentro
-     * dele a ordem é fixa: fato, narrativa, lei, providência, prova. Só a ordem
+     * Cada item é um bloco de raciocínio — o artigo infringido, o que o fiscal
+     * escreveu, o que se exige e as fotos que provam —, e dentro dele a ordem é
+     * fixa: enquadramento, narrativa, providência, prova. Só a ordem
      * ENTRE itens é escolhida, e é a sequência em que a obra foi percorrida.
      *
      * Quem consome isto (tela de leitura e relatório em A4) não decide nada
@@ -248,10 +248,6 @@ class Vistoria extends Model
             'id'    => $i->id,
             'ordem' => $i->ordem,
             'texto' => $i->texto,
-
-            'irregularidades' => $i->irregularidades->map(fn ($r) => [
-                'codigo' => $r->codigo, 'descricao' => $r->descricao, 'gravidade' => $r->gravidade,
-            ])->all(),
 
             'artigos' => $i->artigos->map(fn (VistoriaArtigo $a) => [
                 'id' => $a->id, 'artigo_id' => $a->artigo_id,
@@ -360,13 +356,6 @@ class Vistoria extends Model
 
         return number_format((float) $this->area_construida_aferida_m2, 2, ',', '.') . ' m²'
             . ($metodo ? ' (' . mb_strtolower($metodo) . ')' : '');
-    }
-
-    public function irregularidades(): BelongsToMany
-    {
-        return $this->belongsToMany(Irregularidade::class, 'vistoria_irregularidades')
-                    ->withPivot('observacao')
-                    ->withTimestamps();
     }
 
     /** Rótulo da situação para exibição. */

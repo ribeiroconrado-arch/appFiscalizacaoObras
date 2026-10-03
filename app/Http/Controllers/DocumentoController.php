@@ -218,8 +218,9 @@ class DocumentoController extends Controller
     /**
      * GET /api/vistorias/{vistoria}/sugestao
      *
-     * Devolve os artigos que enquadram as irregularidades daquela vistoria —
-     * o passo que dispensa o fiscal de procurar dispositivo na lei impressa.
+     * Devolve os artigos CITADOS naquela vistoria — o passo que dispensa o
+     * fiscal de procurar de novo, na mesa, o dispositivo que ele já achou em
+     * campo.
      */
     public function sugestao(Vistoria $vistoria): JsonResponse
     {
@@ -247,7 +248,6 @@ class DocumentoController extends Controller
             'exigencias' => $vistoria->exigencias->map(fn ($e) => [
                 'texto' => $e->texto, 'prazo_dias' => $e->prazo_dias, 'rotulo' => $e->rotulo(),
             ]),
-            'irregularidades' => $vistoria->irregularidades()->get(['irregularidades.id', 'codigo', 'descricao']),
             'artigos' => $artigos->map(fn ($a) => [
                 'id' => $a->id, 'numero' => $a->numero, 'rotulo' => $a->rotulo(),
                 'conduta' => $a->conduta, 'sancao' => $a->sancao,
@@ -258,8 +258,7 @@ class DocumentoController extends Controller
             // Sem artigo cadastrado, não há o que sugerir. Dizer isso é melhor
             // do que devolver lista vazia e deixar o fiscal achar que é bug.
             'aviso' => $artigos->isEmpty()
-                ? 'Nenhum artigo vinculado às irregularidades desta vistoria. '
-                  . 'Cadastre a fundamentação legal em Parâmetros > Legislação.'
+                ? 'Nenhum artigo citado nesta vistoria. Escolha a fundamentação abaixo.'
                 : null,
         ]);
     }

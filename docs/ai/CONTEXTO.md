@@ -38,8 +38,8 @@ já fora notificado no mês passado.
 
 Agora: **o mapa é a interface operacional**. Toca-se no lote, vê-se o
 histórico, registra-se a vistoria com foto e coordenada no local, e a peça
-nasce da vistoria — com o enquadramento legal que o catálogo de
-irregularidades sugere.
+nasce da vistoria — com os artigos que o fiscal citou, achados pelo nome
+popular do problema ("escavação", "sem alvará").
 
 ## O ciclo que o sistema executa
 
@@ -48,8 +48,8 @@ irregularidades sugere.
           │
           ▼
      VISTORIA  ──── fotos com data/hora/coordenada próprias
-          │         irregularidades do catálogo
-          │         artigos que as enquadram
+          │         artigos citados (busca pelo problema)
+          │         exigências e relato
           ▼
    ┌──────┴───────┬──────────────┬───────────────┐
    ▼              ▼              ▼               ▼

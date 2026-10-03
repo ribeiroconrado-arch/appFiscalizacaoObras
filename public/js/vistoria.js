@@ -9,7 +9,6 @@
 /** Estado do formulário de vistoria. */
 const vState = {
   /** @type {Object|null} lote sendo vistoriado */ lote: null,
-  /** @type {Array<Object>} catálogo de irregularidades (cache da sessão) */ catalogo: [],
   /** @type {Array<{arquivo:File, titulo:string, descricao:string, url:string}>} */ anexos: [],
   /**
    * O relatório, na ordem em que o fiscal montou.
@@ -39,8 +38,8 @@ const vState = {
    */
   fotoPendente: null,
   /** @type {Array<File>} escolhidas de uma vez, atendidas uma a uma */ filaFotos: [],
-  /** @type {Array<Object>} artigos sugeridos pelas irregularidades marcadas */ artigos: [],
-  /** @type {Array<string>} irregularidades que nenhum artigo enquadra */ semArtigo: [],
+  /** @type {Map<number, Object>} artigos já vistos (busca, rascunho), para dar nome ao id */
+  artigosConhecidos: new Map(),
   /** @type {string} para que serve esta vistoria — decide os campos de obra */
   finalidade: 'obras',
   /** @type {{alvara:string, fase:string, projeto:string, uso:string}} campos de obra escolhidos */
@@ -345,9 +344,9 @@ async function novaVistoria() {
   document.getElementById('nv-hora').value = horaAgoraLocal()
   syncDataHora()
   // "Regular" e o estado de quem ainda nao constatou nada — e e o desfecho da
-  // maioria das vistorias. Nascer "Irregular" fazia a tela pedir uma
-  // irregularidade do catalogo para deixar avancar, mesmo numa atualizacao
-  // cadastral ou num auto de constatacao, onde nem se procura irregularidade.
+  // maioria das vistorias. Nascer "Irregular" fazia a tela pedir um artigo
+  // citado para deixar avancar, mesmo numa atualizacao cadastral ou num auto
+  // de constatacao, onde nem se procura infracao.
   document.getElementById('nv-situacao').value = 'regular'
 
   // A posição já capturada no mapa serve de ponto de partida; o botão do
@@ -358,8 +357,6 @@ async function novaVistoria() {
   irPasso('id')
   oferecerRascunho()
   vState.abrindo = false
-  // O catálogo não depende do imóvel e é o que a janela precisa para trabalhar.
-  await carregarCatalogo()
   openModal('m-vistoria')
 
   // Só o que depende do imóvel, e só quando há um.
@@ -458,8 +455,6 @@ function zerarVistoria() {
   if (termo) { termo.value = '' }
   const achados = document.getElementById('nv-imovel-resultado')
   if (achados) { achados.innerHTML = '' }
-  vState.artigos = []
-  vState.semArtigo = []
   vState.finalidade = 'obras'
   vState.obra = { alvara: '', fase: '', projeto: '', uso: '' }
   vState.gps = null
@@ -474,8 +469,6 @@ function zerarVistoria() {
   põe('nv-ano', '')
   põe('nv-exig-texto', ''); põe('nv-exig-prazo', '')
   document.getElementById('nv-rascunho').hidden = true
-  // As irregularidades vivem DENTRO dos itens agora: zerar `relatorio` já as
-  // leva junto, e não sobra checklist de tela para desmarcar à mão.
   pintarOpcoes(); pintarFinalidade(); renderRelatorio()
 }
 
@@ -688,18 +681,12 @@ function corpoDaVistoria(v) {
   // ── O RELATÓRIO EM GRUPOS ──
   //
   // Cada item é um bloco de raciocínio, e dentro dele a ordem é fixa:
-  // irregularidades, texto, artigos, exigências, fotos — o fato, a narrativa, a
-  // lei, a providência e a prova. Só a ordem ENTRE itens foi escolhida, e é a
+  // artigos, texto, exigências, fotos — a infração, a narrativa, a providência
+  // e a prova. Só a ordem ENTRE itens foi escolhida, e é a
   // sequência em que a obra foi percorrida.
   const relatorio = v.relatorio.length
     ? v.relatorio.map((it, n) => {
         const partes = []
-
-        if (it.irregularidades.length) {
-          partes.push(`<ul class="vv-lista">${it.irregularidades.map(i =>
-            `<li><b>${esc(i.codigo)}</b> ${esc(i.descricao)}
-             <span class="vv-grav vv-${esc(i.gravidade)}">${esc(i.gravidade)}</span></li>`).join('')}</ul>`)
-        }
 
         if (it.texto) { partes.push(`<p class="vv-obs">${esc(it.texto)}</p>`) }
 
@@ -876,8 +863,8 @@ function passoCompleto(k) {
     }
   }
   if (k === 'rel' && document.getElementById('nv-situacao').value === 'irregular'
-      && !irregularidadesDaVistoria().length) {
-    toast('Marque ao menos uma irregularidade', 'err'); return false
+      && !artigosCitadosDaVistoria().length) {
+    toast('Cite ao menos um artigo: vistoria irregular é enquadrada em lei', 'err'); return false
   }
   return true
 }
@@ -902,7 +889,7 @@ function irPasso(k) {
   const corpo = document.querySelector('.vs-corpo')
   if (corpo) { corpo.scrollTop = 0 }
 
-  if (k === 'rel') { sugerirArtigos() }
+  if (k === 'rel') { garantirNomesDosArtigos() }
   if (k === 'rev') {
     renderRevisao()
     if (typeof pintarSinalNaVistoria === 'function') { pintarSinalNaVistoria(vState.lote?.id) }
@@ -1101,111 +1088,47 @@ async function carregarProtocolosCadastrais(loteId) {
   }
 }
 
-/** Busca o catálogo de irregularidades uma vez por sessão. */
-async function carregarCatalogo() {
-  if (vState.catalogo.length) { renderChecklist(); return }
-  try {
-    const r = await fetch('/api/irregularidades', { headers: { 'Accept': 'application/json' } })
-    vState.catalogo = await r.json()
-  } catch (e) {
-    console.error(e)
-    toast('Não foi possível carregar o checklist', 'err')
-  }
-  renderChecklist()
+// ── ARTIGOS DE LEI ───────────────────────────────────────────
+//
+// Só se atua no que está fora da lei, e é o ARTIGO que diz o que está. O
+// fiscal procura o PROBLEMA ("escavação", "sem alvará") e a busca devolve os
+// artigos que tratam dele, de todas as leis, pelos termos de busca cadastrados
+// em Parâmetros › Legislação (ver VistoriaController::buscarArtigos). Antes
+// isso passava por um catálogo de "irregularidades" à parte, que precisava
+// ficar em sincronia com os artigos.
+
+/** Guarda os artigos vistos, para dar nome a um id sem nova consulta. @param {Object[]} lista */
+function conhecerArtigos(lista) {
+  for (const a of lista ?? []) { vState.artigosConhecidos.set(a.id, a) }
 }
 
 /**
- * O catálogo de irregularidades vive DENTRO da janela do item.
- *
- * Era uma lista única da vistoria, num passo à parte. Com o item virando grupo,
- * a irregularidade passou a pertencer ao ponto da obra onde foi constatada —
- * então esta função só repinta a janela aberta, se houver uma.
+ * Os artigos citados nos itens que a tela ainda não conhece (rascunho
+ * retomado) são buscados pelo id, para o resumo e a revisão terem o nome.
  */
-function renderChecklist() {
-  if (vState.itemAberto !== null) { buscarIrregularidade(document.getElementById('vsi-irreg-busca')?.value ?? '') }
-
-  // O catálogo só chega do servidor DEPOIS de o rascunho ser lido, e por isso
-  // as marcas são reaplicadas aqui — não em restaurarRascunho, onde ainda não
-  // existiam caixas para marcar.
-  // O CHECKLIST DEIXOU DE SER DOM DA TELA, e com isso caiu todo o mecanismo
-  // do `rascunhoIrreg`: ele existia porque as marcas do rascunho chegavam
-  // antes das caixas e precisavam esperar o catálogo. Agora a irregularidade
-  // é DADO dentro do item — voltar do rascunho é devolver a lista, e a janela
-  // do item pinta o que estiver nela.
-  sugerirArtigos()
-}
-
-// ── PASSO 3: ARTIGOS DE LEI ──────────────────────────────────
-
-/**
- * Os artigos que enquadram o que foi marcado.
- *
- * Vem para a vistoria — e não só para a lavratura, semanas depois — porque é
- * aqui que os fatos estão à vista. Quem confere o enquadramento diante da obra
- * pode ainda medir, fotografar ou perguntar; na mesa, não pode mais.
- */
-async function sugerirArtigos() {
-  // O bloco `#nv-artigos` saiu da tela: quem mostra os artigos agora é o
-  // seletor da janela do item, e a sugestão só alimenta a lista dele.
-
-
-  // A SOMA DOS ITENS, e não um checklist de tela: cada irregularidade pertence
-  // a um item, e o enquadramento é da vistoria inteira.
-  const ids = irregularidadesDaVistoria()
-  if (!ids.length) {
-    vState.artigos = []
-    if (vState.itemAberto !== null) { buscarArtigo(document.getElementById('vsi-artigo-busca')?.value ?? '') }
-    return
-  }
-
+async function garantirNomesDosArtigos() {
+  const faltam = artigosDaVistoria().filter(id => !vState.artigosConhecidos.has(id))
+  if (!faltam.length) { return }
   try {
-    const r = await fetch('/api/artigos-sugeridos?irregularidades=' + ids.join(','),
-      { headers: { Accept: 'application/json' } })
+    const r = await fetch('/api/artigos/busca?ids=' + faltam.join(','), { headers: { Accept: 'application/json' } })
     if (!r.ok) { throw new Error('HTTP ' + r.status) }
-    const d = await r.json()
-
-    // A sugestão OFERECE, e não escolhe: os artigos entram no seletor da
-    // janela do item, e é o fiscal quem cita o que couber. Antes ela marcava
-    // sozinha uma lista paralela, que podia discordar do que ele escreveu.
-    vState.artigos = d.artigos ?? []
-    renderArtigos(d.sem_artigo ?? [])
+    conhecerArtigos((await r.json()).artigos)
+    renderRelatorio()
+    if (vState.itemAberto !== null) { pintarResumoDoItem() }
+    if (vState.passo === 'rev') { renderRevisao() }
   } catch (e) {
-    console.error(e)
-    toast('Não foi possível buscar os artigos agora. A vistoria grava assim mesmo.', 'aviso')
-  }
-}
-
-/**
- * O que a sugestão devolveu, guardado para o seletor da janela do item.
- *
- * A LISTA DE MARCAR ARTIGOS SAIU. Ela existia quando o relatório era plano: o
- * fiscal marcava os dispositivos da vistoria num lugar e escrevia sobre eles em
- * outro, e as duas listas podiam discordar. Agora o artigo é citado DENTRO do
- * item, com o texto ao lado — e os artigos da vistoria são a soma do que os
- * itens citaram. Uma verdade só.
- *
- * @param {Array<string>} semArtigo irregularidades que nenhum artigo enquadra
- */
-function renderArtigos(semArtigo) {
-  // Dizer o que NÃO está fundamentado é o ponto: em silêncio, o fiscal veria
-  // três artigos sugeridos e concluiria que as cinco marcações estão cobertas.
-  vState.semArtigo = semArtigo ?? []
-
-  if (vState.semArtigo.length) {
-    toast('Sem artigo cadastrado para: ' + vState.semArtigo.join('; ')
-      + '. A vistoria grava, mas a peça vai precisar do enquadramento.', 'aviso')
-  }
-
-  // O seletor do item se refaz com a lista nova, se a janela estiver aberta.
-  if (vState.itemAberto !== null) {
-    pintarLeisDoItem()
-    buscarArtigo(document.getElementById('vsi-artigo-busca')?.value ?? '')
+    console.error(e)   // sem o nome, o item mostra "Art. #id" e grava igual
   }
 }
 
 /** Os artigos citados na vistoria — a soma do que os itens citaram. */
 function artigosDaVistoria() {
   return [...new Set(vState.relatorio.flatMap(i => i.artigos.map(a => a.artigo_id)))]
+}
+
+/** Só os CITADOS (o parecer é a opinião do fiscal, não o enquadramento). */
+function artigosCitadosDaVistoria() {
+  return [...new Set(vState.relatorio.flatMap(i => i.artigos.filter(a => a.tipo !== 'parecer').map(a => a.artigo_id)))]
 }
 
 /** Mantém o campo escondido com o valor combinado aaaa-mm-ddThh:mm. */
@@ -1220,19 +1143,18 @@ function syncDataHora() {
 // O RELATÓRIO EM ITENS
 //
 // Cada item é um GRUPO, e não uma linha. Em campo o que se constata não vem
-// separado: "muro sem recuo" é uma irregularidade, mais o que o fiscal escreveu
-// sobre ela, mais os artigos que a enquadram, mais as fotos que a provam. Eram
+// separado: "muro sem recuo" é o artigo que ele infringe, mais o que o fiscal
+// escreveu, mais o que se exige, mais as fotos que provam. Eram
 // quatro linhas soltas, que precisavam ser lidas juntas e podiam ser
 // reordenadas em separado — desmontando o raciocínio.
 //
 // A ordem ENTRE itens é escolhida (é a sequência em que a obra foi percorrida).
 // A ordem DENTRO do item é fixa e não se escolhe:
 //
-//   1 irregularidades   o que a lei chama de infração
+//   1 artigos           o enquadramento: o que está fora da lei
 //   2 texto livre       o que se viu, com as palavras do fiscal
-//   3 artigos           o enquadramento
-//   4 exigências        o que se cobra, com prazo
-//   5 fotos             a prova
+//   3 exigências        o que se cobra, com prazo
+//   4 fotos             a prova
 //
 // É a ordem do raciocínio de uma peça. Deixá-la à escolha faria cada relatório
 // sair diferente, e quem lê vinte por semana perde o hábito de leitura.
@@ -1243,7 +1165,7 @@ function itemVazio() {
   // `relatos` é a lista que a tela edita; `texto` é ela junta, e continua
   // sendo o que o servidor recebe e o que o resto do sistema lê. Uma verdade
   // só, derivada num lugar só — ver `sincronizarRelatos`.
-  return { texto: '', relatos: [], irregularidades: [], artigos: [], exigencias: [], fotos: [] }
+  return { texto: '', relatos: [], artigos: [], exigencias: [], fotos: [] }
 }
 
 /**
@@ -1285,7 +1207,7 @@ function novoItemRelatorio() {
 /** @param {Object} item @returns {boolean} */
 function itemVazioDeConteudo(item) {
   return !item.texto?.trim()
-    && !item.irregularidades.length && !item.artigos.length
+    && !item.artigos.length
     && !item.exigencias.length && !item.fotos.length
 }
 
@@ -1304,7 +1226,7 @@ function renderRelatorio() {
 
   if (!vState.relatorio.length) {
     alvo.innerHTML = '<div class="leg">Nenhum item ainda. Cada item é um ponto da obra: '
-      + 'a irregularidade, o que você viu, os artigos, o que exige e as fotos.</div>'
+      + 'o artigo infringido, o que você viu, o que exige e as fotos.</div>'
     return
   }
 
@@ -1339,7 +1261,7 @@ function excluirItemDaLista(i) {
   confirmarAcao({
     titulo: 'Excluir item',
     mensagem: `O item ${i + 1} sai do relatório com tudo que está nele — `
-      + 'irregularidades, texto, artigos, exigências e fotos.',
+      + 'artigos, texto, exigências e fotos.',
     textoBtn: 'Excluir',
     perigo: true,
     onConfirm: () => {
@@ -1372,9 +1294,9 @@ function capaDoItem(item, i) {
  * O QUE ESTÁ NO ITEM, dito por extenso — e só o que está.
  *
  * A versão anterior mostrava o texto livre e, embaixo, selos contando o resto:
- * "2 irregularidade(s)", "1 artigo(s)". Contar não é dizer: dois itens com
- * duas irregularidades cada ficavam idênticos na lista, e para saber QUAL era
- * a irregularidade — que é o que decide o enquadramento — só abrindo os dois.
+ * "2 artigo(s)", "1 foto(s)". Contar não é dizer: dois itens com dois artigos
+ * cada ficavam idênticos na lista, e para saber QUAL era o artigo — que é o
+ * que decide o enquadramento — só abrindo os dois.
  *
  * Agora cada bloco preenchido aparece nomeado, na mesma ordem em que sai no
  * relatório, e o bloco vazio não aparece: um item que é só uma foto se lê como
@@ -1385,25 +1307,14 @@ function capaDoItem(item, i) {
 function conteudoDoItem(item) {
   const linhas = []
 
-  if (item.irregularidades.length) {
-    const nomes = item.irregularidades
-      .map(id => vState.catalogo.find(c => c.id === id)?.descricao)
-      .filter(Boolean)
-    linhas.push(linhaDoItem('Irregularidade', nomes, item.irregularidades.length))
+  if (item.artigos.length) {
+    linhas.push(linhaDoItem('Artigo', item.artigos.map(a => nomeDoArtigo(a.artigo_id)), item.artigos.length))
   }
 
   if (item.texto?.trim()) {
     const t = item.texto.trim()
     linhas.push(`<div class="rel-linha"><span class="rel-rot">Relato</span>
       <span class="rel-val">${esc(t.slice(0, 140))}${t.length > 140 ? '…' : ''}</span></div>`)
-  }
-
-  if (item.artigos.length) {
-    const nomes = item.artigos
-      .map(a => vState.artigos.find(x => x.id === a.artigo_id)?.rotulo
-        || vState.artigos.find(x => x.id === a.artigo_id)?.numero)
-      .filter(Boolean)
-    linhas.push(linhaDoItem('Artigo', nomes, item.artigos.length))
   }
 
   if (item.exigencias.length) {
@@ -1462,31 +1373,28 @@ function abrirItemRelatorio(i) {
   if (!item) { return }
 
   vState.itemAberto = i
-  irregEscolhida = null
   artigoEscolhido = null
   document.getElementById('vsi-titulo').textContent = `Item ${i + 1} do relatório`
   // O campo de relato abre VAZIO: o que já foi escrito está na lista do
   // resumo, e trazer de volta para o campo faria o "+add" duplicá-lo.
   garantirRelatos(item)
   document.getElementById('vsi-texto').value = ''
-  document.getElementById('vsi-irreg-busca').value = ''
   document.getElementById('vsi-artigo-busca').value = ''
-  fecharSugestoes('vsi-irreg-sugestoes')
   fecharSugestoes('vsi-artigo-sugestoes')
+  notaDaBuscaDeArtigo()
   descartarFotoPendente()
-  pintarLeisDoItem()
 
   pintarContasDoItem()
 
   // Abre no bloco que JÁ TEM alguma coisa: reabrir um item para conferir a
-  // foto não deveria começar pelo catálogo de irregularidades. Item novo abre
-  // nas irregularidades, que é por onde o enquadramento começa.
+  // foto não deveria começar pela busca de artigo. Item novo abre nos
+  // artigos, que é por onde o enquadramento começa.
   abaDoItem(primeiroBlocoComConteudo(item))
 
   openModal('m-vs-item')
 }
 
-/** Os cinco blocos do item, na ordem em que saem no relatório. */
+/** Os quatro blocos do item, na ordem em que saem no relatório. */
 // Três ícones em círculo, do padrão já usado para anexo (ver/editar/excluir):
 // verde para as duas ações que preservam a foto, vermelho para a que apaga.
 const ICO_OLHO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1498,16 +1406,15 @@ const ICO_LAPIS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const ICO_X = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
   stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`
 
-const BLOCOS_DO_ITEM = ['irreg', 'texto', 'artigos', 'exigencias', 'fotos']
+const BLOCOS_DO_ITEM = ['artigos', 'texto', 'exigencias', 'fotos']
 
 /** @param {Object} item @returns {string} */
 function primeiroBlocoComConteudo(item) {
-  if (item.irregularidades.length) { return 'irreg' }
-  if (item.texto?.trim())          { return 'texto' }
   if (item.artigos.length)         { return 'artigos' }
+  if (item.texto?.trim())          { return 'texto' }
   if (item.exigencias.length)      { return 'exigencias' }
   if (item.fotos.length)           { return 'fotos' }
-  return 'irreg'
+  return 'artigos'
 }
 
 /**
@@ -1524,7 +1431,6 @@ function abaDoItem(nome) {
   })
   // Trocar de aba fecha qualquer combo aberto: a lista flutua sobre o
   // conteúdo, e ficaria pairando sobre a aba nova.
-  fecharSugestoes('vsi-irreg-sugestoes')
   fecharSugestoes('vsi-artigo-sugestoes')
   pintarSetasDeAba('vsi-setas', BLOCOS_DO_ITEM, nome)
   pintarContasDoItem()
@@ -1540,7 +1446,7 @@ function irAbaItem(destino) {
  * A contagem em cada botão.
  *
  * É ela que substitui o empilhamento: sem abrir bloco nenhum dá para ver que o
- * item tem duas irregularidades e nenhuma foto, que era justamente o que a
+ * item tem dois artigos e nenhuma foto, que era justamente o que a
  * janela cheia não deixava enxergar.
  */
 function pintarContasDoItem() {
@@ -1554,7 +1460,6 @@ function pintarContasDoItem() {
     e.parentElement.classList.toggle('vsi-tem', !!n)
   }
 
-  põe('vsi-n-irreg', item.irregularidades.length)
   // O relato passou a ser uma LISTA, então conta como as outras: antes era um
   // campo só, e a aba mostrava um ponto porque "1" não dizia nada.
   põe('vsi-n-texto', item.relatos?.length ?? 0)
@@ -1570,7 +1475,7 @@ function pintarContasDoItem() {
  *
  * Cada aba do item tem, agora, só o controle de acrescentar — um combo, um
  * texto, um formulário curto. O que já foi posto no item mora aqui, fora das
- * abas, sempre visível, para não ser preciso visitar as cinco só para saber o
+ * abas, sempre visível, para não ser preciso visitar as quatro só para saber o
  * que já está preenchido. Cada linha tem seu próprio × — remover não exige
  * trocar de aba.
  */
@@ -1585,15 +1490,14 @@ function pintarResumoDoItem() {
   // desenho anterior apontariam para índices que já mudaram de dono.
   removedores.length = 0
 
-  item.irregularidades.forEach(id => {
-    const irr = vState.catalogo.find(c => c.id === id)
-    const nome = irr?.descricao ?? `Irregularidade #${id}`
+  item.artigos.forEach((a, j) => {
+    const nome = nomeDoArtigo(a.artigo_id)
     cartoes.push(cartaoDoResumo({
       titulo: nome,
-      sub: irr ? `${irr.codigo} · ${irr.gravidade}` : null,
-      desc: irr?.base_legal,
-      onclick: () => removerIrregularidadeDoItem(id),
-      oQue: 'a irregularidade', qual: nome,
+      sub: a.tipo === 'parecer' ? 'Parecer — sua conclusão' : 'Citação — o que se constatou',
+      desc: a.texto || vState.artigosConhecidos.get(a.artigo_id)?.conduta,
+      onclick: () => removerArtigoDoItem(j),
+      oQue: 'o artigo', qual: nome,
     }))
   })
 
@@ -1604,17 +1508,6 @@ function pintarResumoDoItem() {
     onclick: () => removerRelatoDoItem(k),
     oQue: 'o relato', qual: t,
   })))
-
-  item.artigos.forEach((a, j) => {
-    const nome = nomeDoArtigo(a.artigo_id)
-    cartoes.push(cartaoDoResumo({
-      titulo: nome,
-      sub: a.tipo === 'parecer' ? 'Parecer — sua conclusão' : 'Citação — o que se constatou',
-      desc: a.texto,
-      onclick: () => removerArtigoDoItem(j),
-      oQue: 'o artigo', qual: nome,
-    }))
-  })
 
   item.exigencias.forEach((e, j) => cartoes.push(cartaoDoResumo({
     titulo: e.texto,
@@ -1671,7 +1564,7 @@ function cartaoDoResumo({ titulo, sub, desc, onclick, semRemover, oQue, qual }) 
   // botão fica a poucos pixels do texto do próprio cartão — num celular, em
   // campo, o dedo erra. A remoção fica guardada como FUNÇÃO em `removedores`,
   // e o HTML chama pelo índice: montar a chamada como texto obrigaria a
-  // escapar aspas de descrição de irregularidade dentro de um `onclick`, que é
+  // escapar aspas de conduta de artigo ou de texto livre dentro de um `onclick`, que é
   // o tipo de coisa que quebra no primeiro registro com apóstrofo.
   let acao = ''
   if (!semRemover) {
@@ -1696,7 +1589,7 @@ function cartaoDoResumo({ titulo, sub, desc, onclick, semRemover, oQue, qual }) 
  * O modal genérico já se fecha sozinho depois que a ação resolve — ver
  * `confirmarAcao` em ui.js.
  *
- * @param {string} oQue "a irregularidade", "o artigo"…
+ * @param {string} oQue "o artigo", "a exigência"…
  * @param {string} qual o nome, para a pessoa reconhecer o que vai sair
  * @param {Function} acao o que remove de fato
  */
@@ -1716,26 +1609,13 @@ function itemAtual() {
   return vState.relatorio[vState.itemAberto] ?? null
 }
 
-// ── bloco 1: irregularidades ──
-
-/**
- * O catálogo, com o que já foi usado em OUTRO item bloqueado.
- *
- * O banco tem índice único (vistoria, irregularidade): a mesma não pode ser
- * constatada em dois itens. Dizer isso aqui, com o número do item que a usa,
- * evita o pedido recusado depois de todo o trabalho — o que se repete em vários
- * pontos da obra é o texto e a foto, não o enquadramento.
- */
-// ── BUSCA-E-ADICIONA, o padrão dos dois combos deste item ──
+// ── BUSCA-E-ADICIONA, o padrão do combo de artigo ──
 //
-// Um `<select>` obriga a rolar um catálogo de 20 ou 30 entradas para achar
-// uma. Aqui digita-se parte do nome, aparecem as que batem, toca-se numa — ou
-// aperta Enter/"+ add" para a primeira da lista. O que já está no item, ou
-// preso a OUTRO item pelo índice único do banco, nem aparece: ele não é uma
-// opção neste momento, então oferecê-la desabilitada só ocupa espaço.
+// Um `<select>` obriga a rolar um catálogo inteiro para achar uma entrada.
+// Aqui digita-se parte do problema ou do número, aparecem os que batem,
+// toca-se num — ou aperta Enter/"+ add" para o primeiro da lista. O que já
+// está no item nem aparece.
 
-/** @type {Array<Object>} a busca de irregularidade mostrada agora */
-let sugestoesIrreg = []
 /** @type {Array<Object>} a busca de artigo mostrada agora */
 let sugestoesArtigo = []
 
@@ -1746,103 +1626,19 @@ let sugestoesArtigo = []
 /**
  * As remoções do resumo, uma por cartão desenhado.
  *
- * O HTML chama `removedores[i]()` em vez de trazer a chamada escrita: nome de
- * irregularidade tem apóstrofo, e apóstrofo dentro de um `onclick` montado
+ * O HTML chama `removedores[i]()` em vez de trazer a chamada escrita: o texto
+ * de um artigo tem apóstrofo, e apóstrofo dentro de um `onclick` montado
  * como texto quebra o atributo.
  *
  * @type {Array<Function>}
  */
 const removedores = []
 
-/** @type {Object|null} a irregularidade escolhida e ainda não adicionada */
-let irregEscolhida = null
 /** @type {Object|null} o artigo escolhido e ainda não adicionado */
 let artigoEscolhido = null
 
-/** @param {string} texto */
-function buscarIrregularidade(texto) {
-  const item = itemAtual()
-  if (!item) { return }
-
-  const dono = new Map()
-  vState.relatorio.forEach((it, n) => {
-    if (n === vState.itemAberto) { return }
-    it.irregularidades.forEach(id => dono.set(id, n + 1))
-  })
-
-  const q = texto.trim().toLowerCase()
-  const disponiveis = vState.catalogo.filter(irr =>
-    !item.irregularidades.includes(irr.id) && !dono.has(irr.id))
-
-  // Campo vazio (ou recém-focado) mostra o começo do catálogo: combo que só
-  // responde a quem já sabe o que digitar não é combo, é adivinhação.
-  sugestoesIrreg = q
-    ? disponiveis.filter(irr => irr.descricao.toLowerCase().includes(q)
-        || irr.codigo.toLowerCase().includes(q)).slice(0, 8)
-    : disponiveis.slice(0, 8)
-
-  // Some com a escolha que o texto não descreve mais: digitar por cima do
-  // nome escolhido é desistir dela.
-  if (irregEscolhida && irregEscolhida.descricao !== texto) { irregEscolhida = null }
-
-  pintarSugestoes('vsi-irreg-sugestoes', sugestoesIrreg,
-    irr => ({ titulo: irr.descricao, sub: `${irr.codigo} · ${irr.gravidade}` }),
-    'selecionarIrregularidade')
-
-  document.getElementById('vsi-irreg-nota').textContent = disponiveis.length
-    ? 'O que a lei chama de infração. É daqui que saem os artigos sugeridos.'
-    : 'Todas as irregularidades do catálogo já estão marcadas em algum item.'
-}
-
 /**
- * Escolhe (não adiciona): põe o nome no campo e guarda a escolha.
- * @param {number} i índice em `sugestoesIrreg`
- */
-function selecionarIrregularidade(i) {
-  const irr = sugestoesIrreg[i]
-  if (!irr) { return }
-
-  irregEscolhida = irr
-  document.getElementById('vsi-irreg-busca').value = irr.descricao
-  fecharSugestoes('vsi-irreg-sugestoes')
-  document.getElementById('vsi-irreg-nota').textContent =
-    `${irr.codigo} · ${irr.gravidade}. Toque em "+ add" para pôr no item.`
-}
-
-/**
- * O "+ add" e o Enter: põem no item a irregularidade ESCOLHIDA — ou, se
- * ninguém escolheu ainda, a primeira da busca em curso.
- */
-function adicionarIrregularidadeAoItem() {
-  const item = itemAtual()
-  if (!item) { return }
-
-  const irr = irregEscolhida ?? sugestoesIrreg[0]
-  if (!irr) { toast('Escolha a irregularidade na lista', 'err'); return }
-
-  item.irregularidades = [...new Set([...item.irregularidades, irr.id])]
-
-  irregEscolhida = null
-  document.getElementById('vsi-irreg-busca').value = ''
-  buscarIrregularidade('')
-  fecharSugestoes('vsi-irreg-sugestoes')
-  pintarContasDoItem()
-  // A sugestão de artigos lê a SOMA dos itens: marcar aqui muda o que ela
-  // oferece no item inteiro.
-  sugerirArtigos()
-}
-
-/** @param {number} id */
-function removerIrregularidadeDoItem(id) {
-  const item = itemAtual()
-  if (!item) { return }
-  item.irregularidades = item.irregularidades.filter(x => x !== id)
-  pintarContasDoItem()
-  sugerirArtigos()
-}
-
-/**
- * A lista de sugestões, compartilhada pelos dois combos.
+ * A lista de sugestões do combo.
  *
  * @param {string} idAlvo id do container da lista
  * @param {Array<Object>} itens
@@ -1878,7 +1674,6 @@ function fecharSugestoes(idAlvo) {
 // própria lista não conta: é ele que escolhe.
 document.addEventListener('mousedown', ev => {
   if (ev.target.closest('.ac-wrap')) { return }
-  fecharSugestoes('vsi-irreg-sugestoes')
   fecharSugestoes('vsi-artigo-sugestoes')
 })
 
@@ -1887,7 +1682,7 @@ document.addEventListener('mousedown', ev => {
 // Uma LISTA de relatos, e não um campo corrido. Um item da obra costuma
 // render mais de uma constatação, e tudo num bloco só obrigava a reescrever o
 // parágrafo inteiro para tirar uma frase. Cada relato entra pelo "+add" e sai
-// sozinho do resumo, como irregularidade e artigo.
+// sozinho do resumo, como o artigo.
 
 /** O "+add" da aba: leva o que está escrito para a lista. */
 function adicionarRelatoAoItem() {
@@ -1919,63 +1714,84 @@ function removerRelatoDoItem(k) {
 
 // ── bloco 3: artigos ──
 
-/** @param {number} id @returns {string} */
+/** "Art. 12 — escavação sem licença" (apelido, se houver). @param {number} id @returns {string} */
 function nomeDoArtigo(id) {
-  const a = vState.artigos.find(x => x.id === id)
-  return a ? (a.rotulo || a.numero) : 'Artigo'
+  const a = vState.artigosConhecidos.get(id)
+  if (!a) { return `Art. #${id}` }
+  return 'Art. ' + a.numero + (a.rotulo && a.rotulo !== a.numero ? ' — ' + a.rotulo : '')
 }
+
+/** A dica embaixo do campo, quando nada está escolhido. */
+function notaDaBuscaDeArtigo(texto) {
+  const nota = document.getElementById('vsi-artigo-nota')
+  if (!nota) { return }
+  nota.textContent = texto ?? 'Digite o problema que você viu ("escavação", "sem alvará") ou o número do artigo.'
+  nota.hidden = false
+}
+
+/** @type {number} temporizador da busca no servidor */
+let _buscaArtigoTimer = 0
+/** @type {AbortController|null} a busca em curso, cancelada pela seguinte */
+let _buscaArtigoEmCurso = null
 
 /**
- * O select "Lei infringida" — as leis DOS ARTIGOS SUGERIDOS, e não o catálogo
- * inteiro de legislação: oferecer uma lei que não enquadra nenhuma das
- * irregularidades marcadas é oferecer um filtro que só sabe esvaziar a lista.
+ * Busca no SERVIDOR, em todas as leis, pelo termo de busca, número, apelido
+ * ou conduta (VistoriaController::buscarArtigos). Espera o dedo parar
+ * (250 ms) e cancela a busca anterior: em campo, no 4G, a resposta da letra
+ * velha chegaria depois da nova e mostraria a lista errada.
+ * @param {string} texto
  */
-function pintarLeisDoItem() {
-  const sel = document.getElementById('vsi-artigo-lei')
-  if (!sel) { return }
-
-  const leis = [...new Set(vState.artigos.map(a => a.lei).filter(Boolean))].sort()
-  const antes = sel.value
-
-  sel.innerHTML = '<option value="">— todas as leis —</option>'
-    + leis.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')
-
-  // Mantém a lei escolhida se ela ainda existe na lista nova.
-  sel.value = leis.includes(antes) ? antes : ''
-}
-
-/** @param {string} texto */
 function buscarArtigo(texto) {
   const item = itemAtual()
   if (!item) { return }
 
-  const q = texto.trim().toLowerCase()
-  const lei = document.getElementById('vsi-artigo-lei')?.value ?? ''
-
-  const disponiveis = vState.artigos
-    .filter(a => !item.artigos.some(x => x.artigo_id === a.id))
-    .filter(a => !lei || a.lei === lei)
-
-  sugestoesArtigo = q
-    ? disponiveis.filter(a => (a.rotulo || a.numero || '').toLowerCase().includes(q)
-        || (a.conduta || '').toLowerCase().includes(q)).slice(0, 8)
-    : disponiveis.slice(0, 8)
-
   if (artigoEscolhido && (artigoEscolhido.rotulo || artigoEscolhido.numero) !== texto) {
     artigoEscolhido = null
   }
+  clearTimeout(_buscaArtigoTimer)
+  const q = texto.trim()
+  if (q.length < 2) {
+    sugestoesArtigo = []
+    fecharSugestoes('vsi-artigo-sugestoes')
+    notaDaBuscaDeArtigo()
+    return
+  }
 
-  // `a.lei` já vem com o nome inteiro ("Lei Complementar 1/2023"): prefixar
-  // "Lei" aqui escrevia "Lei Lei Complementar".
-  pintarSugestoes('vsi-artigo-sugestoes', sugestoesArtigo,
-    a => ({ titulo: a.rotulo || a.numero, sub: a.lei || null }),
-    'selecionarArtigo')
+  _buscaArtigoTimer = setTimeout(async () => {
+    _buscaArtigoEmCurso?.abort()
+    const ctrl = new AbortController()
+    _buscaArtigoEmCurso = ctrl
+    try {
+      const r = await fetch('/api/artigos/busca?q=' + encodeURIComponent(q),
+        { headers: { Accept: 'application/json' }, signal: ctrl.signal })
+      if (!r.ok) { throw new Error('HTTP ' + r.status) }
+      const achados = (await r.json()).artigos ?? []
+      conhecerArtigos(achados)
 
-  const nota = document.getElementById('vsi-artigo-nota')
-  const texto2 = vState.artigos.length
-    ? '' : 'Marque irregularidades para ver os artigos que as enquadram.'
-  nota.textContent = texto2
-  nota.hidden = !texto2
+      const atual = itemAtual()
+      if (!atual) { return }
+      sugestoesArtigo = achados.filter(a => !atual.artigos.some(x => x.artigo_id === a.id)).slice(0, 8)
+
+      // POR QUE o artigo apareceu: o termo que casou, ou a lei. `a.lei` já
+      // vem com o nome inteiro ("Lei Complementar 1/2023").
+      pintarSugestoes('vsi-artigo-sugestoes', sugestoesArtigo,
+        a => ({
+          titulo: 'Art. ' + a.numero + (a.rotulo && a.rotulo !== a.numero ? ' — ' + a.rotulo : ''),
+          sub: [a.lei, a.casou && a.casou !== 'conduta' && a.casou !== a.numero ? '“' + a.casou + '”' : null]
+            .filter(Boolean).join(' · ') || null,
+        }),
+        'selecionarArtigo')
+      notaDaBuscaDeArtigo(sugestoesArtigo.length ? ''
+        : 'Nenhum artigo trata disso. Tente outra palavra — ou peça ao administrador para '
+          + 'acrescentar o termo ao artigo certo em Parâmetros › Legislação.')
+      document.getElementById('vsi-artigo-nota').hidden = !!sugestoesArtigo.length
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error(e)
+        notaDaBuscaDeArtigo('Não foi possível buscar agora. Confira a conexão e tente de novo.')
+      }
+    }
+  }, 250)
 }
 
 /**
@@ -2018,7 +1834,6 @@ function adicionarArtigoAoItem() {
   artigoEscolhido = null
   document.getElementById('vsi-artigo-busca').value = ''
   buscarArtigo('')
-  fecharSugestoes('vsi-artigo-sugestoes')
   pintarContasDoItem()
 }
 
@@ -2453,7 +2268,7 @@ function salvarItemRelatorio() {
   }
 
   if (item && itemVazioDeConteudo(item)) {
-    toast('O item está vazio — escreva algo, marque uma irregularidade ou anexe uma foto.', 'err')
+    toast('O item está vazio — cite um artigo, escreva algo ou anexe uma foto.', 'err')
     return
   }
 
@@ -2486,10 +2301,6 @@ function fecharItemRelatorio() {
 // exclui agora é `excluirItemDaLista(i)`, a partir do cartão na lista — ver
 // o comentário em `renderRelatorio`.
 
-/** Todas as irregularidades marcadas na vistoria, de todos os itens. */
-function irregularidadesDaVistoria() {
-  return [...new Set(vState.relatorio.flatMap(i => i.irregularidades))]
-}
 
 
 // ── PASSO 5: REVISÃO ─────────────────────────────────────────
@@ -2501,9 +2312,6 @@ function irregularidadesDaVistoria() {
  * formulário: é daqui que saem notificação, auto de infração e embargo.
  */
 function renderRevisao() {
-  const marcadas = irregularidadesDaVistoria()
-    .map(id => vState.catalogo.find(c => c.id === id))
-    .filter(Boolean)
   const sit = document.getElementById('nv-situacao')
   const area = document.getElementById('nv-area').value
   const metodo = document.getElementById('nv-area-metodo')
@@ -2556,18 +2364,14 @@ function renderRevisao() {
         ? 'por volta de ' + esc(document.getElementById('nv-ano').value)
         : falta('não estimada')]] : []),
     // O relatório sai como sairá no papel: item a item, e dentro de cada um a
-    // ordem fixa — irregularidades, texto, artigos, exigências, fotos.
+    // ordem fixa — artigos, texto, exigências, fotos.
     ['Relatório', vState.relatorio.length
       ? '<ol>' + vState.relatorio.map(it => {
           const partes = []
-          if (it.irregularidades.length) {
-            partes.push(it.irregularidades
-              .map(id => esc(vState.catalogo.find(c => c.id === id)?.descricao ?? '—')).join('; '))
-          }
-          if (it.texto?.trim()) { partes.push(esc(it.texto.trim())) }
           if (it.artigos.length) {
             partes.push('<b>' + it.artigos.map(a => esc(nomeDoArtigo(a.artigo_id))).join(', ') + '</b>')
           }
+          if (it.texto?.trim()) { partes.push(esc(it.texto.trim())) }
           it.exigencias.forEach(e => {
             partes.push(esc(e.texto) + (e.prazo ? ' <b>— ' + e.prazo + ' dias</b>' : ''))
           })
@@ -2580,9 +2384,6 @@ function renderRevisao() {
           return '<li>' + (partes.length ? partes.join('<br>') : falta('item vazio')) + '</li>'
         }).join('') + '</ol>'
       : falta('vazio')],
-    ['Irregularidades', marcadas.length
-      ? '<ol>' + marcadas.map(c => '<li>' + esc(c.descricao) + '</li>').join('') + '</ol>'
-      : falta('nenhuma')],
     ['Artigos citados', artigosDaVistoria().length
       ? esc(artigosDaVistoria().map(id => nomeDoArtigo(id)).join(', '))
       : falta('nenhum')],
@@ -2699,10 +2500,8 @@ function retomarRascunho() {
 
   vState.rascunhoPendente = null
   aplicarRascunho(d)
-  // O catálogo já chegou (a oferta só existe com a tela montada), então as
-  // marcas do checklist se aplicam agora — em `renderChecklist`, que é quem
-  // sabe fazê-lo e é o mesmo caminho de quando o catálogo chega depois.
-  renderChecklist()
+  // Os artigos citados no rascunho chegam só como id: o nome vem do servidor.
+  garantirNomesDosArtigos()
 
   const av = document.getElementById('nv-rascunho')
   av.hidden = false
@@ -2770,7 +2569,7 @@ function limparRascunho() {
 function gravarVistoria() {
   if (vState.enviando) return
 
-  const marcadas = irregularidadesDaVistoria()
+  const citados = artigosCitadosDaVistoria()
   const situacao = document.getElementById('nv-situacao').value
 
   // O IMÓVEL É COBRADO AQUI, e não na abertura: a janela abre sem ele para que
@@ -2785,8 +2584,8 @@ function gravarVistoria() {
   if (!document.getElementById('nv-datahora').value) {
     irPasso('id'); toast('Informe data e hora da vistoria', 'err'); return
   }
-  if (situacao === 'irregular' && !marcadas.length) {
-    irPasso('rel'); toast('Marque ao menos uma irregularidade', 'err'); return
+  if (situacao === 'irregular' && !citados.length) {
+    irPasso('rel'); toast('Cite ao menos um artigo: vistoria irregular é enquadrada em lei', 'err'); return
   }
   // A mesma regra do servidor, dita antes de o fiscal perder o envio: área sem
   // método é número que não se sustenta em defesa.
@@ -2794,9 +2593,9 @@ function gravarVistoria() {
     irPasso('id'); toast('Diga como a área foi obtida', 'err'); return
   }
 
-  const resumo = marcadas.length
-    ? `${marcadas.length} irregularidade${marcadas.length > 1 ? 's' : ''}`
-    : 'sem irregularidades'
+  const resumo = citados.length
+    ? `${citados.length} artigo${citados.length > 1 ? 's' : ''} citado${citados.length > 1 ? 's' : ''}`
+    : 'nenhum artigo citado'
 
   const finalidadeSel = document.getElementById('nv-finalidade')
   confirmarAcao({
@@ -2826,9 +2625,6 @@ async function enviarVistoria() {
   if (proto) { fd.append('protocolo_id', proto) }
   // Sinalizações que a vistoria atende e o lembrete de voltar (sinalizacoes.js).
   if (typeof anexarSinalNaVistoria === 'function') { anexarSinalNaVistoria(fd) }
-  // `irregularidades[]` NÃO vai mais no topo: cada uma pertence ao item onde
-  // foi constatada, e o servidor deriva a lista da vistoria somando os itens.
-  // Mandar as duas coisas abriria espaço para elas discordarem.
 
   // ── quem acompanhou e o que se viu da obra ──
   const opcional = (nome, valor) => { if (valor) { fd.append(nome, valor) } }
@@ -2853,15 +2649,11 @@ async function enviarVistoria() {
   // como upload funciona, e o item as reivindica pelo ÍNDICE DA REMESSA —
   // não pelo índice em `vState.anexos`, que guarda buracos de fotos removidas.
   //
-  // Os artigos da vistoria são a SOMA do que os itens citaram: é a relação que
-  // a lavratura lê, e derivá-la evita duas listas que podem discordar.
-  artigosDaVistoria().forEach(id => fd.append('artigos[]', id))
+  // Os artigos vão DENTRO de cada item; a vistoria "tem" a soma deles.
 
   let nFoto = 0
   vState.relatorio.forEach((item, n) => {
     if (item.texto?.trim()) { fd.append(`itens[${n}][texto]`, item.texto.trim()) }
-
-    item.irregularidades.forEach(id => fd.append(`itens[${n}][irregularidades][]`, id))
 
     item.artigos.forEach((a, j) => {
       fd.append(`itens[${n}][artigos][${j}][artigo_id]`, a.artigo_id)

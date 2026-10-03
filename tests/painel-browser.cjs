@@ -12,10 +12,9 @@ const data = {
   atencao: [{titulo:'AI 2026/0002',chave:'documento-prazo-2',detalhe:'Auto de Infração · Quadra 24 · Lote 9',tag:{texto:'Defesa venceu há 12 dias',classe:'bd-er'},aba:'documentos'},
     {titulo:'2 vistorias irregulares sem documento',detalhe:'Constatação registrada, ato administrativo não emitido',tag:{texto:'Sem documento',classe:'bd-er'},aba:'documentos'},
     {titulo:'OS 2026/0002',detalhe:'Plantão para vistoria de habite-se · 2 dias marcados',tag:{texto:'Prazo vencido',classe:'bd-er'},aba:'protocolos'},
-    {titulo:'Protocolo 2026/0377',detalhe:'Construtora Bandeirantes · Quadra 03 · Lote 10',tag:{texto:'Resposta atrasada 7d',classe:'bd-er'},aba:'protocolos'},
-    {titulo:'18 irregularidades sem artigo vinculado',detalhe:'Sem fundamentação legal o sistema bloqueia a lavratura',tag:{texto:'Bloqueia auto',classe:'bd-al'},aba:null}],
+    {titulo:'Protocolo 2026/0377',detalhe:'Construtora Bandeirantes · Quadra 03 · Lote 10',tag:{texto:'Resposta atrasada 7d',classe:'bd-er'},aba:'protocolos'}],
   recentes:Array.from({length:8},(_,i)=>({titulo:'Lotes Residencial Buritis V|21|'+(17+i),detalhe:'Lote reativado',usuario:'Administrador',eu:true,quando:'05/09/2026',hora:'05/09/2026 10:30'})),
-  bairros:['Centro'],por_tipo:[{rotulo:'Auto de Infração',n:3}],irregularidades:[{rotulo:'Construção sem alvará de licença',n:2}]
+  bairros:['Centro'],por_tipo:[{rotulo:'Auto de Infração',n:3}],infracoes:[{rotulo:'Art. 12 — Construção sem alvará de licença',n:2}]
 }
 const app = fs.readFileSync(path.join(root,'public/js/app.js'),'utf8')
 const start = app.indexOf('function irPara('), end = app.indexOf('\n}', start)+2
