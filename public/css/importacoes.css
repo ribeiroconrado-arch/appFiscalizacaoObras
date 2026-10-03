@@ -145,3 +145,24 @@
 .rua-balao .field select,.rua-balao .field input{width:100%}
 .rua-aviso{font-size:11.5px;color:var(--warn);margin-bottom:8px}
 .rua-balao-acoes{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── FICHA DA IMPORTAÇÃO: três faixas, e só a do meio rola ──
+   O cabeçalho (identificação, vínculo do bairro e a linha da conferência) e o
+   rodapé (fonte, CSV e ações) ficam parados; a barra de rolagem é só da lista
+   de divergências. O modal deixa de rolar por inteiro: vira coluna flex, e o
+   limite de altura dele (max-height) é o que faz a faixa do meio encolher. */
+.imp-modal:has(.imp-ficha){display:flex;flex-direction:column;overflow:hidden}
+.imp-modal:has(.imp-ficha) > h3{flex:none}
+.imp-modal:has(.imp-ficha) #imp-corpo{flex:1;min-height:0;display:flex;flex-direction:column}
+.imp-ficha{flex:1;min-height:0;display:flex;flex-direction:column}
+.imp-ficha-topo{flex:none;border-bottom:1px solid var(--blt)}
+.imp-ficha-rolagem{flex:1;min-height:90px;overflow-y:auto;padding-right:6px;margin-right:-6px}
+.imp-ficha-rodape{flex:none;padding-top:8px;border-top:1px solid var(--bord)}
+.imp-ficha-rodape .imp-rodape-conf{margin-top:0}
+.imp-ficha-rodape .imp-acoes{margin-top:8px}
+.imp-ficha-topo .sec-title{margin-top:8px}
+/* A linha da conferência: título, resumo em texto e o botão, lado a lado. */
+.imp-conf-linha{margin:8px 0}
+.imp-conf-linha .sec-title{margin:0}
+.imp-conf-resumo{flex:none;white-space:nowrap}
+@media (max-width:560px){ .imp-conf-linha{flex-wrap:wrap} .imp-conf-linha .sec-title{flex-basis:100%} }

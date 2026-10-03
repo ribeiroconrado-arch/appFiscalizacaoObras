@@ -195,12 +195,6 @@ const ICO_SOLTAR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>
   <path d="M12 17v-6"/><path d="M9.5 13.5 12 11l2.5 2.5"/></svg>`
 
-/** Liga/desliga a área da planilha conforme a fonte escolhida na conferência. */
-function alternarFonteConferencia() {
-  const planilha = document.querySelector('input[name="imp-fonte"]:checked')?.value === 'planilha'
-  document.getElementById('imp-soltar-planilha').hidden = !planilha
-}
-
 async function conferirArquivoImportacao() {
   const arq = document.getElementById('imp-arquivo').files[0]
   impState.arquivo = arq || null
@@ -386,25 +380,18 @@ function renderFichaImportacao(i) {
 
   const cc = i.conferencia_cadastro
   const conf = cc ? _htmlConferenciaCadastro(i, cc) : null
+  // A conferência é SEMPRE com o cadastro que já está no sistema (a carga
+  // mensal): não há fonte a escolher nem planilha a anexar aqui. Por isso o
+  // cabeçalho é uma linha só — o título, o resumo em texto e o botão.
+  const resumo = cc ? `<span class="imp-sub imp-conf-resumo">${Number(cc.casaram).toLocaleString('pt-BR')} casaram ·
+      ${cc.total_divergencias ? `${Number(cc.total_divergencias).toLocaleString('pt-BR')} divergência(s)` : 'sem divergências'}</span>` : ''
   const controles = andamento ? `
-    <div class="sec-title">Conferência com o cadastro da prefeitura</div>
-    <div class="imp-fonte">
-      ${cc && (cc.fonte === 'planilha' || cc.imoveis_no_cadastro > 0) ? `<label class="imp-opcao" title="${esc(cc.fonte_descricao)}"><input type="radio" name="imp-fonte" value="ultima" checked
-        onchange="alternarFonteConferencia()"> ${cc.fonte === 'planilha' ? 'Revisar as divergências (sem planilha)' : 'Mesma fonte da última (cadastro carregado)'}</label>` : ''}
-      <label class="imp-opcao"><input type="radio" name="imp-fonte" value="carregado" ${cc ? '' : 'checked'}
-        onchange="alternarFonteConferencia()"> Cadastro carregado no sistema</label>
-      <label class="imp-opcao"><input type="radio" name="imp-fonte" value="planilha" ${cc && !(cc.fonte === 'planilha' || cc.imoveis_no_cadastro > 0) ? 'checked' : ''}
-        onchange="alternarFonteConferencia()"> Planilha .xlsx enviada agora</label>
-      <button class="btn primary sm" id="imp-btn-conferir" onclick="conferirComCadastro()">${cc ? 'Conferir de novo' : 'Conferir'}</button>
-    </div>
-    <label class="imp-soltar compacta" id="imp-soltar-planilha" for="imp-planilha" ${cc && !(cc.fonte === 'planilha' || cc.imoveis_no_cadastro > 0) ? '' : 'hidden'}>
-      <input type="file" id="imp-planilha" accept=".xlsx"
-        onchange="_mostrarEscolhido('imp-soltar-planilha', this.files[0], 'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário')">
-      ${ICO_SOLTAR}
-      <b>Solte a planilha .xlsx aqui</b>
-      <span>ou clique para escolher · exportação do cadastro imobiliário</span>
-    </label>`
-    : (cc ? '<div class="sec-title">Última conferência com o cadastro</div>' : '')
+    <div class="sec-title-row imp-conf-linha">
+      <div class="sec-title">Conferência com o cadastro da prefeitura</div>
+      ${resumo}
+      <button class="btn primary sm sec-title-acao" id="imp-btn-conferir" onclick="conferirComCadastro()">${cc ? 'Conferir de novo' : 'Conferir'}</button>
+    </div>`
+    : (cc ? `<div class="sec-title-row imp-conf-linha"><div class="sec-title">Última conferência com o cadastro</div>${resumo}</div>` : '')
   const naoConferida = andamento && !cc ? `<p class="imp-expl">Ainda não conferida. ${rascunho
     ? 'Conferir antes de salvar é o recomendado; a publicação exige a conferência.'
     : 'A publicação exige a conferência.'}</p>` : ''
@@ -433,34 +420,34 @@ function renderFichaImportacao(i) {
       : `<button class="btn" disabled title="Só o administrador publica">Aguardando administrador</button>`) : '',
   ].join('')
 
-  // CABEÇALHO E RODAPÉ FIXOS. A lista de divergências pode ter centenas de
-  // linhas: quem rola até a Q 40 continua vendo o vínculo do bairro, os números
-  // da conferência e o botão de conferir de novo (em cima), e a fonte da
-  // conferência e as ações da importação (embaixo) — sem rolar de volta.
+  // TRÊS FAIXAS, e só a do meio rola (.imp-ficha em importacoes.css). A lista
+  // de divergências pode ter centenas de linhas: quem rola até a Q 40 continua
+  // vendo o vínculo do bairro e o botão de conferir (em cima) e as ações da
+  // importação (embaixo). O cabeçalho vai até a linha da conferência.
   _impCorpo(`
-    <div class="imp-fixo-topo">
-      <div class="imp-cabeca">
-        <span class="badge ${IMP_BADGE[i.status] || 'bd-in'}">${esc(i.status_rotulo)}</span>
-        <b>${esc(i.bairro)}</b> · ${Number(i.lotes).toLocaleString('pt-BR')} lotes
-        <span class="imp-sub">· ${esc(i.arquivo)} · ${rascunho ? 'carregado' : 'enviado'} por ${esc(i.enviado_por || '—')} em ${esc(i.enviado_em || '')}${i.salvo_em && i.salvo_em !== i.enviado_em ? ` · salvo em ${esc(i.salvo_em)}` : ''}</span>
+    <div class="imp-ficha">
+      <div class="imp-ficha-topo">
+        <div class="imp-cabeca">
+          <span class="badge ${IMP_BADGE[i.status] || 'bd-in'}">${esc(i.status_rotulo)}</span>
+          <b>${esc(i.bairro)}</b> · ${Number(i.lotes).toLocaleString('pt-BR')} lotes
+          <span class="imp-sub">· ${esc(i.arquivo)} · ${rascunho ? 'carregado' : 'enviado'} por ${esc(i.enviado_por || '—')} em ${esc(i.enviado_em || '')}${i.salvo_em && i.salvo_em !== i.enviado_em ? ` · salvo em ${esc(i.salvo_em)}` : ''}</span>
+        </div>
+        ${i.vinculo ? _htmlVinculoBairro(i.bairro, i.vinculo, andamento ? 'ficha' : 'fixo') : ''}
+        ${controles}
       </div>
-      ${i.vinculo ? _htmlVinculoBairro(i.bairro, i.vinculo, andamento ? 'ficha' : 'fixo') : ''}
-      ${controles}
-      ${conf ? conf.kpis : ''}
-    </div>
-    ${publicada}${excluida}
-    ${vinc.length ? `<div class="cad-nota cad-aviso"><b>Lotes com vínculo</b> — a importação não pode ser excluída:
-        ${vinc.map(([k, n]) => `${rotVinc[k] || k}: ${n}`).join(' · ')}</div>` : ''}
-    <div id="imp-resultado">${conf ? conf.corpo : naoConferida}</div>
-    ${_htmlPreCuradoria(i.pre_curadoria)}
-    <div class="imp-fixo-rodape">
-      ${conf ? conf.rodape : ''}
-      <div id="imp-acao"></div>
-      <div class="btn-row imp-acoes">${acoes}</div>
+      <div class="imp-ficha-rolagem">
+        ${publicada}${excluida}
+        ${vinc.length ? `<div class="cad-nota cad-aviso"><b>Lotes com vínculo</b> — a importação não pode ser excluída:
+            ${vinc.map(([k, n]) => `${rotVinc[k] || k}: ${n}`).join(' · ')}</div>` : ''}
+        <div id="imp-resultado">${conf ? conf.corpo : naoConferida}</div>
+        ${_htmlPreCuradoria(i.pre_curadoria)}
+      </div>
+      <div class="imp-ficha-rodape">
+        ${conf ? conf.rodape : ''}
+        <div id="imp-acao"></div>
+        <div class="btn-row imp-acoes">${acoes}</div>
+      </div>
     </div>`, rascunho ? `Rascunho de importação · ${i.bairro}` : `Importação nº ${i.id}`)
-  _prepararAreaDeSoltar('imp-soltar-planilha', 'imp-planilha', /\.xlsx$/i, 'A planilha precisa ser .xlsx.',
-    () => _mostrarEscolhido('imp-soltar-planilha', document.getElementById('imp-planilha').files[0],
-      'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário'))
 }
 
 /** O registro próprio da pré-curadoria — fora do Histórico do cadastro. */
@@ -477,15 +464,13 @@ function _htmlPreCuradoria(pc) {
 }
 
 /**
- * A conferência em TRÊS pedaços, porque cada um mora num lugar da ficha: os
- * números no cabeçalho fixo, as listas no meio (rolam) e a fonte com o CSV no
- * rodapé fixo.
+ * A conferência em DOIS pedaços, porque cada um mora num lugar da ficha: as
+ * listas no meio (rolam) e a fonte com o CSV no rodapé fixo. Os números de
+ * cada grupo vão no título do próprio grupo.
  *
- * @returns {{kpis:string, corpo:string, rodape:string}}
+ * @returns {{corpo:string, rodape:string}}
  */
 function _htmlConferenciaCadastro(i, c) {
-  const kpi = (rot, n, cls = '') => `<div class="imp-kpi ${cls}"><small>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></div>`
-  const arquivoCadastro = c.nao_encontrados.length + c.inativos.length
   const emDia = i.conferencia_em_dia === false
     ? `<div class="cad-nota cad-aviso">Houve alteração nos lotes depois desta conferência. Confira de novo antes de publicar.</div>` : ''
 
@@ -497,13 +482,6 @@ function _htmlConferenciaCadastro(i, c) {
     ${itens.length > 200 ? `<div class="imp-sub">+ ${itens.length - 200} — veja todas no CSV.</div>` : ''}` : ''
 
   return {
-    kpis: `
-    <div class="imp-kpis">
-      ${kpi('Casaram', c.casaram, 'ok')}
-      ${kpi('Arquivo → cadastro', arquivoCadastro, arquivoCadastro ? 'erro' : '')}
-      ${kpi('Cadastro → arquivo', c.sem_lote.length, c.sem_lote.length ? 'erro' : '')}
-      ${kpi('Sem inscrição possível', c.sem_inscricao.length, c.sem_inscricao.length ? 'aviso' : '')}
-    </div>`,
     corpo: `
     ${emDia}
     ${c.sem_situacao ? `<div class="cad-nota cad-aviso">A planilha não tem coluna de situação ("Situação" ou "Isenção ou Imunidade"):
@@ -540,8 +518,8 @@ function _htmlConferenciaCadastro(i, c) {
 async function _impReconferirSePreciso(i) {
   if (!_impEmAndamento(i) || !i.conferencia_cadastro || i.conferencia_em_dia !== false) return false
   try {
+    // Sem fonte nem planilha: o servidor confere com o cadastro carregado.
     const fd = new FormData()
-    fd.append('fonte', 'ultima')
     const antes = i.conferencia_cadastro.total_divergencias
     const r = await _impPedir(`/api/importacoes/${i.id}/conferir-cadastro`, { method: 'POST', body: fd })
     const resolvidas = antes - r.total_divergencias
@@ -574,16 +552,9 @@ document.addEventListener('lotes-alterados', () => {
 async function conferirComCadastro() {
   const i = impState.atual
   if (!i) return
-  const fonte = document.querySelector('input[name="imp-fonte"]:checked')?.value
+  // Sempre com o cadastro carregado no sistema: pedido sem fonte e sem
+  // planilha é exatamente isso para o servidor (ImportacaoController).
   const fd = new FormData()
-  if (fonte === 'planilha') {
-    const p = document.getElementById('imp-planilha').files[0]
-    if (!p) { exigirCampo('imp-planilha', 'Escolha a planilha .xlsx do cadastro.'); return }
-    fd.append('planilha', p)
-  }
-  // A mesma da última conferência: a planilha guardada (ou o cadastro
-  // carregado), sem anexar nada.
-  if (fonte === 'ultima') fd.append('fonte', 'ultima')
   const btn = document.getElementById('imp-btn-conferir')
   btn.disabled = true
   btn.textContent = 'Conferindo…'
