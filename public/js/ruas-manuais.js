@@ -45,6 +45,8 @@ function abrirNomesDeRua() {
       // Acima dos lotes e dos rótulos, para o clique pegar a linha.
       mapa.createPane('ruasEdicao').style.zIndex = 640
     }
+    // Reaberta, a camada volta a existir (ver fecharNomesDeRua).
+    mapa.getPane('ruasEdicao').style.display = ''
     ruaState.camada = L.layerGroup().addTo(mapa)
     mapa.on('click', _cliqueNoMapaRuas)
     _pintarBarraRuas()
@@ -65,6 +67,13 @@ function fecharNomesDeRua() {
   ruaState.balao = null
   mapa?.off('click', _cliqueNoMapaRuas)
   mapa?.closePopup()
+  // A CAMADA DE EDIÇÃO SAI DA FRENTE. As linhas foram removidas, mas a tela
+  // de desenho (canvas) que o Leaflet cria para esta camada continua no mapa,
+  // do tamanho dele inteiro e ACIMA dos lotes — vazia, e engolindo todo
+  // clique. Era por isso que, fechada a ferramenta, não se selecionava mais
+  // nenhum lote. Escondida, ela não recebe clique nenhum.
+  const pane = mapa?.getPane('ruasEdicao')
+  if (pane) pane.style.display = 'none'
   const barra = document.getElementById('ruas-barra')
   if (barra) barra.hidden = true
 }
