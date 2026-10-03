@@ -72,6 +72,9 @@ function fecharImportacoes() {
   fModalBtn('m-importacoes')
   // Fechar a janela é largar a importação: a barra sai junto. Quem leva a
   // importação ao mapa (verImportacaoNoMapa) liga a barra DEPOIS de fechar.
+  // A pré-curadoria sai com ela: sem a barra à vista, as ferramentas não podem
+  // continuar presas aos lotes de uma importação que ninguém está vendo.
+  if (impState.preCuradoria) sairPreCuradoria()
   impState.noMapa = false
   pintarBarraImportacao()
 }
@@ -416,8 +419,11 @@ function renderFichaImportacao(i) {
   const podeExcluir = emRevisao
   const acoes = [
     `<button class="btn" onclick="carregarListaImportacoes()">Voltar à lista</button>`,
-    i.extensao && i.status !== 'excluida' ? `<button class="btn" onclick="verImportacaoNoMapa()">Ver no mapa</button>` : '',
-    andamento ? `<button class="btn" onclick="fecharImportacoes(); entrarPreCuradoria()">Pré-curadoria</button>` : '',
+    // Um botão só para ir ao mapa: importação não publicada vai em
+    // pré-curadoria (com todas as ferramentas); a publicada, só para ver.
+    andamento
+      ? (i.extensao ? `<button class="btn" onclick="fecharImportacoes(); entrarPreCuradoria()">Pré-curadoria no mapa</button>` : '')
+      : (i.extensao && i.status !== 'excluida' ? `<button class="btn" onclick="verImportacaoNoMapa()">Ver no mapa</button>` : ''),
     i.status === 'publicada' ? `<button class="btn" onclick="gerarContornoDoBairro(${jsArg(i.bairro)})">Gerar contorno do bairro</button>` : '',
     podeExcluir ? `<button class="btn danger" onclick="pedirExclusaoImportacao()">Excluir importação</button>` : '',
     rascunho ? `<button class="btn danger" onclick="pedirDescarteImportacao()">Descartar rascunho</button>` : '',
@@ -790,12 +796,26 @@ function entrarPreCuradoria() {
   pedirFerramenta('curadoria', _entrarPreCuradoria)
 }
 
-function _entrarPreCuradoria() {
-  const i = impState.atual
+/**
+ * Liga a pré-curadoria da importação que foi ao mapa.
+ *
+ * UM MODO SÓ: importação não publicada no mapa É pré-curadoria. Antes havia
+ * dois — "Ver no mapa" (sem Editar lote, Informar número e Excluir lotes) e
+ * "Pré-curadoria" (com elas) —, e a diferença só existia na tela: o servidor
+ * sempre tratou igual qualquer ajuste em lote não publicado
+ * (Lote::tabelaDaAuditoria). Quem chegava pelo "ver no mapa ›" da conferência
+ * ficava sem as ferramentas e sem entender por quê.
+ */
+function _ligarPreCuradoria(i) {
+  if (!_impEmAndamento(i) || impState.preCuradoria?.id === i.id) return
   impState.preCuradoria = { id: i.id, bairro: i.bairro }
   if (typeof limparSelecaoCadastral === 'function') limparSelecaoCadastral()
   _ferramentasDaPreCuradoria(true)
-  verImportacaoNoMapa()
+}
+
+function _entrarPreCuradoria() {
+  const i = impState.atual
+  verImportacaoNoMapa()   // liga a pré-curadoria (_ligarPreCuradoria)
   // Abre a correção cadastral: a mesa lateral em tela grande, o painel no celular.
   setTimeout(() => {
     const mesa = document.getElementById('cad-mesa')
@@ -808,8 +828,10 @@ function _entrarPreCuradoria() {
   toast(`Pré-curadoria · ${_impNome(i)}: as ferramentas só alcançam estes lotes.`)
 }
 
+/** Sair da pré-curadoria é tirar a importação do mapa: a barra fecha junto. */
 function sairPreCuradoria() {
   impState.preCuradoria = null
+  impState.noMapa = false
   _ferramentasDaPreCuradoria(false)
   if (typeof limparSelecaoCadastral === 'function') limparSelecaoCadastral()
   if (typeof montarReguaCadastral === 'function') montarReguaCadastral()
@@ -921,6 +943,7 @@ function verImportacaoNoMapa() {
   if (!camadaLigada('nao-publicados')) ligarCamada('nao-publicados', true)
   fecharImportacoes()
   impState.noMapa = true
+  _ligarPreCuradoria(impState.atual)
   if (typeof irPara === 'function') irPara('mapa')
   setTimeout(() => {
     mapaState.obj?.fitBounds([[e.sul, e.oeste], [e.norte, e.leste]], { padding: [30, 30] })
@@ -934,6 +957,7 @@ async function irAoLoteDaImportacao(loteId) {
     const d = await _impPedir('/api/imoveis/' + loteId)
     fecharImportacoes()
     impState.noMapa = true
+    _ligarPreCuradoria(impState.atual)
     // O lote é da importação: sem a camada de revisão ligada ele nem existe no mapa.
     if (!camadaLigada('nao-publicados')) ligarCamada('nao-publicados', true)
     if (d.lat && d.lon) verImovelNoMapa(d.lat, d.lon)
@@ -946,17 +970,11 @@ async function irAoLoteDaImportacao(loteId) {
 
 /** "Desenhar lote" da conferência: a ferramenta que já existe, no bairro em revisão. */
 function desenharLoteDaConferencia() {
-  const i = impState.atual
+  // Desenhar o lote que falta É pré-curadoria desta importação — e levar a
+  // importação ao mapa já a liga.
   verImportacaoNoMapa()
   setTimeout(() => {
     if (typeof modoCadastral === 'function') modoCadastral('desenho')
-    // Desenhar o lote que falta É pré-curadoria desta importação: a barra diz
-    // isso, e as ferramentas seguintes só alcançam os lotes dela.
-    if (_impEmAndamento(i)) {
-      impState.preCuradoria = { id: i.id, bairro: i.bairro }
-      _ferramentasDaPreCuradoria(true)
-      pintarBarraImportacao()
-    }
     toast('Desenhe o lote que falta. Ele entra na mesma revisão do bairro.')
   }, 400)
 }
@@ -1000,8 +1018,6 @@ function pintarBarraImportacao() {
     <b ${pre ? `title="As ferramentas só alcançam os lotes ${rascunho ? 'deste rascunho' : 'desta importação'}"` : ''}>${pre ? 'Pré-curadoria · ' : ''}${rascunho
       ? `Rascunho · ${esc(i.bairro)} · não salvo`
       : `Importação nº ${i.id} · ${esc(i.bairro)} · não publicada`}</b>
-    ${pre ? '<button class="btn sm" onclick="sairPreCuradoria()">Sair da pré-curadoria</button>'
-          : `<button class="btn sm" onclick="entrarPreCuradoria()">Pré-curadoria</button>`}
     <span>${Number(i.lotes).toLocaleString('pt-BR')} lotes</span>
     ${n === null ? '<span class="badge bd-pe">não conferida</span>'
       : (n ? `<span class="badge bd-er">${n} divergência(s)</span>` : '<span class="badge bd-ok">sem divergências</span>')}
@@ -1013,7 +1029,7 @@ function pintarBarraImportacao() {
       ${impState.podePublicar
         ? `<button class="btn sm primary" onclick="abrirImportacao(${i.id}).then(pedirPublicacaoImportacao)">Publicar</button>`
         : '<span class="imp-sub">Publicar: aguardando administrador</span>'}`}
-      <button class="btn sm imp-barra-x" title="Fechar a barra" onclick="sairPreCuradoria(); impState.atual=null; impState.noMapa=false; pintarBarraImportacao()">&#10005;</button>
+      <button class="btn sm imp-barra-x" title="Sair da pré-curadoria" onclick="sairPreCuradoria(); impState.atual=null; pintarBarraImportacao()">&#10005;</button>
     </span>`
 }
 
