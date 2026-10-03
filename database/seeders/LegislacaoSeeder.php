@@ -20,9 +20,9 @@ use Illuminate\Database\Seeder;
  * derruba a autuação e expõe o município a responsabilização.
  *
  * Os artigos são cadastrados pela própria administração, em Parâmetros >
- * Legislação, com validação da procuradoria. Enquanto não houver artigo
- * vinculado a uma irregularidade, o sistema BLOQUEIA a lavratura do auto
- * correspondente — o que é o comportamento correto, não uma limitação.
+ * Legislação, com validação da procuradoria. Sem artigo na peça, o sistema
+ * BLOQUEIA a lavratura do auto — o que é o comportamento correto, não uma
+ * limitação.
  *
  * Os prazos abaixo são VALORES INICIAIS de formulário, não afirmações
  * jurídicas: precisam ser conferidos contra cada lei antes do uso real.

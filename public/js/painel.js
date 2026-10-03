@@ -90,7 +90,7 @@ function renderPainel(d) {
 
   // ── barras ──
   document.getElementById('pn-por-tipo').innerHTML = barras(d.por_tipo)
-  document.getElementById('pn-irregs').innerHTML = barras(d.irregularidades)
+  document.getElementById('pn-infracoes').innerHTML = barras(d.infracoes)
 
   const sel = document.getElementById('pn-bairro')
   if (sel && sel.options.length <= 1) {

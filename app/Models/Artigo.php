@@ -7,7 +7,7 @@ use App\Models\Concerns\RegistraAuditoria;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Str;
 
 class Artigo extends Model
 {
@@ -23,6 +23,7 @@ class Artigo extends Model
             'multa_upf_m2'  => 'float',
             'multa_min_upf' => 'float',
             'multa_max_upf' => 'float',
+            'termos'        => 'array',
         ];
     }
 
@@ -88,15 +89,41 @@ class Artigo extends Model
     }
 
     /**
-     * Irregularidades que este artigo enquadra.
+     * O artigo que trata do que o fiscal viu, pelo que ele digita.
      *
-     * É esta relação que faz o motor de legislação funcionar: marcada a
-     * irregularidade na vistoria, o sistema já sabe qual dispositivo citar,
-     * em vez de o fiscal procurar artigo na lei impressa.
+     * Os TERMOS DE BUSCA são o vocabulário de campo do artigo ("escavação",
+     * "terraplenagem", "movimento de terra"): o fiscal procura o problema, e
+     * não o número do dispositivo. Casa também com número, apelido e conduta.
+     * Sem acento e sem caixa: em campo ninguém digita "escavação" com cedilha.
+     *
+     * Devolve o que casou (para a lista mostrar POR QUE o artigo apareceu),
+     * ou null. A ordem diz a força: termo, apelido, número, conduta.
      */
-    public function irregularidades(): BelongsToMany
+    public function casaCom(string $busca): ?string
     {
-        return $this->belongsToMany(Irregularidade::class, 'artigo_irregularidade')->withTimestamps();
+        // "art. 27", "artigo 27" → "27": o fiscal escreve como está na lei.
+        $q = preg_replace('/^art(?:igo)?\.?\s*(?=\d)/', '', self::normalizar($busca));
+        if ($q === '') {
+            return null;
+        }
+        foreach ($this->termos ?? [] as $t) {
+            if (str_contains(self::normalizar($t), $q)) {
+                return $t;
+            }
+        }
+        foreach (['apelido', 'numero', 'conduta'] as $campo) {
+            if ($this->{$campo} !== null && str_contains(self::normalizar((string) $this->{$campo}), $q)) {
+                return $campo === 'conduta' ? 'conduta' : (string) $this->{$campo};
+            }
+        }
+
+        return null;
+    }
+
+    /** Texto comparável: sem acento, minúsculo, espaços simples. */
+    public static function normalizar(string $texto): string
+    {
+        return trim(preg_replace('/\s+/', ' ', mb_strtolower(Str::ascii($texto))));
     }
 
     public function scopeAtivos(Builder $q): Builder

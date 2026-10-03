@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Cadastro\BairrosDoDesenho;
 use App\Models\Documento;
-use App\Models\Irregularidade;
 use App\Models\OrdemServico;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
@@ -49,7 +48,7 @@ class PainelController extends Controller
             'atencao'   => $this->atencao($uid),
             'recentes'  => $this->recentes($uid),
             'por_tipo'  => $this->documentosPorTipo(clone $documentos),
-            'irregularidades' => $this->irregularidadesFrequentes($desde),
+            'infracoes' => $this->infracoesFrequentes($desde),
             // So bairros com imovel ativo: bairro que so tem lote inativo nao
             // existe mais como opcao de filtro.
             'bairros'   => DB::table('lotes')->where('situacao', 'ativo')->where('em_revisao', false)
@@ -194,18 +193,7 @@ class PainelController extends Controller
             ];
         }
 
-        // 6. Irregularidades sem enquadramento legal — bloqueiam a lavratura
-        $semArtigo = Irregularidade::ativas()->whereDoesntHave('artigos')->count();
-        if ($semArtigo > 0) {
-            $itens[] = [
-                'titulo'  => $semArtigo . ' irregularidade(s) sem artigo vinculado',
-                'detalhe' => 'Sem fundamentação legal o sistema bloqueia a lavratura',
-                'tag'     => ['texto' => 'Bloqueia auto', 'classe' => 'bd-al'],
-                'aba'     => null,
-            ];
-        }
-
-        // 7. Bairro do desenho sem cadastro amarrado.
+        // 6. Bairro do desenho sem cadastro amarrado.
         //
         // ISTO É PENDÊNCIA POR CAUSA DE COMO O DEFEITO SE ESCONDE. Sem a
         // amarração, `BairrosDoDesenho::oficial` devolve o nome do desenho —
@@ -345,17 +333,27 @@ class PainelController extends Controller
         return $saida;
     }
 
-    /** @return list<array{rotulo:string,n:int}> */
-    private function irregularidadesFrequentes(\Carbon\Carbon $desde): array
+    /**
+     * As infrações mais constatadas no período: os artigos CITADOS nas
+     * vistorias (parecer não conta), uma vez por vistoria.
+     *
+     * @return list<array{rotulo:string,n:int}>
+     */
+    private function infracoesFrequentes(\Carbon\Carbon $desde): array
     {
-        return DB::table('vistoria_irregularidades as vi')
-            ->join('irregularidades as i', 'i.id', '=', 'vi.irregularidade_id')
-            ->join('vistorias as v', 'v.id', '=', 'vi.vistoria_id')
+        return DB::table('vistoria_artigos as va')
+            ->join('artigos as a', 'a.id', '=', 'va.artigo_id')
+            ->join('vistorias as v', 'v.id', '=', 'va.vistoria_id')
+            ->leftJoin('legislacoes as l', 'l.id', '=', 'a.legislacao_id')
+            ->where('va.tipo', 'citacao')
             ->where('v.data_hora', '>=', $desde)
-            ->select('i.descricao as rotulo', DB::raw('COUNT(*) as n'))
-            ->groupBy('i.id', 'i.descricao')
+            ->select('a.numero', 'a.apelido', 'l.numero as lei', DB::raw('COUNT(DISTINCT va.vistoria_id) as n'))
+            ->groupBy('a.id', 'a.numero', 'a.apelido', 'l.numero')
             ->orderByDesc('n')->limit(6)
-            ->get()->map(fn ($r) => ['rotulo' => $r->rotulo, 'n' => (int) $r->n])->all();
+            ->get()->map(fn ($r) => [
+                'rotulo' => 'Art. ' . $r->numero . ($r->apelido ? ' — ' . $r->apelido : ($r->lei ? ' — ' . $r->lei : '')),
+                'n'      => (int) $r->n,
+            ])->all();
     }
 
     /**

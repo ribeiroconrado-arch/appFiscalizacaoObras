@@ -71,7 +71,7 @@ Os controllers validam, chamam e devolvem JSON. Quem decide é o serviço:
 
 | Serviço | Responde |
 |---|---|
-| `LavraturaService` | que artigos enquadram as irregularidades constatadas |
+| `LavraturaService` | os artigos citados na vistoria, que viram a fundamentação da peça |
 | `UnificacaoDeLotes` | dois lotes podem virar um? o que isso produz? |
 | `DesmembramentoDeLote` | um lote pode virar N? as partes preservam o contorno? |
 | `SucessaoDeLotes` | quem sucedeu quem, e o que fica pendurado no inativo |

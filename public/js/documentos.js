@@ -387,7 +387,7 @@ function espelharFiltrosDoc() {
  * já era o resultado final. Agora quem decide a hora é o botão Buscar.
  *
  * A exceção continua sendo o combobox que pesquisa DENTRO do próprio campo
- * (logradouro, irregularidade, artigo): ali a lista É a escrita, e esperar um
+ * (logradouro, artigo): ali a lista É a escrita, e esperar um
  * botão seria pior.
  *
  * @param {string} campo @param {string} valor
@@ -534,7 +534,7 @@ function recalcularMultaDoc() {
 
 /**
  * Motor de legislação: busca a última vistoria do lote e pede ao servidor os
- * artigos que enquadram as irregularidades constatadas. É o passo que dispensa
+ * artigos que o fiscal citou nela. É o passo que dispensa
  * o fiscal de procurar dispositivo na lei impressa (§18 do projeto).
  */
 async function sugerirDaUltimaVistoria(loteId) {
@@ -597,8 +597,8 @@ async function sugerirDaVistoria(vistoriaId) {
     const areaDita = s.vistoria?.area_rotulo
       ? ` Área aferida: <b>${esc(s.vistoria.area_rotulo)}</b>.` : ''
     caixa.innerHTML = `<div class="nd-vinculo-ok">
-        Vinculado à <b>${esc(de || 'vistoria')}</b> · ${s.irregularidades.length} irregularidade(s).
-        <b>${s.artigos.length} artigo(s)</b> sugeridos automaticamente.${areaDita}</div>`
+        Vinculado à <b>${esc(de || 'vistoria')}</b> ·
+        <b>${s.artigos.length} artigo(s)</b> citado(s) na vistoria, já marcados.${areaDita}</div>`
   } catch (e) {
     console.error(e)
     caixa.innerHTML = '<div class="lista-vazia">Não foi possível buscar a sugestão de artigos.</div>'

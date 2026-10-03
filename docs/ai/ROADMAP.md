@@ -23,10 +23,11 @@ Sem estes, o sistema está pronto e ninguém consegue usá-lo para valer.
 
 ### 🔴 [dado] Alimentar a legislação
 
-18 das 20 irregularidades não têm artigo vinculado, e **sem fundamentação legal
-o sistema recusa lavrar o auto** — corretamente. É a maior trava isolada.
+O catálogo legal ainda é raso, e **sem artigo citado a vistoria irregular não
+grava nem o auto é lavrado** — corretamente. É a maior trava isolada.
 
-Onde: Parâmetros → Legislação. O painel já lista as que faltam.
+Onde: Parâmetros → Legislação. Cada artigo precisa dos seus **termos de busca**
+(como o fiscal chama o problema em campo); artigo sem termo aparece em âmbar.
 
 ### 🔴 [dado] Carregar o cadastro dos bairros levantados
 

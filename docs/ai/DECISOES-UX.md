@@ -10,8 +10,8 @@
 
 A janela do item de vistoria já despejou de uma vez o catálogo inteiro de
 irregularidades, mais formulário de artigo, mais de exigência, mais as fotos —
-tudo aberto, para preencher talvez um deles. Hoje são cinco abas com contagem:
-sem abrir nada dá para ver que o item tem duas irregularidades e nenhuma foto.
+tudo aberto, para preencher talvez um deles. Hoje são quatro abas com contagem:
+sem abrir nada dá para ver que o item tem dois artigos citados e nenhuma foto.
 
 O mesmo princípio aparece em vários lugares: campo que não pertence à
 finalidade escolhida **some** em vez de ficar vazio (um campo vazio faz parecer
@@ -38,9 +38,16 @@ abre janela não entra nessa lista.
 ## O relatório de vistoria em itens
 
 Um item é **um ponto da obra**, com tudo que se tem a dizer sobre ele:
-irregularidade, relato, artigos, exigências e fotos.
+artigos, relato, exigências e fotos.
 
-Antes eram listas paralelas — marcava-se a irregularidade num lugar e
+**A irregularidade é termo de busca do artigo, não lista própria.** Só se atua
+no que está fora da lei, e quem define o que está fora da lei é o artigo. O
+fiscal digita o problema ("escavação") e o sistema mostra os artigos que
+tratam dele, de qualquer lei, com o termo que casou. Antes havia um catálogo de
+irregularidades ligado aos artigos — duas listas para manter em sincronia, e a
+vistoria só achava artigo pelo caminho da irregularidade.
+
+Antes ainda eram listas paralelas — marcava-se a irregularidade num lugar e
 escrevia-se sobre ela em outro, e as duas podiam discordar. A ordem entre itens
 é informação: a foto logo depois do artigo que ela ilustra conta algo que a
 mesma foto no fim de uma pilha não conta.
@@ -131,8 +138,8 @@ substitui o `confirm()` nativo em todo módulo. O botão fica "Aguarde…" duran
 o `await`, e o modal só fecha quando a ação resolve.
 
 Exclusão que a história impede é **recusada com o motivo**: "excluir bairro em
-uso" diz quantos lotes o usam; irregularidade já usada em vistoria sugere
-desmarcar "Ativa" em vez de apagar — preserva a leitura das vistorias antigas.
+uso" diz quantos lotes o usam; lei citada em documento sugere desmarcar
+"Ativa" em vez de apagar — preserva a leitura dos atos antigos.
 
 ## Mapa
 
@@ -162,9 +169,8 @@ ficar ilegível espremida.
 dado falta, a tela escreve o que sabe:
 
 - inscrição que não dá para montar → **"sem inscrição"**, nunca `01.000...`
-- irregularidade sem artigo cadastrado → avisa quais ficaram sem
-  fundamentação, porque o fiscal veria três artigos sugeridos e concluiria que
-  as cinco marcações estão cobertas
+- artigo sem termo de busca → aparece em âmbar em Parâmetros, porque na
+  vistoria ele só seria achado por quem já soubesse o número
 
 ## Erros que esta tela já cometeu
 

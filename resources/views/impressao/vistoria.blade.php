@@ -9,7 +9,7 @@
   página no navegador e passa a cobrir o conteúdo da segunda em diante.
 --}}
 @php
-  /** Numeração das seções, calculada e não fixa: "Irregularidades",
+  /** Numeração das seções, calculada e não fixa: "Relatório",
       "Exigências" e "Documentos emitidos" só existem em algumas vistorias, e a
       sequência tem de fechar mesmo assim.
 
@@ -58,17 +58,17 @@
      feita e não foi respondida. */
   .vazio { color: #777; font-style: italic; }
 
-  /* ── Irregularidades e exigências ── */
+  /* ── Exigências e documentos ── */
   table.itens { width: 100%; border-collapse: collapse; }
   table.itens th { background: #ECECEC; border: 1px solid #bbb; padding: 4px 5px; font-size: 8px;
                    text-transform: uppercase; letter-spacing: .04em; text-align: left; }
   table.itens td { border: 1px solid #ddd; padding: 4px 5px; font-size: 9.5px; vertical-align: top; }
   table.itens td.cod { white-space: nowrap; font-weight: bold; width: 62px; }
-  table.itens td.grav { white-space: nowrap; width: 66px; text-transform: uppercase;
-                        font-size: 8px; letter-spacing: .04em; }
+  table.itens td.curto { white-space: nowrap; width: 66px; text-transform: uppercase;
+                         font-size: 8px; letter-spacing: .04em; }
 
   /* ── O relatório: cada item é um bloco que NÃO se parte entre páginas —
-     as irregularidades numa folha e as fotos na outra desmontariam o
+     o artigo numa folha e as fotos na outra desmontariam o
      raciocínio que o item existe para juntar. ── */
   .rel-item-papel { page-break-inside: avoid; margin-bottom: 12px;
                     padding-left: 8px; border-left: 2px solid #bbb; }
@@ -161,13 +161,13 @@
 
       {{-- 2 — O RELATÓRIO, EM ITENS
            Cada item é um bloco de raciocínio, e dentro dele a ordem é fixa:
-           irregularidades, texto, artigos, exigências, fotos — o fato, a
-           narrativa, a lei, a providência e a prova. Só a ordem ENTRE itens foi
-           escolhida, e é a sequência em que a obra foi percorrida.
+           artigos, texto, exigências, fotos — a infração, a narrativa, a
+           providência e a prova. Só a ordem ENTRE itens foi escolhida, e é a
+           sequência em que a obra foi percorrida.
 
-           As irregularidades e as exigências não têm mais seção própria: elas
-           pertencem ao item onde foram constatadas, e tirá-las de lá para uma
-           lista no fim desmontaria o raciocínio que o item existe para juntar. --}}
+           Os artigos e as exigências não têm seção própria: pertencem ao item
+           onde foram constatados, e tirá-los de lá para uma lista no fim
+           desmontaria o raciocínio que o item existe para juntar. --}}
       @if (count($relatorio))
         <div class="sec">
           <div class="sec-tit">{{ $sec('Relatório') }}</div>
@@ -175,27 +175,6 @@
           @foreach ($relatorio as $n => $item)
             <div class="rel-item-papel">
               <div class="rel-item-num">Item {{ $n + 1 }}</div>
-
-              @if (count($item['irregularidades']))
-                <table class="itens">
-                  <thead>
-                    <tr><th>Código</th><th>Irregularidade constatada</th><th>Gravidade</th></tr>
-                  </thead>
-                  <tbody>
-                    @foreach ($item['irregularidades'] as $i)
-                      <tr>
-                        <td class="cod">{{ $i['codigo'] }}</td>
-                        <td>{{ $i['descricao'] }}</td>
-                        <td class="grav">{{ $i['gravidade'] }}</td>
-                      </tr>
-                    @endforeach
-                  </tbody>
-                </table>
-              @endif
-
-              @if ($item['texto'])
-                <p>{{ $item['texto'] }}</p>
-              @endif
 
               @foreach ($item['artigos'] as $a)
                 <div class="item item-lei">
@@ -207,13 +186,17 @@
                 </div>
               @endforeach
 
+              @if ($item['texto'])
+                <p>{{ $item['texto'] }}</p>
+              @endif
+
               @if (count($item['exigencias']))
                 <table class="itens">
                   <tbody>
                     @foreach ($item['exigencias'] as $e)
                       <tr>
                         <td>{{ $e['texto'] }}</td>
-                        <td class="grav">{{ $e['prazo'] ? $e['prazo'] . ' dias' : '—' }}</td>
+                        <td class="curto">{{ $e['prazo'] ? $e['prazo'] . ' dias' : '—' }}</td>
                       </tr>
                     @endforeach
                   </tbody>
@@ -265,8 +248,8 @@
                 <tr>
                   <td class="cod">{{ $d['numero'] }}</td>
                   <td>{{ $d['tipo'] }}</td>
-                  <td class="grav">{{ $d['data'] }}</td>
-                  <td class="grav">{{ $d['status'] }}</td>
+                  <td class="curto">{{ $d['data'] }}</td>
+                  <td class="curto">{{ $d['status'] }}</td>
                 </tr>
               @endforeach
             </tbody>

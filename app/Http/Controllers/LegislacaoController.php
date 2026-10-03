@@ -4,15 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Artigo;
 use App\Models\Documento;
-use App\Models\Irregularidade;
 use App\Models\Legislacao;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Parâmetros > Legislação — cadastro de leis, artigos e do vínculo com as
- * irregularidades.
+ * Parâmetros > Legislação — cadastro de leis e artigos, e dos TERMOS DE BUSCA
+ * de cada artigo: o vocabulário de campo ("escavação", "terraplenagem") pelo
+ * qual o fiscal acha o artigo na vistoria (Artigo::casaCom).
  *
  * É o que destrava o uso real do sistema: sem artigo vinculado, a lavratura
  * de qualquer documento com sanção fica bloqueada (ver LavraturaService).
@@ -30,10 +30,10 @@ class LegislacaoController extends Controller
             : response()->json(['message' => 'Só administrador altera a legislação.'], 403);
     }
 
-    /** GET /api/legislacao — leis com artigos e irregularidades vinculadas. */
+    /** GET /api/legislacao — leis com os artigos e os termos de busca. */
     public function index(): JsonResponse
     {
-        $leis = Legislacao::with(['artigos' => fn ($q) => $q->orderBy('numero'), 'artigos.irregularidades:id,codigo'])
+        $leis = Legislacao::with(['artigos' => fn ($q) => $q->orderBy('numero')])
             ->orderBy('nome')
             ->get()
             ->map(fn (Legislacao $l) => [
@@ -59,21 +59,11 @@ class LegislacaoController extends Controller
                     'multa_min_upf' => $a->multa_min_upf,
                     'multa_max_upf' => $a->multa_max_upf,
                     'ativo'         => $a->ativo,
-                    'irregularidades' => $a->irregularidades->pluck('codigo'),
-                    'irregularidade_ids' => $a->irregularidades->pluck('id'),
+                    'termos'        => $a->termos ?? [],
                 ]),
             ]);
 
-        return response()->json([
-            'leis' => $leis,
-            'irregularidades' => Irregularidade::ativas()->get(['id', 'codigo', 'descricao', 'gravidade']),
-            // Contagem que interessa ao administrador: quantas irregularidades
-            // ainda não têm artigo. Cada uma dessas é um auto que não pode ser
-            // lavrado.
-            'sem_enquadramento' => Irregularidade::ativas()
-                ->whereDoesntHave('artigos')
-                ->count(),
-        ]);
+        return response()->json(['leis' => $leis]);
     }
 
     /** POST /api/legislacao — cria ou atualiza uma lei. */
@@ -102,7 +92,7 @@ class LegislacaoController extends Controller
         return response()->json(['message' => 'Lei gravada.', 'id' => $lei->id]);
     }
 
-    /** POST /api/legislacao/artigos — cria ou atualiza artigo e seus vínculos. */
+    /** POST /api/legislacao/artigos — cria ou atualiza o artigo e os termos de busca. */
     public function salvarArtigo(Request $r): JsonResponse
     {
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
@@ -122,24 +112,31 @@ class LegislacaoController extends Controller
             'multa_min_upf'   => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'multa_max_upf'   => ['nullable', 'numeric', 'min:0', 'max:999999', 'gte:multa_min_upf'],
             'ativo'           => ['nullable', 'boolean'],
-            'irregularidades' => ['array'],
-            'irregularidades.*' => ['integer', 'exists:irregularidades,id'],
+            'termos'          => ['array', 'max:40'],
+            'termos.*'        => ['string', 'max:60'],
         ]);
+
+        // Termos limpos e sem repetir ("Escavação" e "escavacao" são o mesmo
+        // para a busca, que ignora acento e caixa): fica a primeira grafia.
+        $termos = [];
+        foreach ($d['termos'] ?? [] as $t) {
+            $t = trim(preg_replace('/\s+/u', ' ', $t));
+            if ($t !== '') {
+                $termos[Artigo::normalizar($t)] ??= $t;
+            }
+        }
 
         $artigo = Artigo::updateOrCreate(
             ['id' => $d['id'] ?? null],
-            collect($d)->except(['id', 'irregularidades'])->all() + ['ativo' => $d['ativo'] ?? true]
+            collect($d)->except(['id', 'termos'])->all()
+                + ['ativo' => $d['ativo'] ?? true, 'termos' => $termos ? array_values($termos) : null]
         );
-
-        // O vínculo é o que faz o motor de legislação funcionar: sem ele o
-        // artigo existe mas nunca é sugerido em vistoria nenhuma.
-        $artigo->irregularidades()->sync($d['irregularidades'] ?? []);
 
         return response()->json([
             'message' => 'Artigo gravado.',
             'id'      => $artigo->id,
-            'aviso'   => empty($d['irregularidades'])
-                ? 'Artigo sem irregularidade vinculada: ele não será sugerido automaticamente em nenhuma vistoria.'
+            'aviso'   => ! $termos
+                ? 'Artigo sem termos de busca: na vistoria ele só é achado pelo número, apelido ou conduta.'
                 : null,
         ]);
     }

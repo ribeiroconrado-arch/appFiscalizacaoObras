@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════
 // MÓDULO: PARÂMETROS DO SISTEMA (só administrador)
 //
-// Usuários, legislação, UPF, feriados, irregularidades, bairros e órgão.
+// Usuários, legislação, UPF, feriados, bairros e órgão.
 //
 // O padrão de gravação é o do AppPOSTURAS, igual em todas as abas:
 //   - no topo, SÓ a busca e o "+ Novo …" — a busca filtra e nada mais;
@@ -22,13 +22,9 @@ const parState = {
   carregado: false,
   usuarios: [],
   leis: [],
-  irregularidades: [],
   upfs: [],
   feriados: [],
   bairros: [],
-  /** @type {Array<Object>} o catálogo COMPLETO, com gravidade/base legal/ativo — o
-   *  `irregularidades` (sem prefixo) é o de Legislação, resumo para marcar num artigo. */
-  catalogoIrregularidades: [],
   geral: [],
   /** id da lei aberta no detalhe */   leiAberta: null,
   /** aba do detalhe da lei */          subLei: 'artigos',
@@ -71,21 +67,14 @@ async function carregarParametros() {
     parState.upfs = d.upfs
     parState.feriados = d.feriados
     parState.bairros = d.bairros
-    parState.catalogoIrregularidades = d.irregularidades
     parState.geral = d.geral
     parState.carregado = true
     renderUsuarios()
     renderUpfs()
     renderFeriados()
     renderBairros()
-    renderIrregularidades()
     renderGeral()
     renderBrasao()
-    // Lida por ÚLTIMO, e de propósito: `/api/legislacao` também devolve um
-    // `irregularidades` — outro formato, resumido, para o checklist de "quais
-    // esta lei enquadra" — e escreve em `parState.irregularidades` (sem
-    // prefixo). É uma tecla DIFERENTE da usada aqui (`catalogoIrregularidades`),
-    // então as duas convivem sem uma apagar a outra.
     await recarregarLegislacao()
   } catch (e) {
     console.error(e)
@@ -96,7 +85,7 @@ async function carregarParametros() {
 function renderTudoPar() {
   if (!parState.carregado) return
   renderUsuarios(); renderLeis(); renderUpfs(); renderFeriados()
-  renderBairros(); renderIrregularidades(); renderGeral()
+  renderBairros(); renderGeral()
 }
 
 // ── EDIÇÃO NA LINHA (o motor comum de todas as abas) ─────────
@@ -105,7 +94,7 @@ function renderTudoPar() {
 const PAR_RENDER = {
   leis: () => renderLeis(), artigos: () => renderLeis(), textos: () => renderLeis(),
   upf: () => renderUpfs(), anos: () => renderFeriados(), feriados: () => renderFeriados(),
-  bairros: () => renderBairros(), irregularidades: () => renderIrregularidades(), geral: () => renderGeral(),
+  bairros: () => renderBairros(), geral: () => renderGeral(),
 }
 
 /** Abre a edição de um item. @param {string} lista @param {number|string} id */
@@ -197,7 +186,7 @@ async function parGravar(url, corpo, aoTerminar) {
 /** Excluir, com a confirmação de cada lista. */
 function parExcluir(lista, id) {
   ({ leis: excluirLei, artigos: excluirArtigo, upf: excluirUpf, feriados: excluirFeriado,
-     bairros: excluirBairro, irregularidades: excluirIrregularidade })[lista](id)
+     bairros: excluirBairro })[lista](id)
 }
 
 // Enter salva e Esc cancela o cartão aberto. Em textarea o Enter é quebra de linha.
@@ -327,8 +316,6 @@ async function recarregarLegislacao() {
   const r = await fetch('/api/legislacao', { headers: { Accept: 'application/json' } })
   const d = await r.json()
   parState.leis = d.leis
-  parState.irregularidades = d.irregularidades
-  parState.semEnquadramento = d.sem_enquadramento
   if (parState.leiAberta && !parState.leis.some(l => l.id === parState.leiAberta)) parState.leiAberta = null
   renderLeis()
 }
@@ -339,14 +326,6 @@ function renderLeis() {
   document.getElementById('leg-topo-lista').style.display = aberta ? 'none' : ''
   document.getElementById('leg-topo-detalhe').style.display = aberta ? '' : 'none'
   if (aberta) { renderDetalheLei(aberta); return }
-
-  // Irregularidade sem artigo: o sistema recusa lavrar o auto dela. Fica uma
-  // etiqueta ao lado do título — aviso, sem o quadro que ocupava a tela.
-  const sem = parState.semEnquadramento
-  const etiqueta = document.getElementById('leg-sem-enquadramento')
-  etiqueta.hidden = !sem
-  etiqueta.textContent = sem ? `${sem} irregularidade(s) sem artigo` : ''
-  etiqueta.title = sem ? 'Enquanto não houver artigo vinculado, o sistema recusa lavrar o auto correspondente.' : ''
 
   const termo = parBusca('lei-busca')
   const leis = parState.leis.filter(l => !termo || (l.numero + ' ' + l.nome).toLowerCase().includes(termo))
@@ -459,16 +438,17 @@ function renderDetalheLei(l) {
   if (parState.subLei === 'textos') { renderTextosDaLei(l); return }
 
   const termo = parBusca('busca-artigos')
-  const artigos = l.artigos.filter(a => !termo || ((a.numero || '') + ' ' + (a.apelido || '')).toLowerCase().includes(termo))
+  const artigos = l.artigos.filter(a => !termo
+    || [a.numero, a.apelido, ...(a.termos || [])].join(' ').toLowerCase().includes(termo))
   document.getElementById('lista-leis').innerHTML =
     (parEditando('artigos', 'novo') ? formArtigo({}) : '')
     + (artigos.map(a => parEditando('artigos', a.id) ? formArtigo(a) : `
       <div class="par-linha${a.ativo ? '' : ' par-linha-inativa'}">
         <div class="principal">
           <b>${esc(a.apelido || a.numero)}</b>
-          <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.irregularidades.length
-            ? ' · ' + a.irregularidades.length + ' irregularidade(s)'
-            : ' · <span style="color:var(--red)">sem irregularidade vinculada</span>'}${a.ativo ? '' : ' · inativo'}</span>
+          <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'} · ${a.termos?.length
+            ? 'busca: ' + a.termos.map(t => esc(t)).join(', ')
+            : '<span class="art-sem-termos">sem termos de busca</span>'}</span>
         </div>
         ${parAcoes('artigos', a.id)}
       </div>`).join('')
@@ -488,7 +468,6 @@ function rotuloBaseMulta(a) {
 /** @param {Object} a artigo ({} para novo) */
 function formArtigo(a) {
   const base = a.base_multa || 'fixa'
-  const marcadas = a.irregularidade_ids || []
   return parFormLinha(a.id ? 'Editando artigo' : 'Novo artigo', `
     <div class="cad-row">
       ${parRot('Número', parInp('numero', a.numero, 'class="mono" maxlength="30" placeholder="Art. 42, par. 1, II"'), 'max-width:220px')}
@@ -508,16 +487,59 @@ function formArtigo(a) {
         ${parRot('Piso (UPF)', parInp('multa_min_upf', a.multa_min_upf, 'type="number" min="0" step="0.01"'))}
         ${parRot('Teto (UPF)', parInp('multa_max_upf', a.multa_max_upf, 'type="number" min="0" step="0.01"'))}</span>
     </div>
-    <div class="ed-campo"><span>Irregularidades enquadradas</span>
-      <div class="checklist">${parState.irregularidades.map(i => `
-        <label class="chk-item ${marcadas.includes(i.id) ? 'marcado' : ''}"
-               onclick="setTimeout(()=>this.classList.toggle('marcado', this.querySelector('input').checked),0)">
-          <input type="checkbox" name="irr-${i.id}" value="${i.id}" ${marcadas.includes(i.id) ? 'checked' : ''}>
-          <span class="desc">${esc(i.descricao)}<br><span class="cod">${esc(i.codigo)} · ${esc(i.gravidade)}</span></span>
-        </label>`).join('') || '<div class="lista-vazia">Nenhuma irregularidade cadastrada.</div>'}
+    <div class="ed-campo"><span>Termos de busca</span>
+      <div class="art-termos" onclick="this.querySelector('input')?.focus()">
+        ${(a.termos || []).map(etiquetaDeTermo).join('')}
+        <input type="text" class="art-termo-novo" maxlength="60" autocomplete="off"
+               placeholder="escavação, sem alvará… (Enter adiciona)"
+               onkeydown="teclaNoTermo(event)" onblur="adicionarTermo(this)">
       </div>
+      <small class="art-termos-dica">Como o fiscal chama o problema em campo. Na vistoria, digitar
+        um destes termos mostra este artigo.</small>
     </div>
     <div class="cad-row">${parChk('ativo', a.ativo ?? true, 'Artigo ativo')}</div>`, 'salvarArtigo()')
+}
+
+/** @param {string} t */
+function etiquetaDeTermo(t) {
+  return `<span class="art-termo" data-termo="${esc(t)}">${esc(t)}<button type="button"
+    title="Tirar" onclick="event.stopPropagation(); this.parentElement.remove()">&times;</button></span>`
+}
+
+/**
+ * Enter ou vírgula põem o termo; Backspace no campo vazio tira o último.
+ * O `stopPropagation` impede o Enter de chegar ao atalho "Enter salva" do
+ * cartão — aqui ele só fecha a etiqueta.
+ * @param {KeyboardEvent} e
+ */
+function teclaNoTermo(e) {
+  const inp = /** @type {HTMLInputElement} */ (e.target)
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault(); e.stopPropagation()
+    adicionarTermo(inp)
+  } else if (e.key === 'Backspace' && !inp.value) {
+    inp.parentElement.querySelector('.art-termo:last-of-type')?.remove()
+  }
+}
+
+/** @param {HTMLInputElement} inp */
+function adicionarTermo(inp) {
+  const t = inp.value.replace(/\s+/g, ' ').trim().slice(0, 60)
+  inp.value = ''
+  if (!t) return
+  const caixa = inp.parentElement
+  const igual = [...caixa.querySelectorAll('.art-termo')]
+    .some(el => el.dataset.termo.toLowerCase() === t.toLowerCase())
+  if (!igual) inp.insertAdjacentHTML('beforebegin', etiquetaDeTermo(t))
+}
+
+/** Os termos do cartão aberto, incluindo o que ficou digitado sem Enter. */
+function termosDoCartao() {
+  const caixa = document.querySelector('#m-parametros .par-linha.editando .art-termos')
+  if (!caixa) return []
+  const inp = caixa.querySelector('input')
+  if (inp) adicionarTermo(inp)
+  return [...caixa.querySelectorAll('.art-termo')].map(el => el.dataset.termo)
 }
 
 /** Mostra só os campos de valor da base escolhida. @param {HTMLSelectElement} sel */
@@ -530,8 +552,6 @@ function trocarBaseMulta(sel) {
 async function salvarArtigo() {
   const numero = parCampo('numero')
   if (!numero) { toast('Informe o número do artigo', 'err'); return }
-  const irregularidades = [...document.querySelectorAll('#m-parametros .par-linha.editando .checklist input:checked')]
-    .map(i => Number(i.value))
   await parGravar('/api/legislacao/artigos', {
     id: parState.ed.id === 'novo' ? null : parState.ed.id,
     legislacao_id: parState.leiAberta,
@@ -545,7 +565,7 @@ async function salvarArtigo() {
     multa_min_upf: parCampo('multa_min_upf') || null,
     multa_max_upf: parCampo('multa_max_upf') || null,
     ativo: parCampo('ativo'),
-    irregularidades,
+    termos: termosDoCartao(),
   }, recarregarLegislacao)
 }
 
@@ -952,74 +972,6 @@ function excluirBairro(id) {
       : 'O bairro sai da lista de escolha no cadastro de lote. Excluir?',
     perigo: true,
     onConfirm: () => excluirParametro('/api/parametros/bairros/' + id),
-  })
-}
-
-// ── IRREGULARIDADES ───────────────────────────────────────────
-//
-// O catálogo que a vistoria oferece. Excluir é recusado quando alguma vistoria
-// já constatou; desmarcar "Ativa" tira da lista sem apagar o histórico.
-
-function renderIrregularidades() {
-  const termo = parBusca('filtro-irregularidades')
-  const todos = parState.catalogoIrregularidades
-  const lista = todos.filter(i => !termo
-    || String(i.codigo).toLowerCase().includes(termo) || i.descricao.toLowerCase().includes(termo))
-  parContador('cont-irregularidades', lista.length, todos.length)
-
-  document.getElementById('lista-irregularidades').innerHTML =
-    (parEditando('irregularidades', 'novo') ? formIrregularidade({}) : '')
-    + (lista.map(i => parEditando('irregularidades', i.id) ? formIrregularidade(i) : `
-      <div class="par-linha${i.ativo ? '' : ' par-linha-inativa'}">
-        <div class="principal">
-          <b>${esc(i.codigo)} · ${esc(i.descricao)}</b>
-          <span>${esc(i.gravidade)}${i.base_legal ? ' · ' + esc(i.base_legal) : ''}${
-            i.ativo ? '' : ' · desativada'}${i.em_uso ? ` · usada em ${i.em_uso} vistoria(s)` : ''}</span>
-        </div>
-        ${parAcoes('irregularidades', i.id)}
-      </div>`).join('')
-    || '<div class="lista-vazia">Nenhuma irregularidade encontrada.</div>')
-}
-
-/** @param {Object} i irregularidade ({} para nova) */
-function formIrregularidade(i) {
-  return parFormLinha(i.id ? 'Editando irregularidade' : 'Nova irregularidade', `
-    <div class="cad-row">
-      ${parRot('Código', parInp('codigo', i.codigo, 'class="mono" maxlength="20"'), 'max-width:110px')}
-      ${parRot('Descrição', parInp('descricao', i.descricao, 'maxlength="200"'), 'flex:3')}
-      ${parRot('Gravidade', parSel('gravidade', i.gravidade || 'media', [['leve', 'Leve'], ['media', 'Média'], ['grave', 'Grave']]), 'max-width:140px')}
-    </div>
-    <div class="cad-row">
-      ${parRot('Base legal (opcional)', parInp('base_legal', i.base_legal, 'maxlength="200"'), 'flex:3')}
-      ${parRot('Ordem', parInp('ordem', i.ordem, 'type="number" class="mono" min="0"'), 'max-width:100px')}
-      ${parChk('ativo', i.ativo ?? true, 'Ativa')}
-    </div>`, 'salvarIrregularidade()')
-}
-
-async function salvarIrregularidade() {
-  const codigo = parCampo('codigo'), descricao = parCampo('descricao')
-  if (!codigo || !descricao) { toast('Informe o código e a descrição', 'err'); return }
-  await parGravar('/api/parametros/irregularidades', {
-    id: parState.ed.id === 'novo' ? null : parState.ed.id,
-    codigo, descricao,
-    gravidade: parCampo('gravidade'),
-    base_legal: parCampo('base_legal') || null,
-    ordem: parCampo('ordem') || null,
-    ativo: parCampo('ativo'),
-  }, carregarParametros)
-}
-
-/** @param {number} id */
-function excluirIrregularidade(id) {
-  const i = parState.catalogoIrregularidades.find(x => x.id === id)
-  confirmarAcao({
-    titulo: 'Excluir irregularidade',
-    mensagem: i?.em_uso
-      ? `${i.em_uso} vistoria(s) já constataram esta irregularidade — o sistema vai recusar. `
-        + 'Desmarque "Ativa" para tirá-la das próximas sem apagar o histórico.'
-      : 'Ela sai do catálogo que a vistoria oferece. Excluir?',
-    perigo: true,
-    onConfirm: () => excluirParametro('/api/parametros/irregularidades/' + id),
   })
 }
 

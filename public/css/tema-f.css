@@ -210,12 +210,12 @@
    painel — título, as duas linhas de abas e as margens da janela —, senão em
    tela baixa a janela passaria da tela e ganharia uma segunda rolagem. */
 #m-parametros .par-painel.at{height:min(calc(100vh - 215px), 842px)}
-/* Oito abas em DUAS LINHAS de quatro: numa linha só, "Cadastro municipal"
+/* Sete abas em DUAS LINHAS de quatro: numa linha só, "Cadastro municipal"
    era cortado e a última aba ficava espremida. */
 #m-parametros .modal > .sub-abas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}
 #m-parametros .modal > .sub-abas button{min-width:0;overflow:hidden;text-overflow:ellipsis}
 
-/* PAINEL FIXO — Bairros e Irregularidades, as duas listas longas do módulo.
+/* PAINEL FIXO — Bairros e Legislação, as listas longas do módulo.
    Aqui NÃO é o painel inteiro que rola: o cadastro rápido e a busca ficam
    sempre à vista no topo, e só a lista embaixo tem rolagem própria. Sem isto,
    digitar um bairro novo no fim de uma lista de 125 exigia rolar até o topo
@@ -225,8 +225,8 @@
 .par-fixo-topo{flex-shrink:0;padding-right:4px}
 .par-fixo-lista{flex:1;min-height:0;overflow-y:auto;padding-right:4px;margin-top:2px}
 
-/* Irregularidade desativada: continua na lista (é histórico), mas com menos
-   peso — não é uma opção viva no catálogo que a vistoria oferece hoje. */
+/* Item desativado (lei, artigo): continua na lista (é histórico), mas com
+   menos peso — não é uma opção viva que a vistoria oferece hoje. */
 .par-linha-inativa{opacity:.55}
 
 /* Linha de cadastro rápido (padrão .cad-row do AppPOSTURAS): o que cabe numa
@@ -308,7 +308,20 @@
   border:1.5px solid var(--bord);border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--chumbo)}
 .dica-tags .tag:hover{border-color:var(--tx3)}
 .dica-tags .tag-desc{font-size:11.5px;color:var(--tx3)}
-#leg-sem-enquadramento{margin-left:6px;text-transform:none;letter-spacing:0}
+/* TERMOS DE BUSCA do artigo: etiquetas dentro de uma caixa com cara de campo.
+   O campo de digitar fica no fim da própria caixa, e cresce até o fim da linha. */
+.art-termos{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:42px;
+  padding:6px 8px;border:1.5px solid var(--f-bord);border-radius:var(--r);background:#fff;cursor:text}
+.art-termos:focus-within{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.art-termo{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--chumbo);
+  background:var(--blt);border:1.5px solid var(--bord);border-radius:20px;padding:2px 4px 2px 10px}
+.art-termo button{border:0;background:none;color:var(--tx3);font-size:15px;line-height:1;
+  cursor:pointer;padding:0 4px;min-height:0}
+.art-termo button:hover{color:var(--red)}
+.ed-campo .art-termos input.art-termo-novo{flex:1;min-width:160px;width:auto;border:0;outline:none;
+  box-shadow:none;padding:4px 2px;font-size:13.5px;background:transparent}
+.art-termos-dica{font-size:11.5px;color:var(--tx3);margin-top:2px}
+.art-sem-termos{color:var(--warn)}
 
 .par-secao{margin-bottom:18px}
 .par-secao-tit{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -2001,18 +2014,6 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .rel-seta:hover:not(:disabled){border-color:var(--gm);color:var(--gd)}
 .rel-seta:disabled{opacity:.3;cursor:default}
 
-/* O catalogo de irregularidades, recolhido: e a maquina do enquadramento, mas
-   nao e o assunto da maioria das vistorias. */
-.vs-dobra{margin:14px 0 4px;border:1.5px solid var(--bord);border-radius:var(--r);
-  background:var(--sur);overflow:hidden}
-.vs-dobra summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;
-  font-family:'Manrope',sans-serif;font-weight:600;font-size:12.5px;color:var(--tx);
-  list-style:none;min-height:44px;box-sizing:border-box}
-.vs-dobra summary::-webkit-details-marker{display:none}
-.vs-dobra summary::before{content:'▸';color:var(--tx3);font-size:11px;transition:transform .15s}
-.vs-dobra[open] summary::before{transform:rotate(90deg)}
-.vs-dobra-conta{margin-left:auto;font-size:10.5px;font-weight:800;color:var(--tx3)}
-.vs-dobra > *:not(summary){padding:0 12px 12px}
 
 /* ── A FOTO COM MARCACOES ──
    Um toque crava um numero na imagem, e a legenda pode dizer "1" e "2" em vez
@@ -2393,11 +2394,6 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 
 .vv-lista{margin:0;padding-left:18px;font-size:12.5px;line-height:1.5}
 .vv-lista li{margin-bottom:4px}
-.vv-grav{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
-  padding:1px 6px;border-radius:20px;margin-left:5px}
-.vv-leve{background:var(--blt);color:var(--tx2)}
-.vv-media{background:var(--gold-lt);color:var(--gold-dk)}
-.vv-grave{background:var(--rlt);color:var(--red)}
 .vv-prazo{color:var(--gold-dk);font-weight:700}
 
 /* A foto ocupa a largura e a legenda fica colada nela: separadas, deixa de
@@ -2680,8 +2676,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   margin-top:6px;font-size:11px;line-height:1.45;color:var(--tx2)}
 .vsi-nota:empty,.vsi-nota[hidden]{display:none}
 
-/* Irregularidade já usada em outro item: o banco não aceita a mesma duas
-   vezes, e ela nem chega a aparecer na busca — ver `buscarIrregularidade`. */
+/* Caixa de marcar em linha, sem o cartão do `.chk-item` (a da foto de fachada). */
 .chk-item.chk-linha{border:0;padding:0;background:none}
 
 /* ── AS FOTOS: UMA LINHA POR FOTO, do mesmo `.par-linha` usado no resto do
@@ -2828,9 +2823,9 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   width:20px;height:20px;border-radius:50%;color:#fff;font-size:11.5px;flex-shrink:0}
 .desm-cortar{margin-left:auto}
 
-/* ── OS CINCO BOTÕES DO ITEM ──
+/* ── OS QUATRO BOTÕES DO ITEM ──
    Um bloco de cada vez. A contagem no botão é o que substitui o empilhamento:
-   sem abrir nada dá para ver que o item tem duas irregularidades e nenhuma
+   sem abrir nada dá para ver que o item tem dois artigos citados e nenhuma
    foto — que era justamente o que a janela cheia escondia. */
 /* A base — trilho, pílula ativa, texto — vem de `.sub-abas`, a MESMA classe
    de Parâmetros e do formulário de documento. Aqui só se acrescenta a

@@ -249,23 +249,24 @@ class LavraturaService
     }
 
     /**
-     * Artigos sugeridos para uma vistoria, a partir das irregularidades
-     * constatadas. É o coração do motor de legislação do §18.
+     * Artigos sugeridos para a peça de uma vistoria: os que o fiscal CITOU nela
+     * (`vistoria_artigos`, tipo citação), na ordem em que aparecem. Parecer
+     * fica de fora: é a opinião do fiscal sobre o artigo, não o enquadramento.
+     *
+     * Antes a sugestão vinha do catálogo de irregularidades e ignorava o que o
+     * fiscal tinha de fato citado em campo.
      *
      * @return \Illuminate\Support\Collection<int, Artigo>
      */
     public function artigosSugeridos(int $vistoriaId)
     {
-        return Artigo::query()
-            ->ativos()
-            ->with('legislacao:id,numero,nome')
-            ->whereHas('irregularidades', function ($q) use ($vistoriaId) {
-                $q->whereIn('irregularidades.id', function ($sub) use ($vistoriaId) {
-                    $sub->select('irregularidade_id')
-                        ->from('vistoria_irregularidades')
-                        ->where('vistoria_id', $vistoriaId);
-                });
-            })
-            ->get();
+        $ids = DB::table('vistoria_artigos')
+            ->where('vistoria_id', $vistoriaId)->where('tipo', 'citacao')
+            ->orderBy('item_id')->orderBy('ordem')->orderBy('id')
+            ->pluck('artigo_id')->unique()->values();
+
+        $artigos = Artigo::query()->with('legislacao:id,numero,nome')->whereIn('id', $ids)->get()->keyBy('id');
+
+        return $ids->map(fn ($id) => $artigos->get($id))->filter()->values();
     }
 }

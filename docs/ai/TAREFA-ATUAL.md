@@ -41,7 +41,7 @@ custo/benefício é:
 Mas os itens que **realmente destravam o sistema** não são de código — são de
 dado, e dependem do usuário:
 
-1. alimentar a legislação (18 irregularidades sem artigo travam a lavratura)
+1. alimentar a legislação, com os termos de busca de cada artigo (sem artigo citado não há auto)
 2. carregar a exportação do cadastro dos bairros 105 e 90 (a aba BCI está
    vazia para todos os imóveis)
 3. ~~conferir os 101 lotes sem quadra~~ — **feito em 04–05/09**, pela tela
