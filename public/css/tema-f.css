@@ -1099,11 +1099,6 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   margin-bottom:5px;cursor:pointer}
 .ctrl-chk input{accent-color:var(--gd);flex-shrink:0}
 
-.pin-balao b{display:block;margin-bottom:2px}
-.pin-balao button{margin-top:7px;border:1px solid var(--bord);border-radius:var(--r);
-  background:var(--gl);color:var(--gd);font:inherit;font-size:12px;font-weight:600;
-  padding:5px 10px;cursor:pointer}
-
 /* As medidas vêm do próprio controle de camadas, copiadas em tempo de
    execução por igualarAoControleDeCamadas(). Os valores aqui são só o
    fallback para o instante antes de o mapa existir — 40px de largura, e não
@@ -3003,9 +2998,6 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 #map.cam-sem-bairro-contorno .leaflet-contornos-pane,
 #map.cam-sem-ruas .leaflet-rotulos-pane,
 #map.cam-sem-edificacoes .leaflet-edificacoes-pane{display:none}
-/* Pinos do filtro: o ícone padrão do Leaflet (img); o "você está aqui" é div e fica. */
-#map.cam-sem-pinos .leaflet-marker-pane img.leaflet-marker-icon,
-#map.cam-sem-pinos .leaflet-shadow-pane{display:none}
 #map.cam-sem-satelite .tile-satelite{visibility:hidden}
 /* Escuro, e não claro: o contorno dos lotes é branco, pensado para a foto. */
 #map.cam-sem-satelite{background:#3a463e}

@@ -97,7 +97,6 @@ registrarCamada({ id: 'rot-bairro', grupo: 'Bairros', rotulo: 'Nome do bairro' }
 // devolve "API KEY REQUIRED" estampado por cima do mapa. Quem quiser ver, liga.
 registrarCamada({ id: 'ruas', grupo: 'Outras', rotulo: 'Nomes de rua (Carto)', padrao: false })
 registrarCamada({ id: 'edificacoes', grupo: 'Outras', rotulo: 'Edificações' })
-registrarCamada({ id: 'pinos', grupo: 'Outras', rotulo: 'Pinos do filtro' })
 // Os lotes de importação ainda não publicada: só o curador os carrega. Era a
 // caixa "Mostrar lotes não publicados" da curadoria; agora mora aqui, com as
 // outras camadas. O pedido ao servidor lê camadaLigada('nao-publicados') (app.js).

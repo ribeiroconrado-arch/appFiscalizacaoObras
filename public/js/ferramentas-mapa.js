@@ -1,7 +1,7 @@
 /**
  * UMA FERRAMENTA DO MAPA POR VEZ.
  *
- * Localizar imóvel, pinos, cores, correção cadastral (mesa, modos, atos,
+ * Localizar imóvel, cores, correção cadastral (mesa, modos, atos,
  * pré-curadoria) e o desenho de edificação disputam o mesmo mapa — o clique, o
  * alto da tela, a lateral. Abertas juntas, uma trabalhava por baixo da outra:
  * a busca aberta com a mesa de curadoria marcando lotes ao lado, a barra de
@@ -31,12 +31,6 @@ const FERRAMENTAS_MAPA = {
     aberta: () => document.getElementById('pesq-barra')?.hidden === false,
     emCurso: () => null,
     fechar: () => fecharPesquisaMapa(),
-  },
-  pinos: {
-    rotulo: 'pinos',
-    aberta: () => _grupoAberto('grupo-pins'),
-    emCurso: () => null,
-    fechar: () => fecharPaineisMapa(),
   },
   cores: {
     rotulo: 'cores do mapa',

@@ -247,12 +247,19 @@ function vistoriarDaSinalizacao(loteId) {
 
 /** Troca os botões por um campo de uma palavra + confirmar. */
 function _sinPedirResolucao(id, alvoId) {
-  const alvo = document.getElementById(alvoId); if (!alvo) return
-  alvo.style.gridTemplateColumns = '1fr'
-  alvo.innerHTML = `<div class="sin-resolver">
-      <input type="text" id="sin-res-${id}" maxlength="300" placeholder="Como foi resolvida? Ex.: placa instalada">
-      <button type="button" class="btn primary sm" onclick="resolverSinalizacao(${id})">Confirmar</button></div>`
-  document.getElementById('sin-res-' + id)?.focus()
+  // A TROCA ESPERA O CLIQUE TERMINAR. Trocar o innerHTML dentro do próprio
+  // clique tira o botão clicado do DOM antes de o evento acabar de subir — e
+  // quem escuta "clique fora do balão" (o mapa) vê um alvo que não está mais
+  // dentro de balão nenhum, e fecha o balão: o botão parecia não fazer nada.
+  setTimeout(() => {
+    const alvo = document.getElementById(alvoId); if (!alvo) return
+    alvo.style.gridTemplateColumns = '1fr'
+    alvo.innerHTML = `<div class="sin-resolver">
+        <input type="text" id="sin-res-${id}" maxlength="300" placeholder="Como foi resolvida? Ex.: placa instalada"
+               onkeydown="if(event.key==='Enter')resolverSinalizacao(${id})">
+        <button type="button" class="btn primary sm" onclick="resolverSinalizacao(${id})">Confirmar</button></div>`
+    document.getElementById('sin-res-' + id)?.focus()
+  }, 0)
 }
 
 async function resolverSinalizacao(id) {

@@ -93,7 +93,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // foi carregado e amarrado. Ver BuscaController::logradouros.
         Route::get('/imoveis/logradouros', [BuscaController::class, 'logradouros']);
         Route::get('/imoveis/busca', [BuscaController::class, 'buscar']);
-        Route::get('/imoveis/pins', [BuscaController::class, 'pins']);
         // Depois das rotas fixas: registrada antes, a curinga engoliria
         // "bairros" e "busca" como se fossem id de lote.
         Route::get('/imoveis/{lote}', [BuscaController::class, 'ficha']);

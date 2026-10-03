@@ -20,7 +20,7 @@ test('a navegação aguarda o rascunho e permanece na prancheta quando a saída 
 
 // ── Uma ferramenta do mapa por vez (public/js/ferramentas-mapa.js) ──
 function porteiro(estado){
-  const grupos={'grupo-busca':{aberto:estado.busca},'grupo-pins':{aberto:false},'grupo-cores':{aberto:false},'grupo-cadastro':{aberto:false}}
+  const grupos={'grupo-busca':{aberto:estado.busca},'grupo-cores':{aberto:false},'grupo-cadastro':{aberto:false}}
   const ctx={estado,chamadas:[],
     document:{getElementById:id=>id==='cad-mesa'?{hidden:!estado.mesa}:id==='pesq-barra'?{hidden:!estado.busca}:grupos[id]?{classList:{contains:()=>grupos[id].aberto}}:null},
     selState:{ids:new Set(estado.marcados||[]),ativa:false},cadModo:null,atoState:{tipo:null},

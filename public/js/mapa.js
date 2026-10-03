@@ -396,7 +396,7 @@ function alternarPainelMapa(idGrupo) {
   // Um painel é uma ferramenta como as outras: abrir a busca encerra a
   // curadoria em curso (perguntando, se houver lote marcado), e vice-versa.
   // Ver ferramentas-mapa.js.
-  const ferramenta = { 'grupo-busca': 'busca', 'grupo-pins': 'pinos',
+  const ferramenta = { 'grupo-busca': 'busca',
     'grupo-cores': 'cores', 'grupo-cadastro': 'curadoria' }[idGrupo]
 
   // Painel que não é ferramenta (Camadas) só abre: não disputa o mapa.
@@ -418,7 +418,6 @@ function alternarPainelMapa(idGrupo) {
       corpo.style.overflowY = 'auto'
     }
 
-    if (idGrupo === 'grupo-pins') popularBairrosPins()
   })
 }
 
@@ -525,126 +524,6 @@ async function destacarLoteQuandoCarregar(id) {
     return
   }
   toast('O lote não apareceu no mapa. Confira as camadas ligadas.', 'aviso')
-}
-
-// ── PINOS POR FILTRO ─────────────────────────────────────────
-// Marcam no mapa os imóveis que atendem a um critério de fiscalização.
-// Camada própria, separada dos polígonos: os pinos entram e saem sem tocar
-// nos lotes desenhados, e o "Limpar" é remover uma camada, não redesenhar o
-// mapa inteiro.
-
-/** @type {L.LayerGroup|null} */
-let camadaPins = null
-
-/** Preenche o seletor de bairro do painel, uma vez. */
-async function popularBairrosPins() {
-  const sel = document.getElementById('pin-bairro')
-  if (!sel || sel.dataset.pronto) return
-  try {
-    const r = await fetch('/api/imoveis/bairros', { headers: { Accept: 'application/json' } })
-    const d = await r.json()
-    sel.innerHTML = '<option value="">Bairro — todos</option>'
-      + d.bairros.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')
-    sel.dataset.pronto = '1'
-  } catch (e) { console.error(e) }
-}
-
-/** Lê o painel e marca no mapa o que o filtro devolver. */
-async function marcarPins() {
-  const saida = document.getElementById('pin-resultado')
-  const p = new URLSearchParams()
-
-  const bairro = document.getElementById('pin-bairro').value
-  const vistoria = document.getElementById('pin-vistoria').value
-  if (bairro) p.set('bairro', bairro)
-  if (vistoria) p.set('vistoria', vistoria)
-  if (document.getElementById('pin-embargo').checked) p.set('embargo', '1')
-  if (document.getElementById('pin-pendente').checked) p.set('doc_pendente', '1')
-  if (document.getElementById('pin-sem-vistoria').checked) p.set('obra_sem_vistoria', '1')
-
-  if (![...p.keys()].length) { saida.textContent = 'Escolha ao menos um filtro.'; return }
-
-  saida.textContent = 'Marcando…'
-
-  try {
-    const r = await fetch('/api/imoveis/pins?' + p, { headers: { Accept: 'application/json' } })
-    const d = await r.json()
-    if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
-
-    if (!d.pins.length) { limparPins(); saida.textContent = 'Nenhum imóvel atende ao filtro.'; return }
-
-    plotarPins(d.pins)
-    marcarIndicadorControle('grupo-pins', d.total)
-
-    // O filtro também PINTA os lotes que atendem. O pino diz onde procurar
-    // de longe; a cor mostra qual é o lote quando o zoom chega perto, onde o
-    // alfinete já cobre a própria construção que se quer ver.
-    destacarLotes(d.pins.map(p => p.id))
-
-    saida.innerHTML = `${d.total} marcado(s).`
-      + (d.truncado ? ` <b>Teto de ${d.teto} — refine o filtro.</b>` : '')
-  } catch (e) {
-    console.error(e)
-    saida.textContent = e.message || 'Falha ao marcar.'
-  }
-}
-
-/**
- * Busca as coordenadas de uma lista de ids e marca. Usada pela busca do mapa,
- * quando o termo casa com vários imóveis.
- * @param {number[]} ids @returns {Promise<number>} quantos foram marcados
- */
-async function desenharPins(ids) {
-  const pins = []
-  // Sequencial e limitado: a ficha é uma consulta por imóvel, e disparar
-  // duzentas de uma vez trava o aparelho do fiscal — que é o alvo.
-  for (const id of ids.slice(0, 60)) {
-    try {
-      const r = await fetch('/api/imoveis/' + id, { headers: { Accept: 'application/json' } })
-      const f = await r.json()
-      if (f.lat) pins.push({ id: f.id, lat: f.lat, lon: f.lon, bairro: f.bairro, quadra: f.quadra, lote: f.lote })
-    } catch (e) { /* um imóvel sem geometria não invalida os demais */ }
-  }
-  if (pins.length) plotarPins(pins)
-  return pins.length
-}
-
-/** @param {Array<{id:number,lat:number,lon:number,bairro:string,quadra:string,lote:string}>} pins */
-function plotarPins(pins) {
-  if (!mapaState.obj) return
-  limparPins()
-
-  camadaPins = L.layerGroup(pins.map(p => {
-    const m = L.marker([p.lat, p.lon], { title: `Q ${p.quadra ?? '—'} · Lt ${p.lote ?? '—'}` })
-    m.bindPopup(
-      `<div class="pin-balao"><b>Quadra ${esc(p.quadra ?? '—')} · Lote ${esc(p.lote ?? '—')}</b>`
-      + `<div>${esc(p.bairro || '')}</div>`
-      + `<button type="button" onclick="abrirFichaDoPin(${p.id})">Abrir ficha</button></div>`
-    )
-    return m
-  })).addTo(mapaState.obj)
-
-  // Enquadra o conjunto: marcar cem imóveis e deixar o mapa onde estava
-  // esconde o resultado do próprio filtro.
-  const grupo = L.featureGroup(camadaPins.getLayers())
-  mapaState.obj.fitBounds(grupo.getBounds().pad(0.15))
-}
-
-function limparPins() {
-  marcarIndicadorControle('grupo-pins', null)
-  destacarLotes(null)
-  if (camadaPins) {
-    mapaState.obj?.removeLayer(camadaPins)
-    camadaPins = null
-  }
-  const saida = document.getElementById('pin-resultado')
-  if (saida) saida.textContent = 'Escolha ao menos um filtro.'
-}
-
-/** Abre a ficha do imóvel a partir do balão de um pino. @param {number} id */
-function abrirFichaDoPin(id) {
-  irPara('busca')
-  setTimeout(() => abrirImovel(id), 60)
 }
 
 /**

@@ -7,7 +7,10 @@
 .balao4-cab{background:var(--gd);color:#fff;padding:10px 34px 10px 12px;display:flex;align-items:center;gap:7px}
 .balao4-cab b{font-size:14px;font-weight:700}
 .balao4-cab svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.balao4-cab.sinal{background:#9A3412}
+/* Sinalização é AMARELA (aviso), com texto escuro: branco sobre amarelo não se lê. */
+.balao4-cab.sinal{background:#F5B301;color:#3B2A00}
+.balao4-cab.sinal svg{stroke:#3B2A00}
+.popup-lote:has(.balao4-cab.sinal) .leaflet-popup-close-button{color:#3B2A00!important}
 .balao4-cab.lembrete{background:#1D4ED8}
 .balao4-corpo{padding:9px 12px 12px}
 .balao4-tab{width:100%;border-collapse:collapse;margin-bottom:10px}
@@ -29,9 +32,10 @@
 
 /* ── A bandeira no mapa ── */
 .sin-pino{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-  background:#9A3412;box-shadow:0 2px 6px rgba(0,0,0,.35);display:grid;place-items:center;border:2px solid #fff}
+  background:#F5B301;box-shadow:0 2px 6px rgba(0,0,0,.4);display:grid;place-items:center}
 .sin-pino.lembrete{background:#1D4ED8}
-.sin-pino .sin-ico{transform:rotate(45deg);width:13px;height:13px;stroke:#fff;stroke-width:2.2}
+.sin-pino .sin-ico{transform:rotate(45deg);width:14px;height:14px;stroke:#3B2A00;stroke-width:2.2}
+.sin-pino.lembrete .sin-ico{stroke:#fff}
 #map.cam-sem-sinalizacoes .leaflet-sinalizacoes-pane{display:none}
 
 /* ── Ícones de linha ── */
@@ -61,7 +65,7 @@
 /* ── O "Para hoje" do Painel ── */
 .sin-linha{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid var(--blt)}
 .sin-linha:first-child{border-top:0}
-.sin-linha-ico{color:#9A3412}.sin-linha-ico.lembrete{color:#1D4ED8}
+.sin-linha-ico{color:#B45309}.sin-linha-ico.lembrete{color:#1D4ED8}
 .sin-linha-txt{flex:1;min-width:0;cursor:pointer;font-size:12.5px}
 .sin-linha-sub{color:var(--tx3);font-size:11px}
 .sin-linha-ok{border:1px solid var(--bord);border-radius:7px;background:var(--sur);color:var(--gd);width:30px;height:30px;
@@ -71,3 +75,7 @@
 
 /* ── Na vistoria ── */
 .sin-check{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12.5px}
+
+/* Sem a moldura clara do balão em volta do cabeçalho colorido: a cor vai até a
+   borda. Vale para todo balão D4 (lote e sinalização). */
+.popup-lote:has(.balao4) .leaflet-popup-content-wrapper{border:0;overflow:hidden}

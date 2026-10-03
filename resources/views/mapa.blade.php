@@ -413,38 +413,6 @@
     </button>
   </div>
 
-  {{-- PINOS POR FILTRO
-       Marca no mapa os imóveis que atendem a um critério de fiscalização. É a
-       pergunta que o mapa responde melhor que uma lista: onde estão. --}}
-  <div class="ctrl-grupo" id="grupo-pins">
-    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-pins')"
-            title="Marcar imóveis no mapa" aria-expanded="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
-    </button>
-    <div class="ctrl-corpo">
-      <b>Marcar no mapa</b>
-      <select id="pin-bairro" class="ctrl-input" style="margin-bottom:6px">
-        <option value="">Bairro — todos</option>
-      </select>
-      <select id="pin-vistoria" class="ctrl-input" style="margin-bottom:6px">
-        <option value="">Situação da vistoria — qualquer</option>
-        @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
-          <option value="{{ $valor }}">{{ $rotulo }}</option>
-        @endforeach
-      </select>
-      <label class="ctrl-chk"><input type="checkbox" id="pin-embargo"> Com embargo ativo</label>
-      <label class="ctrl-chk"><input type="checkbox" id="pin-pendente"> Com documento pendente</label>
-      <label class="ctrl-chk"><input type="checkbox" id="pin-sem-vistoria"> Projeto aprovado sem vistoria</label>
-      <div class="seg" style="margin:8px 0 0">
-        <button type="button" onclick="limparPins()">Limpar</button>
-        <button type="button" onclick="marcarPins()">Marcar</button>
-      </div>
-      <div class="leg" id="pin-resultado">Escolha ao menos um filtro.</div>
-    </div>
-  </div>
-
   {{-- CORREÇÃO CADASTRAL — só quem tem curadoria cadastral.
        Esconder o controle não é a segurança: quem autoriza de verdade é o
        servidor, em CadastroLoteController. Aqui é para não oferecer a quem
@@ -3405,7 +3373,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 {{-- O registro das camadas vem cedo: os módulos seguintes registram as suas. --}}
 <script src="@assetv('js/camadas-mapa.js')"></script>
 <script src="@assetv('js/pesquisa-mapa.js')"></script>
-{{-- Uma ferramenta do mapa por vez: busca, pinos, cores, curadoria, desenho. --}}
+{{-- Uma ferramenta do mapa por vez: busca, cores, curadoria, desenho. --}}
 <script src="@assetv('js/ferramentas-mapa.js')"></script>
 <script src="@assetv('js/geo.js')"></script>
 {{-- O perímetro urbano vem do servidor porque é configuração de município,
