@@ -805,7 +805,7 @@ function renderGeral() {
   const largo = p => GERAL_LONGOS.includes(p.chave) ? ' style="grid-column:1/-1"' : ''
 
   document.getElementById('lista-geral').innerHTML = parEditando('geral', 'todos')
-    ? parFormLinha('Editando dados do órgão', `<div class="orgao-grade">${campos.map(p => `
+    ? parFormLinha('Editando dados do formulário', `<div class="orgao-grade">${campos.map(p => `
         <label class="ed-campo"${largo(p)}><span>${esc(p.descricao)}</span>${GERAL_LONGOS.includes(p.chave)
           ? parTxt(p.chave, p.valor, 4) : parInp(p.chave, p.valor)}</label>`).join('')}</div>`, 'salvarGeral()')
     : `<div class="par-linha" style="align-items:flex-start">

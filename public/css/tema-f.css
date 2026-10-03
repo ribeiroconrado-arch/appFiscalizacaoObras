@@ -206,6 +206,14 @@
    e do PAINEL, entao todas as abas crescem juntas e a janela continua sem
    mudar de tamanho ao trocar de aba — que era o motivo de ela ser travada. */
 .par-painel.at{display:block;height:min(72vh, 648px);overflow-y:auto;padding-right:4px}
+/* +30% a pedido (648 → 842px). O teto em vh desconta o que fica FORA do
+   painel — título, as duas linhas de abas e as margens da janela —, senão em
+   tela baixa a janela passaria da tela e ganharia uma segunda rolagem. */
+#m-parametros .par-painel.at{height:min(calc(100vh - 215px), 842px)}
+/* Oito abas em DUAS LINHAS de quatro: numa linha só, "Cadastro municipal"
+   era cortado e a última aba ficava espremida. */
+#m-parametros .modal > .sub-abas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}
+#m-parametros .modal > .sub-abas button{min-width:0;overflow:hidden;text-overflow:ellipsis}
 
 /* PAINEL FIXO — Bairros e Irregularidades, as duas listas longas do módulo.
    Aqui NÃO é o painel inteiro que rola: o cadastro rápido e a busca ficam

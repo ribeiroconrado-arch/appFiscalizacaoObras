@@ -114,7 +114,7 @@
      Diz DE QUEM é o sistema (esquerda) e ONDE se está dentro dele (direita).
 
      A entidade vem dos parâmetros e o brasão de um arquivo enviado em
-     Parâmetros → Órgão — não há nada de Primavera do Leste escrito no código.
+     Parâmetros → Formulário — não há nada de Primavera do Leste escrito no código.
      É o que permite instalar o mesmo sistema em outro município trocando dois
      cadastros, em vez de mexer no fonte.
 
@@ -961,7 +961,7 @@
     <button data-sub="irregularidades" onclick="subParametros('irregularidades')">Irregularidades</button>
     <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
     <button data-sub="cadastro" onclick="subParametros('cadastro')">Cadastro municipal</button>
-    <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
+    <button data-sub="geral" onclick="subParametros('geral')">Formulário</button>
   </div>
 
   {{-- PADRÃO DE TODAS AS ABAS (o do AppPOSTURAS): no topo só a busca e o
@@ -1115,7 +1115,7 @@
       </div>
     </div>
 
-    <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Dados do órgão<span class="cont" id="cont-geral">0</span></div>
+    <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Dados do formulário<span class="cont" id="cont-geral">0</span></div>
     <div id="lista-geral"></div>
   </div>
   </div>

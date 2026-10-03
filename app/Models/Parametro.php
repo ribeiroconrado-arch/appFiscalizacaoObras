@@ -39,7 +39,7 @@ class Parametro extends Model
         // Texto fixo do Termo de Recusa. Institucional e igual em qualquer
         // lei (fala do ato de recusar, não do fato) — por isso é parâmetro
         // do órgão e não campo da legislação.
-        'brasao_url' => ['', 'impressao', 'Brasão do município (enviado em Parâmetros → Órgão)'],
+        'brasao_url' => ['', 'impressao', 'Brasão do município (enviado em Parâmetros → Formulário)'],
         'termo_recusa' => [
             'Declaro que o(a) autuado(a), a que se refere o presente documento, aqui devidamente lavrado, '
             . 'recusou-se a assiná-lo, e para dar o devido efeito legal averbei sua recusa, a fim de evitar que '
