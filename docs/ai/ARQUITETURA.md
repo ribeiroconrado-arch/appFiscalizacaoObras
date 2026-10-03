@@ -210,6 +210,26 @@ pede as quadras por bairro, uma vez, quando o bairro entra na tela no nível
 das quadras — um bairro de 1.500 lotes são ~50 quadras, 13 KB (1 KB
 compactado), contra ~1 MB dos lotes.
 
+**Nomes de rua**: o DWG não traz eixo de rua, então o nome sai dos LADOS das
+quadras, no mesmo cálculo das quadras (`calcularQuadrasERuas`). Cada lote vem
+com o logradouro do seu endereço no cadastro (`LoteRepository::lotesDoBairro`,
+a mesma ligação bairro/quadra/lote da ficha) e vota no lado em que encosta:
+vale 1 o lote de um lado só e 0,25 o de esquina, que tem um endereço só para
+dois lados. Vence o mais votado com soma ≥ 1; senão o lado fica SEM NOME. O
+trecho vai 7 m para fora da quadra (o meio da rua), e os dois lados da mesma
+rua viram um trecho só. No mapa, o nome aparece nos níveis das quadras e dos
+lotes, girado com a rua, só onde CABE no trecho (senão abreviado: "R.",
+"AV.").
+
+O que o voto não resolve, o curador informa na ferramenta **Nomes de rua**
+(`ruas-manuais.js`, `RuaManualController`), escolhendo da lista de logradouros
+do cadastro do bairro (fora dela, só o administrador). O nome é informado no
+TRECHO, e não no lote: o endereço do lote vem do cadastro e seria
+sobrescrito na carga seguinte. Rua sem lote de frente é desenhada com dois
+toques. Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
+`ruas_manuais` (nunca apagada pelo "Gerar"); o manual cobre o gerado com que
+coincide na LEITURA (`App\Cadastro\TrechosDeRua`), com auditoria.
+
 **Carga em blocos** (`app.js`, `carregarLotesVisiveis`): a tela vira blocos
 fixos de 0,01° (~1,1 km); só se pede o que falta, quatro em paralelo, do
 centro para fora; bloco carregado não é pedido de novo. Passando de 15 mil

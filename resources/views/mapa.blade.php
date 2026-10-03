@@ -245,6 +245,8 @@
   <div class="imp-barra" id="imp-barra" hidden></div>
   {{-- As pendências da conferência do bairro com o cadastro (conferencia-bairro.js). --}}
   <div class="imp-barra conf-barra" id="conf-barra" hidden></div>
+  {{-- A ferramenta Nomes de rua (ruas-manuais.js). --}}
+  <div class="imp-barra ruas-barra" id="ruas-barra" hidden></div>
 @endif
 
 {{-- ══════ BARRA DE DESENHO ══════
@@ -638,6 +640,18 @@
           </svg>
           <span class="cad-lanca-txt">Contorno dos bairros
             <span class="cad-lanca-obs">Gerar e atualizar a linha de cada bairro.</span>
+          </span>
+        </button>
+
+        {{-- O nome dos trechos de rua que o cadastro não resolveu — ver ruas-manuais.js. --}}
+        <button type="button" class="btn sm cad-lanca" data-fer="ruas" data-min="0"
+                data-exige="nenhuma seleção" onclick="abrirNomesDeRua()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 20L10 4"/><path d="M20 20L14 4"/><path d="M12 6v2"/><path d="M12 11v2"/><path d="M12 16v2"/>
+          </svg>
+          <span class="cad-lanca-txt">Nomes de rua
+            <span class="cad-lanca-obs">Informar o nome dos trechos que o cadastro não resolveu.</span>
           </span>
         </button>
 
@@ -3403,6 +3417,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/prancheta-geo.js')"></script>
 {{-- Depois de prancheta-geo.js: o cálculo do contorno usa a mesma régua (PranchetaGeo.plano). --}}
 <script src="@assetv('js/bairros-contorno.js')"></script>
+<script src="@assetv('js/ruas-manuais.js')"></script>
 <script src="@assetv('js/prancheta-cadastral.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>
 <script src="@assetv('js/painel.js')"></script>

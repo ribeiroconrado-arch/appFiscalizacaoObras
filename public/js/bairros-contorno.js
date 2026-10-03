@@ -100,6 +100,8 @@ const quadraState = {
   porBairro: new Map(),
   /** @type {L.Marker[]} os números das quadras que estão na tela */
   rotulos: [],
+  /** @type {L.Marker[]} os nomes de rua que estão na tela */
+  rotulosRua: [],
 }
 
 /**
@@ -110,7 +112,9 @@ const quadraState = {
 async function carregarQuadrasVisiveis() {
   const mapa = mapaState.obj
   if (!mapa || !contornoState.camada || typeof nivelDoMapa !== 'function') return
-  if (nivelDoMapa(mapa) !== 'quadras') { _desenharRotulosDeQuadra(); return }
+  // Os dados do bairro (quadras e ruas) servem a dois níveis: as quadras só
+  // aparecem no delas, os nomes de rua também no dos lotes.
+  if (!['quadras', 'lotes'].includes(nivelDoMapa(mapa))) { _desenharRotulosDeQuadra(); _desenharRotulosDeRua(); return }
 
   const vista = mapa.getBounds().pad(0.2)
   const pedidos = []
@@ -122,6 +126,8 @@ async function carregarQuadrasVisiveis() {
   })
   await Promise.all(pedidos)
   _desenharRotulosDeQuadra()
+  _desenharRotulosDeRua()
+  if (typeof aoMudarRuas === 'function') aoMudarRuas()   // ferramenta Nomes de rua (ruas-manuais.js)
 }
 
 /** @param {string} nome nome do desenho do bairro */
@@ -134,7 +140,7 @@ async function _carregarQuadrasDoBairro(nome) {
       pane: 'quadras', interactive: false,
       style: { color: '#ffffff', weight: 1.4, opacity: .9, fill: false },
     }).addTo(mapaState.obj)
-    quadraState.porBairro.set(nome, { feicoes: gj.features, camada })
+    quadraState.porBairro.set(nome, { feicoes: gj.features, camada, ruas: gj.ruas || [] })
   } catch (e) {
     // Sem as quadras o mapa continua: o bairro só fica sem elas nesta escala.
     quadraState.porBairro.delete(nome)
@@ -166,6 +172,72 @@ function _desenharRotulosDeQuadra() {
       }).addTo(mapa))
     }
   }
+}
+
+// ── NOMES DE RUA NO MAPA ─────────────────────────────────────
+
+/** Tipo de logradouro abreviado, para quando o nome inteiro não cabe no trecho. */
+const RUA_ABREVIACOES = [[/^AVENIDA\b/i, 'AV.'], [/^RUA\b/i, 'R.'], [/^TRAVESSA\b/i, 'TV.'],
+  [/^ALAMEDA\b/i, 'AL.'], [/^RODOVIA\b/i, 'ROD.'], [/^ESTRADA\b/i, 'EST.'], [/^PRA[CÇ]A\b/i, 'PÇ.']]
+
+/** Largura média de uma letra do rótulo de rua, em pixels (ver .rot-rua). */
+const RUA_PX_POR_LETRA = 6.4
+
+/** @param {string} nome */
+function _abreviarRua(nome) {
+  for (const [re, ab] of RUA_ABREVIACOES) if (re.test(nome)) return nome.replace(re, ab)
+  return nome
+}
+
+/**
+ * Nomes de rua que estão na tela, nos níveis das quadras e dos lotes.
+ *
+ * O nome só aparece se CABE no trecho: o comprimento do trecho na tela, em
+ * pixels, contra a largura estimada do texto. Afastado, só os trechos longos
+ * têm nome; aproximando, os curtos vão ganhando. Não cabendo inteiro, tenta o
+ * tipo abreviado ("R.", "AV."). Assim o mapa nunca vira um borrão de texto, e
+ * não é preciso escolher à mão qual trecho de cada rua leva o nome.
+ *
+ * O texto gira com a rua e nunca fica de cabeça para baixo (-90° a 90°).
+ */
+function _desenharRotulosDeRua() {
+  quadraState.rotulosRua.forEach(m => m.remove())
+  quadraState.rotulosRua = []
+  const mapa = mapaState.obj
+  if (!mapa || typeof nivelDoMapa !== 'function' || !['quadras', 'lotes'].includes(nivelDoMapa(mapa))) return
+
+  const vista = mapa.getBounds().pad(0.05)
+  for (const b of quadraState.porBairro.values()) {
+    if (b === 'carregando') continue
+    for (const t of b.ruas) {
+      if (!t.nome || t.origem === 'oculto' || t.origem === 'sem_nome') continue
+      const meio = L.latLng((t.de[0] + t.ate[0]) / 2, (t.de[1] + t.ate[1]) / 2)
+      if (!vista.contains(meio)) continue
+      const p1 = mapa.latLngToLayerPoint(t.de), p2 = mapa.latLngToLayerPoint(t.ate)
+      const cabe = p1.distanceTo(p2) - 16
+      const texto = [t.nome, _abreviarRua(t.nome)].find(x => x.length * RUA_PX_POR_LETRA <= cabe)
+      if (!texto) continue
+      let ang = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI
+      if (ang > 90) ang -= 180
+      else if (ang <= -90) ang += 180
+      quadraState.rotulosRua.push(L.marker(meio, {
+        interactive: false, keyboard: false,
+        icon: L.divIcon({ className: 'rot-rua', iconSize: [0, 0],
+          html: `<span style="transform:translate(-50%,-50%) rotate(${ang.toFixed(1)}deg)">${esc(texto)}</span>` }),
+      }).addTo(mapa))
+    }
+  }
+}
+
+/**
+ * Troca os trechos de rua de um bairro já guardado (resposta da ferramenta
+ * Nomes de rua) e redesenha, sem novo pedido.
+ * @param {string} nome @param {Object[]} ruas
+ */
+function atualizarRuasDoBairro(nome, ruas) {
+  const b = quadraState.porBairro.get(nome)
+  if (b && b !== 'carregando') b.ruas = ruas
+  _desenharRotulosDeRua()
 }
 
 /** Larga as quadras guardadas de um bairro — depois de gerá-las de novo. @param {string} nome */
@@ -209,15 +281,15 @@ async function gerarContornoDoBairro(bairro, raio = CONTORNO_RAIO_PADRAO, opts =
     if (!dl.lotes.length) throw new Error('O bairro não tem lotes ativos.')
 
     const calc = calcularContorno(dl.lotes, raio, dl.vizinhos || [])
-    // As quadras saem dos MESMOS lotes, no mesmo envio: bairro e quadras
-    // gravados juntos nunca ficam de idades diferentes.
-    const quadras = calcularQuadras(dl.lotes)
+    // As quadras e os nomes de rua saem dos MESMOS lotes, no mesmo envio:
+    // gravados juntos, nunca ficam de idades diferentes.
+    const { quadras, ruas } = calcularQuadrasERuas(dl.lotes)
 
     const rg = await fetch('/api/bairros/contorno', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf },
       body: JSON.stringify({ bairro, geometry: calc.geometry, raio_m: raio, lotes_contados: dl.lotes.length,
-        isolados: calc.isolados, quadras }),
+        isolados: calc.isolados, quadras, ruas }),
     })
     const dg = await rg.json()
     if (!rg.ok) throw new Error(dg.message || 'O servidor recusou o contorno.')
@@ -323,18 +395,53 @@ function calcularContorno(lotes, raio, vizinhos = []) {
  * O contorno de cada quadra do bairro. Função pura: lotes
  * [{id, quadra, geometry(Polygon, lon/lat)}] →
  * [{numero, geometry: MultiPolygon lon/lat, rotulo: [lat, lon], lotes}].
- *
- * União dos lotes da quadra e um fechamento de QUADRA_RAIO, que costura as
- * frestas entre lotes vizinhos. Os furos saem: o que interessa no mapa é a
- * borda da quadra, e um furo é quase sempre uma fresta do desenho. Quadra
- * com o mesmo número em pedaços separados (cortada por rua) fica em pedaços;
- * o número vai no ponto INTERNO do maior — o centro geométrico de uma quadra
- * em L cairia na rua. Lote sem quadra não entra.
+ * (As ruas saem do mesmo cálculo — ver calcularQuadrasERuas.)
  */
 function calcularQuadras(lotes) {
+  return calcularQuadrasERuas(lotes).quadras
+}
+
+// ── NOMES DE RUA ─────────────────────────────────────────────
+
+/** Aresta de lote a até isto (m) da borda da quadra está SOBRE a borda. */
+const RUA_TOLERANCIA_BORDA = 1.5
+/** Arestas paralelas (graus) e alinhadas (m) são o mesmo LADO da quadra. */
+const RUA_ANGULO = 15
+const RUA_ALINHAMENTO = 3
+/** Lado mais curto que isto (m) é chanfro de esquina, não frente de rua. */
+const RUA_LADO_MINIMO = 8
+/** Da borda da quadra ao meio da rua (m): calçada e meia pista. */
+const RUA_AFASTAMENTO = 7
+/** Dois lados (um de cada quadra) até esta distância (m) são a mesma rua. */
+const RUA_FUSAO = 12
+
+/**
+ * Quadras E nomes de rua, num cálculo só (a união dos lotes de cada quadra
+ * serve aos dois). Função pura: lotes
+ * [{id, quadra, logradouro?, geometry(Polygon, lon/lat)}] →
+ * {quadras: [...como calcularQuadras], ruas: [{nome|null, de:[lat,lon], ate:[lat,lon]}]}.
+ *
+ * QUADRA: união dos lotes com o mesmo número e um fechamento de QUADRA_RAIO,
+ * que costura as frestas entre lotes vizinhos. Os furos saem; quadra com o
+ * mesmo número cortada por rua fica em pedaços, e o número vai no ponto
+ * INTERNO do maior (o centro de uma quadra em L cairia na rua).
+ *
+ * RUA: o DWG não traz eixo de rua, então o nome sai dos LADOS das quadras.
+ *   1. As arestas de lote que estão sobre a borda da quadra são as FRENTES;
+ *      as alinhadas formam um lado.
+ *   2. Cada lote vota, no lado em que encosta, no logradouro do seu endereço
+ *      (cadastro). Lote que encosta num lado só vale 1; o de esquina, que
+ *      tem um endereço só para dois lados, vale 0,25 — senão o nome da rua
+ *      dele iria para o lado errado. Vence o mais votado com soma ≥ 1; sem
+ *      isso o lado fica SEM NOME (null), para o curador informar.
+ *   3. O trecho vai RUA_AFASTAMENTO para fora da quadra, que é o meio da rua.
+ *   4. Os dois lados da rua (quadras frente a frente) viram um trecho só, e
+ *      um lado sem nome herda o do lado de lá.
+ */
+function calcularQuadrasERuas(lotes) {
   const J = window.jsts
   const comQuadra = lotes.filter(l => String(l.quadra ?? '').trim() !== '')
-  if (!comQuadra.length) return []
+  if (!comQuadra.length) return { quadras: [], ruas: [] }
   const plano = PranchetaGeo.plano(comQuadra[0].geometry.coordinates[0][0])
   const leitor = new J.io.GeoJSONReader(), escritor = new J.io.GeoJSONWriter()
   const P = J.operation.buffer.BufferParameters
@@ -345,14 +452,16 @@ function calcularQuadras(lotes) {
   for (const l of comQuadra) {
     const numero = String(l.quadra).trim()
     if (!grupos.has(numero)) grupos.set(numero, [])
-    grupos.get(numero).push(leitor.read({ type: 'Polygon',
-      coordinates: l.geometry.coordinates.map(anel => anel.map(c => plano.para(c))) }))
+    grupos.get(numero).push({
+      logradouro: String(l.logradouro ?? '').trim() || null,
+      g: leitor.read({ type: 'Polygon', coordinates: l.geometry.coordinates.map(anel => anel.map(c => plano.para(c))) }),
+    })
   }
 
-  const quadras = []
-  for (const [numero, gs] of grupos) {
-    const f = gs[0].getFactory()
-    let g = J.operation.union.UnaryUnionOp.union(f.createGeometryCollection(gs))
+  const quadras = [], lados = []
+  for (const [numero, ls] of grupos) {
+    const f = ls[0].g.getFactory()
+    let g = J.operation.union.UnaryUnionOp.union(f.createGeometryCollection(ls.map(l => l.g)))
     g = buf(buf(g, QUADRA_RAIO), -QUADRA_RAIO)
     g = J.simplify.TopologyPreservingSimplifier.simplify(g, 0.3)
 
@@ -371,10 +480,113 @@ function calcularQuadras(lotes) {
       numero,
       geometry: _multiPoligonoLonLat(partes.map(p => escritor.write(p).coordinates), plano),
       rotulo: [Number(lat.toFixed(7)), Number(lon.toFixed(7))],
-      lotes: gs.length,
+      lotes: ls.length,
+    })
+    lados.push(..._ladosDaQuadra(partes, ls, J, f))
+  }
+
+  const ruas = _fundirLados(lados).map(t => {
+    const [lon1, lat1] = plano.de(t.a), [lon2, lat2] = plano.de(t.b)
+    return { nome: t.nome, de: [Number(lat1.toFixed(7)), Number(lon1.toFixed(7))], ate: [Number(lat2.toFixed(7)), Number(lon2.toFixed(7))] }
+  })
+  return { quadras, ruas }
+}
+
+/**
+ * Os lados de UMA quadra, já com o nome votado e deslocados para o meio da
+ * rua. Em metros. @returns {{nome:?string, a:number[], b:number[], ux:number, uy:number}[]}
+ */
+function _ladosDaQuadra(partes, lotes, J, f) {
+  const borda = f.createMultiLineString(partes.map(p => f.createLineString(p.getExteriorRing().getCoordinates())))
+  const sobreABorda = (x, y) => borda.distance(f.createPoint(new J.geom.Coordinate(x, y))) <= RUA_TOLERANCIA_BORDA
+  const paralelo = Math.cos(RUA_ANGULO * Math.PI / 180)
+
+  // 1. Frentes: aresta com as duas pontas E o meio sobre a borda. O meio
+  //    importa: num lote que ocupa a quadra de lado a lado, a aresta lateral
+  //    liga uma borda à outra sem estar em nenhuma.
+  const lados = []
+  for (const l of lotes) {
+    const cs = l.g.getExteriorRing().getCoordinates()
+    for (let i = 0; i + 1 < cs.length; i++) {
+      const a = cs[i], b = cs[i + 1]
+      const len = Math.hypot(b.x - a.x, b.y - a.y)
+      if (len < 1 || !sobreABorda(a.x, a.y) || !sobreABorda(b.x, b.y) || !sobreABorda((a.x + b.x) / 2, (a.y + b.y) / 2)) continue
+      const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+      let lado = lados.find(L => Math.abs(L.ux * ux + L.uy * uy) >= paralelo
+        && Math.abs((mx - L.px) * L.uy - (my - L.py) * L.ux) <= RUA_ALINHAMENTO)
+      if (!lado) { lado = { ux, uy, px: a.x, py: a.y, pontos: [], lotes: new Set() }; lados.push(lado) }
+      lado.pontos.push(a, b)
+      lado.lotes.add(l)
+    }
+  }
+
+  // 2. Voto. Quantos lados cada lote toca decide o peso dele.
+  const nLados = new Map()
+  for (const L of lados) for (const l of L.lotes) nLados.set(l, (nLados.get(l) || 0) + 1)
+
+  const saida = []
+  for (const L of lados) {
+    const votos = new Map()
+    for (const l of L.lotes) {
+      if (!l.logradouro) continue
+      votos.set(l.logradouro, (votos.get(l.logradouro) || 0) + (nLados.get(l) === 1 ? 1 : 0.25))
+    }
+    let nome = null, maior = 0
+    for (const [n, v] of votos) if (v > maior) { maior = v; nome = n }
+    if (maior < 1) nome = null
+
+    // 3. Extensão do lado e deslocamento para fora da quadra.
+    let t0 = Infinity, t1 = -Infinity
+    for (const p of L.pontos) { const t = (p.x - L.px) * L.ux + (p.y - L.py) * L.uy; t0 = Math.min(t0, t); t1 = Math.max(t1, t) }
+    if (t1 - t0 < RUA_LADO_MINIMO) continue
+    const mx = L.px + L.ux * (t0 + t1) / 2, my = L.py + L.uy * (t0 + t1) / 2
+    let nx = -L.uy, ny = L.ux
+    if (partes.some(p => p.contains(f.createPoint(new J.geom.Coordinate(mx + nx * 2, my + ny * 2))))) { nx = -nx; ny = -ny }
+    const ox = nx * RUA_AFASTAMENTO, oy = ny * RUA_AFASTAMENTO
+    saida.push({
+      nome, ux: L.ux, uy: L.uy,
+      a: [L.px + L.ux * t0 + ox, L.py + L.uy * t0 + oy],
+      b: [L.px + L.ux * t1 + ox, L.py + L.uy * t1 + oy],
     })
   }
-  return quadras
+  return saida
+}
+
+/**
+ * 4. Os dois lados da mesma rua — um de cada quadra, frente a frente — viram
+ * um trecho só, sobre a reta média. Nomes diferentes não se fundem; um lado
+ * sem nome herda o do lado de lá (é a mesma rua).
+ */
+function _fundirLados(lados) {
+  const paralelo = Math.cos(RUA_ANGULO * Math.PI / 180)
+  const fundidos = []
+  for (const t of lados) {
+    const tmx = (t.a[0] + t.b[0]) / 2, tmy = (t.a[1] + t.b[1]) / 2
+    const par = fundidos.find(o => {
+      if (o.nome && t.nome && o.nome !== t.nome) return false
+      if (Math.abs(o.ux * t.ux + o.uy * t.uy) < paralelo) return false
+      if (Math.abs((tmx - o.a[0]) * o.uy - (tmy - o.a[1]) * o.ux) > RUA_FUSAO) return false
+      // Sobreposição ao longo da rua: os dois lados de UM quarteirão, não o seguinte.
+      const len = Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1])
+      const p1 = (t.a[0] - o.a[0]) * o.ux + (t.a[1] - o.a[1]) * o.uy
+      const p2 = (t.b[0] - o.a[0]) * o.ux + (t.b[1] - o.a[1]) * o.uy
+      const sentido = Math.sign((o.b[0] - o.a[0]) * o.ux + (o.b[1] - o.a[1]) * o.uy) || 1
+      const [i0, i1] = sentido > 0 ? [0, len] : [-len, 0]
+      return Math.min(i1, Math.max(p1, p2)) - Math.max(i0, Math.min(p1, p2)) > 0.3 * Math.min(len, Math.hypot(t.b[0] - t.a[0], t.b[1] - t.a[1]))
+    })
+    if (!par) { fundidos.push({ ...t }); continue }
+
+    // Reta média: o lado de cá desloca metade da distância até o de lá.
+    const d = (tmx - par.a[0]) * par.uy - (tmy - par.a[1]) * par.ux   // distância com sinal, normal (uy, -ux)
+    const nx = par.uy * d / 2, ny = -par.ux * d / 2
+    const ts = [par.a, par.b, t.a, t.b].map(p => (p[0] - par.a[0]) * par.ux + (p[1] - par.a[1]) * par.uy)
+    const t0 = Math.min(...ts), t1 = Math.max(...ts)
+    par.a = [par.a[0] + par.ux * t0 + nx, par.a[1] + par.uy * t0 + ny]
+    par.b = [par.a[0] - par.ux * t0 + par.ux * t1, par.a[1] - par.uy * t0 + par.uy * t1]
+    par.nome = par.nome ?? t.nome
+  }
+  return fundidos
 }
 
 /**

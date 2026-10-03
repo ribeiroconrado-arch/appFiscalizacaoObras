@@ -671,6 +671,9 @@ function adicionarAoMapa(geojson, aoClicar) {
       // Em modo de correção cadastral o clique MARCA o lote em vez de abrir o
       // balão — ver cadastro.js. Fora dele, nada muda.
       camada.on('click', () => {
+        // Desenhando um trecho de rua (ruas-manuais.js), o toque é ponto do
+        // trecho — quem o trata é o clique no mapa, não o lote embaixo.
+        if (typeof ruaState !== 'undefined' && ruaState.desenhando) return
         if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
           alternarSelecao(feicao, camada)
           return

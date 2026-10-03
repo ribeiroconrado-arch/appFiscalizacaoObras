@@ -9,7 +9,7 @@ ctx.window = ctx; ctx.self = ctx
 vm.createContext(ctx)
 vm.runInContext(fs.readFileSync('public/vendor/jsts-2.12.1/jsts.min.js', 'utf8'), ctx)
 vm.runInContext(fs.readFileSync('public/js/prancheta-geo.js', 'utf8') + '\n;globalThis.PranchetaGeo = PranchetaGeo', ctx)
-vm.runInContext(fs.readFileSync('public/js/bairros-contorno.js', 'utf8') + '\n;globalThis.calcularQuadras = calcularQuadras', ctx)
+vm.runInContext(fs.readFileSync('public/js/bairros-contorno.js', 'utf8') + '\n;globalThis.calcularQuadras = calcularQuadras; globalThis.calcularQuadrasERuas = calcularQuadrasERuas', ctx)
 
 const ORIGEM = [-54.3, -15.55]
 const plano = ctx.PranchetaGeo.plano(ORIGEM)
@@ -75,4 +75,70 @@ test('anel externo anti-horário (RFC 7946), como o MySQL espera em coordenada g
 
 test('sem nenhum lote com quadra, nenhuma quadra', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(ctx.calcularQuadras([lote(null, 0, 0)]))), [])
+})
+
+// ── NOMES DE RUA ─────────────────────────────────────────────
+
+/**
+ * Quadra de 2 filas de `n` lotes 12 x 25 m: a fila de baixo tem endereço na
+ * rua `sul`, a de cima na `norte` — inclusive os lotes de esquina, que é o
+ * caso real (o endereço da esquina é numa rua só).
+ */
+const quadraComRuas = (numero, x, y, n, sul, norte) => {
+  const ls = quadra(numero, x, y, n)
+  ls.forEach((l, i) => { l.logradouro = i < n ? sul : norte })
+  return ls
+}
+/** Trecho → metros: {nome, y médio, ângulo em graus (0 = leste-oeste), comprimento}. */
+const emMetros = t => {
+  const [x1, y1] = plano.para([t.de[1], t.de[0]]), [x2, y2] = plano.para([t.ate[1], t.ate[0]])
+  let ang = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI
+  if (ang > 90) ang -= 180; else if (ang <= -90) ang += 180
+  return { nome: t.nome, x: (x1 + x2) / 2, y: (y1 + y2) / 2, ang, len: Math.hypot(x2 - x1, y2 - y1) }
+}
+const ruas = lotes => [...ctx.calcularQuadrasERuas(lotes).ruas].map(emMetros)
+
+test('ruas: cada frente leva o nome da rua dos seus lotes, no meio da rua', () => {
+  const rs = ruas(quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA NORTE'))
+  const sul = rs.find(r => r.nome === 'RUA SUL'), norte = rs.find(r => r.nome === 'RUA NORTE')
+  assert.ok(sul && norte, JSON.stringify(rs))
+  assert.ok(Math.abs(sul.y + 7) < 0.5, `RUA SUL 7 m abaixo da quadra (y=${sul.y.toFixed(2)})`)
+  assert.ok(Math.abs(norte.y - 57) < 0.5, `RUA NORTE 7 m acima (y=${norte.y.toFixed(2)})`)
+  assert.ok(Math.abs(sul.ang) < 1 && Math.abs(sul.len - 60) < 1, 'paralelo e do tamanho da frente')
+})
+
+test('ruas: o lado só com lotes de esquina fica SEM NOME, e não com o nome da esquina', () => {
+  const rs = ruas(quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA NORTE'))
+  const lados = rs.filter(r => Math.abs(Math.abs(r.ang) - 90) < 1)
+  assert.equal(lados.length, 2, 'os dois lados de 50 m aparecem')
+  assert.ok(lados.every(r => r.nome === null), JSON.stringify(lados))
+})
+
+test('ruas: as duas quadras de frente para a mesma rua dão UM nome só, no meio dela', () => {
+  // Rua de 14 m entre y=50 e y=64; o meio é y=57.
+  const rs = ruas([...quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA DO MEIO'), ...quadraComRuas('02', 0, 64, 5, 'RUA DO MEIO', 'RUA NORTE')])
+  const meio = rs.filter(r => r.nome === 'RUA DO MEIO')
+  assert.equal(meio.length, 1, JSON.stringify(meio))
+  assert.ok(Math.abs(meio[0].y - 57) < 0.5, `no meio da rua (y=${meio[0].y.toFixed(2)})`)
+})
+
+test('ruas: o lado sem endereço herda o nome do lado de lá', () => {
+  const rs = ruas([...quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA DO MEIO'), ...quadraComRuas('02', 0, 64, 5, null, 'RUA NORTE')])
+  const noMeio = rs.filter(r => Math.abs(r.y - 57) < 2 && Math.abs(r.ang) < 1)
+  assert.deepEqual(noMeio.map(r => r.nome), ['RUA DO MEIO'])
+})
+
+test('ruas: nomes diferentes frente a frente não se fundem', () => {
+  const rs = ruas([...quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA A'), ...quadraComRuas('02', 0, 64, 5, 'RUA B', 'RUA NORTE')])
+  assert.ok(rs.some(r => r.nome === 'RUA A') && rs.some(r => r.nome === 'RUA B'))
+})
+
+test('ruas: sem cadastro (nenhum logradouro), os lados saem todos sem nome', () => {
+  const rs = ruas(quadra('01', 0, 0, 5))
+  assert.ok(rs.length >= 4 && rs.every(r => r.nome === null))
+})
+
+test('ruas: as quadras continuam iguais com o cálculo das ruas junto', () => {
+  const ls = quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA NORTE')
+  assert.equal(JSON.stringify(ctx.calcularQuadras(ls)), JSON.stringify(ctx.calcularQuadrasERuas(ls).quadras))
 })
