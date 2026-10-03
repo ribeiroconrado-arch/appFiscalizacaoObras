@@ -113,6 +113,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
         // Contorno de cada bairro: o mapa de todos lê; o curador gera e grava.
         Route::get('/mapa/bairros', [BairroContornoController::class, 'index'])->middleware('comprimir');
+        Route::get('/mapa/quadras', [BairroContornoController::class, 'quadras'])->middleware('comprimir');
         Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);

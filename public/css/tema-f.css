@@ -651,7 +651,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .leaflet-tooltip.rot.rot-cidade{font-family:'Manrope',sans-serif;font-weight:800;font-size:17px;
   color:var(--chumbo);text-transform:uppercase;letter-spacing:.12em;display:none;
   text-shadow:0 0 5px #fff,0 0 5px #fff,0 0 10px #fff}
-body.z-cidade .leaflet-tooltip.rot.rot-cidade{display:block}
+/* NÍVEL DE DETALHE (aplicarNivelDoMapa, mapa.js): no do município só o nome
+   da cidade; os bairros aparecem a partir do nível seguinte. */
+body.nivel-municipio .leaflet-tooltip.rot.rot-cidade{display:block}
+body.nivel-municipio .leaflet-tooltip.rot.rot-bairro{display:none}
+/* Número da quadra vindo do CONTORNO gravado — só no nível das quadras; no dos
+   lotes, quem rotula a quadra são os próprios lotes (desenharRotulosDeGrupo). */
+.leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:none}
+body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:block}
 
 @media(min-width:1024px){
   /* A pílula continua no rodapé também aqui, então as listas seguem parando

@@ -1,6 +1,7 @@
 <?php
 // Diagnóstico local do contorno dos bairros, no molde de importacao-backend.php:
-// tudo numa transação DESFEITA no fim. Exige a migração 2026_10_01_000100.
+// tudo numa transação DESFEITA no fim. Exige as migrações 2026_10_01_000100
+// e 2026_10_07_000100 (quadras).
 //
 //   php tests/contorno-backend.php
 
@@ -57,6 +58,27 @@ try {
     confere($f !== null && $f['geometry']['type'] === 'MultiPolygon', 'o mapa recebe o contorno do bairro');
     confere($f['properties']['desatualizado'] === false, 'recém-gerado, está em dia');
 
+    echo "Quadras\n";
+    $centro = [($e['sul'] + $e['norte']) / 2, ($e['oeste'] + $e['leste']) / 2];
+    $quadras = [
+        ['numero' => '01', 'geometry' => $quadrado($e['oeste'], $e['sul'], ($e['oeste'] + $e['leste']) / 2, $e['norte']), 'rotulo' => $centro, 'lotes' => 3],
+        ['numero' => '02', 'geometry' => $quadrado(($e['oeste'] + $e['leste']) / 2, $e['sul'], $e['leste'], $e['norte']), 'rotulo' => $centro, 'lotes' => 2],
+        ['numero' => '03', 'geometry' => $gravata, 'rotulo' => $centro, 'lotes' => 1],
+    ];
+    $r = $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total, 'quadras' => $quadras]);
+    $d = json_decode($r->getContent(), true);
+    confere($r->getStatusCode() === 200 && $d['quadras'] === 2, 'quadras gravadas junto com o bairro (' . $d['message'] . ')');
+    confere($d['quadras_invalidas'] === ['03'], 'quadra de desenho inválido fica de fora sem barrar o bairro');
+    $f = collect(json_decode($chama('index', $admin)->getContent(), true)['features'])->firstWhere('properties.nome', $bairro);
+    confere($f['properties']['quadras'] === 2, 'o mapa sabe quantas quadras o bairro tem');
+    $q = json_decode($chama('quadras', $admin, ['bairro' => $bairro])->getContent(), true);
+    confere(count($q['features']) === 2 && $q['features'][0]['properties']['numero'] === '01'
+        && $q['features'][0]['geometry']['type'] === 'MultiPolygon', 'o mapa recebe contorno e número das quadras');
+    $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total]);
+    confere(DB::table('quadras')->where('bairro', $bairro)->count() === 2, 'envio sem quadras (página antiga em cache) não apaga as gravadas');
+    $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total, 'quadras' => [$quadras[1]]]);
+    confere(DB::table('quadras')->where('bairro', $bairro)->pluck('numero')->all() === ['02'], 'gerar de novo substitui as quadras do bairro');
+
     DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')->limit(1)->update(['updated_at' => now()->addMinute()]);
     $f = collect(json_decode($chama('index', $admin)->getContent(), true)['features'])->firstWhere('properties.nome', $bairro);
     confere($f['properties']['desatualizado'] === true, 'lote alterado depois do contorno o deixa desatualizado');
@@ -67,6 +89,8 @@ try {
     DB::table('lotes')->where('bairro', $bairro)->update(['em_revisao' => true]);
     $nomes = collect(json_decode($chama('index', $externo)->getContent(), true)['features'])->pluck('properties.nome');
     confere(! $nomes->contains($bairro), 'externo não vê o contorno de bairro só em revisão');
+    confere(json_decode($chama('quadras', $externo, ['bairro' => $bairro])->getContent(), true)['features'] === [],
+        'externo também não vê as quadras dele');
     $r = $chama('gravar', $externo, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total]);
     confere($r->getStatusCode() === 403, 'quem não é curador nem admin não grava contorno');
 

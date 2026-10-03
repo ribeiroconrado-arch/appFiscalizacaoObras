@@ -50,18 +50,26 @@ function estiloDestaque() {
 const ZOOM_MAXIMO = 22
 
 /**
- * Fora da escala dos lotes (lotesNaEscala, em app.js: zoom mínimo e área
- * visível de até ~3,5 km²), os que já estão carregados SAEM da pintura: o
- * canvas dos lotes vive no `overlayPane`, e escondê-lo poupa o navegador de
- * redesenhar milhares de polígonos a cada arrasto, numa escala em que eles
- * seriam só uma mancha — ali quem fala é o contorno do bairro. Continuam em
- * memória: ao aproximar, voltam sem novo pedido ao servidor.
+ * Aplica o nível de detalhe da área visível (nivelDoMapa, em app.js):
+ *  - classe `nivel-*` no <body>, que decide os rótulos por CSS (nome da
+ *    cidade, nomes dos bairros, números das quadras);
+ *  - cada camada só é pintada no seu nível. Os lotes já carregados SAEM da
+ *    pintura fora do nível deles: o canvas vive no `overlayPane`, e
+ *    escondê-lo poupa o navegador de redesenhar milhares de polígonos a cada
+ *    arrasto numa escala em que seriam só uma mancha. Continuam em memória:
+ *    ao aproximar, voltam sem novo pedido ao servidor.
  */
-function ocultarLotesAfastado() {
+function aplicarNivelDoMapa() {
   const m = mapaState.obj
-  const pane = m?.getPane('overlayPane')
-  if (!pane || typeof lotesNaEscala !== 'function') return
-  pane.style.display = lotesNaEscala(m) ? '' : 'none'
+  if (!m || typeof nivelDoMapa !== 'function') return
+  const nivel = nivelDoMapa(m)
+  for (const n of ['municipio', 'bairros', 'quadras', 'lotes']) {
+    document.body.classList.toggle('nivel-' + n, n === nivel)
+  }
+  const mostrar = (pane, sim) => { const p = m.getPane(pane); if (p) p.style.display = sim ? '' : 'none' }
+  mostrar('overlayPane', nivel === 'lotes')
+  mostrar('contornos', nivel !== 'municipio')
+  mostrar('quadras', nivel === 'quadras')
 }
 
 /** Cria o mapa. Idempotente. */
@@ -166,9 +174,11 @@ function iniciarMapa() {
   // grupos novos para a vista (agendado, para não competir com o arrasto).
   mapaState.obj.on('moveend', () => { if (typeof agendarRotulosDeGrupo === 'function') agendarRotulosDeGrupo() })
   mapaState.obj.on('baselayerchange', () => ajustarNitidezSatelite())
-  mapaState.obj.on('zoomend', ocultarLotesAfastado)
+  mapaState.obj.on('zoomend', aplicarNivelDoMapa)
   // A área visível também muda ao girar o tablet ou recolher o menu lateral.
-  mapaState.obj.on('resize', ocultarLotesAfastado)
+  mapaState.obj.on('resize', aplicarNivelDoMapa)
+  // Contorno e número das quadras: pedidos por bairro, ao chegar à escala.
+  mapaState.obj.on('moveend', () => { if (typeof carregarQuadrasVisiveis === 'function') carregarQuadrasVisiveis() })
 
   // Duplo toque FORA de um lote larga a seleção — o mesmo gesto do Esc, para
   // quem tem o dedo no mapa e não no teclado. Cada lote consome o próprio
@@ -734,13 +744,19 @@ async function recortarMunicipio() {
       fill: false, interactive: false,
     }).addTo(mapaState.obj)
 
-    // NOME DA CIDADE, no centro da malha — só no zoom mais afastado (CSS
-    // `z-cidade`, ver rotulosPorZoom). É o primeiro degrau do nível de
-    // detalhe: cidade → bairros → quadras → lotes → medidas.
-    L.marker(contorno.getBounds().getCenter(), {
+    // NOME DA CIDADE, no centro da malha — só no nível do município (CSS
+    // `nivel-municipio`, ver aplicarNivelDoMapa). É o primeiro degrau do nível
+    // de detalhe: município → bairros → quadras → lotes → medidas.
+    // Sobre a CIDADE (o retângulo do perímetro urbano, config/gis.php), e não
+    // no centro do município: este fica no meio da lavoura, longe de tudo o
+    // que o fiscal procura.
+    const centro = typeof PERIMETRO_URBANO !== 'undefined' && PERIMETRO_URBANO?.length === 4
+      ? [(PERIMETRO_URBANO[1] + PERIMETRO_URBANO[3]) / 2, (PERIMETRO_URBANO[0] + PERIMETRO_URBANO[2]) / 2]
+      : contorno.getBounds().getCenter()
+    L.marker(centro, {
       interactive: false, keyboard: false,
       icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }),
-    }).bindTooltip(f.properties?.nome || 'Primavera do Leste', {
+    }).bindTooltip((f.properties?.nome || 'Primavera do Leste') + ' - MT', {
       permanent: true, direction: 'center', className: 'rot rot-cidade',
     }).addTo(mapaState.obj)
 

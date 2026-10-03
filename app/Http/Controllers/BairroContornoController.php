@@ -6,10 +6,13 @@ use App\Cadastro\BairrosDoDesenho;
 use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * O contorno de cada bairro — a linha tracejada que o mapa mostra sempre, e que
- * vira o desenho principal quando o mapa está afastado demais para os lotes.
+ * vira o desenho principal quando o mapa está afastado demais para os lotes —
+ * e, gerado junto, o contorno de cada QUADRA do bairro, que o mapa mostra na
+ * escala do bairro no lugar das linhas de lote.
  *
  * O CÁLCULO acontece no navegador do curador (public/js/bairros-contorno.js):
  * união dos lotes e fechamento de R metros com JSTS. Aqui fica o que o
@@ -20,6 +23,9 @@ class BairroContornoController extends Controller
 {
     /** Fração mínima dos lotes do bairro que o contorno precisa tocar. */
     private const COBERTURA_MINIMA = 0.99;
+
+    /** Teto de quadras num envio — o maior loteamento da base tem pouco mais de 100. */
+    private const MAX_QUADRAS = 2000;
 
     public function __construct(private LoteRepository $lotes) {}
 
@@ -39,6 +45,7 @@ class BairroContornoController extends Controller
     {
         $nomes = new BairrosDoDesenho();
         $situacao = $this->lotes->situacaoDosBairros();
+        $quadras = $this->lotes->quadrasPorBairro();
         $curador = $this->podeGerar($r);
 
         $feicoes = [];
@@ -66,6 +73,8 @@ class BairroContornoController extends Controller
                     'contorno_em'   => $b->contorno_em ? date('d/m/Y H:i', strtotime($b->contorno_em)) : null,
                     'raio_m'        => (float) $b->raio_m,
                     'isolados'      => json_decode($b->isolados ?? '[]', true) ?: [],
+                    // O mapa só pede /api/mapa/quadras de bairro que as tem.
+                    'quadras'       => $quadras[$b->nome] ?? 0,
                 ],
             ];
         }
@@ -90,7 +99,7 @@ class BairroContornoController extends Controller
 
         return response()->json([
             'bairro' => $d['bairro'],
-            'lotes'  => array_map(fn ($l) => ['id' => (int) $l->id, 'geometry' => json_decode($l->geojson)],
+            'lotes'  => array_map(fn ($l) => ['id' => (int) $l->id, 'quadra' => $l->quadra, 'geometry' => json_decode($l->geojson)],
                 $this->lotes->lotesDoBairro($d['bairro'])),
             // O que a fusão não pode engolir: lotes de outros bairros em volta.
             'vizinhos' => array_map(fn ($l) => json_decode($l->geojson), $this->lotes->lotesVizinhos($d['bairro'])),
@@ -112,6 +121,16 @@ class BairroContornoController extends Controller
             'lotes_contados'       => ['required', 'integer', 'min:1'],
             'isolados'             => ['nullable', 'array'],
             'isolados.*'           => ['integer'],
+            // As quadras vêm no mesmo envio: são do mesmo cálculo, sobre os
+            // mesmos lotes, e gravadas juntas nunca ficam de idades diferentes.
+            'quadras'                        => ['nullable', 'array', 'max:' . self::MAX_QUADRAS],
+            'quadras.*.numero'               => ['required', 'string', 'max:20'],
+            'quadras.*.geometry'             => ['required', 'array'],
+            'quadras.*.geometry.type'        => ['required', 'in:MultiPolygon'],
+            'quadras.*.geometry.coordinates' => ['required', 'array'],
+            'quadras.*.rotulo'               => ['required', 'array', 'size:2'],
+            'quadras.*.rotulo.*'             => ['numeric', 'between:-180,180'],
+            'quadras.*.lotes'                => ['required', 'integer', 'min:1'],
         ]);
 
         $geojson = json_encode($d['geometry']);
@@ -131,14 +150,65 @@ class BairroContornoController extends Controller
         }
 
         $codigo = (new BairrosDoDesenho())->codigos()[BairrosDoDesenho::chave($d['bairro'])] ?? null;
-        $this->lotes->gravarContorno($d['bairro'], $codigo, $geojson, (float) $d['raio_m'],
-            (int) $d['lotes_contados'], $d['isolados'] ?? [], $r->user()->id);
+        $q = DB::transaction(function () use ($d, $codigo, $geojson, $r) {
+            $this->lotes->gravarContorno($d['bairro'], $codigo, $geojson, (float) $d['raio_m'],
+                (int) $d['lotes_contados'], $d['isolados'] ?? [], $r->user()->id);
+
+            // Sem `quadras` no envio (cliente antigo em cache), as gravadas ficam.
+            return array_key_exists('quadras', $d)
+                ? $this->lotes->gravarQuadras($d['bairro'], array_map(fn ($q) => [
+                    'numero'  => $q['numero'],
+                    'geojson' => json_encode($q['geometry']),
+                    'lat'     => (float) $q['rotulo'][0],
+                    'lon'     => (float) $q['rotulo'][1],
+                    'lotes'   => (int) $q['lotes'],
+                ], $d['quadras'] ?? []))
+                : null;
+        });
+
+        $msg = sprintf('Contorno de %s gravado: %s ha', $d['bairro'], number_format($c['area_m2'] / 10000, 2, ',', '.'));
+        if ($q) {
+            $msg .= $q['gravadas'] === 1 ? ', com 1 quadra' : sprintf(', com %d quadras', $q['gravadas']);
+            if ($q['invalidas']) {
+                $msg .= sprintf('. %d quadra(s) com desenho inválido ficaram sem contorno: %s',
+                    count($q['invalidas']), implode(', ', $q['invalidas']));
+            }
+        }
 
         return response()->json([
-            'message' => sprintf('Contorno de %s gravado: %s ha.', $d['bairro'],
-                number_format($c['area_m2'] / 10000, 2, ',', '.')),
+            'message' => $msg . '.',
             'area_ha' => round($c['area_m2'] / 10000, 2),
             'fora'    => $c['fora'],
+            'quadras' => $q['gravadas'] ?? null,
+            'quadras_invalidas' => $q['invalidas'] ?? [],
+        ]);
+    }
+
+    /**
+     * GET /api/mapa/quadras?bairro= — contorno e número das quadras de um
+     * bairro, para o mapa na escala do bairro. Pedido por bairro (e não por
+     * área) porque é assim que o mapa os guarda: um bairro já lido não volta
+     * a ser pedido.
+     */
+    public function quadras(Request $r): JsonResponse
+    {
+        $d = $r->validate(['bairro' => ['required', 'string', 'max:120']]);
+
+        // Bairro só com lotes em revisão ainda não existe para quem não revisa.
+        if (! $this->podeGerar($r)) {
+            $s = $this->lotes->situacaoDosBairros()[$d['bairro']] ?? null;
+            if (! $s || (int) $s->publicados === 0) {
+                return response()->json(['type' => 'FeatureCollection', 'features' => []]);
+            }
+        }
+
+        return response()->json([
+            'type'     => 'FeatureCollection',
+            'features' => array_map(fn ($q) => [
+                'type'       => 'Feature',
+                'geometry'   => json_decode($q->geojson),
+                'properties' => ['numero' => $q->numero, 'rotulo' => [(float) $q->lat, (float) $q->lon]],
+            ], $this->lotes->quadrasDoBairro($d['bairro'])),
         ]);
     }
 }

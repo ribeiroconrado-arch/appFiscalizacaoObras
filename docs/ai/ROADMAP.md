@@ -80,13 +80,17 @@ custo/benefício da lista.
 
 ### ✅ Unificar a colação de `lotes.bairro` e `cadastro_bairros.nome_gis` — feito em 10/2026
 
-### 🟡 [dado] Contorno de todos os bairros
+### 🟡 [dado] Contorno de todos os bairros (e das quadras)
 
-Com o mapa em camadas por escala (ARQUITETURA.md), de longe só aparece o
-CONTORNO do bairro — os lotes vêm ao aproximar. Bairro sem contorno gerado
-fica sem nada nessa escala. O contorno é gerado pelo curador ("Contorno dos
-bairros"); a importação publicada já gera o dela. Falta passar pelos bairros
-antigos.
+Com o mapa afastado, o sistema mostra só o CONTORNO do bairro; um pouco mais
+perto, o contorno e o número das QUADRAS. Os lotes vêm só ao aproximar mais.
+Bairro sem contorno gerado fica sem nada nessas escalas, e contorno gerado
+antes de 10/2026 não tem as quadras.
+
+Como resolver: Correção cadastral → "Contorno dos bairros" → **Gerar todos**.
+Ele calcula de novo o contorno e as quadras de cada bairro, um por vez. Bairro
+que falhar aparece no aviso; o "Gerar" da linha mostra o motivo (em geral lote
+isolado, com coordenada errada).
 
 ### 🟢 Aviso quando a amarração não casa
 
