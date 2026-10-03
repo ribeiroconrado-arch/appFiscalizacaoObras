@@ -192,11 +192,35 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   // a consultar, e a função já trata o id ausente limpando a caixa.
   if (documento) { return }
 
+  preencherAutuadoDoCadastro(fdState.lote?.id ?? null)
+
   if (vistoria) {
     await sugerirDaVistoria(vistoria)
   } else {
     await sugerirDaUltimaVistoria(fdState.lote?.id ?? null)
   }
+}
+
+/**
+ * Sugere como autuado o (primeiro) proprietário do cadastro municipal.
+ *
+ * Só sugere: o campo continua editável, porque quem responde pela obra nem
+ * sempre é o dono que consta no cadastro. Não sobrescreve o que já foi
+ * digitado, e o CPF só vem se o servidor o mandou para este usuário (agente
+ * ou administrador — ver App\Cadastro\ProprietariosVisiveis).
+ *
+ * @param {number|null} loteId
+ */
+async function preencherAutuadoDoCadastro(loteId) {
+  if (!loteId || typeof obterBci !== 'function') { return }
+  try {
+    const dono = (await obterBci(loteId)).proprietarios?.[0]
+    if (!dono || fdState.lote?.id !== loteId) { return }
+    const nome = document.getElementById('nd-autuado')
+    const doc = document.getElementById('nd-autuado-doc')
+    if (!nome.value.trim()) { nome.value = dono.nome || '' }
+    if (!doc.value.trim() && dono.documento) { doc.value = dono.documento }
+  } catch { /* sem cadastro: o fiscal digita, como antes */ }
 }
 
 /** Campos em branco, com os padrões de um documento novo. */
@@ -238,9 +262,9 @@ function preencherFormDoc(d) {
     carimbo.hidden = !d.cadastro
     if (d.cadastro) {
       carimbo.textContent = d.cadastro.consultado_em
-        ? 'Cadastro do imóvel consultado em ' + d.cadastro.consultado_em
-          + (d.cadastro.fonte === 'exportacao' ? ', por exportação do cadastro imobiliário.' : '.')
-        : 'Lavrado sem consulta ao cadastro imobiliário.'
+        ? 'Dados do imóvel conforme o cadastro municipal integrado em ' + d.cadastro.consultado_em
+          + (d.cadastro.fonte === 'exportacao' ? ' (exportação da prefeitura).' : '.')
+        : 'Lavrado sem dado do cadastro municipal.'
     }
   }
   document.getElementById('nd-endereco').value = d.imovel.endereco || ''

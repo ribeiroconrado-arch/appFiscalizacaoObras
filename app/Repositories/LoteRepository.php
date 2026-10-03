@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Support\GeometriaPlana;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -193,7 +194,10 @@ class LoteRepository
             $params[] = $rascunhosDe;
         }
 
-        $sql = 'SELECT ' . self::CAMPOS . ', ST_AsGeoJSON(geom) AS geojson
+        // 8 casas decimais: ~1 mm no terreno, bem abaixo do centímetro em que
+        // as medidas dos lados são mostradas — e o ST_AsGeoJSON sem limite
+        // escreve até 15 casas por coordenada, que só pesam na resposta.
+        $sql = 'SELECT ' . self::CAMPOS . ', ST_AsGeoJSON(geom, 8) AS geojson
                   FROM lotes
                  WHERE ' . ($incluirRevisao ? self::SO_ATIVOS : self::SO_PUBLICADOS) . '
                    AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))' . $alheios . '
@@ -205,7 +209,11 @@ class LoteRepository
     /** Total de lotes carregados. Usado pelo cabeçalho do mapa e pela conferência. */
     public function total(): int
     {
-        return (int) DB::scalar('SELECT COUNT(*) FROM lotes WHERE ' . self::SO_PUBLICADOS);
+        // Em cache: a rota do mapa (/) mostra o total a cada abertura, e
+        // contar 50 mil linhas a cada página aberta é custo sem leitura — o
+        // número é informativo, alguns minutos de atraso não mudam nada.
+        return (int) Cache::remember('mapa:total-lotes', 600,
+            fn () => DB::scalar('SELECT COUNT(*) FROM lotes WHERE ' . self::SO_PUBLICADOS));
     }
 
     /**
@@ -223,6 +231,19 @@ class LoteRepository
      * @return array{sul:float,oeste:float,norte:float,leste:float}|null
      */
     public function extensao(?string $bairro = null): ?array
+    {
+        // A extensão da base inteira percorre todos os lotes e só muda quando
+        // entra um bairro novo: guardada por 10 minutos. A de um bairro (usada
+        // pelo contorno) é pequena e vem sempre fresca.
+        if ($bairro === null) {
+            return Cache::remember('mapa:extensao', 600, fn () => $this->calcularExtensao(null));
+        }
+
+        return $this->calcularExtensao($bairro);
+    }
+
+    /** @return array{sul:float,oeste:float,norte:float,leste:float}|null */
+    private function calcularExtensao(?string $bairro): ?array
     {
         $sql = 'SELECT MIN(ST_X(p)) AS sul, MAX(ST_X(p)) AS norte,
                        MIN(ST_Y(p)) AS oeste, MAX(ST_Y(p)) AS leste

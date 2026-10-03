@@ -7,7 +7,7 @@ const profile = fs.mkdtempSync(path.join(output, 'painel-browser-'))
 const blade = fs.readFileSync(path.join(root, 'resources/views/mapa.blade.php'), 'utf8')
 const sections=['busca','documentos','protocolos'].map(id=>blade.match(new RegExp('<section class="tela" id="t-'+id+'">[\\s\\S]*?</section>'))[0]).join('').replace(/\{\{--[\s\S]*?--\}\}/g,'').replace(/@else[\s\S]*?@endif/g,'').replace(/@(?:if|elseif)[^\n]*|@else|@endif/g,'');
 const mesa=blade.match(/<aside class="cad-mesa"[\s\S]*?<\/aside>/)[0];
-const html='<!doctype html><html data-tema="institucional"><meta charset="utf-8">'+['app','tema-f','tema-institucional','painel-responsivo'].map(f=>'<link rel="stylesheet" href="/public/css/'+f+'.css">').join('')+sections+mesa;
+const html='<!doctype html><html data-tema="institucional"><meta charset="utf-8">'+['temas','app','tema-f','painel-responsivo'].map(f=>'<link rel="stylesheet" href="/public/css/'+f+'.css">').join('')+sections+mesa;
 const server = http.createServer((req,res)=>{
   if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html)}
   if(!/^\/public\/(css|js)\/[a-z-]+\.(css|js)$/.test(req.url)){res.writeHead(404);return res.end()}

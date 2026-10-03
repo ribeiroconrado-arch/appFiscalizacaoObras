@@ -47,12 +47,15 @@ app/
 │   ├── FonteDoCadastro.php      (contrato)
 │   ├── CadastroCarregado.php    (implementação: exportação XLSX carregada)
 │   ├── BairrosDoDesenho.php     (nome do desenho ↔ código/nome oficial)
-│   ├── RetratoBci.php           (o que a consulta devolve)
-│   ├── SincronizaBci.php
+│   ├── RetratoBci.php           (o que a consulta devolve; regra da isenção)
+│   ├── CargaDoCadastro.php      (carga mensal: grava só a diferença)
+│   ├── DiferencaDoCadastro.php  (o que conta como mudança; hash)
+│   ├── ProprietariosVisiveis.php (quem vê o quê do proprietário)
+│   ├── ColunasDaExportacao.php  (colunas da planilha → campos)
 │   └── LeitorXlsx.php
 ├── Console/Commands/  7 comandos de manutenção da base
 ├── Http/Controllers/  16 controllers, todos finos
-├── Models/            22 modelos + Bci/ + Concerns/
+├── Models/            modelos + Concerns/
 ├── Providers/
 ├── Repositories/
 │   └── LoteRepository.php       TODA consulta espacial passa por aqui
@@ -183,6 +186,84 @@ Como o intervalo de busca precisa ser um `WHERE`, a mesma fórmula é escrita
 **também em SQL**, em `BuscaController::inscricaoEmSql()`. As duas têm de
 concordar.
 
+## Mapa em camadas por escala (50 mil lotes)
+
+O que o mapa desenha depende da ESCALA, e a escala é medida pela área
+visível, não pelo zoom (o mesmo zoom 16 cobre 0,8 km² no celular e 18 km² num
+monitor largo):
+
+| Escala | Mostra | De onde |
+|---|---|---|
+| zoom ≤ 12 | nome da cidade e contorno do município | `public/geo/primavera-do-leste.geojson` |
+| até ~3,5 km² visíveis | contorno e nome dos bairros | tabela `bairros` (bairros-contorno.js) |
+| até ~3,5 km² (14 km² com curadoria no mapa) | linhas dos lotes | `/api/mapa/lotes`, em blocos |
+| zoom ≥ 16 / 18 / 21 | número da quadra / do lote / medidas dos lados | lotes carregados |
+
+**Carga em blocos** (`app.js`, `carregarLotesVisiveis`): a tela vira blocos
+fixos de 0,01° (~1,1 km); só se pede o que falta, quatro em paralelo, do
+centro para fora; bloco carregado não é pedido de novo. Passando de 15 mil
+lotes em memória, os blocos mais distantes saem — nunca o lote aberto, os
+marcados na mesa, o do desmembramento ou os destacados (`lotesProtegidos`).
+Cores e rótulos de grupo são refeitos UMA vez por leva (`agendarRepintura`), e
+os rótulos de quadra existem só para o que está na tela.
+
+**Servidor**: bbox acima de 0,05° de lado é recusado (`gis.bbox_max_graus`);
+coordenadas com 8 casas (~1 mm); resposta compactada pela própria aplicação
+(`ComprimirResposta` — o Nginx padrão do Ubuntu não compacta JSON); total e
+extensão da base em cache de 10 minutos.
+
+Medido no Chromium com 50 mil lotes sintéticos (bloco denso: ~2.700 lotes,
+1,8 MB → 105 KB compactado; ~100 ms no MySQL 8.0.46): carga inicial ~1 s,
+arrasto típico 0,1 s no computador e 0,4 s num tablet com CPU 4× mais lenta,
+pior caso 1,5–1,8 s. Antes da repintura por leva, o pior caso passava de 18 s
+(computador) e 36 s (tablet).
+
+## Cadastro municipal — duas famílias de dados
+
+Os dados do imóvel vêm de dois lugares que **se relacionam, mas não se
+misturam**:
+
+| Família | Tabelas | Quem escreve | Muda |
+|---|---|---|---|
+| Aplicação | `lotes`, `vistorias`, `documentos`, `sinalizacoes`, `edificacoes`… | o sistema e os fiscais | a todo momento |
+| Cadastro municipal | `cadastro_externo_imoveis`, `cadastro_proprietarios`, `cadastro_cargas`, `cadastro_alteracoes` | só a carga da planilha | uma vez por mês |
+
+A ligação é a **inscrição imobiliária** (bairro + quadra + lote, ver
+`CadastroCarregado::linhasDoLote`). Nada da aplicação aponta para o cadastro
+por chave estrangeira, e nada do cadastro aponta para a aplicação.
+
+**A carga mensal grava só a diferença** (`App\Cadastro\CargaDoCadastro`).
+A prefeitura manda o município inteiro (~56 mil imóveis); cada imóvel tem um
+`hash` do registro + proprietários. Igual: só o ponteiro `vista_na_carga_id`
+anda ("Últ. integração"). Diferente: atualiza e grava em `cadastro_alteracoes`
+só os campos que mudaram, com antes e depois. O que não veio fica com
+`ausente_desde_carga_id` — **marcado, nunca apagado** —, e só nos bairros
+presentes no arquivo. Planilha cortada (mais de 20% ausentes) para em
+`aguardando_confirmacao`.
+
+Medido com 56 mil imóveis sintéticos no MySQL 8.0.46: primeira carga 25 s,
+carga mensal 16 s, pico de 217 MB; 2% de mudança grava ~1.100 linhas de
+histórico. Guardar a planilha inteira todo mês custaria ~40 MB/mês só na
+tabela; o histórico por diferença custa uma fração disso.
+
+**O arquivo é apagado** assim que a carga conclui (traz CPF de milhares de
+pessoas; os dados já estão no banco). Fica só o rastro em `cadastro_cargas`:
+nome, tamanho, SHA-256 (recusa a mesma planilha duas vezes), quem e quando.
+
+**Sem worker de fila.** O envio responde na hora e o processamento segue no
+mesmo processo PHP (`dispatchAfterResponse`). Se morrer no meio,
+`php artisan cadastro:processar-cargas` ou o "Tentar de novo" retomam — e
+retomar é seguro, porque o que já foi gravado passa a contar como igual.
+
+**A ficha lê o cadastro ao vivo.** A aba BCI consulta `cadastro_externo_imoveis`
+direto (`CadastroCarregado::consultar`); não existe mais cópia por lote nem
+botão "Atualizar" (as tabelas `bci_*` saíram em 10/2026). O documento lavrado
+congela o que usou: data e fonte, a carga (`cadastro_carga_id`) e o retrato do
+terreno (`cadastro_retrato`).
+
+**Quem vê o proprietário** é decidido em `App\Cadastro\ProprietariosVisiveis`
+(ver CONTEXTO.md).
+
 ## Auditoria
 
 O trait `App\Models\Concerns\RegistraAuditoria` registra criação, alteração e
@@ -297,7 +378,8 @@ divergência de esquema continua lá, esperando uma migração.
 | Comando | Faz |
 |---|---|
 | `lotes:importar` | carrega o GeoJSON convertido do DWG |
-| `cadastro:carregar` | carrega a exportação XLSX do cadastro da prefeitura |
+| `cadastro:carregar` | carrega a exportação XLSX pelo terminal — mesma carga da tela (Parâmetros → Cadastro municipal), gravando só a diferença |
+| `cadastro:processar-cargas` | retoma carga do cadastro parada e apaga planilhas vencidas |
 | `gis:conferir` | procura defeito na base (sobreposição, sufixo solto, órfão) |
 | `inscricao:conferir` | prova a fórmula da inscrição contra os dados reais |
 | `quadras:corrigir` / `quadra:semente` | correção de quadra em massa |

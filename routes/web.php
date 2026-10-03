@@ -106,14 +106,14 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'criar']);
         Route::delete('/edificacoes/{edificacao}', [EdificacaoController::class, 'excluir']);
 
-        Route::get('/mapa/lotes', [MapaController::class, 'lotes']);
+        Route::get('/mapa/lotes', [MapaController::class, 'lotes'])->middleware('comprimir');
         Route::post('/pranchetas/carregar', [\App\Http\Controllers\PranchetaController::class, 'carregar']);
         Route::post('/pranchetas/salvar', [\App\Http\Controllers\PranchetaController::class, 'salvar']);
         Route::get('/lotes/{lote}/pranchas', [\App\Http\Controllers\PranchetaController::class, 'historico']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
         // Contorno de cada bairro: o mapa de todos lê; o curador gera e grava.
-        Route::get('/mapa/bairros', [BairroContornoController::class, 'index']);
-        Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes']);
+        Route::get('/mapa/bairros', [BairroContornoController::class, 'index'])->middleware('comprimir');
+        Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);
         Route::post('/localizacao/identificar', [MapaController::class, 'identificar']);
@@ -214,7 +214,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/painel', [PainelController::class, 'index']);
         Route::get('/notificacoes', [PainelController::class, 'notificacoes']);
 
-        Route::post('/imoveis/{lote}/bci/atualizar', [CadastroImobiliarioController::class, 'atualizar']);
 
         // Fiscalização
         Route::get('/irregularidades', [VistoriaController::class, 'catalogo']);
@@ -294,6 +293,16 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // distingue os dois. Interna porque a trilha inteira inclui documento
         // e vistoria — o curador externo tem o recorte do cadastro, acima.
         Route::get('/trilha', [TrilhaController::class, 'index']);
+
+        // Cadastro municipal: a planilha mensal da prefeitura (só admin) e o
+        // histórico do imóvel (servidores). Ver CadastroCargaController.
+        Route::get('/cadastro/cargas', [\App\Http\Controllers\CadastroCargaController::class, 'index']);
+        Route::post('/cadastro/cargas', [\App\Http\Controllers\CadastroCargaController::class, 'store'])->middleware('throttle:pesado');
+        Route::get('/cadastro/cargas/{carga}', [\App\Http\Controllers\CadastroCargaController::class, 'show']);
+        Route::post('/cadastro/cargas/{carga}/confirmar', [\App\Http\Controllers\CadastroCargaController::class, 'confirmar']);
+        Route::post('/cadastro/cargas/{carga}/reprocessar', [\App\Http\Controllers\CadastroCargaController::class, 'reprocessar']);
+        Route::get('/cadastro/cargas/{carga}/alteracoes', [\App\Http\Controllers\CadastroCargaController::class, 'alteracoes']);
+        Route::get('/imoveis/{lote}/cadastro/historico', [\App\Http\Controllers\CadastroCargaController::class, 'historico']);
 
         Route::get('/parametros', [ParametroController::class, 'index']);
         Route::post('/parametros/usuarios', [ParametroController::class, 'salvarUsuario']);

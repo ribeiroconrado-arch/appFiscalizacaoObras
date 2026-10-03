@@ -113,7 +113,6 @@ class PreCuradoriaDeLotes
             'protocolo(s)'      => $conta('protocolos'),
             'ordem(ns) de serviço' => $conta('ordens_servico'),
             'obra(s)'           => $conta('obras'),
-            'ficha(s) do BCI'   => $conta('bci_imoveis'),
             'ato(s) de unificação/desmembramento' => $conta('lote_ato_lotes'),
         ]);
 

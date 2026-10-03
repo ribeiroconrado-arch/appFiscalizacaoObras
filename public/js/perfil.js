@@ -222,14 +222,14 @@ async function postPerfil(url, corpo) {
 }
 
 // ── TEMA ─────────────────────────────────────────────────────
-// Dois temas convivem porque todo componente lê token: trocar de tema é
+// Os temas convivem porque todo componente lê token: trocar de tema é
 // trocar um atributo no <html>, não recarregar folha de estilo nenhuma.
 // A aplicação em si (paleta, ícones, cor da barra do sistema) mora em
 // js/tema.js, que roda no <head>; aqui fica só o que é da tela de perfil.
 
-const NOME_TEMA = { institucional: 'institucional', f: 'âmbar', azul: 'azul' }
+const NOME_TEMA = { institucional: 'institucional', f: 'âmbar', cinza: 'cinza' }
 
-/** @param {'institucional'|'f'|'azul'} tema */
+/** @param {'institucional'|'f'|'cinza'} tema */
 function escolherTema(tema) {
   aplicarTema(tema, true)
   marcarTemaAtivo()

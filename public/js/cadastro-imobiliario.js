@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════
 // ABA "CADASTRO IMOBILIÁRIO" DA FICHA
 //
-// Mostra a cópia local do BCI da prefeitura. Três regras que explicam a forma
-// desta tela:
+// Mostra o cadastro municipal do imóvel, lido ao vivo da última carga mensal
+// da planilha da prefeitura. Três regras que explicam a forma desta tela:
 //
 // 1. CARREGA SÓ QUANDO A ABA ABRE. O mapa traz até 3.000 lotes; buscar o
 //    cadastro de todos seria pagar caro por um dado que quase ninguém olha.
@@ -32,15 +32,31 @@ async function carregarBci(loteId) {
 
   caixa.innerHTML = '<div class="vazio-msg">Carregando cadastro…</div>'
   try {
-    const r = await fetch(`/api/imoveis/${loteId}/bci`, { headers: { Accept: 'application/json' } })
-    if (!r.ok) { throw new Error(r.status) }
-    const dados = await r.json()
-    bciCache.set(loteId, dados)
+    const dados = await obterBci(loteId)
     // Entre o pedido e a resposta o usuário pode ter aberto outro imóvel.
     if (bciLoteAtual === loteId) { desenharBci(caixa, dados) }
   } catch (e) {
     caixa.innerHTML = '<div class="vazio-msg">Não foi possível ler o cadastro agora.</div>'
   }
+}
+
+/**
+ * O BCI de um lote, do cache ou do servidor — sem desenhar nada.
+ *
+ * Usado pela aba, pelo cabeçalho da ficha ("Últ. Integração") e pelo
+ * formulário de documento (proprietário como autuado): uma ida ao servidor
+ * serve aos três.
+ *
+ * @param {number|string} loteId
+ * @returns {Promise<Object>}
+ */
+async function obterBci(loteId) {
+  if (bciCache.has(loteId)) { return bciCache.get(loteId) }
+  const r = await fetch(`/api/imoveis/${loteId}/bci`, { headers: { Accept: 'application/json' } })
+  if (!r.ok) { throw new Error(r.status) }
+  const dados = await r.json()
+  bciCache.set(loteId, dados)
+  return dados
 }
 
 /** Esquece o que está em cache de um lote — usar depois de reconsultar. */
@@ -62,8 +78,7 @@ function desenharBci(caixa, d) {
         <p class="bci-vazio-p">Área de terreno, medidas, características e
            construções vêm do cadastro da prefeitura. Esta aba fica vazia — e não
            em branco: o que falta é o dado de lá, não o imóvel.</p>
-        ${botaoConsultar('Consultar o cadastro')}
-      </div>`
+      </div>${secProprietarios(d.proprietarios)}`
     return
   }
 
@@ -71,54 +86,70 @@ function desenharBci(caixa, d) {
   caixa.innerHTML = [
     cabecalhoBci(d),
     secImovel(i),
+    secProprietarios(d.proprietarios),
     secCaracteristicas(d.caracteristicas),
     secUnidades(d.unidades),
   ].filter(Boolean).join('')
 }
 
-/** Linha de topo: quando foi consultado, e o botão de consultar de novo. */
-function cabecalhoBci(d) {
-  return `<div class="bci-topo">
-    <span>Consultado em <b>${esc(dataHoraCurta(d.consultado_em))}</b></span>
-    ${botaoConsultar('Atualizar')}
-  </div>`
-}
-
-function botaoConsultar(rotulo) {
-  return `<button class="btn sm out-green" onclick="atualizarBci(this)">${esc(rotulo)}</button>`
+/**
+ * Proprietários do imóvel. O servidor já mandou só o que este usuário pode ver
+ * (ver App\Cadastro\ProprietariosVisiveis): CPF/CNPJ e endereço chegam só para
+ * agente e administrador, e o externo não recebe o bloco.
+ */
+function secProprietarios(lista) {
+  if (!lista || !lista.length) { return '' }
+  const corpo = lista.map(p => `
+    <div class="bci-prop">
+      <div class="bci-prop-n">${esc(p.nome)}${p.documento
+        ? ` <span class="mono bci-doc">${esc(p.documento)}</span>` : ''}</div>
+      ${p.endereco ? `<div class="bci-prop-e">${esc(p.endereco)}</div>` : ''}
+    </div>`).join('')
+  return bciSecao(lista.length > 1 ? 'Proprietários' : 'Proprietário', corpo)
 }
 
 /**
- * Consulta o cadastro AGORA e regrava a cópia local.
- *
- * É um ato do usuário, e não algo que a ficha faça sozinha ao abrir: a consulta
- * depende do cadastro da prefeitura estar de pé, e o fiscal em campo precisa
- * que a ficha abra mesmo quando ele não está.
+ * Linha de topo: a situação do imóvel nas cargas mensais do cadastro. O dado
+ * desta aba é sempre o da última carga — não há o que "atualizar" aqui; a
+ * planilha nova entra por Parâmetros → Cadastro municipal.
  */
-async function atualizarBci(botao) {
-  const loteId = state.selecionado?.properties?.id
-  if (!loteId) { return }
+function cabecalhoBci(d) {
+  return linhaDasCargas(d)
+}
 
-  const rotulo = botao.textContent
-  botao.disabled = true
-  botao.textContent = 'Consultando...'
+/** "Últ. integração" e "Últ. alteração" do cadastro municipal. */
+function linhaDasCargas(d) {
+  const g = d.integracao || {}
+  if (!g.em && !g.ausente_desde) { return '' }
+  return `<div class="bci-cargas imp-sub">
+      ${g.ausente_desde
+        ? `<b>Fora do cadastro</b> desde a carga de ${esc(dataHoraCurta(g.ausente_desde))}`
+        : `Últ. integração <b>${esc(dataHoraCurta(g.em))}</b>`}
+      ${g.alterado_em ? ` · Últ. alteração <b>${esc(dataHoraCurta(g.alterado_em))}</b>
+        · <a href="#" onclick="event.preventDefault(); verHistoricoDoCadastro()">ver o que mudou</a>` : ''}
+    </div>
+    <div id="bci-historico"></div>`
+}
+
+/** O que mudou no cadastro deste imóvel, carga a carga. */
+async function verHistoricoDoCadastro() {
+  const loteId = state.selecionado?.properties?.id
+  const caixa = document.getElementById('bci-historico')
+  if (!loteId || !caixa) { return }
+  caixa.innerHTML = '<div class="imp-sub">Carregando…</div>'
   try {
-    const r = await fetch(`/api/imoveis/${loteId}/bci/atualizar`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-      },
-    })
+    const r = await fetch(`/api/imoveis/${loteId}/cadastro/historico`, { headers: { Accept: 'application/json' } })
     if (!r.ok) { throw new Error(r.status) }
-    const dados = await r.json()
-    bciCache.set(loteId, dados)
-    desenharBci(document.getElementById('fi-bci'), dados)
-    toast(dados.tem ? 'Cadastro atualizado' : 'O cadastro não tem este imóvel', dados.tem ? '' : 'err')
-  } catch (e) {
-    botao.disabled = false
-    botao.textContent = rotulo
-    toast('Não foi possível consultar o cadastro agora', 'err')
+    const itens = (await r.json()).itens
+    const tipo = { novo: 'Entrou no cadastro', ausente: 'Saiu do cadastro', reapareceu: 'Voltou ao cadastro' }
+    caixa.innerHTML = itens.length ? `<table class="imp-tabela"><tbody>${itens.map(a => `<tr>
+        <td class="imp-sub">${esc(dataHoraCurta(a.em))}</td>
+        <td>${esc(a.campo || tipo[a.tipo] || a.tipo)}</td>
+        <td>${a.campo ? `${esc(a.antes ?? '—')} → <b>${esc(a.depois ?? '—')}</b>` : ''}</td>
+      </tr>`).join('')}</tbody></table>`
+      : '<div class="imp-sub">Nenhuma alteração registrada.</div>'
+  } catch {
+    caixa.innerHTML = '<div class="imp-sub">Não foi possível carregar o histórico.</div>'
   }
 }
 

@@ -153,6 +153,11 @@ class MapaController extends Controller
             return response()->json(['message' => 'bbox invertido: oeste<leste e sul<norte.'], 422);
         }
 
+        $max = (float) config('gis.bbox_max_graus');
+        if ($leste - $oeste > $max || $norte - $sul > $max) {
+            return response()->json(['message' => 'Área grande demais: aproxime o mapa.'], 422);
+        }
+
         $limite = (int) config('gis.max_lotes');
         // O bairro importado e ainda em revisão só é pintado para o curador,
         // e só quando ele pede — o pedido vem do filtro "mostrar lotes em

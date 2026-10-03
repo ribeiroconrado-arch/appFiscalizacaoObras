@@ -2,43 +2,58 @@
 
 > Tokens, componentes e as regras de cor. Se for criar tela nova, use o que já
 > existe — quase tudo já tem nome.
-> Atualizado em 04/09/2026.
+> Atualizado em 03/10/2026.
 
 ## Arquivos
 
 | Arquivo | Papel |
 |---|---|
-| `public/css/app.css` | base: tokens, `.btn`, `.field`, `.badge`, `.sec-title`, modais |
-| `public/css/tema-f.css` | os componentes do sistema (o grosso do CSS) |
-| `public/css/tema-institucional.css` | **só redefine tokens**, sob `html[data-tema="institucional"]` |
+| `public/css/temas.css` | **as paletas, e só elas**: um bloco de tokens por tema. Primeira folha da página |
+| `public/css/app.css` | base portada do AppPOSTURAS: `.btn`, `.field`, `.badge`, `.sec-title`, modais, tela de entrada |
+| `public/css/tema-f.css` | os componentes do sistema (o grosso do CSS). O nome é histórico |
+| `painel-responsivo.css`, `tabelas.css`… | layout das telas e padrões de lista, iguais em todos os temas |
 
-Um tema é **um bloco de tokens**, nada mais. Sem o atributo no `<html>`, o
-arquivo institucional é inerte — é por isso que os dois convivem sem custo.
+Um tema é **um bloco de tokens**, nada mais. Os três (`f` âmbar, `institucional`
+verde, `cinza` chumbo e cinza claro) usam os mesmos nomes, e nenhuma folha de
+componente pergunta qual tema está ativo — não há `html[data-tema=…]` fora de
+`temas.css`. Tema novo: um bloco em `temas.css`, um conjunto de ícones em
+`public/img` (`*-<tema>.png`), uma entrada em `js/tema.js` e um botão em Meu
+perfil.
 
 `tema.js` é carregado no `<head>` **sem `defer`**, de propósito: aplicado
 depois, o tema salvo entraria por cima de um quadro já pintado e a tela
-piscaria a cada carregamento. Ele troca também a marca (favicon, logo).
+piscaria a cada carregamento. Ele troca também a marca (favicon, logo, a marca
+da tela de carregamento), pelos atributos `data-src-<tema>`.
 
 ## Tokens
 
+Valores do tema institucional (o padrão); os dos outros estão em `temas.css`.
+
 ```css
 /* marca */
---g:#009B3A  --gd:#006B28  --gxd:#004D1C  --gl:#E8F5E9  --gm:#A5D6A7
+--g:#009B3A  --gd:#006B28  --gxd:#00451A  --gl:#E8F3EB  --gm:#A5D6A7
 
 /* superfícies neutras */
---bg:#F2F5F2  --sur:#FFF  --bord:#D8E4D8  --blt:#EDF3ED
+--bg:#F5F5F5  --sur:#FFF  --bord:#DCDCDC  --blt:#EFEFEF
 
 /* texto */
---tx:#0F1F0F  --tx2:#4A5E4A  --tx3:#7A8E7A  --chumbo:#37474F
+--tx:#1A1A1A  --tx2:#4D4D4D  --tx3:#767676  --chumbo:#37413F (texto das tags)
 
 /* semântica */
---red:#C62828  --rlt:#FFEBEE     erro / exclusão
---warn:#E65100 --wlt:#FFF3E0     aviso
---gold:#F5C400 --gold-dk:#B8860B rascunho / prazo
---blue:#1565C0 --blt2:#E3F2FD    informação
+--red:#B3261E  --rlt:#FBEAE8     erro / exclusão
+--warn:#B45309 --wlt:#FDF3E3     aviso
+--gold:#B45309 --gold-dk:#8A4B00 rascunho / prazo
+--blue:#1D4ED8 --blt2:#EAF0FE    informação
+
+/* campos */
+--f-bord  --f-bord-foco  --f-anel  --f-fundo  --f-fundo-ro  --f-rot
 
 /* forma */
---r:10px  --rl:14px  --sh / --shl (sombras)
+--r:6px  --rl:8px  --sh / --shl (sombras)  --grad-topo  --grad-fundo
+
+/* sombras e véus que acompanham o tema */
+--sombra-topo  --sombra-primario  --anel-sel  --veu
+--marca-viva  --marca-sombra  --tinta  --tinta-quente   (R G B: use rgb(var(--x) / .22))
 ```
 
 ## A regra de cor

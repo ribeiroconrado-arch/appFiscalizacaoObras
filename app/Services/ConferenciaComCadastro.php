@@ -6,7 +6,6 @@ use App\Cadastro\BairrosDoDesenho;
 use App\Cadastro\FonteDoCadastro;
 use App\Cadastro\PlanilhaDoCadastro;
 use Illuminate\Http\Request;
-use App\Models\Bci\BciImovel;
 use App\Models\ImportacaoLote;
 use App\Support\InscricaoImobiliaria;
 use Illuminate\Support\Facades\DB;
@@ -320,7 +319,7 @@ class ConferenciaComCadastro
             $vistos[$insc] = true;
             $noCadastro++;
 
-            $ativo = BciImovel::isencaoAtiva($c['isencao']);
+            $ativo = \App\Cadastro\RetratoBci::isencaoAtiva($c['isencao']);
 
             if (isset($doArquivo[$insc])) {
                 if ($ativo === false) {

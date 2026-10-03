@@ -20,6 +20,7 @@ class Documento extends Model
             'data_fato'          => 'datetime',
             'data_lavratura'     => 'datetime',
             'cadastro_consultado_em' => 'datetime',
+            'cadastro_retrato'       => 'array',
             'anulado_em'         => 'datetime',
             'prazo_ate'          => 'date',
             'defesa_ate'         => 'date',

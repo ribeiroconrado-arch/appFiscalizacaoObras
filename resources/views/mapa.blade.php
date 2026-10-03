@@ -11,11 +11,11 @@
      montados no JavaScript, para não perder o ?v= do @assetv — sem ele, uma
      regeração de ícones sairia do cache do navegador. --}}
 <link rel="icon" type="image/png" sizes="32x32" href="@assetv('img/favicon-32.png')"
-      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')" data-src-azul="@assetv('img/favicon-32-azul.png')">
+      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')" data-src-cinza="@assetv('img/favicon-32-cinza.png')">
 <link rel="icon" type="image/png" sizes="16x16" href="@assetv('img/favicon-16.png')"
-      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')" data-src-azul="@assetv('img/favicon-16-azul.png')">
+      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')" data-src-cinza="@assetv('img/favicon-16-cinza.png')">
 <link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')"
-      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')" data-src-azul="@assetv('img/apple-touch-icon-azul.png')">
+      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')" data-src-cinza="@assetv('img/apple-touch-icon-cinza.png')">
 <link rel="manifest" href="@assetv('manifest.json')">
 {{-- Leaflet servido daqui (public/vendor), não da CDN: script de terceiro roda
      com a sessão do fiscal, e uma CDN comprometida seria o sistema comprometido. --}}
@@ -23,17 +23,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+{{-- Primeiro as paletas: um tema é um bloco de variáveis, e as folhas
+     seguintes só leem variável. Trocar de tema é trocar o data-tema do <html>. --}}
+<link rel="stylesheet" href="@assetv('css/temas.css')">
 <link rel="stylesheet" href="@assetv('css/app.css')">
-{{-- Tema em camada separada: o design ainda está em avaliação (seis
-     variantes). Trocar de proposta é trocar esta linha, não refazer o CSS. --}}
 <link rel="stylesheet" href="@assetv('css/tema-f.css')">
 <link rel="stylesheet" href="@assetv('css/importacoes.css')">
-{{-- Camada institucional (verde do município). Só pinta quando o <html> traz
-     data-tema="institucional" — sem o atributo este arquivo é inerte, e é por
-     isso que os dois temas convivem sem custo: um tema é um bloco de tokens,
-     não uma segunda folha de componentes. --}}
-<link rel="stylesheet" href="@assetv('css/tema-institucional.css')">
-<link rel="stylesheet" href="@assetv('css/tema-azul.css')">
 <link rel="stylesheet" href="@assetv('css/painel-responsivo.css')">
 <link rel="stylesheet" href="@assetv('css/prancheta-cadastral.css')">
 {{-- Por último entre as de lista: o padrão de tabela vale por cima dos temas. --}}
@@ -60,7 +55,7 @@
   {{-- Ícone oficial, sem o fundo de fora do squircle. Troca junto com o tema
        (ver js/tema.js): verde no institucional, âmbar no Tema F. --}}
   <img class="topo-marca" src="@assetv('img/logo-64.png')" alt=""
-       data-src-institucional="@assetv('img/logo-64.png')" data-src-f="@assetv('img/logo-64-ambar.png')" data-src-azul="@assetv('img/logo-64-azul.png')">
+       data-src-institucional="@assetv('img/logo-64.png')" data-src-f="@assetv('img/logo-64-ambar.png')" data-src-cinza="@assetv('img/logo-64-cinza.png')">
   <div>
     <h1>Fiscalização de Obras</h1>
     <div class="sub">{{ number_format($total, 0, ',', '.') }} lotes na base</div>
@@ -997,6 +992,7 @@
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
     <button data-sub="irregularidades" onclick="subParametros('irregularidades')">Irregularidades</button>
     <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
+    <button data-sub="cadastro" onclick="subParametros('cadastro')">Cadastro municipal</button>
     <button data-sub="geral" onclick="subParametros('geral')">Órgão</button>
   </div>
 
@@ -1106,6 +1102,32 @@
   </div>
 
   {{-- ÓRGÃO --}}
+  {{-- CADASTRO MUNICIPAL — a planilha mensal da prefeitura. Grava só o que
+       mudou, marca o que sumiu e apaga o arquivo ao fim. Montado por
+       cadastro-municipal.js; ver CadastroCargaController. --}}
+  <div class="par-painel" id="par-cadastro">
+    <div class="par-sec"><span class="par-num">1</span>Enviar a planilha do mês</div>
+    <p class="aviso-legal">
+      A exportação do cadastro imobiliário do município inteiro (.xlsx). O sistema
+      compara com o que já tem e grava <b>só o que mudou</b>; imóvel que não vier
+      fica marcado como fora do cadastro, nunca apagado. O arquivo é
+      <b>apagado do servidor</b> assim que a carga termina.
+    </p>
+    <label class="imp-soltar" id="cm-soltar" for="cm-arquivo">
+      <input type="file" id="cm-arquivo" accept=".xlsx" onchange="cmArquivoEscolhido()">
+      <b>Solte a planilha .xlsx aqui</b>
+      <span>ou clique para escolher no computador</span>
+    </label>
+    <div class="btn-row" style="margin-top:8px">
+      <button class="btn primary sm" id="cm-enviar" onclick="enviarCargaDoCadastro()" disabled>Enviar e processar</button>
+    </div>
+    <div id="cm-andamento"></div>
+
+    <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Cargas<span class="cont" id="cont-cargas">0</span></div>
+    <div id="cm-lista"></div>
+    <div id="cm-detalhe"></div>
+  </div>
+
   <div class="par-painel" id="par-geral">
     <div class="par-sec"><span class="par-num">1</span>Brasão do município</div>
     {{-- É o brasão que torna o sistema replicável: instalar a mesma aplicação
@@ -2621,12 +2643,11 @@
 
 <div class="tela-carregando" id="tela-carregando">
   <div class="carregando-marca" aria-hidden="true">
-    <img class="marca-face marca-verde" src="@assetv('img/logo-128.png')" alt="">
-    <img class="marca-face marca-verde marca-verso" src="@assetv('img/logo-128.png')" alt="">
-    <img class="marca-face marca-ambar" src="@assetv('img/logo-128-ambar.png')" alt="">
-    <img class="marca-face marca-ambar marca-verso" src="@assetv('img/logo-128-ambar.png')" alt="">
-    <img class="marca-face marca-azul" src="@assetv('img/logo-128-azul.png')" alt="">
-    <img class="marca-face marca-azul marca-verso" src="@assetv('img/logo-128-azul.png')" alt="">
+    {{-- Uma face e o verso; a imagem é a do tema, trocada por js/tema.js. --}}
+    @foreach (['marca-face', 'marca-face marca-verso'] as $face)
+      <img class="{{ $face }}" src="@assetv('img/logo-128.png')" alt=""
+           data-src-institucional="@assetv('img/logo-128.png')" data-src-f="@assetv('img/logo-128-ambar.png')" data-src-cinza="@assetv('img/logo-128-cinza.png')">
+    @endforeach
   </div>
   <div class="tela-carregando-txt" id="tela-carregando-txt" role="status"
        aria-live="polite">Carregando...</div>
@@ -3219,11 +3240,11 @@
             <span class="obs">Tema anterior</span>
           </span>
         </button>
-        <button type="button" class="tema-op" id="tema-op-azul" onclick="escolherTema('azul')">
-          <span class="amostra" style="background:linear-gradient(160deg,#1E3A8A,#2563EB)"></span>
+        <button type="button" class="tema-op" id="tema-op-cinza" onclick="escolherTema('cinza')">
+          <span class="amostra" style="background:linear-gradient(160deg,#4B545E,#5F6973)"></span>
           <span>
-            <span class="nome">Azul</span>
-            <span class="obs">Azul corporativo</span>
+            <span class="nome">Cinza</span>
+            <span class="obs">Chumbo e cinza claro</span>
           </span>
         </button>
       </div>
@@ -3435,6 +3456,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 @endif
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
+  <script src="@assetv('js/cadastro-municipal.js')"></script>
 @endif
 <script src="@assetv('js/app.js')"></script>
 </body>

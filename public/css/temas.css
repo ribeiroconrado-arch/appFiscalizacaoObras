@@ -1,0 +1,136 @@
+/* ══════════════════════════════════════════════════════════════
+   TEMAS — as três paletas num lugar só
+   Primeira folha da página: só define variáveis, não pinta nada.
+
+   Um tema é ISTO: um bloco de tokens. Todo componente lê var(--g),
+   var(--r), var(--sh)… e nenhum traz cor própria ligada à marca, então
+   trocar de tema é trocar o atributo data-tema do <html> (ver js/tema.js),
+   sem recarregar folha nenhuma. Tema novo = um bloco novo aqui, com os
+   MESMOS nomes, mais o seu conjunto de ícones em public/img.
+
+   O que fica fora dos temas de propósito: as tags de status ("Modelo D").
+   Fundo em degradê do tom do status e texto cinza-chumbo, idênticas em
+   todos — ver .bd-* em tema-f.css.
+
+   Nenhuma folha de componente pergunta qual é o tema: a forma (raio,
+   sombra) também é token, e a barra de abas é a mesma em todos.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── ÂMBAR (Tema F) ──
+   É também o valor de partida: vale antes do js/tema.js marcar o <html>. */
+:root{
+  /* --g realce e estado ativo · --gd ação e botão primário · --gxd superfícies
+     pequenas e escuras (toast) · --gl fundo de seleção · --gm borda média */
+  --g:#F97316; --gd:#EA580C; --gxd:#B4470D; --gl:#FFF2E8; --gm:#FDBA8C;
+  --gold:#D97706; --gold-lt:#FDF3E3; --gold-dk:#B45309;
+
+  /* Neutros quentes: cinza puro brigaria com o laranja. */
+  --bg:#FAF7F4; --sur:#FFFFFF; --bord:#EAE1D9; --blt:#F4EEE8;
+  --tx:#4A423C; --tx2:#6A5C52; --tx3:#9B8B7F;
+  /* Texto das tags de status. Nenhum outro tema o redefine: as tags são
+     iguais em todos, por pedido. */
+  --chumbo:#37413F;
+
+  --red:#C2352B; --rlt:#FCECEA;
+  --warn:#B45309; --wlt:#FDF3E3;
+  --blue:#1D4ED8; --blt2:#EAF0FE;
+
+  /* Cinzas de formulário, deliberadamente fora da faixa da marca: se a borda
+     de foco usasse a cor quente, que no sistema quer dizer prazo e
+     irregularidade, o usuário aprenderia a ignorá-la. */
+  --f-bord:#CFCAC4; --f-bord-foco:#6B6560; --f-anel:rgba(107,101,96,.14);
+  --f-fundo:#FFFFFF; --f-fundo-ro:#F3F1EF; --f-rot:#7A736C;
+  --marcado:#F4F2F0;      /* item de checklist marcado */
+  --chip-hover:#DCEFE3;   /* chip de filtro sob o mouse */
+
+  --r:10px; --rl:14px;
+  --sh:0 1px 4px rgba(0,50,10,.07),0 4px 12px rgba(0,50,10,.05);
+  --shl:0 6px 28px rgba(0,50,10,.11);
+
+  /* Barra superior: começa no laranja médio (--gd), e não no queimado
+     (--gxd), que pesava demais numa faixa da largura da tela. */
+  --grad-topo: linear-gradient(135deg, var(--gd) 0%, var(--g) 100%);
+  --grad-fundo: linear-gradient(150deg, var(--gd) 0%, var(--g) 55%, #FB9142 100%);
+
+  /* ── SOMBRAS E VÉUS ──
+     Os que levam R G B sem rgba() são usados como rgb(var(--x) / .22): cada
+     componente mantém a própria transparência e o tema só troca o tom. */
+  --sombra-topo: 0 2px 10px rgba(0,40,10,.25);
+  --sombra-primario: 0 3px 10px rgba(0,155,58,.3);
+  --marca-viva: 0 155 58;     /* sombra de botão cheio na cor da marca */
+  --marca-sombra: 0 77 28;    /* sombra de avatar e ícone de cabeçalho */
+  --anel-sel: rgba(0,108,22,.1);
+  --veu: rgba(0,20,5,.52);    /* fundo atrás das janelas */
+  --tinta: 22 33 28;          /* sombra de menus e painéis flutuantes */
+  --tinta-quente: 74 66 60;   /* idem, nos menus da ficha e na barra do mapa */
+}
+
+/* ── INSTITUCIONAL — verde do município (padrão) ──
+   O verde é o do ícone oficial do aplicativo (#05933D, amostrado da arte).
+   Cabeçalho, menu, ícones e botões carregam a marca; o CONTEÚDO é branco,
+   preto e cinza puros, com prioridade para o cinza nos fundos e campos. */
+html[data-tema="institucional"]{
+  --g:#009B3A; --gd:#006B28; --gxd:#00451A; --gl:#E8F3EB; --gm:#A5D6A7;
+  /* Âmbar continua âmbar: tom quente é prazo correndo. */
+  --gold:#B45309; --gold-lt:#FDF3E3; --gold-dk:#8A4B00;
+
+  --bg:#F5F5F5; --sur:#FFFFFF; --bord:#DCDCDC; --blt:#EFEFEF;
+  --tx:#1A1A1A; --tx2:#4D4D4D; --tx3:#767676;
+
+  --red:#B3261E; --rlt:#FBEAE8;
+  --warn:#B45309; --wlt:#FDF3E3;
+  --blue:#1D4ED8; --blt2:#EAF0FE;
+
+  --f-bord:#C7C7C7; --f-bord-foco:#595959; --f-anel:rgba(89,89,89,.16);
+  --f-fundo:#FFFFFF; --f-fundo-ro:#F0F0F0; --f-rot:#6E6E6E;
+
+  /* Raio curto e sombra de 1px: gramática de sistema administrativo. O toque
+     generoso no celular vem do tamanho do alvo, não do arredondamento. */
+  --r:6px; --rl:8px;
+  --sh:0 1px 2px rgba(22,33,28,.07), 0 1px 1px rgba(22,33,28,.04);
+  --shl:0 4px 14px rgba(22,33,28,.10);
+
+  --grad-topo: linear-gradient(160deg, var(--gxd) 0%, var(--gd) 100%);
+  --grad-fundo: linear-gradient(150deg, var(--gxd) 0%, var(--gd) 60%, #0A7A32 100%);
+
+  --sombra-primario: 0 1px 2px rgba(0,69,26,.22);
+}
+
+/* ── CINZA — chumbo claro e cinza claro ──
+   Dois tons: o chumbo claro (#4B545E) na barra, nos botões e nos ícones; o
+   cinza claro (#ECEEF0) na seleção e nos destaques. Sem cor de marca na tela,
+   as cores de status passam a ser as únicas — e saltam mais à vista. */
+html[data-tema="cinza"]{
+  --g:#5B6570; --gd:#4B545E; --gxd:#3F4750; --gl:#ECEEF0; --gm:#C8CDD3;
+  --gold:#B45309; --gold-lt:#FDF3E3; --gold-dk:#8A4B00;
+
+  --bg:#F3F4F5; --sur:#FFFFFF; --bord:#DADDE1; --blt:#EDEEF0;
+  --tx:#1F2328; --tx2:#4A5058; --tx3:#737980;
+
+  --red:#B3261E; --rlt:#FBEAE8;
+  --warn:#B45309; --wlt:#FDF3E3;
+  /* O azul "informativo" fica num azul-petróleo: é a única cor fria da tela,
+     e não pode ser confundido com botão. */
+  --blue:#0E7490; --blt2:#E6F4F7;
+
+  --f-bord:#C7CBD0; --f-bord-foco:#4B545E; --f-anel:rgba(75,84,94,.18);
+  --f-fundo:#FFFFFF; --f-fundo-ro:#F0F1F3; --f-rot:#6E6E6E;
+  --marcado:#EEF0F2;
+  --chip-hover:#E2E5E9;
+
+  --r:6px; --rl:8px;
+  --sh:0 1px 2px rgba(24,27,31,.07), 0 1px 1px rgba(24,27,31,.04);
+  --shl:0 4px 14px rgba(24,27,31,.10);
+
+  --grad-topo: linear-gradient(160deg, var(--gd) 0%, #5F6973 100%);
+  --grad-fundo: linear-gradient(150deg, var(--gxd) 0%, var(--g) 60%, #8A939C 100%);
+
+  --sombra-topo: 0 2px 10px rgba(24,27,31,.25);
+  --sombra-primario: 0 1px 2px rgba(63,71,80,.28);
+  --marca-viva: 91 101 112;
+  --marca-sombra: 63 71 80;
+  --anel-sel: rgba(75,84,94,.14);
+  --veu: rgba(24,27,31,.5);
+  --tinta: 24 27 31;
+  --tinta-quente: 24 27 31;
+}

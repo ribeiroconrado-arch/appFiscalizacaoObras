@@ -132,6 +132,16 @@ class User extends Authenticatable
      * Só quem é agente de fiscalização lavra documento — coordenador e
      * secretário acompanham, não autuam. Espelha `podeCadastrarAutos()`.
      */
+    /**
+     * CPF/CNPJ e endereço do proprietário: só quem lavra a peça (o agente) e o
+     * administrador. Os demais servidores veem o nome. Ver
+     * App\Cadastro\ProprietariosVisiveis.
+     */
+    public function podeVerDadosDoProprietario(): bool
+    {
+        return $this->ativo && ($this->isAdmin() || $this->tipo_usuario === 'agente');
+    }
+
     public function podeLavrarDocumento(): bool
     {
         return $this->canEdit() && $this->tipo_usuario === 'agente';

@@ -2,100 +2,97 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Bci\BciImovel;
-use App\Models\Bci\BciUnidade;
-use App\Cadastro\SincronizaBci;
+use App\Cadastro\ColunasDaExportacao;
+use App\Cadastro\FonteDoCadastro;
+use App\Cadastro\ProprietariosVisiveis;
+use App\Cadastro\RetratoBci;
 use App\Models\Lote;
 use Illuminate\Http\JsonResponse;
 
 /**
  * A aba "Cadastro imobiliário" da ficha do imóvel.
  *
- * Lê a CÓPIA LOCAL do BCI, nunca o banco da prefeitura — a consulta lá é um
- * ato explícito (ver App\Cadastro), porque depende da rede deles estar de pé.
+ * Lê o CADASTRO MUNICIPAL AO VIVO — a tabela que a carga mensal da planilha
+ * mantém (ver App\Cadastro\CargaDoCadastro). Não há mais cópia por lote nem
+ * botão "Atualizar": o dado é o da última carga, e a data dela aparece como
+ * "Últ. integração".
  *
- * Este endpoint é chamado quando a aba é aberta, e não junto da ficha: o mapa
- * carrega até 3.000 lotes de uma vez, e enriquecer todos seria pagar por um
- * dado que quase ninguém vai olhar.
+ * Este endpoint é chamado quando a ficha abre a aba (e pelo cabeçalho da
+ * ficha), e não junto do mapa: enriquecer milhares de lotes de uma vez seria
+ * pagar por um dado que quase ninguém vai olhar.
  */
 class CadastroImobiliarioController extends Controller
 {
-    public function __construct(private SincronizaBci $sincroniza)
+    public function __construct(private FonteDoCadastro $fonte)
     {
     }
 
     public function mostrar(Lote $lote): JsonResponse
     {
-        return response()->json($this->retrato($lote));
-    }
+        $donos = ProprietariosVisiveis::para(request()->user(), $this->fonte->proprietarios($lote));
 
-    /**
-     * Consulta o cadastro AGORA e regrava a cópia local.
-     *
-     * É um ato explícito, e não algo que a ficha faz sozinha ao abrir: a
-     * consulta depende do cadastro da prefeitura estar de pé, e o fiscal em
-     * campo precisa que a ficha abra mesmo quando ele não está.
-     */
-    public function atualizar(Lote $lote): JsonResponse
-    {
-        $bci = $this->sincroniza->atualizar($lote);
+        $situacao = $this->fonte->situacao($lote);
+        unset($situacao['inscricoes']);
 
-        return response()->json($this->retrato($lote) + [
-            'atualizado' => (bool) $bci,
-        ]);
+        return response()->json(
+            $this->retrato($lote)
+            + ['integracao' => $situacao]
+            + ($donos === null ? [] : ['proprietarios' => $donos])
+        );
     }
 
     /** @return array<string,mixed> */
     private function retrato(Lote $lote): array
     {
-        $bci = BciImovel::with(['caracteristicas', 'unidades'])
-            ->where('lote_id', $lote->id)->first();
+        $r = $this->fonte->consultar($lote);
 
-        if (! $bci) {
+        if (! $r) {
             // Vazio EXPLICADO, não campos em branco: quem abre precisa saber se
-            // o imóvel não tem cadastro, se o bairro não foi amarrado, ou se o
-            // sistema simplesmente ainda não perguntou. São três situações
-            // diferentes, com três providências diferentes.
+            // o imóvel não está no cadastro, se o bairro não foi amarrado ou se
+            // o lote não tem quadra/número — cada caso tem uma providência.
             return [
                 'tem'    => false,
-                'motivo' => $this->sincroniza->porQueVazio($lote),
+                'motivo' => $this->fonte->porQueVazio($lote),
             ];
         }
 
+        $i = $r->imovel;
+        $num = fn ($v) => $v === null || $v === '' ? null : (float) $v;
+
         return [
-            'tem'           => true,
-            'consultado_em' => $bci->consultado_em?->toIso8601String(),
-            'imovel'        => [
-                'codigo_cadastro'       => $bci->codigo_cadastro,
-                'inscricao_alternativa' => $bci->inscricao_alternativa,
-                'isencao'               => $bci->isencao,
-                'ativo'                 => $bci->ativo(),
-                'area_terreno_m2'       => $bci->area_terreno_m2,
-                'area_edificada_m2'     => $bci->area_edificada_m2,
-                'fracao_ideal'          => $bci->fracao_ideal,
-                'testada_m'             => $bci->testada_m,
-                'medida_lado_direito'   => $bci->medida_lado_direito,
-                'medida_lado_esquerdo'  => $bci->medida_lado_esquerdo,
-                'medida_fundo'          => $bci->medida_fundo,
-                'setor'                 => $bci->setor,
-                'regiao_fiscal'         => $bci->regiao_fiscal,
-                'complemento'           => $bci->complemento,
+            'tem'    => true,
+            'imovel' => [
+                'codigo_cadastro'       => $i['codigo_cadastro'] ?? null,
+                'inscricao_alternativa' => $i['inscricao_alternativa'] ?? null,
+                'isencao'               => $i['isencao'] ?? null,
+                'ativo'                 => RetratoBci::isencaoAtiva($i['isencao'] ?? null),
+                'area_terreno_m2'       => $num($i['area_terreno_m2'] ?? null),
+                'area_edificada_m2'     => $num($i['area_edificada_m2'] ?? null),
+                'fracao_ideal'          => $num($i['fracao_ideal'] ?? null),
+                'testada_m'             => $num($i['testada_m'] ?? null),
+                'medida_lado_direito'   => $num($i['medida_lado_direito'] ?? null),
+                'medida_lado_esquerdo'  => $num($i['medida_lado_esquerdo'] ?? null),
+                'medida_fundo'          => $num($i['medida_fundo'] ?? null),
+                'setor'                 => $i['setor'] ?? null,
+                'regiao_fiscal'         => $i['regiao_fiscal'] ?? null,
+                'complemento'           => $i['complemento'] ?? null,
             ],
-            // Chave/valor na ordem em que o BCI as traz: a lista muda de
-            // município para município, e a tela desenha o que vier.
-            'caracteristicas' => $bci->caracteristicas->map(fn ($c) => [
-                'chave' => $c->chave,
-                'valor' => $c->valor,
-            ]),
-            'unidades' => $bci->unidades->map(fn (BciUnidade $u) => [
-                'numero' => $u->numero,
-                'ano'    => $u->ano_construcao,
-                'area'   => $u->area_edificada_m2,
+            // Na ordem das colunas da exportação: a coluna JSON do MySQL
+            // reordena as chaves, e a ficha leria "AGUA" antes de "OCUPACAO".
+            // Chave que a lista não conhece vai para o fim, na ordem que veio.
+            'caracteristicas' => collect($r->caracteristicas)
+                ->map(fn ($valor, $chave) => ['chave' => $chave, 'valor' => $valor])
+                ->sortBy(fn ($c) => array_search($c['chave'], ColunasDaExportacao::CARACTERISTICAS, true) === false
+                    ? PHP_INT_MAX : array_search($c['chave'], ColunasDaExportacao::CARACTERISTICAS, true))
+                ->values(),
+            'unidades' => array_map(fn (array $u) => [
+                'numero' => $u['numero'],
+                'ano'    => $u['ano_construcao'] !== null ? (int) $u['ano_construcao'] : null,
+                'area'   => $num($u['area_edificada_m2']),
                 // Sem padrão gravado, mostra os pontos: é deles que o padrão
-                // sai no cadastro, e um campo com o número bruto informa mais
-                // do que um travessão.
-                'padrao' => $u->padrao ?: ($u->pontos ? $u->pontos . ' pts' : null),
-            ]),
+                // sai no cadastro, e o número bruto informa mais que um travessão.
+                'padrao' => $u['padrao'] ?: ($u['pontos'] ? $u['pontos'] . ' pts' : null),
+            ], $r->unidades),
         ];
     }
 }

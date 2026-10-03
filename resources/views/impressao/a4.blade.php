@@ -354,10 +354,10 @@
             };
           @endphp
           @if ($doc->cadastro_consultado_em)
-            Dados cadastrais do imóvel consultados em
+            Dados cadastrais do imóvel conforme o cadastro municipal integrado em
             {{ $doc->cadastro_consultado_em->format('d/m/Y') }}{{ $origem }}.
           @else
-            Lavrado sem consulta ao cadastro imobiliário.
+            Lavrado sem dado do cadastro municipal.
           @endif
         </div>
       @endif

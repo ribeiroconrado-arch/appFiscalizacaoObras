@@ -13,16 +13,15 @@
      O icone.svg ao lado é só a versão de 512 embrulhada — serve como peça
      única citável, não como fonte para a tela. --}}
 <link rel="icon" type="image/png" sizes="32x32" href="@assetv('img/favicon-32.png')"
-      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')" data-src-azul="@assetv('img/favicon-32-azul.png')">
+      data-src-institucional="@assetv('img/favicon-32.png')" data-src-f="@assetv('img/favicon-32-ambar.png')" data-src-cinza="@assetv('img/favicon-32-cinza.png')">
 <link rel="icon" type="image/png" sizes="16x16" href="@assetv('img/favicon-16.png')"
-      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')" data-src-azul="@assetv('img/favicon-16-azul.png')">
+      data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')" data-src-cinza="@assetv('img/favicon-16-cinza.png')">
 <link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')"
-      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')" data-src-azul="@assetv('img/apple-touch-icon-azul.png')">
+      data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')" data-src-cinza="@assetv('img/apple-touch-icon-cinza.png')">
+{{-- As mesmas folhas da tela do mapa, na mesma ordem (ver mapa.blade.php). --}}
+<link rel="stylesheet" href="@assetv('css/temas.css')">
 <link rel="stylesheet" href="@assetv('css/app.css')">
-{{-- Mesmo tema da tela do mapa: trocar de variante é trocar esta linha. --}}
 <link rel="stylesheet" href="@assetv('css/tema-f.css')">
-<link rel="stylesheet" href="@assetv('css/tema-institucional.css')">
-<link rel="stylesheet" href="@assetv('css/tema-azul.css')">
 {{-- A escolha vive no navegador, então já vale na porta de entrada: quem
      escolheu o tema institucional não entra por uma tela laranja. --}}
 <script src="@assetv('js/tema.js')"></script>
@@ -35,7 +34,7 @@
     <div class="login-seal">
       {{-- 128px cobre os 104px em telas retina. Troca junto com o tema. --}}
       <img src="@assetv('img/logo-128.png')" alt="" style="width:104px;height:104px;display:block"
-           data-src-institucional="@assetv('img/logo-128.png')" data-src-f="@assetv('img/logo-128-ambar.png')" data-src-azul="@assetv('img/logo-128-azul.png')">
+           data-src-institucional="@assetv('img/logo-128.png')" data-src-f="@assetv('img/logo-128-ambar.png')" data-src-cinza="@assetv('img/logo-128-cinza.png')">
     </div>
     <h1>Fiscalização de Obras</h1>
     <p>Prefeitura de Primavera do Leste</p>

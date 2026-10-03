@@ -78,11 +78,15 @@ de `lotes`. São 2 hoje; serão dezenas.
 **Custo baixo, elimina uma classe inteira de erro.** É o melhor item de
 custo/benefício da lista.
 
-### 🟡 Unificar a colação de `lotes.bairro` e `cadastro_bairros.nome_gis`
+### ✅ Unificar a colação de `lotes.bairro` e `cadastro_bairros.nome_gis` — feito em 10/2026
 
-Migração `ALTER TABLE … CONVERT TO CHARACTER SET utf8mb4 COLLATE
-utf8mb4_unicode_ci`. Hoje o código contorna resolvendo nomes em PHP; a
-divergência continua esperando a próxima consulta que junte as tabelas.
+### 🟡 [dado] Contorno de todos os bairros
+
+Com o mapa em camadas por escala (ARQUITETURA.md), de longe só aparece o
+CONTORNO do bairro — os lotes vêm ao aproximar. Bairro sem contorno gerado
+fica sem nada nessa escala. O contorno é gerado pelo curador ("Contorno dos
+bairros"); a importação publicada já gera o dela. Falta passar pelos bairros
+antigos.
 
 ### 🟢 Aviso quando a amarração não casa
 
@@ -101,9 +105,45 @@ Hoje quem não tem a máquina de desenvolvimento não consegue.
 Rascunho → salva → publicada, com pré-curadoria e conferência com o cadastro.
 A conversão DWG → GeoJSON continua fora do sistema, como planejado.
 
-### 🟢 Carregar cadastro (XLSX) pela tela
+### ✅ Carregar cadastro (XLSX) pela tela — feito em 10/2026
 
-Mesmo raciocínio, para `cadastro:carregar`.
+Parâmetros → Cadastro municipal. Grava só a diferença, guarda o histórico
+campo a campo e apaga o arquivo ao fim. Ver ARQUITETURA.md, "Cadastro municipal".
+
+### 🟢 Cadastro tratado fora do sistema (app desktop → JSON de diferenças) — ideia registrada, adiada
+
+Decisão de rumo, ainda sem data. A planilha do município deixa de entrar no
+sistema: um **app desktop**, na prefeitura, lê o Excel e gera um **JSON só com
+as diferenças em relação à importação anterior**. Esse JSON é **anexado dentro
+da aplicação** (não há envio automático do app para o servidor), e a
+integração parte dele.
+
+Motivos (todos de segurança):
+- a planilha bruta, com todas as colunas, não passa mais pelo servidor;
+- CPF/CNPJ e colunas sem uso podem ser descartados antes, no próprio PC;
+- o que entra é pequeno e verificável, não um arquivo de 12 MB;
+- reduz o efeito de alguém anexar uma planilha errada ou adulterada.
+
+A decidir quando for feito:
+- **"Importação anterior" sem cópia da base no PC.** Guardar a planilha
+  anterior no computador cria uma segunda cópia com dados pessoais e pode
+  dessincronizar do servidor (JSON perdido, aplicado duas vezes ou fora de
+  ordem). Alternativa: o sistema exporta um arquivo só com `inscrição → hash`
+  (sem dado pessoal; o hash já existe em `cadastro_externo_imoveis.hash`),
+  o app compara o Excel contra ele e gera o JSON.
+- **Mesma regra de normalização dos dois lados**, senão o hash não bate. De
+  preferência o app normaliza e calcula, e o servidor grava o hash recebido.
+- **Conferência do JSON ao anexar:** versão do formato, a qual carga anterior
+  ele se refere (recusar fora de ordem ou repetido) e, se possível, assinatura
+  do app.
+- **Onde fica o CPF/CNPJ**: hoje é mostrado a agentes e administradores e
+  usado na lavratura.
+- O servidor reaproveita `CargaDoCadastro` (diferença, ausência por bairro,
+  trava de 20%, histórico), trocando só a leitura do Excel pela do JSON. O JSON
+  precisa trazer a lista de inscrições presentes para marcar as ausentes.
+- Linguagem e distribuição do app.
+
+Até lá vale o envio do `.xlsx` por Parâmetros → Cadastro municipal.
 
 ### 🟢 Rodar as conferências pela tela
 
@@ -195,12 +235,22 @@ relatório em itens, impressão / mesa, desfazer, curadoria). Sem módulos ES, a
 ordem dos `<script>` em `mapa.blade.php` passa a importar: documentar a ordem
 no topo de cada arquivo.
 
-### 🟢 6. Consolidar os três temas de CSS — risco médio
+### ✅ 6. Consolidar os temas de CSS — feito em 10/2026 (parcial)
 
-`tema-institucional.css`, `tema-azul.css` e `tema-f.css` (3.346 linhas) são
-carregados juntos e cada um sobrescreve o anterior. Extrair o que é comum para
-`app.css` e deixar em cada tema só variáveis e diferenças reais. Exige
-conferência visual dos três temas em celular, tablet e desktop.
+As três paletas (âmbar, institucional e cinza, que substituiu o azul) estão em
+`temas.css`, só como tokens; saíram `tema-institucional.css` e `tema-azul.css`,
+os seletores `html[data-tema=…]` das folhas de componente, a barra `.acoes`
+(sem uso) e 127 declarações que outra regra, mais adiante, sempre vencia.
+Conferido por captura de tela antes/depois: institucional e âmbar ficaram
+idênticos pixel a pixel.
+
+Falta, se valer o esforço:
+- `tema-f.css` (3.200 linhas) continua sendo a folha de componentes com nome
+  de tema; renomear para `componentes.css` toca as duas views e os testes.
+- `app.css` ainda tem fragmentos de regras que `tema-f.css` completa (`.badge`,
+  `#toast`, `.ctrl-btn`). Juntar cada componente num lugar só.
+- `prancheta-cadastral.css` tem verdes fixos (`#009b3a`, `#f4f7f5`…) que não
+  seguem o tema.
 
 ### 🟢 7. Emagrecer os controllers grandes — risco médio
 
