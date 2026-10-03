@@ -298,6 +298,12 @@ class DocumentoController extends Controller
             'autuado_documento' => ['nullable', 'string', 'max:20'],
             'autuado_endereco'  => ['nullable', 'string', 'max:300'],
             'endereco'       => ['nullable', 'string', 'max:200'],
+            // A identificação do imóvel como está na peça: do cadastro
+            // municipal, ou digitada quando o imóvel não está nele.
+            'imovel_inscricao' => ['nullable', 'string', 'max:30'],
+            'imovel_bairro'    => ['nullable', 'string', 'max:160'],
+            'imovel_quadra'    => ['nullable', 'string', 'max:20'],
+            'imovel_lote'      => ['nullable', 'string', 'max:20'],
             'descricao'      => ['nullable', 'string', 'max:5000'],
             'observacoes'    => ['nullable', 'string', 'max:5000'],
             // Área do terreno vem do GIS e é só conferida; a construída tem
@@ -322,6 +328,10 @@ class DocumentoController extends Controller
             'autuado_documento' => $d['autuado_documento'] ?? null,
             'autuado_endereco'  => $d['autuado_endereco'] ?? null,
             'endereco'      => $d['endereco'] ?? null,
+            'imovel_inscricao' => $d['imovel_inscricao'] ?? null,
+            'imovel_bairro'    => $d['imovel_bairro'] ?? null,
+            'imovel_quadra'    => $d['imovel_quadra'] ?? null,
+            'imovel_lote'      => $d['imovel_lote'] ?? null,
             'descricao'     => $d['descricao'] ?? null,
             'observacoes'   => $d['observacoes'] ?? null,
             'area_terreno_m2'    => $d['area_terreno_m2'] ?? $lote?->area_gis_m2 ?? null,
@@ -401,10 +411,12 @@ class DocumentoController extends Controller
                 'lote_id'   => $documento->lote_id,
                 // Derivada, e bairro pelo nome OFICIAL: é esta a identificação
                 // que entra na peça.
-                'inscricao' => $documento->lote?->inscricaoFormatada(),
-                'bairro'    => $documento->lote?->bairroOficial(),
-                'quadra'    => $documento->lote?->quadra,
-                'lote'      => $documento->lote?->numero_lote,
+                // O que a PEÇA guarda tem precedência; peça antiga (colunas
+                // nulas) cai no lote.
+                'inscricao' => $documento->imovel_inscricao ?: $documento->lote?->inscricaoFormatada(),
+                'bairro'    => $documento->imovel_bairro ?: $documento->lote?->bairroOficial(),
+                'quadra'    => $documento->imovel_quadra ?? $documento->lote?->quadra,
+                'lote'      => $documento->imovel_lote ?? $documento->lote?->numero_lote,
                 'endereco'  => $documento->endereco,
                 'terreno'   => $documento->area_terreno_m2,
                 'construida'=> $documento->area_construida_m2,
@@ -526,6 +538,10 @@ class DocumentoController extends Controller
             'autuado_documento'  => ['nullable', 'string', 'max:20'],
             'autuado_endereco'   => ['nullable', 'string', 'max:300'],
             'endereco'           => ['nullable', 'string', 'max:200'],
+            'imovel_inscricao'   => ['nullable', 'string', 'max:30'],
+            'imovel_bairro'      => ['nullable', 'string', 'max:160'],
+            'imovel_quadra'      => ['nullable', 'string', 'max:20'],
+            'imovel_lote'        => ['nullable', 'string', 'max:20'],
             'descricao'          => ['nullable', 'string', 'max:5000'],
             'observacoes'        => ['nullable', 'string', 'max:5000'],
             'prazo_dias'         => ['nullable', 'integer', 'min:0', 'max:365'],

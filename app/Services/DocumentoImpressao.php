@@ -80,10 +80,11 @@ class DocumentoImpressao
         return [
             // A informada, a montada agora ou a última gravada (Lote::inscricao):
             // a coluna crua sai vazia em quase todo lote vindo do desenho.
-            'inscricao' => $l?->inscricaoFormatada() ?? $l?->inscricao_imobiliaria,
-            'bairro'    => $l?->bairro,
-            'quadra'    => $l?->quadra,
-            'lote'      => $l?->numero_lote,
+            // O que a peça guarda (do cadastro municipal ou digitado) vem antes.
+            'inscricao' => $doc->imovel_inscricao ?: ($l?->inscricaoFormatada() ?? $l?->inscricao_imobiliaria),
+            'bairro'    => $doc->imovel_bairro ?: $l?->bairro,
+            'quadra'    => $doc->imovel_quadra ?? $l?->quadra,
+            'lote'      => $doc->imovel_lote ?? $l?->numero_lote,
             'endereco'  => $doc->endereco,
             'areaGis'   => $l?->area_gis_m2,
         ];

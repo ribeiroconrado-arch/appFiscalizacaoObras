@@ -609,13 +609,6 @@ function removerArtigoDoc(id) {
   trocarLeiDoc()
 }
 
-/** O que cada artigo cobra, para a linha de cima do quadro. */
-function multaDoArtigoDoc(a) {
-  if (a.base_multa === 'fixa') return fmtNum(a.multa_upf || 0) + ' UPF'
-  if (a.base_multa === 'sem_multa') return 'sem multa'
-  return fmtNum(a.multa_upf_m2 || 0) + ' UPF/m² · ' + (a.base_multa === 'area_terreno' ? 'terreno' : 'construído')
-}
-
 /**
  * Redesenha a lei, a trava e os quadros dos artigos a partir do estado
  * (#nd-lei e fdState.artigos). É o ponto único de atualização: quem muda a
@@ -636,7 +629,7 @@ function trocarLeiDoc() {
         if (!a) return ''
         return `<div class="artigo-tag">
           <div class="artigo-tag-topo">
-            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')} <span class="artigo-tag-multa">· ${multaDoArtigoDoc(a)}</span></span>
+            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}</span>
             ${travado ? '' : `<button type="button" class="artigo-tag-x" title="Remover" onclick="removerArtigoDoc(${a.id})">&times;</button>`}
           </div>
           ${a.conduta ? `<div class="artigo-tag-texto">${esc(a.conduta)}</div>` : ''}
@@ -690,29 +683,6 @@ function recalcularMultaDoc() {
 }
 
 /**
- * Motor de legislação: busca a última vistoria do lote e pede ao servidor os
- * artigos que o fiscal citou nela. É o passo que dispensa
- * o fiscal de procurar dispositivo na lei impressa (§18 do projeto).
- */
-async function sugerirDaUltimaVistoria(loteId) {
-  const caixa = document.getElementById('nd-sugestao')
-  caixa.innerHTML = ''
-  if (!loteId) return
-
-  try {
-    const h = await fetch(`/api/lotes/${loteId}/historico`, { headers: { Accept: 'application/json' } })
-    const dados = await h.json()
-    const ultima = dados.vistorias?.[0]
-    if (!ultima) { caixa.innerHTML = '<div class="lista-vazia">Sem vistoria neste imóvel — o documento nascerá sem vínculo.</div>'; return }
-
-    await sugerirDaVistoria(ultima.id)
-  } catch (e) {
-    console.error(e)
-    caixa.innerHTML = '<div class="lista-vazia">Não foi possível buscar a sugestão de artigos.</div>'
-  }
-}
-
-/**
  * A SUGESTÃO DE UMA VISTORIA ESCOLHIDA — e o vínculo com ela.
  *
  * Era o miolo de `sugerirDaUltimaVistoria`, que só sabia trabalhar com a
@@ -736,13 +706,8 @@ async function sugerirDaVistoria(vistoriaId) {
     // por causa de um `return` seria jogar fora o trabalho de campo.
     aproveitarDaVistoria(s)
 
-    // O NÚMERO DA VISTORIA À VISTA. Sem ele, um vínculo errado — a peça presa
-    // à visita de outro dia — só apareceria muito depois, na defesa.
-    const de = [s.vistoria?.numero, s.vistoria?.data_hora].filter(Boolean).join(', de ')
-
     if (s.aviso) {
       caixa.innerHTML = `<div class="aviso-legal">${esc(s.aviso)}</div>`
-      if (de) { caixa.innerHTML += `<div class="nd-vinculo">Vinculado à ${esc(de)}</div>` }
       return
     }
 
@@ -751,11 +716,6 @@ async function sugerirDaVistoria(vistoriaId) {
       document.getElementById('nd-lei').value = s.artigos[0].legislacao_id
       trocarLeiDoc()
     }
-    const areaDita = s.vistoria?.area_rotulo
-      ? ` Área aferida: <b>${esc(s.vistoria.area_rotulo)}</b>.` : ''
-    caixa.innerHTML = `<div class="nd-vinculo-ok">
-        Vinculado à <b>${esc(de || 'vistoria')}</b> ·
-        <b>${s.artigos.length} artigo(s)</b> citado(s) na vistoria, já marcados.${areaDita}</div>`
   } catch (e) {
     console.error(e)
     caixa.innerHTML = '<div class="lista-vazia">Não foi possível buscar a sugestão de artigos.</div>'

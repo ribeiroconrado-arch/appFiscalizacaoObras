@@ -2078,28 +2078,48 @@
       <p class="doc-carimbo" id="nd-carimbo" hidden></p>
 
       <div class="sec-title">Imóvel</div>
-      {{-- Só leitura: o imóvel vem do mapa ou da busca, e trocá-lo aqui
-           faria o documento mudar de objeto no meio da lavratura. --}}
-      <div class="df-grade" id="nd-imovel-dados"></div>
+      {{-- O localizador, quando a peça ainda não tem imóvel (renderImovelDoc). --}}
+      <div id="nd-imovel-dados"></div>
 
-      <div class="sec-title">Endereço da obra</div>
-      <div class="field">
-        <label for="nd-endereco">Endereço</label>
-        <input type="text" id="nd-endereco" maxlength="200" data-lock
-               placeholder="Rua, número — complemento">
+      {{-- A IDENTIFICAÇÃO DO IMÓVEL, em campos. Quando o imóvel está no
+           cadastro municipal, eles vêm de lá e ficam só para leitura; quando
+           não está, ficam abertos para o fiscal informar à mão
+           (renderBciDoc → travarImovelDoc). --}}
+      <div class="g2">
+        <div class="field">
+          <label for="nd-im-inscricao">Inscrição imobiliária</label>
+          <input type="text" id="nd-im-inscricao" class="mono" maxlength="30" data-lock placeholder="01.000.000.0000.000">
+        </div>
+        <div class="field">
+          <label for="nd-im-bairro">Bairro</label>
+          <input type="text" id="nd-im-bairro" maxlength="160" data-lock>
+        </div>
       </div>
-      {{-- Não editável: é a área do cadastro municipal (ou a do desenho,
-           quando o cadastro não a traz), e é base de multa. --}}
+      <div class="g3">
+        <div class="field">
+          <label for="nd-im-quadra">Quadra</label>
+          <input type="text" id="nd-im-quadra" maxlength="20" data-lock>
+        </div>
+        <div class="field">
+          <label for="nd-im-lote">Lote</label>
+          <input type="text" id="nd-im-lote" maxlength="20" data-lock>
+        </div>
+        <div class="field">
+          <label for="nd-area-terreno">Área do terreno (m²)</label>
+          <input id="nd-area-terreno" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+        </div>
+      </div>
       <div class="field">
-        <label for="nd-area-terreno" id="nd-area-terreno-rot">Área do terreno (m²)</label>
-        <input id="nd-area-terreno" type="number" readonly tabindex="-1" class="so-leitura-campo">
+        <label for="nd-endereco">Endereço da obra</label>
+        <input type="text" id="nd-endereco" maxlength="200" data-lock placeholder="Logradouro, número">
       </div>
 
-      {{-- O QUE O CADASTRO MUNICIPAL (BCI) DIZ DESTE IMÓVEL — desenhado por
-           documento-form.js (renderBciDoc). Leitura: o que a peça pode
-           alterar são os campos dela, acima, que nascem sugeridos daqui. --}}
-      <div class="sec-title">Cadastro municipal (BCI)</div>
-      <div id="nd-bci"></div>
+      {{-- O RESTO DO CADASTRO MUNICIPAL (BCI) deste imóvel — só aparece quando
+           o imóvel está no cadastro. Desenhado por renderBciDoc. --}}
+      <div id="nd-bci-bloco" hidden>
+        <div class="sec-title">Cadastro municipal (BCI)</div>
+        <div id="nd-bci"></div>
+      </div>
 
       <div class="sec-title">Origem</div>
       <div class="field">

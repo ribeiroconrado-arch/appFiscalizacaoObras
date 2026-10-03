@@ -3436,10 +3436,13 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 .artigo-tag{background:var(--blt);border:1.5px solid var(--bord);border-radius:var(--r);padding:9px 12px;margin-bottom:8px;
   font-size:12.5px;color:var(--tx)}
 .artigo-tag-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-.artigo-tag-multa{color:var(--tx3);white-space:nowrap}
 .artigo-tag-texto{margin-top:5px;font-size:12px;color:var(--tx2);line-height:1.45}
 .artigo-tag-x{background:none;border:0;color:var(--red);font-size:17px;line-height:1;cursor:pointer;padding:0 2px;flex:none}
-/* Campo que mostra um dado e não se edita (área do terreno). */
+/* Três campos lado a lado (quadra, lote e área do terreno). */
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.g2 + .g3,.g3 + .field,.g3 + .g2{margin-top:9px}
+@media (max-width:520px){ .g3{grid-template-columns:1fr 1fr} .g3 > :last-child{grid-column:1/-1} }
+/* Campo que mostra um dado e não se edita (veio do cadastro municipal). */
 .field input.so-leitura-campo{color:var(--tx2);cursor:default}
 .field:has(.so-leitura-campo){background:var(--blt)}
 /* BCI dentro do documento */
