@@ -5,6 +5,11 @@ sistema. A planilha completa da prefeitura (com o CPF de todo o município) não
 sai do computador: o app lê o `.xlsx`, compara com a **referência** baixada do
 sistema e salva um `.json` só com o que mudou.
 
+## Baixar
+
+[FiscObras-Cadastro-win-x64.zip](https://github.com/ribeiroconrado-arch/appFiscalizacaoObras/releases/download/cadastro-desktop-v1.0.0/FiscObras-Cadastro-win-x64.zip)
+— extraia e abra `FiscObras Cadastro.exe`. Não precisa instalar.
+
 ## Uso (todo mês)
 
 1. No sistema: **Parâmetros › Cadastro municipal › Baixar referência**.
@@ -48,5 +53,8 @@ npm run gerar -- referencia.json planilha.xlsx saida.json   # sem janela
 npm run empacotar            # dist/FiscObras Cadastro-win32-x64
 ```
 
-O `.exe` oficial sai do workflow **App do cadastro (Windows)** (aba Actions do
-GitHub), que testa e empacota num Windows a cada mudança nesta pasta.
+O `.exe` oficial sai do workflow **App do cadastro (Windows)**, que testa e
+empacota num Windows a cada mudança nesta pasta e publica o zip no release
+`cadastro-desktop-v<versão>` (aba Releases), com link direto, sem login:
+`https://github.com/ribeiroconrado-arch/appFiscalizacaoObras/releases/download/cadastro-desktop-v1.0.0/FiscObras-Cadastro-win-x64.zip`.
+Para publicar uma versão nova, suba `version` no `package.json`.

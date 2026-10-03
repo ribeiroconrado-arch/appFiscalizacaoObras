@@ -1,9 +1,11 @@
 # Compila o app desktop do cadastro (ferramentas/cadastro-desktop) num Windows
 # de verdade e publica o .zip como artefato da execução.
 #
-# Para baixar: aba Actions › "App do cadastro (Windows)" › a execução mais
-# recente › Artifacts › FiscObras-Cadastro-win-x64. Também roda à mão pelo
-# botão "Run workflow".
+# Para baixar SEM LOGIN: o release "cadastro-desktop-v<versão>" (aba Releases
+# do repositório), com o link direto
+#   releases/download/cadastro-desktop-v<versão>/FiscObras-Cadastro-win-x64.zip
+# Cada build da mesma versão substitui o arquivo; versão nova (package.json)
+# gera release novo. Também roda à mão pelo botão "Run workflow".
 name: App do cadastro (Windows)
 
 on:
@@ -17,7 +19,7 @@ on:
       - '.github/workflows/cadastro-desktop.yml'
 
 permissions:
-  contents: read
+  contents: write   # publicar o release
 
 jobs:
   windows:
@@ -34,6 +36,23 @@ jobs:
       # O código de conferência tem de bater com o do PHP do sistema.
       - run: node --test ../../tests/cadastro-desktop.test.cjs
       - run: npm run empacotar
+      - name: Compactar
+        shell: pwsh
+        run: Compress-Archive -Path "dist/FiscObras Cadastro-win32-x64/*" -DestinationPath FiscObras-Cadastro-win-x64.zip
+      - name: Publicar no release (link público, sem login)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          versao=$(node -p "require('./package.json').version")
+          tag="cadastro-desktop-v$versao"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" FiscObras-Cadastro-win-x64.zip --clobber
+          else
+            gh release create "$tag" FiscObras-Cadastro-win-x64.zip --target "$GITHUB_SHA" --latest=false \
+              --title "FiscObras Cadastro $versao (Windows)" \
+              --notes "App desktop do cadastro municipal. Baixe FiscObras-Cadastro-win-x64.zip, extraia e abra \"FiscObras Cadastro.exe\". Uso: ferramentas/cadastro-desktop/README.md."
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: FiscObras-Cadastro-win-x64
