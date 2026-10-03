@@ -115,6 +115,11 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/mapa/quadras', [BairroContornoController::class, 'quadras'])->middleware('comprimir');
         Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
+        // Nomes de rua informados pelo curador (Correção cadastral → Nomes de rua).
+        Route::get('/ruas/logradouros', [\App\Http\Controllers\RuaManualController::class, 'logradouros']);
+        Route::post('/ruas/manuais', [\App\Http\Controllers\RuaManualController::class, 'criar']);
+        Route::put('/ruas/manuais/{rua}', [\App\Http\Controllers\RuaManualController::class, 'alterar']);
+        Route::delete('/ruas/manuais/{rua}', [\App\Http\Controllers\RuaManualController::class, 'excluir']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);
         Route::post('/localizacao/identificar', [MapaController::class, 'identificar']);
 

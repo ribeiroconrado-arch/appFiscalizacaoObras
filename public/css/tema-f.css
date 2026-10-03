@@ -650,6 +650,14 @@ body.login-bg{
 body.z-lote .leaflet-tooltip.rot.rot-lote{display:block}
 /* Medida de cada lado do lote — só no último zoom (ver sincronizarMedidas). A
    caixa do ícone tem tamanho zero; o texto se centra e gira sobre o meio do lado. */
+/* Nome de rua (bairros-contorno.js, _desenharRotulosDeRua): caixa de tamanho
+   zero, texto centrado e girado com a rua. Halo branco como o do bairro: o
+   nome cai sobre o asfalto da foto, que é escuro. */
+.rot-rua{background:none;border:0}
+.rot-rua span{position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;
+  font-family:'Inter',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--chumbo);
+  text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff,0 0 6px #fff}
 .rot-medida{background:none;border:0}
 .rot-medida span{position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;
   font-family:'JetBrains Mono','Courier New',monospace;font-size:12px;font-weight:600;color:#0f172a;
@@ -3002,7 +3010,8 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 #map.cam-sem-rot-lote .rot-lote,
 #map.cam-sem-medidas .rot-medida,
 #map.cam-sem-rot-quadra .rot-quadra,
-#map.cam-sem-rot-bairro .rot-bairro{display:none}
+#map.cam-sem-rot-bairro .rot-bairro,
+#map.cam-sem-ruas-cadastro .rot-rua{display:none}
 #map.cam-sem-bairro-contorno .leaflet-contornos-pane,
 #map.cam-sem-ruas .leaflet-rotulos-pane,
 #map.cam-sem-edificacoes .leaflet-edificacoes-pane{display:none}

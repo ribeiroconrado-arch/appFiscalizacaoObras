@@ -547,14 +547,53 @@ class LoteRepository
 
     /**
      * Os lotes ativos de um bairro, em GeoJSON, para o cálculo do contorno do
-     * bairro e das quadras dele.
+     * bairro, das quadras e dos nomes de rua.
      *
-     * @return array<int,object> id, quadra, geojson
+     * Com o código do bairro no cadastro, cada lote vem com o LOGRADOURO do
+     * seu endereço — a mesma ligação de CadastroCarregado::linhasDoLote
+     * (bairro, quadra e lote, sem zeros à esquerda), feita de uma vez para o
+     * bairro inteiro. Imóvel ausente da última carga não conta. Lote com
+     * várias unidades leva o logradouro mais frequente entre elas.
+     *
+     * @return array<int,object> id, quadra, geojson, logradouro
      */
-    public function lotesDoBairro(string $bairro): array
+    public function lotesDoBairro(string $bairro, ?string $codigoCadastro = null): array
     {
-        return DB::select('SELECT id, quadra, ST_AsGeoJSON(geom) AS geojson FROM lotes
-                            WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$bairro]);
+        if ($codigoCadastro === null) {
+            return DB::select('SELECT id, quadra, ST_AsGeoJSON(geom) AS geojson, NULL AS logradouro FROM lotes
+                                WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$bairro]);
+        }
+
+        return DB::select("SELECT l.id, l.quadra, ST_AsGeoJSON(l.geom) AS geojson, c.logradouro
+                             FROM lotes l
+                             LEFT JOIN (
+                                   SELECT q, n, logradouro FROM (
+                                          SELECT TRIM(LEADING '0' FROM quadra) AS q, TRIM(LEADING '0' FROM lote) AS n, logradouro,
+                                                 ROW_NUMBER() OVER (PARTITION BY TRIM(LEADING '0' FROM quadra), TRIM(LEADING '0' FROM lote)
+                                                                    ORDER BY COUNT(*) DESC, logradouro) AS ordem
+                                            FROM cadastro_externo_imoveis
+                                           WHERE TRIM(LEADING '0' FROM codigo_bairro) = ?
+                                             AND ausente_desde_carga_id IS NULL
+                                             AND logradouro IS NOT NULL AND logradouro <> ''
+                                           GROUP BY q, n, logradouro) t
+                                    WHERE ordem = 1) c
+                                ON c.q = TRIM(LEADING '0' FROM l.quadra) AND c.n = TRIM(LEADING '0' FROM l.numero_lote)
+                            WHERE l." . self::SO_ATIVOS . ' AND l.bairro = ?', [ltrim($codigoCadastro, '0'), $bairro]);
+    }
+
+    /**
+     * Os logradouros do cadastro num bairro — a lista oficial de onde o
+     * curador escolhe o nome de um trecho de rua.
+     *
+     * @return list<string>
+     */
+    public function logradourosDoBairro(string $codigoCadastro): array
+    {
+        return DB::table('cadastro_externo_imoveis')
+            ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim($codigoCadastro, '0')])
+            ->whereNull('ausente_desde_carga_id')
+            ->whereNotNull('logradouro')->where('logradouro', '<>', '')
+            ->distinct()->orderBy('logradouro')->pluck('logradouro')->all();
     }
 
     /**
@@ -692,6 +731,46 @@ class LoteRepository
     {
         return DB::select('SELECT numero, rotulo_lat AS lat, rotulo_lon AS lon, ST_AsGeoJSON(geom, 7) AS geojson
                              FROM quadras WHERE bairro = ? ORDER BY numero', [$bairro]);
+    }
+
+    /**
+     * Substitui os trechos de rua GERADOS de um bairro. Os manuais
+     * (`ruas_manuais`) não são tocados: valem por cima, na leitura.
+     *
+     * @param  list<array{nome:?string, de:array{0:float,1:float}, ate:array{0:float,1:float}}>  $trechos
+     */
+    public function gravarRuas(string $bairro, array $trechos): int
+    {
+        $agora = now()->toDateTimeString();
+        DB::table('ruas_trechos')->where('bairro', $bairro)->delete();
+        foreach (array_chunk($trechos, 500) as $bloco) {
+            DB::table('ruas_trechos')->insert(array_map(fn ($t) => [
+                'bairro' => $bairro, 'nome' => $t['nome'],
+                'de_lat' => $t['de'][0], 'de_lon' => $t['de'][1], 'ate_lat' => $t['ate'][0], 'ate_lon' => $t['ate'][1],
+                'created_at' => $agora, 'updated_at' => $agora,
+            ], $bloco));
+        }
+
+        return count($trechos);
+    }
+
+    /**
+     * Os trechos de rua de um bairro, os gerados com os manuais por cima (ver
+     * App\Cadastro\TrechosDeRua).
+     *
+     * @return list<array{id:?int, nome:?string, de:array, ate:array, origem:string}>
+     */
+    public function ruasDoBairro(string $bairro): array
+    {
+        $ponto = fn ($l, $p) => [(float) $l->{$p . '_lat'}, (float) $l->{$p . '_lon'}];
+
+        $gerados = DB::table('ruas_trechos')->where('bairro', $bairro)->orderBy('id')->get()
+            ->map(fn ($l) => ['nome' => $l->nome, 'de' => $ponto($l, 'de'), 'ate' => $ponto($l, 'ate')])->all();
+        $manuais = DB::table('ruas_manuais')->where('bairro', $bairro)->orderBy('id')->get()
+            ->map(fn ($l) => ['id' => (int) $l->id, 'nome' => $l->nome, 'oculto' => (bool) $l->oculto,
+                'de' => $ponto($l, 'de'), 'ate' => $ponto($l, 'ate')])->all();
+
+        return \App\Cadastro\TrechosDeRua::combinar($gerados, $manuais);
     }
 
     /** Quantas quadras cada bairro tem gravadas. @return array<string,int> */

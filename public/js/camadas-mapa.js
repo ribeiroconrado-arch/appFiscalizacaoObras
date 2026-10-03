@@ -93,6 +93,10 @@ registrarCamada({ id: 'medidas', grupo: 'Lotes', rotulo: 'Medidas dos lados' })
 registrarCamada({ id: 'rot-quadra', grupo: 'Quadras', rotulo: 'Número da quadra' })
 registrarCamada({ id: 'bairro-contorno', grupo: 'Bairros', rotulo: 'Contorno do bairro' })
 registrarCamada({ id: 'rot-bairro', grupo: 'Bairros', rotulo: 'Nome do bairro' })
+// Nomes de rua tirados do cadastro municipal (bairros-contorno.js): o nome
+// oficial, o mesmo dos documentos. Ligados de início; o do Carto, abaixo, não
+// serve mais.
+registrarCamada({ id: 'ruas-cadastro', grupo: 'Outras', rotulo: 'Nomes de rua (cadastro)', padrao: true })
 // Desligada por padrão: o serviço de rótulos (Carto) passou a exigir chave e
 // devolve "API KEY REQUIRED" estampado por cima do mapa. Quem quiser ver, liga.
 registrarCamada({ id: 'ruas', grupo: 'Outras', rotulo: 'Nomes de rua (Carto)', padrao: false })

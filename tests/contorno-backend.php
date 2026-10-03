@@ -1,7 +1,7 @@
 <?php
 // Diagnóstico local do contorno dos bairros, no molde de importacao-backend.php:
 // tudo numa transação DESFEITA no fim. Exige as migrações 2026_10_01_000100
-// e 2026_10_07_000100 (quadras).
+// 2026_10_07_000100 (quadras) e 2026_10_08_000100 (nomes de rua).
 //
 //   php tests/contorno-backend.php
 
@@ -79,6 +79,35 @@ try {
     $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total, 'quadras' => [$quadras[1]]]);
     confere(DB::table('quadras')->where('bairro', $bairro)->pluck('numero')->all() === ['02'], 'gerar de novo substitui as quadras do bairro');
 
+    echo "Nomes de rua\n";
+    $trecho = ['nome' => 'RUA TESTE', 'de' => [$e['sul'], $e['oeste']], 'ate' => [$e['sul'], $e['leste']]];
+    $semNome = ['nome' => null, 'de' => [$e['norte'], $e['oeste']], 'ate' => [$e['norte'], $e['leste']]];
+    $r = $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total, 'ruas' => [$trecho, $semNome]]);
+    confere($r->getStatusCode() === 200, 'trechos de rua gravados junto (' . json_decode($r->getContent())->message . ')');
+    $ruas = json_decode($chama('quadras', $admin, ['bairro' => $bairro])->getContent(), true)['ruas'];
+    confere(array_column($ruas, 'origem') === ['cadastro', 'sem_nome'], 'o mapa recebe os trechos, com a origem');
+
+    $ctlRua = app(\App\Http\Controllers\RuaManualController::class);
+    $rua = function (string $metodo, User $u, array $corpo = [], $modelo = null) use ($ctlRua) {
+        Auth::guard('web')->setUser($u);
+        $req = Request::create('/x', 'POST', $corpo);
+        $req->setUserResolver(fn () => $u);
+        try { return $modelo ? $ctlRua->{$metodo}($req, $modelo) : $ctlRua->{$metodo}($req); }
+        catch (Illuminate\Validation\ValidationException $ex) { return response()->json($ex->errors(), 422); }
+    };
+    $r = $rua('criar', $admin, ['bairro' => $bairro, 'de' => $semNome['de'], 'ate' => $semNome['ate'], 'nome' => 'AVENIDA DO TESTE']);
+    $d = json_decode($r->getContent(), true);
+    confere($r->getStatusCode() === 200 && in_array('manual', array_column($d['ruas'], 'origem'), true)
+        && ! in_array('sem_nome', array_column($d['ruas'], 'origem'), true), 'o nome informado cobre o trecho sem nome');
+    $manual = \App\Models\RuaManual::where('bairro', $bairro)->latest('id')->first();
+    confere(DB::table('auditoria')->where('tabela', 'ruas_manuais')->where('registro_id', $manual->id)->exists(), 'fica na auditoria');
+    $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total, 'ruas' => [$trecho, $semNome]]);
+    confere(\App\Models\RuaManual::whereKey($manual->id)->exists(), 'gerar de novo não apaga o nome informado à mão');
+    $r = $rua('alterar', $admin, ['oculto' => true], $manual);
+    confere(in_array('oculto', array_column(json_decode($r->getContent(), true)['ruas'], 'origem'), true), 'ocultar o trecho');
+    $r = $rua('excluir', $admin, [], $manual->fresh());
+    confere(array_column(json_decode($r->getContent(), true)['ruas'], 'origem') === ['cadastro', 'sem_nome'], 'voltar ao cadastro');
+
     DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')->limit(1)->update(['updated_at' => now()->addMinute()]);
     $f = collect(json_decode($chama('index', $admin)->getContent(), true)['features'])->firstWhere('properties.nome', $bairro);
     confere($f['properties']['desatualizado'] === true, 'lote alterado depois do contorno o deixa desatualizado');
@@ -93,6 +122,8 @@ try {
         'externo também não vê as quadras dele');
     $r = $chama('gravar', $externo, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total]);
     confere($r->getStatusCode() === 403, 'quem não é curador nem admin não grava contorno');
+    $r = $rua('criar', $externo, ['bairro' => $bairro, 'de' => $semNome['de'], 'ate' => $semNome['ate'], 'nome' => 'X']);
+    confere($r->getStatusCode() === 403, 'quem não é curador nem admin não informa nome de rua');
 
     echo "\n{$ok} verificações passaram.\n";
 } finally {

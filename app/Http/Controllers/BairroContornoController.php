@@ -27,6 +27,15 @@ class BairroContornoController extends Controller
     /** Teto de quadras num envio — o maior loteamento da base tem pouco mais de 100. */
     private const MAX_QUADRAS = 2000;
 
+    /** Teto de trechos de rua num envio: ~4 lados por quadra, com folga. */
+    private const MAX_TRECHOS = 8000;
+
+    /** O código do bairro no cadastro municipal, pelo nome do desenho. */
+    private function codigoNoCadastro(string $bairro): ?string
+    {
+        return (new BairrosDoDesenho())->codigos()[BairrosDoDesenho::chave($bairro)] ?? null;
+    }
+
     public function __construct(private LoteRepository $lotes) {}
 
     /** Quem gera: o curador, ou o administrador (é ele quem publica a importação). */
@@ -97,10 +106,16 @@ class BairroContornoController extends Controller
         }
         $d = $r->validate(['bairro' => ['required', 'string', 'max:120']]);
 
+        $codigo = $this->codigoNoCadastro($d['bairro']);
+
         return response()->json([
             'bairro' => $d['bairro'],
-            'lotes'  => array_map(fn ($l) => ['id' => (int) $l->id, 'quadra' => $l->quadra, 'geometry' => json_decode($l->geojson)],
-                $this->lotes->lotesDoBairro($d['bairro'])),
+            // Sem cadastro amarrado não há logradouro: o contorno e as quadras
+            // saem do mesmo jeito, os nomes de rua não.
+            'cadastro' => $codigo !== null,
+            'lotes'  => array_map(fn ($l) => ['id' => (int) $l->id, 'quadra' => $l->quadra,
+                'logradouro' => $l->logradouro, 'geometry' => json_decode($l->geojson)],
+                $this->lotes->lotesDoBairro($d['bairro'], $codigo)),
             // O que a fusão não pode engolir: lotes de outros bairros em volta.
             'vizinhos' => array_map(fn ($l) => json_decode($l->geojson), $this->lotes->lotesVizinhos($d['bairro'])),
         ]);
@@ -131,6 +146,14 @@ class BairroContornoController extends Controller
             'quadras.*.rotulo'               => ['required', 'array', 'size:2'],
             'quadras.*.rotulo.*'             => ['numeric', 'between:-180,180'],
             'quadras.*.lotes'                => ['required', 'integer', 'min:1'],
+            // Os trechos de rua, do mesmo cálculo. `nome` nulo é trecho em que
+            // o voto dos lotes não decidiu — a ferramenta mostra em vermelho.
+            'ruas'          => ['nullable', 'array', 'max:' . self::MAX_TRECHOS],
+            'ruas.*.nome'   => ['nullable', 'string', 'max:180'],
+            'ruas.*.de'     => ['required', 'array', 'size:2'],
+            'ruas.*.de.*'   => ['numeric', 'between:-180,180'],
+            'ruas.*.ate'    => ['required', 'array', 'size:2'],
+            'ruas.*.ate.*'  => ['numeric', 'between:-180,180'],
         ]);
 
         $geojson = json_encode($d['geometry']);
@@ -149,8 +172,16 @@ class BairroContornoController extends Controller
                 $c['fora'], $c['total'])], 422);
         }
 
-        $codigo = (new BairrosDoDesenho())->codigos()[BairrosDoDesenho::chave($d['bairro'])] ?? null;
+        $codigo = $this->codigoNoCadastro($d['bairro']);
         $q = DB::transaction(function () use ($d, $codigo, $geojson, $r) {
+            if (array_key_exists('ruas', $d)) {
+                $this->lotes->gravarRuas($d['bairro'], array_map(fn ($t) => [
+                    'nome' => isset($t['nome']) && trim($t['nome']) !== '' ? trim($t['nome']) : null,
+                    'de'   => [(float) $t['de'][0], (float) $t['de'][1]],
+                    'ate'  => [(float) $t['ate'][0], (float) $t['ate'][1]],
+                ], $d['ruas'] ?? []));
+            }
+
             $this->lotes->gravarContorno($d['bairro'], $codigo, $geojson, (float) $d['raio_m'],
                 (int) $d['lotes_contados'], $d['isolados'] ?? [], $r->user()->id);
 
@@ -172,6 +203,15 @@ class BairroContornoController extends Controller
             if ($q['invalidas']) {
                 $msg .= sprintf('. %d quadra(s) com desenho inválido ficaram sem contorno: %s',
                     count($q['invalidas']), implode(', ', $q['invalidas']));
+            }
+        }
+        if (array_key_exists('ruas', $d)) {
+            if ($codigo === null) {
+                $msg .= '. Bairro sem cadastro amarrado: nomes de rua automáticos não gerados (dá para informar à mão em Nomes de rua)';
+            } else {
+                $semNome = count(array_filter($d['ruas'] ?? [], fn ($t) => empty($t['nome'])));
+                $msg .= sprintf('. %d trecho(s) de rua', count($d['ruas'] ?? []))
+                    . ($semNome ? sprintf(', %d sem nome — veja em Nomes de rua', $semNome) : '');
             }
         }
 
@@ -209,6 +249,8 @@ class BairroContornoController extends Controller
                 'geometry'   => json_decode($q->geojson),
                 'properties' => ['numero' => $q->numero, 'rotulo' => [(float) $q->lat, (float) $q->lon]],
             ], $this->lotes->quadrasDoBairro($d['bairro'])),
+            // Os trechos de rua vêm no mesmo pedido: o mapa já guarda por bairro.
+            'ruas' => $this->lotes->ruasDoBairro($d['bairro']),
         ]);
     }
 }
