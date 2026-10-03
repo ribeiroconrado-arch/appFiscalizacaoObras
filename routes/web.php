@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BairroContornoController;
 use App\Http\Controllers\BuscaController;
+use App\Http\Controllers\PesquisaMapaController;
 use App\Http\Controllers\CadastroImobiliarioController;
 use App\Http\Controllers\CadastroLoteController;
 use App\Http\Controllers\DemandaController;
@@ -93,6 +94,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // foi carregado e amarrado. Ver BuscaController::logradouros.
         Route::get('/imoveis/logradouros', [BuscaController::class, 'logradouros']);
         Route::get('/imoveis/busca', [BuscaController::class, 'buscar']);
+        // A pesquisa do MAPA: filtros combinados (onde, endereço, pendências).
+        Route::get('/mapa/pesquisa/opcoes', [PesquisaMapaController::class, 'opcoes']);
+        Route::get('/mapa/pesquisa', [PesquisaMapaController::class, 'pesquisar']);
         // Depois das rotas fixas: registrada antes, a curinga engoliria
         // "bairros" e "busca" como se fossem id de lote.
         Route::get('/imoveis/{lote}', [BuscaController::class, 'ficha']);

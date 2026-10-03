@@ -3023,31 +3023,92 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 
 /* ══════════════════════════════════════════════
    PESQUISA DO MAPA (pesquisa-mapa.js) — barra horizontal, primeira da faixa. */
-.pesq-barra{width:min(620px, 100%);background:var(--sur);border:1.5px solid var(--gm);border-radius:14px;
-  padding:8px 10px;box-shadow:0 8px 24px rgb(var(--tinta) / .18)}
+.pesq-barra{width:min(760px, 100%);background:var(--sur);border:1.5px solid var(--gm);border-radius:14px;
+  padding:10px 12px;box-shadow:0 8px 24px rgb(var(--tinta) / .18)}
 .pesq-barra[hidden]{display:none}
-.pesq-linha{display:flex;align-items:center;gap:8px}
-.pesq-ico{width:17px;height:17px;color:var(--tx3);flex:none}
-.pesq-termo{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:14px;padding:6px 2px;color:var(--tx)}
+.pesq-linha{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pesq-secao{margin-top:9px;padding-top:9px;border-top:1px solid var(--blt)}
+.pesq-tit{display:flex;align-items:center;gap:7px;margin-right:auto;font-family:'Manrope',sans-serif;font-weight:700;
+  font-size:13px;color:var(--gd)}
+.pesq-ico{width:16px;height:16px;flex:none}
 .pesq-x{padding:5px 9px}
-.pesq-opcoes{flex-wrap:wrap;gap:6px;margin-top:6px;padding-top:7px;border-top:1px solid var(--blt)}
-.pesq-chip{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--bord);
-  background:var(--sur);color:var(--tx2);cursor:pointer}
-.pesq-chip.at{background:var(--gl);border-color:var(--g);color:var(--gd)}
-.pesq-escopo{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx3)}
-.pesq-escopo select{max-width:210px;font-size:12px;padding:4px 6px;border:1px solid var(--bord);border-radius:8px;background:var(--sur)}
-.pesq-resultado{margin-top:7px;padding-top:6px;border-top:1px solid var(--blt);max-height:min(46vh, 340px);overflow-y:auto}
-.pesq-resultado[hidden]{display:none}
+.pesq-coord{flex:1;min-width:0;border:1.5px solid var(--bord);border-radius:var(--r);padding:7px 9px;font-size:13px;
+  background:var(--sur);color:var(--tx)}
+/* Os filtros aplicados: etiqueta com o resumo; clicar reabre, o X tira. */
+.pesq-filtro{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--g);background:var(--gl);color:var(--gd);
+  border-radius:999px;padding:4px 5px 4px 11px;font-size:12px;font-weight:600;cursor:pointer;max-width:100%}
+.pesq-filtro > span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pesq-filtro small{font-weight:500;font-size:12px;color:var(--tx2)}
+.pesq-filtro.aberto{background:var(--sur);box-shadow:0 0 0 3px var(--gl)}
+.pesq-tira{border:0;background:rgb(var(--tinta) / .1);color:inherit;border-radius:50%;width:19px;height:19px;
+  cursor:pointer;line-height:1;flex:none;font-size:10px;padding:0}
+.pesq-e{font-size:11px;color:var(--tx3);font-weight:600}
+.pesq-vazio{font-size:12px;color:var(--tx3)}
+.pesq-mais{border:1.5px dashed var(--tx3);background:transparent;color:var(--tx2);border-radius:999px;padding:4px 11px;
+  font-size:12px;font-weight:600;cursor:pointer}
+.pesq-mais:hover{border-color:var(--gd);color:var(--gd)}
+/* O menu do "+ Filtro", em grupos. */
+.pesq-menu{margin-top:9px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:10px;
+  background:var(--bg);border-radius:var(--r)}
+.pesq-menu h4,.pesq-editor h4{margin:0 0 5px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3)}
+.pesq-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:5px 7px;border-radius:6px;
+  cursor:pointer;font-size:12.5px;color:var(--tx)}
+.pesq-menu button:hover{background:var(--sur)}
+.pesq-menu button[disabled]{color:var(--tx3);cursor:default;text-decoration:line-through}
+/* O editor do filtro aberto. */
+.pesq-editor{margin-top:9px;padding:10px;border:1.5px solid var(--gm);border-radius:var(--r);display:flex;flex-direction:column;gap:9px}
+.pesq-editor h4{color:var(--gd);margin:0}
+.pesq-campos{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.pesq-campo{display:flex;flex-direction:column;gap:3px;flex:1;min-width:110px}
+.pesq-campo > span{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3)}
+.pesq-campo input{border:1.5px solid var(--bord);border-radius:var(--r);padding:7px 9px;background:var(--sur);color:var(--tx);
+  min-width:0;width:100%;font-size:13px}
+.pesq-campo input:focus,.pesq-coord:focus{outline:0;border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.pesq-ops{display:flex;flex-wrap:wrap;gap:6px}
+.pesq-op{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--bord);border-radius:999px;padding:4px 10px;
+  cursor:pointer;font-size:12px;color:var(--tx2)}
+.pesq-op:has(input:checked){border-color:var(--g);background:var(--gl);color:var(--gd);font-weight:600}
+.pesq-op input{accent-color:var(--g);margin:0}
+.pesq-dica{font-size:11.5px;color:var(--tx3)}
+.pesq-pe{display:flex;gap:8px;justify-content:flex-end}
+/* Seletor com busca: digita, escolhe na lista, vira etiqueta dentro do campo. */
+.pesq-sel{position:relative;border:1.5px solid var(--bord);border-radius:var(--r);background:var(--sur);padding:5px 6px;
+  display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.pesq-sel:focus-within{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.pesq-sel input{flex:1;min-width:140px;border:0;outline:0;background:transparent;padding:4px 3px;font-size:13px;color:var(--tx)}
+.pesq-tks{display:contents}
+.pesq-tk{display:inline-flex;align-items:center;gap:5px;background:var(--gl);color:var(--gd);border-radius:999px;
+  padding:2px 4px 2px 9px;font-size:12px;font-weight:600}
+.pesq-tk button{border:0;background:rgb(var(--tinta) / .1);color:inherit;border-radius:50%;width:17px;height:17px;
+  line-height:1;cursor:pointer;font-size:10px;padding:0}
+.pesq-drop{position:absolute;left:-1.5px;right:-1.5px;top:calc(100% + 4px);z-index:9;background:var(--sur);
+  border:1.5px solid var(--gm);border-radius:var(--r);box-shadow:0 8px 22px rgb(var(--tinta) / .18);
+  max-height:210px;overflow-y:auto;padding:4px}
+.pesq-drop[hidden]{display:none}
+.pesq-drop button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:6px 8px;border-radius:6px;
+  cursor:pointer;font-size:12.5px;color:var(--tx)}
+.pesq-drop button:hover,.pesq-drop button.at{background:var(--gl);color:var(--gd)}
+.pesq-drop small{color:var(--tx3);font-weight:400}
+.pesq-drop mark{background:transparent;color:var(--gd);font-weight:700}
+.pesq-nada{padding:6px 8px;color:var(--tx3);font-size:12px}
+/* Resultado */
+.pesq-resultado{margin-top:9px;padding-top:7px;border-top:1px solid var(--blt);max-height:min(38vh, 300px);overflow-y:auto}
+.pesq-resultado:empty{display:none}
 .pesq-msg{font-size:12px;color:var(--tx2);padding:3px 2px}
+.pesq-msg[hidden]{display:none}
 .pesq-msg a{color:var(--gd)}
 .pesq-erro{color:var(--red)}
 .pesq-tabela{width:100%;border-collapse:collapse;font-size:12.5px}
-.pesq-tabela td{padding:6px 4px;border-bottom:1px solid var(--blt)}
+.pesq-tabela td{padding:6px 4px;border-bottom:1px solid var(--blt);vertical-align:top}
 .pesq-tabela tr{cursor:pointer}
 .pesq-tabela tr:hover{background:var(--gl)}
+.pesq-tabela .mono{white-space:nowrap}
+.pesq-sub{font-size:11.5px;color:var(--tx3)}
+.pesq-tag{display:inline-block;font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px;margin:0 3px 2px 0;
+  background:#FFF3CD;color:#3B2A00}
 .pesq-ver{text-align:right;color:var(--gd);white-space:nowrap}
 #grupo-busca .ctrl-btn.at{background:var(--gl);color:var(--gd)}
-@media (max-width:620px){ .pesq-escopo{margin-left:0;width:100%} .pesq-escopo select{max-width:none;flex:1} .pesq-tabela td:nth-child(3){display:none} }
+@media (max-width:620px){ .pesq-tabela td:nth-child(3){display:none} }
 
 /* O lote procurado (pesquisa, conferência): contorno amarelo piscando. */
 .lote-realce{animation:lote-pisca 1s ease-in-out 6}
