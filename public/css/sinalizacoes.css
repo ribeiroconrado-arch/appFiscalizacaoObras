@@ -1,6 +1,6 @@
 /* ══════ BALÃO DO MAPA (modelo D4) E SINALIZAÇÃO ══════
    Cores pelos tokens do tema: o cabeçalho acompanha o institucional (verde),
-   o azul ou o âmbar. Âmbar fixo só no AVISO de pendência — é sinal, não marca. */
+   o cinza ou o âmbar. Âmbar fixo só no AVISO de pendência — é sinal, não marca. */
 
 /* ── O balão ── */
 .balao4{width:280px;font-family:'Inter',sans-serif;font-size:12px;color:var(--tx);overflow:hidden;border-radius:var(--rl,10px)}

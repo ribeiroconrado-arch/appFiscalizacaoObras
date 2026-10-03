@@ -15,17 +15,20 @@
 // ══════════════════════════════════════════════
 
 // `dataset` é o nome do data-src-* de cada tema, já no formato do JavaScript
-// (data-src-azul → srcAzul).
+// (data-src-cinza → srcCinza).
 const TEMAS = {
   institucional: { cor: '#00451A', dataset: 'srcInstitucional' },
   f:             { cor: '#B4470D', dataset: 'srcF' },
-  azul:          { cor: '#1E3A8A', dataset: 'srcAzul' },
+  cinza:         { cor: '#3F4750', dataset: 'srcCinza' },
 }
 
-/** Tema salvo, ou o institucional. @returns {'institucional'|'f'|'azul'} */
+/** Tema salvo, ou o institucional. @returns {'institucional'|'f'|'cinza'} */
 function temaSalvo() {
   try {
-    const t = localStorage.getItem('tema')
+    // O azul virou o cinza: quem tinha escolhido o azul continua no tema
+    // que substituiu o dele, e não cai no padrão sem ter pedido.
+    const salvo = localStorage.getItem('tema')
+    const t = salvo === 'azul' ? 'cinza' : salvo
     return TEMAS[t] ? t : 'institucional'
   } catch (e) {
     return 'institucional'   // modo privado: vale só nesta sessão
@@ -33,7 +36,7 @@ function temaSalvo() {
 }
 
 /**
- * @param {'institucional'|'f'|'azul'} tema
+ * @param {'institucional'|'f'|'cinza'} tema
  * @param {boolean} [salvar=false] false na carga inicial — não há o que gravar.
  */
 function aplicarTema(tema, salvar = false) {

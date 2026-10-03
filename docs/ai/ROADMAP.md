@@ -235,12 +235,22 @@ relatório em itens, impressão / mesa, desfazer, curadoria). Sem módulos ES, a
 ordem dos `<script>` em `mapa.blade.php` passa a importar: documentar a ordem
 no topo de cada arquivo.
 
-### 🟢 6. Consolidar os três temas de CSS — risco médio
+### ✅ 6. Consolidar os temas de CSS — feito em 10/2026 (parcial)
 
-`tema-institucional.css`, `tema-azul.css` e `tema-f.css` (3.346 linhas) são
-carregados juntos e cada um sobrescreve o anterior. Extrair o que é comum para
-`app.css` e deixar em cada tema só variáveis e diferenças reais. Exige
-conferência visual dos três temas em celular, tablet e desktop.
+As três paletas (âmbar, institucional e cinza, que substituiu o azul) estão em
+`temas.css`, só como tokens; saíram `tema-institucional.css` e `tema-azul.css`,
+os seletores `html[data-tema=…]` das folhas de componente, a barra `.acoes`
+(sem uso) e 127 declarações que outra regra, mais adiante, sempre vencia.
+Conferido por captura de tela antes/depois: institucional e âmbar ficaram
+idênticos pixel a pixel.
+
+Falta, se valer o esforço:
+- `tema-f.css` (3.200 linhas) continua sendo a folha de componentes com nome
+  de tema; renomear para `componentes.css` toca as duas views e os testes.
+- `app.css` ainda tem fragmentos de regras que `tema-f.css` completa (`.badge`,
+  `#toast`, `.ctrl-btn`). Juntar cada componente num lugar só.
+- `prancheta-cadastral.css` tem verdes fixos (`#009b3a`, `#f4f7f5`…) que não
+  seguem o tema.
 
 ### 🟢 7. Emagrecer os controllers grandes — risco médio
 

@@ -20,7 +20,7 @@ const data = {
 const app = fs.readFileSync(path.join(root,'public/js/app.js'),'utf8')
 const start = app.indexOf('function irPara('), end = app.indexOf('\n}', start)+2
 const html = `<!doctype html><html data-tema="institucional"><meta charset="utf-8">
-${['app','tema-f','tema-institucional','painel-responsivo'].map(f=>`<link rel="stylesheet" href="/public/css/${f}.css">`).join('')}
+${['temas','app','tema-f','painel-responsivo'].map(f=>`<link rel="stylesheet" href="/public/css/${f}.css">`).join('')}
 <header style="height:68px;background:#005b24;color:white;padding:16px;font:700 16px Arial">Fiscalização de Obras</header><div class="subcab">Prefeitura Municipal de Primavera do Leste</div>
 ${painel}${['busca','documentos','protocolos','mapa'].map(id=>`<section class="tela" id="t-${id}"></section>`).join('')}${nav}
 <script>function esc(s){const el=document.createElement('span');el.textContent=s??'';return el.innerHTML.replaceAll('"','&quot;')}

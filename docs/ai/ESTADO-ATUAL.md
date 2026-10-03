@@ -52,7 +52,7 @@ legal, que é o que dá força à peça, está quase vazio.
 | Bairros e irregularidades em Parâmetros (CRUD) | ✅ |
 | Inscrição imobiliária derivada, exibida e buscável | ✅ |
 | Auditoria de tudo que altera identificação | ✅ |
-| Três temas (institucional / F / azul) e menu lateral recolhível | ✅ |
+| Três temas (institucional / âmbar / cinza), só tokens em `temas.css`, e menu lateral recolhível | ✅ |
 | Importação de bairro pela tela (rascunho → salva → publicada), com pré-curadoria | ✅ `bd34623` |
 | Conferência do bairro com a planilha do cadastro, nos dois sentidos, com justificativas | ✅ `bd34623` |
 | Painel Camadas, pesquisa em barra (inscrição, endereço, coordenada lat/long ou UTM) | ✅ `bd34623` |
@@ -149,7 +149,7 @@ fim.
   telas e modais). Funciona, mas é um arquivo muito grande.
 - `public/js/vistoria.js` passa de 2.900 linhas.
 - Front sem módulos ES: tudo em escopo global.
-- `public/css/tema-f.css` passa de 3.300 linhas: três temas empilhados, cada
-  um sobrescrevendo o anterior.
+- `public/css/tema-f.css` tem 3.200 linhas: é a folha de componentes, com nome
+  de tema por herança (ver ROADMAP, item 5.6).
 - Cada `fetch` monta o próprio cabeçalho `X-CSRF-TOKEN` (23 lugares); falta um
   utilitário único.

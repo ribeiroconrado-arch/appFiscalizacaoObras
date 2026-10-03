@@ -1,8 +1,7 @@
 #pc-modal{position:absolute;inset:0;margin:0;padding:0;border:0;border-radius:0;width:auto;max-width:none;height:auto;max-height:none;background:#fff;color:#213547;box-shadow:none;overflow:hidden;z-index:1200;display:flex}
 #pc-modal[hidden]{display:none}
 .pc-janela{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0}
-.pc-regua-slot{display:none;flex:0 0 56px;min-height:0;border-right:1px solid var(--bord,#ddd);background:var(--sur,#fff)}
-.pc-com-regua .pc-regua-slot{display:block}
+.pc-regua-slot{flex:0 0 56px;min-height:0;border-right:1px solid var(--bord,#ddd);background:var(--sur,#fff)}
 #pc-modal .cad-regua{width:56px;height:100%;overflow-y:auto;overflow-x:hidden}
 #pc-modal .cad-dica-fer{display:none}
 /* A prancheta ocupa o contêiner do mapa INTEIRO (#t-mapa) e fica sozinha:
@@ -27,8 +26,6 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 .pc-parte-mais[hidden]{display:none}
 .pc-medidas-tit{display:block;font-size:12px;margin-bottom:8px}
 /* Cartão mais enxuto: apelido e metragem NA MESMA LINHA, menos respiro. */
-#pc-dados .pc-parte-card{padding:10px 14px 12px;margin-bottom:12px}
-#pc-dados .pc-parte-topo{margin:0 0 8px}
 #pc-dados .pc-parte-topo>div:first-child{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;min-width:0}
 #pc-dados .pc-parte-topo>div:first-child small{display:inline;margin-top:0;font-size:11px}
 #pc-dados .pc-parte-card .pc-mais{margin-top:8px}
@@ -67,7 +64,7 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 .pc-canvas{position:relative;flex:1;min-height:180px;overflow:hidden}#pc-svg{width:100%;height:100%;display:block;touch-action:none;outline:none;cursor:crosshair}
 .pc-hit{fill:none;stroke:transparent;stroke-width:16;pointer-events:stroke;cursor:move}
 .pc-label,.pc-cota,.pc-confronto,.pc-vizinho{font-family:Inter,Arial,sans-serif;fill:#263e50;paint-order:stroke;stroke:white;stroke-width:4px;stroke-linejoin:round;pointer-events:none}
-.pc-label{font-size:12px;font-weight:700}.pc-cota{font-size:11px;transform:translateY(-7px)}.pc-vizinho{font-size:11px;fill:#586875}.pc-confronto{font-size:13px;font-weight:700}.pc-snap{font:12px Inter,Arial;fill:#16803c;paint-order:stroke;stroke:white;stroke-width:3px;pointer-events:none}
+.pc-label{font-size:12px;font-weight:700}.pc-cota{font-size:11px}.pc-vizinho{font-size:11px;fill:#586875}.pc-confronto{font-size:13px;font-weight:700}.pc-snap{font:12px Inter,Arial;fill:#16803c;paint-order:stroke;stroke:white;stroke-width:3px;pointer-events:none}
 .pc-credito{position:absolute;right:8px;bottom:4px;font-size:9px;color:#586575;background:#ffffffcf;padding:2px 5px;border-radius:3px}.pc-credito a{color:inherit}.pc-cota{transform:none}
 #pc-entrada{position:absolute;display:flex;align-items:center;gap:6px;background:white;border:1px solid #4c8dcc;border-radius:5px;box-shadow:0 3px 15px #0002;padding:5px 7px;font-size:11px;z-index:2}#pc-entrada[hidden]{display:none}#pc-entrada input{width:75px;border:0;border-bottom:1px solid #8cafcf;font:13px monospace;padding:3px;background:#f1f7ff}#pc-entrada span{color:#698091;white-space:nowrap}
 /* RODAPÉ: Salvar rascunho e Exportar SVG à esquerda, a ação principal à
