@@ -130,10 +130,15 @@ body{
 /* ── MODAIS ───────────────────────────────────────────────── */
 /* Fecham só pelo × ou por botão explícito — clicar no fundo NÃO fecha,
    de propósito, para não perder dados já digitados. */
+/* SEM `backdrop-filter`. O borrão de 2 px no fundo obrigava o navegador a
+   refazer o desfoque do MAPA INTEIRO por trás (foto + milhares de lotes) a
+   cada repintura dentro da janela — inclusive a cada troca de aba. Medido no
+   Chromium: troca de aba da ficha de 96 ms para 32 ms (pior caso, 248 → 40;
+   com a CPU 4x mais lenta de um tablet, 128 → 80). O véu escuro sozinho já
+   separa a janela do mapa. */
 .modal-bg{
   display:none;position:fixed;inset:0;background:var(--veu);z-index:2000;
   align-items:flex-start;justify-content:center;padding:14px;overflow-y:auto;
-  backdrop-filter:blur(2px);
 }
 .modal-bg.open{display:flex}
 .modal{
@@ -408,8 +413,10 @@ body.login-bg{
    ("Imagens ©2026 Airbus, Maxar Technologies"), que é a única informação de
    tempo que a API do Google devolve. Numa fiscalização isso importa — a foto
    é o que o fiscal compara com o que viu em campo. */
+/* Fundo mais opaco no lugar do borrão: o crédito fica sobre o mapa, e um
+   `backdrop-filter` ali é refeito a cada quadro de arrasto. */
 .leaflet-control-attribution{
-  background:rgba(255,255,255,.74);backdrop-filter:blur(3px);
+  background:rgba(255,255,255,.88);
   font-size:9.5px;line-height:1.5;color:var(--tx3);
   padding:2px 7px;border-radius:7px 0 0 0;font-family:inherit;
 }
