@@ -184,7 +184,28 @@ function iniciarMapa() {
   // quem tem o dedo no mapa e não no teclado. Cada lote consome o próprio
   // duplo toque (ver onEachFeature) antes de ele chegar aqui, então isto só
   // dispara quando o toque caiu fora de qualquer lote.
+  //
+  // COM ALGO SELECIONADO, O DUPLO CLIQUE SÓ DESMARCA — não aproxima o mapa. O
+  // zoom do duplo clique é do Leaflet, e ele ouve o mesmo `dblclick`: quem
+  // queria só soltar os lotes ganhava de brinde um mapa um nível mais perto.
+  // Sem nada selecionado, o zoom continua valendo.
+  //
+  // Para poder vetar o zoom, este ouvinte tem de rodar ANTES do dele — daí o
+  // desliga/liga em volta do registro. Desligado dentro do nosso ouvinte, o do
+  // Leaflet não chega a rodar neste mesmo evento; ele volta logo em seguida.
+  const zoomDuplo = mapaState.obj.doubleClickZoom
+  const zoomDuploLigado = zoomDuplo.enabled()
+  if (zoomDuploLigado) zoomDuplo.disable()
   mapaState.obj.on('dblclick', () => {
+    const haviaSelecao = !!state.selecionado || !!mapaState.destacado
+      || (typeof selState !== 'undefined' && selState.ids.size > 0)
+    // Só quando ele está ligado: durante o desenho de lote quem o desliga é o
+    // desenho (desenho.js), e religá-lo aqui seria passar por cima.
+    if (haviaSelecao && zoomDuplo.enabled()) {
+      zoomDuplo.disable()
+      setTimeout(() => zoomDuplo.enable(), 0)
+    }
+
     // `escaparSelecao` e não `desligarSelecao`: na mesa, soltar as marcas não
     // pode desarmar a marcação — desarmada, ela devolveria o clique ao balão e
     // a régua ficaria sem como acender. Ver cadastro.js.
@@ -194,6 +215,7 @@ function iniciarMapa() {
     }
     limparSelecao()
   })
+  if (zoomDuploLigado) zoomDuplo.enable()
 
   recortarMunicipio()
 }

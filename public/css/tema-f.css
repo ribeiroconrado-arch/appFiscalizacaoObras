@@ -3108,13 +3108,21 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 /* No padrão dos outros painéis da coluna (.ctrl-corpo): mesmo título, mesma
    letra das legendas, caixa de marcar na cor do tema (.lembrar). A altura é
    limitada ao que sobra da tela (alternarPainelMapa) e o resto rola. */
-.ctrl-camadas{width:196px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
-.ctrl-camadas .cam-grupo{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
-  color:var(--tx3);margin:8px 0 2px}
-.ctrl-camadas .cam-grupo:first-child{margin-top:0}
-.ctrl-camadas .cam-item{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:500;
-  color:var(--tx2);padding:2px 0;cursor:pointer;line-height:1.35}
-.ctrl-camadas .cam-item input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--g)}
+.ctrl-camadas{width:224px;max-width:224px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+/* Título e o X na mesma linha. O X fecha o painel sem ter de voltar ao botão
+   da coluna, que no celular fica debaixo do dedo. */
+.ctrl-camadas .cam-topo{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.ctrl-camadas .cam-topo b{margin:0;font-size:11px}
+.ctrl-camadas .cam-x{flex:none;width:24px;height:24px;border:0;border-radius:6px;background:none;
+  color:var(--tx3);font-size:13px;line-height:1;cursor:pointer}
+.ctrl-camadas .cam-x:hover{background:var(--blt);color:var(--red)}
+/* Uma LINHA separa cada grupo: com seis grupos de duas ou três camadas, só o
+   título em caixa alta não bastava para o olho achar onde um acaba. */
+.ctrl-camadas .cam-grupo{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--tx3);margin:9px 0 3px;padding-top:9px;border-top:1px solid var(--bord)}
+.ctrl-camadas .cam-item{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;
+  color:var(--tx2);padding:3px 0;cursor:pointer;line-height:1.35}
+.ctrl-camadas .cam-item input{width:15px;height:15px;margin:0;flex:none;accent-color:var(--g)}
 .cad-mesa-x:hover{color:var(--red)}
 .cad-mesa-rolo{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px}
 /* Duas colunas de campo (frente/fundos, lados) cabendo na mesa: sem

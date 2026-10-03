@@ -396,7 +396,11 @@
         <path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 18 10 5 10-5" opacity=".55"/></svg>
     </button>
     <div class="ctrl-corpo ctrl-camadas">
-      <b>Camadas</b>
+      <div class="cam-topo">
+        <b>Camadas</b>
+        <button type="button" class="cam-x" onclick="alternarPainelMapa('grupo-camadas')"
+                title="Fechar" aria-label="Fechar as camadas">&#10005;</button>
+      </div>
       <div id="camadas-lista"></div>
     </div>
   </div>
@@ -486,7 +490,7 @@
             <circle cx="20" cy="10" r="1.6"/><circle cx="20" cy="20" r="1.6"/><circle cx="4" cy="20" r="1.6"/>
           </svg>
           <span class="cad-lanca-txt">Editar lote
-            <span class="cad-lanca-obs">Vértices, número e quadra — só na pré-curadoria.</span>
+            <span class="cad-lanca-obs">Vértices, número e quadra — só em lote de importação não publicada.</span>
           </span>
         </button>
 
@@ -501,7 +505,7 @@
             <path d="M9 4 7 20M17 4l-2 16M4 9h16M3 15h16"/>
           </svg>
           <span class="cad-lanca-txt">Informar número do lote
-            <span class="cad-lanca-obs">Marque 1 lote e digite o número — só na pré-curadoria.</span>
+            <span class="cad-lanca-obs">Marque 1 lote e digite o número — só em lote de importação não publicada.</span>
           </span>
         </button>
 
@@ -513,7 +517,7 @@
             <rect x="4" y="4" width="16" height="16" rx="1.4"/><path d="m9 9 6 6M15 9l-6 6"/>
           </svg>
           <span class="cad-lanca-txt">Excluir lotes
-            <span class="cad-lanca-obs">Marque um ou vários lotes da importação — só na pré-curadoria.</span>
+            <span class="cad-lanca-obs">Marque um ou vários lotes de uma importação não publicada.</span>
           </span>
         </button>
 

@@ -18,6 +18,8 @@ const impState = {
   podePublicar: !!window.USUARIO_ADMIN,
   /** Importação em PRÉ-CURADORIA: as ferramentas só alcançam os lotes dela. @type {Object|null} */
   preCuradoria: null,
+  /** Quantas importações não publicadas existem (rascunho ou em revisão). */
+  pendentes: 0,
   /** A importação foi levada ao MAPA (Ver no mapa, Pré-curadoria, ver lote)? Só então a barra aparece. */
   noMapa: false,
 }
@@ -84,7 +86,7 @@ async function carregarListaImportacoes() {
   try {
     const d = await _impPedir('/api/importacoes')
     impState.podePublicar = d.pode_publicar
-    atualizarContadorImportacoes(d.em_revisao)
+    atualizarContadorImportacoes(d.em_revisao, _impPendentes(d))
 
     const linhas = d.importacoes.map(i => `
       <tr onclick="abrirImportacao(${i.id})">
@@ -117,7 +119,15 @@ async function carregarListaImportacoes() {
 }
 
 /** O número de importações em revisão, ao lado do botão do painel. */
-function atualizarContadorImportacoes(n) {
+/** Rascunhos (os meus) e importações em revisão: tudo o que ainda não foi publicado. */
+function _impPendentes(d) {
+  return (d.importacoes || []).filter(i => i.status === "rascunho" || i.status === "revisao").length
+}
+
+function atualizarContadorImportacoes(n, pendentes = n) {
+  // É também o que acende as ferramentas de lote não publicado na mesa.
+  impState.pendentes = Number(pendentes) || 0
+  _ferramentasDaPreCuradoria()
   const el = document.getElementById('imp-contador')
   if (!el) return
   el.hidden = !n
@@ -711,7 +721,7 @@ async function salvarImportacao() {
     const d = await _impPedir(`/api/importacoes/${i.id}/salvar`, { method: 'POST' })
     toast(d.message)
     await abrirImportacao(i.id)
-    atualizarContadorImportacoes((await _impPedir('/api/importacoes')).em_revisao)
+    { const d = await _impPedir("/api/importacoes"); atualizarContadorImportacoes(d.em_revisao, _impPendentes(d)) }
   } catch (e) {
     toast(e.message, 'err')
     if (btn) { btn.disabled = false; btn.textContent = 'Salvar importação' }
@@ -781,7 +791,7 @@ function _ligarPreCuradoria(i) {
   if (!_impEmAndamento(i) || impState.preCuradoria?.id === i.id) return
   impState.preCuradoria = { id: i.id, bairro: i.bairro }
   if (typeof limparSelecaoCadastral === 'function') limparSelecaoCadastral()
-  _ferramentasDaPreCuradoria(true)
+  _ferramentasDaPreCuradoria()
 }
 
 function _entrarPreCuradoria() {
@@ -803,7 +813,7 @@ function _entrarPreCuradoria() {
 function sairPreCuradoria() {
   impState.preCuradoria = null
   impState.noMapa = false
-  _ferramentasDaPreCuradoria(false)
+  _ferramentasDaPreCuradoria()
   if (typeof limparSelecaoCadastral === 'function') limparSelecaoCadastral()
   if (typeof montarReguaCadastral === 'function') montarReguaCadastral()
   pintarBarraImportacao()
@@ -816,7 +826,7 @@ function editarLoteDaPreCuradoria() {
   const p = marcado ?? state.selecionado?.properties
   if (!p?.id) { toast('Marque o lote que vai editar.', 'err'); return }
   if (!p.em_revisao || (impState.preCuradoria && Number(p.importacao_id) !== impState.preCuradoria.id)) {
-    toast('Editar lote vale só para os lotes da importação em pré-curadoria.', 'err'); return
+    toast('Editar lote vale só para lote de importação não publicada.', 'err'); return
   }
   PranchetaCad.abrir('edicao', [p.id], null, null, {
     quadra: p.quadra, numero_lote: p.numero_lote,
@@ -825,24 +835,36 @@ function editarLoteDaPreCuradoria() {
 }
 
 /**
- * Mostra (ou esconde) as ferramentas que só existem na pré-curadoria —
- * Editar lote, Informar número e Excluir lotes — e refaz a régua da mesa,
- * que é montada a partir dos lançadores visíveis.
+ * Mostra (ou esconde) Editar lote, Informar número e Excluir lotes, e refaz a
+ * régua da mesa, que é montada a partir dos lançadores visíveis.
+ *
+ * Aparecem enquanto HOUVER importação não publicada — e não só com a barra da
+ * pré-curadoria aberta. O que elas exigem é o LOTE ser de importação não
+ * publicada; quem abria a correção cadastral direto no mapa via os lotes do
+ * rascunho, marcava um e ouvia "só na pré-curadoria".
  */
-function _ferramentasDaPreCuradoria(mostrar) {
+function _ferramentasDaPreCuradoria() {
+  const mostrar = !!impState.preCuradoria || impState.pendentes > 0
   document.querySelectorAll('#cad-geral .cad-lanca.so-pre').forEach(b => { b.hidden = !mostrar })
   if (typeof montarReguaCadastral === 'function') montarReguaCadastral()
 }
 
-/** Os lotes marcados, conferindo que são todos da importação em pré-curadoria. */
+/**
+ * Os lotes marcados, conferindo que são todos de UMA importação não publicada.
+ * A importação sai dos próprios lotes: a ferramenta vale com ou sem a barra da
+ * pré-curadoria aberta. O servidor confere de novo (PreCuradoriaDeLotes).
+ */
 function _lotesMarcadosDaPreCuradoria() {
   const pre = impState.preCuradoria
   const props = [...(typeof selState !== 'undefined' ? selState.ids : [])]
     .map(id => mapaState.porId.get(id)?.feature?.properties).filter(Boolean)
-  if (!pre) { toast('Esta ferramenta é só da pré-curadoria.', 'err'); return null }
   if (!props.length) { toast('Marque o lote no mapa.', 'err'); return null }
-  if (props.some(p => Number(p.importacao_id) !== pre.id)) {
-    toast('Só entram lotes da importação em pré-curadoria.', 'err'); return null
+  if (props.some(p => !p.em_revisao || !p.importacao_id)) {
+    toast('Esta ferramenta vale só para lote de importação não publicada.', 'err'); return null
+  }
+  const imp = Number(props[0].importacao_id)
+  if (props.some(p => Number(p.importacao_id) !== imp) || (pre && imp !== pre.id)) {
+    toast(pre ? 'Só entram lotes da importação em pré-curadoria.' : 'Marque lotes de uma importação só.', 'err'); return null
   }
   return props
 }
@@ -868,7 +890,7 @@ function numerarLoteDaPreCuradoria() {
     minimo: 1, linhas: 1, valor: p.numero_lote ?? '', textoBtn: 'Gravar número',
     onOk: async numero => {
       try {
-        const d = await _impPedir(`/api/importacoes/${impState.preCuradoria.id}/lotes/${p.id}/numero`, {
+        const d = await _impPedir(`/api/importacoes/${Number(p.importacao_id)}/lotes/${p.id}/numero`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ numero_lote: numero }),
         })
@@ -890,7 +912,7 @@ function excluirLotesDaPreCuradoria() {
     textoBtn: 'Excluir', perigo: true,
     onConfirm: async () => {
       try {
-        const d = await _impPedir(`/api/importacoes/${impState.preCuradoria.id}/lotes/excluir`, {
+        const d = await _impPedir(`/api/importacoes/${Number(lotes[0].importacao_id)}/lotes/excluir`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: lotes.map(p => p.id) }),
         })
@@ -1008,6 +1030,6 @@ function pintarBarraImportacao() {
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     const d = await _impPedir('/api/importacoes')
-    atualizarContadorImportacoes(d.em_revisao)
+    atualizarContadorImportacoes(d.em_revisao, _impPendentes(d))
   } catch { /* sem contador — o botão continua funcionando */ }
 })
