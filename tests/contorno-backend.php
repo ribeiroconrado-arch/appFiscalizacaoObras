@@ -36,6 +36,14 @@ $quadrado = fn ($o, $s, $l, $n) => ['type' => 'MultiPolygon', 'coordinates' => [
 DB::beginTransaction();
 try {
     $total = DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')->count();
+
+    // Com o código do cadastro, a leitura junta `lotes` com o cadastro — duas
+    // tabelas de collations diferentes. Em 03/10/2026 isso derrubava a
+    // ferramenta de contorno em produção com "Server Error" (erro 1267).
+    echo "Lotes do bairro com o logradouro do cadastro\n";
+    confere(count(app(LoteRepository::class)->lotesDoBairro($bairro, '105')) === $total,
+        'a junção com o cadastro devolve todos os lotes, sem erro de collation');
+
     $e = app(LoteRepository::class)->extensao($bairro);
     $m = 0.01;   // o bairro inteiro, com folga: cobre também lote de canto
     // Lote isolado (coordenada corrompida) fica fora de qualquer quadrado razoável:

@@ -577,7 +577,11 @@ class LoteRepository
                                              AND logradouro IS NOT NULL AND logradouro <> ''
                                            GROUP BY q, n, logradouro) t
                                     WHERE ordem = 1) c
-                                ON c.q = TRIM(LEADING '0' FROM l.quadra) AND c.n = TRIM(LEADING '0' FROM l.numero_lote)
+                                -- COLLATE dos DOIS lados: `lotes` e o cadastro foram criados com
+                                -- collations diferentes (0900_ai_ci e unicode_ci), e o MySQL recusa
+                                -- comparar as duas sem que alguém diga qual vale (erro 1267).
+                                ON c.q COLLATE utf8mb4_unicode_ci = TRIM(LEADING '0' FROM l.quadra) COLLATE utf8mb4_unicode_ci
+                               AND c.n COLLATE utf8mb4_unicode_ci = TRIM(LEADING '0' FROM l.numero_lote) COLLATE utf8mb4_unicode_ci
                             WHERE l." . self::SO_ATIVOS . ' AND l.bairro = ?', [ltrim($codigoCadastro, '0'), $bairro]);
     }
 
