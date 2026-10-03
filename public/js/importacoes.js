@@ -794,18 +794,20 @@ function _ligarPreCuradoria(i) {
   _ferramentasDaPreCuradoria()
 }
 
+/** Abre a correção cadastral: a mesa lateral em tela grande, o painel no celular. */
+function _abrirMesaDaCuradoria() {
+  const mesa = document.getElementById('cad-mesa')
+  const aberto = typeof ehMesaCadastral === 'function' && ehMesaCadastral()
+    ? mesa && !mesa.hidden
+    : document.getElementById('grupo-cadastro')?.classList.contains('aberto')
+  if (!aberto && typeof alternarPainelMapa === 'function') alternarPainelMapa('grupo-cadastro')
+  if (typeof montarReguaCadastral === 'function') montarReguaCadastral()
+}
+
 function _entrarPreCuradoria() {
   const i = impState.atual
   verImportacaoNoMapa()   // liga a pré-curadoria (_ligarPreCuradoria)
-  // Abre a correção cadastral: a mesa lateral em tela grande, o painel no celular.
-  setTimeout(() => {
-    const mesa = document.getElementById('cad-mesa')
-    const aberto = typeof ehMesaCadastral === 'function' && ehMesaCadastral()
-      ? mesa && !mesa.hidden
-      : document.getElementById('grupo-cadastro')?.classList.contains('aberto')
-    if (!aberto && typeof alternarPainelMapa === 'function') alternarPainelMapa('grupo-cadastro')
-    if (typeof montarReguaCadastral === 'function') montarReguaCadastral()
-  }, 200)
+  setTimeout(_abrirMesaDaCuradoria, 200)
   toast(`Pré-curadoria · ${_impNome(i)}: as ferramentas só alcançam estes lotes.`)
 }
 
@@ -955,7 +957,18 @@ async function irAoLoteDaImportacao(loteId) {
     if (!camadaLigada('nao-publicados')) ligarCamada('nao-publicados', true)
     if (d.lat && d.lon) verImovelNoMapa(d.lat, d.lon)
     pintarBarraImportacao()
-    destacarLoteQuandoCarregar(Number(loteId))   // mapa.js
+    if (!impState.preCuradoria) { destacarLoteQuandoCarregar(Number(loteId)); return }   // mapa.js
+
+    // Em pré-curadoria o "ver no mapa ›" é para CORRIGIR o lote: a mesa abre e
+    // o lote já chega marcado, pronto para N, L ou X. Só destacado, com a mesa
+    // fechada, o atalho não fazia nada — e sem aviso nenhum.
+    setTimeout(_abrirMesaDaCuradoria, 200)
+    await destacarLoteQuandoCarregar(Number(loteId))
+    const camada = mapaState.porId?.get(Number(loteId))
+    if (camada && typeof alternarSelecao === 'function' && typeof selState !== 'undefined') {
+      if (typeof limparSelecaoCadastral === 'function') limparSelecaoCadastral()
+      alternarSelecao(camada.feature, camada)
+    }
   } catch (e) {
     toast(e.message, 'err')
   }
