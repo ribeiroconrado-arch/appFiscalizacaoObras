@@ -228,6 +228,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // O artigo pelo problema que o fiscal viu ("escav" → escavação), em
         // todas as leis — ver VistoriaController::buscarArtigos.
         Route::get('/artigos/busca', [VistoriaController::class, 'buscarArtigos']);
+        // Progressividade: o único dado da aba BCI que a fiscalização lança.
+        Route::put('/imoveis/{lote}/progressividade', [CadastroImobiliarioController::class, 'progressividade']);
 
         // Atos cadastrais. O portao NAO e o perfil: e a VISTORIA regular
         // amarrada ao protocolo deferido. O deferimento diz que o pedido

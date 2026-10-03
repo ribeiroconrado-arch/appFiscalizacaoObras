@@ -66,6 +66,9 @@ class CadastroCarregado implements FonteDoCadastro
             imovel: [
                 'codigo_cadastro'       => $c->codigo_cadastro,
                 'inscricao_alternativa' => $c->inscricao_alternativa,
+                // O bairro COMO O CADASTRO O CHAMA: é com ele, e não com o do
+                // sistema, que se confere se a ficha puxou o imóvel certo.
+                'nome_bairro'           => $c->nome_bairro,
                 'logradouro'            => $c->logradouro,
                 'numero_predial'        => $c->numero_predial,
                 'complemento'           => $c->complemento,

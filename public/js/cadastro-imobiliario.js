@@ -6,11 +6,14 @@
 //
 // 1. CARREGA SÓ QUANDO A ABA ABRE. O mapa traz até 3.000 lotes; buscar o
 //    cadastro de todos seria pagar caro por um dado que quase ninguém olha.
-// 2. NÃO REPETE O QUE A FICHA JÁ SABE. Inscrição, quadra, lote, bairro e CEP
-//    ficam de fora — o sistema já os tem, e guardar duas versões do mesmo fato
-//    é garantir que um dia elas divirjam.
-// 3. CABE NA ABA, SEM ROLAGEM INTERNA. As características vão em duas colunas
-//    e fonte menor; nenhuma seção rola por dentro.
+// 2. MOSTRA O IMÓVEL COMO O CADASTRO O CONHECE. Logradouro, número, bairro e
+//    inscrição alternativa vêm de lá, e não do sistema: é por eles que se
+//    confere se a ficha puxou o imóvel certo. Inscrição, quadra e lote do
+//    sistema continuam só no cabeçalho da ficha.
+// 3. CABE NA ABA, SEM ROLAGEM INTERNA. Linhas de rótulo e valor em duas
+//    colunas; os serviços públicos na testada ficam de fora (BCI_OCULTAS).
+// 4. A PROGRESSIVIDADE NÃO É DO CADASTRO: a fiscalização lança aqui, e ela
+//    mora no lote.
 // ══════════════════════════════════════════════
 
 /** Cache por lote: reabrir a aba do mesmo imóvel não repete a ida ao servidor. */
@@ -78,34 +81,21 @@ function desenharBci(caixa, d) {
         <p class="bci-vazio-p">Área de terreno, medidas, características e
            construções vêm do cadastro da prefeitura. Esta aba fica vazia — e não
            em branco: o que falta é o dado de lá, não o imóvel.</p>
-      </div>${secProprietarios(d.proprietarios)}`
+      </div>${secTopo(d.proprietarios, null)}${secFiscalizacao(d, null)}`
     return
   }
 
-  const i = d.imovel
+  // A ORDEM é a da leitura em campo: de quem é e qual imóvel é (para conferir
+  // se puxou o certo), como é o terreno, o que interessa à fiscalização e, por
+  // fim, o que está construído.
+  const c = bciCaracteristicas(d.caracteristicas)
   caixa.innerHTML = [
     cabecalhoBci(d),
-    secImovel(i),
-    secProprietarios(d.proprietarios),
-    secCaracteristicas(d.caracteristicas),
+    secTopo(d.proprietarios, d.imovel),
+    secTerreno(d.imovel, c),
+    secFiscalizacao(d, c),
     secUnidades(d.unidades),
   ].filter(Boolean).join('')
-}
-
-/**
- * Proprietários do imóvel. O servidor já mandou só o que este usuário pode ver
- * (ver App\Cadastro\ProprietariosVisiveis): CPF/CNPJ e endereço chegam só para
- * agente e administrador, e o externo não recebe o bloco.
- */
-function secProprietarios(lista) {
-  if (!lista || !lista.length) { return '' }
-  const corpo = lista.map(p => `
-    <div class="bci-prop">
-      <div class="bci-prop-n">${esc(p.nome)}${p.documento
-        ? ` <span class="mono bci-doc">${esc(p.documento)}</span>` : ''}</div>
-      ${p.endereco ? `<div class="bci-prop-e">${esc(p.endereco)}</div>` : ''}
-    </div>`).join('')
-  return bciSecao(lista.length > 1 ? 'Proprietários' : 'Proprietário', corpo)
 }
 
 /**
@@ -162,78 +152,234 @@ function dataHoraCurta(iso) {
        + ` - ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+// ── as peças do desenho ──────────────────────────────────────
+//
+// A aba inteira fala UMA gramática: linha de rótulo (cinza, à esquerda) e
+// valor (escuro, à direita), em duas colunas. Sem cor e sem caixa alta — o que
+// pesa é a ordem: de quem é, qual imóvel é, como é o terreno, o que interessa
+// à fiscalização, o que está construído.
+
 /** Uma seção com título. */
-function bciSecao(titulo, corpo) {
-  return `<div class="bci-sec"><div class="bci-sec-t">${esc(titulo)}</div>${corpo}</div>`
-}
-
-/** Faixa de campos — a mesma estrutura da ficha, para o traço não quebrar. */
-function bciFaixa(campos) {
-  const cheios = campos.filter(c => c[1] !== null && c[1] !== undefined && c[1] !== '')
-  if (!cheios.length) { return '' }
-  return '<div class="fi-linha">' + cheios.map(([rot, val]) => {
-    // Monoespaçado quando o valor é para CONFERIR dígito a dígito — código,
-    // inscrição, área, medida. Texto corrido (setor, isenção) fica na fonte
-    // do sistema, que é mais legível para ler do que para comparar.
-    const numero = /^[\d.,\/\s-]+(\s?m²|\s?m)?$/.test(String(val))
-    return `<div class="fi-campo"><span class="fi-rot">${esc(rot)}</span>`
-      + `<span class="fi-val${numero ? ' mono' : ''}">${esc(val)}</span></div>`
-  }).join('') + '</div>'
-}
-
-const bciM2 = v => (v || v === 0) ? fmtNum(v) + ' m²' : null
-const bciM  = v => (v || v === 0) ? fmtNum(v) + ' m' : null
-
-function secImovel(i) {
-  const faixas = [
-    bciFaixa([['Código', i.codigo_cadastro], ['Insc. alternativa', i.inscricao_alternativa],
-              ['Isenção', i.isencao]]),
-    bciFaixa([['Área terreno', bciM2(i.area_terreno_m2)],
-              ['Área edificada', bciM2(i.area_edificada_m2)],
-              ['Fração ideal', i.fracao_ideal]]),
-    bciFaixa([['Testada', bciM(i.testada_m)], ['Lado dir.', bciM(i.medida_lado_direito)],
-              ['Lado esq.', bciM(i.medida_lado_esquerdo)], ['Fundo', bciM(i.medida_fundo)]]),
-    bciFaixa([['Setor', i.setor], ['Região fiscal', i.regiao_fiscal]]),
-    bciFaixa([['Complemento', i.complemento]]),
-  ].join('')
-
-  return faixas ? bciSecao('Imóvel', `<div class="fi-linhas">${faixas}</div>`) : ''
+function bciSecao(titulo, corpo, classe = '') {
+  return `<div class="bci-sec ${classe}"><div class="bci-sec-t">${esc(titulo)}</div>${corpo}</div>`
 }
 
 /**
- * Rótulos do BCI que precisam de outro nome NA TELA.
+ * Uma linha rótulo/valor. Valor vazio vira travessão: nas seções de
+ * conferência, a linha em falta é informação ("o cadastro não tem número").
  *
- * "Situação", no quadro de características, quer dizer onde o lote está no
- * quarteirão (MEIO DA QUADRA, ESQUINA). Na ficha, "Situação" já quer dizer
- * outra coisa — imóvel ativo ou inativo por sucessão. Duas palavras iguais com
- * sentidos diferentes na mesma tela é erro esperando acontecer, e quem paga é
- * quem lê o auto depois.
+ * @param {string} rot
+ * @param {*} val
+ * @param {{mono?:boolean, forte?:boolean, longo?:boolean, html?:boolean}} [o]  `html`: o valor
+ *        já vem montado (e escapado) por quem chama — é o caso do seletor.
  */
-const BCI_ROTULOS = {
-  'Situação': 'Posição na quadra',
-  'SITUACAO': 'Posição na quadra',
+function bciLin(rot, val, o = {}) {
+  const vazio = val === null || val === undefined || val === ''
+  const corpo = vazio ? '—' : (o.html ? val : esc(val))
+  const cls = [o.mono ? 'mono' : '', o.forte ? 'forte' : '', o.longo ? 'longo' : '', vazio ? 'vazio' : ''].filter(Boolean).join(' ')
+  return `<div class="bci-lin"><span>${esc(rot)}</span><b${cls ? ` class="${cls}"` : ''}>${corpo}</b></div>`
 }
 
-function secCaracteristicas(lista) {
-  if (!lista || !lista.length) { return '' }
-  // Duas colunas: são 22 pares no BCI de Primavera, e em uma coluna só eles
-  // sozinhos passariam da altura da aba.
-  const corpo = '<div class="bci-carac">' + lista.map(c =>
-    `<div class="bci-par"><span>${esc(BCI_ROTULOS[c.chave] ?? c.chave)}</span>`
-    + `<b>${esc(c.valor ?? '—')}</b></div>`
-  ).join('') + '</div>'
-  return bciSecao('Características', corpo)
+/** Duas colunas de linhas. */
+function bciCols(esq, dir, classe = '') {
+  return `<div class="bci-g2 ${classe}"><div>${esq.join('')}</div><div>${dir.join('')}</div></div>`
+}
+
+const bciM2 = v => (v || v === 0) ? fmtNum(v) + ' m²' : null
+const bciM  = v => (v || v === 0) ? fmtNum(v) : null
+
+/** Dois valores numa linha só ("12 × 30 m"), ou o que houver deles. */
+function bciPar(a, b, sep, unidade) {
+  const partes = [a, b].filter(v => v !== null && v !== undefined && v !== '')
+  return partes.length ? partes.join(sep) + (unidade ? ' ' + unidade : '') : null
+}
+
+/**
+ * O cadastro grava tudo em CAIXA ALTA ("MEIO DA QUADRA"). Na tela vai em caixa
+ * de frase: doze linhas gritando deixam de destacar a que importa.
+ */
+function bciFrase(v) {
+  if (v === null || v === undefined || v === '') { return null }
+  const s = String(v).trim().toLowerCase()
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** "SIM"/"NÃO" sozinhos não dizem nada ao lado de "Calçada": tem ou não tem. */
+function bciTem(v) {
+  const s = String(v ?? '').trim().toUpperCase()
+  if (s === 'SIM') { return 'Tem' }
+  if (s === 'NÃO' || s === 'NAO' || s === 'NAO TEM' || s === 'NÃO TEM') { return 'Não tem' }
+  return bciFrase(v)
+}
+
+/**
+ * Características que a aba NÃO mostra: os serviços públicos na testada. Foi
+ * decisão de quem usa — na fiscalização de obras eles não mudam conduta, e
+ * ocupavam um terço da tela.
+ */
+const BCI_OCULTAS = new Set(['ENERGIA', 'AGUA', 'COLETA DE LIXO', 'ASFALTO', 'REDE DE ESGOTO',
+  'REDE TELEFONICA', 'GALERIAS', 'ILUMINAÇÃO PUBL'])
+
+/**
+ * Leitor das características: entrega cada uma pelo nome e lembra quais já
+ * foram usadas. As que sobrarem — a lista muda de município para município —
+ * vão para o fim do Terreno, em vez de sumir.
+ */
+function bciCaracteristicas(lista) {
+  const mapa = new Map((lista || []).map(c => [c.chave, c.valor]))
+  const usadas = new Set()
+  return {
+    pega(chave) { usadas.add(chave); return mapa.get(chave) ?? null },
+    resto() {
+      return [...mapa].filter(([k]) => !usadas.has(k) && !BCI_OCULTAS.has(k))
+        .map(([k, v]) => [bciFrase(k), bciFrase(v)])
+    },
+  }
+}
+
+/**
+ * PROPRIETÁRIO ao lado do IMÓVEL. O imóvel está aqui para CONFERIR se o
+ * cadastro puxado é o deste lote: logradouro, número, bairro e inscrição
+ * alternativa são os do cadastro municipal, não os do sistema.
+ *
+ * O servidor já mandou só o que este usuário pode ver (ver
+ * App\Cadastro\ProprietariosVisiveis): CPF inteiro e endereço só para agente e
+ * administrador; os demais servidores recebem o CPF mascarado; o externo não
+ * recebe o bloco — e aí o imóvel ocupa as duas colunas.
+ */
+function secTopo(donos, i) {
+  const imovel = i ? [
+    bciLin('Logradouro', i.logradouro),
+    bciLin('Número', bciPar(i.numero_predial, i.complemento, ' · '), { mono: !i.complemento }),
+    bciLin('Bairro', i.nome_bairro),
+    bciLin('Insc. alternativa', i.inscricao_alternativa, { mono: true }),
+  ] : null
+
+  const temDonos = donos && donos.length
+  if (!temDonos) {
+    return imovel ? bciSecao('Imóvel', bciCols(imovel.slice(0, 2), imovel.slice(2))) : ''
+  }
+
+  const dono = donos.map(p => {
+    const doc = p.documento ?? p.documento_mascarado
+    return [
+      bciLin('Nome', p.nome),
+      bciLin(/\//.test(doc ?? '') ? 'CNPJ' : 'CPF', doc, { mono: true }),
+      p.endereco ? bciLin('Endereço', p.endereco, { longo: true }) : '',
+    ].join('')
+  }).join('')
+  const titulo = donos.length > 1 ? 'Proprietários' : 'Proprietário'
+
+  if (!imovel) { return bciSecao(titulo, dono) }
+  return `<div class="bci-g2">${bciSecao(titulo, dono)}${bciSecao('Imóvel', imovel.join(''))}</div>`
+}
+
+function secTerreno(i, c) {
+  const esq = [
+    bciLin('Área', bciM2(i.area_terreno_m2), { mono: true }),
+    bciLin('Testada × fundo', bciPar(bciM(i.testada_m), bciM(i.medida_fundo), ' × ', 'm'), { mono: true }),
+    bciLin('Laterais', bciPar(bciM(i.medida_lado_direito), bciM(i.medida_lado_esquerdo), ' / ', 'm'), { mono: true }),
+    // "Situação", no cadastro, é onde o lote está no quarteirão. Na ficha a
+    // palavra já quer dizer outra coisa (ativo/inativo) — daí o outro nome.
+    bciLin('Posição na quadra', bciFrase(c.pega('SITUACAO') ?? c.pega('Situação'))),
+  ]
+  const dir = [
+    bciLin('Utilização', bciPar(bciFrase(c.pega('UTILIZACAO')), bciFrase(c.pega('TIPO DE IMOVEL')), ' · ')),
+    bciLin('Topografia', bciPar(bciFrase(c.pega('TOPOGRAFIA')), bciFrase(c.pega('PEDOLOGIA')), ' · ')),
+    bciLin('Setor', bciPar(i.setor, i.regiao_fiscal, ' · ')),
+    bciLin('Isenção', bciFrase(i.isencao)),
+  ]
+
+  // O que só às vezes existe entra no fim, alternando as colunas.
+  const extras = [
+    ['Patrimônio', bciFrase(c.pega('BEM IMOV. PATRIMONIO'))],
+    ['Fração ideal', i.fracao_ideal],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '')
+  // As da fiscalização são marcadas como usadas ANTES de calcular o resto.
+  BCI_DA_FISCALIZACAO.forEach(k => c.pega(k))
+  extras.concat(c.resto()).forEach(([rot, val], n) => (n % 2 ? dir : esq).push(bciLin(rot, val)))
+
+  return bciSecao('Terreno', bciCols(esq, dir))
+}
+
+const BCI_DA_FISCALIZACAO = ['CALCADA', 'ELEMENTO DE PROTECAO', 'OCUPACAO DO LOTE', 'CONSERVACAO DE']
+
+/**
+ * PARA A FISCALIZAÇÃO — o que decide conduta em campo: calçada,
+ * progressividade, muro, ocupação, área edificada, conservação.
+ *
+ * A progressividade é o único dado da aba que NÃO vem do cadastro municipal: é
+ * lançada aqui, pela fiscalização, e mora no lote. Por isso aparece mesmo
+ * quando o imóvel não está no cadastro.
+ */
+function secFiscalizacao(d, c) {
+  const i = d.imovel || {}
+  const progressividade = bciLin('Progressividade', campoProgressividade(d.fiscalizacao), { forte: true, html: true })
+  if (!c) {
+    return bciSecao('Para a fiscalização', `<div class="bci-g2 bci-marca"><div>${progressividade}</div><div></div></div>`)
+  }
+  const esq = [
+    bciLin('Calçada', bciTem(c.pega('CALCADA')), { forte: true }),
+    progressividade,
+    bciLin('Muro / proteção', bciFrase(c.pega('ELEMENTO DE PROTECAO')), { forte: true }),
+  ]
+  const dir = [
+    bciLin('Ocupação', bciFrase(c.pega('OCUPACAO DO LOTE')), { forte: true }),
+    bciLin('Área edificada', bciM2(i.area_edificada_m2), { forte: true, mono: true }),
+    bciLin('Conservação', bciFrase(c.pega('CONSERVACAO DE')), { forte: true }),
+  ]
+  return bciSecao('Para a fiscalização', bciCols(esq, dir, 'bci-marca'))
+}
+
+const BCI_PROGRESSIVIDADE = [['', 'Não informado'], ['1', 'Sim'], ['0', 'Não']]
+
+/** Quem lança vê o seletor; quem só consulta, o texto. */
+function campoProgressividade(f) {
+  const atual = f?.tem_progressividade === true ? '1' : f?.tem_progressividade === false ? '0' : ''
+  if (!window.PODE_EDITAR) {
+    return esc(BCI_PROGRESSIVIDADE.find(([v]) => v === atual)[1])
+  }
+  return `<select class="bci-sel" aria-label="Progressividade" onchange="salvarProgressividade(this)">${
+    BCI_PROGRESSIVIDADE.map(([v, r]) => `<option value="${v}"${v === atual ? ' selected' : ''}>${r}</option>`).join('')
+  }</select>`
+}
+
+/** Grava a progressividade do lote aberto. Falhou: o seletor volta ao que era. */
+async function salvarProgressividade(sel) {
+  const loteId = state.selecionado?.properties?.id
+  if (!loteId) { return }
+  const antes = bciCache.get(loteId)?.fiscalizacao?.tem_progressividade
+  sel.disabled = true
+  try {
+    const r = await fetch(`/api/imoveis/${loteId}/progressividade`, {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json', 'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+      },
+      body: JSON.stringify({ tem_progressividade: sel.value === '' ? null : sel.value === '1' }),
+    })
+    if (!r.ok) { throw new Error(r.status) }
+    const dados = await r.json()
+    if (bciCache.has(loteId)) { bciCache.get(loteId).fiscalizacao = dados.fiscalizacao }
+    toast('Progressividade gravada')
+  } catch (e) {
+    sel.value = antes === true ? '1' : antes === false ? '0' : ''
+    toast('Não foi possível gravar a progressividade', 'err')
+  } finally {
+    sel.disabled = false
+  }
 }
 
 function secUnidades(lista) {
   if (!lista || !lista.length) { return '' }
-  // Só ano, área e padrão: foi o pedido, e é o que responde "o que está
-  // construído aí". O número da unidade fica porque distingue as linhas.
+  // Só ano, área e padrão: é o que responde "o que está construído aí". O
+  // número da unidade fica porque distingue as linhas.
   const corpo = '<table class="bci-tab"><thead><tr><th>Un.</th><th>Ano</th>'
     + '<th class="num">Área</th><th>Padrão</th></tr></thead><tbody>'
     + lista.map(u => `<tr><td>${esc(u.numero ?? '—')}</td><td>${esc(u.ano ?? '—')}</td>`
-        + `<td class="num">${u.area || u.area === 0 ? esc(bciM2(u.area)) : '—'}</td>`
-        + `<td>${esc(u.padrao ?? '—')}</td></tr>`).join('')
+        + `<td class="num mono">${u.area || u.area === 0 ? esc(bciM2(u.area)) : '—'}</td>`
+        + `<td>${esc(bciFrase(u.padrao) ?? '—')}</td></tr>`).join('')
     + '</tbody></table>'
   return bciSecao('Unidades', corpo)
 }

@@ -35,9 +35,17 @@ class ProprietariosVisiveisTest extends TestCase
     public function test_coordenador_ve_so_o_nome(): void
     {
         $this->assertSame(
-            [['nome' => 'Maria da Silva']],
+            [['nome' => 'Maria da Silva', 'documento_mascarado' => '***.456.***-00']],
             ProprietariosVisiveis::para($this->usuario('viewer', 'coordenador'), self::DONOS)
         );
+    }
+
+    public function test_mascara_esconde_seis_digitos_do_cpf_e_deixa_o_cnpj(): void
+    {
+        $this->assertSame('***.456.***-00', ProprietariosVisiveis::mascarar('12345678900'));
+        $this->assertSame('12.345.678/0001-90', ProprietariosVisiveis::mascarar('12.345.678/0001-90'));
+        $this->assertNull(ProprietariosVisiveis::mascarar(null));
+        $this->assertNull(ProprietariosVisiveis::mascarar('123'));
     }
 
     public function test_externo_nao_recebe_o_bloco(): void
