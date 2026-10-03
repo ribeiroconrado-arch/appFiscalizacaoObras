@@ -28,6 +28,14 @@ use RuntimeException;
  * Trava de planilha cortada: se mais de 20% dos imóveis desses bairros
  * ficariam ausentes, a carga para em `aguardando_confirmacao` e só segue com
  * a confirmação de quem enviou.
+ *
+ * DOIS ARQUIVOS DE ENTRADA, UMA REGRA SÓ. Além da planilha .xlsx, a carga
+ * aceita o JSON de diferenças do app desktop (ferramentas/cadastro-desktop):
+ * a planilha é lida no PC da prefeitura e chega aqui só o que mudou, mais a
+ * lista do que veio igual. Muda só a LEITURA (`lerJson`); a comparação, a
+ * trava, o histórico e as ausências são os mesmos — o estado final do banco
+ * é o mesmo que a planilha produziria. O JSON só vale sobre o banco no estado
+ * em que a referência foi tirada (ver ReferenciaDoCadastro).
  */
 final class CargaDoCadastro
 {
@@ -47,6 +55,12 @@ final class CargaDoCadastro
     /** @var array<string,true> códigos de bairro presentes, sem zeros à esquerda */
     private array $bairros = [];
 
+    /** @var array<string,true> JSON do app: inscrições que vieram iguais (sem registro) */
+    private array $iguaisDoArquivo = [];
+
+    /** JSON do app: registros cujo código de conferência não bateu com o calculado aqui. */
+    private int $divergentes = 0;
+
     public function processar(CadastroCarga $carga, string $arquivo, bool $confirmarAusencias = false): CadastroCarga
     {
         @set_time_limit(0);
@@ -54,9 +68,17 @@ final class CargaDoCadastro
 
         $carga->update(['status' => 'processando', 'iniciada_em' => $carga->iniciada_em ?? now(), 'mensagem' => null]);
 
-        $this->ler($carga, $arquivo);
+        $porJson = str_ends_with(strtolower($arquivo), '.json');
+        if ($porJson) {
+            $this->conferirReferencia($carga, $this->lerJson($carga, $arquivo));
+        } else {
+            $this->ler($carga, $arquivo);
+        }
 
         $atuais = $this->atuais();
+        if ($porJson) {
+            $this->bairrosDosIguais($atuais);
+        }
         $plano = $this->classificar($atuais);
 
         $carga->fill([
@@ -82,6 +104,7 @@ final class CargaDoCadastro
 
             return $carga;
         }
+        $carga->gravacao_iniciada_em ??= now();
         $carga->save();
 
         $this->gravarNovos($carga, $plano['novos']);
@@ -91,7 +114,10 @@ final class CargaDoCadastro
         $this->marcarReaparecidos($carga, $plano['reaparecidos']);
         $this->marcarAusentes($carga, $plano['ausentes']);
 
-        $carga->update(['status' => 'concluida', 'concluida_em' => now(), 'mensagem' => null]);
+        $carga->update(['status' => 'concluida', 'concluida_em' => now(), 'mensagem' => $this->divergentes
+            ? "{$this->divergentes} imóvel(is) vieram com código de conferência diferente do calculado aqui. "
+              . 'Os dados foram gravados; se isso se repetir, atualize o app do cadastro.'
+            : null]);
 
         return $carga;
     }
@@ -142,6 +168,165 @@ final class CargaDoCadastro
         $carga->update(['linhas_lidas' => $lidas]);
     }
 
+    // ── leitura do JSON do app desktop ──────────────────────────
+
+    /** Formato do arquivo que o app gera. */
+    public const FORMATO_JSON = 'fiscobras-cadastro-diferenca';
+
+    public const VERSAO_JSON = 1;
+
+    /**
+     * Lê o JSON de diferenças: os registros (novos ou alterados, já na forma
+     * canônica) entram em `$registros`/`$donos` como se viessem da planilha;
+     * os iguais só como inscrição. Tudo o que vem de fora é conferido: o app
+     * roda num PC que o sistema não controla.
+     *
+     * @return array{base:?int, conferencia:string}
+     */
+    private function lerJson(CadastroCarga $carga, string $arquivo): array
+    {
+        try {
+            $d = json_decode((string) file_get_contents($arquivo), true, 64, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new RuntimeException('O arquivo não é um JSON válido. Gere de novo no app do cadastro.');
+        }
+        if (! is_array($d) || ($d['formato'] ?? null) !== self::FORMATO_JSON) {
+            throw new RuntimeException('Este JSON não foi gerado pelo app do cadastro.');
+        }
+        if (($d['versao'] ?? null) !== self::VERSAO_JSON) {
+            throw new RuntimeException('Este JSON é de outra versão do app do cadastro. Atualize o app.');
+        }
+        $ref = $d['referencia'] ?? null;
+        if (! is_array($ref) || ! is_string($ref['conferencia'] ?? null)
+            || ! (is_int($ref['base_carga_id'] ?? null) || ($ref['base_carga_id'] ?? null) === null)) {
+            throw new RuntimeException('O JSON não diz sobre qual referência foi gerado.');
+        }
+        if (! is_array($d['registros'] ?? null) || ! is_array($d['iguais'] ?? null)) {
+            throw new RuntimeException('O JSON está incompleto: faltam os registros ou a lista de iguais.');
+        }
+
+        $colunas = array_merge(array_values(ColunasDaExportacao::CAMPOS), ['logradouro', 'caracteristicas']);
+        foreach ($d['registros'] as $i => $item) {
+            $insc = is_array($item) ? ($item['inscricao'] ?? null) : null;
+            if (! is_string($insc) || $insc === '' || mb_strlen($insc) > 30 || ! is_array($item['dados'] ?? null)) {
+                throw new RuntimeException('Registro ' . ($i + 1) . ' do JSON sem inscrição ou sem dados.');
+            }
+
+            $r = [];
+            foreach ($colunas as $col) {
+                $v = $item['dados'][$col] ?? null;
+                if ($v !== null && ! is_scalar($v)) {
+                    throw new RuntimeException("Inscrição {$insc}: o campo {$col} não é texto.");
+                }
+                $r[$col] = $col === 'caracteristicas' ? $this->caracteristicasDoJson($insc, $v)
+                    : ColunasDaExportacao::canonico($col, $v);
+            }
+            if ($r['inscricao'] !== $insc) {
+                throw new RuntimeException("Inscrição {$insc}: os dados dizem outra inscrição.");
+            }
+
+            $donos = [];
+            foreach (is_array($item['proprietarios'] ?? null) ? $item['proprietarios'] : [] as $p) {
+                $nome = is_array($p) && is_string($p['nome'] ?? null) ? trim($p['nome']) : '';
+                if ($nome === '') {
+                    continue;
+                }
+                $doc = is_string($p['documento'] ?? null) && trim($p['documento']) !== '' ? mb_substr(trim($p['documento']), 0, 24) : null;
+                $end = is_string($p['endereco'] ?? null) && trim($p['endereco']) !== '' ? mb_substr(trim($p['endereco']), 0, 300) : null;
+                $dono = ['nome' => mb_substr($nome, 0, 200), 'documento' => $doc, 'endereco' => $end];
+                $donos[mb_strtolower($dono['nome'] . '|' . $dono['documento'])] = $dono;
+            }
+
+            $this->registros[$insc] = json_encode($r, JSON_UNESCAPED_UNICODE);
+            $this->donos[$insc] = $donos;
+            if ($r['codigo_bairro'] !== null) {
+                $this->bairros[ltrim($r['codigo_bairro'], '0')] = true;
+            }
+            if (($item['hash'] ?? null) !== DiferencaDoCadastro::hash($r, array_values($donos))) {
+                $this->divergentes++;
+            }
+        }
+        // Sem proprietário = sem entrada, como na leitura da planilha.
+        $this->donos = array_filter($this->donos);
+
+        foreach ($d['iguais'] as $insc) {
+            if (! is_string($insc) || $insc === '') {
+                throw new RuntimeException('A lista de iguais do JSON tem um item que não é inscrição.');
+            }
+            if (! isset($this->registros[$insc])) {
+                $this->iguaisDoArquivo[$insc] = true;
+            }
+        }
+        if (! $this->registros && ! $this->iguaisDoArquivo) {
+            throw new RuntimeException('O JSON não traz imóvel nenhum. A planilha usada no app estava vazia?');
+        }
+
+        $carga->update(['linhas_lidas' => (int) ($d['planilha']['linhas'] ?? 0)]);
+
+        return ['base' => $ref['base_carga_id'], 'conferencia' => $ref['conferencia']];
+    }
+
+    /** Características como a planilha as grava: objeto de textos, na ordem em que vieram. */
+    private function caracteristicasDoJson(string $insc, mixed $v): ?string
+    {
+        if ($v === null || $v === '') {
+            return null;
+        }
+        $a = json_decode((string) $v, true);
+        if (! is_array($a) || ($a && array_is_list($a))) {
+            throw new RuntimeException("Inscrição {$insc}: as características não estão no formato esperado.");
+        }
+        foreach ($a as $k => $x) {
+            if (! is_string($x)) {
+                throw new RuntimeException("Inscrição {$insc}: a característica {$k} não é texto.");
+            }
+        }
+
+        return $a ? json_encode($a, JSON_UNESCAPED_UNICODE) : null;
+    }
+
+    /**
+     * O JSON só vale sobre o banco no estado da referência que o app usou.
+     * Outra carga concluída depois dela (inclusive este mesmo JSON, já
+     * aplicado) torna a lista de iguais falsa — recusa.
+     *
+     * A conferência completa só antes da primeira gravação: uma carga retomada
+     * depois de cair no meio já mudou o banco ela mesma (ver a migração
+     * `carga_do_cadastro_por_json`).
+     *
+     * @param array{base:?int, conferencia:string} $ref
+     */
+    private function conferirReferencia(CadastroCarga $carga, array $ref): void
+    {
+        $base = ReferenciaDoCadastro::baseCargaId();
+        $velha = 'Este arquivo foi gerado sobre uma referência que não é mais a atual'
+            . ' — já houve outra carga depois dela. Baixe a referência de novo e gere outro JSON no app.';
+        if ($ref['base'] !== $base) {
+            throw new RuntimeException($velha);
+        }
+        if ($carga->gravacao_iniciada_em === null && ! hash_equals(ReferenciaDoCadastro::conferenciaAtual(), $ref['conferencia'])) {
+            throw new RuntimeException($velha);
+        }
+    }
+
+    /**
+     * Os bairros dos que vieram iguais saem do banco — o hash igual garante
+     * que o bairro é o mesmo. Igual que o banco não conhece é JSON adulterado
+     * ou de outra base.
+     */
+    private function bairrosDosIguais(array $atuais): void
+    {
+        foreach (array_keys($this->iguaisDoArquivo) as $insc) {
+            $atual = $atuais[$insc] ?? null;
+            if ($atual === null || $atual->hash === null) {
+                throw new RuntimeException("O JSON diz que a inscrição {$insc} veio igual, mas ela não está no cadastro carregado.");
+            }
+            if ($atual->codigo_bairro !== null) {
+                $this->bairros[ltrim((string) $atual->codigo_bairro, '0')] = true;
+            }
+        }
+    }
+
     // ── comparação ──────────────────────────────────────────────
 
     /** @return array<string, object{hash:?string, ausente_desde_carga_id:?int, codigo_bairro:?string}> */
@@ -180,12 +365,21 @@ final class CargaDoCadastro
             }
         }
 
+        // Iguais do JSON do app: o banco já tem exatamente isto.
+        foreach (array_keys($this->iguaisDoArquivo) as $insc) {
+            if ($atuais[$insc]->ausente_desde_carga_id !== null) {
+                $p['reaparecidos'][] = $insc;
+            }
+            $p['iguais'][] = $insc;
+        }
+
         foreach ($atuais as $insc => $atual) {
             if (! isset($this->bairros[ltrim((string) $atual->codigo_bairro, '0')])) {
                 continue;   // bairro que não veio no arquivo: fora do alcance desta carga
             }
             $p['universo']++;
-            if (! isset($this->registros[$insc]) && $atual->ausente_desde_carga_id === null) {
+            if (! isset($this->registros[$insc]) && ! isset($this->iguaisDoArquivo[$insc])
+                && $atual->ausente_desde_carga_id === null) {
                 $p['ausentes'][] = $insc;
             }
         }

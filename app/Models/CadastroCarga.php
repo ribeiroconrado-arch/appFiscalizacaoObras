@@ -25,6 +25,7 @@ class CadastroCarga extends Model
             'bairros'      => 'array',
             'primeira'     => 'boolean',
             'iniciada_em'  => 'datetime',
+            'gravacao_iniciada_em' => 'datetime',
             'concluida_em' => 'datetime',
         ];
     }
@@ -34,10 +35,16 @@ class CadastroCarga extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** A carga veio do JSON do app desktop, e não da planilha? */
+    public function porJson(): bool
+    {
+        return str_ends_with(strtolower((string) $this->arquivo_nome), '.json');
+    }
+
     /** Onde o arquivo fica enquanto a carga não termina (disco `private`, que nunca é servido). */
     public function caminhoDoArquivo(): string
     {
-        return "cargas/{$this->id}.xlsx";
+        return "cargas/{$this->id}." . ($this->porJson() ? 'json' : 'xlsx');
     }
 
     /**
@@ -72,6 +79,7 @@ class CadastroCarga extends Model
         return [
             'id'           => $this->id,
             'arquivo'      => $this->arquivo_nome,
+            'origem'       => $this->porJson() ? 'app' : 'planilha',
             'bytes'        => $this->arquivo_bytes,
             'usuario'      => $this->usuario?->name,
             'status'       => $this->status,

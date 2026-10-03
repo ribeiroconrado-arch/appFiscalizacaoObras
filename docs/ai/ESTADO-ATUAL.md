@@ -58,6 +58,7 @@ legal, que é o que dá força à peça, está quase vazio.
 | Painel Camadas, pesquisa em barra (inscrição, endereço, coordenada lat/long ou UTM) | ✅ `bd34623` |
 | Contorno de bairro gerado dos lotes | ✅ `bd34623` |
 | Prancheta em tela cheia (Snap, Ortho, Fillet) | ✅ `bd34623` |
+| Cadastro municipal pelo app desktop (planilha lida no PC → JSON só com as diferenças) | ✅ `ferramentas/cadastro-desktop` |
 | Acesso externo (topógrafo, arquiteto, contribuinte) só a mapa e consulta | ✅ `bd34623` |
 | Trilha de alterações do cadastro e desfazer (incl. exclusão e desmembramento) | ✅ |
 | Layout responsivo (celular, tablet, desktop) | ✅ `9f44bbe` `8a25541` |
@@ -70,7 +71,9 @@ legal, que é o que dá força à peça, está quase vazio.
 A aba BCI lê o cadastro municipal **ao vivo** (não há mais "Consultar" nem
 cópia por lote). Ela fica vazia até a planilha do município ser enviada por
 Parâmetros → Cadastro municipal, e o motivo do vazio é dito na tela. A
-planilha da prefeitura tem ~12 MB.
+planilha da prefeitura tem ~12 MB. O caminho recomendado é o app desktop
+(`ferramentas/cadastro-desktop`): ele lê a planilha no PC e o sistema recebe
+só o JSON com as diferenças; o `.xlsx` direto continua aceito.
 
 ### ✅ Os 101 lotes sem quadra — resolvido
 

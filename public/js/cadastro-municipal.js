@@ -1,9 +1,11 @@
 // ══════════════════════════════════════════════
 // PARÂMETROS → CADASTRO MUNICIPAL
 //
-// A planilha mensal do cadastro imobiliário da prefeitura. O servidor compara
-// com o que já tem e grava só o que mudou (ver App\Cadastro\CargaDoCadastro);
-// esta tela envia, acompanha o processamento e mostra o que mudou.
+// O cadastro imobiliário mensal da prefeitura: o JSON de diferenças gerado
+// pelo app desktop (ferramentas/cadastro-desktop), ou a planilha .xlsx direta.
+// O servidor compara com o que já tem e grava só o que mudou (ver
+// App\Cadastro\CargaDoCadastro); esta tela envia, acompanha o processamento e
+// mostra o que mudou.
 //
 // O processamento roda DEPOIS da resposta do envio, então a tela consulta a
 // carga a cada 2 s até ela sair de "na fila"/"processando".
@@ -55,7 +57,7 @@ async function carregarCargasDoCadastro() {
 function desenharCargas(imoveis) {
   const lista = document.getElementById('cm-lista')
   if (!cmState.cargas.length) {
-    lista.innerHTML = '<p class="imp-expl">Nenhuma planilha carregada ainda.</p>'
+    lista.innerHTML = '<p class="imp-expl">Nenhuma carga do cadastro ainda.</p>'
     return
   }
   lista.innerHTML = `
@@ -67,7 +69,7 @@ function desenharCargas(imoveis) {
         const [rotulo, cls] = CM_STATUS[c.status] || [c.status, 'bd-pe']
         return `<tr onclick="abrirCargaDoCadastro(${Number(c.id)})">
           <td>${esc(formatarDataHoraCurta(c.enviada_em))}<div class="imp-sub">${esc(c.usuario || 'terminal')}</div></td>
-          <td>${esc(c.arquivo)}</td>
+          <td>${esc(c.arquivo)}${c.origem === 'app' ? '<div class="imp-sub">gerado pelo app</div>' : ''}</td>
           <td><span class="badge ${cls}">${esc(rotulo)}</span></td>
           <td class="num">${cmNum(c.novos)}</td><td class="num">${cmNum(c.alterados)}</td>
           <td class="num">${cmNum(c.ausentes)}</td><td class="num">${cmNum(c.iguais)}</td>
@@ -82,9 +84,12 @@ function cmArquivoEscolhido() {
   const arq = document.getElementById('cm-arquivo').files[0]
   const area = document.getElementById('cm-soltar')
   area.classList.toggle('escolhido', !!arq)
-  area.querySelector('b').textContent = arq ? arq.name : 'Solte a planilha .xlsx aqui'
+  area.querySelector('b').textContent = arq ? arq.name : 'Solte aqui o .json do app ou a planilha .xlsx'
+  const tamanho = arq && (arq.size < 1048576
+    ? `${Math.max(1, Math.round(arq.size / 1024)).toLocaleString('pt-BR')} KB`
+    : `${(arq.size / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`)
   area.querySelector('span').textContent = arq
-    ? `${(arq.size / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB · solte outra ou clique para trocar`
+    ? `${tamanho} · ${/\.json$/i.test(arq.name) ? 'gerado pelo app' : 'planilha'} · solte outro ou clique para trocar`
     : 'ou clique para escolher no computador'
   document.getElementById('cm-enviar').disabled = !arq
 }
@@ -102,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ligar(false)(e)
     const arq = e.dataTransfer?.files?.[0]
     if (!arq) { return }
-    if (!/\.xlsx$/i.test(arq.name)) { toast('A planilha precisa ser .xlsx.', 'err'); return }
+    if (!/\.(xlsx|json)$/i.test(arq.name)) { toast('Envie o .json do app do cadastro ou a planilha .xlsx.', 'err'); return }
     const dt = new DataTransfer()
     dt.items.add(arq)
     input.files = dt.files
@@ -129,18 +134,18 @@ async function enviarCargaDoCadastro(forcar = false) {
     const d = await r.json().catch(() => ({}))
     if (r.status === 422 && d.repetida) {
       confirmarAcao({
-        titulo: 'Mesma planilha',
+        titulo: 'Mesmo arquivo',
         mensagem: d.message + ' Enviar mesmo assim?',
         textoBtn: 'Enviar mesmo assim',
         onConfirm: () => enviarCargaDoCadastro(true),
       })
       return
     }
-    if (!r.ok) { throw new Error(d.message || 'Não foi possível enviar a planilha.') }
+    if (!r.ok) { throw new Error(d.message || 'Não foi possível enviar o arquivo.') }
 
     document.getElementById('cm-arquivo').value = ''
     cmArquivoEscolhido()
-    toast('Planilha recebida. Processando…')
+    toast('Arquivo recebido. Processando…')
     await carregarCargasDoCadastro()
     acompanharCarga(d.carga.id)
   } catch (e) {

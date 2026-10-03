@@ -51,7 +51,7 @@ class ProcessarCargaDoCadastro
             $disco = Storage::disk('private');
             if (! $disco->exists($carga->caminhoDoArquivo())) {
                 $carga->update(['status' => 'falhou',
-                    'mensagem' => 'O arquivo desta carga não está mais no servidor. Envie a planilha de novo.']);
+                    'mensagem' => 'O arquivo desta carga não está mais no servidor. Envie o arquivo de novo.']);
 
                 return;
             }

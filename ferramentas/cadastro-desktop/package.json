@@ -1,0 +1,17 @@
+{
+  "name": "fiscobras-cadastro",
+  "productName": "FiscObras Cadastro",
+  "version": "1.0.0",
+  "description": "Gera, no PC da prefeitura, o JSON de diferenças do cadastro municipal a partir da planilha .xlsx.",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "gerar": "node src/cli.js",
+    "empacotar": "electron-packager . \"FiscObras Cadastro\" --platform=win32 --arch=x64 --out=dist --overwrite --prune=true --ignore=^/dist --app-copyright=\"Prefeitura Municipal\""
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "electron": "44.5.1"
+  }
+}
