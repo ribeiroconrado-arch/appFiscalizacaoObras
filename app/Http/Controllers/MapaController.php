@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Cadastro\BairrosDoDesenho;
+use App\Cadastro\InscricoesGravadas;
 use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -179,6 +180,8 @@ class MapaController extends Controller
                 // do município chama o lugar.
                 'bairro'      => $l->bairro,
                 'bairro_oficial' => $bairros->oficial($l->bairro),
+                // E o APELIDO, só para o rótulo do mapa (Parâmetros › Bairros).
+                'apelido'     => $bairros->apelido($l->bairro),
                 'quadra'      => $l->quadra,
                 'numero_lote' => $l->numero_lote,
                 'tag_origem' => \App\Models\Lote::tagOrigem($l->origem ?? null),
@@ -200,6 +203,13 @@ class MapaController extends Controller
                 'importacao_id' => $l->importacao_id,
             ],
         ], $linhas);
+
+        // A inscrição que acabou de ser montada fica GRAVADA no lote: se a
+        // amarração do bairro cair depois, ela não some da ficha, e fica
+        // comparável com o cadastro da prefeitura. Só grava o que mudou — na
+        // imensa maioria das requisições, nada.
+        $gravadas = new InscricoesGravadas($bairros);
+        $gravadas->persistir($gravadas->mudancas($linhas));
 
         return response()->json([
             'type'     => 'FeatureCollection',

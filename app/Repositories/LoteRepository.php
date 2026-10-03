@@ -28,7 +28,7 @@ class LoteRepository
      * todos os lotes, então a falta não aparecia; apareceria na primeira parte
      * de desmembramento desenhada, com a variação saindo 000 em vez de 001.
      */
-    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria, origem, importacao_id, em_revisao, frente_m, fundos_m';
+    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria, inscricao_montada, origem, importacao_id, em_revisao, frente_m, fundos_m';
 
     /**
      * Recorte padrão de TODA consulta de mapa, GPS e busca.

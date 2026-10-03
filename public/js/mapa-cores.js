@@ -245,6 +245,7 @@ function desenharRotulosDeGrupo() {
 
   for (const chave of ['bairro', 'quadra']) {
     const g = {}
+    const apelidos = {}   // nome do desenho => apelido do mapa (Parâmetros › Bairros)
     for (const f of state.lotes.values()) {
       // A quadra é agrupada por BAIRRO + número. O número só é único dentro
       // do loteamento: existe "Q 05" no Jardim Europa IV e outra no Buritis
@@ -255,6 +256,7 @@ function desenharRotulosDeGrupo() {
         ? String(f.properties.bairro ?? '?') + '|' + String(f.properties.quadra ?? '?')
         : String(f.properties.bairro ?? '?')
       ;(g[k] = g[k] || []).push(centroLote(f))
+      if (chave === 'bairro' && f.properties.apelido) apelidos[k] = f.properties.apelido
     }
     for (const [k, pts] of Object.entries(g)) {
       const rotulo = chave === 'quadra' ? k.split('|')[1] : k
@@ -270,7 +272,7 @@ function desenharRotulosDeGrupo() {
         interactive: false,
         icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }),
       })
-        .bindTooltip(chave === 'quadra' ? 'Q ' + rotulo : rotulo, {
+        .bindTooltip(chave === 'quadra' ? 'Q ' + rotulo : (apelidos[k] || rotulo), {
           permanent: true, direction: 'center',
           className: 'rot rot-' + chave,
         })

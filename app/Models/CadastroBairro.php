@@ -27,7 +27,7 @@ class CadastroBairro extends Model
 
     protected $table = 'cadastro_bairros';
 
-    protected $fillable = ['nome_gis', 'codigo', 'nome_cadastro'];
+    protected $fillable = ['nome_gis', 'apelido', 'codigo', 'nome_cadastro'];
 
     /** Quantos lotes do desenho estão neste bairro. */
     public function lotesEmUso(): int

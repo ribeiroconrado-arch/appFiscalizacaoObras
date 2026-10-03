@@ -206,10 +206,16 @@ class BuscaController extends Controller
             $bind[] = str_pad((string) (int) $codigo, 3, '0', STR_PAD_LEFT);
         }
 
-        $expr = "CONCAT('01', CASE bairro{$casos} END,"
+        // Lote sem quadra ou sem lote não TEM inscrição montada (ver
+        // InscricaoImobiliaria::montar): o CASE devolve nulo em vez de deixar o
+        // LPAD fabricar 000/0000. Onde a montagem não sai — bairro sem
+        // amarração — vale a última inscrição gravada (InscricoesGravadas).
+        $montada = $casos === '' ? 'NULL'
+            : "CASE WHEN quadra <> '' AND numero_lote <> '' THEN CONCAT('01', CASE bairro{$casos} END,"
               . " LPAD(CAST(quadra AS UNSIGNED), 3, '0'),"
               . " LPAD(CAST(numero_lote AS UNSIGNED), 4, '0'),"
-              . " LPAD(COALESCE(desmembramento, 0), 3, '0'))";
+              . " LPAD(COALESCE(desmembramento, 0), 3, '0')) END";
+        $expr = "COALESCE({$montada}, inscricao_montada)";
 
         return [$expr, $bind, $pares->keys()->all()];
     }
@@ -262,20 +268,8 @@ class BuscaController extends Controller
         if ($de !== '' || $ate !== '') {
             [$expr, $bind, $bairros] = $this->inscricaoEmSql();
 
-            // Nenhum bairro amarrado: não há inscrição no sistema inteiro, e o
-            // intervalo não tem o que devolver.
-            if (! $bairros) {
-                $q->whereRaw('1 = 0');
-                return true;
-            }
-
-            // Lote sem quadra ou sem lote não TEM inscrição (ver
-            // InscricaoImobiliaria::montar); deixá-lo entrar faria o LPAD
-            // fabricar 000/0000 e o cadastro cairia dentro de intervalos que
-            // não são dele.
-            $q->whereIn('bairro', $bairros)
-                ->whereNotNull('quadra')->where('quadra', '<>', '')
-                ->whereNotNull('numero_lote')->where('numero_lote', '<>', '');
+            // Só entra quem TEM inscrição — montada agora ou gravada antes.
+            $q->whereRaw("{$expr} IS NOT NULL", $bind);
 
             // Extremos incompletos viram o menor e o maior do prefixo: quem
             // digita "01.090.001" quer a quadra 1 inteira, não um erro.
@@ -310,14 +304,22 @@ class BuscaController extends Controller
                     ->pluck('nome_gis')
                     ->all();
 
-                $q->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [(string) $partes['quadra']])
-                    ->whereRaw("TRIM(LEADING '0' FROM numero_lote) = ?", [(string) $partes['lote']])
-                    ->where('desmembramento', $partes['variacao'])
-                    ->whereIn('bairro', $nomes);
+                $n = InscricaoImobiliaria::normalizar($d['inscricao']);
+                $q->where(function ($s) use ($partes, $nomes, $n) {
+                    $s->where(function ($p) use ($partes, $nomes) {
+                        $p->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [(string) $partes['quadra']])
+                            ->whereRaw("TRIM(LEADING '0' FROM numero_lote) = ?", [(string) $partes['lote']])
+                            ->where('desmembramento', $partes['variacao'])
+                            ->whereIn('bairro', $nomes);
+                    })
+                    // A gravada acha o lote mesmo se a amarração do bairro cair.
+                      ->orWhere('inscricao_montada', $n);
+                });
             } else {
                 // Inscrição pela metade (o fiscal ainda está digitando): vale a
                 // busca na coluna, para as que um dia forem informadas à mão.
-                $q->where('inscricao_imobiliaria', 'like', '%' . $d['inscricao'] . '%');
+                $q->where(fn ($s) => $s->where('inscricao_imobiliaria', 'like', '%' . $d['inscricao'] . '%')
+                    ->orWhere('inscricao_montada', 'like', preg_replace('/\D/', '', $d['inscricao']) . '%'));
             }
 
             return true;
@@ -342,6 +344,11 @@ class BuscaController extends Controller
             $q->where(function ($s) use ($t, $numeros, $porOficial) {
                 $s->where('bairro', 'like', '%' . $t . '%')
                   ->orWhere('inscricao_imobiliaria', 'like', '%' . $t . '%')
+                  // Inscrição digitada com ou sem pontos acha a gravada pelo
+                  // começo. Oito dígitos no mínimo: menos que isso é número de
+                  // quadra e lote, que casaria com meio cadastro.
+                  ->when(strlen(preg_replace('/\D/', '', $t)) >= 8,
+                      fn ($w) => $w->orWhere('inscricao_montada', 'like', preg_replace('/\D/', '', $t) . '%'))
                   ->orWhere('chave', 'like', '%' . $t . '%');
 
                 if ($porOficial) { $s->orWhereIn('bairro', $porOficial); }
@@ -617,7 +624,7 @@ class BuscaController extends Controller
         // Mesmo primeiro-vértice usado em toda consulta espacial deste sistema:
         // ST_Centroid não é implementado para SRS geográfico no MySQL. Em SRID
         // 4326 o MySQL guarda lat/long, então ST_X devolve a LATITUDE.
-        $marca = 'SELECT id, bairro, quadra, numero_lote, inscricao_imobiliaria,
+        $marca = 'SELECT id, bairro, quadra, numero_lote, desmembramento, inscricao_imobiliaria, inscricao_montada,
                          ST_X(ST_PointN(ST_ExteriorRing(geom), 1)) AS lat,
                          ST_Y(ST_PointN(ST_ExteriorRing(geom), 1)) AS lon
                     FROM lotes WHERE id IN (' . $ids->implode(',') . ')';

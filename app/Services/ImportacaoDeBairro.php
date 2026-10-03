@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Cadastro\BairrosDoDesenho;
+use App\Cadastro\InscricoesGravadas;
 use App\Cadastro\VinculoDoBairro;
 use App\Models\ImportacaoLote;
 use App\Models\User;
@@ -463,6 +464,11 @@ class ImportacaoDeBairro
                 'justificativa' => $justificativa !== '' ? $justificativa : null,
             ]);
         });
+
+        // Publicado, o bairro passa a valer: a inscrição dos lotes fica gravada.
+        (new InscricoesGravadas())->gravar(
+            DB::table('lotes')->where('importacao_id', $imp->id)->distinct()->pluck('bairro')->all()
+        );
     }
 
     /**

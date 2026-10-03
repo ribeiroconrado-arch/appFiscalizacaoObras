@@ -97,7 +97,7 @@ class VinculoDoBairro
                 . "{$a->codigo} · {$a->rotulo()}. Trocar mudaria a inscrição deles — isso é feito pelo administrador em Parâmetros → Bairros.");
         }
 
-        return DB::transaction(function () use ($alvo, $antigos, $nome) {
+        $alvo = DB::transaction(function () use ($alvo, $antigos, $nome) {
             // Primeiro solta a ligação antiga: `nome_gis` é único.
             foreach ($antigos as $b) {
                 $b->update(['nome_gis' => null]);
@@ -106,6 +106,11 @@ class VinculoDoBairro
 
             return $alvo;
         });
+
+        // Amarrado o bairro, os lotes dele já têm inscrição: fica gravada.
+        (new InscricoesGravadas())->gravar([$nome]);
+
+        return $alvo;
     }
 
     /** Lotes ativos com este nome que NÃO são da importação. */

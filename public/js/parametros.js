@@ -884,7 +884,8 @@ function renderBairros() {
   const lista = parState.bairros.filter(b => !termo
     || String(b.codigo).includes(termo)
     || (b.nome_cadastro || '').toLowerCase().includes(termo)
-    || (b.nome_gis || '').toLowerCase().includes(termo))
+    || (b.nome_gis || '').toLowerCase().includes(termo)
+    || (b.apelido || '').toLowerCase().includes(termo))
   parContador('cont-bairros', lista.length, parState.bairros.length)
 
   document.getElementById('lista-bairros').innerHTML =
@@ -894,7 +895,8 @@ function renderBairros() {
         <div class="principal">
           <b>${esc(b.codigo)} · ${esc(b.nome_cadastro || b.nome_gis || '(sem nome)')}</b>
           <span>${b.nome_gis
-            ? 'No desenho: ' + esc(b.nome_gis) + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
+            ? 'No desenho: ' + esc(b.nome_gis) + (b.apelido ? ' · no mapa: ' + esc(b.apelido) : '')
+              + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
             : 'Ainda sem desenho convertido'}</span>
         </div>
         ${parAcoes('bairros', b.id)}
@@ -904,14 +906,22 @@ function renderBairros() {
 
 /** @param {Object} b bairro ({} para novo) */
 function formBairro(b) {
-  // Três nomes, de propósito: o código e o nome do cadastro são os da
-  // prefeitura; o nome no desenho é como o bairro aparece no DWG convertido —
-  // é ele que amarra os lotes ao código, e fica vazio até o bairro ser levantado.
+  // O código e o nome do cadastro são os da prefeitura. O nome no desenho é
+  // como o bairro aparece no DWG convertido — é ele que amarra os lotes ao
+  // código (e daí sai a inscrição), por isso TRAVA quando já há lote nele. O
+  // apelido é só o rótulo do mapa, e muda à vontade.
+  const travado = !!(b.nome_gis && b.lotes)
   return parFormLinha(b.id ? 'Editando bairro' : 'Novo bairro', `
     <div class="cad-row">
       ${parRot('Código', parInp('codigo', b.codigo, 'type="number" min="1"'), 'max-width:110px')}
       ${parRot('Nome no cadastro', parInp('nome_cadastro', b.nome_cadastro, 'placeholder="JARDIM EUROPA IV"'), 'flex:2')}
-      ${parRot('Nome no desenho (apelido)', parInp('nome_gis', b.nome_gis, 'placeholder="opcional"'), 'flex:2')}
+    </div>
+    <div class="cad-row">
+      ${parRot('Nome no desenho' + (travado ? ` · liga ${b.lotes} lote(s)` : ''),
+        parInp('nome_gis', b.nome_gis, travado
+          ? 'readonly title="Liga os lotes ao código do bairro e não pode mudar. Para o mapa, use o apelido."'
+          : 'placeholder="opcional"'), 'flex:2')}
+      ${parRot('Apelido no mapa', parInp('apelido', b.apelido, 'maxlength="160" placeholder="opcional — ex.: BURITIS V"'), 'flex:2')}
     </div>`, 'salvarBairro()')
 }
 
@@ -925,6 +935,7 @@ async function salvarBairro() {
     // Vazio vira nulo no servidor: bairro sem desenho convertido não tem nome
     // de GIS, e string vazia colidiria com a próxima no índice único.
     nome_gis: parCampo('nome_gis') || null,
+    apelido: parCampo('apelido') || null,
   }, carregarParametros)
 }
 

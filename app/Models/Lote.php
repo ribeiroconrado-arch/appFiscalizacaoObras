@@ -59,7 +59,7 @@ class Lote extends Model
      */
     public const COLUNAS = [
         'id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'chave',
-        'inscricao_imobiliaria', 'area_gis_m2', 'fonte', 'origem',
+        'inscricao_imobiliaria', 'inscricao_montada', 'inscricao_montada_em', 'area_gis_m2', 'fonte', 'origem',
         'situacao', 'inativado_em', 'importacao_id', 'em_revisao',
         'created_at', 'updated_at',
     ];
@@ -190,29 +190,24 @@ class Lote extends Model
      * quadra + lote + variação (ver App\Support\InscricaoImobiliaria), e o
      * sistema já tem os quatro.
      *
-     * DERIVADA, e não gravada: guardar cópia do que se calcula cria duas
-     * verdades, que divergem na primeira renumeração de quadra. A coluna
-     * continua existindo e TEM PRECEDÊNCIA — é onde entra a inscrição que a
-     * prefeitura informar e que, por qualquer motivo, não siga a fórmula.
+     * A coluna `inscricao_imobiliaria` TEM PRECEDÊNCIA — é onde entra a
+     * inscrição que a prefeitura informar e que, por qualquer motivo, não siga
+     * a fórmula. Depois vem a montada agora, das partes atuais; e, se o bairro
+     * do desenho perdeu a amarração com o cadastro, a última montada que ficou
+     * gravada (`inscricao_montada`, ver App\Cadastro\InscricoesGravadas).
      *
-     * Devolve null quando o bairro do desenho ainda não foi amarrado a um do
-     * cadastro: sem o código não há o que montar, e inventar número de imóvel
-     * é pior do que não ter nenhum.
+     * Devolve null só quando nunca houve como montar: sem o código do bairro
+     * não há o que montar, e inventar número de imóvel é pior do que não ter.
      */
     public function inscricao(): ?string
     {
-        $gravada = InscricaoImobiliaria::normalizar($this->inscricao_imobiliaria);
-        if ($gravada !== null) {
-            return $gravada;
+        $informada = InscricaoImobiliaria::normalizar($this->inscricao_imobiliaria);
+        if ($informada !== null) {
+            return $informada;
         }
 
-        $codigo = DB::table('cadastro_bairros')
-            ->where('nome_gis', $this->bairro)
-            ->value('codigo');
-
-        return InscricaoImobiliaria::montar(
-            $codigo, $this->quadra, $this->numero_lote, $this->desmembramento ?? 0
-        );
+        return (new BairrosDoDesenho())->montadaAgora($this)
+            ?? InscricaoImobiliaria::normalizar($this->inscricao_montada);
     }
 
     /** A inscrição pronta para ler: 01.124.002.0001.000. */

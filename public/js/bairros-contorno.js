@@ -66,10 +66,11 @@ async function carregarContornosDosBairros() {
     style: _estiloContorno,
     onEachFeature: (f, camada) => {
       // O nome do bairro no centro, com o estilo `rot-bairro` (aparece com o mapa afastado).
-      // NO MAPA, O APELIDO — o nome do desenho ("Buritis I"), que é o que está
-      // escrito na planta e cabe no mapa. O oficial ("RESIDENCIAL BURITIS
-      // PRIMAVERA") é de ficha, vistoria e documento (BairrosDoDesenho::oficial).
-      camada.bindTooltip(f.properties.nome || f.properties.nome_oficial,
+      // NO MAPA, O APELIDO — o cadastrado em Parâmetros › Bairros, ou o nome
+      // do desenho ("Buritis I"), que é o que está escrito na planta e cabe no
+      // mapa. O oficial ("RESIDENCIAL BURITIS PRIMAVERA") é de ficha, vistoria
+      // e documento (BairrosDoDesenho::oficial).
+      camada.bindTooltip(f.properties.apelido || f.properties.nome || f.properties.nome_oficial,
         { permanent: true, direction: 'center', className: 'rot rot-bairro', interactive: false })
     },
   }).addTo(mapa)

@@ -94,7 +94,7 @@ class ConferenciaComCadastro
     {
         $bairros = new BairrosDoDesenho();
         $nomes = $anterior['nomes_do_desenho'] ?? [$bairro];
-        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'importacao_id'];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id'];
         $lotes = DB::table('lotes')->where('situacao', 'ativo')->whereIn('bairro', $nomes)->get($campos);
 
         $porId = [];          // lote ativo => [inscrição atual (ou null), linha]
@@ -272,7 +272,7 @@ class ConferenciaComCadastro
                 . 'cadastro, e sem o código dele não há como montar a inscrição dos lotes. ' . $comoLigar);
         }
 
-        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'importacao_id'];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id'];
 
         // Todos os nomes de desenho amarrados ao MESMO código: o cadastro não
         // sabe que o desenho partiu o bairro em dois nomes.

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Cadastro\InscricoesGravadas;
 use App\Models\CadastroBairro;
 use App\Models\Feriado;
 use App\Models\Irregularidade;
@@ -67,6 +68,7 @@ class ParametroController extends Controller
                 ->map(fn (CadastroBairro $b) => [
                     'id' => $b->id, 'codigo' => $b->codigo,
                     'nome_cadastro' => $b->nome_cadastro, 'nome_gis' => $b->nome_gis,
+                    'apelido' => $b->apelido,
                     'lotes' => $b->lotesEmUso(),
                 ]),
             // Ordem de exibição = ordem de trabalho: `ordem` primeiro (para
@@ -316,6 +318,7 @@ class ParametroController extends Controller
             'nome_cadastro' => ['required', 'string', 'max:160'],
             'nome_gis'      => ['nullable', 'string', 'max:160',
                 Rule::unique('cadastro_bairros', 'nome_gis')->ignore($r->input('id'))],
+            'apelido'       => ['nullable', 'string', 'max:160'],
         ], [], [
             // Sem isto o erro sai como "Este nome gis já está cadastrado", com
             // o nome da COLUNA no lugar do nome do campo que a pessoa vê.
@@ -326,34 +329,37 @@ class ParametroController extends Controller
 
         $bairro = CadastroBairro::find($d['id'] ?? null) ?? new CadastroBairro();
         $anterior = $bairro->nome_gis;
+        $novo = ($d['nome_gis'] ?? null) ?: null;
+
+        // O NOME NO DESENHO TRAVA QUANDO HÁ LOTE NELE.
+        //
+        // Os lotes guardam o TEXTO do bairro, não uma chave: trocar `nome_gis`
+        // desliga todos do código do cadastro — e a inscrição deixa de ser
+        // montada. Foi o que aconteceu em 02/10/2026, ao encurtar o nome para
+        // o rótulo do mapa. Para isso existe o apelido, que é só rótulo.
+        if ($anterior !== null && $novo !== $anterior) {
+            $presos = Lote::where('bairro', $anterior)->count();
+            if ($presos > 0) {
+                return response()->json(['message' => sprintf(
+                    'O nome no desenho liga %d lote(s) a este bairro e não pode mudar. '
+                    . 'Para mudar como ele aparece no mapa, use o apelido.', $presos)], 422);
+            }
+        }
 
         $bairro->fill([
             'codigo'        => $d['codigo'],
             'nome_cadastro' => $d['nome_cadastro'],
-            'nome_gis'      => $d['nome_gis'] ?: null,
+            'nome_gis'      => $novo,
+            'apelido'       => trim((string) ($d['apelido'] ?? '')) ?: null,
         ])->save();
 
-        // TROCAR O NOME DE GIS DESLIGA OS LOTES.
-        //
-        // Os lotes guardam o TEXTO do bairro, não uma chave — mudar `nome_gis`
-        // em silêncio deixaria N lotes apontando para um nome que não existe
-        // mais em cadastro nenhum, e o código do bairro sumiria da ficha deles
-        // sem ninguém notar. Aqui não se mexe nos lotes: só se diz o que houve.
-        $aviso = null;
-        if ($anterior && $anterior !== $bairro->nome_gis) {
-            $presos = Lote::where('bairro', $anterior)->count();
-            if ($presos > 0) {
-                $aviso = sprintf(
-                    '%d lote(s) continuam gravados como "%s" e deixaram de achar este bairro. '
-                    . 'Corrija o bairro deles ou volte o nome do desenho.',
-                    $presos, $anterior);
-            }
+        // Código novo ou amarração nova mudam a inscrição dos lotes do bairro:
+        // grava já, em vez de esperar alguém abrir o mapa ali.
+        if ($novo !== null) {
+            (new InscricoesGravadas())->gravar([$novo]);
         }
 
-        return response()->json([
-            'message' => 'Bairro gravado.',
-            'aviso'   => $aviso,
-        ]);
+        return response()->json(['message' => 'Bairro gravado.']);
     }
 
     /**

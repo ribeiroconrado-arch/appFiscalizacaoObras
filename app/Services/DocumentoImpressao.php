@@ -78,7 +78,9 @@ class DocumentoImpressao
         $l = $doc->lote;
 
         return [
-            'inscricao' => $l?->inscricao_imobiliaria,
+            // A informada, a montada agora ou a última gravada (Lote::inscricao):
+            // a coluna crua sai vazia em quase todo lote vindo do desenho.
+            'inscricao' => $l?->inscricaoFormatada() ?? $l?->inscricao_imobiliaria,
             'bairro'    => $l?->bairro,
             'quadra'    => $l?->quadra,
             'lote'      => $l?->numero_lote,

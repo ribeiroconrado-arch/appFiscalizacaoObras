@@ -163,28 +163,60 @@ class BairrosDoDesenho
     }
 
     /**
-     * A inscrição de um lote — a gravada, ou a que as partes dele formam.
+     * A inscrição de um lote: a informada; senão a que as partes formam agora;
+     * senão a última que ficou gravada (ver InscricoesGravadas).
      *
      * Aceita modelo ou linha crua do banco: as três telas que chamam isto
-     * consultam de jeitos diferentes, e todas têm os mesmos quatro campos.
+     * consultam de jeitos diferentes, e todas têm os mesmos campos.
      *
-     * Ver Lote::inscricao() para o porquê de derivar em vez de guardar, e
-     * InscricaoImobiliaria para o formato.
-     *
-     * @param  object  $l  com bairro, quadra, numero_lote e desmembramento
+     * @param  object  $l  com bairro, quadra, numero_lote, desmembramento e,
+     *                     quando houver, inscricao_imobiliaria/inscricao_montada
      */
     public function inscricaoDe(object $l): ?string
     {
-        $gravada = InscricaoImobiliaria::normalizar($l->inscricao_imobiliaria ?? null);
-        if ($gravada !== null) {
-            return InscricaoImobiliaria::formatar($gravada);
+        $informada = InscricaoImobiliaria::normalizar($l->inscricao_imobiliaria ?? null);
+        if ($informada !== null) {
+            return InscricaoImobiliaria::formatar($informada);
         }
 
-        return InscricaoImobiliaria::formatar(InscricaoImobiliaria::montar(
+        return InscricaoImobiliaria::formatar(
+            $this->montadaAgora($l) ?? InscricaoImobiliaria::normalizar($l->inscricao_montada ?? null)
+        );
+    }
+
+    /** A inscrição que as partes do lote formam hoje (15 dígitos), ou nulo. */
+    public function montadaAgora(object $l): ?string
+    {
+        return InscricaoImobiliaria::montar(
             $this->codigos()[self::chave($l->bairro ?? null)] ?? null,
             $l->quadra ?? null,
             $l->numero_lote ?? null,
             $l->desmembramento ?? 0
-        ));
+        );
+    }
+
+    /** @var array<string,string>|null chave normalizada => apelido do mapa */
+    private ?array $apelidos = null;
+
+    /**
+     * Como o bairro aparece no MAPA: o apelido cadastrado, ou o próprio nome
+     * do desenho. É só rótulo — nunca serve de chave para achar lote.
+     */
+    public function apelido(?string $nomeDoDesenho): ?string
+    {
+        if ($nomeDoDesenho === null || $nomeDoDesenho === '') {
+            return null;
+        }
+
+        if ($this->apelidos === null) {
+            $this->apelidos = [];
+            foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->whereNotNull('apelido')->get() as $b) {
+                if (trim((string) $b->apelido) !== '') {
+                    $this->apelidos[self::chave($b->nome_gis)] = $b->apelido;
+                }
+            }
+        }
+
+        return $this->apelidos[self::chave($nomeDoDesenho)] ?? $nomeDoDesenho;
     }
 }
