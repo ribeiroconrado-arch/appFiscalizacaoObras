@@ -141,6 +141,10 @@ Como ficaram as decisões que estavam em aberto:
 - **CPF/CNPJ:** continua indo, só nos imóveis novos ou alterados.
 - **Reaproveitamento:** `CargaDoCadastro` ganhou só a leitura do JSON
   (`lerJson`); diferença, trava de 20%, histórico e ausências são os mesmos.
+- **Tamanho do envio:** o navegador compacta o JSON (gzip) antes de enviar e
+  o servidor descompacta com teto de 200 MB (`ArquivoCompactado`). A primeira
+  carga, com o município inteiro, cai de ~58 MB para ~4 MB — sem isso o
+  servidor recusava com 413.
 - **Distribuição:** o workflow "App do cadastro (Windows)" testa e empacota
   num Windows e publica o `.zip` como artefato.
 

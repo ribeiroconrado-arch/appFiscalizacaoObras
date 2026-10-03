@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Cadastro\ArquivoCompactado;
 use App\Cadastro\CargaDoCadastro;
 use App\Cadastro\FonteDoCadastro;
 use App\Cadastro\ReferenciaDoCadastro;
@@ -12,7 +13,9 @@ use App\Models\Lote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\File;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 /**
  * Parâmetros → Cadastro municipal: a planilha mensal da prefeitura.
@@ -74,17 +77,48 @@ class CadastroCargaController extends Controller
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
 
         $r->validate(['arquivo' => ['required', 'file', 'max:' . self::TETO_KB]], [
-            'arquivo.max' => 'A planilha passa de 64 MB.',
+            'arquivo.max' => 'O arquivo passa de 64 MB.',
         ]);
         $arq = $r->file('arquivo');
-        $ext = strtolower($arq->getClientOriginalExtension());
+        $nome = $arq->getClientOriginalName();
+        $caminho = $arq->getRealPath();
+        $bytes = $arq->getSize();
+
+        // O JSON do app chega compactado pelo navegador (ver ArquivoCompactado).
+        // Daqui para a frente ele é o .json de sempre: conferência, sha256 e
+        // o arquivo guardado são do conteúdo, não do embrulho.
+        if (preg_match('/\.json\.gz$/i', $nome)) {
+            $temporario = tempnam(sys_get_temp_dir(), 'carga-json-');
+            try {
+                $bytes = ArquivoCompactado::descompactar($caminho, $temporario);
+            } catch (RuntimeException $e) {
+                @unlink($temporario);
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+            $caminho = $temporario;
+            $nome = substr($nome, 0, -3);
+        }
+
+        try {
+            return $this->receber($r, $caminho, $nome, $bytes);
+        } finally {
+            if (isset($temporario)) {
+                @unlink($temporario);
+            }
+        }
+    }
+
+    /** O arquivo recebido, já descompactado se for o caso: confere, registra e agenda. */
+    private function receber(Request $r, string $caminho, string $nome, int $bytes): JsonResponse
+    {
+        $ext = strtolower(pathinfo($nome, PATHINFO_EXTENSION));
         if (! in_array($ext, ['xlsx', 'json'], true)) {
             return response()->json(['message' => 'Envie a planilha .xlsx (Excel) ou o .json gerado pelo app do cadastro.'], 422);
         }
         // O JSON é conferido JÁ, e não só na hora de processar: arquivo de
         // referência velha é o erro mais provável, e quem anexou precisa saber
         // agora, não minutos depois numa linha "falhou" da lista.
-        if ($ext === 'json' && ($recusa = $this->conferirJson($arq->getRealPath()))) {
+        if ($ext === 'json' && ($recusa = $this->conferirJson($caminho))) {
             return response()->json(['message' => $recusa], 422);
         }
 
@@ -98,7 +132,7 @@ class CadastroCargaController extends Controller
 
         // A mesma planilha duas vezes não muda nada — e costuma ser engano de
         // arquivo. Recusa, a menos que quem envia insista.
-        $sha = hash_file('sha256', $arq->getRealPath());
+        $sha = hash_file('sha256', $caminho);
         $ultima = CadastroCarga::where('status', 'concluida')->latest('id')->first();
         if ($ultima && $ultima->arquivo_sha256 === $sha && ! $r->boolean('forcar')) {
             return response()->json([
@@ -108,13 +142,13 @@ class CadastroCargaController extends Controller
         }
 
         $carga = CadastroCarga::create([
-            'arquivo_nome'   => mb_substr($arq->getClientOriginalName(), 0, 200),
-            'arquivo_bytes'  => $arq->getSize(),
+            'arquivo_nome'   => mb_substr($nome, 0, 200),
+            'arquivo_bytes'  => $bytes,
             'arquivo_sha256' => $sha,
             'user_id'        => $r->user()->id,
             'status'         => 'na_fila',
         ]);
-        Storage::disk('private')->putFileAs('cargas', $arq, basename($carga->caminhoDoArquivo()));
+        Storage::disk('private')->putFileAs('cargas', new File($caminho), basename($carga->caminhoDoArquivo()));
 
         ProcessarCargaDoCadastro::dispatchAfterResponse($carga->id);
 

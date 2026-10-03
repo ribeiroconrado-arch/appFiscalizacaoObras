@@ -85,9 +85,7 @@ function cmArquivoEscolhido() {
   const area = document.getElementById('cm-soltar')
   area.classList.toggle('escolhido', !!arq)
   area.querySelector('b').textContent = arq ? arq.name : 'Solte aqui o .json do app ou a planilha .xlsx'
-  const tamanho = arq && (arq.size < 1048576
-    ? `${Math.max(1, Math.round(arq.size / 1024)).toLocaleString('pt-BR')} KB`
-    : `${(arq.size / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`)
+  const tamanho = arq && cmTamanho(arq.size)
   area.querySelector('span').textContent = arq
     ? `${tamanho} · ${/\.json$/i.test(arq.name) ? 'gerado pelo app' : 'planilha'} · solte outro ou clique para trocar`
     : 'ou clique para escolher no computador'
@@ -115,6 +113,29 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 })
 
+/** "850 KB", "3,8 MB". */
+function cmTamanho(bytes) {
+  return bytes < 1048576
+    ? `${Math.max(1, Math.round(bytes / 1024)).toLocaleString('pt-BR')} KB`
+    : `${(bytes / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`
+}
+
+/**
+ * O JSON do app vai COMPACTADO (gzip). Na primeira carga ele traz o município
+ * inteiro — ~58 MB, acima do limite de envio do servidor (o erro 413) —, e
+ * compactado fica com ~4 MB, menos que a própria planilha. O servidor
+ * descompacta (App\Cadastro\ArquivoCompactado). A planilha .xlsx já é um zip
+ * e vai como está; navegador sem CompressionStream manda o JSON puro.
+ * @param {File} arq
+ * @returns {Promise<File>}
+ */
+async function cmCompactarSeJson(arq) {
+  if (!/\.json$/i.test(arq.name) || typeof CompressionStream === 'undefined') { return arq }
+  document.getElementById('cm-enviar').textContent = 'Compactando…'
+  const gz = await new Response(arq.stream().pipeThrough(new CompressionStream('gzip'))).blob()
+  return new File([gz], arq.name + '.gz', { type: 'application/gzip' })
+}
+
 async function enviarCargaDoCadastro(forcar = false) {
   const arq = document.getElementById('cm-arquivo').files[0]
   if (!arq) { return }
@@ -123,15 +144,22 @@ async function enviarCargaDoCadastro(forcar = false) {
   botao.textContent = 'Enviando…'
 
   const corpo = new FormData()
-  corpo.append('arquivo', arq)
   if (forcar) { corpo.append('forcar', '1') }
 
   try {
+    const envio = await cmCompactarSeJson(arq)
+    corpo.append('arquivo', envio, envio.name)
+    botao.textContent = 'Enviando…'
     const r = await fetch('/api/cadastro/cargas', {
       method: 'POST', body: corpo,
       headers: { Accept: 'application/json', 'X-CSRF-TOKEN': cmCsrf() },
     })
     const d = await r.json().catch(() => ({}))
+    if (r.status === 413) {
+      throw new Error(`O arquivo (${cmTamanho(envio.size)} enviados) passa do limite de envio do servidor. `
+        + 'É preciso aumentar client_max_body_size (nginx) e post_max_size/upload_max_filesize (PHP) — '
+        + 'ver docs/seguranca-servidor.md.')
+    }
     if (r.status === 422 && d.repetida) {
       confirmarAcao({
         titulo: 'Mesmo arquivo',

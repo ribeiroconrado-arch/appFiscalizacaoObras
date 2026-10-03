@@ -21,6 +21,10 @@ sistema e salva um `.json` só com o que mudou.
 4. Apague o `.json` do computador depois de anexar: ele traz nome e CPF/CNPJ dos
    proprietários novos ou alterados.
 
+Ao anexar, o navegador **compacta** o `.json` (gzip) e o sistema descompacta:
+na primeira carga, com o município inteiro, viajam ~4 MB em vez de ~58 MB —
+menos que a própria planilha, dentro do limite de envio do servidor.
+
 Anexe **antes de qualquer outra carga**. O sistema recusa o arquivo se o
 cadastro tiver mudado depois da referência (outra carga, ou o mesmo arquivo
 anexado duas vezes) — aí é só baixar a referência de novo e gerar outro.
