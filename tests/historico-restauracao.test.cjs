@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm')
 function carregar(file,nome,ctx){const src=fs.readFileSync(file,'utf8'),start=src.indexOf('async function '+nome+'(')>=0?src.indexOf('async function '+nome+'('):src.indexOf('function '+nome+'(');vm.runInNewContext(src.slice(start,src.indexOf('\n}',start)+2),ctx);return ctx[nome]}
 test('resposta anterior à restauração não repõe lotes antigos nem cancela a carga nova',async()=>{
-  const fonte=fs.readFileSync('public/js/app.js','utf8'),responses=[],ret={getWest:()=>-54.309,getEast:()=>-54.301,getSouth:()=>-15.569,getNorth:()=>-15.561,pad(){return ret}};
+  const fonte=fs.readFileSync('public/js/app.js','utf8'),responses=[],ret={getWest:()=>-54.307,getEast:()=>-54.303,getSouth:()=>-15.567,getNorth:()=>-15.563,pad(){return ret}};
   const ctx={state:{lotes:new Map(),versaoLotes:0,blocos:new Map(),pendentes:new Map(),blocosTruncados:new Set()},mapaState:{obj:{getZoom:()=>19,getBounds:()=>ret,removeLayer(){}},camadas:[],porId:new Map()},mapaVisivel:()=>true,desenhados:new Set(),atualizarChip(){},acrescentarLotes(){},toast(){},console,Math,fetch:()=>new Promise(resolve=>responses.push(resolve))};
   const ini=fonte.indexOf('const ZOOM_MINIMO'),fim=fonte.indexOf('/** Ids já desenhados'),lim=fonte.indexOf('function limparLotesDoMapa(');
   vm.runInNewContext(fonte.slice(ini,fim)+'\n'+fonte.slice(lim,fonte.indexOf('\n}',lim)+2)+';Object.assign(globalThis,{carregarLotesVisiveis,limparLotesDoMapa})',ctx);

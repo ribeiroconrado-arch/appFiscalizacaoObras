@@ -14,7 +14,7 @@ function retangulo(o,s,l,n){const r={getWest:()=>o,getSouth:()=>s,getEast:()=>l,
 function contexto(extra={}){
   const pedidos=[];
   const ctx={state:{lotes:new Map(),selecionado:null,versaoLotes:0,truncado:false,blocos:new Map(),pendentes:new Map(),blocosTruncados:new Set()},
-    mapaState:{obj:{getZoom:()=>18,getBounds:()=>retangulo(-54.304,-15.564,-54.296,-15.556),removeLayer(){}},camadas:[],porId:new Map(),camadaLotes:{removeLayer(){}}},
+    mapaState:{obj:{getZoom:()=>18,getBounds:()=>retangulo(-54.302,-15.562,-54.298,-15.558),removeLayer(){}},camadas:[],porId:new Map(),camadaLotes:{removeLayer(){}}},
     mapaVisivel:()=>true,desenhados:new Set(),atualizarChip(){},acrescentarLotes(fs){fs.forEach(f=>ctx.desenhados.add(f.properties.id))},toast(){},console,Math,
     fetch:url=>new Promise(r=>pedidos.push({url,responder:ids=>r({ok:true,json:async()=>({features:ids.map(id=>({properties:{id}})),truncado:false})})})),
     ...extra};
@@ -56,7 +56,7 @@ test('bloco em trânsito é aguardado sem repetir o pedido',async()=>{
 test('arrastar durante a carga pede a área nova (antes o pedido se perdia)',async()=>{
   const {ctx,pedidos}=contexto();
   ctx.carregarLotesVisiveis();await tick();const antes=pedidos.length;
-  ctx.mapaState.obj.getBounds=()=>retangulo(-54.254,-15.564,-54.246,-15.556);
+  ctx.mapaState.obj.getBounds=()=>retangulo(-54.252,-15.562,-54.248,-15.558);
   ctx.carregarLotesVisiveis();await tick();
   assert.ok(pedidos.length>antes,'os blocos da área nova foram pedidos');
 });
@@ -64,7 +64,7 @@ test('arrastar durante a carga pede a área nova (antes o pedido se perdia)',asy
 test('nível de detalhe pela área visível: município → bairros → quadras → lotes',()=>{
   const {ctx}=contexto();
   // Lado do quadrado visível, em graus, e o nível esperado.
-  for(const [lado,nivel] of [[0.3,'municipio'],[0.1,'bairros'],[0.02,'quadras'],[0.008,'lotes']]){
+  for(const [lado,nivel] of [[0.3,'municipio'],[0.1,'bairros'],[0.02,'bairros'],[0.012,'quadras'],[0.008,'quadras'],[0.004,'lotes']]){
     ctx.mapaState.obj.getBounds=()=>retangulo(-54.3,-15.56,-54.3+lado,-15.56+lado);
     assert.equal(ctx.nivelDoMapa(ctx.mapaState.obj),nivel,`lado ${lado}°`);
   }

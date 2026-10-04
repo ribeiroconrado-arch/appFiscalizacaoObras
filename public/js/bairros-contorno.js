@@ -197,7 +197,7 @@ function _abreviarRua(nome) {
 
 
 /** De quantos em quantos pixels o nome da MESMA rua se repete ao longo dela. */
-const RUA_REPETE_PX = 560
+const RUA_REPETE_PX = 1100
 
 /**
  * Nomes de rua que estão na tela, nos níveis das quadras e dos lotes.
