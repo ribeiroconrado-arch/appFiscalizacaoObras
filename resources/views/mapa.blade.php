@@ -2053,23 +2053,50 @@
     {{-- AUTUADO / IMÓVEL --}}
     <div class="doc-painel ativa" id="fdp-autuado">
       <div class="sec-title">Dados do autuado</div>
-      <div class="field">
-        <label for="nd-autuado-doc">CPF / CNPJ</label>
-        <input type="text" id="nd-autuado-doc" class="mono" maxlength="20" data-lock
-               placeholder="000.000.000-00">
-      </div>
-      <div class="field">
-        <label for="nd-autuado">Nome / razão social</label>
-        <input type="text" id="nd-autuado" maxlength="160" data-lock
-               placeholder="Como consta no cadastro">
+      {{-- LINHA 1: o documento na largura de um CNPJ, e o nome com o resto.
+           Saindo do campo com um CNPJ válido, o sistema consulta a empresa e
+           preenche o que estiver vazio (buscarCnpjDoc) — como no AppPOSTURAS. --}}
+      <div class="doc-lin doc-lin-autuado">
+        <div class="field">
+          <label for="nd-autuado-doc">CPF / CNPJ</label>
+          <input type="text" id="nd-autuado-doc" class="mono" maxlength="18" data-lock inputmode="numeric"
+                 placeholder="000.000.000-00" autocomplete="off"
+                 oninput="mascararCpfCnpjDoc(this)" onblur="buscarCnpjDoc(this)">
+        </div>
+        <div class="field">
+          <label for="nd-autuado">Nome / razão social</label>
+          <input type="text" id="nd-autuado" maxlength="160" data-lock
+                 placeholder="Como consta no cadastro">
+        </div>
       </div>
       {{-- O DOMICÍLIO do autuado, e não o endereço da obra (que fica abaixo, no
            imóvel): é para onde a peça é entregue ou enviada. Vem sugerido do
-           endereço de correspondência do cadastro municipal. --}}
-      <div class="field">
-        <label for="nd-autuado-endereco">Endereço domiciliar do autuado</label>
-        <input type="text" id="nd-autuado-endereco" maxlength="300" data-lock
-               placeholder="Rua, número, bairro, cidade — onde ele recebe correspondência">
+           endereço de correspondência do cadastro municipal, ou do CNPJ. --}}
+      <div class="doc-lin doc-lin-rua">
+        <div class="field">
+          <label for="nd-aut-logradouro">Logradouro</label>
+          <input type="text" id="nd-aut-logradouro" maxlength="160" data-lock
+                 placeholder="Onde ele recebe correspondência">
+        </div>
+        <div class="field">
+          <label for="nd-aut-numero">Número</label>
+          <input type="text" id="nd-aut-numero" class="mono" maxlength="20" data-lock>
+        </div>
+      </div>
+      <div class="doc-lin doc-lin-cidade">
+        <div class="field">
+          <label for="nd-aut-bairro">Bairro</label>
+          <input type="text" id="nd-aut-bairro" maxlength="120" data-lock>
+        </div>
+        <div class="field">
+          <label for="nd-aut-cidade">Cidade</label>
+          <input type="text" id="nd-aut-cidade" maxlength="120" data-lock>
+        </div>
+        <div class="field">
+          <label for="nd-aut-uf">UF</label>
+          <input type="text" id="nd-aut-uf" maxlength="2" data-lock autocomplete="off"
+                 style="text-transform:uppercase" oninput="this.value = this.value.replace(/[^a-zA-Z]/g, '').toUpperCase()">
+        </div>
       </div>
       <p class="aviso-legal">
         Sem autuado identificado o documento ainda pode ser lavrado — a
@@ -2089,33 +2116,36 @@
            cadastro municipal, eles vêm de lá e ficam só para leitura; quando
            não está, ficam abertos para o fiscal informar à mão
            (renderBciDoc → travarImovelDoc). --}}
-      <div class="g2">
+      {{-- LINHA 1: a inscrição na largura dela, o número para cinco dígitos, e
+           o logradouro com o que sobra. A área do terreno saiu daqui: é base
+           de cálculo, e mora na aba Infração, com a área construída. --}}
+      <div class="doc-lin doc-lin-imovel">
         <div class="field">
           <label for="nd-im-inscricao">Inscrição imobiliária</label>
           <input type="text" id="nd-im-inscricao" class="mono" maxlength="30" data-lock placeholder="01.000.000.0000.000">
         </div>
         <div class="field">
+          <label for="nd-im-logradouro">Logradouro</label>
+          <input type="text" id="nd-im-logradouro" maxlength="160" data-lock>
+        </div>
+        <div class="field">
+          <label for="nd-im-numero">Número</label>
+          <input type="text" id="nd-im-numero" class="mono" maxlength="20" data-lock>
+        </div>
+      </div>
+      <div class="doc-lin doc-lin-quadra">
+        <div class="field">
           <label for="nd-im-bairro">Bairro</label>
           <input type="text" id="nd-im-bairro" maxlength="160" data-lock>
         </div>
-      </div>
-      <div class="g3">
         <div class="field">
           <label for="nd-im-quadra">Quadra</label>
-          <input type="text" id="nd-im-quadra" maxlength="20" data-lock>
+          <input type="text" id="nd-im-quadra" class="mono" maxlength="20" data-lock>
         </div>
         <div class="field">
           <label for="nd-im-lote">Lote</label>
-          <input type="text" id="nd-im-lote" maxlength="20" data-lock>
+          <input type="text" id="nd-im-lote" class="mono" maxlength="20" data-lock>
         </div>
-        <div class="field">
-          <label for="nd-area-terreno">Área do terreno (m²)</label>
-          <input id="nd-area-terreno" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
-        </div>
-      </div>
-      <div class="field">
-        <label for="nd-endereco">Endereço da obra</label>
-        <input type="text" id="nd-endereco" maxlength="200" data-lock placeholder="Logradouro, número">
       </div>
 
       {{-- O RESTO DO CADASTRO MUNICIPAL (BCI) deste imóvel — só aparece quando
@@ -2142,19 +2172,31 @@
       <select id="nd-tipo" hidden onchange="trocarTipoDoc()"></select>
 
       <div class="sec-title">Data do fato</div>
-      {{-- Data e hora em TEXTO, com máscara: dd/mm/aaaa e hh:mm. Os seletores
-           nativos do navegador mudavam de cara a cada aparelho. Os valores que
-           o sistema usa ficam nos campos escondidos (syncDataDoc). --}}
+      {{-- Data e hora em TEXTO, com máscara (dd/mm/aaaa e hh:mm) — e, no botão
+           ao lado, um calendário e um relógio PRÓPRIOS do sistema. Os seletores
+           nativos do navegador mudavam de cara a cada aparelho; estes são
+           iguais em todos (abrirCalendarioDoc / abrirRelogioDoc). Os valores
+           que o sistema usa ficam nos campos escondidos (syncDataDoc). --}}
       <div class="g2">
-        <div class="field">
+        <div class="field dh-campo">
           <label for="nd-data-txt">Data</label>
           <input type="text" id="nd-data-txt" class="mono" inputmode="numeric" maxlength="10" data-lock
                  placeholder="dd/mm/aaaa" autocomplete="off" oninput="mascararDataDoc(this)" onblur="lerDataHoraDoc()">
+          <button type="button" class="dh-btn" data-lock title="Escolher no calendário" aria-label="Escolher a data no calendário"
+                  onclick="abrirCalendarioDoc(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          </button>
         </div>
-        <div class="field">
+        <div class="field dh-campo">
           <label for="nd-hora-txt">Hora</label>
           <input type="text" id="nd-hora-txt" class="mono" inputmode="numeric" maxlength="5" data-lock
                  placeholder="hh:mm" autocomplete="off" oninput="mascararHoraDoc(this)" onblur="lerDataHoraDoc()">
+          <button type="button" class="dh-btn" data-lock title="Escolher no relógio" aria-label="Escolher a hora no relógio"
+                  onclick="abrirRelogioDoc(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </button>
         </div>
       </div>
       <input type="hidden" id="nd-data">
@@ -2200,9 +2242,17 @@
              escolhido cobra por metro quadrado. --}}
         <div id="nd-bloco-area" style="display:none">
           <div class="sec-title">Áreas para cálculo</div>
-          <div class="field">
-            <label for="nd-area-construida">Área construída aferida (m²)</label>
-            <input id="nd-area-construida" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+          {{-- As duas bases de multa lado a lado: há artigo que cobra pelo
+               terreno e artigo que cobra pela construção. --}}
+          <div class="g2">
+            <div class="field">
+              <label for="nd-area-terreno">Área do terreno (m²)</label>
+              <input id="nd-area-terreno" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+            </div>
+            <div class="field">
+              <label for="nd-area-construida">Área construída aferida (m²)</label>
+              <input id="nd-area-construida" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+            </div>
           </div>
           <div id="nd-memoria-calculo"></div>
         </div>

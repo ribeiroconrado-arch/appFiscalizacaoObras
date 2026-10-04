@@ -266,7 +266,9 @@ async function renderBciDoc({ sugerir = false } = {}) {
   if (sugerir) {
     por('nd-autuado', donos[0]?.nome)
     por('nd-autuado-doc', donos[0]?.documento)
-    por('nd-autuado-endereco', donos[0]?.endereco)
+    // O endereço de correspondência do cadastro é um texto só: entra no
+    // logradouro, e o fiscal separa o que precisar.
+    por('nd-aut-logradouro', donos[0]?.endereco)
   }
 
   // IMÓVEL FORA DO CADASTRO: nada a mostrar, e os campos ficam para o fiscal.
@@ -274,7 +276,7 @@ async function renderBciDoc({ sugerir = false } = {}) {
 
   const im = bci.imovel
   // O endereço da obra é só logradouro e número — o complemento fica no BCI.
-  const endereco = [im.logradouro, im.numero_predial && String(im.numero_predial).replace(/^0+/, '')].filter(Boolean).join(', ')
+  const numero = im.numero_predial ? String(im.numero_predial).replace(/^0+/, '') : ''
   const doCadastro = ['nd-im-inscricao', 'nd-im-bairro', 'nd-im-quadra', 'nd-im-lote']
 
   // Em peça nova, o que o cadastro diz substitui o que estava no campo; em
@@ -284,9 +286,13 @@ async function renderBciDoc({ sugerir = false } = {}) {
     if (sugerir || !g('nd-area-terreno').value) g('nd-area-terreno').value = Number(im.area_terreno_m2).toFixed(2)
     doCadastro.push('nd-area-terreno')
   }
-  if (endereco) {
-    if (sugerir || !g('nd-endereco').value.trim()) g('nd-endereco').value = endereco
-    doCadastro.push('nd-endereco')
+  if (im.logradouro) {
+    if (sugerir || !g('nd-im-logradouro').value.trim()) g('nd-im-logradouro').value = im.logradouro
+    doCadastro.push('nd-im-logradouro')
+  }
+  if (numero) {
+    if (sugerir || !g('nd-im-numero').value.trim()) g('nd-im-numero').value = numero
+    doCadastro.push('nd-im-numero')
   }
   travarImovelDoc(doCadastro)
   recalcularMultaDoc()
@@ -309,7 +315,24 @@ async function renderBciDoc({ sugerir = false } = {}) {
 }
 
 /** Os campos que identificam o imóvel na peça. */
-const CAMPOS_IMOVEL_DOC = ['nd-im-inscricao', 'nd-im-bairro', 'nd-im-quadra', 'nd-im-lote', 'nd-area-terreno', 'nd-endereco']
+const CAMPOS_IMOVEL_DOC = ['nd-im-inscricao', 'nd-im-bairro', 'nd-im-quadra', 'nd-im-lote', 'nd-area-terreno',
+  'nd-im-logradouro', 'nd-im-numero']
+
+/** O domicílio do autuado, em partes: id do campo → nome da parte. */
+const CAMPOS_ENDERECO_AUTUADO_DOC = { 'nd-aut-logradouro': 'logradouro', 'nd-aut-numero': 'numero',
+  'nd-aut-bairro': 'bairro', 'nd-aut-cidade': 'cidade', 'nd-aut-uf': 'uf' }
+
+/** "Rua X, 10 — Centro — Cidade/UF": o domicílio do autuado numa linha, para o resumo. */
+function enderecoAutuadoDoc() {
+  const v = id => document.getElementById(id).value.trim()
+  return [[v('nd-aut-logradouro'), v('nd-aut-numero')].filter(Boolean).join(', '), v('nd-aut-bairro'),
+    [v('nd-aut-cidade'), v('nd-aut-uf')].filter(Boolean).join('/')].filter(Boolean).join(' — ')
+}
+
+/** "Rua X, 10": o endereço da obra numa linha. */
+function enderecoObraDoc() {
+  return ['nd-im-logradouro', 'nd-im-numero'].map(id => document.getElementById(id).value.trim()).filter(Boolean).join(', ')
+}
 
 /**
  * Deixa só para leitura os campos do imóvel que vieram do cadastro municipal,
@@ -332,7 +355,10 @@ function travarImovelDoc(doCadastro) {
 function limparFormDoc() {
   document.getElementById('nd-autuado').value = ''
   document.getElementById('nd-autuado-doc').value = ''
-  document.getElementById('nd-autuado-endereco').value = ''
+  Object.keys(CAMPOS_ENDERECO_AUTUADO_DOC).forEach(id => { document.getElementById(id).value = '' })
+  // Peça nova: o CNPJ da anterior não pode impedir a consulta desta.
+  if (typeof _cnpjConsultadoDoc !== 'undefined') _cnpjConsultadoDoc = ''
+  if (typeof fecharBalaoDataHora === 'function') fecharBalaoDataHora()
   CAMPOS_IMOVEL_DOC.forEach(id => { document.getElementById(id).value = '' })
   document.getElementById('nd-descricao').value = ''
   document.getElementById('nd-data').value = dataHojeLocal()
@@ -357,7 +383,9 @@ function preencherFormDoc(d) {
   document.getElementById('nd-tipo').value = d.tipo
   document.getElementById('nd-autuado').value = d.autuado.nome || ''
   document.getElementById('nd-autuado-doc').value = d.autuado.documento || ''
-  document.getElementById('nd-autuado-endereco').value = d.autuado.endereco || ''
+  for (const [id, parte] of Object.entries(CAMPOS_ENDERECO_AUTUADO_DOC)) {
+    document.getElementById(id).value = d.autuado[parte] || ''
+  }
 
   // De quando é o dado cadastral desta peça. `d.cadastro` vem nulo no
   // rascunho — lá o carimbo ainda não existe, porque o conteúdo ainda pode
@@ -372,7 +400,8 @@ function preencherFormDoc(d) {
         : 'Lavrado sem dado do cadastro municipal.'
     }
   }
-  document.getElementById('nd-endereco').value = d.imovel.endereco || ''
+  document.getElementById('nd-im-logradouro').value = d.imovel.logradouro || ''
+  document.getElementById('nd-im-numero').value = d.imovel.numero || ''
   document.getElementById('nd-im-inscricao').value = d.imovel.inscricao || ''
   document.getElementById('nd-im-bairro').value = d.imovel.bairro || ''
   document.getElementById('nd-im-quadra').value = d.imovel.quadra ?? ''
@@ -498,6 +527,7 @@ function renderAnexosDoc() {
 /** @param {string} nome */
 function irAbaDoc(nome) {
   if (!ABAS_DOC.includes(nome)) return
+  if (typeof fecharBalaoDataHora === 'function') fecharBalaoDataHora()   // o calendário não segue para outra aba
   fdState.aba = nome
 
   document.querySelectorAll('#fd-tabs .doc-tab')
@@ -634,8 +664,11 @@ async function gravarDoc() {
     data_fato: document.getElementById('nd-datahora').value,
     autuado_nome: document.getElementById('nd-autuado').value,
     autuado_documento: document.getElementById('nd-autuado-doc').value,
-    autuado_endereco: document.getElementById('nd-autuado-endereco').value,
-    endereco: document.getElementById('nd-endereco').value,
+    // O endereço vai EM PARTES; o servidor monta o texto único da peça.
+    ...Object.fromEntries(Object.entries(CAMPOS_ENDERECO_AUTUADO_DOC)
+      .map(([id, parte]) => ['autuado_' + parte, document.getElementById(id).value.trim() || null])),
+    imovel_logradouro: document.getElementById('nd-im-logradouro').value.trim() || null,
+    imovel_numero: document.getElementById('nd-im-numero').value.trim() || null,
     imovel_inscricao: document.getElementById('nd-im-inscricao').value.trim() || null,
     imovel_bairro: document.getElementById('nd-im-bairro').value.trim() || null,
     imovel_quadra: document.getElementById('nd-im-quadra').value.trim() || null,
@@ -785,14 +818,14 @@ function renderResumoDoc() {
     ${sec('Autuado')}
     ${linha('Nome', document.getElementById('nd-autuado').value) || '<div class="rs-linha"><span>Nome</span><b>—</b></div>'}
     ${linha('CPF/CNPJ', document.getElementById('nd-autuado-doc').value)}
-    ${linha('Endereço', document.getElementById('nd-autuado-endereco').value)}
+    ${linha('Endereço', enderecoAutuadoDoc())}
 
     ${sec('Imóvel')}
     ${linha('Inscrição', document.getElementById('nd-im-inscricao').value || 'sem inscrição')}
     ${linha('Bairro', document.getElementById('nd-im-bairro').value)}
     ${linha('Quadra / Lote', `${document.getElementById('nd-im-quadra').value || '—'} / ${document.getElementById('nd-im-lote').value || '—'}`)}
     ${linha('Área do terreno', document.getElementById('nd-area-terreno').value ? fmtNum(document.getElementById('nd-area-terreno').value) + ' m²' : '')}
-    ${linha('Endereço da obra', document.getElementById('nd-endereco').value)}
+    ${linha('Endereço da obra', enderecoObraDoc())}
 
     ${document.getElementById('nd-descricao').value
       ? sec('Constatação') + `<p class="rs-texto">${esc(document.getElementById('nd-descricao').value)}</p>` : ''}

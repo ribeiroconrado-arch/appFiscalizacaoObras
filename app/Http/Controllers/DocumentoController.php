@@ -20,6 +20,45 @@ class DocumentoController extends Controller
 {
     public function __construct(private LavraturaService $lavratura) {}
 
+    /** Os campos do formulário que viram as partes do endereço — não são colunas. */
+    private const PARTES_DE_ENDERECO = ['autuado_logradouro', 'autuado_numero', 'autuado_bairro',
+        'autuado_cidade', 'autuado_uf', 'imovel_logradouro', 'imovel_numero'];
+
+    /**
+     * O endereço do autuado e o do imóvel, como a peça os guarda: as PARTES (em
+     * JSON, para o formulário reabrir cada campo no seu lugar) e o TEXTO ÚNICO
+     * montado a partir delas — que é o que a impressão e as listas leem.
+     *
+     * Pedido sem parte nenhuma (cliente antigo, importação) mantém o texto
+     * único que veio, sem inventar partes.
+     *
+     * @param  array<string,mixed>  $d  dados validados
+     * @return array<string,mixed>
+     */
+    private function enderecosDaPeca(array $d): array
+    {
+        $limpo = fn (?string $v) => ($v = trim((string) $v)) === '' ? null : $v;
+        $partes = fn (array $campos) => array_filter(
+            array_map(fn ($c) => $limpo($d[$c] ?? null), $campos), fn ($v) => $v !== null);
+        $rua = fn (array $p) => implode(', ', array_filter([$p['logradouro'] ?? null, $p['numero'] ?? null]));
+
+        $a = $partes(['logradouro' => 'autuado_logradouro', 'numero' => 'autuado_numero', 'bairro' => 'autuado_bairro',
+            'cidade' => 'autuado_cidade', 'uf' => 'autuado_uf']);
+        if (isset($a['uf'])) { $a['uf'] = mb_strtoupper($a['uf']); }
+        $i = $partes(['logradouro' => 'imovel_logradouro', 'numero' => 'imovel_numero']);
+
+        $cidade = implode('/', array_filter([$a['cidade'] ?? null, $a['uf'] ?? null]));
+
+        return [
+            'autuado_endereco_partes' => $a ?: null,
+            'autuado_endereco' => $a
+                ? mb_substr(implode(' — ', array_filter([$rua($a), $a['bairro'] ?? null, $cidade])), 0, 300)
+                : ($d['autuado_endereco'] ?? null),
+            'imovel_endereco_partes' => $i ?: null,
+            'endereco' => $i ? mb_substr($rua($i), 0, 200) : ($d['endereco'] ?? null),
+        ];
+    }
+
     /**
      * GET /api/documentos — lista filtrada.
      *
@@ -298,6 +337,15 @@ class DocumentoController extends Controller
             'autuado_documento' => ['nullable', 'string', 'max:20'],
             'autuado_endereco'  => ['nullable', 'string', 'max:300'],
             'endereco'       => ['nullable', 'string', 'max:200'],
+            // O endereço EM PARTES (o formulário). O texto único de cada um é
+            // montado a partir delas — ver enderecosDaPeca().
+            'autuado_logradouro' => ['nullable', 'string', 'max:160'],
+            'autuado_numero'     => ['nullable', 'string', 'max:20'],
+            'autuado_bairro'     => ['nullable', 'string', 'max:120'],
+            'autuado_cidade'     => ['nullable', 'string', 'max:120'],
+            'autuado_uf'         => ['nullable', 'string', 'size:2'],
+            'imovel_logradouro'  => ['nullable', 'string', 'max:160'],
+            'imovel_numero'      => ['nullable', 'string', 'max:20'],
             // A identificação do imóvel como está na peça: do cadastro
             // municipal, ou digitada quando o imóvel não está nele.
             'imovel_inscricao' => ['nullable', 'string', 'max:30'],
@@ -326,8 +374,7 @@ class DocumentoController extends Controller
             'prazo_dias'    => $d['prazo_dias'] ?? null,
             'autuado_nome'  => $d['autuado_nome'] ?? null,
             'autuado_documento' => $d['autuado_documento'] ?? null,
-            'autuado_endereco'  => $d['autuado_endereco'] ?? null,
-            'endereco'      => $d['endereco'] ?? null,
+            ...$this->enderecosDaPeca($d),
             'imovel_inscricao' => $d['imovel_inscricao'] ?? null,
             'imovel_bairro'    => $d['imovel_bairro'] ?? null,
             'imovel_quadra'    => $d['imovel_quadra'] ?? null,
@@ -418,6 +465,9 @@ class DocumentoController extends Controller
                 'quadra'    => $documento->imovel_quadra ?? $documento->lote?->quadra,
                 'lote'      => $documento->imovel_lote ?? $documento->lote?->numero_lote,
                 'endereco'  => $documento->endereco,
+                // Peça antiga, sem as partes: o texto único inteiro vai no logradouro.
+                'logradouro' => $documento->imovel_endereco_partes['logradouro'] ?? $documento->endereco,
+                'numero'     => $documento->imovel_endereco_partes['numero'] ?? null,
                 'terreno'   => $documento->area_terreno_m2,
                 'construida'=> $documento->area_construida_m2,
             ],
@@ -425,6 +475,11 @@ class DocumentoController extends Controller
             'autuado'   => [
                 'nome' => $documento->autuado_nome, 'documento' => $documento->autuado_documento,
                 'endereco' => $documento->autuado_endereco,
+                'logradouro' => $documento->autuado_endereco_partes['logradouro'] ?? $documento->autuado_endereco,
+                'numero'     => $documento->autuado_endereco_partes['numero'] ?? null,
+                'bairro'     => $documento->autuado_endereco_partes['bairro'] ?? null,
+                'cidade'     => $documento->autuado_endereco_partes['cidade'] ?? null,
+                'uf'         => $documento->autuado_endereco_partes['uf'] ?? null,
             ],
 
             // De quando é o dado cadastral que esta peça usou. Vai para a ficha
@@ -538,6 +593,15 @@ class DocumentoController extends Controller
             'autuado_documento'  => ['nullable', 'string', 'max:20'],
             'autuado_endereco'   => ['nullable', 'string', 'max:300'],
             'endereco'           => ['nullable', 'string', 'max:200'],
+            // O endereço EM PARTES (o formulário). O texto único de cada um é
+            // montado a partir delas — ver enderecosDaPeca().
+            'autuado_logradouro' => ['nullable', 'string', 'max:160'],
+            'autuado_numero'     => ['nullable', 'string', 'max:20'],
+            'autuado_bairro'     => ['nullable', 'string', 'max:120'],
+            'autuado_cidade'     => ['nullable', 'string', 'max:120'],
+            'autuado_uf'         => ['nullable', 'string', 'size:2'],
+            'imovel_logradouro'  => ['nullable', 'string', 'max:160'],
+            'imovel_numero'      => ['nullable', 'string', 'max:20'],
             'imovel_inscricao'   => ['nullable', 'string', 'max:30'],
             'imovel_bairro'      => ['nullable', 'string', 'max:160'],
             'imovel_quadra'      => ['nullable', 'string', 'max:20'],
@@ -551,7 +615,10 @@ class DocumentoController extends Controller
             'artigos.*'          => ['integer', 'exists:artigos,id'],
         ]);
 
-        $documento->update(collect($d)->except('artigos')->all());
+        // array_merge, e não `+`: o texto único montado das partes tem de VENCER o
+        // que veio no pedido.
+        $documento->update(array_merge(
+            collect($d)->except(['artigos', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d)));
 
         // Os artigos são refixados por inteiro: manter os antigos e somar os
         // novos deixaria no documento um enquadramento que o fiscal removeu

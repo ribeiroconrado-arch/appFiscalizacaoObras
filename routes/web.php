@@ -253,6 +253,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Etapa 6 — legislação e documentos
         Route::get('/documentos', [DocumentoController::class, 'index']);
         Route::get('/documentos/opcoes', [DocumentoController::class, 'opcoes']);
+        // Consulta de CNPJ para o autuado — feita pelo servidor, com limite próprio.
+        Route::get('/cnpj/{cnpj}', [\App\Http\Controllers\CnpjController::class, 'mostrar'])->middleware('throttle:pesado');
         Route::get('/vistorias/{vistoria}/sugestao', [DocumentoController::class, 'sugestao']);
         Route::post('/lotes/{lote}/documentos', [DocumentoController::class, 'store']);
         // Sem imóvel: o fiscal abre a peça em campo e amarra o lote depois.

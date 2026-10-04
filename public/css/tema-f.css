@@ -27,7 +27,7 @@
      nenhum — la quem manda ja era o vh, e o valor em pixels nunca chegaria a
      ser alcancado. As CINCO telas sobem juntas porque leem este token: ficha,
      vistoria, vistoria de embargo, auto de infracao e auto de embargo. */
-  --modal-trabalho:672px;
+  --modal-trabalho:740px;   /* era 672: +10%, para o formulário de documento e a ficha */
   --modal-trabalho-alt:min(96vh, 988px);
 }
 
@@ -3453,3 +3453,64 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 #nd-bci .df-grade + .bci-sub{margin-top:12px}
 .bci-sub{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx3);margin:0 0 6px}
 #nd-bci{margin-bottom:14px}
+
+/* ══════════════════════════════════════════════
+   FORMULÁRIO DE DOCUMENTO — linhas de campo de largura medida
+
+   Cada linha é uma grade em que o campo CURTO tem a largura do que cabe nele
+   (um CNPJ, uma inscrição, cinco dígitos de número, duas letras de UF) e o
+   campo de texto livre fica com o que sobra. Larguras em px porque o valor é
+   em fonte monoespaçada de 14px: 8,4px por caractere, mais o recuo do campo.
+   ══════════════════════════════════════════════ */
+.doc-lin{display:grid;gap:9px;margin-bottom:9px;align-items:start}
+.doc-lin .field{margin-bottom:0;min-width:0}
+.doc-lin-autuado{grid-template-columns:190px minmax(0,1fr)}      /* CNPJ: 18 caracteres */
+.doc-lin-rua{grid-template-columns:minmax(0,9fr) minmax(76px,1fr)} /* logradouro 90% · número 10% */
+.doc-lin-cidade{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 62px}   /* UF: duas letras */
+.doc-lin-imovel{grid-template-columns:196px minmax(0,1fr) 78px}  /* inscrição: 19 caracteres · número: 5 dígitos */
+.doc-lin-quadra{grid-template-columns:minmax(0,1fr) 78px 72px}   /* quadra e lote: a largura do rótulo */
+@media (max-width:560px){
+  /* No celular o documento e a inscrição ganham a linha inteira; os curtos
+     continuam ao lado do campo que acompanham. */
+  .doc-lin-autuado{grid-template-columns:minmax(0,1fr)}
+  .doc-lin-imovel{grid-template-columns:minmax(0,1fr) 78px}
+  .doc-lin-imovel .field:first-child{grid-column:1 / -1}
+}
+
+/* ── Calendário e relógio do formulário (documentos.js) ──
+   O botão mora dentro do campo, à direita; o balão abre logo abaixo. */
+.dh-campo{position:relative;padding-right:40px}
+.dh-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+  display:flex;align-items:center;justify-content:center;border:0;border-radius:8px;
+  background:none;color:var(--tx3);cursor:pointer}
+.dh-btn:hover{background:var(--blt);color:var(--chumbo)}
+.dh-btn:disabled{opacity:.35;cursor:default;background:none}
+.dh-btn svg{width:17px;height:17px}
+.dh-balao{position:absolute;z-index:30;top:calc(100% + 6px);left:0;width:264px;
+  background:var(--sur,#fff);border:1.5px solid var(--bord);border-radius:12px;
+  box-shadow:0 12px 32px rgba(30,40,35,.18);padding:10px;font-size:13px;color:var(--tx)}
+.dh-rel{width:196px}
+.dh-topo{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px}
+.dh-topo b{font-family:'Manrope',sans-serif;font-weight:700;font-size:13px;color:var(--chumbo);
+  flex:1;text-align:center}
+.dh-nav{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--tx2);
+  font-size:18px;line-height:1;cursor:pointer}
+.dh-nav:hover{background:var(--blt)}
+.dh-grade{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dh-semana span{font-size:10.5px;font-weight:700;color:var(--tx3);text-align:center;padding:2px 0 4px}
+.dh-dia{height:32px;border:0;border-radius:8px;background:none;color:var(--tx);
+  font:inherit;font-variant-numeric:tabular-nums;cursor:pointer}
+.dh-dia:hover{background:var(--gl)}
+.dh-dia.hoje{box-shadow:inset 0 0 0 1.5px var(--gm)}
+.dh-dia.sel{background:var(--gd);color:#fff;font-weight:700}
+.dh-pe{display:flex;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--blt)}
+.dh-atalho{border:0;background:none;color:var(--gd);font:inherit;font-weight:600;font-size:12.5px;
+  padding:4px 6px;border-radius:6px;cursor:pointer}
+.dh-atalho:hover{background:var(--gl)}
+.dh-colunas{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dh-colunas small{display:block;font-size:10.5px;font-weight:700;color:var(--tx3);text-align:center;margin-bottom:4px}
+.dh-lista{max-height:176px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin}
+.dh-hm{height:30px;flex:none;border:0;border-radius:8px;background:none;color:var(--tx);
+  font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer}
+.dh-hm:hover{background:var(--gl)}
+.dh-hm.sel{background:var(--gd);color:#fff;font-weight:700}

@@ -466,6 +466,177 @@ function lerDataHoraDoc() {
   syncDataDoc()
 }
 
+// ── CALENDÁRIO E RELÓGIO ─────────────────────────────────────
+//
+// Dois balões próprios, abertos pelo botão dentro do campo. Não substituem a
+// digitação — quem sabe a data escreve mais rápido —, só dão a outra porta.
+// São iguais em todo aparelho, ao contrário dos seletores do navegador. Um
+// balão por vez; fecha ao escolher, no Esc e no clique fora.
+
+let _dhBalao = null
+
+function fecharBalaoDataHora() {
+  _dhBalao?.remove()
+  _dhBalao = null
+  document.removeEventListener('mousedown', _dhCliqueFora, true)
+  document.removeEventListener('keydown', _dhTecla, true)
+}
+function _dhCliqueFora(ev) { if (_dhBalao && !_dhBalao.contains(ev.target) && !ev.target.closest('.dh-btn')) fecharBalaoDataHora() }
+function _dhTecla(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); fecharBalaoDataHora() } }
+
+/** Cria o balão dentro do campo do botão. @param {HTMLElement} botao @param {string} classe */
+function _dhAbrir(botao, classe) {
+  const jaAberto = _dhBalao?.classList.contains(classe)
+  fecharBalaoDataHora()
+  if (jaAberto) return null          // o mesmo botão de novo fecha
+  _dhBalao = document.createElement('div')
+  _dhBalao.className = 'dh-balao ' + classe
+  botao.closest('.dh-campo').appendChild(_dhBalao)
+  document.addEventListener('mousedown', _dhCliqueFora, true)
+  document.addEventListener('keydown', _dhTecla, true)
+  return _dhBalao
+}
+
+const DH_MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
+/** Calendário: um mês por vez, com o dia escolhido e o de hoje marcados. */
+function abrirCalendarioDoc(botao) {
+  if (docTravado()) return
+  lerDataHoraDoc()
+  const balao = _dhAbrir(botao, 'dh-cal')
+  if (!balao) return
+  const iso = document.getElementById('nd-data').value
+  const escolhida = iso ? new Date(iso + 'T12:00') : new Date()
+  let ano = escolhida.getFullYear(), mes = escolhida.getMonth()
+  const p2 = n => String(n).padStart(2, '0')
+  const hoje = new Date()
+
+  const pintar = () => {
+    const primeiro = new Date(ano, mes, 1).getDay()          // 0 = domingo
+    const dias = new Date(ano, mes + 1, 0).getDate()
+    const celulas = Array(primeiro).fill('<span></span>')
+    for (let d = 1; d <= dias; d++) {
+      const marca = (iso === `${ano}-${p2(mes + 1)}-${p2(d)}` ? ' sel' : '')
+        + (hoje.getFullYear() === ano && hoje.getMonth() === mes && hoje.getDate() === d ? ' hoje' : '')
+      celulas.push(`<button type="button" class="dh-dia${marca}" data-dia="${d}">${d}</button>`)
+    }
+    balao.innerHTML = `
+      <div class="dh-topo">
+        <button type="button" class="dh-nav" data-passo="-1" aria-label="Mês anterior">&lsaquo;</button>
+        <b>${DH_MESES[mes][0].toUpperCase() + DH_MESES[mes].slice(1)} de ${ano}</b>
+        <button type="button" class="dh-nav" data-passo="1" aria-label="Próximo mês">&rsaquo;</button>
+      </div>
+      <div class="dh-grade dh-semana">${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(s => `<span>${s}</span>`).join('')}</div>
+      <div class="dh-grade">${celulas.join('')}</div>
+      <div class="dh-pe"><button type="button" class="dh-atalho" data-hoje="1">Hoje</button></div>`
+  }
+  const escolher = (a, m, d) => {
+    document.getElementById('nd-data-txt').value = `${p2(d)}/${p2(m + 1)}/${a}`
+    fecharBalaoDataHora()
+    lerDataHoraDoc()
+  }
+  // `mousedown` com preventDefault: o campo de texto não perde o foco, e o
+  // `onblur` dele não roda no meio do clique.
+  balao.addEventListener('mousedown', ev => ev.preventDefault())
+  balao.addEventListener('click', ev => {
+    const alvo = ev.target.closest('button')
+    if (!alvo) return
+    if (alvo.dataset.passo) {
+      mes += Number(alvo.dataset.passo)
+      if (mes < 0) { mes = 11; ano-- } else if (mes > 11) { mes = 0; ano++ }
+      pintar()
+    } else if (alvo.dataset.hoje) {
+      escolher(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
+    } else if (alvo.dataset.dia) {
+      escolher(ano, mes, Number(alvo.dataset.dia))
+    }
+  })
+  pintar()
+}
+
+/** Relógio: horas de um lado, minutos (de 5 em 5) do outro. */
+function abrirRelogioDoc(botao) {
+  if (docTravado()) return
+  lerDataHoraDoc()
+  const balao = _dhAbrir(botao, 'dh-rel')
+  if (!balao) return
+  const p2 = n => String(n).padStart(2, '0')
+  let [h, m] = (document.getElementById('nd-hora').value || '').split(':').map(Number)
+  if (!Number.isFinite(h)) { const a = new Date(); h = a.getHours(); m = a.getMinutes() }
+
+  const gravar = fechar => {
+    document.getElementById('nd-hora-txt').value = `${p2(h)}:${p2(m)}`
+    lerDataHoraDoc()
+    if (fechar) fecharBalaoDataHora(); else pintar()
+  }
+  const pintar = () => {
+    const col = (lista, atual, chave) => lista.map(v =>
+      `<button type="button" class="dh-hm${v === atual ? ' sel' : ''}" data-${chave}="${v}">${p2(v)}</button>`).join('')
+    balao.innerHTML = `
+      <div class="dh-topo"><b>${p2(h)}:${p2(m)}</b></div>
+      <div class="dh-colunas">
+        <div><small>Hora</small><div class="dh-lista">${col([...Array(24).keys()], h, 'h')}</div></div>
+        <div><small>Minuto</small><div class="dh-lista">${col([...Array(12).keys()].map(i => i * 5), m, 'm')}</div></div>
+      </div>
+      <div class="dh-pe"><button type="button" class="dh-atalho" data-agora="1">Agora</button>
+        <button type="button" class="dh-atalho" data-ok="1">Pronto</button></div>`
+    balao.querySelector('.dh-hm.sel')?.scrollIntoView({ block: 'center' })
+  }
+  balao.addEventListener('mousedown', ev => ev.preventDefault())
+  balao.addEventListener('click', ev => {
+    const alvo = ev.target.closest('button')
+    if (!alvo) return
+    if (alvo.dataset.agora) { const a = new Date(); h = a.getHours(); m = a.getMinutes(); gravar(true) }
+    else if (alvo.dataset.ok) { gravar(true) }
+    else if (alvo.dataset.h !== undefined) { h = Number(alvo.dataset.h); gravar(false) }
+    // Escolhido o minuto, a hora está completa: fecha.
+    else if (alvo.dataset.m !== undefined) { m = Number(alvo.dataset.m); gravar(true) }
+  })
+  pintar()
+}
+
+// ── CPF / CNPJ DO AUTUADO ────────────────────────────────────
+
+/** Máscara conforme o tamanho: até 11 dígitos é CPF, daí em diante CNPJ. */
+function mascararCpfCnpjDoc(inp) {
+  const n = inp.value.replace(/\D/g, '').slice(0, 14)
+  inp.value = n.length <= 11
+    ? n.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2')
+    : n.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+       .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2')
+}
+
+/** O último CNPJ consultado — sair e voltar ao campo não repete a consulta. */
+let _cnpjConsultadoDoc = ''
+
+/**
+ * Saindo do campo com um CNPJ completo, consulta a empresa e preenche o que
+ * estiver VAZIO: razão social e endereço. O que o fiscal já digitou fica.
+ * É o recurso do AppPOSTURAS; aqui a consulta passa pelo servidor
+ * (CnpjController), que é quem fala com a BrasilAPI.
+ */
+async function buscarCnpjDoc(inp) {
+  if (docTravado()) return
+  const digitos = inp.value.replace(/\D/g, '')
+  if (digitos.length !== 14 || digitos === _cnpjConsultadoDoc) return
+  _cnpjConsultadoDoc = digitos
+  try {
+    const r = await fetch('/api/cnpj/' + digitos, { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    if (!r.ok) { toast(d.message || 'Não foi possível consultar o CNPJ.', 'err'); return }
+    const por = (id, v) => { const el = document.getElementById(id); if (v && !el.value.trim()) el.value = v }
+    por('nd-autuado', d.nome)
+    por('nd-aut-logradouro', d.logradouro)
+    por('nd-aut-numero', d.numero)
+    por('nd-aut-bairro', d.bairro)
+    por('nd-aut-cidade', d.cidade)
+    por('nd-aut-uf', d.uf)
+    toast('Dados do CNPJ preenchidos')
+  } catch {
+    toast('Não foi possível consultar o CNPJ. Preencha manualmente.', 'err')
+  }
+}
+
 /**
  * Ajusta o formulário ao tipo escolhido.
  *
@@ -572,12 +743,26 @@ function buscarArtigoDoc(inp) {
   lista.classList.add('open')
 }
 
-/** Escolhe o artigo na busca; ele só entra na lista com o "+add". */
+/**
+ * Escolhe o artigo na busca; ele só entra na lista com o "+add".
+ *
+ * Sem lei escolhida, o artigo JÁ ESCOLHE A LEI dele no campo de cima — como no
+ * AppPOSTURAS. Quem procura pelo artigo ("escavação", "sem alvará") não tem de
+ * saber de antemão em que lei ele está; e ver a lei aparecer é a confirmação
+ * de que achou o artigo certo, antes de somá-lo à lista.
+ */
 function selArtigoDoc(id) {
   if (docTravado()) return
   artigoEscolhidoDoc = id
   document.getElementById('nd-artigo-busca').value = rotuloArtigoDoc(artigoDoc(id))
   document.getElementById('ac-nd-artigo').classList.remove('open')
+
+  const lei = leiDoArtigoDoc(id)
+  if (lei && !document.getElementById('nd-lei').value) {
+    document.getElementById('nd-lei').value = lei.id
+    document.getElementById('nd-lei-busca').value = lei.rotulo
+    trocarTipoDoc()   // o aviso do prazo de defesa depende da lei
+  }
 }
 
 function limparArtigoBuscaDoc() {

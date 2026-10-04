@@ -21,6 +21,8 @@ class Documento extends Model
             'data_lavratura'     => 'datetime',
             'cadastro_consultado_em' => 'datetime',
             'cadastro_retrato'       => 'array',
+            'autuado_endereco_partes' => 'array',
+            'imovel_endereco_partes'  => 'array',
             'anulado_em'         => 'datetime',
             'prazo_ate'          => 'date',
             'defesa_ate'         => 'date',
