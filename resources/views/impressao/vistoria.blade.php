@@ -117,15 +117,7 @@
 </head>
 <body>
 
-<table class="pagina">
-  <thead>
-    <tr><td>
-      @include('impressao._cabecalho', ['numero' => $v->numeroFormatado()])
-    </td></tr>
-  </thead>
-
-  <tbody>
-    <tr><td>
+@include('impressao._pagina-abre', ['numero' => $v->numeroFormatado()])
 
       {{-- Faixa do topo: quem vistoriou, quando e o quê. Só na primeira
            página, por isso fica no tbody. --}}
@@ -289,9 +281,7 @@
         </div>
       @endif
 
-    </td></tr>
-  </tbody>
-</table>
+@include('impressao._pagina-fecha')
 
 @if ($navegador)
   <div class="imp-barra">

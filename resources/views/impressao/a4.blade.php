@@ -121,15 +121,7 @@
   <div class="marca">{{ $marca }}</div>
 @endif
 
-<table class="pagina">
-  <thead>
-    <tr><td>
-      @include('impressao._cabecalho', ['numero' => $doc->numeroFormatado()])
-    </td></tr>
-  </thead>
-
-  <tbody>
-    <tr><td>
+@include('impressao._pagina-abre', ['numero' => $doc->numeroFormatado()])
 
       {{-- Faixa do topo: identifica quem lavrou e quando. Fica no tbody de
            propósito — só faz sentido na primeira página. --}}
@@ -375,9 +367,7 @@
         </div>
       @endif
 
-    </td></tr>
-  </tbody>
-</table>
+@include('impressao._pagina-fecha')
 
 @if ($navegador)
   <div class="imp-barra">

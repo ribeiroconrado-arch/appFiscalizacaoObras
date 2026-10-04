@@ -2098,11 +2098,6 @@
                  style="text-transform:uppercase" oninput="this.value = this.value.replace(/[^a-zA-Z]/g, '').toUpperCase()">
         </div>
       </div>
-      <p class="aviso-legal">
-        Sem autuado identificado o documento ainda pode ser lavrado — a
-        fiscalização encontra obra sem responsável no local o tempo todo. O
-        nome pode ser completado antes da entrega da via.
-      </p>
       {{-- CARIMBO DE PROCEDÊNCIA. Só em peça lavrada: no rascunho ainda não há
            carimbo, porque o dado ainda pode mudar. Discreto de propósito — é
            conferência, e quem abre a peça quase nunca está atrás dele. --}}

@@ -101,15 +101,7 @@
 </head>
 <body>
 
-<table class="pagina">
-  <thead>
-    <tr><td>
-      @include('impressao._cabecalho', ['titulo' => 'ORDEM DE SERVIÇO', 'numero' => $os->numero])
-    </td></tr>
-  </thead>
-
-  <tbody>
-    <tr><td>
+@include('impressao._pagina-abre', ['titulo' => 'ORDEM DE SERVIÇO', 'numero' => $os->numero])
 
       <table class="topo">
         <tr>
@@ -263,9 +255,7 @@
         <div class="rodape">{!! implode(' &nbsp;·&nbsp; ', array_map('e', $rodape)) !!}</div>
       @endif
 
-    </td></tr>
-  </tbody>
-</table>
+@include('impressao._pagina-fecha')
 
 </body>
 </html>

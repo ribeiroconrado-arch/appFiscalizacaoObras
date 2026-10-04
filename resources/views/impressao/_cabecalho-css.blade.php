@@ -72,3 +72,14 @@
               letter-spacing: .02em; white-space: nowrap; }
   .topo-val { font-size: 13px; font-weight: bold; }
   .topo-regua { border-bottom: 2px solid #111; height: 0; margin-bottom: 10px; }
+
+@unless ($navegador ?? false)
+  /* ── Só no PDF (dompdf) ──
+     O cabeçalho é um bloco fixo na MARGEM de cima, repetido em toda folha
+     (ver _pagina-abre). A margem de cima da página cresce para reservar o
+     espaço dele: 8mm de borda + 34mm de cabeçalho (medido: com as quatro
+     linhas do órgão ele vai de 8 a 40,4mm). Esta regra vem DEPOIS do
+     @page do layout, e é ela que vale. */
+  @page { margin: 42mm 10mm 10mm 10mm; }
+  .cab-fixo { position: fixed; top: -34mm; left: 0; right: 0; height: 33mm; }
+@endunless
