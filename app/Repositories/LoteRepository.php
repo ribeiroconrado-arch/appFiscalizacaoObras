@@ -648,6 +648,26 @@ class LoteRepository
     }
 
     /**
+     * "O lote toca o contorno?" — conferido NO PLANO (SRID 0), e não em
+     * coordenada geográfica.
+     *
+     * O `ST_Intersects` geográfico do MySQL 8.0 (SRID 4326) ERRA com polígono
+     * grande: em 04/10/2026, no Jd. Esperança, ele respondeu "não toca" para 6
+     * lotes inteiramente dentro do contorno — os mesmos para os quais o
+     * `ST_Distance` devolvia 0 m. O contorno era recusado ("deixa de fora 6
+     * dos 362"), os lotes apontados estavam no lugar certo, e não havia raio
+     * que resolvesse. Aconteceu em seis bairros.
+     *
+     * Tirar o SRID dos DOIS lados compara longitude e latitude como x e y.
+     * Para saber se uma figura está dentro da outra isso é exato na escala de
+     * um bairro (a distorção do grau afeta medida, não inclusão), e é o mesmo
+     * cálculo que o navegador faz ao gerar o contorno (JSTS).
+     *
+     * O parâmetro é o GeoJSON do contorno.
+     */
+    private const TOCA_O_CONTORNO = 'ST_Intersects(ST_SRID(geom, 0), ST_SRID(ST_GeomFromGeoJSON(?, 1, 4326), 0))';
+
+    /**
      * Confere um contorno antes de gravar: válido, multipolígono em 4326, e
      * quantos lotes ativos do bairro ele NÃO toca.
      *
@@ -658,7 +678,7 @@ class LoteRepository
         $g = DB::selectOne('SELECT ST_IsValid(g) AS valido, ST_GeometryType(g) AS tipo, ST_Area(g) AS area
                               FROM (SELECT ST_GeomFromGeoJSON(?, 1, 4326) g) t', [$geojson]);
         $c = DB::selectOne('SELECT COUNT(*) AS total,
-                                   SUM(NOT ST_Intersects(geom, ST_GeomFromGeoJSON(?, 1, 4326))) AS fora
+                                   SUM(NOT ' . self::TOCA_O_CONTORNO . ') AS fora
                               FROM lotes WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$geojson, $bairro]);
 
         return [
@@ -682,7 +702,7 @@ class LoteRepository
         return array_map(fn ($l) => ['id' => (int) $l->id, 'quadra' => $l->quadra, 'lote' => $l->numero_lote],
             DB::select('SELECT id, quadra, numero_lote FROM lotes
                          WHERE ' . self::SO_ATIVOS . ' AND bairro = ?
-                           AND NOT ST_Intersects(geom, ST_GeomFromGeoJSON(?, 1, 4326))
+                           AND NOT ' . self::TOCA_O_CONTORNO . '
                          ORDER BY quadra, numero_lote LIMIT ' . max(1, $limite), [$bairro, $geojson]));
     }
 

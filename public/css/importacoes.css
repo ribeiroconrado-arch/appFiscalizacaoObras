@@ -166,3 +166,9 @@
 .imp-conf-linha .sec-title{margin:0}
 .imp-conf-resumo{flex:none;white-space:nowrap}
 @media (max-width:560px){ .imp-conf-linha{flex-wrap:wrap} .imp-conf-linha .sec-title{flex-basis:100%} }
+
+/* Lista "Contorno dos bairros": a linha dos lotes fora do contorno (ou
+   isolados) pode trazer dezenas de links. Ela QUEBRA dentro da célula — no
+   padrão de tabela larga (tabelas.css) a célula não quebra, e essa linha
+   empurrava a situação, a área e o botão "Gerar" para fora da janela. */
+.imp-tabela td .imp-diverge{white-space:normal;overflow-wrap:anywhere;line-height:1.6;max-width:460px}
