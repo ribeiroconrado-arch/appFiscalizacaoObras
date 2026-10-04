@@ -88,7 +88,11 @@ class ImportacaoController extends Controller
             'vinculos'             => $importacao->status === 'excluida' ? [] : $this->importacao->vinculos($importacao),
             'extensao'             => $this->lotes->extensaoDaImportacao($importacao->id),
             'pre_curadoria'        => $this->preCuradoria($importacao),
-            'vinculo'              => $importacao->status === 'excluida' ? null
+            // Contorno inválido e número repetido: o que ainda falta acertar
+            // no desenho, lido da base agora.
+            'pendencias_desenho'   => $importacao->emAndamento()
+                ? $this->importacao->pendenciasDoDesenho($importacao) : null,
+            'vinculo'             => $importacao->status === 'excluida' ? null
                 : app(VinculoDoBairro::class)->situacao($importacao->bairro, $importacao->id),
             'justificativa_publicacao' => $importacao->justificativa_publicacao,
             'motivo_exclusao'      => $importacao->motivo_exclusao,
@@ -126,9 +130,17 @@ class ImportacaoController extends Controller
             return response()->json(['message' => $ex->getMessage()], 422);
         }
 
+        $p = $this->importacao->pendenciasDoDesenho($imp);
+        $pendencias = array_filter([
+            $p['invalidos'] ? count($p['invalidos']) . ' com contorno inválido' : null,
+            $p['repetidos'] ? count($p['repetidos']) . ' com número repetido (entraram sem número)' : null,
+        ]);
+
         return response()->json([
             'message' => "{$imp->bairro} carregado como rascunho: {$imp->total_lotes} lotes. "
-                . 'Faça a pré-curadoria e a conferência; a importação só vale depois de salva.',
+                . ($pendencias ? 'Pendências do desenho: ' . implode(' e ', $pendencias) . ' — veja na ficha. '
+                    : 'Faça a pré-curadoria e a conferência; ')
+                . ($pendencias ? 'A' : 'a') . ' importação só vale depois de salva.',
             'id'      => $imp->id,
         ]);
     }

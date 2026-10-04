@@ -126,7 +126,9 @@ try {
     $arqRep = tempnam(sys_get_temp_dir(), 'imp') . '.geojson';
     file_put_contents($arqRep, json_encode(['type' => 'FeatureCollection', 'features' => $repetido]));
     $cr = $svc->conferirArquivo($arqRep, 'rep.geojson');
-    confere(! $cr['pode_gravar'] && $cr['repetidos_total'] === 1, 'número repetido no arquivo barra a gravação');
+    // Repetido não barra mais: os lotes entram sem número (ver
+    // importacao-pendencias-backend.php).
+    confere($cr['pode_gravar'] && $cr['repetidos_total'] === 1, 'número repetido no arquivo é avisado, sem barrar');
 
     echo "Importação — carregar como rascunho\n";
     $imp = $svc->gravar($arquivo, 'teste.geojson', $topografo);

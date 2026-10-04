@@ -157,9 +157,11 @@ class ImportacaoDeBairro
                 $repetidos[] = ['quadra' => $q, 'lote' => $lt, 'vezes' => $n];
             }
         }
-        if ($repetidos) {
-            $impedimentos[] = count($repetidos) . ' combinação(ões) de quadra e lote aparecem mais de uma vez no arquivo.';
-        }
+        // Repetido NÃO impede mais o carregamento: os lotes repetidos entram
+        // SEM número (o índice único não aceitaria dois iguais, e escolher um
+        // deles aqui seria chute), e a ficha da importação os lista para o
+        // curador decidir no mapa qual é o certo — ver gravar() e
+        // pendenciasDoDesenho().
 
         // Lotes que JÁ EXISTEM ativos na base, pela chave de identidade — a
         // coluna gerada que o índice único usa.
@@ -245,6 +247,35 @@ class ImportacaoDeBairro
                 'conferencia'  => collect($conf)->except(['hash', 'impedimentos', 'pode_gravar', 'vinculo'])->all(),
             ]);
 
+            // Quadra+lote que aparece mais de uma vez no arquivo: esses lotes
+            // entram um a um, SEM número, e o id de cada um fica anotado na
+            // importação com o número que tinham — é a lista que a ficha
+            // mostra para o curador escolher, no mapa, qual é o certo.
+            $vezes = [];
+            foreach ($linhas as $l) {
+                if ($l['quadra'] !== null && $l['numero_lote'] !== null) {
+                    $k = $l['quadra'] . '|' . $l['numero_lote'];
+                    $vezes[$k] = ($vezes[$k] ?? 0) + 1;
+                }
+            }
+            $ehRepetida = fn (array $l) => $l['quadra'] !== null && $l['numero_lote'] !== null
+                && $vezes[$l['quadra'] . '|' . $l['numero_lote']] > 1;
+            $repetidas = array_values(array_filter($linhas, $ehRepetida));
+            $linhas = array_values(array_filter($linhas, fn (array $l) => ! $ehRepetida($l)));
+
+            $repetidosLotes = [];
+            foreach ($repetidas as $l) {
+                DB::insert(
+                    'INSERT INTO lotes (bairro, quadra, numero_lote, chave, area_gis_m2, fonte, geom,
+                                        origem, importacao_id, em_revisao, created_at, updated_at)
+                     VALUES (?, ?, NULL, ?, ?, ?, ST_GeomFromGeoJSON(?, 1, 4326), ?, ?, 1, ?, ?)',
+                    [$l['bairro'], $l['quadra'], $l['chave'], $l['area_gis_m2'], $l['fonte'], $l['geojson'],
+                     'importacao', $imp->id, $l['ts'], $l['ts']]
+                );
+                $repetidosLotes[] = ['lote_id' => (int) DB::getPdo()->lastInsertId(),
+                    'quadra' => $l['quadra'], 'lote' => $l['numero_lote']];
+            }
+
             foreach (array_chunk($linhas, self::LOTE_INSERCAO) as $bloco) {
                 $valores = [];
                 $params  = [];
@@ -273,18 +304,22 @@ class ImportacaoDeBairro
             $d = DB::selectOne('SELECT SUM(ST_SRID(geom) <> 4326) AS srid_errado,
                                        SUM(NOT ST_IsValid(geom))  AS geometria_invalida
                                   FROM lotes WHERE importacao_id = ?', [$imp->id]);
-            if ((int) $d->srid_errado > 0 || (int) $d->geometria_invalida > 0) {
-                // QUAIS lotes: sem isso o curador recebe um "inválido" sem ter
-                // por onde começar a corrigir o DWG.
-                $quais = collect(DB::select('SELECT quadra, numero_lote FROM lotes
-                                              WHERE importacao_id = ? AND (NOT ST_IsValid(geom) OR ST_SRID(geom) <> 4326)
-                                              LIMIT 8', [$imp->id]))
-                    ->map(fn ($l) => 'Q' . ($l->quadra ?? '?') . ' L' . ($l->numero_lote ?? '?'))->implode(', ');
-                $n = (int) $d->srid_errado + (int) $d->geometria_invalida;
-                throw new RuntimeException("O arquivo tem {$n} lote(s) com geometria que o banco não aceita "
-                    . "(contorno que se cruza ou coordenada fora de EPSG:4326): {$quais}"
-                    . ($n > 8 ? ' e outros' : '') . '. Corrija no desenho e envie de novo. Nada foi gravado.');
+            // SRID errado continua barrando: é o arquivo inteiro no sistema de
+            // coordenadas errado, e não há o que corrigir lote a lote.
+            if ((int) $d->srid_errado > 0) {
+                throw new RuntimeException("O arquivo tem {$d->srid_errado} lote(s) fora de EPSG:4326. "
+                    . 'Converta o desenho para EPSG:4326 e envie de novo. Nada foi gravado.');
             }
+            // CONTORNO INVÁLIDO (linha que se cruza) NÃO barra mais: um lote
+            // torto não pode segurar um bairro inteiro. Ele entra no rascunho,
+            // a ficha o lista (pendenciasDoDesenho) e o curador conserta com
+            // Editar lote ou exclui e redesenha. Quem garante que não passa
+            // adiante é salvar(), que recusa rascunho com geometria inválida.
+
+            $imp->update(['conferencia' => ($imp->conferencia ?? []) + [
+                'repetidos_lotes'    => $repetidosLotes,
+                'geometria_invalida' => (int) $d->geometria_invalida,
+            ]]);
 
             // Escolhido na leitura do arquivo. Se a ligação for recusada, o
             // carregamento inteiro volta — melhor do que um rascunho que não
@@ -297,6 +332,32 @@ class ImportacaoDeBairro
             // em salvar().
             return $imp;
         });
+    }
+
+    /**
+     * O que o DESENHO desta importação ainda deve, lido da base AGORA: os lotes
+     * de contorno inválido e os que vieram com número repetido e continuam sem
+     * número. Cada item traz o id do lote, para a ficha levar o curador até
+     * ele no mapa. O que já foi corrigido ou excluído sai da lista sozinho.
+     *
+     * @return array{invalidos: list<array<string,mixed>>, repetidos: list<array<string,mixed>>}
+     */
+    public function pendenciasDoDesenho(ImportacaoLote $imp): array
+    {
+        $invalidos = DB::select('SELECT id, quadra, numero_lote FROM lotes
+                                  WHERE importacao_id = ? AND situacao = "ativo" AND NOT ST_IsValid(geom)
+                                  ORDER BY quadra, numero_lote LIMIT 200', [$imp->id]);
+
+        $anotados = collect($imp->conferencia['repetidos_lotes'] ?? []);
+        $semNumero = $anotados->isEmpty() ? collect() : DB::table('lotes')
+            ->whereIn('id', $anotados->pluck('lote_id'))->where('importacao_id', $imp->id)
+            ->where('situacao', 'ativo')->whereNull('numero_lote')->pluck('id')->flip();
+
+        return [
+            'invalidos' => array_map(fn ($l) => ['lote_id' => (int) $l->id, 'quadra' => $l->quadra,
+                'lote' => $l->numero_lote], $invalidos),
+            'repetidos' => $anotados->filter(fn ($r) => $semNumero->has($r['lote_id']))->values()->all(),
+        ];
     }
 
     /**
@@ -315,7 +376,8 @@ class ImportacaoDeBairro
         $ruins = (int) DB::scalar('SELECT COUNT(*) FROM lotes WHERE importacao_id = ? AND situacao = "ativo"
                                      AND (NOT ST_IsValid(geom) OR ST_SRID(geom) <> 4326)', [$imp->id]);
         if ($ruins > 0) {
-            throw new RuntimeException("{$ruins} lote(s) do rascunho têm geometria inválida. Corrija na pré-curadoria antes de salvar.");
+            throw new RuntimeException("{$ruins} lote(s) do rascunho têm contorno inválido — estão em \"Pendências do desenho\", "
+                . 'na ficha da importação. Edite ou exclua cada um na pré-curadoria antes de salvar.');
         }
         $ativos = DB::table('lotes')->where('importacao_id', $imp->id)->where('situacao', 'ativo')->count();
         if ($ativos === 0) {

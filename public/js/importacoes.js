@@ -240,7 +240,7 @@ function _htmlConferenciaArquivo(c) {
   const kpi = (rot, n, cls = '') => `<div class="imp-kpi ${cls}"><small>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></div>`
   const avisos = []
   if (c.sem_quadra) avisos.push(`<tr><td>Sem quadra ou sem número — corrigir depois no mapa, com "Corrigir quadra"</td><td class="num">${c.sem_quadra}</td></tr>`)
-  c.repetidos.forEach(r => avisos.push(`<tr><td>Quadra ${esc(r.quadra)} · Lote ${esc(r.lote)} aparece ${r.vezes} vezes no arquivo</td><td class="num">${r.vezes}</td></tr>`))
+  c.repetidos.forEach(r => avisos.push(`<tr><td>Quadra ${esc(r.quadra)} · Lote ${esc(r.lote)} aparece ${r.vezes} vezes no arquivo — entram <b>sem número</b>, para você escolher no mapa qual é o certo</td><td class="num">${r.vezes}</td></tr>`))
   if (c.ignoradas) avisos.push(`<tr><td>Feições que não são polígono, ou sem bairro (ignoradas)</td><td class="num">${c.ignoradas}</td></tr>`)
   c.conflitos.forEach(x => avisos.push(`<tr><td>Quadra ${esc(x.quadra)} · Lote ${esc(x.lote)} já existe na base</td><td class="num">1</td></tr>`))
 
@@ -251,7 +251,7 @@ function _htmlConferenciaArquivo(c) {
     <div class="imp-kpis">
       ${kpi('Lotes lidos', c.lidos)}
       ${kpi('Sem quadra', c.sem_quadra, c.sem_quadra ? 'aviso' : '')}
-      ${kpi('Nº repetido', c.repetidos_total, c.repetidos_total ? 'erro' : '')}
+      ${kpi('Nº repetido', c.repetidos_total, c.repetidos_total ? 'aviso' : '')}
       ${kpi('Conflito com a base', c.conflitos_total, c.conflitos_total ? 'erro' : 'ok')}
     </div>
     ${avisos.length ? `<table class="imp-tabela"><thead><tr><th>Aviso</th><th class="num">Lotes</th></tr></thead><tbody>${avisos.join('')}</tbody></table>` : ''}
@@ -449,6 +449,7 @@ function renderFichaImportacao(i) {
         ${publicada}${excluida}
         ${vinc.length ? `<div class="cad-nota cad-aviso"><b>Lotes com vínculo</b> — a importação não pode ser excluída:
             ${vinc.map(([k, n]) => `${rotVinc[k] || k}: ${n}`).join(' · ')}</div>` : ''}
+        ${_htmlPendenciasDoDesenho(i)}
         <div id="imp-resultado">${conf ? conf.corpo : naoConferida}</div>
         ${_htmlPreCuradoria(i.pre_curadoria)}
       </div>
@@ -458,6 +459,31 @@ function renderFichaImportacao(i) {
         <div class="btn-row imp-acoes">${acoes}</div>
       </div>
     </div>`, rascunho ? `Rascunho de importação · ${i.bairro}` : `Importação nº ${i.id}`)
+}
+
+/**
+ * PENDÊNCIAS DO DESENHO: o que o arquivo trouxe de errado e NÃO impediu o
+ * carregamento — contorno inválido e número repetido. Cada linha leva ao lote
+ * no mapa, já em pré-curadoria e marcado, pronto para a ferramenta. O que foi
+ * corrigido sai da lista sozinho (o servidor lê a base a cada abertura).
+ */
+function _htmlPendenciasDoDesenho(i) {
+  const p = i.pendencias_desenho
+  if (!p || (!p.invalidos.length && !p.repetidos.length)) return ''
+  const ver = l => `<a href="#" onclick="event.preventDefault(); irAoLoteDaImportacao(${Number(l.lote_id)})">ver no mapa ›</a>`
+  const grupo = (titulo, dica, itens, linha) => itens.length ? `
+    <div class="imp-grupo"><span class="badge bd-pe">${itens.length}</span> ${titulo}</div>
+    <p class="imp-expl">${dica}</p>
+    <table class="imp-tabela"><tbody>${itens.map(linha).join('')}</tbody></table>` : ''
+
+  return `<div class="sec-title">Pendências do desenho</div>
+    ${grupo('Contorno inválido (linha que se cruza)',
+      `Corrija os vértices com <b>Editar lote (L)</b>, ou exclua <b>(X)</b> e desenhe de novo <b>(D)</b>.${
+        i.status === 'rascunho' ? ' O rascunho só pode ser salvo depois disso.' : ''}`,
+      p.invalidos, l => `<tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td class="imp-abrir">${ver(l)}</td></tr>`)}
+    ${grupo('Número repetido no arquivo — entraram sem número',
+      'Veja cada um no mapa: informe o número do que está certo <b>(N)</b> e renumere ou exclua <b>(X)</b> o outro.',
+      p.repetidos, l => `<tr><td>Q ${esc(l.quadra)} · no arquivo era o lote <b>${esc(l.lote)}</b></td><td class="imp-abrir">${ver(l)}</td></tr>`)}`
 }
 
 /** O registro próprio da pré-curadoria — fora do Histórico do cadastro. */
