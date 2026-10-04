@@ -144,6 +144,8 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
 
   fdState.editando = false
   fdState.aba = 'autuado'
+  // A cópia do cadastro municipal guardada na lavratura (nula em rascunho).
+  fdState.cadastro = documento?.cadastro ?? null
 
   if (documento) {
     fdState.estado = documento.status.valor === 'rascunho' ? 'rascunho' : 'lavrado'
@@ -210,21 +212,14 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
 
 /** Rótulo e formato de cada dado do BCI, na ordem em que aparecem. */
 const BCI_CAMPOS_DOC = [
-  ['codigo_cadastro', 'Código no cadastro'],
   ['inscricao_alternativa', 'Inscrição alternativa'],
-  ['isencao', 'Situação / isenção'],
-  ['area_terreno_m2', 'Área do terreno', 'm²'],
   ['area_edificada_m2', 'Área edificada', 'm²'],
   ['fracao_ideal', 'Fração ideal'],
   ['testada_m', 'Testada', 'm'],
   ['medida_lado_direito', 'Lado direito', 'm'],
   ['medida_lado_esquerdo', 'Lado esquerdo', 'm'],
   ['medida_fundo', 'Fundo', 'm'],
-  ['setor', 'Setor'],
   ['regiao_fiscal', 'Região fiscal'],
-  ['logradouro', 'Logradouro'],
-  ['numero_predial', 'Número'],
-  ['complemento', 'Complemento'],
 ]
 
 /**
@@ -254,6 +249,20 @@ async function renderBciDoc({ sugerir = false } = {}) {
   // Até o cadastro responder (ou se ele não tiver o imóvel), os campos do
   // imóvel ficam abertos à digitação.
   travarImovelDoc([])
+
+  // PEÇA LAVRADA: mostra a CÓPIA que ela guardou na lavratura, e não o
+  // cadastro de hoje — que pode ter mudado numa carga posterior. A data em
+  // que a cópia foi tirada vai escrita no topo do bloco.
+  if (fdState.estado === 'lavrado') {
+    const c = fdState.cadastro
+    if (c?.retrato) {
+      bloco.hidden = false
+      alvo.innerHTML = htmlBciDoc(c.retrato.imovel, c.retrato.caracteristicas, c.retrato.unidades, [],
+        `Dados copiados do cadastro municipal na lavratura, em <b>${esc(c.copiado_em || '—')}</b>`
+        + (c.consultado_em ? ` — cadastro integrado em <b>${esc(c.consultado_em)}</b>.` : '.'))
+    }
+    return
+  }
 
   if (!loteId || typeof obterBci !== 'function') return
 
@@ -297,20 +306,55 @@ async function renderBciDoc({ sugerir = false } = {}) {
   travarImovelDoc(doCadastro)
   recalcularMultaDoc()
 
-  const par = (r, v) => `<div><span class="df-rot">${esc(r)}</span><span class="df-val">${esc(v)}</span></div>`
-  const dados = BCI_CAMPOS_DOC
-    .filter(([k]) => im[k] !== null && im[k] !== undefined && im[k] !== '')
-    .map(([k, rot, un]) => par(rot, typeof im[k] === 'number' ? fmtNum(im[k]) + (un ? ' ' + un : '') : im[k]))
-  const carac = (bci.caracteristicas || []).filter(c => c.valor !== null && c.valor !== '')
-
   bloco.hidden = false
-  alvo.innerHTML = `
-    <div class="df-grade">${dados.join('') || par('Cadastro', 'sem dados')}</div>
+  const carga = bci.integracao?.em && typeof dataHoraCurta === 'function' ? dataHoraCurta(bci.integracao.em) : null
+  alvo.innerHTML = htmlBciDoc(im, bci.caracteristicas, bci.unidades, donos,
+    (carga ? `Cadastro municipal integrado em <b>${esc(carga)}</b>. ` : '')
+    + 'Ao lavrar, estes dados são copiados para a peça, com a data.')
+}
+
+/**
+ * O bloco "Cadastro municipal (BCI)" do formulário: o mesmo desenho para o
+ * cadastro AO VIVO (rascunho) e para a CÓPIA guardada na peça (lavrada).
+ *
+ * Linhas fixas no topo — código, situação e área; logradouro, número e bairro;
+ * complemento na linha inteira — e o resto do que vier, em grade. O setor não
+ * aparece: é o nome interno do bairro no cadastro, e o bairro já está na linha.
+ *
+ * @param {Object} im campos do imóvel
+ * @param {{chave:string, valor:?string}[]} [caracteristicas]
+ * @param {Object[]} [unidades]
+ * @param {Object[]} [donos]
+ * @param {string} [nota] de quando é o dado (HTML já escapado por quem chama)
+ */
+function htmlBciDoc(im, caracteristicas = [], unidades = [], donos = [], nota = '') {
+  const par = (r, v) => `<div><span class="df-rot">${esc(r)}</span><span class="df-val">${esc(v ?? '—')}</span></div>`
+  const tem = v => v !== null && v !== undefined && v !== ''
+  const numero = tem(im.numero_predial) ? String(im.numero_predial).replace(/^0+/, '') || '0' : null
+  const outros = BCI_CAMPOS_DOC
+    .filter(([k]) => tem(im[k]))
+    .map(([k, rot, un]) => par(rot, typeof im[k] === 'number' ? fmtNum(im[k]) + (un ? ' ' + un : '') : im[k]))
+  const carac = (caracteristicas || []).filter(c => tem(c.valor))
+
+  return `
+    ${nota ? `<p class="bci-doc-nota">${nota}</p>` : ''}
+    <div class="bci-doc-lin bci-doc-l3">
+      ${par('Código no cadastro', im.codigo_cadastro)}
+      ${par('Situação / isenção', im.isencao)}
+      ${par('Área do terreno', tem(im.area_terreno_m2) ? fmtNum(im.area_terreno_m2) + ' m²' : null)}
+    </div>
+    <div class="bci-doc-lin bci-doc-rua">
+      ${par('Logradouro', im.logradouro)}
+      ${par('Número', numero)}
+      ${par('Bairro', im.nome_bairro)}
+    </div>
+    ${tem(im.complemento) ? `<div class="bci-doc-lin">${par('Complemento', im.complemento)}</div>` : ''}
+    ${outros.length ? `<div class="df-grade">${outros.join('')}</div>` : ''}
     ${donos.length ? `<div class="bci-sub">Proprietário(s)</div><div class="df-grade">${donos.map(d =>
       par(d.nome || '—', [d.documento, d.endereco].filter(Boolean).join(' · ') || '—')).join('')}</div>` : ''}
     ${carac.length ? `<div class="bci-sub">Características</div><div class="df-grade">${carac.map(c =>
       par(String(c.chave).replace(/_/g, ' '), c.valor)).join('')}</div>` : ''}
-    ${(bci.unidades || []).length ? `<div class="bci-sub">Unidades edificadas</div><div class="df-grade">${bci.unidades.map(u =>
+    ${(unidades || []).length ? `<div class="bci-sub">Unidades edificadas</div><div class="df-grade">${unidades.map(u =>
       par('Unidade ' + (u.numero ?? '—'), [u.area ? fmtNum(u.area) + ' m²' : null, u.ano, u.padrao].filter(Boolean).join(' · ') || '—')).join('')}</div>` : ''}`
 }
 

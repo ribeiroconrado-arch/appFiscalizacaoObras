@@ -599,6 +599,7 @@ function abrirRelogioDoc(botao) {
 
 /** Máscara conforme o tamanho: até 11 dígitos é CPF, daí em diante CNPJ. */
 function mascararCpfCnpjDoc(inp) {
+  _cnpjConsultadoDoc = ''   // mexeu no documento: a próxima saída do campo consulta de novo
   const n = inp.value.replace(/\D/g, '').slice(0, 14)
   inp.value = n.length <= 11
     ? n.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2')
@@ -606,12 +607,26 @@ function mascararCpfCnpjDoc(inp) {
        .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2')
 }
 
-/** O último CNPJ consultado — sair e voltar ao campo não repete a consulta. */
+/** O último CNPJ consultado — sair e voltar ao campo, sem mexer nele, não repete a consulta. */
 let _cnpjConsultadoDoc = ''
 
+/** Os campos que a consulta de CNPJ preenche: id → [rótulo, chave da resposta]. */
+const CAMPOS_DO_CNPJ_DOC = {
+  'nd-autuado': ['Nome', 'nome'], 'nd-aut-logradouro': ['Logradouro', 'logradouro'],
+  'nd-aut-numero': ['Número', 'numero'], 'nd-aut-bairro': ['Bairro', 'bairro'],
+  'nd-aut-cidade': ['Cidade', 'cidade'], 'nd-aut-uf': ['UF', 'uf'],
+}
+
 /**
- * Saindo do campo com um CNPJ completo, consulta a empresa e preenche o que
- * estiver VAZIO: razão social e endereço. O que o fiscal já digitou fica.
+ * Saindo do campo com um CNPJ completo, consulta a empresa e preenche a razão
+ * social e o endereço — SUBSTITUINDO o que estava lá: o dado da Receita é o
+ * atual, e o que estava no campo pode ser o de outra empresa ou de anos atrás.
+ *
+ * Como substituir em silêncio apagaria o que o fiscal digitou sem ele ver, o
+ * que foi TROCADO é avisado: o campo fica marcado até ser editado, e o aviso
+ * diz quais foram e o que havia antes. Campo que a consulta não trouxe fica
+ * como estava.
+ *
  * É o recurso do AppPOSTURAS; aqui a consulta passa pelo servidor
  * (CnpjController), que é quem fala com a BrasilAPI.
  */
@@ -624,14 +639,27 @@ async function buscarCnpjDoc(inp) {
     const r = await fetch('/api/cnpj/' + digitos, { headers: { Accept: 'application/json' } })
     const d = await r.json()
     if (!r.ok) { toast(d.message || 'Não foi possível consultar o CNPJ.', 'err'); return }
-    const por = (id, v) => { const el = document.getElementById(id); if (v && !el.value.trim()) el.value = v }
-    por('nd-autuado', d.nome)
-    por('nd-aut-logradouro', d.logradouro)
-    por('nd-aut-numero', d.numero)
-    por('nd-aut-bairro', d.bairro)
-    por('nd-aut-cidade', d.cidade)
-    por('nd-aut-uf', d.uf)
-    toast('Dados do CNPJ preenchidos')
+
+    const trocados = []
+    for (const [id, [rotulo, chave]] of Object.entries(CAMPOS_DO_CNPJ_DOC)) {
+      const el = document.getElementById(id)
+      const novo = String(d[chave] ?? '').trim()
+      const antes = el.value.trim()
+      el.classList.remove('campo-trocado')
+      if (!novo || novo.toLowerCase() === antes.toLowerCase()) continue
+      el.value = novo
+      if (antes) {
+        trocados.push(`${rotulo} (era "${antes}")`)
+        // Marcado até o fiscal mexer no campo — a marca é o "confira aqui".
+        el.classList.add('campo-trocado')
+        el.addEventListener('input', () => el.classList.remove('campo-trocado'), { once: true })
+      }
+    }
+    if (trocados.length) {
+      toast(`CNPJ consultado. ${trocados.length} campo(s) já preenchido(s) foram substituídos: ${trocados.join('; ')}.`, 'aviso', { duracao: 9000 })
+    } else {
+      toast('Dados do CNPJ preenchidos')
+    }
   } catch {
     toast('Não foi possível consultar o CNPJ. Preencha manualmente.', 'err')
   }

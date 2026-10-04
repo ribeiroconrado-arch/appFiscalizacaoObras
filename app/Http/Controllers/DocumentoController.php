@@ -20,6 +20,44 @@ class DocumentoController extends Controller
 {
     public function __construct(private LavraturaService $lavratura) {}
 
+    /**
+     * A cópia do cadastro municipal guardada na peça, num formato só.
+     *
+     * Peça lavrada antes de 04/10/2026 guardou só o terreno, solto; as de
+     * depois guardam terreno, características e unidades. Quem lê recebe sempre
+     * as três chaves, com os números como número.
+     *
+     * @param  array<string,mixed>|null  $retrato
+     * @return array{imovel: array<string,mixed>, caracteristicas: list<array{chave:string, valor:?string}>, unidades: list<array<string,mixed>>}|null
+     */
+    private function retratoDoCadastro(?array $retrato): ?array
+    {
+        if (! $retrato) {
+            return null;
+        }
+        $novo = array_key_exists('imovel', $retrato);
+        $imovel = $novo ? ($retrato['imovel'] ?? []) : $retrato;
+        $num = fn ($v) => $v === null || $v === '' ? null : (float) $v;
+        foreach (['area_terreno_m2', 'area_edificada_m2', 'fracao_ideal', 'testada_m',
+                  'medida_lado_direito', 'medida_lado_esquerdo', 'medida_fundo'] as $campo) {
+            if (array_key_exists($campo, $imovel)) {
+                $imovel[$campo] = $num($imovel[$campo]);
+            }
+        }
+
+        return [
+            'imovel' => $imovel,
+            'caracteristicas' => collect($novo ? ($retrato['caracteristicas'] ?? []) : [])
+                ->map(fn ($valor, $chave) => ['chave' => (string) $chave, 'valor' => $valor])->values()->all(),
+            'unidades' => array_map(fn (array $u) => [
+                'numero' => $u['numero'] ?? null,
+                'ano'    => isset($u['ano_construcao']) ? (int) $u['ano_construcao'] : null,
+                'area'   => $num($u['area_edificada_m2'] ?? null),
+                'padrao' => ($u['padrao'] ?? null) ?: (($u['pontos'] ?? null) ? $u['pontos'] . ' pts' : null),
+            ], $novo ? ($retrato['unidades'] ?? []) : []),
+        ];
+    }
+
     /** Os campos do formulário que viram as partes do endereço — não são colunas. */
     private const PARTES_DE_ENDERECO = ['autuado_logradouro', 'autuado_numero', 'autuado_bairro',
         'autuado_cidade', 'autuado_uf', 'imovel_logradouro', 'imovel_numero'];
@@ -489,6 +527,10 @@ class DocumentoController extends Controller
             'cadastro'  => $documento->status === 'rascunho' ? null : [
                 'consultado_em' => $documento->cadastro_consultado_em?->format('d/m/Y'),
                 'fonte'         => $documento->cadastro_fonte,
+                // QUANDO a cópia foi tirada: na lavratura. E a própria cópia —
+                // é ela que a peça reaberta mostra, e não o cadastro do dia.
+                'copiado_em'    => $documento->data_lavratura?->format('d/m/Y H:i'),
+                'retrato'       => $this->retratoDoCadastro($documento->cadastro_retrato),
             ],
             'descricao' => $documento->descricao,
             'observacoes' => $documento->observacoes,

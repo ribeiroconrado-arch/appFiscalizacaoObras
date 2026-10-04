@@ -3514,3 +3514,20 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
   font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer}
 .dh-hm:hover{background:var(--gl)}
 .dh-hm.sel{background:var(--gd);color:#fff;font-weight:700}
+
+/* ── Bloco "Cadastro municipal (BCI)" do formulário de documento ──
+   Linhas fixas (código · situação · área; logradouro · número · bairro;
+   complemento na linha inteira) e, abaixo, o resto em grade. */
+.bci-doc-nota{font-size:11.5px;color:var(--tx3);margin:0 0 8px;line-height:1.45}
+.bci-doc-nota b{color:var(--tx2);font-weight:600}
+.bci-doc-lin{display:grid;gap:8px 14px;margin-bottom:8px}
+.bci-doc-lin > div{min-width:0}
+.bci-doc-lin .df-val{overflow-wrap:anywhere}
+.bci-doc-l3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.bci-doc-rua{grid-template-columns:minmax(0,1fr) 78px minmax(0,1fr)}   /* número: 5 dígitos */
+#nd-bci .bci-doc-lin + .df-grade{margin-top:8px}
+@media (max-width:560px){ .bci-doc-l3,.bci-doc-rua{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} }
+
+/* Campo cujo conteúdo a consulta de CNPJ SUBSTITUIU: marcado em âmbar até o
+   fiscal mexer nele (documentos.js, buscarCnpjDoc). */
+.field:has(> input.campo-trocado){border-color:#D9A200;box-shadow:0 0 0 3px #FFF3CD}

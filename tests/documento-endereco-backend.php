@@ -78,6 +78,26 @@ try {
     confere($antiga->refresh()->autuado_endereco === 'Rua Velha, 1, Centro' && $antiga->autuado_endereco_partes === null,
         'pedido sem partes mantém o texto único e não inventa partes');
 
+    echo "Cópia do cadastro na peça lavrada\n";
+    $lavrada = fn (?array $retrato) => Documento::create(['tipo' => 'notificacao', 'agente_id' => $agente->id,
+        'status' => 'lavrado', 'data_fato' => now(), 'data_lavratura' => '2026-10-04 11:26:00',
+        'cadastro_consultado_em' => '2026-10-03 18:04:00', 'cadastro_fonte' => 'exportacao', 'cadastro_retrato' => $retrato]);
+    $c = json_decode($ctl->ficha($pedido($agente, 'GET', []), $lavrada([
+        'imovel' => ['codigo_cadastro' => '42988', 'area_terreno_m2' => '1414.40', 'logradouro' => 'DAS NACOES UNIDAS', 'nome_bairro' => 'JARDIM EUROPA'],
+        'caracteristicas' => ['CALCADA' => 'NÃO'],
+        'unidades' => [['numero' => '1', 'ano_construcao' => '2004', 'area_edificada_m2' => '98.50', 'pontos' => null, 'padrao' => 'MEDIO']],
+    ]))->getContent(), true)['cadastro'];
+    confere($c['copiado_em'] === '04/10/2026 11:26' && $c['consultado_em'] === '03/10/2026',
+        'a ficha diz QUANDO a cópia foi tirada (a lavratura) e de que carga era o cadastro');
+    confere($c['retrato']['imovel']['area_terreno_m2'] === 1414.4 && $c['retrato']['caracteristicas'][0] === ['chave' => 'CALCADA', 'valor' => 'NÃO']
+        && $c['retrato']['unidades'][0]['ano'] === 2004 && $c['retrato']['unidades'][0]['area'] === 98.5,
+        'e devolve a cópia inteira: terreno, características e unidades');
+    $c = json_decode($ctl->ficha($pedido($agente, 'GET', []), $lavrada(['codigo_cadastro' => '24148', 'area_terreno_m2' => '200.00']))->getContent(), true)['cadastro'];
+    confere($c['retrato']['imovel']['codigo_cadastro'] === '24148' && $c['retrato']['caracteristicas'] === [] && $c['retrato']['unidades'] === [],
+        'peça lavrada antes (só o terreno guardado) é lida no mesmo formato');
+    $c = json_decode($ctl->ficha($pedido($agente, 'GET', []), $lavrada(null))->getContent(), true)['cadastro'];
+    confere($c['retrato'] === null, 'sem cópia (imóvel fora do cadastro), o retrato vem nulo');
+
     echo "\n{$ok} verificações passaram.\n";
 } finally {
     DB::rollBack();

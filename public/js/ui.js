@@ -34,7 +34,8 @@ function toast(msg, tipo = 'ok', opts = {}) {
 
   clearTimeout(el._t)
   // Erro fica mais tempo: costuma pedir uma ação, não só informar.
-  el._t = setTimeout(() => { el.className = 'toast' }, t === 'err' ? 5000 : 3200)
+  // `opts.duracao`: aviso longo, que lista o que mudou, precisa de mais tempo de leitura.
+  el._t = setTimeout(() => { el.className = 'toast' }, opts.duracao ?? (t === 'err' ? 5000 : 3200))
 
   if (opts.campo) marcarCampoInvalido(opts.campo)
 }

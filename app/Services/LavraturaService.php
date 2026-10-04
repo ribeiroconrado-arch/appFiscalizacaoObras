@@ -139,7 +139,18 @@ class LavraturaService
             $doc->cadastro_consultado_em = $situacao['em'] ?? null;
             $doc->cadastro_fonte         = ($situacao['em'] ?? null) ? $fonte->nome() : null;
             $doc->cadastro_carga_id      = $situacao['carga_id'] ?? null;
-            $doc->cadastro_retrato       = $retrato?->imovel;
+            // O retrato INTEIRO do que o formulário mostrou: o terreno, as
+            // características e as unidades. Antes ia só o terreno, e a peça
+            // reaberta exibia o resto pelo cadastro do dia — outro dado, sob o
+            // mesmo título. Peça antiga tem o formato curto (só o terreno, sem
+            // a chave `imovel`); quem lê trata os dois (DocumentoController::ficha).
+            // O proprietário NÃO entra: é dado pessoal, e a peça já guarda o autuado.
+            // A data em que a cópia foi tirada é a da própria lavratura.
+            $doc->cadastro_retrato = $retrato ? [
+                'imovel'          => $retrato->imovel,
+                'caracteristicas' => $retrato->caracteristicas,
+                'unidades'        => $retrato->unidades,
+            ] : null;
 
             $doc->save();
 
