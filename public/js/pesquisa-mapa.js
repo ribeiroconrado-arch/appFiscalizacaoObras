@@ -366,7 +366,7 @@ async function _pesqBuscar() {
       const [sul, oeste, norte, leste] = d.caixa
       // Sem animação: o salto é direto, e uma animação interrompida (aba em
       // segundo plano, outro movimento no meio) deixava o mapa a meio caminho.
-      mapaState.obj?.fitBounds([[sul, oeste], [norte, leste]], { padding: [40, 40], maxZoom: 19, animate: false })
+      mapaState.obj?.fitBounds([[sul, oeste], [norte, leste]], { padding: [40, 40], maxZoom: ZOOM_DO_LOTE, animate: false })
     }
   } catch (e) {
     if (pedido !== s.pedido) return
@@ -507,7 +507,7 @@ function _pesqIrACoordenada(termo) {
   pesqState.ponto?.remove()
   pesqState.ponto = L.circleMarker([lat, lon], { radius: 9, color: '#facc15', weight: 3, fillOpacity: .25 })
     .addTo(mapaState.obj)
-  mapaState.obj.setView([lat, lon], 19)
+  mapaState.obj.setView([lat, lon], ZOOM_DO_LOTE)
   _pesqSaida(`<div class="pesq-msg">${como}: ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>`)
 }
 

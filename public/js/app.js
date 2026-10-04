@@ -59,14 +59,21 @@ const ZOOM_MINIMO = 13
 const BLOCO_GRAUS = 0.01
 
 /**
- * Maior área visível (graus²) em que os lotes são pedidos — ~0,3 km²: um zoom
+ * Maior área visível (graus²) em que os lotes são pedidos — ~0,09 km²: DOIS zooms
  * mais perto do que era (0,0001, ~1,2 km²). Com menos lotes na tela de cada
  * vez o mapa fica mais leve, e o número de cada lote já é legível. No
- * monitor largo é o zoom 19 — o dos atalhos "ver no mapa". O teto tem uma
- * folga sobre o quarto exato (0,000025) para um monitor de 2560 px ainda
+ * monitor largo é o zoom 20 — o dos atalhos "ver no mapa". O teto tem uma
+ * folga sobre o valor exato (0,00000625) para um monitor de 2560 px ainda
  * mostrar os lotes nesse zoom.
  */
-const AREA_MAX_GRAUS2 = 0.00003
+const AREA_MAX_GRAUS2 = 0.0000075
+
+/**
+ * O zoom a que os atalhos levam ("ver no mapa", a busca, o GPS): o primeiro em
+ * que os lotes aparecem numa tela larga. Anda junto com AREA_MAX_GRAUS2 — um
+ * atalho que parasse um zoom antes mostraria a quadra, e não o lote procurado.
+ */
+const ZOOM_DO_LOTE = 20
 
 /** Maior área (graus²) em que as quadras aparecem — ~2,4 km². Também um zoom mais perto do que era (0,0008). */
 const AREA_MAX_QUADRAS_GRAUS2 = 0.0002
@@ -693,7 +700,7 @@ function usarMinhaLocalizacao() {
       btn.classList.add('gps-ativo')
       btn.dataset.gpsCapturado = '1'
       rotuloGps('Remover GPS')
-      mapaState.obj.setView([lat, lon], 19)   // o zoom em que os lotes aparecem numa tela larga
+      mapaState.obj.setView([lat, lon], ZOOM_DO_LOTE)
       await identificarNoServidor(lat, lon, prec)
     },
     err => {

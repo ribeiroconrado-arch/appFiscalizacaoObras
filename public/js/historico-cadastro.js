@@ -166,7 +166,7 @@ async function mostrarLoteRestaurado(id) {
       const r = await fetch('/api/imoveis/' + id + '/geometria', { headers: { Accept: 'application/json' } })
       const d = await r.json()
       if (!r.ok || !d.geometry) throw new Error('Geometria indisponível')
-      mapaState.obj.fitBounds(L.geoJSON(d.geometry).getBounds(), { padding: [80, 80], maxZoom: 19, animate: false })
+      mapaState.obj.fitBounds(L.geoJSON(d.geometry).getBounds(), { padding: [80, 80], maxZoom: ZOOM_DO_LOTE, animate: false })
       // Recarrega a feição completa, com os atributos usados nas cores e no balão.
       limparLotesDoMapa()
       await carregarLotesVisiveis()

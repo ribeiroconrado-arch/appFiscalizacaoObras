@@ -511,7 +511,7 @@ async function irAoLoteNoMapa(id) {
     if (!r.ok) throw new Error(ficha.message || 'Imóvel não encontrado.')
     if (!ficha.lat) { toast('Imóvel sem geometria cadastrada.', 'aviso'); return }
     if (typeof irPara === 'function') irPara('mapa')
-    setTimeout(() => mapaState.obj?.setView([ficha.lat, ficha.lon], 19), 120)
+    setTimeout(() => mapaState.obj?.setView([ficha.lat, ficha.lon], ZOOM_DO_LOTE), 120)
     destacarLoteQuandoCarregar(Number(id))
   } catch (e) {
     toast(e.message, 'err')
@@ -1048,7 +1048,7 @@ function destacarPorId(id) {
   const c = mapaState.porId.get(id)
   if (!c) return
   destacar(c)
-  mapaState.obj.fitBounds(c.getBounds(), { padding: [80, 80], maxZoom: 19 })
+  mapaState.obj.fitBounds(c.getBounds(), { padding: [80, 80], maxZoom: ZOOM_DO_LOTE })
 }
 
 /**

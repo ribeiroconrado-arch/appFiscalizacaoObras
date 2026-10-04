@@ -480,7 +480,7 @@ async function aplicarQuadraQuarteirao(id) {
 /** Leva o mapa até o imóvel. @param {number} lat @param {number} lon */
 function verImovelNoMapa(lat, lon) {
   irPara('mapa')
-  setTimeout(() => mapaState.obj?.setView([lat, lon], 19), 220)
+  setTimeout(() => mapaState.obj?.setView([lat, lon], ZOOM_DO_LOTE), 220)
 }
 
 /** @type {L.GeoJSON|null} o contorno do inativo que está sendo mostrado */
@@ -522,7 +522,7 @@ async function verInativoNoMapa(id, lat, lon) {
       style: { color: '#6B7280', weight: 2.5, opacity: .95, dashArray: '7,6', fillOpacity: .07 },
     }).addTo(mapa)
 
-    mapa.setView([lat, lon], 19)
+    mapa.setView([lat, lon], ZOOM_DO_LOTE)
     toast('Contorno antigo em cinza tracejado. Toque em "tirar do mapa" para limpar.', 'aviso')
 
     const btn = document.getElementById('btn-tirar-inativo')

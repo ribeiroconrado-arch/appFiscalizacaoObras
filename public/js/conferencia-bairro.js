@@ -415,6 +415,6 @@ function _confIrAoItem(it) {
   const c = confState.resultado?.centros_quadras?.[q]
   if (!c) { toast(`A quadra ${it.quadra ?? '—'} não tem lote no mapa para servir de referência.`, 'aviso'); return }
   if (typeof irPara === 'function') irPara('mapa')
-  mapaState.obj?.setView(c, 19)
+  mapaState.obj?.setView(c, ZOOM_DO_LOTE)
   toast(`${it.inscricao}: o cadastro tem este imóvel na quadra ${it.quadra}, e o mapa não tem o lote.`)
 }
