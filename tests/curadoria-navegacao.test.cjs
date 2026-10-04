@@ -23,7 +23,7 @@ function porteiro(estado){
   const grupos={'grupo-busca':{aberto:estado.busca},'grupo-cores':{aberto:false},'grupo-cadastro':{aberto:false}}
   const ctx={estado,chamadas:[],
     document:{getElementById:id=>id==='cad-mesa'?{hidden:!estado.mesa}:id==='pesq-barra'?{hidden:!estado.busca}:grupos[id]?{classList:{contains:()=>grupos[id].aberto}}:null},
-    selState:{ids:new Set(estado.marcados||[]),ativa:false},cadModo:null,atoState:{tipo:null},
+    selState:{ids:new Set(estado.marcados||[]),ativa:false},cadModo:estado.cadModo||null,atoState:{tipo:null},
     fecharPaineisMapa(){Object.values(grupos).forEach(g=>g.aberto=false)},
     fecharPesquisaMapa(){estado.busca=false},
     fecharMesaCadastral(){estado.mesa=false},limparSelecaoCadastral(){ctx.selState.ids.clear()},
@@ -42,6 +42,17 @@ test('com lote marcado, pergunta antes — e só encerra se confirmar',()=>{
   assert.equal(abriu,false);assert.equal(c.estado.mesa,true);assert.match(c.confirmado.mensagem,/2 lote\(s\) marcados/)
   c.confirmado.onConfirm()
   assert.equal(abriu,true);assert.equal(c.estado.mesa,false);assert.equal(c.selState.ids.size,0)
+})
+test('voltar a uma janela da curadoria com lote só marcado não pergunta',()=>{
+  // Quem exclui ou edita um lote e volta à ficha da importação não perde nada.
+  const c=porteiro({mesa:true,marcados:[7]});let abriu=false
+  c.pedirFerramenta('janela',()=>abriu=true)
+  assert.equal(abriu,true);assert.equal(c.confirmado,undefined);assert.equal(c.selState.ids.size,0)
+})
+test('mas com ferramenta em uso a janela também pergunta',()=>{
+  const c=porteiro({mesa:true,marcados:[7,8],cadModo:'quadra'});let abriu=false
+  c.pedirFerramenta('janela',()=>abriu=true)
+  assert.equal(abriu,false);assert.match(c.confirmado.mensagem,/2 lote\(s\) marcados/)
 })
 test('a curadoria fecha a busca ao abrir, e o que convive não é fechado',()=>{
   const c=porteiro({busca:true});let abriu=false

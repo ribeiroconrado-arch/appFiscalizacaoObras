@@ -54,9 +54,18 @@ const FERRAMENTAS_MAPA = {
         || document.getElementById('imp-barra')?.hidden === false
         || document.getElementById('conf-barra')?.hidden === false
     },
-    emCurso: () => {
+    // Para OUTRA ferramenta (busca, pesquisa), lote marcado é trabalho em
+    // curso: pergunta antes. Para uma JANELA da própria curadoria (a ficha da
+    // importação, a lista, a conferência) a marcação sozinha não conta: quem
+    // exclui ou edita um lote e volta à ficha não está perdendo nada, e a
+    // pergunta a cada volta era alarme sem perda. Ali só conta a marcação
+    // feita DENTRO de uma ferramenta em uso (corrigir quadra, unificar…).
+    emCurso: (para) => {
       const n = typeof selState !== 'undefined' ? selState.ids.size : 0
-      return n ? `${n} lote(s) marcados` : null
+      if (!n) return null
+      const emUso = (typeof cadModo !== 'undefined' && !!cadModo)
+        || (typeof atoState !== 'undefined' && !!atoState.tipo)
+      return para === 'janela' && !emUso ? null : `${n} lote(s) marcados`
     },
     fechar: () => sairDaCuradoria(),
   },
@@ -94,7 +103,7 @@ function pedirFerramenta(nome, abrir, opts = {}) {
   const outras = Object.entries(FERRAMENTAS_MAPA)
     .filter(([k, f]) => k !== nome && !(opts.convive || []).includes(k) && f.aberta())
 
-  const perdas = outras.map(([, f]) => f.emCurso() && `${f.rotulo}: ${f.emCurso()}`).filter(Boolean)
+  const perdas = outras.map(([, f]) => f.emCurso(nome) && `${f.rotulo}: ${f.emCurso(nome)}`).filter(Boolean)
 
   const seguir = () => {
     outras.forEach(([, f]) => { try { f.fechar() } catch (e) { console.error(e) } })
