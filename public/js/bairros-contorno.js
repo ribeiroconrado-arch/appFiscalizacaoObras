@@ -16,6 +16,12 @@
 const contornoState = {
   /** @type {L.GeoJSON|null} */ camada: null,
   /** @type {Object|null} resposta de /api/mapa/bairros */ dados: null,
+  /**
+   * Bairro → lotes que a última tentativa de contorno deixou de fora (a que o
+   * servidor recusou). A lista da curadoria os mostra com link para o mapa.
+   * @type {Object<string, {id:number, quadra:?string, lote:?string}[]>}
+   */
+  fora: {},
 }
 
 /** Raio padrão do fechamento: com 25 m os dois bairros da base fecham num contorno só. */
@@ -189,14 +195,26 @@ function _abreviarRua(nome) {
   return nome
 }
 
+
+/** De quantos em quantos pixels o nome da MESMA rua se repete ao longo dela. */
+const RUA_REPETE_PX = 560
+
 /**
  * Nomes de rua que estão na tela, nos níveis das quadras e dos lotes.
  *
  * O nome só aparece se CABE no trecho: o comprimento do trecho na tela, em
  * pixels, contra a largura estimada do texto. Afastado, só os trechos longos
  * têm nome; aproximando, os curtos vão ganhando. Não cabendo inteiro, tenta o
- * tipo abreviado ("R.", "AV."). Assim o mapa nunca vira um borrão de texto, e
- * não é preciso escolher à mão qual trecho de cada rua leva o nome.
+ * tipo abreviado ("R.", "AV.").
+ *
+ * E NÃO SE REPETE A CADA QUADRA. Cada trecho (o pedaço entre duas esquinas)
+ * que comportava o nome ganhava o seu, e uma rua de dez quadras saía com o
+ * nome escrito dez vezes, um a cada 80 metros. Agora a rua é dividida em
+ * faixas de RUA_REPETE_PX ao longo do comprimento, e cada faixa leva UM nome —
+ * no trecho mais próximo do meio dela. As faixas são contadas em coordenada
+ * absoluta do mapa, e não a partir da borda da tela: arrastar não faz os nomes
+ * pularem de quadra. Menos rótulos também é menos peso (cada um é um elemento
+ * da página, refeito a cada movimento).
  *
  * O texto gira com a rua e nunca fica de cabeça para baixo (-90° a 90°).
  */
@@ -207,24 +225,54 @@ function _desenharRotulosDeRua() {
   if (!mapa || typeof nivelDoMapa !== 'function' || !['quadras', 'lotes'].includes(nivelDoMapa(mapa))) return
 
   const vista = mapa.getBounds().pad(0.05)
+  const zoom = mapa.getZoom()
+
   for (const b of quadraState.porBairro.values()) {
+
     if (b === 'carregando') continue
+
+    // 1. Os trechos com nome, agrupados por rua, com a posição absoluta do meio.
+    const ruas = new Map()
     for (const t of b.ruas) {
       if (!t.nome || t.origem === 'oculto' || t.origem === 'sem_nome') continue
       const meio = L.latLng((t.de[0] + t.ate[0]) / 2, (t.de[1] + t.ate[1]) / 2)
-      if (!vista.contains(meio)) continue
-      const p1 = mapa.latLngToLayerPoint(t.de), p2 = mapa.latLngToLayerPoint(t.ate)
-      const cabe = p1.distanceTo(p2) - 16
-      const texto = [t.nome, _abreviarRua(t.nome)].find(x => x.length * RUA_PX_POR_LETRA <= cabe)
-      if (!texto) continue
-      let ang = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI
-      if (ang > 90) ang -= 180
-      else if (ang <= -90) ang += 180
-      quadraState.rotulosRua.push(L.marker(meio, {
-        interactive: false, keyboard: false,
-        icon: L.divIcon({ className: 'rot-rua', iconSize: [0, 0],
-          html: `<span style="transform:translate(-50%,-50%) rotate(${ang.toFixed(1)}deg)">${esc(texto)}</span>` }),
-      }).addTo(mapa))
+      const lista = ruas.get(t.nome) || ruas.set(t.nome, []).get(t.nome)
+      lista.push({ t, meio, abs: mapa.project(meio, zoom) })
+    }
+
+    for (const [nome, trechos] of ruas) {
+      // 2. O eixo da rua: o lado em que ela mais se estende. É ao longo dele
+      //    que as faixas são contadas.
+      const xs = trechos.map(x => x.abs.x), ys = trechos.map(x => x.abs.y)
+      const porX = Math.max(...xs) - Math.min(...xs) >= Math.max(...ys) - Math.min(...ys)
+
+      // 3. Um candidato por faixa: o trecho que comporta o nome e está mais
+      //    perto do meio da faixa.
+      const porFaixa = new Map()
+      for (const x of trechos) {
+        const p1 = mapa.latLngToLayerPoint(x.t.de), p2 = mapa.latLngToLayerPoint(x.t.ate)
+        const cabe = p1.distanceTo(p2) - 16
+        const texto = [nome, _abreviarRua(nome)].find(s => s.length * RUA_PX_POR_LETRA <= cabe)
+        if (!texto) continue
+        const s = porX ? x.abs.x : x.abs.y
+        const faixa = Math.floor(s / RUA_REPETE_PX)
+        const desvio = Math.abs(s - (faixa + 0.5) * RUA_REPETE_PX)
+        const atual = porFaixa.get(faixa)
+        if (!atual || desvio < atual.desvio) porFaixa.set(faixa, { ...x, p1, p2, texto, desvio })
+      }
+
+      // 4. Só o que está na tela vira elemento.
+      for (const c of porFaixa.values()) {
+        if (!vista.contains(c.meio)) continue
+        let ang = Math.atan2(c.p2.y - c.p1.y, c.p2.x - c.p1.x) * 180 / Math.PI
+        if (ang > 90) ang -= 180
+        else if (ang <= -90) ang += 180
+        quadraState.rotulosRua.push(L.marker(c.meio, {
+          interactive: false, keyboard: false,
+          icon: L.divIcon({ className: 'rot-rua', iconSize: [0, 0],
+            html: `<span style="transform:translate(-50%,-50%) rotate(${ang.toFixed(1)}deg)">${esc(c.texto)}</span>` }),
+        }).addTo(mapa))
+      }
     }
   }
 }
@@ -292,8 +340,13 @@ async function gerarContornoDoBairro(bairro, raio = CONTORNO_RAIO_PADRAO, opts =
         isolados: calc.isolados, quadras, ruas }),
     })
     const dg = await rg.json()
-    if (!rg.ok) throw new Error(dg.message || 'O servidor recusou o contorno.')
+    if (!rg.ok) {
+      // Recusado por deixar lotes de fora: guarda QUAIS, para a lista mostrar.
+      if (Array.isArray(dg.fora)) contornoState.fora[bairro] = dg.fora
+      throw new Error(dg.message || 'O servidor recusou o contorno.')
+    }
 
+    delete contornoState.fora[bairro]
     _esquecerQuadras(bairro)
     await carregarContornosDosBairros()
     const resumo = { ...dg, pedacos: calc.pedacos, isolados: calc.isolados }
@@ -610,6 +663,9 @@ function _multiPoligonoLonLat(poligonos, plano) {
 
 /** "Contorno dos bairros" no painel de correção cadastral. */
 async function abrirContornosDosBairros() {
+  // O raio digitado sobrevive à lista ser refeita (depois de gerar, ou de uma
+  // recusa): voltar a 25 obrigaria a digitá-lo de novo a cada tentativa.
+  const raioEscolhido = Number(document.getElementById('ctn-raio')?.value) || CONTORNO_RAIO_PADRAO
   await abrirJanelaDoMapa()   // fecha a ferramenta em uso (ferramentas-mapa.js)
   openModal('m-importacoes')
   _impCorpo('<div class="vazio-msg">Carregando…</div>', 'Contorno dos bairros')
@@ -629,12 +685,14 @@ async function abrirContornosDosBairros() {
       Junto, sai o contorno de cada <b>quadra</b>, que o mapa mostra na escala do bairro no lugar das linhas de lote.
       Fica <b>desatualizado</b> quando a curadoria mexe nos lotes depois de gerado.</p>
     <div class="field" style="max-width:220px"><label for="ctn-raio">Raio do fechamento (m)</label>
-      <input type="number" id="ctn-raio" min="5" max="200" step="1" value="${CONTORNO_RAIO_PADRAO}"></div>
+      <input type="number" id="ctn-raio" min="5" max="200" step="1" value="${raioEscolhido}"></div>
     <table class="imp-tabela"><thead><tr><th>Bairro</th><th>Situação</th><th class="num">Área</th><th></th></tr></thead><tbody>
     ${linhas.map(l => `<tr>
       <td>${esc(l.oficial)}${l.oficial !== l.nome ? `<div class="imp-sub">${esc(l.nome)}</div>` : ''}
         ${l.p?.isolados?.length ? `<div class="imp-sub imp-diverge">${l.p.isolados.length} lote(s) isolado(s) fora do contorno:
-          ${l.p.isolados.map(id => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(id)})">nº ${Number(id)}</a>`).join(', ')}</div>` : ''}</td>
+          ${l.p.isolados.map(id => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(id)})">nº ${Number(id)}</a>`).join(', ')}</div>` : ''}
+        ${contornoState.fora[l.nome]?.length ? `<div class="imp-sub imp-diverge">Última tentativa recusada — ${contornoState.fora[l.nome].length} lote(s) fora do contorno (clique para ver no mapa):
+          ${contornoState.fora[l.nome].map(x => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(x.id)})">Q ${esc(x.quadra ?? '—')} · L ${esc(x.lote ?? '—')}</a>`).join(', ')}</div>` : ''}</td>
       <td>${situacao(l.p)}${l.p?.contorno_em ? `<div class="imp-sub">${esc(l.p.contorno_em)} · raio ${l.p.raio_m} m
         · ${l.p.quadras ? l.p.quadras + ' quadra(s)' : 'sem quadras — gere de novo'}</div>` : ''}</td>
       <td class="num">${l.p ? l.p.area_ha.toLocaleString('pt-BR') + ' ha' : '—'}</td>
@@ -650,7 +708,8 @@ async function gerarDaLista(btn, bairro) {
   const raio = Number(document.getElementById('ctn-raio')?.value) || CONTORNO_RAIO_PADRAO
   btn.disabled = true; btn.textContent = 'Calculando…'
   const r = await gerarContornoDoBairro(bairro, raio)
-  if (r) await abrirContornosDosBairros()
+  // Refaz a lista também na recusa com lotes de fora: é nela que eles aparecem.
+  if (r || contornoState.fora[bairro]?.length) await abrirContornosDosBairros()
   else { btn.disabled = false; btn.textContent = 'Gerar' }
 }
 

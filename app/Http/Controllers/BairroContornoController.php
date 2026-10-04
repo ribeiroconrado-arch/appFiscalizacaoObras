@@ -168,8 +168,11 @@ class BairroContornoController extends Controller
         }
         if ($c['total'] > 0 && ($c['total'] - $c['fora']) / $c['total'] < self::COBERTURA_MINIMA) {
             return response()->json(['message' => sprintf(
-                'O contorno deixa de fora %d dos %d lotes do bairro. Aumente o raio ou corrija os lotes isolados.',
-                $c['fora'], $c['total'])], 422);
+                'O contorno deixa de fora %d dos %d lotes do bairro. Eles estão listados na linha do bairro: '
+                . 'veja cada um no mapa, e aumente o raio ou corrija os que estiverem fora do lugar.',
+                $c['fora'], $c['total']),
+                // QUAIS são — a tela os lista com link para o mapa.
+                'fora' => $this->lotes->lotesForaDoContorno($d['bairro'], $geojson)], 422);
         }
 
         $codigo = $this->codigoNoCadastro($d['bairro']);

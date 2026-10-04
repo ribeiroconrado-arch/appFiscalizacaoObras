@@ -731,36 +731,90 @@ function adicionarAoMapa(geojson, aoClicar) {
 const ZOOM_ROTULO_LOTE = 18
 
 /**
- * Cria e destrói os rótulos de lote conforme o zoom e o que está na tela.
- *
- * Dois cortes, e os dois importam. O do ZOOM evita 2.239 elementos existirem
- * quando nenhum deles seria legível. O do ENQUADRAMENTO evita que, no zoom em
- * que eles aparecem, sejam criados também os do bairro inteiro — em zoom 18
- * cabem algumas dezenas de lotes na tela, não milhares.
+ * Refaz os rótulos que dependem do zoom e do enquadramento: o número de cada
+ * lote e as medidas dos lados. Chamada a cada `moveend`, a cada `zoomend` e a
+ * cada leva de lotes que chega.
  */
 function sincronizarRotulos() {
+  if (!mapaState.obj) { return }
+  desenharNumerosDosLotes()
+  sincronizarMedidas()
+}
+
+/** Quanto a tela dos números passa da área visível, de cada lado (fração). */
+const NUMEROS_FOLGA = 0.25
+
+/**
+ * Escreve o número de cada lote visível — DESENHADO numa tela (canvas) só, e
+ * não um elemento da página por lote.
+ *
+ * Era um tooltip permanente do Leaflet por lote. No zoom 18 cabem 700 lotes
+ * numa tela grande, e cada tooltip criado faz o navegador recalcular o layout
+ * da página inteira (o Leaflet lê a largura do rótulo logo depois de inseri-lo).
+ * Medido em 03/10/2026, com 1.400 lotes carregados: ~400 ms de tela travada a
+ * cada movimento do mapa, crescendo com o número de lotes. Desenhar 700 textos
+ * numa tela custa poucos milissegundos e não cria elemento nenhum.
+ *
+ * A tela fica num pane próprio, cobre a área visível com folga (para o arrasto
+ * não mostrar borda vazia) e é reposicionada e redesenhada a cada chamada.
+ */
+function desenharNumerosDosLotes() {
   const mapa = mapaState.obj
-  if (!mapa) { return }
+  // Antes de o mapa ter centro e zoom (a página abre no Painel) não há o que
+  // desenhar — e pedir a área visível a um mapa sem posição lança erro.
+  if (!mapa || !mapa._loaded) { return }
+  if (!mapa.getPane('numeros')) {
+    const pane = mapa.createPane('numeros')
+    pane.style.zIndex = 640              // acima dos lotes, abaixo dos rótulos de grupo e dos balões
+    pane.style.pointerEvents = 'none'
+  }
+  // `rot-lote` é a classe que a camada "Número do lote" esconde por CSS
+  // (#map.cam-sem-rot-lote); `leaflet-zoom-hide` a esconde durante a animação
+  // do zoom, quando a posição dela ainda é a do zoom anterior.
+  const tela = mapaState.telaNumeros
+    ||= L.DomUtil.create('canvas', 'rot-lote rot-lote-tela leaflet-zoom-hide', mapa.getPane('numeros'))
 
-  const mostrar = mapa.getZoom() >= ZOOM_ROTULO_LOTE
-  const vista = mostrar ? mapa.getBounds().pad(0.2) : null
+  const tam = mapa.getSize()
+  const fx = Math.round(tam.x * NUMEROS_FOLGA), fy = Math.round(tam.y * NUMEROS_FOLGA)
+  const larg = tam.x + 2 * fx, alt = tam.y + 2 * fy
+  const dpr = window.devicePixelRatio || 1
+  if (tela.width !== Math.round(larg * dpr) || tela.height !== Math.round(alt * dpr)) {
+    tela.width = Math.round(larg * dpr)
+    tela.height = Math.round(alt * dpr)
+    tela.style.width = larg + 'px'
+    tela.style.height = alt + 'px'
+  }
+  L.DomUtil.setPosition(tela, mapa.containerPointToLayerPoint([-fx, -fy]))
 
+  const ctx = tela.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, larg, alt)
+
+  // O número só é legível de perto, e só faz sentido com os lotes à vista.
+  const noNivel = typeof nivelDoMapa !== 'function' || nivelDoMapa(mapa) === 'lotes'
+  if (!(mapa.getZoom() >= ZOOM_ROTULO_LOTE) || !noNivel) { return }
+
+  ctx.font = "500 10.5px 'JetBrains Mono','Courier New',monospace"
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 3
+  // Halo branco sob o texto escuro: o número cai sobre telhado, grama e asfalto.
+  ctx.strokeStyle = 'rgba(255,255,255,.92)'
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--chumbo').trim() || '#37413F'
+
+  const vista = mapa.getBounds().pad(NUMEROS_FOLGA)
   for (const camada of mapaState.camadas) {
     if (!camada._numeroLote) { continue }
-
     // `getBounds` do polígono é barato: o Leaflet já o mantém calculado.
-    const dentro = mostrar && vista.intersects(camada.getBounds())
-    const tem = !!camada.getTooltip()
-
-    if (dentro && !tem) {
-      camada.bindTooltip(camada._numeroLote,
-        { permanent: true, direction: 'center', className: 'rot rot-lote' })
-    } else if (!dentro && tem) {
-      camada.unbindTooltip()
-    }
+    if (!vista.intersects(camada.getBounds())) { continue }
+    // O centro do polígono não muda: calculado uma vez por lote.
+    // O centroide, e não o meio da caixa: num lote em "L" o meio da caixa cai fora dele.
+    const centro = camada._centroDoNumero ||= (camada._map ? camada.getCenter() : camada.getBounds().getCenter())
+    const p = mapa.latLngToContainerPoint(centro)
+    ctx.strokeText(camada._numeroLote, p.x + fx, p.y + fy)
+    ctx.fillText(camada._numeroLote, p.x + fx, p.y + fy)
   }
-
-  sincronizarMedidas()
 }
 
 // ── MEDIDAS DOS LADOS ────────────────────────────────────────

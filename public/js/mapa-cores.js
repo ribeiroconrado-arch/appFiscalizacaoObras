@@ -275,8 +275,12 @@ function agendarRotulosDeGrupo() {
  * O do lote é criado junto com o polígono (ver mapa.js).
  */
 function desenharRotulosDeGrupo() {
-  corState.rotulos.forEach(m => m.remove())
-  corState.rotulos = []
+  // REAPROVEITA os rótulos que não mudaram. Antes, cada chamada (uma por
+  // movimento do mapa) apagava todos e criava de novo — e cada rótulo criado é
+  // um recálculo de layout da página. Arrastar o mapa dentro do mesmo bairro
+  // recriava as mesmas quarenta pastilhas de quadra, nos mesmos lugares.
+  const antes = corState.rotulosPorId || new Map()
+  const agora = new Map()
   // Só os grupos cujo centro está na tela (com folga). Cada rótulo é um
   // elemento que o Leaflet reposiciona a cada arrasto; com a cidade inteira
   // eram centenas de quadras fora da vista. Refeito a cada moveend (mapa.js).
@@ -312,18 +316,25 @@ function desenharRotulosDeGrupo() {
       const lat = pts.reduce((a, p) => a + p[0], 0) / pts.length
       const lon = pts.reduce((a, p) => a + p[1], 0) / pts.length
       if (area && !area.contains([lat, lon])) continue
-      const m = L.marker([lat, lon], {
+      const texto = chave === 'quadra' ? 'Q ' + rotulo : (apelidos[k] || rotulo)
+      // Mesmo grupo, mesmo texto, mesmo lugar: é o mesmo rótulo. O lugar entra
+      // na identidade porque muda enquanto os lotes do grupo ainda chegam.
+      const id = `${chave}|${k}|${texto}|${lat.toFixed(6)}|${lon.toFixed(6)}`
+      const m = antes.get(id) || L.marker([lat, lon], {
         interactive: false,
         icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }),
       })
-        .bindTooltip(chave === 'quadra' ? 'Q ' + rotulo : (apelidos[k] || rotulo), {
+        .bindTooltip(texto, {
           permanent: true, direction: 'center',
           className: 'rot rot-' + chave,
         })
         .addTo(mapaState.obj)
-      corState.rotulos.push(m)
+      agora.set(id, m)
     }
   }
+  for (const [id, m] of antes) { if (!agora.has(id)) m.remove() }
+  corState.rotulosPorId = agora
+  corState.rotulos = [...agora.values()]
   rotulosPorZoom()
 }
 

@@ -325,6 +325,9 @@ function limparLotesDoMapa() {
   mapaState.porId.clear()
   state.lotes.clear()
   desenhados.clear()
+  // Os números desenhados eram dos lotes que saíram: a tela é limpa já, e não
+  // só quando a próxima leva chegar.
+  if (mapa && typeof desenharNumerosDosLotes === "function") desenharNumerosDosLotes()
   // A seleção apontava para um lote que acabou de sair da tela.
   state.selecionado = null
 }

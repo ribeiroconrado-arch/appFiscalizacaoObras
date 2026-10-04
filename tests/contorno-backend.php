@@ -53,6 +53,9 @@ try {
     echo "Gravar ({$bairro}, {$total} lotes)\n";
     $r = $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $quadrado(-54.31, -15.51, -54.30, -15.50), 'raio_m' => 25, 'lotes_contados' => $total]);
     confere($r->getStatusCode() === 422 && str_contains($r->getContent(), 'deixa de fora'), 'contorno que não cobre os lotes é recusado');
+    $fora = json_decode($r->getContent(), true)['fora'] ?? [];
+    confere(count($fora) > 0 && isset($fora[0]['id']) && array_key_exists('quadra', $fora[0]) && array_key_exists('lote', $fora[0]),
+        'e a recusa diz QUAIS lotes ficaram de fora (' . count($fora) . ' listados)');
 
     $gravata = ['type' => 'MultiPolygon', 'coordinates' => [[[[$e['oeste'], $e['sul']], [$e['leste'], $e['norte']], [$e['leste'], $e['sul']], [$e['oeste'], $e['norte']], [$e['oeste'], $e['sul']]]]]];
     $r = $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $gravata, 'raio_m' => 25, 'lotes_contados' => $total]);

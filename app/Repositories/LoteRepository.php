@@ -671,6 +671,22 @@ class LoteRepository
     }
 
     /**
+     * QUAIS lotes ativos do bairro o contorno não toca. "Deixa de fora 14" sem
+     * dizer quais manda o curador caçar no mapa um lote que pode estar a
+     * quilômetros dali — é justamente o que ele não está vendo.
+     *
+     * @return list<array{id:int, quadra:?string, lote:?string}>
+     */
+    public function lotesForaDoContorno(string $bairro, string $geojson, int $limite = 60): array
+    {
+        return array_map(fn ($l) => ['id' => (int) $l->id, 'quadra' => $l->quadra, 'lote' => $l->numero_lote],
+            DB::select('SELECT id, quadra, numero_lote FROM lotes
+                         WHERE ' . self::SO_ATIVOS . ' AND bairro = ?
+                           AND NOT ST_Intersects(geom, ST_GeomFromGeoJSON(?, 1, 4326))
+                         ORDER BY quadra, numero_lote LIMIT ' . max(1, $limite), [$bairro, $geojson]));
+    }
+
+    /**
      * Grava (ou substitui) o contorno de um bairro.
      *
      * A hora vem da APLICAÇÃO, e não do NOW() do MySQL: é com o `updated_at`
