@@ -14,17 +14,8 @@
   assinaturas, termo de recusa (condicional) e anexos (condicional).
 --}}
 @php
-  /** Numeração das seções. Calculada, não fixa: "Constatação", "Termo de
-      Recusa" e "Anexos" só existem em certos documentos, e a numeração tem de
-      fechar mesmo assim.
-
-      Closure com `use (&$n)`, e não arrow function: a arrow function captura
-      o escopo por VALOR, então `++$n` incrementaria uma cópia a cada chamada
-      e todas as seções sairiam numeradas "1". */
-  $n = 0;
-  $sec = function (string $titulo) use (&$n) {
-      return (++$n) . ' – ' . $titulo;
-  };
+  // Referências estáveis: a ausência de recusa não renumera os anexos.
+  $sec = fn (int $numero, string $titulo) => sprintf('%02d   %s', $numero, $titulo);
 
   $navegador = $navegador ?? false;
   $fmt = fn ($v, $c = 2) => $v === null ? '—' : number_format((float) $v, $c, ',', '.');
@@ -38,7 +29,7 @@
   @page { size: A4; margin: 8mm 10mm 10mm 10mm; }
 
   body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10.5px; color: #111;
-         line-height: 1.45; margin: 0; }
+         line-height: 1.3; margin: 0; }
 
   /* ── Cabeçalho institucional (repete em toda página) ── */
   table.pagina { width: 100%; border-collapse: collapse; }
@@ -51,27 +42,41 @@
 
 @include('impressao._cabecalho-css')
 
+  /* Ajustes exclusivos do A4 dos documentos; OS e bobina conservam seus modelos. */
+  .cab-regua { border-bottom: 1px solid #50565b; }
+  .cab-num-lbl, .topo-lbl { font-weight: normal; }
+  .cab-num-val, .topo-val { font-weight: bold; }
+  table.topo { margin-top: 0; background: #f1f1f1; table-layout: fixed; }
+  table.topo td { padding: 7px 6px; }
+  table.topo td:last-child { padding-right: 6px; }
+  .topo-lbl { font-size: 7px; white-space: normal; }
+  .topo-val { font-size: 9px; }
+  .topo-regua { border-bottom: 1px solid #50565b; margin-bottom: 14px; }
+
   /* ── Seções ── */
-  .sec { margin-bottom: 9px; }
+  .sec { margin-bottom: 6px; }
   .sec-tit { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em;
-             background: #ECECEC; border: 1px solid #bbb; padding: 3px 6px; margin-bottom: 5px; }
+             border-bottom: 1px solid #d5d5d5; padding: 0 0 5px; margin: 10px 0 7px;
+             page-break-after: avoid; }
   .sec p { margin: 0 0 5px; text-align: justify; }
 
   table.campos { width: 100%; border-collapse: collapse; }
-  table.campos td { border: 1px solid #ddd; padding: 3px 5px; vertical-align: top; }
+  table.campos td { border: 0; padding: 3px 12px 5px 0; vertical-align: top; font-weight: normal; }
   table.campos .lbl { display: block; font-size: 7.5px; color: #666; text-transform: uppercase;
-                      letter-spacing: .04em; }
+                      letter-spacing: .04em; font-weight: normal; }
 
   /* ── Memória de cálculo da multa (específico de obras) ── */
-  table.multa { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-  table.multa th { background: #ECECEC; border: 1px solid #bbb; padding: 4px 5px; font-size: 8px;
-                   text-transform: uppercase; letter-spacing: .04em; text-align: left; }
-  table.multa td { border: 1px solid #ddd; padding: 4px 5px; font-size: 9.5px; vertical-align: top; }
-  table.multa td.dir { text-align: right; white-space: nowrap; }
-  table.multa .conduta { color: #444; font-size: 9px; }
-  table.multa .limite { color: #8a4b00; font-size: 8.5px; }
-  table.multa tr.total td { background: #F4F4F4; font-weight: bold; }
-  .total-reais { font-weight: normal; font-size: 8.5px; color: #444; }
+  .lei-cab { border: 1px solid #d3d3d3; border-bottom: 0; padding: 8px 9px;
+             page-break-after: avoid; }
+  .lei-cab .lbl { font-size: 7.5px; color: #666; margin-right: 7px; }
+  table.multa { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 4px; }
+  table.multa th { background: #f5f5f5; border: 1px solid #ddd; padding: 6px 8px;
+                   font-size: 8px; text-align: left; }
+  table.multa td { border: 1px solid #ddd; padding: 8px; font-size: 10px; vertical-align: top; }
+  table.multa td.dir { text-align: right; white-space: nowrap; font-weight: bold; }
+  table.multa .calculo { color: #555; font-size: 8px; }
+  table.multa .limite { font-size: 8px; }
+  table.multa tr { page-break-inside: avoid; }
 
   /* ── Assinaturas ── */
   table.assina { width: 100%; border-collapse: collapse; margin: 4px 0 12px; page-break-inside: avoid; }
@@ -126,27 +131,28 @@
       {{-- Faixa do topo: identifica quem lavrou e quando. Fica no tbody de
            propósito — só faz sentido na primeira página. --}}
       <table class="topo">
+        <colgroup><col style="width:11%"><col style="width:17%"><col style="width:30%"><col style="width:21%"><col style="width:21%"></colgroup>
         <tr>
-          <td><span class="topo-lbl">Exercício</span><span class="topo-val">{{ $doc->exercicio ?? '—' }}</span></td>
-          <td><span class="topo-lbl">Matrícula do agente</span><span class="topo-val">{{ $doc->agente?->matricula ?? '—' }}</span></td>
-          <td><span class="topo-lbl">Origem</span><span class="topo-val">{{ $origemTexto }}</span></td>
-          <td><span class="topo-lbl">Data/hora do fato</span><span class="topo-val">{{ $doc->data_fato?->format('d/m/y H:i') ?? '—' }}</span></td>
-          <td><span class="topo-lbl">Data/hora da lavratura</span><span class="topo-val">{{ $doc->data_lavratura?->format('d/m/y H:i') ?? '—' }}</span></td>
+          <td style="width:11%"><span class="topo-lbl">Exercício</span><span class="topo-val">{{ $doc->exercicio ?? '—' }}</span></td>
+          <td style="width:17%"><span class="topo-lbl">Matrícula do agente</span><span class="topo-val">{{ $doc->agente?->matricula ?? '—' }}</span></td>
+          <td style="width:30%"><span class="topo-lbl">Origem</span><span class="topo-val">{{ $origemTexto }}</span></td>
+          <td style="width:21%"><span class="topo-lbl">Data/hora do fato</span><span class="topo-val">{{ $doc->data_fato?->format('d/m/y H:i') ?? '—' }}</span></td>
+          <td style="width:21%"><span class="topo-lbl">Data/hora da lavratura</span><span class="topo-val">{{ $doc->data_lavratura?->format('d/m/y H:i') ?? '—' }}</span></td>
         </tr>
       </table>
       <div class="topo-regua"></div>
 
       {{-- 1 — Autuado --}}
       <div class="sec">
-        <div class="sec-tit">{{ $sec($doc->exigeFundamentacao() ? 'Autuado / Interessado' : 'Interessado') }}</div>
+        <div class="sec-tit">{{ $sec(1, $doc->exigeFundamentacao() ? 'Identificação do autuado' : 'Identificação do interessado') }}</div>
         <table class="campos">
           <tr>
-            <td colspan="2"><span class="lbl">Nome / Razão social</span>{{ $doc->autuado_nome ?: '—' }}</td>
+            <td style="width:56%"><span class="lbl">Nome / Razão social</span>{{ $doc->autuado_nome ?: '—' }}</td>
             <td><span class="lbl">CPF / CNPJ</span>{{ $doc->autuado_documento ?: '—' }}</td>
           </tr>
           @if ($doc->autuado_endereco)
           <tr>
-            <td colspan="3"><span class="lbl">Endereço do autuado</span>{{ $doc->autuado_endereco }}</td>
+            <td colspan="2"><span class="lbl">Domicílio fiscal / correspondência</span>{{ preg_replace('/(?:[,;\s]|—|-)*CEP\s*:?\s*\d{5}-?\d{3}/iu', '', $doc->autuado_endereco) }}</td>
           </tr>
           @endif
         </table>
@@ -156,122 +162,77 @@
            inscrição imobiliária: é por ela que o processo é indexado e é ela
            que amarra o documento ao cadastro do município. --}}
       <div class="sec">
-        <div class="sec-tit">{{ $sec('Identificação do Imóvel') }}</div>
+        <div class="sec-tit">{{ $sec(2, 'Local da infração e identificação do imóvel') }}</div>
         <table class="campos">
           <tr>
-            <td colspan="2"><span class="lbl">Inscrição imobiliária</span>{{ $imovel['inscricao'] ?: '—' }}</td>
-            <td><span class="lbl">Bairro / Loteamento</span>{{ $imovel['bairro'] ?: '—' }}</td>
-            <td><span class="lbl">Quadra / Lote</span>{{ $imovel['quadra'] ?? '—' }} / {{ $imovel['lote'] ?? '—' }}</td>
+            <td style="width:56%"><span class="lbl">Inscrição imobiliária</span>{{ $imovel['inscricao'] ?: '—' }}</td>
+            <td><span class="lbl">Bairro · quadra · lote</span>{{ $imovel['bairro'] ?: '—' }} · {{ $imovel['quadra'] ?? '—' }} · {{ $imovel['lote'] ?? '—' }}</td>
           </tr>
           <tr>
-            <td colspan="2"><span class="lbl">Endereço</span>{{ $imovel['endereco'] ?: '—' }}</td>
-            <td><span class="lbl">Área do terreno</span>{{ $doc->area_terreno_m2 ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }}</td>
-            <td><span class="lbl">Área construída aferida</span>{{ $doc->area_construida_m2 ? $fmt($doc->area_construida_m2) . ' m²' : '—' }}</td>
+            <td colspan="2"><span class="lbl">Endereço / referência de localização</span>{{ $imovel['endereco'] ?: '—' }}</td>
+          </tr>
+          <tr>
+            <td colspan="2"><span class="lbl">Terreno · área construída aferida</span>{{ $doc->area_terreno_m2 !== null ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }} · {{ $doc->area_construida_m2 !== null ? $fmt($doc->area_construida_m2) . ' m²' : '—' }}</td>
           </tr>
         </table>
       </div>
 
-      {{-- 3 — Constatação --}}
+      {{-- A constatação continua íntegra, sem criar outra seção numerada. --}}
       @if ($doc->descricao)
         <div class="sec">
-          <div class="sec-tit">{{ $sec($doc->exigeFundamentacao() ? 'Constatação' : 'Constatação da Vistoria') }}</div>
+          <span class="lbl" style="font-size:8px;color:#666">CONSTATAÇÃO</span>
           <p>{{ $doc->descricao }}</p>
         </div>
       @endif
 
       @if ($doc->exigeFundamentacao())
-        {{-- 4 — Legislação infringida --}}
         <div class="sec">
-          <div class="sec-tit">{{ $sec('Legislação Infringida') }}</div>
-          @if ($doc->legislacao)
-            <p><strong>{{ $doc->legislacao->rotulo() }}</strong></p>
-          @endif
-          @forelse ($doc->artigos as $a)
-            <p><strong>Art. {{ preg_replace('/^Art\.?\s*/i', '', $a->numero) }}.</strong>
-               {{ $a->conduta }}@if ($a->sancao) <em>{{ $a->sancao }}</em>@endif</p>
-          @empty
-            <p>—</p>
-          @endforelse
-        </div>
-
-        {{-- 5 — Multa. A memória de cálculo é o que diferencia obras de
-             posturas: multa por m² tem de mostrar a conta, senão o autuado
-             não tem como conferir e o auto não se sustenta em defesa.
-
-             A condição olha para o VALOR, não para a existência de artigos: a
-             notificação também cita artigo, mas não impõe multa — ela manda
-             regularizar. Uma notificação com seção de penalidade anuncia uma
-             sanção que ela não aplica. --}}
-        @if ($memoria['total'] !== null)
-          <div class="sec">
-            <div class="sec-tit">{{ $sec('Penalidade e Memória de Cálculo') }}</div>
-            <table class="multa">
-              <thead>
+          <div class="sec-tit">{{ $sec(3, $memoria['total'] !== null ? 'Infração / legislação infringida / multa e penalidade' : 'Infração / legislação infringida') }}</div>
+          <div class="lei-cab"><span class="lbl">LEI INFRINGIDA:</span> <strong>{{ $doc->legislacao?->rotulo() ?: '—' }}</strong></div>
+          <table class="multa">
+            <thead>
+              <tr>
+                <th style="width:10%">Artigo</th>
+                <th>Texto da legislação infringida</th>
+                @if ($memoria['total'] !== null)
+                  <th style="width:17%">Cálculo</th>
+                  <th style="width:11%;text-align:right">Multa · UPF</th>
+                @endif
+              </tr>
+            </thead>
+            <tbody>
+              @forelse ($memoria['linhas'] as $l)
                 <tr>
-                  <th style="width:52px">Artigo</th>
-                  <th>Enquadramento</th>
-                  <th style="width:110px">Base de cálculo</th>
-                  <th style="width:150px">Cálculo</th>
-                  <th style="width:78px;text-align:right">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                @foreach ($memoria['linhas'] as $l)
-                  <tr>
-                    <td>{{ $l['numero'] }}</td>
-                    <td><span class="conduta">{{ $l['conduta'] ?: '—' }}</span></td>
-                    <td>{{ $l['base'] }}</td>
-                    <td>
-                      {{ $l['conta'] }}
+                  <td><strong>{{ preg_replace('/^Art\.?\s*/i', '', $l['numero']) }}</strong></td>
+                  <td>{{ $l['conduta'] ?: '—' }}@if ($l['sancao']) {{ $l['sancao'] }}@endif</td>
+                  @if ($memoria['total'] !== null)
+                    <td class="calculo">
+                      {{ $l['base'] === 'Valor fixo' ? $l['base'] : $l['conta'] }}
                       @if ($l['limite'])<br><span class="limite">{{ $l['limite'] }}</span>@endif
                     </td>
-                    <td class="dir">{{ $l['valor'] !== null ? $fmt($l['valor']) . ' UPF' : '—' }}</td>
-                  </tr>
-                @endforeach
-                @if ($memoria['total'] !== null)
-                  <tr class="total">
-                    <td colspan="4">
-                      Total da multa
-                      @if ($memoria['upf'])
-                        <span class="total-reais">— UPF do exercício: R$ {{ $fmt($memoria['upf'], 4) }}</span>
-                      @endif
-                    </td>
-                    <td class="dir">
-                      {{ $fmt($memoria['total']) }} UPF
-                      @if ($memoria['emReais'])
-                        <br><span class="total-reais">R$ {{ $fmt($memoria['emReais']) }}</span>
-                      @endif
-                    </td>
-                  </tr>
-                @endif
-              </tbody>
-            </table>
-          </div>
-        @endif
-      @endif
-
-      {{-- 6 — Prazo --}}
-      @if ($prazo)
-        <div class="sec">
-          <div class="sec-tit">{{ $sec($prazo['rotulo']) }}</div>
-          <p><strong>Até {{ $prazo['data'] }}.</strong> {{ $prazo['nota'] }}</p>
+                    <td class="dir">{{ $l['valor'] !== null ? $fmt($l['valor']) : '—' }}</td>
+                  @endif
+                </tr>
+              @empty
+                <tr><td colspan="{{ $memoria['total'] !== null ? 4 : 2 }}">—</td></tr>
+              @endforelse
+            </tbody>
+          </table>
         </div>
       @endif
 
-      {{-- 7 — Ciência --}}
-      @if ($ciencia)
-        <div class="sec">
-          <div class="sec-tit">{{ $sec('Ciência / Intimação') }}</div>
+      <div class="sec">
+        <div class="sec-tit">{{ $sec(4, 'Ciência / intimação') }}</div>
+        @if ($ciencia)
           <p>{{ $ciencia }}</p>
-        </div>
-      @endif
-
-      @if ($doc->observacoes)
-        <div class="sec">
-          <div class="sec-tit">{{ $sec('Observações') }}</div>
-          <p>{{ $doc->observacoes }}</p>
-        </div>
-      @endif
+        @endif
+        @if ($prazo)
+          <p><strong>{{ $prazo['rotulo'] }}: até {{ $prazo['data'] }}.</strong> {{ $prazo['nota'] }}</p>
+        @endif
+        @if ($doc->observacoes)
+          <p><span class="lbl" style="font-size:8px;color:#666">OBSERVAÇÕES</span><br>{{ $doc->observacoes }}</p>
+        @endif
+      </div>
 
       {{-- Assinaturas. A do autuado fica em branco quando houve recusa: nesse
            caso quem assina é a testemunha, na seção do Termo de Recusa. --}}
@@ -305,7 +266,7 @@
 
       @if ($doc->recusa_assinatura)
         <div class="sec">
-          <div class="sec-tit">{{ $sec('Termo de Recusa') }}</div>
+          <div class="sec-tit">{{ $sec(5, 'Termo de Recusa') }}</div>
           <p>{{ $termoRecusa }}</p>
           <p><strong>Registro do agente:</strong> {{ $doc->recusa_assinatura }}</p>
         </div>
@@ -313,7 +274,7 @@
 
       @if (count($anexos))
         <div class="sec">
-          <div class="sec-tit">{{ $sec('Anexos') }}</div>
+          <div class="sec-tit">{{ $sec(6, 'Anexos') }}</div>
           @foreach ($anexos as $a)
             <div class="anexo">
               @if ($a['foto'])
