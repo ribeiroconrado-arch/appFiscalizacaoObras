@@ -1777,7 +1777,7 @@ function buscarArtigo(texto) {
       pintarSugestoes('vsi-artigo-sugestoes', sugestoesArtigo,
         a => ({
           titulo: 'Art. ' + a.numero + (a.rotulo && a.rotulo !== a.numero ? ' — ' + a.rotulo : ''),
-          sub: [a.lei, a.casou && a.casou !== 'conduta' && a.casou !== a.numero ? '“' + a.casou + '”' : null]
+          sub: [a.lei, a.embargo, a.casou && a.casou !== 'conduta' && a.casou !== a.numero ? '“' + a.casou + '”' : null]
             .filter(Boolean).join(' · ') || null,
         }),
         'selecionarArtigo')

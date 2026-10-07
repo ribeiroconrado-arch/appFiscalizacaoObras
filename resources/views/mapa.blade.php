@@ -2252,8 +2252,21 @@
               <input id="nd-area-construida" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
             </div>
           </div>
-          <div id="nd-memoria-calculo"></div>
         </div>
+        {{-- Multa por múltiplo do valor do alvará (LC 001/2023, art. 120,
+             parágrafo único): aparece só com artigo desse tipo na peça. --}}
+        <div id="nd-bloco-alvara" style="display:none">
+          <div class="sec-title">Alvará — base da multa</div>
+          <div class="g2">
+            <div class="field">
+              <label for="nd-alvara-valor">Valor do alvará (R$)</label>
+              <input id="nd-alvara-valor" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+            </div>
+            <div id="nd-multiplicadores" style="display:contents"></div>
+          </div>
+        </div>
+        {{-- A memória de cálculo vem do servidor (/api/multas/simular). --}}
+        <div id="nd-memoria-calculo"></div>
       </div>
 
       <div id="bloco-prazo">

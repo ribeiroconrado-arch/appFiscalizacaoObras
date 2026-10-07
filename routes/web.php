@@ -253,6 +253,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Etapa 6 — legislação e documentos
         Route::get('/documentos', [DocumentoController::class, 'index']);
         Route::get('/documentos/opcoes', [DocumentoController::class, 'opcoes']);
+        // A prévia da multa: a tela pede a conta, não a refaz.
+        Route::post('/multas/simular', [DocumentoController::class, 'simularMulta']);
         // Consulta de CNPJ para o autuado — feita pelo servidor, com limite próprio.
         Route::get('/cnpj/{cnpj}', [\App\Http\Controllers\CnpjController::class, 'mostrar'])->middleware('throttle:pesado');
         Route::get('/vistorias/{vistoria}/sugestao', [DocumentoController::class, 'sugestao']);

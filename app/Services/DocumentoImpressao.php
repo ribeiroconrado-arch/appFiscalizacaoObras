@@ -116,11 +116,25 @@ class DocumentoImpressao
         $linhas = [];
 
         foreach ($doc->artigos as $a) {
+            // Peça gravada depois das formas novas de multa traz a memória
+            // CONGELADA: é ela que sai, sem refazer conta nenhuma aqui.
+            if ($a->memoria !== null && $a->memoria !== '') {
+                $linhas[] = [
+                    'numero'  => $a->numero,
+                    'conduta' => $a->conduta,
+                    'sancao'  => $a->sancao,
+                    'base'    => \App\Models\Artigo::BASES_MULTA[$a->base_multa] ?? (string) $a->base_multa,
+                    'conta'   => $a->base_multa === 'sem_multa' ? '—' : $a->memoria,
+                    'limite'  => null,
+                    'valor'   => $a->valor_upf,
+                ];
+                continue;
+            }
+
             $base = match ($a->base_multa) {
                 'fixa'            => 'Valor fixo',
                 'sem_multa'       => 'Sem multa',
-                'area_terreno'    => 'Por área do terreno',
-                'area_construida' => 'Por área construída',
+                'por_m2'          => $a->multa_area === 'terreno' ? 'Por área do terreno' : 'Por área construída',
                 default           => (string) $a->base_multa,
             };
 
@@ -134,7 +148,7 @@ class DocumentoImpressao
 
             // Piso e teto: quando o cálculo bruto difere do valor gravado, foi
             // o limite da lei que decidiu — e isso tem de sair impresso.
-            $bruto = in_array($a->base_multa, ['area_terreno', 'area_construida'], true) && $a->area_m2
+            $bruto = $a->base_multa === 'por_m2' && $a->area_m2
                 ? (float) $a->multa_upf_m2 * (float) $a->area_m2
                 : null;
 

@@ -25,6 +25,9 @@ class DocumentoArtigo extends Model
             'multa_upf_m2' => 'float',
             'area_m2'      => 'float',
             'valor_upf'    => 'float',
+            'valor_reais'  => 'float',
+            'multiplicador' => 'float',
+            'multa_faixas' => 'array',
         ];
     }
 

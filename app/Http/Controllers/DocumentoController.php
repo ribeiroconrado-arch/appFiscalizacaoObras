@@ -285,11 +285,19 @@ class DocumentoController extends Controller
                         // Os termos de busca do artigo: o campo de artigo do
                         // documento também acha por eles.
                         'termos'  => $a->termos ?? [],
-                        'base_multa'    => $a->base_multa,
-                        'multa_upf'     => $a->multa_upf,
-                        'multa_upf_m2'  => $a->multa_upf_m2,
-                        'multa_min_upf' => $a->multa_min_upf,
-                        'multa_max_upf' => $a->multa_max_upf,
+                        // É com isto que o formulário filtra a lista de artigos
+                        // pelo tipo da peça (a regra é Artigo::serveA).
+                        'embargo'            => $a->embargo,
+                        'embargo_modo'       => $a->embargo_modo,
+                        'embargo_prazo_dias' => $a->embargo_prazo_dias,
+                        'embargo_rotulo'     => $a->rotuloEmbargo(),
+                        // A tela NÃO calcula multa (pede a /api/multas/simular);
+                        // isto é só para ela saber que campos mostrar.
+                        'base_multa'     => $a->base_multa,
+                        'multa_area'     => $a->multa_area,
+                        'multa_mult_min' => $a->multa_mult_min,
+                        'multa_mult_max' => $a->multa_mult_max,
+                        'multa_rotulo'   => $a->rotuloMulta(),
                     ]),
                 ]),
         ]);
@@ -302,9 +310,13 @@ class DocumentoController extends Controller
      * fiscal de procurar de novo, na mesa, o dispositivo que ele já achou em
      * campo.
      */
-    public function sugestao(Vistoria $vistoria): JsonResponse
+    public function sugestao(Request $request, Vistoria $vistoria): JsonResponse
     {
-        $artigos = $this->lavratura->artigosSugeridos($vistoria->id);
+        // Com o tipo da peça, só vêm os artigos da vistoria que servem a ela:
+        // o que não cabe embargo não entra numa peça de embargo, e vice-versa.
+        $tipo = $request->query('tipo');
+        $tipo = is_string($tipo) && isset(Documento::TIPOS[$tipo]) ? $tipo : null;
+        $artigos = $this->lavratura->artigosSugeridos($vistoria->id, $tipo);
 
         return response()->json([
             'vistoria' => [
@@ -397,9 +409,14 @@ class DocumentoController extends Controller
             // não calcula multa (ver Artigo::calcularMulta).
             'area_terreno_m2'    => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'area_construida_m2' => ['nullable', 'numeric', 'min:0', 'max:999999'],
+            ...self::REGRAS_DO_ALVARA,
             'artigos'        => ['array'],
             'artigos.*'      => ['integer', 'exists:artigos,id'],
         ]);
+
+        if ($recusa = $this->recusarArtigosForaDoTipo($d['tipo'], $d['artigos'] ?? [])) {
+            return $recusa;
+        }
 
         $doc = Documento::create([
             'tipo'          => $d['tipo'],
@@ -421,19 +438,94 @@ class DocumentoController extends Controller
             'observacoes'   => $d['observacoes'] ?? null,
             'area_terreno_m2'    => $d['area_terreno_m2'] ?? $lote?->area_gis_m2 ?? null,
             'area_construida_m2' => $d['area_construida_m2'] ?? null,
+            'alvara_valor'       => $d['alvara_valor'] ?? null,
         ]);
 
         if (! empty($d['artigos'])) {
-            $this->lavratura->fixarArtigos($doc, $d['artigos']);
+            $this->lavratura->fixarArtigos($doc, $d['artigos'], $d['multiplicadores'] ?? []);
         }
 
         return response()->json([
             'message'   => 'Rascunho criado.',
             'documento' => ['id' => $doc->id, 'numero' => $doc->numeroFormatado()],
+            'avisos'    => $this->lavratura->avisosDeEmbargo($doc),
         ], 201);
     }
 
+    /**
+     * O que a multa por MÚLTIPLO DO ALVARÁ pede da peça: o valor do alvará, em
+     * reais, e o multiplicador de cada artigo que tem intervalo (1 a 10×).
+     * Fora do intervalo não é recusado aqui — o rascunho grava, e a lavratura
+     * é que não passa (LavraturaService::pendenciasDeMulta).
+     */
+    private const REGRAS_DO_ALVARA = [
+        'alvara_valor'      => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+        'multiplicadores'   => ['nullable', 'array'],
+        'multiplicadores.*' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+    ];
+
+    /**
+     * POST /api/multas/simular — a multa de um conjunto de artigos, com as
+     * áreas e o alvará que estão NA TELA.
+     *
+     * A tela não tem a regra da multa: pede aqui. É o mesmo
+     * Artigo::calcularMulta da lavratura, então a prévia que o fiscal vê é a
+     * conta que vai valer. Não grava nada.
+     */
+    public function simularMulta(Request $request): JsonResponse
+    {
+        $d = $request->validate([
+            'artigos'            => ['required', 'array', 'max:60'],
+            'artigos.*'          => ['integer'],
+            'area_terreno_m2'    => ['nullable', 'numeric', 'min:0'],
+            'area_construida_m2' => ['nullable', 'numeric', 'min:0'],
+            'data_fato'          => ['nullable', 'date'],
+            ...self::REGRAS_DO_ALVARA,
+        ]);
+
+        $num = fn ($v) => $v === null || $v === '' ? null : (float) $v;
+        $upf = \App\Models\Upf::vigente(isset($d['data_fato']) ? \Illuminate\Support\Carbon::parse($d['data_fato']) : now())?->valor;
+        $porId = \App\Models\Artigo::whereIn('id', $d['artigos'])->get()->keyBy('id');
+
+        $total = 0.0;
+        $linhas = [];
+        // Na ordem em que o fiscal os pôs na peça.
+        foreach ($d['artigos'] as $id) {
+            if (! ($a = $porId[$id] ?? null)) { continue; }
+            $c = $a->calcularMulta($num($d['area_terreno_m2'] ?? null), $num($d['area_construida_m2'] ?? null),
+                $num($d['alvara_valor'] ?? null), $num($d['multiplicadores'][$id] ?? null), $upf ? (float) $upf : null);
+            $total += $c['valor'];
+            $linhas[] = ['artigo_id' => $a->id, 'numero' => $a->numero, 'base' => $a->base_multa] + $c;
+        }
+
+        return response()->json([
+            'linhas'    => $linhas,
+            'total_upf' => round($total, 2),
+            'upf_valor' => $upf ? (float) $upf : null,
+            'total_reais' => $upf ? round($total * (float) $upf, 2) : null,
+            'pendencias'  => collect($linhas)->pluck('pendencia')->filter()->unique()->values(),
+        ]);
+    }
+
     /** POST /api/documentos/{documento}/lavrar — atribui número e fecha. */
+    /**
+     * 422 quando algum artigo não serve ao tipo da peça — artigo sem embargo
+     * numa peça de embargo, ou artigo exclusivo de embargo fora dela. A regra
+     * é Artigo::serveA; a tela já filtra, e isto é o que vale.
+     *
+     * @param  array<int,int>  $artigos
+     */
+    private function recusarArtigosForaDoTipo(string $tipo, array $artigos): ?JsonResponse
+    {
+        try {
+            $this->lavratura->conferirArtigosDoTipo($tipo, $artigos);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return null;
+    }
+
     public function lavrar(Request $request, Documento $documento): JsonResponse
     {
         if (! $request->user()->podeLavrarDocumento()) {
@@ -508,6 +600,7 @@ class DocumentoController extends Controller
                 'numero'     => $documento->imovel_endereco_partes['numero'] ?? null,
                 'terreno'   => $documento->area_terreno_m2,
                 'construida'=> $documento->area_construida_m2,
+                'alvara_valor' => $documento->alvara_valor,
             ],
 
             'autuado'   => [
@@ -545,11 +638,13 @@ class DocumentoController extends Controller
                 'conduta' => $a->conduta,
                 'sancao'  => $a->sancao,
                 'base'    => $a->base_multa,
-                'calculo' => $a->base_multa === 'fixa'
+                // A memória congelada; peça antiga, sem ela, mostra a conta curta.
+                'calculo' => $a->memoria ?: ($a->base_multa === 'fixa'
                     ? $a->multa_upf . ' UPF (fixo)'
                     : ($a->base_multa === 'sem_multa'
                         ? 'sem multa'
-                        : $a->multa_upf_m2 . ' UPF/m²' . ($a->area_m2 ? ' × ' . $a->area_m2 . ' m²' : '')),
+                        : $a->multa_upf_m2 . ' UPF/m²' . ($a->area_m2 ? ' × ' . $a->area_m2 . ' m²' : ''))),
+                'multiplicador' => $a->multiplicador,
                 'valor'   => $a->valor_upf,
             ]),
 
@@ -653,24 +748,32 @@ class DocumentoController extends Controller
             'prazo_dias'         => ['nullable', 'integer', 'min:0', 'max:365'],
             'area_terreno_m2'    => ['nullable', 'numeric', 'min:0'],
             'area_construida_m2' => ['nullable', 'numeric', 'min:0'],
+            ...self::REGRAS_DO_ALVARA,
             'artigos'            => ['nullable', 'array'],
             'artigos.*'          => ['integer', 'exists:artigos,id'],
         ]);
 
+        if ($recusa = $this->recusarArtigosForaDoTipo($d['tipo'], $d['artigos'] ?? [])) {
+            return $recusa;
+        }
+
         // array_merge, e não `+`: o texto único montado das partes tem de VENCER o
         // que veio no pedido.
         $documento->update(array_merge(
-            collect($d)->except(['artigos', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d)));
+            collect($d)->except(['artigos', 'multiplicadores', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d)));
 
         // Os artigos são refixados por inteiro: manter os antigos e somar os
         // novos deixaria no documento um enquadramento que o fiscal removeu
         // da tela e acredita ter tirado.
         $documento->artigos()->delete();
         if (! empty($d['artigos'])) {
-            $this->lavratura->fixarArtigos($documento, $d['artigos']);
+            $this->lavratura->fixarArtigos($documento, $d['artigos'], $d['multiplicadores'] ?? []);
         }
 
-        return response()->json(['message' => 'Rascunho atualizado.']);
+        return response()->json([
+            'message' => 'Rascunho atualizado.',
+            'avisos'  => $this->lavratura->avisosDeEmbargo($documento),
+        ]);
     }
 
     /**

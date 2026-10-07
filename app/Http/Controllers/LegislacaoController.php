@@ -58,8 +58,17 @@ class LegislacaoController extends Controller
                     'multa_upf_m2'  => $a->multa_upf_m2,
                     'multa_min_upf' => $a->multa_min_upf,
                     'multa_max_upf' => $a->multa_max_upf,
+                    'multa_area'    => $a->multa_area,
+                    'multa_faixas'  => $a->multa_faixas,
+                    'multa_mult_min' => $a->multa_mult_min,
+                    'multa_mult_max' => $a->multa_mult_max,
+                    'multa_rotulo'  => $a->rotuloMulta(),
                     'ativo'         => $a->ativo,
                     'termos'        => $a->termos ?? [],
+                    'embargo'            => $a->embargo,
+                    'embargo_modo'       => $a->embargo_modo,
+                    'embargo_prazo_dias' => $a->embargo_prazo_dias,
+                    'embargo_rotulo'     => $a->rotuloEmbargo(),
                 ]),
             ]);
 
@@ -111,10 +120,72 @@ class LegislacaoController extends Controller
             'multa_upf_m2'    => ['nullable', 'numeric', 'min:0', 'max:9999'],
             'multa_min_upf'   => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'multa_max_upf'   => ['nullable', 'numeric', 'min:0', 'max:999999', 'gte:multa_min_upf'],
+            // Sobre QUAL área — só para "por m²" e "por faixa".
+            'multa_area'      => ['nullable', 'required_if:base_multa,por_m2,faixas', Rule::in(array_keys(Artigo::AREAS_MULTA))],
+            // Faixas: valor FECHADO por faixa de área; a última é aberta.
+            'multa_faixas'          => ['nullable', 'required_if:base_multa,faixas', 'array', 'min:2', 'max:12'],
+            'multa_faixas.*.ate_m2' => ['nullable', 'numeric', 'gt:0', 'max:9999999'],
+            'multa_faixas.*.upf'    => ['required', 'numeric', 'min:0', 'max:999999'],
+            // Múltiplo do alvará: iguais = fixo; diferentes = o fiscal informa.
+            'multa_mult_min'  => ['nullable', 'required_if:base_multa,multiplo_alvara', 'numeric', 'gt:0', 'max:1000'],
+            'multa_mult_max'  => ['nullable', 'required_if:base_multa,multiplo_alvara', 'numeric', 'gt:0', 'max:1000', 'gte:multa_mult_min'],
             'ativo'           => ['nullable', 'boolean'],
             'termos'          => ['array', 'max:40'],
             'termos.*'        => ['string', 'max:60'],
+            // Embargo: se o artigo embarga, tem de dizer QUANDO — de imediato,
+            // ou só depois de um prazo (e de quantos dias).
+            'embargo'            => ['nullable', Rule::in(array_keys(Artigo::EMBARGO))],
+            'embargo_modo'       => ['nullable', 'required_if:embargo,cabe,exclusivo', Rule::in(array_keys(Artigo::EMBARGO_MODOS))],
+            'embargo_prazo_dias' => ['nullable', 'required_if:embargo_modo,apos_prazo', 'integer', 'min:1', 'max:365'],
+        ], [
+            'multa_area.required_if'         => 'Diga sobre qual área a multa é calculada.',
+            'multa_faixas.required_if'       => 'Informe as faixas de área e o valor de cada uma.',
+            'multa_faixas.min'               => 'São precisas pelo menos duas faixas (a última é a "acima de").',
+            'multa_mult_min.required_if'     => 'Informe o multiplicador do alvará.',
+            'multa_mult_max.required_if'     => 'Informe o multiplicador do alvará.',
+            'multa_mult_max.gte'             => 'O multiplicador máximo não pode ser menor que o mínimo.',
+            'embargo_modo.required_if'       => 'Diga se o embargo é imediato ou após prazo.',
+            'embargo_prazo_dias.required_if' => 'Informe de quantos dias é o prazo antes do embargo.',
         ]);
+
+        // Cada forma de multa guarda só os campos DELA: artigo "valor fixo" com
+        // faixas esquecidas de uma edição anterior é dado que engana.
+        $porArea = in_array($d['base_multa'], Artigo::BASES_POR_AREA, true);
+        $d['multa_area'] = $porArea ? $d['multa_area'] : null;
+        if ($d['base_multa'] !== 'fixa') { $d['multa_upf'] = null; }
+        if ($d['base_multa'] !== 'por_m2') { $d['multa_upf_m2'] = $d['multa_min_upf'] = $d['multa_max_upf'] = null; }
+        if ($d['base_multa'] !== 'multiplo_alvara') { $d['multa_mult_min'] = $d['multa_mult_max'] = null; }
+        if ($d['base_multa'] === 'faixas') {
+            // Limites crescentes, e a faixa aberta ("acima de") por último e
+            // única: sem ela, uma obra maior que o último limite ficaria sem multa.
+            $faixas = array_values($d['multa_faixas']);
+            $anterior = 0.0;
+            foreach ($faixas as $i => $fx) {
+                $ate = $fx['ate_m2'] ?? null;
+                $ultima = $i === count($faixas) - 1;
+                if ($ultima !== ($ate === null)) {
+                    return response()->json(['message' => 'Só a última faixa fica aberta ("acima de"); as outras precisam do limite em m².'], 422);
+                }
+                if ($ate !== null && (float) $ate <= $anterior) {
+                    return response()->json(['message' => 'Os limites das faixas precisam crescer de uma para a outra.'], 422);
+                }
+                $anterior = (float) ($ate ?? $anterior);
+                $faixas[$i] = ['ate_m2' => $ate === null ? null : (float) $ate, 'upf' => (float) $fx['upf']];
+            }
+            $d['multa_faixas'] = $faixas;
+        } else {
+            $d['multa_faixas'] = null;
+        }
+
+        // Sem embargo, modo e prazo não significam nada; embargo imediato não
+        // tem prazo. Gravar limpo evita artigo "não cabe embargo, após 5 dias".
+        $d['embargo'] = $d['embargo'] ?? 'nao';
+        if ($d['embargo'] === 'nao') {
+            $d['embargo_modo'] = null;
+        }
+        if (($d['embargo_modo'] ?? null) !== 'apos_prazo') {
+            $d['embargo_prazo_dias'] = null;
+        }
 
         // Termos limpos e sem repetir ("Escavação" e "escavacao" são o mesmo
         // para a busca, que ignora acento e caixa): fica a primeira grafia.

@@ -98,7 +98,28 @@ class LavraturaService
             );
         }
 
+        // A última barreira: a peça só vira ato com artigo que serve a ela. O
+        // rascunho pode ter sido gravado antes de o artigo ser reconfigurado.
+        $this->conferirArtigosDoTipo($doc->tipo, $doc->artigos()->pluck('artigo_id')->filter()->all());
+
+        // AUTO DE INFRAÇÃO NÃO LAVRA COM MULTA POR CALCULAR. Antes, artigo por
+        // área sem a área saía com multa zero e a nota "não calculada" — um
+        // auto lavrado sem o valor que ele existe para impor.
+        if ($doc->tipo === 'auto_infracao' && ($faltam = $this->pendenciasDeMulta($doc))) {
+            throw new RuntimeException('A multa não fecha: falta informar ' . implode('; ', $faltam) . '.');
+        }
+
         return DB::transaction(function () use ($doc) {
+            // A multa é refeita AGORA, com a UPF e as áreas do dia da lavratura:
+            // o rascunho pode ter ficado dias aberto.
+            if ($doc->tipo === 'auto_infracao') {
+                $copias = $doc->artigos()->get();
+                if (Artigo::whereIn('id', $copias->pluck('artigo_id')->filter())->count() === $copias->count()) {
+                    $this->fixarArtigos($doc, $copias->pluck('artigo_id')->all(),
+                        $copias->pluck('multiplicador', 'artigo_id')->filter(fn ($m) => $m !== null)->all());
+                }
+            }
+
             ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo);
 
             $doc->numero         = $numero;
@@ -225,15 +246,18 @@ class LavraturaService
      *
      * @param  list<int>  $artigoIds
      */
-    public function fixarArtigos(Documento $doc, array $artigoIds): void
+    public function fixarArtigos(Documento $doc, array $artigoIds, array $multiplicadores = []): void
     {
         $doc->artigos()->delete();
 
         $artigos = Artigo::whereIn('id', $artigoIds)->get();
+        $upf = Upf::vigente($doc->data_fato ?? now())?->valor;
         $total = 0.0;
 
         foreach ($artigos as $a) {
-            $calc = $a->calcularMulta($doc->area_terreno_m2, $doc->area_construida_m2);
+            $mult = $multiplicadores[$a->id] ?? null;
+            $calc = $a->calcularMulta($doc->area_terreno_m2, $doc->area_construida_m2,
+                $doc->alvara_valor, $mult !== null ? (float) $mult : null, $upf ? (float) $upf : null);
 
             DocumentoArtigo::create([
                 'documento_id' => $doc->id,
@@ -242,21 +266,47 @@ class LavraturaService
                 'conduta'      => $a->conduta,
                 'sancao'       => $a->sancao,
                 'base_multa'   => $a->base_multa,
+                'multa_area'   => $a->multa_area,
                 'multa_upf'    => $a->multa_upf,
                 'multa_upf_m2' => $a->multa_upf_m2,
-                'area_m2'      => $a->base_multa === 'area_terreno' ? $doc->area_terreno_m2
-                                 : ($a->base_multa === 'area_construida' ? $doc->area_construida_m2 : null),
+                'multa_faixas' => $a->base_multa === 'faixas' ? $a->multa_faixas : null,
+                'area_m2'      => $calc['area_m2'],
+                'area_usada'   => $calc['area_usada'],
+                // O informado fica guardado mesmo fora do intervalo: é o que
+                // a tela mostra de volta para o fiscal corrigir.
+                'multiplicador' => $calc['multiplicador'] ?? ($mult !== null ? (float) $mult : null),
                 'valor_upf'    => $calc['valor'],
+                'valor_reais'  => $calc['valor_reais'],
+                'memoria'      => $calc['memoria'],
             ]);
             $total += $calc['valor'];
         }
 
         // Só auto de infração acumula multa; notificação e termo não penalizam.
-        if ($doc->tipo === 'auto_infracao' && $total > 0) {
-            $doc->valor_upf = round($total, 2);
-            $doc->upf_valor = Upf::vigente($doc->data_fato ?? now())?->valor;
+        // Sem multa a somar, o total volta a nulo: o artigo que multava pode
+        // ter saído da peça desde a última gravação.
+        if ($doc->tipo === 'auto_infracao') {
+            $doc->valor_upf = $total > 0 ? round($total, 2) : null;
+            $doc->upf_valor = $total > 0 ? $upf : null;
             $doc->save();
         }
+    }
+
+    /**
+     * O que FALTA para a multa de cada artigo da peça fechar: área, valor do
+     * alvará, multiplicador, UPF. Vazio = tudo calculado.
+     *
+     * @return list<string>
+     */
+    public function pendenciasDeMulta(Documento $doc): array
+    {
+        $upf = Upf::vigente($doc->data_fato ?? now())?->valor;
+        $copias = $doc->artigos()->get()->keyBy('artigo_id');
+
+        return Artigo::whereIn('id', $copias->keys()->filter())->get()
+            ->map(fn (Artigo $a) => $a->calcularMulta($doc->area_terreno_m2, $doc->area_construida_m2,
+                $doc->alvara_valor, $copias[$a->id]->multiplicador, $upf ? (float) $upf : null)['pendencia'])
+            ->filter()->unique()->values()->all();
     }
 
     /**
@@ -269,7 +319,71 @@ class LavraturaService
      *
      * @return \Illuminate\Support\Collection<int, Artigo>
      */
-    public function artigosSugeridos(int $vistoriaId)
+    /**
+     * Recusa artigo que não serve ao tipo da peça (Artigo::serveA).
+     *
+     * @param  array<int,int>  $artigoIds
+     * @throws RuntimeException dizendo quais artigos, e por quê
+     */
+    public function conferirArtigosDoTipo(string $tipo, array $artigoIds): void
+    {
+        if (! $artigoIds) {
+            return;
+        }
+        $fora = Artigo::whereIn('id', $artigoIds)->get()
+            ->reject(fn (Artigo $a) => $a->serveA($tipo))
+            ->map(fn (Artigo $a) => $a->numero)->values()->all();
+        if (! $fora) {
+            return;
+        }
+
+        $lista = implode(', ', $fora);
+        throw new RuntimeException(in_array($tipo, Documento::DE_EMBARGO, true)
+            ? "Não cabe embargo por {$lista}. Peça de embargo só aceita artigo configurado para embargo (Parâmetros › Legislação)."
+            : "{$lista} é exclusivo de embargo: só entra em Notificação de Embargo ou Auto de Embargo.");
+    }
+
+    /**
+     * O que o fiscal deve saber antes de lavrar um AUTO DE EMBARGO.
+     *
+     * Artigo que só embarga APÓS PRAZO (LC 001/2023, art. 22, §5º e art. 32,
+     * §2º) pede que o prazo tenha sido dado e vencido — o que se prova com
+     * uma Notificação de Embargo lavrada para o imóvel. É AVISO, e não trava:
+     * o prazo pode ter corrido por outro meio (notificação em papel, peça de
+     * antes do sistema), e quem responde pelo ato é o fiscal.
+     *
+     * @return array<int,string>
+     */
+    public function avisosDeEmbargo(Documento $doc): array
+    {
+        if ($doc->tipo !== 'auto_embargo') {
+            return [];
+        }
+        $comPrazo = Artigo::whereIn('id', $doc->artigos()->pluck('artigo_id')->filter())
+            ->where('embargo_modo', 'apos_prazo')->get();
+        if ($comPrazo->isEmpty()) {
+            return [];
+        }
+
+        $vencida = $doc->lote_id && Documento::where('lote_id', $doc->lote_id)
+            ->where('tipo', 'notificacao_embargo')
+            ->whereNotIn('status', ['rascunho', 'anulado'])
+            ->whereNotNull('prazo_ate')->where('prazo_ate', '<', now()->toDateString())
+            ->exists();
+        if ($vencida) {
+            return [];
+        }
+
+        $artigos = $comPrazo->map(fn (Artigo $a) => $a->numero . ' (' . (int) $a->embargo_prazo_dias . ' dias)')->implode(', ');
+
+        return ["{$artigos}: o embargo só cabe depois do prazo, e este imóvel não tem Notificação de Embargo "
+            . 'com prazo vencido no sistema. Confira se o prazo foi dado e correu antes de lavrar.'];
+    }
+
+    /**
+     * @param  string|null  $tipo  com ele, só os artigos que servem àquela peça
+     */
+    public function artigosSugeridos(int $vistoriaId, ?string $tipo = null)
     {
         $ids = DB::table('vistoria_artigos')
             ->where('vistoria_id', $vistoriaId)->where('tipo', 'citacao')
@@ -278,6 +392,7 @@ class LavraturaService
 
         $artigos = Artigo::query()->with('legislacao:id,numero,nome')->whereIn('id', $ids)->get()->keyBy('id');
 
-        return $ids->map(fn ($id) => $artigos->get($id))->filter()->values();
+        return $ids->map(fn ($id) => $artigos->get($id))->filter()
+            ->filter(fn (Artigo $a) => $tipo === null || $a->serveA($tipo))->values();
     }
 }

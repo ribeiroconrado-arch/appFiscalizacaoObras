@@ -29,6 +29,7 @@ class Documento extends Model
             'valor_upf'          => 'float',
             'area_terreno_m2'    => 'float',
             'area_construida_m2' => 'float',
+            'alvara_valor'       => 'float',
             'upf_valor'          => 'float',
         ];
     }
@@ -73,6 +74,12 @@ class Documento extends Model
      * Embargo, e esse tem prazo de defesa.
      */
     public const COM_CUMPRIMENTO = ['notificacao', 'notificacao_embargo'];
+
+    /**
+     * As peças de EMBARGO. Só aceitam artigo configurado para embargo
+     * (Artigo::serveA) — e artigo exclusivo de embargo só aparece nelas.
+     */
+    public const DE_EMBARGO = ['notificacao_embargo', 'auto_embargo'];
 
     public function lote(): BelongsTo       { return $this->belongsTo(Lote::class); }
     public function vistoria(): BelongsTo   { return $this->belongsTo(Vistoria::class); }

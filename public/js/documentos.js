@@ -758,17 +758,40 @@ function buscarArtigoDoc(inp) {
   artigoEscolhidoDoc = null
   const lei = leiDoDoc()
   const q = semAcentoDoc(inp.value.trim())
-  const pool = (lei ? [lei] : dState.opcoes.leis)
+  // SÓ OS ARTIGOS QUE SERVEM A ESTA PEÇA: numa peça de embargo, os que
+  // aceitam embargo; nas demais, todos menos os exclusivos de embargo.
+  const daPeca = (lei ? [lei] : dState.opcoes.leis)
     .flatMap(l => l.artigos.map(a => ({ a, lei: lei ? '' : l.rotulo })))
+    .filter(({ a }) => artigoServeAoDoc(a))
+  const pool = daPeca
     .filter(({ a }) => !fdState.artigos.includes(a.id))
     .filter(({ a }) => !q || semAcentoDoc([a.numero, a.rotulo, a.conduta, ...(a.termos || [])].join(' ')).includes(q))
 
+  // Lista vazia tem de dizer POR QUÊ: "nenhum artigo encontrado" numa peça
+  // de embargo sem artigo configurado pareceria defeito da busca.
+  const vazio = lei && !lei.artigos.length ? 'Esta lei ainda não tem artigos cadastrados (Parâmetros › Legislação).'
+    : !daPeca.length && docDeEmbargo() ? 'Nenhum artigo está configurado para embargo. Marque quais aceitam em Parâmetros › Legislação › Artigos.'
+    : 'Nenhum artigo encontrado'
+
   lista.innerHTML = pool.length
     ? pool.slice(0, 60).map(({ a, lei }) => `<div class="ac-item" onmousedown="event.preventDefault(); selArtigoDoc(${a.id})">
-        ${esc(rotuloArtigoDoc(a))}${lei ? ` <span class="ac-sub">· ${esc(lei)}</span>` : ''}</div>`).join('')
-    : `<div class="ac-empty">${lei && !lei.artigos.length
-        ? 'Esta lei ainda não tem artigos cadastrados (Parâmetros › Legislação).' : 'Nenhum artigo encontrado'}</div>`
+        ${esc(rotuloArtigoDoc(a))}${a.embargo_rotulo && docDeEmbargo() ? ` <span class="ac-sub">· ${esc(a.embargo_rotulo)}</span>` : ''}${
+          lei ? ` <span class="ac-sub">· ${esc(lei)}</span>` : ''}</div>`).join('')
+    : `<div class="ac-empty">${vazio}</div>`
   lista.classList.add('open')
+}
+
+/** As peças de embargo (Documento::DE_EMBARGO). */
+const TIPOS_DE_EMBARGO = ['notificacao_embargo', 'auto_embargo']
+const docDeEmbargo = () => TIPOS_DE_EMBARGO.includes(document.getElementById('nd-tipo').value)
+
+/**
+ * Este artigo pode fundamentar a peça aberta? MESMA regra de Artigo::serveA,
+ * no servidor — repetida aqui só para a lista não oferecer o que o servidor
+ * vai recusar ao gravar.
+ */
+function artigoServeAoDoc(a) {
+  return docDeEmbargo() ? ['cabe', 'exclusivo'].includes(a.embargo) : a.embargo !== 'exclusivo'
 }
 
 /**
@@ -813,6 +836,20 @@ function addArtigoDoc() {
   if (!fdState.artigos.includes(id)) fdState.artigos.push(id)
   limparArtigoBuscaDoc()
   trocarLeiDoc()
+  sugerirPrazoDoEmbargo()
+}
+
+/**
+ * NOTIFICAÇÃO DE EMBARGO: o prazo de cumprimento vem sugerido pelo artigo que
+ * só embarga após prazo (o menor, se houver mais de um). O campo continua
+ * livre — é sugestão, e o fiscal responde pelo prazo que der.
+ */
+function sugerirPrazoDoEmbargo() {
+  if (document.getElementById('nd-tipo').value !== 'notificacao_embargo') return
+  const prazos = fdState.artigos.map(artigoDoc)
+    .filter(a => a?.embargo_modo === 'apos_prazo' && a.embargo_prazo_dias)
+    .map(a => Number(a.embargo_prazo_dias))
+  if (prazos.length) document.getElementById('nd-prazo').value = Math.min(...prazos)
 }
 
 /** @param {number} id */
@@ -842,7 +879,8 @@ function trocarLeiDoc() {
         if (!a) return ''
         return `<div class="artigo-tag">
           <div class="artigo-tag-topo">
-            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}</span>
+            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}${
+              a.embargo_rotulo && docDeEmbargo() ? ` <span class="artigo-tag-embargo">${esc(a.embargo_rotulo)}</span>` : ''}</span>
             ${travado ? '' : `<button type="button" class="artigo-tag-x" title="Remover" onclick="removerArtigoDoc(${a.id})">&times;</button>`}
           </div>
           ${a.conduta ? `<div class="artigo-tag-texto">${esc(a.conduta)}</div>` : ''}
@@ -855,43 +893,107 @@ function trocarLeiDoc() {
 }
 
 /**
- * Prévia da multa, artigo por artigo — mesma regra de App\Models\Artigo::
- * calcularMulta(), reproduzida aqui só para o fiscal ver o total ANTES de
- * lavrar. O valor que vale de verdade é recalculado no servidor na lavratura;
- * esta função nunca é enviada ao back-end.
+ * PRÉVIA DA MULTA, artigo por artigo.
+ *
+ * A conta NÃO é feita aqui: a tela pede a /api/multas/simular, que usa o
+ * mesmo Artigo::calcularMulta da lavratura. Com faixa de área, "obra ou
+ * terreno" e múltiplo do alvará, repetir a regra em JavaScript era pedir
+ * para a prévia mostrar um valor e o auto sair com outro.
+ *
+ * Esta função só decide QUAIS campos aparecem (áreas, alvará,
+ * multiplicador) e agenda o pedido.
  */
 function recalcularMultaDoc() {
-  const lei = dState.opcoes.leis.find(l => String(l.id) === document.getElementById('nd-lei').value)
-  const artigos = (lei?.artigos || []).filter(a => fdState.artigos.includes(a.id))
-  const porArea = artigos.filter(a => a.base_multa === 'area_construida' || a.base_multa === 'area_terreno')
+  const artigos = fdState.artigos.map(artigoDoc).filter(Boolean)
+  const porArea = artigos.some(a => a.base_multa === 'por_m2' || a.base_multa === 'faixas')
+  const doAlvara = artigos.filter(a => a.base_multa === 'multiplo_alvara')
+  // Só pergunta o multiplicador de quem tem INTERVALO (1 a 10×); o fixo (3×) já está dado.
+  const comIntervalo = doAlvara.filter(a => Number(a.multa_mult_min) !== Number(a.multa_mult_max))
 
-  document.getElementById('nd-bloco-area').style.display = porArea.length ? '' : 'none'
-  if (!porArea.length) { document.getElementById('nd-memoria-calculo').innerHTML = ''; return }
+  document.getElementById('nd-bloco-area').style.display = porArea ? '' : 'none'
+  document.getElementById('nd-bloco-alvara').style.display = doAlvara.length ? '' : 'none'
 
-  const areaTerreno = parseFloat(document.getElementById('nd-area-terreno').value) || null
-  const areaConstruida = parseFloat(document.getElementById('nd-area-construida').value) || null
+  // Redesenha os campos de multiplicador só quando o CONJUNTO de artigos
+  // muda — redesenhar a cada tecla tiraria o foco de quem está digitando.
+  const caixa = document.getElementById('nd-multiplicadores')
+  const chave = comIntervalo.map(a => a.id).join(',')
+  if (caixa.dataset.chave !== chave) {
+    caixa.dataset.chave = chave
+    caixa.innerHTML = comIntervalo.map(a => `<div class="field">
+        <label for="nd-mult-${a.id}">Multiplicador — ${esc(a.numero)} (${fmtNum(a.multa_mult_min)} a ${fmtNum(a.multa_mult_max)}×)</label>
+        <input id="nd-mult-${a.id}" type="number" min="${a.multa_mult_min}" max="${a.multa_mult_max}" step="0.01" data-lock
+               value="${esc(String(fdState.multiplicadores[a.id] ?? ''))}" ${docTravado() ? 'disabled' : ''}
+               oninput="fdState.multiplicadores[${a.id}] = this.value === '' ? null : Number(this.value); recalcularMultaDoc()">
+      </div>`).join('')
+  }
 
-  let total = 0
-  const linhas = artigos.map(a => {
-    if (a.base_multa === 'sem_multa') return null
-    if (a.base_multa === 'fixa') { total += Number(a.multa_upf || 0); return `${esc(a.numero)}: ${fmtNum(a.multa_upf || 0)} UPF (fixo)` }
+  if (!artigos.some(a => a.base_multa !== 'sem_multa')) {
+    fdState.multa = null
+    mostrarMultaDoc()
+    return
+  }
+  // Peça só aberta para leitura: mostra o que ela GUARDOU, sem refazer a
+  // conta com a lei e a UPF de hoje.
+  if (docTravado() && fdState.multaGravada) {
+    fdState.multa = fdState.multaGravada
+    mostrarMultaDoc()
+    return
+  }
+  clearTimeout(recalcularMultaDoc.espera)
+  recalcularMultaDoc.espera = setTimeout(simularMultaDoc, 250)
+}
 
-    const area = a.base_multa === 'area_terreno' ? areaTerreno : areaConstruida
-    if (area === null) return `${esc(a.numero)}: <span style="color:var(--red)">informe a área para calcular</span>`
+/** Os multiplicadores só dos artigos que estão na peça. */
+function multiplicadoresDoDoc() {
+  return Object.fromEntries(fdState.artigos
+    .filter(id => fdState.multiplicadores[id] !== null && fdState.multiplicadores[id] !== undefined)
+    .map(id => [id, fdState.multiplicadores[id]]))
+}
 
-    let valor = Number(a.multa_upf_m2 || 0) * area
-    let obs = ''
-    if (a.multa_min_upf !== null && valor < Number(a.multa_min_upf)) { valor = Number(a.multa_min_upf); obs = ' (piso aplicado)' }
-    else if (a.multa_max_upf !== null && valor > Number(a.multa_max_upf)) { valor = Number(a.multa_max_upf); obs = ' (teto aplicado)' }
-    total += valor
-    return `${esc(a.numero)}: ${fmtNum(a.multa_upf_m2)} UPF/m² × ${fmtNum(area)} m² = ${fmtNum(valor)} UPF${obs}`
-  }).filter(Boolean)
+/** Pede a conta ao servidor. Resposta atrasada de um pedido antigo é descartada. */
+async function simularMultaDoc() {
+  const pedido = simularMultaDoc.ultimo = (simularMultaDoc.ultimo || 0) + 1
+  const num = id => { const v = document.getElementById(id).value; return v === '' ? null : Number(v) }
+  try {
+    const r = await fetch('/api/multas/simular', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', Accept: 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+      },
+      body: JSON.stringify({
+        artigos: fdState.artigos,
+        area_terreno_m2: num('nd-area-terreno'),
+        area_construida_m2: num('nd-area-construida'),
+        alvara_valor: num('nd-alvara-valor'),
+        multiplicadores: multiplicadoresDoDoc(),
+        data_fato: document.getElementById('nd-datahora').value || null,
+      }),
+    })
+    if (pedido !== simularMultaDoc.ultimo) return
+    fdState.multa = r.ok ? await r.json() : null
+  } catch (_) {
+    if (pedido !== simularMultaDoc.ultimo) return
+    fdState.multa = null
+  }
+  mostrarMultaDoc()
+  // O resumo aberto mostra a mesma conta: atualiza junto.
+  if (fdState.aba === 'resumo' && typeof renderResumoDoc === 'function') renderResumoDoc()
+}
 
-  document.getElementById('nd-memoria-calculo').innerHTML = `
+/** Desenha a memória de cálculo que está em fdState.multa. */
+function mostrarMultaDoc() {
+  const m = fdState.multa
+  const caixa = document.getElementById('nd-memoria-calculo')
+  if (!m) { caixa.innerHTML = ''; return }
+  const linhas = m.linhas.filter(l => l.base !== 'sem_multa').map(l => `<b>${esc(l.numero)}</b>: ${
+    l.pendencia ? `<span style="color:var(--red)">falta informar ${esc(l.pendencia)}</span>` : esc(l.memoria)}`)
+  caixa.innerHTML = `
     <div style="font-size:12px;color:var(--tx2);background:var(--blt);border-radius:var(--r);padding:10px 12px;margin-top:4px">
       ${linhas.join('<br>')}
-      <div style="margin-top:6px;font-weight:700;color:var(--chumbo)">Total estimado: ${fmtNum(total)} UPF</div>
-      <div style="margin-top:4px;color:var(--tx3)">O valor definitivo é calculado na lavratura.</div>
+      <div style="margin-top:6px;font-weight:700;color:var(--chumbo)">Total${m.gravada ? '' : ' estimado'}: ${fmtNum(m.total_upf || 0)} UPF${
+        m.total_reais ? ' · R$ ' + fmtNum(m.total_reais) : ''}</div>
+      ${m.gravada ? '' : '<div style="margin-top:4px;color:var(--tx3)">O valor definitivo é calculado na lavratura, com a UPF do exercício.</div>'}
     </div>`
 }
 
@@ -911,7 +1013,9 @@ async function sugerirDaVistoria(vistoriaId) {
 
   try {
     fdState.vistoriaId = vistoriaId
-    const r = await fetch(`/api/vistorias/${vistoriaId}/sugestao`, { headers: { Accept: 'application/json' } })
+    // Com o tipo, o servidor devolve só os artigos da vistoria que servem a esta peça.
+    const tipo = encodeURIComponent(document.getElementById('nd-tipo').value)
+    const r = await fetch(`/api/vistorias/${vistoriaId}/sugestao?tipo=${tipo}`, { headers: { Accept: 'application/json' } })
     const s = await r.json()
 
     // A área e as exigências vêm ANTES do aviso de artigo faltando: mesmo sem

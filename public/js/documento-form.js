@@ -30,6 +30,9 @@ const fdState = {
   /** @type {number[]} */ artigos: [],
   /** @type {number|null} */ vistoriaId: null,
   /** @type {number} */ anexos: 0,
+  /** @type {Object<number, number|null>} multiplicador do alvará, por artigo */ multiplicadores: {},
+  /** @type {Object|null} a última conta da multa (de /api/multas/simular) */ multa: null,
+  /** @type {Object|null} a conta que a peça reaberta guardou */ multaGravada: null,
 }
 
 // ── ABERTURA ─────────────────────────────────────────────────
@@ -153,6 +156,15 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     // Os artigos e a lei da peça voltam ao formulário pelos ids: sem isto,
     // gravar um rascunho reaberto apagava o enquadramento dele.
     fdState.artigos = (documento.artigos || []).map(a => a.artigo_id).filter(Boolean)
+    fdState.multiplicadores = Object.fromEntries((documento.artigos || [])
+      .filter(a => a.artigo_id && a.multiplicador !== null).map(a => [a.artigo_id, a.multiplicador]))
+    // A conta como a peça a guardou: é o que se mostra enquanto ela está só
+    // aberta para leitura. Ao editar, a prévia volta a vir do servidor.
+    fdState.multaGravada = {
+      gravada: true,
+      linhas: (documento.artigos || []).map(a => ({ numero: a.numero, base: a.base, memoria: a.calculo, valor: a.valor, pendencia: null })),
+      total_upf: documento.valor_upf, total_reais: documento.valor_reais,
+    }
     fdState.anexos = documento.anexos || 0
     fdState.lote = {
       id: documento.imovel.lote_id ?? null,
@@ -166,6 +178,8 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     fdState.estado = 'novo'
     fdState.id = null
     fdState.artigos = []
+    fdState.multiplicadores = {}
+    fdState.multaGravada = null
     fdState.anexos = 0
     fdState.vistoriaId = null
     fdState.lote = lote
@@ -415,8 +429,12 @@ function limparFormDoc() {
   const p = fdState.lote
   document.getElementById('nd-area-terreno').value = p?.area_gis_m2 ? Number(p.area_gis_m2).toFixed(2) : ''
   document.getElementById('nd-area-construida').value = ''
+  document.getElementById('nd-alvara-valor').value = ''
   document.getElementById('nd-bloco-area').style.display = 'none'
+  document.getElementById('nd-bloco-alvara').style.display = 'none'
+  document.getElementById('nd-multiplicadores').dataset.chave = '?'
   document.getElementById('nd-memoria-calculo').innerHTML = ''
+  fdState.multa = null
 
   renderImovelDoc()
   trocarLeiDoc()
@@ -453,6 +471,7 @@ function preencherFormDoc(d) {
   document.getElementById('nd-descricao').value = d.descricao || ''
   document.getElementById('nd-area-terreno').value = d.imovel.terreno ?? ''
   document.getElementById('nd-area-construida').value = d.imovel.construida ?? ''
+  document.getElementById('nd-alvara-valor').value = d.imovel.alvara_valor ?? ''
 
   const [dia, hora] = (d.data_fato || ' ').split(' ')
   if (dia) {
@@ -729,6 +748,10 @@ async function gravarDoc() {
   const areaC = document.getElementById('nd-area-construida').value
   if (areaT !== '') corpo.area_terreno_m2 = Number(areaT)
   if (areaC !== '') corpo.area_construida_m2 = Number(areaC)
+  // Multa por múltiplo do alvará: o valor do alvará e o multiplicador de cada artigo.
+  const alvara = document.getElementById('nd-alvara-valor').value
+  corpo.alvara_valor = alvara === '' ? null : Number(alvara)
+  corpo.multiplicadores = multiplicadoresDoDoc()
 
   // Num rascunho já gravado, o imóvel vinculado depois viaja no PATCH.
   if (fdState.id && fdState.lote?.id) corpo.lote_id = fdState.lote.id
@@ -754,6 +777,9 @@ async function gravarDoc() {
     fdState.editando = false
     aplicarEstadoDoc()
     toast(d.message)
+    // Avisos do servidor (Auto de Embargo por artigo que pede prazo, sem
+    // Notificação de Embargo vencida): não impedem gravar nem lavrar.
+    ;(d.avisos || []).forEach(a => toast(a, 'aviso'))
     carregarDocumentos()
   } catch (e) {
     console.error(e)
@@ -897,33 +923,19 @@ function renderResumoDoc() {
     </div>`
 }
 
-/** Bloco de multa do resumo — a memória de cálculo, como sai impressa. */
+/**
+ * Bloco de multa do resumo — a memória de cálculo, como sai impressa.
+ * Mostra a MESMA conta da aba de infração (fdState.multa, vinda do servidor).
+ */
 function resumoMulta(artigos) {
-  const comValor = artigos.filter(a => a.base_multa !== 'sem_multa')
-  if (!comValor.length) return ''
+  const m = fdState.multa
+  if (!m || !artigos.some(a => a.base_multa !== 'sem_multa')) return ''
 
-  const areaT = parseFloat(document.getElementById('nd-area-terreno').value) || null
-  const areaC = parseFloat(document.getElementById('nd-area-construida').value) || null
-
-  let total = 0
-  const linhas = comValor.map(a => {
-    if (a.base_multa === 'fixa') {
-      total += Number(a.multa_upf || 0)
-      return `<div class="rs-linha"><span>${esc(a.numero)}</span><b>${fmtNum(a.multa_upf || 0)} UPF (fixo)</b></div>`
-    }
-    const area = a.base_multa === 'area_terreno' ? areaT : areaC
-    if (area === null) {
-      return `<div class="rs-linha"><span>${esc(a.numero)}</span><b style="color:var(--red)">informe a área</b></div>`
-    }
-    let v = Number(a.multa_upf_m2 || 0) * area
-    let obs = ''
-    if (a.multa_min_upf !== null && v < Number(a.multa_min_upf)) { v = Number(a.multa_min_upf); obs = ' (piso)' }
-    else if (a.multa_max_upf !== null && v > Number(a.multa_max_upf)) { v = Number(a.multa_max_upf); obs = ' (teto)' }
-    total += v
-    return `<div class="rs-linha"><span>${esc(a.numero)}</span><b>${fmtNum(a.multa_upf_m2)} UPF/m² × ${fmtNum(area)} m² = ${fmtNum(v)} UPF${obs}</b></div>`
-  }).join('')
+  const linhas = m.linhas.filter(l => l.base !== 'sem_multa').map(l => `<div class="rs-linha"><span>${esc(l.numero)}</span>${
+    l.pendencia ? `<b style="color:var(--red)">falta informar ${esc(l.pendencia)}</b>` : `<b>${esc(l.memoria)}</b>`}</div>`).join('')
 
   return `<div class="rs-sec"><span class="rs-num">•</span>Penalidade</div>${linhas}
-    <div class="rs-linha rs-total"><span>Total estimado</span><b>${fmtNum(total)} UPF</b></div>
-    <p class="rs-nota">O valor definitivo é calculado na lavratura, com a UPF do exercício.</p>`
+    <div class="rs-linha rs-total"><span>Total${m.gravada ? '' : ' estimado'}</span><b>${fmtNum(m.total_upf || 0)} UPF${
+      m.total_reais ? ' · R$ ' + fmtNum(m.total_reais) : ''}</b></div>
+    ${m.gravada ? '' : '<p class="rs-nota">O valor definitivo é calculado na lavratura, com a UPF do exercício.</p>'}`
 }

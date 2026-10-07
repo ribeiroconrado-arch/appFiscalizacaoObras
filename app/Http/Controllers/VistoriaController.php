@@ -520,10 +520,15 @@ class VistoriaController extends Controller
                 'rotulo'        => $a->rotulo(),
                 'conduta'       => $a->conduta,
                 'base'          => Artigo::BASES_MULTA[$a->base_multa] ?? null,
-                'por_m2'        => $a->base_multa === 'area_construida',
+                // A multa deste artigo depende da área CONSTRUÍDA (por m² ou
+                // por faixa): é o aviso para o fiscal medir a obra em campo.
+                'por_m2'        => in_array($a->base_multa, Artigo::BASES_POR_AREA, true) && $a->multa_area !== 'terreno',
                 'lei'           => $a->legislacao?->numero,
                 'legislacao_id' => $a->legislacao_id,
                 'termos'        => $a->termos ?? [],
+                // A vistoria cita qualquer artigo; a etiqueta só avisa o
+                // fiscal de que este sustenta embargo.
+                'embargo'       => $a->rotuloEmbargo(),
                 'casou'         => $casou,
             ];
             if (count($achados) >= self::MAX_BUSCA_ARTIGOS) {
