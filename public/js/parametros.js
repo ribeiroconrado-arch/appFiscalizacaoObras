@@ -106,6 +106,23 @@ function parEditar(lista, id) {
   parFocarEdicao()
 }
 
+/**
+ * VISUALIZAR: clicar em qualquer item abre o mesmo cartão da edição, com os
+ * campos travados e os botões Fechar e Editar. É o que deixa conferir um
+ * parâmetro inteiro sem o risco de alterá-lo — a lista só mostra um resumo.
+ *
+ * @param {string} lista @param {number|string} id
+ */
+function parVer(lista, id) {
+  // Clicar de novo no que já está aberto não faz nada (nem fecha a edição).
+  if (parEditando(lista, id)) return
+  const anterior = parState.ed?.lista
+  parState.ed = { lista, id, ver: true }
+  if (anterior && anterior !== lista) PAR_RENDER[anterior]?.()
+  PAR_RENDER[lista]()
+  setTimeout(() => document.querySelector('#m-parametros .par-linha.editando')?.scrollIntoView({ block: 'nearest' }), 0)
+}
+
 /** Abre o cartão em branco no topo da lista. @param {string} lista */
 function parNovo(lista) {
   // A busca é limpa: o cartão novo entra no topo, e um filtro ativo poderia
@@ -118,6 +135,8 @@ function parNovo(lista) {
 function parCancelar() {
   const lista = parState.ed?.lista
   parState.ed = null
+  // Desistir de uma lei NOVA fecha a janela dela: não há lei para mostrar.
+  if (lista === 'leis' && parState.leiAberta === 'nova') parState.leiAberta = null
   if (lista) PAR_RENDER[lista]()
 }
 
@@ -157,17 +176,40 @@ function parAcoes(lista, id, extra = '') {
   </div>`
 }
 
-/** Cartão aberto: título, campos e Cancelar/Salvar. */
-function parFormLinha(titulo, corpo, aoSalvar) {
+/**
+ * Cartão aberto: título, campos e os botões.
+ *
+ * EDITANDO: Cancelar e Salvar. VISUALIZANDO (`ver`): os campos vão dentro de
+ * um <fieldset disabled> — o navegador trava todos de uma vez, inclusive os
+ * botões internos do cartão — e os botões são Fechar e Editar.
+ *
+ * @param {{lista:string, id:(number|string), semFechar?:boolean}|null} [ver]
+ *        por padrão, o item que está em visualização (parVer)
+ */
+function parFormLinha(titulo, corpo, aoSalvar, ver = parState.ed?.ver ? parState.ed : null) {
+  if (ver) {
+    return `<div class="par-linha editando vendo">
+      <div class="ed-tit">${titulo.replace(/^Editando/, 'Visualizando')}</div>
+      <fieldset class="ed-corpo" disabled>${corpo}</fieldset>
+      <div class="ed-botoes">
+        ${ver.semFechar ? '' : '<button type="button" class="btn sm" onclick="parCancelar()">Fechar</button>'}
+        <button type="button" class="btn edit-verde sm" onclick="parEditar('${ver.lista}', ${parId(ver.id)})">${ICO_EDITAR}Editar</button>
+      </div>
+    </div>`
+  }
   return `<div class="par-linha editando">
     <div class="ed-tit">${titulo}</div>
-    ${corpo}
+    <fieldset class="ed-corpo">${corpo}</fieldset>
     <div class="ed-botoes">
       <button type="button" class="btn sm" onclick="parCancelar()">Cancelar</button>
       <button type="button" class="btn primary sm" onclick="${aoSalvar}">Salvar</button>
     </div>
   </div>`
 }
+
+/** O bloco de texto de uma linha da lista: clicar nele abre a visualização. */
+const parPrincipal = (lista, id) => `<div class="principal clicavel" title="Clique para visualizar" onclick="parVer('${lista}', ${parId(id)})">`
+
 
 const parRot = (rot, html, estilo = '') => `<label class="ed-campo"${estilo ? ` style="${estilo}"` : ''}><span>${rot}</span>${html}</label>`
 const parInp = (nome, valor, extra = '') => `<input name="${nome}" value="${esc(valor ?? '')}" ${extra}>`
@@ -222,7 +264,7 @@ function renderUsuarios() {
 
     return `
       <div class="par-card">
-        <div class="par-card-ident">
+        <div class="par-card-ident clicavel" title="Clique para visualizar" onclick="verUsuario(${u.id})">
           <div class="par-av${admin ? ' adm' : ''}">${esc(inicial)}</div>
           <div class="par-card-txt">
             <div class="par-card-nome">${esc(u.name)}</div>
@@ -240,6 +282,7 @@ function renderUsuarios() {
 }
 
 function novoUsuario() {
+  travarUsuario(false)
   document.getElementById('us-titulo').textContent = 'Novo usuário'
   document.getElementById('us-id').value = ''
   document.getElementById('us-nome').value = ''
@@ -272,10 +315,35 @@ function ajustarPerfilDoCargo() {
   document.getElementById('us-externo-obs').hidden = !externo
 }
 
+/**
+ * A janela do usuário só para LEITURA: os mesmos campos, travados, e o botão
+ * Editar no lugar do Salvar. @param {number} id
+ */
+function verUsuario(id) {
+  editarUsuario(id)
+  travarUsuario(true)
+}
+
+/** Sai da visualização para a edição, na mesma janela. */
+function liberarUsuario() {
+  travarUsuario(false)
+  ajustarPerfilDoCargo()   // o perfil de cargo externo continua travado
+  document.getElementById('us-nome').focus()
+}
+
+/** @param {boolean} travar */
+function travarUsuario(travar) {
+  document.querySelectorAll('#m-usuario input, #m-usuario select').forEach(el => { el.disabled = travar })
+  document.getElementById('us-salvar').hidden = travar
+  document.getElementById('us-editar').hidden = !travar
+  document.getElementById('us-cancelar').textContent = travar ? 'Fechar' : 'Cancelar'
+}
+
 /** @param {number} id */
 function editarUsuario(id) {
   const u = parState.usuarios.find(x => x.id === id)
   if (!u) return
+  travarUsuario(false)
   document.getElementById('us-titulo').textContent = u.name
   document.getElementById('us-id').value = u.id
   document.getElementById('us-nome').value = u.name
@@ -320,9 +388,16 @@ async function recarregarLegislacao() {
   renderLeis()
 }
 
-/** A aba Legislação desenha a lista de leis OU o detalhe da lei aberta. */
+/**
+ * A aba Legislação desenha a lista de leis OU a JANELA da lei aberta.
+ *
+ * A janela ocupa o lugar da lista, dentro do mesmo modal, com "← Voltar" e
+ * três abas: Dados gerais, Textos de ciência e Artigos. Ver, editar e
+ * cadastrar uma lei acontecem nela — antes, editar abria os campos no meio da
+ * lista, e os artigos e os textos ficavam noutra tela.
+ */
 function renderLeis() {
-  const aberta = parState.leis.find(l => l.id === parState.leiAberta)
+  const aberta = parState.leiAberta === 'nova' ? {} : parState.leis.find(l => l.id === parState.leiAberta)
   document.getElementById('leg-topo-lista').style.display = aberta ? 'none' : ''
   document.getElementById('leg-topo-detalhe').style.display = aberta ? '' : 'none'
   if (aberta) { renderDetalheLei(aberta); return }
@@ -331,21 +406,28 @@ function renderLeis() {
   const leis = parState.leis.filter(l => !termo || (l.numero + ' ' + l.nome).toLowerCase().includes(termo))
   parContador('cont-leis', leis.length, parState.leis.length)
 
-  document.getElementById('lista-leis').innerHTML =
-    (parEditando('leis', 'novo') ? formLei({}) : '')
-    + (leis.map(l => parEditando('leis', l.id) ? formLei(l) : `
+  document.getElementById('lista-leis').innerHTML = leis.map(l => `
       <div class="par-linha${l.ativa ? '' : ' par-linha-inativa'}">
-        <div class="principal">
+        <div class="principal clicavel" title="Clique para visualizar" onclick="abrirLei(${l.id})">
           <b>${esc(l.numero)} · ${esc(l.nome)}</b>
           <span>${l.artigos.length} artigo(s) · defesa em ${esc(l.prazo_defesa_dias)} dia(s) úteis${l.ativa ? '' : ' · inativa'}</span>
         </div>
-        ${parAcoes('leis', l.id, `<button type="button" class="btn sm" onclick="abrirLei(${l.id})">Artigos ›</button>`)}
+        <div class="par-acoes">
+          <button type="button" class="btn sm" onclick="abrirLei(${l.id}, 'artigos')">Artigos ›</button>
+          <button type="button" class="btn edit-verde sm" onclick="editarLei(${l.id})">${ICO_EDITAR}Editar</button>
+          <button type="button" class="btn out-vermelho sm" onclick="excluirLei(${l.id})">Excluir</button>
+        </div>
       </div>`).join('')
-    || `<div class="lista-vazia">${termo ? 'Nenhuma lei encontrada.' : 'Nenhuma lei cadastrada.'}</div>`)
+    || `<div class="lista-vazia">${termo ? 'Nenhuma lei encontrada.' : 'Nenhuma lei cadastrada.'}</div>`
 }
 
-/** @param {Object} l lei ({} para nova) */
-function formLei(l) {
+/**
+ * Os dados gerais da lei, na aba dela.
+ *
+ * @param {Object} l lei ({} para nova)
+ * @param {boolean} ver  só leitura, com o botão Editar
+ */
+function formLei(l, ver = false) {
   return parFormLinha(l.id ? 'Editando lei' : 'Nova lei', `
     <div class="cad-row">
       ${parRot('Número', parInp('numero', l.numero, 'class="mono" maxlength="40"'), 'max-width:190px')}
@@ -357,7 +439,7 @@ function formLei(l) {
       ${parRot('Prazo de defesa (dias úteis)', parInp('prazo_defesa_dias', l.prazo_defesa_dias ?? 5, 'type="number" min="1" max="120"'))}
       ${parRot('Prazo de cumprimento sugerido (dias corridos)', parInp('prazo_cumprimento_dias', l.prazo_cumprimento_dias ?? 10, 'type="number" min="0" max="365"'))}
       ${parChk('ativa', l.ativa ?? true, 'Lei ativa')}
-    </div>`, 'salvarLei()')
+    </div>`, 'salvarLei()', ver ? { lista: 'leis', id: l.id, semFechar: true } : null)
 }
 
 /** O corpo inteiro da lei vai junto: o servidor grava o que receber. */
@@ -371,16 +453,20 @@ function corpoDaLei(l) {
 }
 
 async function salvarLei() {
+  const nova = parState.leiAberta === 'nova'
   const atual = parState.leis.find(l => l.id === parState.ed?.id) || {}
   const numero = parCampo('numero'), nome = parCampo('nome')
   if (!numero || !nome) { toast('Informe o número e o nome da lei', 'err'); return }
-  await parGravar('/api/legislacao', corpoDaLei({
+  const d = await parGravar('/api/legislacao', corpoDaLei({
     ...atual, numero, nome,
     ano: parCampo('ano'), ementa: parCampo('ementa'),
     prazo_defesa_dias: parCampo('prazo_defesa_dias'),
     prazo_cumprimento_dias: parCampo('prazo_cumprimento_dias'),
     ativa: parCampo('ativa'),
   }), recarregarLegislacao)
+  // Lei recém-criada: a janela continua aberta nela, agora com as abas de
+  // textos e de artigos liberadas — é o passo seguinte de quem cadastra.
+  if (d?.id && nova) abrirLei(d.id)
 }
 
 /**
@@ -406,14 +492,34 @@ function excluirLei(id) {
   })
 }
 
-/** @param {number} id */
-function abrirLei(id) {
+/**
+ * Abre a janela da lei. Sem aba, cai nos Dados gerais, em visualização.
+ *
+ * @param {number} id
+ * @param {'dados'|'textos'|'artigos'} [aba]
+ */
+function abrirLei(id, aba = 'dados') {
   parState.leiAberta = id
-  parState.subLei = 'artigos'
+  parState.subLei = aba
   parState.ed = null
   const busca = document.getElementById('busca-artigos')
   if (busca) busca.value = ''
   renderLeis()
+}
+
+/** Abre a janela da lei já com os dados gerais em edição. @param {number} id */
+function editarLei(id) {
+  abrirLei(id)
+  parEditar('leis', id)
+}
+
+/** A janela de uma lei que ainda não existe: só os dados gerais, em edição. */
+function novaLei() {
+  parState.leiAberta = 'nova'
+  parState.subLei = 'dados'
+  parState.ed = { lista: 'leis', id: 'novo' }
+  renderLeis()
+  parFocarEdicao()
 }
 
 function voltarLeis() {
@@ -422,19 +528,33 @@ function voltarLeis() {
   renderLeis()
 }
 
-/** @param {string} nome 'artigos' | 'textos' */
+/** @param {'dados'|'textos'|'artigos'} nome */
 function subLei(nome) {
+  if (parState.leiAberta === 'nova' && nome !== 'dados') {
+    toast('Salve os dados gerais da lei antes de cadastrar os textos e os artigos.', 'aviso')
+    return
+  }
   parState.subLei = nome
   parState.ed = null
   renderLeis()
 }
 
 function renderDetalheLei(l) {
-  document.getElementById('leg-detalhe-titulo').textContent = l.numero + ' · ' + l.nome
-  document.querySelectorAll('#leg-topo-detalhe .sub-abas button')
-    .forEach(b => b.classList.toggle('at', b.dataset.leg === parState.subLei))
+  const nova = !l.id
+  document.getElementById('leg-detalhe-titulo').textContent = nova ? 'Nova lei' : l.numero + ' · ' + l.nome
+  document.querySelectorAll('#leg-topo-detalhe .sub-abas button').forEach(b => {
+    b.classList.toggle('at', b.dataset.leg === parState.subLei)
+    // Lei nova: textos e artigos só depois de salvar os dados gerais.
+    b.classList.toggle('inativa', nova && b.dataset.leg !== 'dados')
+  })
   document.getElementById('leg-busca-artigos').style.display = parState.subLei === 'artigos' ? '' : 'none'
 
+  if (parState.subLei === 'dados') {
+    // Em edição só quando se pediu (Editar, ou lei nova); senão, leitura.
+    const editando = parEditando('leis', nova ? 'novo' : l.id) && !parState.ed.ver
+    document.getElementById('lista-leis').innerHTML = formLei(l, !editando)
+    return
+  }
   if (parState.subLei === 'textos') { renderTextosDaLei(l); return }
 
   const termo = parBusca('busca-artigos')
@@ -444,7 +564,7 @@ function renderDetalheLei(l) {
     (parEditando('artigos', 'novo') ? formArtigo({}) : '')
     + (artigos.map(a => parEditando('artigos', a.id) ? formArtigo(a) : `
       <div class="par-linha${a.ativo ? '' : ' par-linha-inativa'}">
-        <div class="principal">
+        ${parPrincipal('artigos', a.id)}
           <b>${esc(a.apelido || a.numero)}</b>
           <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'} · ${a.termos?.length
             ? 'busca: ' + a.termos.map(t => esc(t)).join(', ')
@@ -648,7 +768,7 @@ function renderUpfs() {
     (parEditando('upf', 'novo') ? formUpf({}) : '')
     + (lista.map(u => parEditando('upf', u.id) ? formUpf(u) : `
       <div class="par-linha">
-        <div class="principal">
+        ${parPrincipal('upf', u.id)}
           <b>${u.exercicio} · ${fmtNum(u.valor)}</b>
           <span>Vigente desde ${formatarDataBR(u.vigencia_inicio)}${u.norma ? ' · ' + esc(u.norma) : ''}</span>
         </div>
@@ -736,7 +856,7 @@ function renderFeriados() {
     (parEditando('feriados', 'novo') ? formFeriado({}) : '')
     + (doAno.map(f => parEditando('feriados', f.id) ? formFeriado(f) : `
       <div class="par-linha">
-        <div class="principal">
+        ${parPrincipal('feriados', f.id)}
           <b>${formatarDataBR(f.data)} — ${esc(f.nome)}</b>
           <span>${esc(f.tipo)}${f.recorrente ? ' · repete todo ano' : ''}</span>
         </div>
@@ -915,7 +1035,7 @@ function renderBairros() {
     (parEditando('bairros', 'novo') ? formBairro({}) : '')
     + (lista.map(b => parEditando('bairros', b.id) ? formBairro(b) : `
       <div class="par-linha">
-        <div class="principal">
+        ${parPrincipal('bairros', b.id)}
           <b>${esc(b.codigo)} · ${esc(b.nome_cadastro || b.nome_gis || '(sem nome)')}</b>
           <span>${b.nome_gis
             ? 'No desenho: ' + esc(b.nome_gis) + (b.apelido ? ' · no mapa: ' + esc(b.apelido) : '')

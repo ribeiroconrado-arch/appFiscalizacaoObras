@@ -292,6 +292,19 @@
 .cad-row .lembrar{flex:0 0 auto;display:flex;align-items:center;gap:6px;white-space:nowrap;margin:0;padding-bottom:9px}
 .cad-row .lembrar input{flex:none;min-width:0;width:auto;padding:0}
 .ed-botoes{display:flex;gap:8px;justify-content:flex-end}
+/* O corpo do cartão vai num <fieldset>: na VISUALIZAÇÃO ele vem "disabled" e
+   o navegador trava todos os campos de uma vez. Sem moldura nem recuo — é só
+   o agrupador; o espaçamento é o mesmo do cartão. */
+.ed-corpo{border:0;margin:0;padding:0;min-width:0;display:flex;flex-direction:column;gap:8px}
+/* Visualizando: campo travado continua LEGÍVEL (o cinza apagado do navegador
+   faria parecer vazio), sobre o fundo de leitura. */
+.par-linha.vendo{border-color:var(--bord);box-shadow:none}
+.par-linha.vendo .ed-tit{color:var(--tx3)}
+.par-linha.vendo :is(input,select,textarea):disabled{color:var(--tx);-webkit-text-fill-color:var(--tx);opacity:1;
+  background:var(--blt);cursor:default}
+.par-card-ident.clicavel{cursor:pointer}
+/* Aba que ainda não pode ser aberta (lei nova: textos e artigos). */
+.sub-abas button.inativa{opacity:.45;cursor:not-allowed}
 .par-busca input[type=search]{background:#fff}
 .texto-longo{white-space:pre-wrap;display:block}
 .par-linha .principal b.texto-longo,.orgao-grade b.texto-longo{font-weight:600}

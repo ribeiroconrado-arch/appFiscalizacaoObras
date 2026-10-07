@@ -1005,7 +1005,7 @@
       <div class="sec-simples">Leis <span class="cont" id="cont-leis">0</span></div>
       <div class="par-busca">
         <input type="search" id="lei-busca" placeholder="Procurar lei por número ou nome" oninput="renderLeis()">
-        <button class="btn out-verde sm" onclick="parNovo('leis')">+ Nova lei</button>
+        <button class="btn out-verde sm" onclick="novaLei()">+ Nova lei</button>
       </div>
     </div>
     <div class="par-fixo-topo" id="leg-topo-detalhe" style="display:none">
@@ -1013,9 +1013,12 @@
         <button class="btn sm" onclick="voltarLeis()">← Voltar</button>
         <div class="titulo" id="leg-detalhe-titulo">—</div>
       </div>
+      {{-- A JANELA DA LEI: dados gerais, textos de ciência e artigos, cada um
+           na sua aba. Ver, editar e cadastrar uma lei acontecem aqui. --}}
       <div class="sub-abas">
-        <button class="at" data-leg="artigos" onclick="subLei('artigos')">Artigos</button>
+        <button class="at" data-leg="dados" onclick="subLei('dados')">Dados gerais</button>
         <button data-leg="textos" onclick="subLei('textos')">Textos de ciência</button>
+        <button data-leg="artigos" onclick="subLei('artigos')">Artigos</button>
       </div>
       <div class="par-busca" id="leg-busca-artigos">
         <input type="search" id="busca-artigos" placeholder="Procurar artigo por número, apelido ou termo" oninput="renderLeis()">
@@ -3220,8 +3223,10 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-usuario')">Cancelar</button>
-      <button class="btn primary" onclick="salvarUsuario()">Salvar</button>
+      <button class="btn" id="us-cancelar" onclick="fModalBtn('m-usuario')">Cancelar</button>
+      {{-- Só na visualização (clique no cartão do usuário): libera os campos. --}}
+      <button class="btn edit-verde" id="us-editar" onclick="liberarUsuario()" hidden>Editar</button>
+      <button class="btn primary" id="us-salvar" onclick="salvarUsuario()">Salvar</button>
     </div>
   </div>
 </div>
