@@ -597,10 +597,7 @@ function formArtigo(a) {
         ${parRot('Apelido (rótulo curto na lista)', parInp('apelido', a.apelido, 'maxlength="60"'), 'flex:2')}
         ${parChk('ativo', a.ativo ?? true, 'Artigo ativo')}
       </div>
-      <div class="cad-row">
-        ${parRot('Conduta (o que a norma proíbe)', parTxt('conduta', a.conduta, 3), 'min-width:260px')}
-        ${parRot('Sanção prevista', parTxt('sancao', a.sancao, 3), 'min-width:260px')}
-      </div>`)
+      <div class="cad-row">${parRot('Texto da lei', parTxt('conduta', a.conduta, 4))}</div>`)
     + grupo('Multa', `
       <div class="cad-row">
         ${parRot('Como a multa é calculada', parSel('base_multa', base, [
@@ -634,7 +631,7 @@ function formArtigo(a) {
         <small class="art-termos-dica">Iguais (3 e 3) = multiplicador fixo. Diferentes (1 e 10) = o fiscal informa o
           multiplicador no auto, dentro do intervalo. O valor do alvará é informado em reais na peça.</small>
       </div>`)
-    + grupo('Embargo', `
+    + '<div class="ed-grupos-lado">' + grupo('Embargo', `
       <div class="cad-row">
         ${parRot('Este artigo sustenta embargo?', parSel('embargo', embargo, [
           ['nao', 'Não cabe embargo'], ['cabe', 'Cabe embargo (e também notificação e auto de infração)'],
@@ -658,7 +655,7 @@ function formArtigo(a) {
         </div>
         <small class="art-termos-dica">Como o fiscal chama o problema em campo. Na vistoria, digitar
           um destes termos mostra este artigo.</small>
-      </div>`), 'salvarArtigo()')
+      </div>`) + '</div>', 'salvarArtigo()')
 }
 
 /** @param {string} t */
@@ -782,7 +779,6 @@ async function salvarArtigo() {
     numero,
     apelido: parCampo('apelido') || null,
     conduta: parCampo('conduta') || null,
-    sancao: parCampo('sancao') || null,
     base_multa: parCampo('base_multa'),
     multa_upf: parCampo('multa_upf') || null,
     multa_upf_m2: parCampo('multa_upf_m2') || null,

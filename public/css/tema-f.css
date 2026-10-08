@@ -339,6 +339,9 @@
 /* Grupos do cartão em edição: campos do mesmo assunto na mesma moldura. */
 .ed-grupo{border:1px solid var(--f-bord);border-radius:10px;padding:10px 12px 12px;
   display:flex;flex-direction:column;gap:8px;min-width:0}
+/* Dois grupos curtos lado a lado; em tela estreita, um embaixo do outro. */
+.ed-grupos-lado{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.ed-grupos-lado > .ed-grupo{flex:1 1 320px}
 .ed-grupo-tit{font-size:11px;font-weight:700;color:var(--gd);text-transform:uppercase;letter-spacing:.08em}
 .par-linha.vendo .ed-grupo-tit{color:var(--tx3)}
 #abas-geral{margin-bottom:14px}
