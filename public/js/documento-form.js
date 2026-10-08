@@ -33,6 +33,8 @@ const fdState = {
   /** @type {Object<number, number|null>} multiplicador do alvará, por artigo */ multiplicadores: {},
   /** @type {Object|null} a última conta da multa (de /api/multas/simular) */ multa: null,
   /** @type {Object|null} a conta que a peça reaberta guardou */ multaGravada: null,
+  /** @type {boolean} a área de lavratura (assinaturas) está aberta no resumo */ lavrando: false,
+  /** @type {Object|null} as assinaturas da peça lavrada */ assinaturas: null,
   /** @type {number|null} a peça de que esta nasceu */ origemId: null,
   /** @type {string|null} */ origemRotulo: null,
   /** @type {number|null} o auto de que este é reincidência */ reincidenciaId: null,
@@ -151,6 +153,9 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   const o = await carregarOpcoes()
 
   fdState.editando = false
+  fdState.lavrando = false
+  fdState.assinaturas = documento?.assinaturas ?? null
+  if (typeof fecharAreaLavratura === 'function') fecharAreaLavratura()
   fdState.aba = 'autuado'
   // A cópia do cadastro municipal guardada na lavratura (nula em rascunho).
   fdState.cadastro = documento?.cadastro ?? null
@@ -610,6 +615,8 @@ function renderAnexosDoc() {
 function irAbaDoc(nome) {
   if (!ABAS_DOC.includes(nome)) return
   if (typeof fecharBalaoDataHora === 'function') fecharBalaoDataHora()   // o calendário não segue para outra aba
+  // A lavratura acontece no Resumo: sair dele é desistir dela.
+  if (fdState.lavrando && nome !== 'resumo') cancelarLavraturaDoc()
   fdState.aba = nome
 
   document.querySelectorAll('#fd-tabs .doc-tab')
@@ -707,13 +714,17 @@ function renderRodapeDoc() {
   const rascunho = fdState.estado === 'rascunho'
   const lavrado = fdState.estado === 'lavrado'
 
-  mostrar('fd-gravar', novo || fdState.editando)
-  mostrar('fd-sair-edicao', fdState.editando)
-  mostrar('fd-editar', rascunho && !fdState.editando)
-  mostrar('fd-lavrar', rascunho && !fdState.editando)
+  // LAVRANDO: só os dois botões do ato — o resto sai de cena até decidir.
+  const lavrando = fdState.lavrando
+  mostrar('fd-gravar', (novo || fdState.editando) && !lavrando)
+  mostrar('fd-sair-edicao', fdState.editando && !lavrando)
+  mostrar('fd-editar', rascunho && !fdState.editando && !lavrando)
+  mostrar('fd-lavrar', rascunho && !fdState.editando && !lavrando)
+  mostrar('fd-lavrar-cancelar', lavrando)
+  mostrar('fd-lavrar-ok', lavrando)
   // Opções depende de haver documento gravado: antes disso não há nada para
   // imprimir, anular ou excluir.
-  mostrar('fd-opcoes-wrap', (rascunho || lavrado) && !fdState.editando)
+  mostrar('fd-opcoes-wrap', (rascunho || lavrado) && !fdState.editando && !lavrando)
 }
 
 // ── AÇÕES ────────────────────────────────────────────────────
@@ -828,26 +839,10 @@ function lavrarDocumento() {
     return
   }
 
-  confirmarAcao({
-    titulo: 'Lavrar documento',
-    mensagem: 'A lavratura atribui número definitivo, congela o prazo e fecha o documento '
-            + 'para edição. Esta ação não pode ser desfeita — só anulada.',
-    textoBtn: 'Lavrar',
-    onConfirm: async () => {
-      const r = await fetch(`/api/documentos/${fdState.id}/lavrar`, { method: 'POST', headers: cabecalhoDoc() })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
-      toast(d.message)
-      fModalBtn('m-doc')
-      // Quem lavrou de dentro da ficha volta para o imóvel, com o documento
-      // já na linha do tempo. Quem lavrou da lista continua na lista, que é
-      // de onde veio.
-      if (! voltarAFicha()) {
-        irPara('documentos')
-        carregarDocumentos()
-      }
-    },
-  })
+  // As assinaturas são colhidas no próprio Resumo (documento-lavratura.js):
+  // o fiscal confere a peça, o autuado assina — ou se registra a recusa — e
+  // só então a lavratura é confirmada.
+  abrirAreaLavratura()
 }
 
 /**
@@ -938,10 +933,7 @@ function renderResumoDoc() {
         ? sec('Prazo de defesa') + `<div class="rs-linha"><span>Prazo</span><b>${lei ? esc(String(lei.prazo_defesa_dias)) + ' dias úteis da lavratura' : 'definido pela lei'}</b></div>`
         : ''}
 
-    <div class="rs-assinaturas">
-      <div><div class="rs-assina-linha"></div>Fiscal</div>
-      <div><div class="rs-assina-linha"></div>Autuado / Preposto</div>
-    </div>`
+    ${typeof resumoAssinaturasDoc === 'function' ? resumoAssinaturasDoc() : ''}`
 }
 
 /**

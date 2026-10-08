@@ -74,7 +74,14 @@ class LavraturaService
         return ['numero' => $numero, 'exercicio' => $exercicio];
     }
 
-    public function lavrar(Documento $doc): Documento
+    /**
+     * @param  array{assinatura_autuado?: ?string, recusa?: bool, testemunha_nome?: ?string, assinatura_testemunha?: ?string}  $ato
+     *         o que foi colhido NA HORA da lavratura: a assinatura do autuado,
+     *         ou, se ele se recusou, a testemunha (nome e assinatura). Quem
+     *         exige que venha é a tela de lavratura (DocumentoController::
+     *         lavrar); aqui só se guarda.
+     */
+    public function lavrar(Documento $doc, array $ato = []): Documento
     {
         if ($doc->status !== 'rascunho') {
             throw new RuntimeException('Só rascunho pode ser lavrado.');
@@ -109,7 +116,20 @@ class LavraturaService
             throw new RuntimeException('A multa não fecha: falta informar ' . implode('; ', $faltam) . '.');
         }
 
-        return DB::transaction(function () use ($doc) {
+        return DB::transaction(function () use ($doc, $ato) {
+            // AS ASSINATURAS DO ATO. Com recusa, a do autuado não existe: quem
+            // assina é a testemunha, e o registro da recusa vai para o Termo
+            // de Recusa da peça impressa.
+            if ($ato) {
+                $recusa = (bool) ($ato['recusa'] ?? false);
+                $doc->assinatura_autuado    = $recusa ? null : ($ato['assinatura_autuado'] ?? null);
+                $doc->testemunha_nome       = $recusa ? ($ato['testemunha_nome'] ?? null) : null;
+                $doc->assinatura_testemunha = $recusa ? ($ato['assinatura_testemunha'] ?? null) : null;
+                $doc->recusa_assinatura     = $recusa
+                    ? mb_substr('Recusou-se a assinar. Testemunha: ' . ($ato['testemunha_nome'] ?? '—') . '.', 0, 160)
+                    : null;
+            }
+
             // A multa é refeita AGORA, com a UPF e as áreas do dia da lavratura:
             // o rascunho pode ter ficado dias aberto.
             if ($doc->tipo === 'auto_infracao') {

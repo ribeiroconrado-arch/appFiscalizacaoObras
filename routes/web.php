@@ -258,6 +258,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Os autos de que um auto novo pode ser reincidência (antes da rota curinga).
         Route::get('/documentos/autos-anteriores', [DocumentoController::class, 'autosAnteriores']);
         Route::get('/documentos/origens', [DocumentoController::class, 'origens']);
+        Route::get('/documentos/testemunhas', [DocumentoController::class, 'testemunhas']);
         // Consulta de CNPJ para o autuado — feita pelo servidor, com limite próprio.
         Route::get('/cnpj/{cnpj}', [\App\Http\Controllers\CnpjController::class, 'mostrar'])->middleware('throttle:pesado');
         Route::get('/vistorias/{vistoria}/sugestao', [DocumentoController::class, 'sugestao']);

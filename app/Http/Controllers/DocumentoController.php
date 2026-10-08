@@ -632,7 +632,31 @@ class DocumentoController extends Controller
         return null;
     }
 
-    public function lavrar(Request $request, Documento $documento): JsonResponse
+    /**
+     * GET /api/documentos/testemunhas — quem pode testemunhar uma recusa de
+     * assinatura: os usuários ativos, menos o próprio fiscal (ele não é
+     * testemunha do próprio ato). Fora da lista, o nome é digitado.
+     */
+    public function testemunhas(Request $request): JsonResponse
+    {
+        return response()->json([
+            'usuarios' => \App\Models\User::where('ativo', true)->where('id', '!=', $request->user()->id)
+                ->orderBy('name')->get(['id', 'name', 'matricula'])
+                ->map(fn ($u) => ['nome' => $u->name, 'matricula' => $u->matricula]),
+            // A rubrica do próprio fiscal, para ele ver com o que vai assinar.
+            'minha_assinatura' => $request->user()->assinatura,
+        ]);
+    }
+
+    /**
+     * POST /api/documentos/{documento}/lavrar — atribui número e fecha.
+     *
+     * A lavratura é o ATO: além de numerar, colhe as assinaturas. A do fiscal
+     * vem do cadastro dele; a do autuado é desenhada na tela — ou, se ele se
+     * recusar, registra-se a recusa com uma testemunha (nome e assinatura),
+     * que é o que sustenta o Termo de Recusa.
+     */
+    public function lavrar(Request $request, Documento $documento, \App\Services\Assinatura $assinatura): JsonResponse
     {
         if (! $request->user()->podeLavrarDocumento()) {
             return response()->json(['message' => 'Só agente de fiscalização pode lavrar.'], 403);
@@ -641,9 +665,35 @@ class DocumentoController extends Controller
             return response()->json(['message' => 'Só o autor do rascunho pode lavrá-lo.'], 403);
         }
 
+        $png = ['string', 'max:1000000', 'regex:/^data:image\/png;base64,[A-Za-z0-9+\/=]+$/'];
+        $d = $request->validate([
+            'recusa'                => ['nullable', 'boolean'],
+            'assinatura_autuado'    => ['nullable', 'required_unless:recusa,1,true', ...$png],
+            'testemunha_nome'       => ['nullable', 'required_if:recusa,1,true', 'string', 'max:120'],
+            'assinatura_testemunha' => ['nullable', 'required_if:recusa,1,true', ...$png],
+        ], [
+            'assinatura_autuado.required_unless' => 'Colha a assinatura do autuado, ou registre a recusa.',
+            'testemunha_nome.required_if'        => 'Informe a testemunha da recusa.',
+            'assinatura_testemunha.required_if'  => 'Colha a assinatura da testemunha.',
+            'assinatura_autuado.regex'           => 'Formato de assinatura inválido.',
+            'assinatura_testemunha.regex'        => 'Formato de assinatura inválido.',
+        ]);
+        // A lavratura é indelegável: sai com a rubrica de quem lavra.
+        if (! $request->user()->assinatura) {
+            return response()->json(['message' => 'Cadastre a sua assinatura em Meu perfil › Assinatura antes de lavrar.'], 422);
+        }
+
+        $recusa = (bool) ($d['recusa'] ?? false);
         try {
             $documento->loadMissing('legislacao');
-            $doc = $this->lavratura->lavrar($documento);
+            // Aparadas até o traço, como a do fiscal: o canvas tem a largura
+            // da tela e a pessoa assina num pedaço dele.
+            $doc = $this->lavratura->lavrar($documento, [
+                'recusa'                => $recusa,
+                'assinatura_autuado'    => $recusa ? null : $assinatura->aparar($d['assinatura_autuado']),
+                'testemunha_nome'       => $recusa ? trim($d['testemunha_nome']) : null,
+                'assinatura_testemunha' => $recusa ? $assinatura->aparar($d['assinatura_testemunha']) : null,
+            ]);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -774,6 +824,15 @@ class DocumentoController extends Controller
             'defesa_ate' => $documento->defesa_ate?->format('d/m/Y'),
 
             'anexos' => $documento->vistoria?->evidencias->count() ?? 0,
+
+            // As assinaturas colhidas na lavratura, para o resumo da peça.
+            'assinaturas' => $documento->status === 'rascunho' ? null : [
+                'agente'          => $documento->assinatura_agente,
+                'autuado'         => $documento->recusa_assinatura ? null : $documento->assinatura_autuado,
+                'recusa'          => (bool) $documento->recusa_assinatura,
+                'testemunha_nome' => $documento->testemunha_nome,
+                'testemunha'      => $documento->assinatura_testemunha,
+            ],
 
             'anulacao' => $documento->anulado_em ? [
                 'em'     => $documento->anulado_em->format('d/m/Y H:i'),

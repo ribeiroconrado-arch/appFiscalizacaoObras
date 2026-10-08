@@ -2324,6 +2324,55 @@
     {{-- RESUMO --}}
     <div class="doc-painel" id="fdp-resumo">
       <div class="doc-resumo" id="nd-resumo"></div>
+
+      {{-- LAVRATURA, na própria tela do resumo (aparece ao tocar em Lavrar):
+           o fiscal confere a peça, colhe a assinatura do autuado — ou
+           registra a recusa, com testemunha — e confirma. Estado em
+           documento-lavratura.js. --}}
+      <div class="lav" id="nd-lavratura" hidden>
+        <div class="sec-title">Lavratura</div>
+        <div class="g2">
+          <div class="field">
+            <label>Data e hora da lavratura</label>
+            <div class="lav-quando" id="lav-quando">—</div>
+          </div>
+          <div class="field">
+            <label>Assinatura do fiscal</label>
+            <div class="lav-fiscal" id="lav-fiscal"></div>
+          </div>
+        </div>
+
+        <div class="lav-caixa" id="lav-autuado-caixa">
+          <div class="lav-cap">Assinatura do autuado / preposto</div>
+          <canvas class="lav-canvas" id="lav-autuado"></canvas>
+          <button type="button" class="btn sm" onclick="limparPadLavratura('autuado')">Limpar</button>
+        </div>
+
+        <label class="lav-recusa">
+          <input type="checkbox" id="lav-recusa" onchange="alternarRecusaLavratura()">
+          Declaro que o autuado se recusou a assinar
+        </label>
+
+        <div id="lav-recusa-bloco" hidden>
+          <div class="g2">
+            <div class="field">
+              <label for="lav-testemunha">Testemunha</label>
+              <select id="lav-testemunha" onchange="alternarRecusaLavratura()">
+                <option value="">Selecione…</option>
+              </select>
+            </div>
+            <div class="field" id="lav-testemunha-outro-campo" hidden>
+              <label for="lav-testemunha-outro">Nome da testemunha</label>
+              <input type="text" id="lav-testemunha-outro" maxlength="120" placeholder="Nome completo">
+            </div>
+          </div>
+          <div class="lav-caixa">
+            <div class="lav-cap">Assinatura da testemunha</div>
+            <canvas class="lav-canvas" id="lav-testemunha-canvas"></canvas>
+            <button type="button" class="btn sm" onclick="limparPadLavratura('testemunha')">Limpar</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2359,6 +2408,8 @@
       </svg>Editar</button>
     <button class="btn primary" id="fd-gravar" onclick="gravarDoc()" hidden>Gravar</button>
     <button class="btn atencao" id="fd-lavrar" onclick="lavrarDocumento()" hidden>Lavrar</button>
+    <button class="btn" id="fd-lavrar-cancelar" onclick="cancelarLavraturaDoc()" hidden>Cancelar</button>
+    <button class="btn atencao" id="fd-lavrar-ok" onclick="confirmarLavraturaDoc()" hidden>Confirmar lavratura</button>
   </div>
 </div>
 </div>
@@ -3537,6 +3588,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/busca.js')"></script>
 <script src="@assetv('js/documentos.js')"></script>
 <script src="@assetv('js/documento-form.js')"></script>
+<script src="@assetv('js/documento-lavratura.js')"></script>
 <script src="@assetv('js/protocolos.js')"></script>
 <script src="@assetv('js/os.js')"></script>
 {{-- Depois dos dois: a fila lê as duas fontes e abre a ficha de cada uma. --}}

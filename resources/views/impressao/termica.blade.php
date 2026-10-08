@@ -241,7 +241,18 @@
 @if ($doc->recusa_assinatura)
   <div class="faixa">Termo de Recusa</div>
   <div class="par">{{ $termoRecusa }}</div>
-  <div class="par"><b>Registro do agente:</b> {{ $doc->recusa_assinatura }}</div>
+  @if ($doc->testemunha_nome)
+    <div class="ass">
+      @if ($doc->assinatura_testemunha)
+        <img src="{{ $doc->assinatura_testemunha }}" alt="">
+      @else
+        <div class="vazio"></div>
+      @endif
+      <div class="linha">{{ $doc->testemunha_nome }} — Testemunha</div>
+    </div>
+  @else
+    <div class="par"><b>Registro do agente:</b> {{ $doc->recusa_assinatura }}</div>
+  @endif
 @endif
 
 @if (count($anexos))

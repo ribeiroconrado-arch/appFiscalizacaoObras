@@ -269,7 +269,24 @@
         <div class="sec">
           <div class="sec-tit">{{ $sec(5, 'Termo de Recusa') }}</div>
           <p>{{ $termoRecusa }}</p>
-          <p><strong>Registro do agente:</strong> {{ $doc->recusa_assinatura }}</p>
+          @if ($doc->testemunha_nome)
+            {{-- Com recusa, quem assina é a testemunha. --}}
+            <table class="assina">
+              <tr>
+                <td>
+                  @if ($doc->assinatura_testemunha)
+                    <img class="assina-img" src="{{ $doc->assinatura_testemunha }}" alt="">
+                  @else
+                    <div class="assina-vazio"></div>
+                  @endif
+                  <div class="assina-linha">{{ $doc->testemunha_nome }} — Testemunha</div>
+                </td>
+                <td></td>
+              </tr>
+            </table>
+          @else
+            <p><strong>Registro do agente:</strong> {{ $doc->recusa_assinatura }}</p>
+          @endif
         </div>
       @endif
 

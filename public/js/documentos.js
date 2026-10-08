@@ -1351,21 +1351,15 @@ function imprimirDoc(comAnexos) {
 
 // ── AÇÕES DA FICHA ───────────────────────────────────────────
 
-function lavrarDaFicha() {
-  confirmarAcao({
-    titulo: 'Lavrar documento',
-    mensagem: 'A lavratura atribui número definitivo, congela o prazo e fecha o documento '
-            + 'para edição. Esta ação não pode ser desfeita — só anulada.',
-    textoBtn: 'Lavrar',
-    onConfirm: async () => {
-      const r = await fetch(`/api/documentos/${dFicha.doc.id}/lavrar`, { method: 'POST', headers: cabecalhoDoc() })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
-      toast(d.message)
-      fModalBtn('m-doc-ficha')
-      carregarDocumentos()
-    },
-  })
+/**
+ * Lavrar pela ficha leva à própria peça: a lavratura colhe assinaturas, e
+ * isso se faz olhando o resumo do documento, não num aviso de confirmação.
+ */
+async function lavrarDaFicha() {
+  const doc = dFicha.doc
+  fModalBtn('m-doc-ficha')
+  await abrirFormDoc({ documento: doc })
+  lavrarDocumento()
 }
 
 function abrirAnulacaoDoc() {
