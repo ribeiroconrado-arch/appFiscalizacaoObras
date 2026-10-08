@@ -588,70 +588,77 @@ function formArtigo(a) {
   const base = a.base_multa || 'fixa'
   const porArea = base === 'por_m2' || base === 'faixas'
   const embargo = a.embargo || 'nao'
-  return parFormLinha(a.id ? 'Editando artigo' : 'Novo artigo', `
-    <div class="cad-row">
-      ${parRot('Número', parInp('numero', a.numero, 'class="mono" maxlength="30" placeholder="Art. 42, par. 1, II"'), 'max-width:220px')}
-      ${parRot('Apelido (rótulo curto na lista)', parInp('apelido', a.apelido, 'maxlength="60"'), 'flex:2')}
-    </div>
-    <div class="cad-row">${parRot('Conduta (o que a norma proíbe)', parTxt('conduta', a.conduta))}</div>
-    <div class="cad-row">${parRot('Sanção prevista', parTxt('sancao', a.sancao))}</div>
-    <div class="cad-row">
-      ${parRot('Como a multa é calculada', parSel('base_multa', base, [
-        ['fixa', 'Valor fixo'], ['por_m2', 'Por m²'], ['faixas', 'Por faixa de área'],
-        ['multiplo_alvara', 'Múltiplo do valor do alvará'], ['sem_multa', 'Sem multa (só notificação/embargo)'],
-      ], 'onchange="trocarBaseMulta(this)"'))}
-      <span class="art-bloco-qual-area" style="display:${porArea ? 'contents' : 'none'}">
-        ${parRot('Sobre qual área', parSel('multa_area', a.multa_area || 'construida', [
-          ['construida', 'Área construída (obra)'], ['terreno', 'Área do terreno'],
-          ['construida_ou_terreno', 'Obra, se houver; senão, o terreno'],
-        ]))}</span>
-      <span class="art-bloco-fixa" style="display:${base === 'fixa' ? 'contents' : 'none'}">
-        ${parRot('Multa (UPF)', parInp('multa_upf', a.multa_upf, 'type="number" min="0" step="0.01"'))}</span>
-      <span class="art-bloco-alvara" style="display:${base === 'multiplo_alvara' ? 'contents' : 'none'}">
-        ${parRot('De (× o alvará)', parInp('multa_mult_min', a.multa_mult_min ?? 1, 'type="number" min="0.01" step="0.01"'), 'max-width:150px')}
-        ${parRot('Até (× o alvará)', parInp('multa_mult_max', a.multa_mult_max ?? 1, 'type="number" min="0.01" step="0.01"'), 'max-width:150px')}</span>
-    </div>
-    <div class="cad-row art-bloco-m2" style="display:${base === 'por_m2' ? '' : 'none'}">
-      ${parRot('UPF por m²', parInp('multa_upf_m2', a.multa_upf_m2, 'type="number" min="0" step="0.0001"'))}
-      ${parRot('Piso (UPF)', parInp('multa_min_upf', a.multa_min_upf, 'type="number" min="0" step="0.01"'))}
-      ${parRot('Teto (UPF)', parInp('multa_max_upf', a.multa_max_upf, 'type="number" min="0" step="0.01"'))}
-    </div>
-    <div class="ed-campo art-bloco-faixas" style="display:${base === 'faixas' ? '' : 'none'}"><span>Faixas de área — valor da multa em cada uma</span>
-      <div class="art-faixas">
-        ${faixasDoArtigo(a).map(linhaDeFaixa).join('')}
-        <button type="button" class="btn sec sm art-faixa-mais" onclick="adicionarFaixa(this)">+ faixa</button>
+  // EM GRUPOS: o que é do mesmo assunto fica na mesma moldura, e o que cabe
+  // lado a lado vai lado a lado — o cartão tinha virado uma coluna comprida.
+  const grupo = (titulo, corpo) => `<div class="ed-grupo"><div class="ed-grupo-tit">${titulo}</div>${corpo}</div>`
+  return parFormLinha(a.id ? 'Editando artigo' : 'Novo artigo', grupo('Identificação', `
+      <div class="cad-row">
+        ${parRot('Número', parInp('numero', a.numero, 'class="mono" maxlength="30" placeholder="Art. 42, par. 1, II"'), 'max-width:220px')}
+        ${parRot('Apelido (rótulo curto na lista)', parInp('apelido', a.apelido, 'maxlength="60"'), 'flex:2')}
+        ${parChk('ativo', a.ativo ?? true, 'Artigo ativo')}
       </div>
-      <small class="art-termos-dica">O limite inclui o próprio número: "até 60" vale para 60 m². A última faixa
-        fica aberta e cobre tudo acima do último limite.</small>
-    </div>
-    <div class="art-bloco-alvara-dica ed-dica-multa" style="display:${base === 'multiplo_alvara' ? '' : 'none'}">
-      <small class="art-termos-dica">Iguais (3 e 3) = multiplicador fixo. Diferentes (1 e 10) = o fiscal informa o
-        multiplicador no auto, dentro do intervalo. O valor do alvará é informado em reais na peça.</small>
-    </div>
-    <div class="cad-row">
-      ${parRot('Embargo', parSel('embargo', embargo, [
-        ['nao', 'Não cabe embargo'], ['cabe', 'Cabe embargo (e também notificação e auto de infração)'],
-        ['exclusivo', 'Exclusivo de embargo (só peças de embargo)'],
-      ], 'onchange="trocarEmbargo(this)"'), 'flex:2')}
-      <span class="art-bloco-embargo" style="display:${embargo === 'nao' ? 'none' : 'contents'}">
-        ${parRot('Quando embarga', parSel('embargo_modo', a.embargo_modo || 'apos_prazo', [
-          ['imediato', 'Imediato'], ['apos_prazo', 'Após prazo'],
-        ], 'onchange="trocarEmbargo(this)"'))}
-        <span class="art-bloco-prazo" style="display:${(a.embargo_modo || 'apos_prazo') === 'apos_prazo' ? 'contents' : 'none'}">
-          ${parRot('Prazo (dias)', parInp('embargo_prazo_dias', a.embargo_prazo_dias ?? 5, 'type="number" min="1" max="365"'), 'max-width:120px')}</span>
-      </span>
-    </div>
-    <div class="ed-campo"><span>Termos de busca</span>
-      <div class="art-termos" onclick="this.querySelector('input')?.focus()">
-        ${(a.termos || []).map(etiquetaDeTermo).join('')}
-        <input type="text" class="art-termo-novo" maxlength="60" autocomplete="off"
-               placeholder="escavação, sem alvará… (Enter adiciona)"
-               onkeydown="teclaNoTermo(event)" onblur="adicionarTermo(this)">
+      <div class="cad-row">
+        ${parRot('Conduta (o que a norma proíbe)', parTxt('conduta', a.conduta, 3), 'min-width:260px')}
+        ${parRot('Sanção prevista', parTxt('sancao', a.sancao, 3), 'min-width:260px')}
+      </div>`)
+    + grupo('Multa', `
+      <div class="cad-row">
+        ${parRot('Como a multa é calculada', parSel('base_multa', base, [
+          ['fixa', 'Valor fixo'], ['por_m2', 'Por m²'], ['faixas', 'Por faixa de área'],
+          ['multiplo_alvara', 'Múltiplo do valor do alvará'], ['sem_multa', 'Sem multa (só notificação/embargo)'],
+        ], 'onchange="trocarBaseMulta(this)"'), 'flex:2')}
+        <span class="art-bloco-qual-area" style="display:${porArea ? 'contents' : 'none'}">
+          ${parRot('Sobre qual área', parSel('multa_area', a.multa_area || 'construida', [
+            ['construida', 'Área construída (obra)'], ['terreno', 'Área do terreno'],
+            ['construida_ou_terreno', 'Obra, se houver; senão, o terreno'],
+          ]), 'flex:2')}</span>
+        <span class="art-bloco-fixa" style="display:${base === 'fixa' ? 'contents' : 'none'}">
+          ${parRot('Multa (UPF)', parInp('multa_upf', a.multa_upf, 'type="number" min="0" step="0.01"'))}</span>
+        <span class="art-bloco-alvara" style="display:${base === 'multiplo_alvara' ? 'contents' : 'none'}">
+          ${parRot('De (× o alvará)', parInp('multa_mult_min', a.multa_mult_min ?? 1, 'type="number" min="0.01" step="0.01"'))}
+          ${parRot('Até (× o alvará)', parInp('multa_mult_max', a.multa_mult_max ?? 1, 'type="number" min="0.01" step="0.01"'))}</span>
+        <span class="art-bloco-m2" style="display:${base === 'por_m2' ? 'contents' : 'none'}">
+          ${parRot('UPF por m²', parInp('multa_upf_m2', a.multa_upf_m2, 'type="number" min="0" step="0.0001"'))}
+          ${parRot('Piso (UPF)', parInp('multa_min_upf', a.multa_min_upf, 'type="number" min="0" step="0.01"'))}
+          ${parRot('Teto (UPF)', parInp('multa_max_upf', a.multa_max_upf, 'type="number" min="0" step="0.01"'))}</span>
       </div>
-      <small class="art-termos-dica">Como o fiscal chama o problema em campo. Na vistoria, digitar
-        um destes termos mostra este artigo.</small>
-    </div>
-    <div class="cad-row">${parChk('ativo', a.ativo ?? true, 'Artigo ativo')}</div>`, 'salvarArtigo()')
+      <div class="ed-campo art-bloco-faixas" style="display:${base === 'faixas' ? '' : 'none'}"><span>Faixas de área — valor da multa em cada uma</span>
+        <div class="art-faixas">
+          ${faixasDoArtigo(a).map(linhaDeFaixa).join('')}
+          <button type="button" class="btn sec sm art-faixa-mais" onclick="adicionarFaixa(this)">+ faixa</button>
+        </div>
+        <small class="art-termos-dica">O limite inclui o próprio número: "até 60" vale para 60 m². A última faixa
+          fica aberta e cobre tudo acima do último limite.</small>
+      </div>
+      <div class="art-bloco-alvara-dica" style="display:${base === 'multiplo_alvara' ? '' : 'none'}">
+        <small class="art-termos-dica">Iguais (3 e 3) = multiplicador fixo. Diferentes (1 e 10) = o fiscal informa o
+          multiplicador no auto, dentro do intervalo. O valor do alvará é informado em reais na peça.</small>
+      </div>`)
+    + grupo('Embargo', `
+      <div class="cad-row">
+        ${parRot('Este artigo sustenta embargo?', parSel('embargo', embargo, [
+          ['nao', 'Não cabe embargo'], ['cabe', 'Cabe embargo (e também notificação e auto de infração)'],
+          ['exclusivo', 'Exclusivo de embargo (só peças de embargo)'],
+        ], 'onchange="trocarEmbargo(this)"'), 'flex:3')}
+        <span class="art-bloco-embargo" style="display:${embargo === 'nao' ? 'none' : 'contents'}">
+          ${parRot('Quando embarga', parSel('embargo_modo', a.embargo_modo || 'apos_prazo', [
+            ['imediato', 'Imediato'], ['apos_prazo', 'Após prazo'],
+          ], 'onchange="trocarEmbargo(this)"'))}
+          <span class="art-bloco-prazo" style="display:${(a.embargo_modo || 'apos_prazo') === 'apos_prazo' ? 'contents' : 'none'}">
+            ${parRot('Prazo (dias)', parInp('embargo_prazo_dias', a.embargo_prazo_dias ?? 5, 'type="number" min="1" max="365"'), 'max-width:120px')}</span>
+        </span>
+      </div>`)
+    + grupo('Busca em campo', `
+      <div class="ed-campo"><span>Termos de busca</span>
+        <div class="art-termos" onclick="this.querySelector('input')?.focus()">
+          ${(a.termos || []).map(etiquetaDeTermo).join('')}
+          <input type="text" class="art-termo-novo" maxlength="60" autocomplete="off"
+                 placeholder="escavação, sem alvará… (Enter adiciona)"
+                 onkeydown="teclaNoTermo(event)" onblur="adicionarTermo(this)">
+        </div>
+        <small class="art-termos-dica">Como o fiscal chama o problema em campo. Na vistoria, digitar
+          um destes termos mostra este artigo.</small>
+      </div>`), 'salvarArtigo()')
 }
 
 /** @param {string} t */
@@ -723,7 +730,7 @@ function trocarBaseMulta(sel) {
   mostra('.art-bloco-qual-area', v === 'por_m2' || v === 'faixas', 'contents')
   mostra('.art-bloco-alvara', v === 'multiplo_alvara', 'contents')
   mostra('.art-bloco-alvara-dica', v === 'multiplo_alvara')
-  mostra('.art-bloco-m2', v === 'por_m2')
+  mostra('.art-bloco-m2', v === 'por_m2', 'contents')
   mostra('.art-bloco-faixas', v === 'faixas')
 }
 
@@ -742,7 +749,7 @@ function linhaDeFaixa(fx) {
   return fx.ate_m2 === null
     ? `<div class="art-faixa fx-aberta"><span class="fx-rot">acima do último limite</span><span>=</span>${valor}</div>`
     : `<div class="art-faixa"><span class="fx-rot">até</span>
-        <input type="number" class="fx-ate" min="0" step="0.01" value="${esc(String(fx.ate_m2 ?? ''))}" placeholder="m²"> <span>m² =</span>${valor}
+        <input type="number" class="fx-ate" min="0" step="0.01" value="${esc(String(fx.ate_m2 ?? ''))}" placeholder="0"> <span>m² =</span>${valor}
         <button type="button" class="fx-x" title="Tirar a faixa" onclick="this.parentElement.remove()">&times;</button></div>`
 }
 
@@ -1039,19 +1046,49 @@ function excluirFeriado(id) {
 // Não é lista: são campos fixos. Por isso um bloco só, lido como ficha, com
 // UM Editar que abre todos os campos de uma vez.
 
-/** O brasão tem tela própria (envio de imagem) e não aparece como texto. */
-const geralEditaveis = () => parState.geral.filter(p => p.chave !== 'brasao_url')
+/**
+ * As sub-abas da aba Formulário: cada uma junta os campos que saem no MESMO
+ * lugar do documento. Chave nova de Parametro::CHAVES que não esteja aqui cai
+ * na primeira — nunca some da tela.
+ */
+const GERAL_ABAS = [
+  ['orgao', 'Órgão', ['orgao_nome', 'orgao_secretaria', 'orgao_cnpj', 'orgao_telefone', 'orgao_endereco']],
+  ['cabecalho', 'Cabeçalho', ['orgao_departamento', 'orgao_divisao', 'orgao_municipio', 'impressao_selo']],
+  ['rodape', 'Rodapé', ['rodape_protocolo', 'rodape_ouvidoria']],
+  ['recusa', 'Termo de recusa', ['termo_recusa']],
+]
 /** Textos longos ocupam a linha inteira e editam em caixa de várias linhas. */
-const GERAL_LONGOS = ['termo_recusa']
+const GERAL_LONGOS = ['termo_recusa', 'orgao_endereco']
+
+/** Os campos da sub-aba, na ordem dela. O brasão tem tela própria (envio de imagem). */
+function geralDaAba(aba) {
+  const editaveis = parState.geral.filter(p => p.chave !== 'brasao_url')
+  const classificadas = GERAL_ABAS.flatMap(([, , chaves]) => chaves)
+  const chaves = GERAL_ABAS.find(([id]) => id === aba)[2]
+  const daAba = chaves.map(c => editaveis.find(p => p.chave === c)).filter(Boolean)
+  return aba === 'orgao' ? [...daAba, ...editaveis.filter(p => !classificadas.includes(p.chave))] : daAba
+}
+
+/** @param {string} aba */
+function subGeral(aba) {
+  parState.subGeral = aba
+  parState.ed = null
+  renderGeral()
+}
 
 function renderGeral() {
-  const campos = geralEditaveis()
-  document.getElementById('cont-geral').textContent = campos.length
+  const aba = parState.subGeral || 'orgao'
+  const campos = geralDaAba(aba)
   const largo = p => GERAL_LONGOS.includes(p.chave) ? ' style="grid-column:1/-1"' : ''
 
+  document.getElementById('abas-geral').innerHTML = GERAL_ABAS.map(([id, rotulo]) =>
+    `<button type="button" class="${id === aba ? 'at' : ''}" onclick="subGeral('${id}')">${rotulo}</button>`).join('')
+  // O brasão é do órgão: aparece só na primeira sub-aba.
+  document.getElementById('geral-brasao').hidden = aba !== 'orgao'
+
   document.getElementById('lista-geral').innerHTML = parEditando('geral', 'todos')
-    ? parFormLinha('Editando dados do formulário', `<div class="orgao-grade">${campos.map(p => `
-        <label class="ed-campo"${largo(p)}><span>${esc(p.descricao)}</span>${GERAL_LONGOS.includes(p.chave)
+    ? parFormLinha('Editando ' + GERAL_ABAS.find(([id]) => id === aba)[1].toLowerCase(), `<div class="orgao-grade">${campos.map(p => `
+        <label class="ed-campo"${largo(p)}><span>${esc(p.descricao)}</span>${p.chave === 'termo_recusa'
           ? parTxt(p.chave, p.valor, 4) : parInp(p.chave, p.valor)}</label>`).join('')}</div>`, 'salvarGeral()')
     : `<div class="par-linha" style="align-items:flex-start">
         <div class="orgao-grade">${campos.map(p => `
@@ -1061,9 +1098,10 @@ function renderGeral() {
       </div>`
 }
 
+/** Grava só os campos da sub-aba aberta: os das outras não estão na tela. */
 async function salvarGeral() {
   const valores = {}
-  geralEditaveis().forEach(p => { valores[p.chave] = parCampo(p.chave) })
+  geralDaAba(parState.subGeral || 'orgao').forEach(p => { valores[p.chave] = parCampo(p.chave) })
   await parGravar('/api/parametros/geral', { valores }, carregarParametros)
 }
 

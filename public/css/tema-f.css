@@ -336,12 +336,20 @@
 .art-termos-dica{font-size:11.5px;color:var(--tx3);margin-top:2px}
 .art-sem-termos{color:var(--warn)}
 /* Editor de faixas de multa (Parâmetros › Legislação › Artigos). */
-.art-faixas{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
-.art-faixa{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chumbo)}
-.art-faixa .fx-rot{min-width:44px}
+/* Grupos do cartão em edição: campos do mesmo assunto na mesma moldura. */
+.ed-grupo{border:1px solid var(--f-bord);border-radius:10px;padding:10px 12px 12px;
+  display:flex;flex-direction:column;gap:8px;min-width:0}
+.ed-grupo-tit{font-size:11px;font-weight:700;color:var(--gd);text-transform:uppercase;letter-spacing:.08em}
+.par-linha.vendo .ed-grupo-tit{color:var(--tx3)}
+#abas-geral{margin-bottom:14px}
+/* As faixas em colunas: cada uma é curta, e uma por linha desperdiçava o cartão. */
+.art-faixas{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:6px 18px;align-items:center}
+.art-faixa{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chumbo);white-space:nowrap}
+.art-faixa .fx-rot{min-width:26px}
 .art-faixa.fx-aberta .fx-rot{min-width:0}
-.art-faixa input{width:110px;height:34px;padding:0 8px;border:1px solid var(--f-bord);border-radius:8px;font:inherit;background:#fff}
-.art-faixa input:focus{outline:none;border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.ed-campo .art-faixa input{width:92px;flex:none;height:34px;padding:0 8px;border:1px solid var(--f-bord);border-radius:8px;font:inherit;background:#fff}
+.ed-campo .art-faixa input:focus{outline:none;border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.art-faixa-mais{justify-self:start}
 .art-faixa .fx-x{border:none;background:none;font-size:18px;line-height:1;color:var(--tx3);cursor:pointer;padding:0 4px}
 .art-faixa .fx-x:hover{color:var(--red)}
 fieldset[disabled] .art-faixa .fx-x,fieldset[disabled] .art-faixa-mais{display:none}

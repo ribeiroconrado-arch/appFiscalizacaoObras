@@ -1088,16 +1088,6 @@
          JSON só com o que mudou. Para saber o que mudou ele precisa da
          REFERÊNCIA, que não tem dado pessoal (App\Cadastro\ReferenciaDoCadastro).
          A planilha .xlsx direta continua aceita. --}}
-    <p class="aviso-legal">
-      <b>Pelo app do cadastro (recomendado):</b> baixe a referência, gere o arquivo no
-      app <b>FiscObras Cadastro</b> com a planilha da prefeitura e anexe aqui o
-      <b>.json</b> que ele salvar. A planilha completa não sai do computador.
-      Anexe antes de qualquer outra carga: o arquivo só vale sobre a referência de que saiu.<br>
-      <b>Ou</b> envie direto a exportação do município inteiro (<b>.xlsx</b>).<br>
-      Nos dois casos o sistema grava <b>só o que mudou</b>; imóvel que não vier fica marcado
-      como fora do cadastro, nunca apagado, e o arquivo é <b>apagado do servidor</b> assim
-      que a carga termina.
-    </p>
     <div class="btn-row" style="margin-bottom:8px;justify-content:flex-start;align-items:center">
       <a class="btn out-verde sm" style="text-decoration:none" href="/api/cadastro/referencia" download>Baixar referência</a>
       <span class="imp-sub">Só inscrições e códigos de conferência — sem nome nem CPF.</span>
@@ -1118,26 +1108,31 @@
   </div>
 
   <div class="par-painel" id="par-geral">
-    <div class="par-sec"><span class="par-num">1</span>Brasão do município</div>
+    {{-- Sub-abas: cada uma junta os campos que saem no mesmo lugar do
+         documento (GERAL_ABAS, em parametros.js). --}}
+    <div class="sub-abas" id="abas-geral"></div>
+
     {{-- É o brasão que torna o sistema replicável: instalar a mesma aplicação
          em outra prefeitura passa a ser trocar dois cadastros, em vez de mexer
          no código. Por isso ele é enviado aqui, e não embutido em public/img. --}}
-    <div class="brasao-caixa">
-      <div class="brasao-previa" id="brasao-previa"></div>
-      <div class="brasao-acoes">
-        <input type="file" id="brasao-arquivo" accept="image/png,image/jpeg" hidden
-               onchange="enviarBrasao(this)">
-        <button class="btn out-verde sm" onclick="document.getElementById('brasao-arquivo').click()">
-          Enviar imagem
-        </button>
-        <button class="btn out-vermelho sm" id="brasao-remover" onclick="removerBrasao()" hidden>
-          Remover
-        </button>
+    <div id="geral-brasao">
+      <div class="par-sec">Brasão do município</div>
+      <div class="brasao-caixa">
+        <div class="brasao-previa" id="brasao-previa"></div>
+        <div class="brasao-acoes">
+          <input type="file" id="brasao-arquivo" accept="image/png,image/jpeg" hidden
+                 onchange="enviarBrasao(this)">
+          <button class="btn out-verde sm" onclick="document.getElementById('brasao-arquivo').click()">
+            Enviar imagem
+          </button>
+          <button class="btn out-vermelho sm" id="brasao-remover" onclick="removerBrasao()" hidden>
+            Remover
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Dados do formulário<span class="cont" id="cont-geral">0</span></div>
-    <div id="lista-geral"></div>
+    <div id="lista-geral" style="margin-top:14px"></div>
   </div>
   </div>
 </div>
