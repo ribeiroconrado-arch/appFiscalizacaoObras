@@ -89,8 +89,14 @@ async function carregarContornosDosBairros() {
       // do desenho ("Buritis I"), que é o que está escrito na planta e cabe no
       // mapa. O oficial ("RESIDENCIAL BURITIS PRIMAVERA") é de ficha, vistoria
       // e documento (BairrosDoDesenho::oficial).
-      camada.bindTooltip(f.properties.apelido || f.properties.nome || f.properties.nome_oficial,
-        { permanent: true, direction: 'center', className: 'rot rot-bairro', interactive: false })
+      // DE LONGE, SÓ O CÓDIGO do bairro; ao aproximar, o nome (a troca é por
+      // CSS, pela classe `bairro-so-codigo` — aplicarNivelDoMapa). Bairro sem
+      // código cadastrado mostra o nome nos dois casos.
+      const nome = esc(f.properties.apelido || f.properties.nome || f.properties.nome_oficial || '')
+      const codigo = f.properties.codigo
+      camada.bindTooltip(codigo !== null && codigo !== undefined && codigo !== ''
+        ? `<span class="rb-nome">${nome}</span><span class="rb-cod">${esc(String(codigo))}</span>` : nome,
+      { permanent: true, direction: 'center', className: 'rot rot-bairro', interactive: false })
     },
   }).addTo(mapa)
   // Os rótulos de bairro tirados dos lotes cedem lugar aos do contorno.

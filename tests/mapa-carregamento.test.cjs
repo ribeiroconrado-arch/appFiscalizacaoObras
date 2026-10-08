@@ -64,9 +64,13 @@ test('arrastar durante a carga pede a área nova (antes o pedido se perdia)',asy
 test('nível de detalhe pela área visível: município → bairros → quadras → lotes',()=>{
   const {ctx}=contexto();
   // Lado do quadrado visível, em graus, e o nível esperado.
-  for(const [lado,nivel] of [[0.3,'municipio'],[0.1,'bairros'],[0.02,'bairros'],[0.012,'quadras'],[0.008,'quadras'],[0.004,'quadras'],[0.002,'lotes']]){
+  // Bairros e quadras aparecem dois zooms mais longe do que apareciam; nos dois
+  // zooms novos o bairro mostra só o CÓDIGO (terceira coluna), depois o nome.
+  for(const [lado,nivel,soCodigo] of [[0.8,'municipio',false],[0.3,'bairros',true],[0.2,'bairros',true],[0.1,'bairros',false],[0.06,'bairros',false],
+    [0.05,'quadras',false],[0.012,'quadras',false],[0.004,'quadras',false],[0.002,'lotes',false]]){
     ctx.mapaState.obj.getBounds=()=>retangulo(-54.3,-15.56,-54.3+lado,-15.56+lado);
     assert.equal(ctx.nivelDoMapa(ctx.mapaState.obj),nivel,`lado ${lado}°`);
+    assert.equal(ctx.bairroSoComCodigo(ctx.mapaState.obj),soCodigo,`só código, lado ${lado}°`);
   }
   // Abaixo do zoom mínimo não há lote, por menor que seja a área.
   ctx.mapaState.obj.getZoom=()=>12;

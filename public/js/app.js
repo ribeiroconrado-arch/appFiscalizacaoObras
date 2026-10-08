@@ -75,11 +75,31 @@ const AREA_MAX_GRAUS2 = 0.0000075
  */
 const ZOOM_DO_LOTE = 20
 
-/** Maior área (graus²) em que as quadras aparecem — ~2,4 km². Também um zoom mais perto do que era (0,0008). */
-const AREA_MAX_QUADRAS_GRAUS2 = 0.0002
+/**
+ * Maior área (graus²) em que as quadras aparecem — ~38 km². DOIS ZOOMS mais
+ * longe do que era (0,0002): cada zoom quadruplica a área, então 16×.
+ */
+const AREA_MAX_QUADRAS_GRAUS2 = 0.0032
 
-/** Maior área (graus²) em que os bairros aparecem — ~370 km², a cidade com folga. */
-const AREA_MAX_BAIRROS_GRAUS2 = 0.03
+/**
+ * Maior área (graus²) em que os bairros aparecem. Também dois zooms mais longe
+ * do que era (0,03). Nesses dois zooms novos o bairro aparece só com o CÓDIGO.
+ */
+const AREA_MAX_BAIRROS_GRAUS2 = 0.48
+
+/**
+ * Até esta área o bairro mostra o NOME; acima dela (os dois zooms mais
+ * afastados do nível dos bairros), só o código — de longe os nomes se
+ * atropelam, e o número cabe. É o limite antigo dos bairros.
+ */
+const AREA_MAX_NOME_BAIRRO_GRAUS2 = 0.03
+
+/** O bairro está na escala do CÓDIGO (longe demais para o nome)? @param {L.Map} mapa */
+function bairroSoComCodigo(mapa) {
+  if (!mapa || nivelDoMapa(mapa) !== 'bairros') return false
+  const b = mapa.getBounds()
+  return (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth()) > AREA_MAX_NOME_BAIRRO_GRAUS2
+}
 
 /**
  * Área maior (~14 km², um bairro inteiro numa tela larga) enquanto uma

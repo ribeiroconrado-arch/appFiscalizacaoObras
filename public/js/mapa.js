@@ -66,6 +66,8 @@ function aplicarNivelDoMapa() {
   for (const n of ['municipio', 'bairros', 'quadras', 'lotes']) {
     document.body.classList.toggle('nivel-' + n, n === nivel)
   }
+  // Bairro de longe: só o código; mais perto, o nome (tema-f.css, .rb-cod/.rb-nome).
+  document.body.classList.toggle('bairro-so-codigo', typeof bairroSoComCodigo === 'function' && bairroSoComCodigo(m))
   const mostrar = (pane, sim) => { const p = m.getPane(pane); if (p) p.style.display = sim ? '' : 'none' }
   mostrar('overlayPane', nivel === 'lotes')
   mostrar('contornos', nivel !== 'municipio')
