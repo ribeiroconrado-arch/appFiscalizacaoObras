@@ -527,7 +527,7 @@ class VistoriaController extends Controller
                 'legislacao_id' => $a->legislacao_id,
                 'termos'        => $a->termos ?? [],
                 // A vistoria cita qualquer artigo; a etiqueta só avisa o
-                // fiscal de que este sustenta embargo.
+                // fiscal de que este entra em peça de embargo.
                 'embargo'       => $a->rotuloEmbargo(),
                 'casou'         => $casou,
             ];

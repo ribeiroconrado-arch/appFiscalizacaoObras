@@ -113,8 +113,25 @@ try {
     confere($umDez->calcularMulta(null, null, 1000.0, 4.0, 250.0)['valor'] === 16.0, 'multiplicador dentro do intervalo calcula');
     confere(str_contains($umDez->calcularMulta(null, null, 1000.0, 4.0, null)['pendencia'], 'UPF'), 'sem UPF vigente, não converte e pede');
 
+    echo "Entre mínimo e máximo, a critério do fiscal\n";
+    $tapume = $novo('Art. M8', ['base_multa' => 'intervalo', 'multa_min_upf' => 50, 'multa_max_upf' => 200, 'multa_dobra_reincidencia' => true]);
+    confere(str_contains($tapume->calcularMulta(null, null)['pendencia'], 'o valor da multa do Art. M8 (50,00 a 200,00 UPF)'), 'sem o valor, pede — e diz o intervalo');
+    confere($tapume->calcularMulta(null, null, null, 250.0)['valor'] === 0.0 && $tapume->calcularMulta(null, null, null, 49.0)['pendencia'] !== null, 'valor fora do intervalo é recusado');
+    $c = $tapume->calcularMulta(null, null, null, 120.0);
+    confere($c['valor'] === 120.0 && str_contains($c['memoria'], '120,00 UPF (fixado pelo fiscal, de 50,00 a 200,00 UPF)'), 'dentro do intervalo, vale o que o fiscal fixou');
+    confere($tapume->rotuloMulta() === '50 a 200 UPF', 'resumo do intervalo');
+
+    echo "Reincidência dobra\n";
+    $c = $tapume->calcularMulta(null, null, null, 120.0, null, 2);
+    confere($c['valor'] === 240.0 && $c['fator'] === 2 && str_contains($c['memoria'], '× 2 (reincidência) = 240,00 UPF'), 'artigo marcado: a multa dobra, e a memória diz');
+    confere($tapume->calcularMulta(null, null, null, 120.0, null, 4)['valor'] === 480.0, 'segunda reincidência: quatro vezes');
+    confere($fixa->calcularMulta(null, null, null, null, null, 2)['valor'] === 30.0, 'artigo NÃO marcado não dobra');
+    confere($tapume->calcularMulta(null, null, null, null, null, 2)['valor'] === 0.0, 'com pendência não há o que dobrar');
+
     echo "Parâmetros: gravar o artigo\n";
-    $base = ['legislacao_id' => $lei->id, 'numero' => 'Art. M9', 'termos' => ['teste']];
+    $base = ['legislacao_id' => $lei->id, 'numero' => 'Art. M9', 'termos' => ['teste'], 'documentos' => ['notificacao', 'auto_infracao']];
+    [$s] = $grava0 = chamar($admin, LegislacaoController::class, 'salvarArtigo', $base + ['base_multa' => 'intervalo', 'multa_min_upf' => 50]);
+    confere($s === 422, 'multa "entre mínimo e máximo" sem o máximo é recusada');
     $grava = fn (array $extra) => chamar($admin, LegislacaoController::class, 'salvarArtigo', $base + $extra);
     [$s] = $grava(['base_multa' => 'por_m2', 'multa_upf_m2' => 1]);
     confere($s === 422, '"por m²" sem dizer qual área é recusado');
@@ -172,6 +189,31 @@ try {
     [$s, $d] = $peca('notificacao', ['artigos' => [$porFx->id]]);
     $notif = app(LavraturaService::class)->lavrar(Documento::find($d['documento']['id']));
     confere($notif->status === 'lavrado' && $notif->valor_upf === null, 'Notificação lavra mesmo sem a área: ela não multa');
+
+    echo "Reincidência na peça\n";
+    // O auto lavrado acima (108 UPF) vira base de um auto de reincidência.
+    $porFx->update(['multa_faixas' => $faixas, 'multa_dobra_reincidencia' => true]);
+    [, $d] = chamar($admin, DocumentoController::class, 'autosAnteriores', [], []);
+    confere($d['autos'] === [], 'sem imóvel nem CPF não há o que listar');
+    $reqAnt = Illuminate\Http\Request::create('/x', 'GET', ['lote_id' => $lote->id]);
+    Auth::guard('web')->setUser($admin);
+    $ant = json_decode(app(DocumentoController::class)->autosAnteriores($reqAnt)->getContent(), true)['autos'];
+    confere(collect($ant)->contains(fn ($a) => $a['id'] === $lavrado->id && $a['proximo_fator'] === 2), 'o auto lavrado aparece como base, com o fator 2');
+    [$s, $d] = $peca('notificacao', ['artigos' => [$porFx->id], 'reincidencia_de_id' => $lavrado->id]);
+    confere($s === 422, 'notificação não pode ser reincidência');
+    [$s, $d] = $peca('auto_infracao', ['artigos' => [$porFx->id], 'reincidencia_de_id' => $notif->id, 'area_construida_m2' => 98.5]);
+    confere($s === 422, 'reincidência tem de apontar para um Auto de Infração');
+    [$s, $d] = $peca('auto_infracao', ['artigos' => [$porFx->id, $fixa->id], 'reincidencia_de_id' => $lavrado->id, 'area_construida_m2' => 98.5]);
+    $re = Documento::find($d['documento']['id'] ?? 0);
+    confere($s === 201 && $re->reincidencia_nivel === 1 && $re->valor_upf === 230.0, 'auto de reincidência: 100 × 2 (marcado) + 30 (não marcado) = 230 UPF');
+    $copia = $re->artigos()->where('artigo_id', $porFx->id)->first();
+    confere($copia->fator_reincidencia === 2 && str_contains($copia->memoria, '× 2 (reincidência) = 200,00 UPF'), 'a cópia guarda o fator e a memória da dobra');
+    [, $sim] = chamar($admin, DocumentoController::class, 'simularMulta', ['artigos' => [$porFx->id, $fixa->id],
+        'area_construida_m2' => 98.5, 'reincidencia_de_id' => $lavrado->id]);
+    confere($sim['total_upf'] == 230.0 && $sim['fator_reincidencia'] === 2, 'a prévia mostra a mesma conta dobrada');
+    $re2 = app(LavraturaService::class)->lavrar($re);
+    [$s, $d] = $peca('auto_infracao', ['artigos' => [$porFx->id], 'reincidencia_de_id' => $re2->id, 'area_construida_m2' => 98.5]);
+    confere($s === 201 && Documento::find($d['documento']['id'])->valor_upf === 400.0, 'reincidência da reincidência: 100 × 4');
 
     echo "Migração: a base antiga\n";
     confere(DB::table('artigos')->whereIn('base_multa', ['area_construida', 'area_terreno'])->count() === 0

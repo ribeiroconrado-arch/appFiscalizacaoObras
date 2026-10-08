@@ -25,6 +25,8 @@ class Artigo extends Model
             'multa_max_upf' => 'float',
             'termos'        => 'array',
             'multa_faixas'  => 'array',
+            'documentos'    => 'array',
+            'multa_dobra_reincidencia' => 'boolean',
             'multa_mult_min' => 'float',
             'multa_mult_max' => 'float',
         ];
@@ -39,6 +41,7 @@ class Artigo extends Model
         'fixa'            => 'Valor fixo',
         'por_m2'          => 'Por m²',
         'faixas'          => 'Por faixa de área',
+        'intervalo'       => 'Entre mínimo e máximo, a critério do fiscal',
         'multiplo_alvara' => 'Múltiplo do valor do alvará',
     ];
 
@@ -56,54 +59,39 @@ class Artigo extends Model
     public const BASES_POR_AREA = ['por_m2', 'faixas'];
 
     /**
-     * O artigo sustenta EMBARGO?
+     * EM QUAIS DOCUMENTOS o artigo pode entrar — marcados um a um em
+     * Parâmetros (`artigos.documentos`).
      *
-     *   nao        não cabe embargo — é o caso da maioria;
-     *   cabe       embarga e também serve à notificação e ao auto de infração
-     *              (LC 001/2023, art. 32, §2º: "sob pena de embargo e/ou multa");
-     *   exclusivo  só existe para embargar: aparece na Notificação de Embargo e
-     *              no Auto de Embargo, e em nenhuma outra peça (art. 22, §§4º e 5º).
+     * Cada artigo tem as suas peças: o art. 22 (prazo de 5 dias para
+     * apresentar alvará e projeto) é de notificação, o art. 121-A é do Auto de
+     * Embargo, o art. 121-B (descumprir o embargo) é do Auto de Infração.
      */
-    public const EMBARGO = [
-        'nao'       => 'Não cabe embargo',
-        'cabe'      => 'Cabe embargo',
-        'exclusivo' => 'Exclusivo de embargo',
-    ];
-
-    /**
-     * QUANDO o embargo acontece. A lei separa os dois casos, e é isso que
-     * decide entre lavrar direto o Auto de Embargo ou dar antes a Notificação
-     * de Embargo, com prazo.
-     */
-    public const EMBARGO_MODOS = [
-        'imediato'   => 'Imediato',
-        'apos_prazo' => 'Após prazo',
-    ];
+    public const DOCUMENTOS = ['notificacao', 'notificacao_embargo', 'auto_embargo', 'auto_infracao'];
 
     /**
      * Este artigo pode fundamentar uma peça deste tipo?
      *
      * A REGRA ÚNICA: a tela filtra a lista por ela (documentos.js repete o
      * teste só para não oferecer o que o servidor recusaria), e o servidor a
-     * impõe ao gravar e ao lavrar.
+     * impõe ao gravar e ao lavrar. Artigo sem nenhuma peça marcada (cadastro
+     * antigo) serve a todas — sumir da lista seria pior do que sobrar.
      */
     public function serveA(string $tipoDeDocumento): bool
     {
-        return in_array($tipoDeDocumento, Documento::DE_EMBARGO, true)
-            ? in_array($this->embargo, ['cabe', 'exclusivo'], true)
-            : $this->embargo !== 'exclusivo';
+        return ! $this->documentos || in_array($tipoDeDocumento, $this->documentos, true);
     }
 
-    /** "embarga de imediato", "embarga após 5 dias" — ou null se não embarga. */
+    /** "NOT · NE · AE · AI" — as siglas das peças em que o artigo entra. */
+    public function rotuloDocumentos(): string
+    {
+        return collect(self::DOCUMENTOS)->filter(fn ($t) => $this->serveA($t))
+            ->map(fn ($t) => Documento::TIPOS[$t][1])->implode(' · ');
+    }
+
+    /** Aviso curto para a vistoria: este artigo sustenta peça de embargo. */
     public function rotuloEmbargo(): ?string
     {
-        if (! in_array($this->embargo, ['cabe', 'exclusivo'], true)) {
-            return null;
-        }
-
-        return $this->embargo_modo === 'apos_prazo'
-            ? 'embarga após ' . (int) $this->embargo_prazo_dias . ' dia(s)'
-            : 'embarga de imediato';
+        return $this->documentos && array_intersect($this->documentos, Documento::DE_EMBARGO) ? 'cabe embargo' : null;
     }
 
     /**
@@ -119,7 +107,7 @@ class Artigo extends Model
      * não lavra: multa zero por dado faltando é multa errada.
      *
      * @return array{valor: float, valor_reais: ?float, area_usada: ?string, area_m2: ?float,
-     *               multiplicador: ?float, memoria: string, pendencia: ?string}
+     *               multiplicador: ?float, memoria: string, pendencia: ?string, fator: int}
      */
     public function calcularMulta(
         ?float $areaTerreno,
@@ -127,6 +115,36 @@ class Artigo extends Model
         ?float $alvaraValor = null,
         ?float $multiplicador = null,
         ?float $upfValor = null,
+        int $fatorReincidencia = 1,
+    ): array {
+        $r = $this->multaSemReincidencia($areaTerreno, $areaConstruida, $alvaraValor, $multiplicador, $upfValor);
+        $r['fator'] = 1;
+
+        // REINCIDÊNCIA: a multa dobra a cada auto anterior da cadeia (art.
+        // 121-B, §2º) — só nos artigos marcados para isso, e só quando a
+        // conta fechou.
+        if ($fatorReincidencia > 1 && $this->multa_dobra_reincidencia && ! $r['pendencia'] && $r['valor'] > 0) {
+            $n = fn (float $v) => number_format($v, 2, ',', '.');
+            $r['fator'] = $fatorReincidencia;
+            $r['valor'] = round($r['valor'] * $fatorReincidencia, 2);
+            $r['valor_reais'] = $r['valor_reais'] !== null ? round($r['valor_reais'] * $fatorReincidencia, 2) : null;
+            $r['memoria'] .= ' × ' . $fatorReincidencia . ' (reincidência) = ' . $n($r['valor']) . ' UPF';
+        }
+
+        return $r;
+    }
+
+    /**
+     * A conta do artigo, sem a reincidência. `$multiplicador` é o número que
+     * o FISCAL informa na peça: o multiplicador do alvará, ou o valor em UPF
+     * da multa "entre mínimo e máximo".
+     */
+    private function multaSemReincidencia(
+        ?float $areaTerreno,
+        ?float $areaConstruida,
+        ?float $alvaraValor,
+        ?float $multiplicador,
+        ?float $upfValor,
     ): array {
         $r = ['valor' => 0.0, 'valor_reais' => null, 'area_usada' => null, 'area_m2' => null,
             'multiplicador' => null, 'memoria' => '', 'pendencia' => null];
@@ -140,6 +158,25 @@ class Artigo extends Model
             $valor = (float) ($this->multa_upf ?? 0);
 
             return ['valor' => $valor, 'memoria' => $n($valor) . ' UPF (valor fixo do artigo)'] + $r;
+        }
+
+        // A CRITÉRIO DO FISCAL, dentro do intervalo do artigo (art. 35, §5º:
+        // "multa de 50 a 200 UPFs"), conforme a gravidade.
+        if ($this->base_multa === 'intervalo') {
+            $min = (float) ($this->multa_min_upf ?? 0);
+            $max = (float) ($this->multa_max_upf ?? $min);
+            $faixa = $n($min) . ' a ' . $n($max) . ' UPF';
+            if ($multiplicador === null) {
+                return ['memoria' => 'Valor da multa não informado (' . $faixa . ').',
+                    'pendencia' => 'o valor da multa do ' . $this->numero . ' (' . $faixa . ')'] + $r;
+            }
+            if ($multiplicador < $min - 0.005 || $multiplicador > $max + 0.005) {
+                return ['multiplicador' => $multiplicador, 'memoria' => 'Valor fora do intervalo (' . $faixa . ').',
+                    'pendencia' => 'um valor de ' . $faixa . ' para o ' . $this->numero] + $r;
+            }
+
+            return ['valor' => round($multiplicador, 2), 'multiplicador' => $multiplicador,
+                'memoria' => $n($multiplicador) . ' UPF (fixado pelo fiscal, de ' . $faixa . ')'] + $r;
         }
 
         if ($this->base_multa === 'multiplo_alvara') {
@@ -257,6 +294,7 @@ class Artigo extends Model
             'fixa'            => $n($this->multa_upf) . ' UPF',
             'por_m2'          => $n($this->multa_upf_m2, 4) . ' UPF/m² · ' . $area,
             'faixas'          => count($this->multa_faixas ?? []) . ' faixa(s) · ' . $area,
+            'intervalo'       => $n($this->multa_min_upf) . ' a ' . $n($this->multa_max_upf) . ' UPF',
             'multiplo_alvara' => (abs((float) $this->multa_mult_max - (float) $this->multa_mult_min) < 0.005
                 ? $n($this->multa_mult_min) : $n($this->multa_mult_min) . ' a ' . $n($this->multa_mult_max)) . '× o alvará',
             default           => (string) $this->base_multa,

@@ -566,8 +566,7 @@ function renderDetalheLei(l) {
       <div class="par-linha${a.ativo ? '' : ' par-linha-inativa'}">
         ${parPrincipal('artigos', a.id)}
           <b>${esc(a.apelido || a.numero)}</b>
-          <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'}${a.embargo_rotulo
-            ? ` · <span class="art-embargo">${a.embargo === 'exclusivo' ? 'só embargo' : 'cabe embargo'}: ${esc(a.embargo_rotulo)}</span>` : ''} · ${a.termos?.length
+          <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'}${a.documentos_rotulo ? ` · <span class="art-embargo">${esc(a.documentos_rotulo)}</span>` : ''} · ${a.termos?.length
             ? 'busca: ' + a.termos.map(t => esc(t)).join(', ')
             : '<span class="art-sem-termos">sem termos de busca</span>'}</span>
         </div>
@@ -587,7 +586,9 @@ function rotuloBaseMulta(a) {
 function formArtigo(a) {
   const base = a.base_multa || 'fixa'
   const porArea = base === 'por_m2' || base === 'faixas'
-  const embargo = a.embargo || 'nao'
+  const comMinMax = base === 'por_m2' || base === 'intervalo'
+  // Artigo novo nasce para notificação e auto de infração — o caso comum.
+  const docs = a.documentos || ['notificacao', 'auto_infracao']
   // EM GRUPOS: o que é do mesmo assunto fica na mesma moldura, e o que cabe
   // lado a lado vai lado a lado — o cartão tinha virado uma coluna comprida.
   const grupo = (titulo, corpo) => `<div class="ed-grupo"><div class="ed-grupo-tit">${titulo}</div>${corpo}</div>`
@@ -602,6 +603,7 @@ function formArtigo(a) {
       <div class="cad-row">
         ${parRot('Como a multa é calculada', parSel('base_multa', base, [
           ['fixa', 'Valor fixo'], ['por_m2', 'Por m²'], ['faixas', 'Por faixa de área'],
+          ['intervalo', 'Entre mínimo e máximo (a critério do fiscal)'],
           ['multiplo_alvara', 'Múltiplo do valor do alvará'], ['sem_multa', 'Sem multa (só notificação/embargo)'],
         ], 'onchange="trocarBaseMulta(this)"'), 'flex:2')}
         <span class="art-bloco-qual-area" style="display:${porArea ? 'contents' : 'none'}">
@@ -615,9 +617,12 @@ function formArtigo(a) {
           ${parRot('De (× o alvará)', parInp('multa_mult_min', a.multa_mult_min ?? 1, 'type="number" min="0.01" step="0.01"'))}
           ${parRot('Até (× o alvará)', parInp('multa_mult_max', a.multa_mult_max ?? 1, 'type="number" min="0.01" step="0.01"'))}</span>
         <span class="art-bloco-m2" style="display:${base === 'por_m2' ? 'contents' : 'none'}">
-          ${parRot('UPF por m²', parInp('multa_upf_m2', a.multa_upf_m2, 'type="number" min="0" step="0.0001"'))}
-          ${parRot('Piso (UPF)', parInp('multa_min_upf', a.multa_min_upf, 'type="number" min="0" step="0.01"'))}
-          ${parRot('Teto (UPF)', parInp('multa_max_upf', a.multa_max_upf, 'type="number" min="0" step="0.01"'))}</span>
+          ${parRot('UPF por m²', parInp('multa_upf_m2', a.multa_upf_m2, 'type="number" min="0" step="0.0001"'))}</span>
+        <span class="art-bloco-minmax" style="display:${comMinMax ? 'contents' : 'none'}">
+          ${parRot('Mínimo (UPF)', parInp('multa_min_upf', a.multa_min_upf, 'type="number" min="0" step="0.01"'))}
+          ${parRot('Máximo (UPF)', parInp('multa_max_upf', a.multa_max_upf, 'type="number" min="0" step="0.01"'))}</span>
+        <span class="art-bloco-dobra" style="display:${base === 'sem_multa' ? 'none' : 'contents'}">
+          ${parChk('multa_dobra_reincidencia', a.multa_dobra_reincidencia, 'Dobra na reincidência')}</span>
       </div>
       <div class="ed-campo art-bloco-faixas" style="display:${base === 'faixas' ? '' : 'none'}"><span>Faixas de área — valor da multa em cada uma</span>
         <div class="art-faixas">
@@ -631,19 +636,12 @@ function formArtigo(a) {
         <small class="art-termos-dica">Iguais (3 e 3) = multiplicador fixo. Diferentes (1 e 10) = o fiscal informa o
           multiplicador no auto, dentro do intervalo. O valor do alvará é informado em reais na peça.</small>
       </div>`)
-    + '<div class="ed-grupos-lado">' + grupo('Embargo', `
+    + '<div class="ed-grupos-lado">' + grupo('Documentos em que se aplica', `
+      <div class="cad-row art-docs">
+        ${ARTIGO_DOCUMENTOS.map(([tipo, rotulo]) => parChk('doc_' + tipo, docs.includes(tipo), rotulo)).join('')}
+      </div>
       <div class="cad-row">
-        ${parRot('Este artigo sustenta embargo?', parSel('embargo', embargo, [
-          ['nao', 'Não cabe embargo'], ['cabe', 'Cabe embargo (e também notificação e auto de infração)'],
-          ['exclusivo', 'Exclusivo de embargo (só peças de embargo)'],
-        ], 'onchange="trocarEmbargo(this)"'), 'flex:3')}
-        <span class="art-bloco-embargo" style="display:${embargo === 'nao' ? 'none' : 'contents'}">
-          ${parRot('Quando embarga', parSel('embargo_modo', a.embargo_modo || 'apos_prazo', [
-            ['imediato', 'Imediato'], ['apos_prazo', 'Após prazo'],
-          ], 'onchange="trocarEmbargo(this)"'))}
-          <span class="art-bloco-prazo" style="display:${(a.embargo_modo || 'apos_prazo') === 'apos_prazo' ? 'contents' : 'none'}">
-            ${parRot('Prazo (dias)', parInp('embargo_prazo_dias', a.embargo_prazo_dias ?? 5, 'type="number" min="1" max="365"'), 'max-width:120px')}</span>
-        </span>
+        ${parRot('Prazo sugerido na notificação (dias)', parInp('prazo_notificacao_dias', a.prazo_notificacao_dias, 'type="number" min="1" max="365" placeholder="o da lei"'), 'max-width:260px')}
       </div>`)
     + grupo('Busca em campo', `
       <div class="ed-campo"><span>Termos de busca</span>
@@ -700,25 +698,16 @@ function termosDoCartao() {
   return [...caixa.querySelectorAll('.art-termo')].map(el => el.dataset.termo)
 }
 
-/** Mostra só os campos de valor da base escolhida. @param {HTMLSelectElement} sel */
 /**
- * Mostra "quando embarga" só para artigo que embarga, e o prazo só para o
- * "após prazo". Artigo EXCLUSIVO de embargo não multa: a base vai para
- * "Sem multa" (quem multa é outro artigo, no auto de infração).
+ * As peças em que um artigo pode entrar (Artigo::DOCUMENTOS). Marcadas uma a
+ * uma: é isso que decide quais artigos cada documento oferece.
  */
-function trocarEmbargo(sel) {
-  const cartao = sel.closest('.par-linha')
-  const embargo = cartao.querySelector('[name=embargo]').value
-  const modo = cartao.querySelector('[name=embargo_modo]').value
-  cartao.querySelector('.art-bloco-embargo').style.display = embargo === 'nao' ? 'none' : 'contents'
-  cartao.querySelector('.art-bloco-prazo').style.display = modo === 'apos_prazo' ? 'contents' : 'none'
-  if (sel.name === 'embargo' && embargo === 'exclusivo') {
-    const base = cartao.querySelector('[name=base_multa]')
-    base.value = 'sem_multa'
-    trocarBaseMulta(base)
-  }
-}
+const ARTIGO_DOCUMENTOS = [
+  ['notificacao', 'Notificação'], ['notificacao_embargo', 'Notificação de Embargo'],
+  ['auto_embargo', 'Auto de Embargo'], ['auto_infracao', 'Auto de Infração'],
+]
 
+/** Mostra só os campos de valor da base escolhida. @param {HTMLSelectElement} sel */
 function trocarBaseMulta(sel) {
   const cartao = sel.closest('.par-linha')
   const v = sel.value
@@ -728,6 +717,8 @@ function trocarBaseMulta(sel) {
   mostra('.art-bloco-alvara', v === 'multiplo_alvara', 'contents')
   mostra('.art-bloco-alvara-dica', v === 'multiplo_alvara')
   mostra('.art-bloco-m2', v === 'por_m2', 'contents')
+  mostra('.art-bloco-minmax', v === 'por_m2' || v === 'intervalo', 'contents')
+  mostra('.art-bloco-dobra', v !== 'sem_multa', 'contents')
   mostra('.art-bloco-faixas', v === 'faixas')
 }
 
@@ -773,6 +764,9 @@ async function salvarArtigo() {
   if (base === 'faixas' && faixasDoCartao().slice(0, -1).some(fx => !fx.ate_m2)) {
     toast('Preencha o limite (m²) de cada faixa', 'err'); return
   }
+  if (!ARTIGO_DOCUMENTOS.some(([tipo]) => parCampo('doc_' + tipo))) {
+    toast('Marque ao menos um documento em que o artigo se aplica', 'err'); return
+  }
   await parGravar('/api/legislacao/artigos', {
     id: parState.ed.id === 'novo' ? null : parState.ed.id,
     legislacao_id: parState.leiAberta,
@@ -789,10 +783,9 @@ async function salvarArtigo() {
     multa_mult_min: base === 'multiplo_alvara' ? parCampo('multa_mult_min') || null : null,
     multa_mult_max: base === 'multiplo_alvara' ? parCampo('multa_mult_max') || null : null,
     ativo: parCampo('ativo'),
-    embargo: parCampo('embargo'),
-    embargo_modo: parCampo('embargo') === 'nao' ? null : parCampo('embargo_modo'),
-    embargo_prazo_dias: parCampo('embargo') !== 'nao' && parCampo('embargo_modo') === 'apos_prazo'
-      ? parCampo('embargo_prazo_dias') || null : null,
+    documentos: ARTIGO_DOCUMENTOS.map(([tipo]) => tipo).filter(tipo => parCampo('doc_' + tipo)),
+    prazo_notificacao_dias: parCampo('prazo_notificacao_dias') || null,
+    multa_dobra_reincidencia: base !== 'sem_multa' && !!parCampo('multa_dobra_reincidencia'),
     termos: termosDoCartao(),
   }, recarregarLegislacao)
 }

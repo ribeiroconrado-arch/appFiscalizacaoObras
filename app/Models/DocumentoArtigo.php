@@ -27,6 +27,7 @@ class DocumentoArtigo extends Model
             'valor_upf'    => 'float',
             'valor_reais'  => 'float',
             'multiplicador' => 'float',
+            'fator_reincidencia' => 'integer',
             'multa_faixas' => 'array',
         ];
     }

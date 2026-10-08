@@ -87,6 +87,14 @@ class Documento extends Model
     public function agente(): BelongsTo     { return $this->belongsTo(User::class, 'agente_id'); }
     public function origem(): BelongsTo     { return $this->belongsTo(Documento::class, 'origem_id'); }
     public function derivados(): HasMany    { return $this->hasMany(Documento::class, 'origem_id'); }
+    /** O auto de infração anterior, de que este é reincidência. */
+    public function reincidenciaDe(): BelongsTo { return $this->belongsTo(Documento::class, 'reincidencia_de_id'); }
+
+    /** Por quanto a reincidência multiplica a multa: dobra a cada elo (1, 2, 4, 8…). */
+    public function fatorReincidencia(): int
+    {
+        return 2 ** min((int) $this->reincidencia_nivel, 6);
+    }
     public function artigos(): HasMany      { return $this->hasMany(DocumentoArtigo::class); }
     public function anuladoPor(): BelongsTo { return $this->belongsTo(User::class, 'anulado_por'); }
 

@@ -257,7 +257,8 @@ class LavraturaService
         foreach ($artigos as $a) {
             $mult = $multiplicadores[$a->id] ?? null;
             $calc = $a->calcularMulta($doc->area_terreno_m2, $doc->area_construida_m2,
-                $doc->alvara_valor, $mult !== null ? (float) $mult : null, $upf ? (float) $upf : null);
+                $doc->alvara_valor, $mult !== null ? (float) $mult : null, $upf ? (float) $upf : null,
+                $doc->fatorReincidencia());
 
             DocumentoArtigo::create([
                 'documento_id' => $doc->id,
@@ -275,6 +276,7 @@ class LavraturaService
                 // O informado fica guardado mesmo fora do intervalo: é o que
                 // a tela mostra de volta para o fiscal corrigir.
                 'multiplicador' => $calc['multiplicador'] ?? ($mult !== null ? (float) $mult : null),
+                'fator_reincidencia' => $calc['fator'] > 1 ? $calc['fator'] : null,
                 'valor_upf'    => $calc['valor'],
                 'valor_reais'  => $calc['valor_reais'],
                 'memoria'      => $calc['memoria'],
@@ -337,47 +339,63 @@ class LavraturaService
             return;
         }
 
-        $lista = implode(', ', $fora);
-        throw new RuntimeException(in_array($tipo, Documento::DE_EMBARGO, true)
-            ? "Não cabe embargo por {$lista}. Peça de embargo só aceita artigo configurado para embargo (Parâmetros › Legislação)."
-            : "{$lista} é exclusivo de embargo: só entra em Notificação de Embargo ou Auto de Embargo.");
+        throw new RuntimeException(implode(', ', $fora) . ' não se aplica a ' . (Documento::TIPOS[$tipo][0] ?? $tipo)
+            . '. As peças de cada artigo são marcadas em Parâmetros › Legislação › Artigos.');
     }
 
     /**
      * O que o fiscal deve saber antes de lavrar um AUTO DE EMBARGO.
      *
-     * Artigo que só embarga APÓS PRAZO (LC 001/2023, art. 22, §5º e art. 32,
-     * §2º) pede que o prazo tenha sido dado e vencido — o que se prova com
-     * uma Notificação de Embargo lavrada para o imóvel. É AVISO, e não trava:
-     * o prazo pode ter corrido por outro meio (notificação em papel, peça de
-     * antes do sistema), e quem responde pelo ato é o fiscal.
+     * A prática é notificar antes: a Notificação de Embargo dá o prazo, e o
+     * auto vem depois de ele vencer. É AVISO, e não trava — o art. 121-A
+     * manda embargar de imediato, e o prazo pode ter corrido por outro meio
+     * (notificação em papel, peça de antes do sistema). Quem responde pelo
+     * ato é o fiscal.
      *
      * @return array<int,string>
      */
     public function avisosDeEmbargo(Documento $doc): array
     {
-        if ($doc->tipo !== 'auto_embargo') {
-            return [];
-        }
-        $comPrazo = Artigo::whereIn('id', $doc->artigos()->pluck('artigo_id')->filter())
-            ->where('embargo_modo', 'apos_prazo')->get();
-        if ($comPrazo->isEmpty()) {
+        if ($doc->tipo !== 'auto_embargo' || ! $doc->lote_id) {
             return [];
         }
 
-        $vencida = $doc->lote_id && Documento::where('lote_id', $doc->lote_id)
+        $vencida = Documento::where('lote_id', $doc->lote_id)
             ->where('tipo', 'notificacao_embargo')
             ->whereNotIn('status', ['rascunho', 'anulado'])
             ->whereNotNull('prazo_ate')->where('prazo_ate', '<', now()->toDateString())
             ->exists();
-        if ($vencida) {
-            return [];
+
+        return $vencida ? [] : ['Este imóvel não tem Notificação de Embargo com prazo vencido no sistema. '
+            . 'Confira se o prazo foi dado e correu antes de lavrar o Auto de Embargo.'];
+    }
+
+    /**
+     * REINCIDÊNCIA: amarra o auto ao auto anterior e conta o elo da cadeia.
+     *
+     * Só Auto de Infração é reincidência, e só de outro Auto de Infração
+     * LAVRADO e não anulado — reincidir num rascunho ou num ato desfeito não
+     * existe. O nível é o do anterior mais um; é ele que dobra a multa
+     * (Documento::fatorReincidencia).
+     */
+    public function vincularReincidencia(Documento $doc, ?int $anteriorId): void
+    {
+        if (! $anteriorId) {
+            $doc->reincidencia_de_id = null;
+            $doc->reincidencia_nivel = 0;
+
+            return;
         }
-
-        $artigos = $comPrazo->map(fn (Artigo $a) => $a->numero . ' (' . (int) $a->embargo_prazo_dias . ' dias)')->implode(', ');
-
-        return ["{$artigos}: o embargo só cabe depois do prazo, e este imóvel não tem Notificação de Embargo "
-            . 'com prazo vencido no sistema. Confira se o prazo foi dado e correu antes de lavrar.'];
+        if ($doc->tipo !== 'auto_infracao') {
+            throw new RuntimeException('Só Auto de Infração pode ser lavrado como reincidência.');
+        }
+        $anterior = Documento::find($anteriorId);
+        if (! $anterior || $anterior->id === $doc->id || $anterior->tipo !== 'auto_infracao'
+            || in_array($anterior->status, ['rascunho', 'anulado'], true)) {
+            throw new RuntimeException('A reincidência tem de apontar para um Auto de Infração lavrado e não anulado.');
+        }
+        $doc->reincidencia_de_id = $anterior->id;
+        $doc->reincidencia_nivel = min((int) $anterior->reincidencia_nivel + 1, 6);
     }
 
     /**

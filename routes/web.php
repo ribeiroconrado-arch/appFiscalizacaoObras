@@ -255,6 +255,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/documentos/opcoes', [DocumentoController::class, 'opcoes']);
         // A prévia da multa: a tela pede a conta, não a refaz.
         Route::post('/multas/simular', [DocumentoController::class, 'simularMulta']);
+        // Os autos de que um auto novo pode ser reincidência (antes da rota curinga).
+        Route::get('/documentos/autos-anteriores', [DocumentoController::class, 'autosAnteriores']);
         // Consulta de CNPJ para o autuado — feita pelo servidor, com limite próprio.
         Route::get('/cnpj/{cnpj}', [\App\Http\Controllers\CnpjController::class, 'mostrar'])->middleware('throttle:pesado');
         Route::get('/vistorias/{vistoria}/sugestao', [DocumentoController::class, 'sugestao']);

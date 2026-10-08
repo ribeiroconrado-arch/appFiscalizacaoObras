@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Artigo;
 use App\Models\Documento;
 use App\Models\Legislacao;
 use App\Models\Lote;
@@ -287,10 +288,12 @@ class DocumentoController extends Controller
                         'termos'  => $a->termos ?? [],
                         // É com isto que o formulário filtra a lista de artigos
                         // pelo tipo da peça (a regra é Artigo::serveA).
-                        'embargo'            => $a->embargo,
-                        'embargo_modo'       => $a->embargo_modo,
-                        'embargo_prazo_dias' => $a->embargo_prazo_dias,
-                        'embargo_rotulo'     => $a->rotuloEmbargo(),
+                        'documentos'             => $a->documentos ?: Artigo::DOCUMENTOS,
+                        'prazo_notificacao_dias' => $a->prazo_notificacao_dias,
+                        // Para o campo do valor que o fiscal informa (multa "de X a Y UPF").
+                        'multa_min_upf'  => $a->multa_min_upf,
+                        'multa_max_upf'  => $a->multa_max_upf,
+                        'multa_dobra_reincidencia' => $a->multa_dobra_reincidencia,
                         // A tela NÃO calcula multa (pede a /api/multas/simular);
                         // isto é só para ela saber que campos mostrar.
                         'base_multa'     => $a->base_multa,
@@ -441,6 +444,15 @@ class DocumentoController extends Controller
             'alvara_valor'       => $d['alvara_valor'] ?? null,
         ]);
 
+        try {
+            $this->lavratura->vincularReincidencia($doc, $d['reincidencia_de_id'] ?? null);
+            $doc->save();
+        } catch (RuntimeException $e) {
+            $doc->delete();
+
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         if (! empty($d['artigos'])) {
             $this->lavratura->fixarArtigos($doc, $d['artigos'], $d['multiplicadores'] ?? []);
         }
@@ -460,9 +472,47 @@ class DocumentoController extends Controller
      */
     private const REGRAS_DO_ALVARA = [
         'alvara_valor'      => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+        // Por artigo, o número que o FISCAL informa: o multiplicador do alvará
+        // ou o valor em UPF da multa "entre mínimo e máximo".
         'multiplicadores'   => ['nullable', 'array'],
-        'multiplicadores.*' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+        'multiplicadores.*' => ['nullable', 'numeric', 'min:0', 'max:999999'],
+        // O auto anterior, de que este é reincidência (a multa dobra).
+        'reincidencia_de_id' => ['nullable', 'integer', 'exists:documentos,id'],
     ];
+
+    /**
+     * GET /api/documentos/autos-anteriores — os Autos de Infração lavrados de
+     * que um auto novo pode ser reincidência: os do mesmo imóvel, ou, sem
+     * imóvel, os do mesmo autuado (CPF/CNPJ).
+     */
+    public function autosAnteriores(Request $request): JsonResponse
+    {
+        $d = $request->validate([
+            'lote_id'   => ['nullable', 'integer'],
+            'documento' => ['nullable', 'string', 'max:20'],
+            'exceto'    => ['nullable', 'integer'],
+        ]);
+        if (empty($d['lote_id']) && empty($d['documento'])) {
+            return response()->json(['autos' => []]);
+        }
+
+        $autos = Documento::where('tipo', 'auto_infracao')->whereNotIn('status', ['rascunho', 'anulado'])
+            ->when($d['exceto'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
+            ->where(fn ($q) => $q
+                ->when($d['lote_id'] ?? null, fn ($x, $id) => $x->orWhere('lote_id', $id))
+                ->when($d['documento'] ?? null, fn ($x, $doc) => $x->orWhere('autuado_documento', $doc)))
+            ->orderByDesc('data_lavratura')->limit(40)->get();
+
+        return response()->json(['autos' => $autos->map(fn (Documento $a) => [
+            'id'     => $a->id,
+            'numero' => $a->numeroFormatado(),
+            'data'   => $a->data_lavratura?->format('d/m/Y'),
+            'autuado' => $a->autuado_nome,
+            'valor_upf' => $a->valor_upf,
+            // Quantas vezes a multa do PRÓXIMO auto será multiplicada.
+            'proximo_fator' => 2 ** min((int) $a->reincidencia_nivel + 1, 6),
+        ])]);
+    }
 
     /**
      * POST /api/multas/simular — a multa de um conjunto de artigos, com as
@@ -482,6 +532,8 @@ class DocumentoController extends Controller
             'data_fato'          => ['nullable', 'date'],
             ...self::REGRAS_DO_ALVARA,
         ]);
+        $anterior = isset($d['reincidencia_de_id']) ? Documento::find($d['reincidencia_de_id']) : null;
+        $fator = $anterior ? 2 ** min((int) $anterior->reincidencia_nivel + 1, 6) : 1;
 
         $num = fn ($v) => $v === null || $v === '' ? null : (float) $v;
         $upf = \App\Models\Upf::vigente(isset($d['data_fato']) ? \Illuminate\Support\Carbon::parse($d['data_fato']) : now())?->valor;
@@ -493,13 +545,14 @@ class DocumentoController extends Controller
         foreach ($d['artigos'] as $id) {
             if (! ($a = $porId[$id] ?? null)) { continue; }
             $c = $a->calcularMulta($num($d['area_terreno_m2'] ?? null), $num($d['area_construida_m2'] ?? null),
-                $num($d['alvara_valor'] ?? null), $num($d['multiplicadores'][$id] ?? null), $upf ? (float) $upf : null);
+                $num($d['alvara_valor'] ?? null), $num($d['multiplicadores'][$id] ?? null), $upf ? (float) $upf : null, $fator);
             $total += $c['valor'];
             $linhas[] = ['artigo_id' => $a->id, 'numero' => $a->numero, 'base' => $a->base_multa] + $c;
         }
 
         return response()->json([
             'linhas'    => $linhas,
+            'fator_reincidencia' => $fator,
             'total_upf' => round($total, 2),
             'upf_valor' => $upf ? (float) $upf : null,
             'total_reais' => $upf ? round($total * (float) $upf, 2) : null,
@@ -645,8 +698,16 @@ class DocumentoController extends Controller
                         ? 'sem multa'
                         : $a->multa_upf_m2 . ' UPF/m²' . ($a->area_m2 ? ' × ' . $a->area_m2 . ' m²' : ''))),
                 'multiplicador' => $a->multiplicador,
+                'fator_reincidencia' => $a->fator_reincidencia,
                 'valor'   => $a->valor_upf,
             ]),
+
+            // Reincidência: o auto anterior e por quanto a multa foi multiplicada.
+            'reincidencia' => $documento->reincidencia_de_id ? [
+                'id'     => $documento->reincidencia_de_id,
+                'numero' => $documento->reincidenciaDe?->numeroFormatado(),
+                'fator'  => $documento->fatorReincidencia(),
+            ] : null,
 
             'valor_upf' => $documento->valor_upf,
             'upf_valor' => $documento->upf_valor,
@@ -759,8 +820,15 @@ class DocumentoController extends Controller
 
         // array_merge, e não `+`: o texto único montado das partes tem de VENCER o
         // que veio no pedido.
+        try {
+            $documento->tipo = $d['tipo'];
+            $this->lavratura->vincularReincidencia($documento, $d['reincidencia_de_id'] ?? null);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         $documento->update(array_merge(
-            collect($d)->except(['artigos', 'multiplicadores', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d)));
+            collect($d)->except(['artigos', 'multiplicadores', 'reincidencia_de_id', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d)));
 
         // Os artigos são refixados por inteiro: manter os antigos e somar os
         // novos deixaria no documento um enquadramento que o fiscal removeu

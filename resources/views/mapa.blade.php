@@ -2257,7 +2257,24 @@
               <label for="nd-alvara-valor">Valor do alvará (R$)</label>
               <input id="nd-alvara-valor" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
             </div>
-            <div id="nd-multiplicadores" style="display:contents"></div>
+          </div>
+        </div>
+        {{-- O que o FISCAL informa por artigo: o multiplicador do alvará com
+             intervalo, e o valor da multa "entre mínimo e máximo" (art. 35,
+             §5º), fixado conforme a gravidade. --}}
+        <div id="nd-bloco-informados" style="display:none">
+          <div class="sec-title">Multa a critério do fiscal</div>
+          <div class="g2" id="nd-multiplicadores"></div>
+        </div>
+        {{-- Reincidência (art. 121-B, §2º): o auto é lavrado a partir de outro
+             auto, e a multa dos artigos marcados dobra. Só em Auto de Infração. --}}
+        <div id="nd-bloco-reincidencia" style="display:none">
+          <div class="sec-title">Reincidência</div>
+          <div class="field">
+            <label for="nd-reincidencia">Reincidência do auto</label>
+            <select id="nd-reincidencia" data-lock onfocus="carregarAutosAnterioresDoc()" onchange="recalcularMultaDoc()">
+              <option value="">Não é reincidência</option>
+            </select>
           </div>
         </div>
         {{-- A memória de cálculo vem do servidor (/api/multas/simular). --}}

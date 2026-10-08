@@ -33,6 +33,9 @@ const fdState = {
   /** @type {Object<number, number|null>} multiplicador do alvará, por artigo */ multiplicadores: {},
   /** @type {Object|null} a última conta da multa (de /api/multas/simular) */ multa: null,
   /** @type {Object|null} a conta que a peça reaberta guardou */ multaGravada: null,
+  /** @type {number|null} o auto de que este é reincidência */ reincidenciaId: null,
+  /** @type {string|null} */ reincidenciaNumero: null,
+  /** @type {number|null} */ reincidenciaFator: null,
 }
 
 // ── ABERTURA ─────────────────────────────────────────────────
@@ -160,8 +163,12 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
       .filter(a => a.artigo_id && a.multiplicador !== null).map(a => [a.artigo_id, a.multiplicador]))
     // A conta como a peça a guardou: é o que se mostra enquanto ela está só
     // aberta para leitura. Ao editar, a prévia volta a vir do servidor.
+    fdState.reincidenciaId = documento.reincidencia?.id ?? null
+    fdState.reincidenciaNumero = documento.reincidencia?.numero ?? null
+    fdState.reincidenciaFator = documento.reincidencia?.fator ?? null
     fdState.multaGravada = {
       gravada: true,
+      fator_reincidencia: documento.reincidencia?.fator ?? 1,
       linhas: (documento.artigos || []).map(a => ({ numero: a.numero, base: a.base, memoria: a.calculo, valor: a.valor, pendencia: null })),
       total_upf: documento.valor_upf, total_reais: documento.valor_reais,
     }
@@ -180,6 +187,7 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     fdState.artigos = []
     fdState.multiplicadores = {}
     fdState.multaGravada = null
+    fdState.reincidenciaId = fdState.reincidenciaNumero = fdState.reincidenciaFator = null
     fdState.anexos = 0
     fdState.vistoriaId = null
     fdState.lote = lote
@@ -211,6 +219,9 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   // O cadastro municipal do imóvel: sempre mostrado; em peça nova, também
   // sugere o autuado, os endereços e a área do terreno.
   renderBciDoc({ sugerir: !documento })
+  // Os autos anteriores do imóvel, para o campo de reincidência.
+  document.getElementById('nd-reincidencia').innerHTML = '<option value="">Não é reincidência</option>'
+  carregarAutosAnterioresDoc().then(() => { if (fdState.reincidenciaId) recalcularMultaDoc() })
 
   if (documento) { return }
 
@@ -752,6 +763,7 @@ async function gravarDoc() {
   const alvara = document.getElementById('nd-alvara-valor').value
   corpo.alvara_valor = alvara === '' ? null : Number(alvara)
   corpo.multiplicadores = multiplicadoresDoDoc()
+  corpo.reincidencia_de_id = reincidenciaDoDoc()
 
   // Num rascunho já gravado, o imóvel vinculado depois viaja no PATCH.
   if (fdState.id && fdState.lote?.id) corpo.lote_id = fdState.lote.id

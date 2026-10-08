@@ -65,10 +65,10 @@ class LegislacaoController extends Controller
                     'multa_rotulo'  => $a->rotuloMulta(),
                     'ativo'         => $a->ativo,
                     'termos'        => $a->termos ?? [],
-                    'embargo'            => $a->embargo,
-                    'embargo_modo'       => $a->embargo_modo,
-                    'embargo_prazo_dias' => $a->embargo_prazo_dias,
-                    'embargo_rotulo'     => $a->rotuloEmbargo(),
+                    'documentos'             => $a->documentos ?: Artigo::DOCUMENTOS,
+                    'documentos_rotulo'      => $a->rotuloDocumentos(),
+                    'prazo_notificacao_dias' => $a->prazo_notificacao_dias,
+                    'multa_dobra_reincidencia' => $a->multa_dobra_reincidencia,
                 ]),
             ]);
 
@@ -134,9 +134,12 @@ class LegislacaoController extends Controller
             'termos.*'        => ['string', 'max:60'],
             // Embargo: se o artigo embarga, tem de dizer QUANDO — de imediato,
             // ou só depois de um prazo (e de quantos dias).
-            'embargo'            => ['nullable', Rule::in(array_keys(Artigo::EMBARGO))],
-            'embargo_modo'       => ['nullable', 'required_if:embargo,cabe,exclusivo', Rule::in(array_keys(Artigo::EMBARGO_MODOS))],
-            'embargo_prazo_dias' => ['nullable', 'required_if:embargo_modo,apos_prazo', 'integer', 'min:1', 'max:365'],
+            // Em quais documentos o artigo entra — marcados um a um.
+            'documentos'             => ['required', 'array', 'min:1'],
+            'documentos.*'           => [Rule::in(Artigo::DOCUMENTOS)],
+            // O prazo que a notificação sugere quando este artigo entra nela.
+            'prazo_notificacao_dias' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'multa_dobra_reincidencia' => ['nullable', 'boolean'],
         ], [
             'multa_area.required_if'         => 'Diga sobre qual área a multa é calculada.',
             'multa_faixas.required_if'       => 'Informe as faixas de área e o valor de cada uma.',
@@ -144,8 +147,8 @@ class LegislacaoController extends Controller
             'multa_mult_min.required_if'     => 'Informe o multiplicador do alvará.',
             'multa_mult_max.required_if'     => 'Informe o multiplicador do alvará.',
             'multa_mult_max.gte'             => 'O multiplicador máximo não pode ser menor que o mínimo.',
-            'embargo_modo.required_if'       => 'Diga se o embargo é imediato ou após prazo.',
-            'embargo_prazo_dias.required_if' => 'Informe de quantos dias é o prazo antes do embargo.',
+            'documentos.required'            => 'Marque ao menos um documento em que o artigo se aplica.',
+            'documentos.min'                 => 'Marque ao menos um documento em que o artigo se aplica.',
         ]);
 
         // Cada forma de multa guarda só os campos DELA: artigo "valor fixo" com
@@ -153,7 +156,13 @@ class LegislacaoController extends Controller
         $porArea = in_array($d['base_multa'], Artigo::BASES_POR_AREA, true);
         $d['multa_area'] = $porArea ? $d['multa_area'] : null;
         if ($d['base_multa'] !== 'fixa') { $d['multa_upf'] = null; }
-        if ($d['base_multa'] !== 'por_m2') { $d['multa_upf_m2'] = $d['multa_min_upf'] = $d['multa_max_upf'] = null; }
+        if ($d['base_multa'] !== 'por_m2') { $d['multa_upf_m2'] = null; }
+        // Mínimo e máximo servem a duas formas: piso e teto do "por m²", e o
+        // intervalo da multa a critério do fiscal — onde os dois são obrigatórios.
+        if (! in_array($d['base_multa'], ['por_m2', 'intervalo'], true)) { $d['multa_min_upf'] = $d['multa_max_upf'] = null; }
+        if ($d['base_multa'] === 'intervalo' && (($d['multa_min_upf'] ?? null) === null || ($d['multa_max_upf'] ?? null) === null)) {
+            return response()->json(['message' => 'Informe o mínimo e o máximo da multa.'], 422);
+        }
         if ($d['base_multa'] !== 'multiplo_alvara') { $d['multa_mult_min'] = $d['multa_mult_max'] = null; }
         if ($d['base_multa'] === 'faixas') {
             // Limites crescentes, e a faixa aberta ("acima de") por último e
@@ -177,15 +186,13 @@ class LegislacaoController extends Controller
             $d['multa_faixas'] = null;
         }
 
-        // Sem embargo, modo e prazo não significam nada; embargo imediato não
-        // tem prazo. Gravar limpo evita artigo "não cabe embargo, após 5 dias".
-        $d['embargo'] = $d['embargo'] ?? 'nao';
-        if ($d['embargo'] === 'nao') {
-            $d['embargo_modo'] = null;
+        // Na ordem oficial das peças, sem repetir. O prazo sugerido só faz
+        // sentido para artigo que entra em notificação.
+        $d['documentos'] = array_values(array_intersect(Artigo::DOCUMENTOS, $d['documentos']));
+        if (! array_intersect($d['documentos'], ['notificacao', 'notificacao_embargo'])) {
+            $d['prazo_notificacao_dias'] = null;
         }
-        if (($d['embargo_modo'] ?? null) !== 'apos_prazo') {
-            $d['embargo_prazo_dias'] = null;
-        }
+        $d['multa_dobra_reincidencia'] = (bool) ($d['multa_dobra_reincidencia'] ?? false);
 
         // Termos limpos e sem repetir ("Escavação" e "escavacao" são o mesmo
         // para a busca, que ignora acento e caixa): fica a primeira grafia.

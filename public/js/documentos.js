@@ -758,8 +758,7 @@ function buscarArtigoDoc(inp) {
   artigoEscolhidoDoc = null
   const lei = leiDoDoc()
   const q = semAcentoDoc(inp.value.trim())
-  // SÓ OS ARTIGOS QUE SERVEM A ESTA PEÇA: numa peça de embargo, os que
-  // aceitam embargo; nas demais, todos menos os exclusivos de embargo.
+  // SÓ OS ARTIGOS MARCADOS PARA ESTA PEÇA (Parâmetros › Legislação › Artigos).
   const daPeca = (lei ? [lei] : dState.opcoes.leis)
     .flatMap(l => l.artigos.map(a => ({ a, lei: lei ? '' : l.rotulo })))
     .filter(({ a }) => artigoServeAoDoc(a))
@@ -768,30 +767,26 @@ function buscarArtigoDoc(inp) {
     .filter(({ a }) => !q || semAcentoDoc([a.numero, a.rotulo, a.conduta, ...(a.termos || [])].join(' ')).includes(q))
 
   // Lista vazia tem de dizer POR QUÊ: "nenhum artigo encontrado" numa peça
-  // de embargo sem artigo configurado pareceria defeito da busca.
+  // sem artigo marcado para ela pareceria defeito da busca.
   const vazio = lei && !lei.artigos.length ? 'Esta lei ainda não tem artigos cadastrados (Parâmetros › Legislação).'
-    : !daPeca.length && docDeEmbargo() ? 'Nenhum artigo está configurado para embargo. Marque quais aceitam em Parâmetros › Legislação › Artigos.'
+    : !daPeca.length ? 'Nenhum artigo está marcado para este documento. Marque em Parâmetros › Legislação › Artigos.'
     : 'Nenhum artigo encontrado'
 
   lista.innerHTML = pool.length
     ? pool.slice(0, 60).map(({ a, lei }) => `<div class="ac-item" onmousedown="event.preventDefault(); selArtigoDoc(${a.id})">
-        ${esc(rotuloArtigoDoc(a))}${a.embargo_rotulo && docDeEmbargo() ? ` <span class="ac-sub">· ${esc(a.embargo_rotulo)}</span>` : ''}${
+        ${esc(rotuloArtigoDoc(a))}${
           lei ? ` <span class="ac-sub">· ${esc(lei)}</span>` : ''}</div>`).join('')
     : `<div class="ac-empty">${vazio}</div>`
   lista.classList.add('open')
 }
 
-/** As peças de embargo (Documento::DE_EMBARGO). */
-const TIPOS_DE_EMBARGO = ['notificacao_embargo', 'auto_embargo']
-const docDeEmbargo = () => TIPOS_DE_EMBARGO.includes(document.getElementById('nd-tipo').value)
-
 /**
  * Este artigo pode fundamentar a peça aberta? MESMA regra de Artigo::serveA,
  * no servidor — repetida aqui só para a lista não oferecer o que o servidor
- * vai recusar ao gravar.
+ * vai recusar ao gravar. Artigo sem peça marcada serve a todas.
  */
 function artigoServeAoDoc(a) {
-  return docDeEmbargo() ? ['cabe', 'exclusivo'].includes(a.embargo) : a.embargo !== 'exclusivo'
+  return !a.documentos?.length || a.documentos.includes(document.getElementById('nd-tipo').value)
 }
 
 /**
@@ -840,15 +835,15 @@ function addArtigoDoc() {
 }
 
 /**
- * NOTIFICAÇÃO DE EMBARGO: o prazo de cumprimento vem sugerido pelo artigo que
- * só embarga após prazo (o menor, se houver mais de um). O campo continua
- * livre — é sugestão, e o fiscal responde pelo prazo que der.
+ * NAS NOTIFICAÇÕES, o prazo de cumprimento vem sugerido pelo artigo que tem
+ * prazo próprio (o menor, se houver mais de um) — os 5 dias do art. 22, por
+ * exemplo. O campo continua livre: é sugestão, e o fiscal responde pelo
+ * prazo que der.
  */
 function sugerirPrazoDoEmbargo() {
-  if (document.getElementById('nd-tipo').value !== 'notificacao_embargo') return
+  if (!['notificacao', 'notificacao_embargo'].includes(document.getElementById('nd-tipo').value)) return
   const prazos = fdState.artigos.map(artigoDoc)
-    .filter(a => a?.embargo_modo === 'apos_prazo' && a.embargo_prazo_dias)
-    .map(a => Number(a.embargo_prazo_dias))
+    .filter(a => a?.prazo_notificacao_dias).map(a => Number(a.prazo_notificacao_dias))
   if (prazos.length) document.getElementById('nd-prazo').value = Math.min(...prazos)
 }
 
@@ -879,8 +874,7 @@ function trocarLeiDoc() {
         if (!a) return ''
         return `<div class="artigo-tag">
           <div class="artigo-tag-topo">
-            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}${
-              a.embargo_rotulo && docDeEmbargo() ? ` <span class="artigo-tag-embargo">${esc(a.embargo_rotulo)}</span>` : ''}</span>
+            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}</span>
             ${travado ? '' : `<button type="button" class="artigo-tag-x" title="Remover" onclick="removerArtigoDoc(${a.id})">&times;</button>`}
           </div>
           ${a.conduta ? `<div class="artigo-tag-texto">${esc(a.conduta)}</div>` : ''}
@@ -907,24 +901,35 @@ function recalcularMultaDoc() {
   const artigos = fdState.artigos.map(artigoDoc).filter(Boolean)
   const porArea = artigos.some(a => a.base_multa === 'por_m2' || a.base_multa === 'faixas')
   const doAlvara = artigos.filter(a => a.base_multa === 'multiplo_alvara')
-  // Só pergunta o multiplicador de quem tem INTERVALO (1 a 10×); o fixo (3×) já está dado.
-  const comIntervalo = doAlvara.filter(a => Number(a.multa_mult_min) !== Number(a.multa_mult_max))
+  // O que o FISCAL informa por artigo: o multiplicador do alvará que tem
+  // intervalo (1 a 10×; o fixo, 3×, já está dado) e o valor da multa "entre
+  // mínimo e máximo", que é fixado conforme a gravidade.
+  const informados = artigos.filter(a => a.base_multa === 'intervalo'
+    || (a.base_multa === 'multiplo_alvara' && Number(a.multa_mult_min) !== Number(a.multa_mult_max)))
+  const ehAuto = document.getElementById('nd-tipo').value === 'auto_infracao'
 
   document.getElementById('nd-bloco-area').style.display = porArea ? '' : 'none'
   document.getElementById('nd-bloco-alvara').style.display = doAlvara.length ? '' : 'none'
+  document.getElementById('nd-bloco-informados').style.display = informados.length ? '' : 'none'
+  document.getElementById('nd-bloco-reincidencia').style.display = ehAuto ? '' : 'none'
 
-  // Redesenha os campos de multiplicador só quando o CONJUNTO de artigos
-  // muda — redesenhar a cada tecla tiraria o foco de quem está digitando.
+  // Redesenha os campos só quando o CONJUNTO de artigos muda — redesenhar a
+  // cada tecla tiraria o foco de quem está digitando.
   const caixa = document.getElementById('nd-multiplicadores')
-  const chave = comIntervalo.map(a => a.id).join(',')
+  const chave = informados.map(a => a.id).join(',')
   if (caixa.dataset.chave !== chave) {
     caixa.dataset.chave = chave
-    caixa.innerHTML = comIntervalo.map(a => `<div class="field">
-        <label for="nd-mult-${a.id}">Multiplicador — ${esc(a.numero)} (${fmtNum(a.multa_mult_min)} a ${fmtNum(a.multa_mult_max)}×)</label>
-        <input id="nd-mult-${a.id}" type="number" min="${a.multa_mult_min}" max="${a.multa_mult_max}" step="0.01" data-lock
+    caixa.innerHTML = informados.map(a => {
+      const [min, max, rotulo] = a.base_multa === 'intervalo'
+        ? [a.multa_min_upf, a.multa_max_upf, `Multa em UPF — ${esc(a.numero)} (${fmtNum(a.multa_min_upf)} a ${fmtNum(a.multa_max_upf)})`]
+        : [a.multa_mult_min, a.multa_mult_max, `Multiplicador — ${esc(a.numero)} (${fmtNum(a.multa_mult_min)} a ${fmtNum(a.multa_mult_max)}×)`]
+      return `<div class="field">
+        <label for="nd-mult-${a.id}">${rotulo}</label>
+        <input id="nd-mult-${a.id}" type="number" min="${min}" max="${max}" step="0.01" data-lock
                value="${esc(String(fdState.multiplicadores[a.id] ?? ''))}" ${docTravado() ? 'disabled' : ''}
                oninput="fdState.multiplicadores[${a.id}] = this.value === '' ? null : Number(this.value); recalcularMultaDoc()">
-      </div>`).join('')
+      </div>`
+    }).join('')
   }
 
   if (!artigos.some(a => a.base_multa !== 'sem_multa')) {
@@ -950,6 +955,39 @@ function multiplicadoresDoDoc() {
     .map(id => [id, fdState.multiplicadores[id]]))
 }
 
+/** O auto anterior escolhido como base da reincidência (só em Auto de Infração). */
+function reincidenciaDoDoc() {
+  if (document.getElementById('nd-tipo').value !== 'auto_infracao') return null
+  return Number(document.getElementById('nd-reincidencia').value) || null
+}
+
+/**
+ * REINCIDÊNCIA: lista os Autos de Infração lavrados do mesmo imóvel (ou do
+ * mesmo CPF/CNPJ) — é de um deles que o auto novo pode ser reincidência, e
+ * a multa dos artigos marcados dobra a cada elo.
+ */
+async function carregarAutosAnterioresDoc() {
+  const sel = document.getElementById('nd-reincidencia')
+  const atual = sel.value || String(fdState.reincidenciaId || '')
+  const p = new URLSearchParams()
+  if (fdState.lote?.id) p.set('lote_id', fdState.lote.id)
+  const cpf = document.getElementById('nd-autuado-doc').value.trim()
+  if (cpf) p.set('documento', cpf)
+  if (fdState.id) p.set('exceto', fdState.id)
+  let autos = []
+  try {
+    const r = await fetch('/api/documentos/autos-anteriores?' + p, { headers: { Accept: 'application/json' } })
+    if (r.ok) autos = (await r.json()).autos
+  } catch (_) { /* sem lista: fica só o "não é reincidência" */ }
+  // A peça reaberta mostra o vínculo que tem, mesmo que o auto não venha na lista.
+  if (atual && fdState.reincidenciaNumero && !autos.some(a => String(a.id) === atual)) {
+    autos.unshift({ id: Number(atual), numero: fdState.reincidenciaNumero, data: '', proximo_fator: fdState.reincidenciaFator || 2 })
+  }
+  sel.innerHTML = '<option value="">Não é reincidência</option>' + autos.map(a =>
+    `<option value="${a.id}">${esc(a.numero)}${a.data ? ' · ' + esc(a.data) : ''} — multa × ${a.proximo_fator}</option>`).join('')
+  sel.value = autos.some(a => String(a.id) === atual) ? atual : ''
+}
+
 /** Pede a conta ao servidor. Resposta atrasada de um pedido antigo é descartada. */
 async function simularMultaDoc() {
   const pedido = simularMultaDoc.ultimo = (simularMultaDoc.ultimo || 0) + 1
@@ -967,6 +1005,7 @@ async function simularMultaDoc() {
         area_construida_m2: num('nd-area-construida'),
         alvara_valor: num('nd-alvara-valor'),
         multiplicadores: multiplicadoresDoDoc(),
+        reincidencia_de_id: reincidenciaDoDoc(),
         data_fato: document.getElementById('nd-datahora').value || null,
       }),
     })
@@ -991,6 +1030,7 @@ function mostrarMultaDoc() {
   caixa.innerHTML = `
     <div style="font-size:12px;color:var(--tx2);background:var(--blt);border-radius:var(--r);padding:10px 12px;margin-top:4px">
       ${linhas.join('<br>')}
+      ${m.fator_reincidencia > 1 ? `<div style="margin-top:4px">Reincidência: os artigos que dobram saem multiplicados por ${m.fator_reincidencia}.</div>` : ''}
       <div style="margin-top:6px;font-weight:700;color:var(--chumbo)">Total${m.gravada ? '' : ' estimado'}: ${fmtNum(m.total_upf || 0)} UPF${
         m.total_reais ? ' · R$ ' + fmtNum(m.total_reais) : ''}</div>
       ${m.gravada ? '' : '<div style="margin-top:4px;color:var(--tx3)">O valor definitivo é calculado na lavratura, com a UPF do exercício.</div>'}
