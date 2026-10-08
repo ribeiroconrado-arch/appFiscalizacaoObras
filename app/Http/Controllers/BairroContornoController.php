@@ -77,9 +77,6 @@ class BairroContornoController extends Controller
                     'nome_oficial'  => $nomes->oficial($b->nome),
                     // Só rótulo do mapa; `nome` continua sendo a chave.
                     'apelido'       => $nomes->apelido($b->nome),
-                    // O código do cadastro de bairros: é o rótulo do bairro
-                    // com o mapa afastado, onde o nome não cabe.
-                    'codigo'        => $nomes->codigos()[BairrosDoDesenho::chave($b->nome)] ?? null,
                     'area_ha'       => round((float) $b->area_m2 / 10000, 2),
                     'desatualizado' => $desatualizado,
                     'contorno_em'   => $b->contorno_em ? date('d/m/Y H:i', strtotime($b->contorno_em)) : null,

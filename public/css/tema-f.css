@@ -720,10 +720,6 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
    da cidade; os bairros aparecem a partir do nível seguinte. */
 body.nivel-municipio .leaflet-tooltip.rot.rot-cidade{display:block}
 body.nivel-municipio .leaflet-tooltip.rot.rot-bairro{display:none}
-/* Bairro de longe: só o CÓDIGO; ao aproximar, o nome. */
-.rot-bairro .rb-cod{display:none}
-body.bairro-so-codigo .rot-bairro .rb-nome{display:none}
-body.bairro-so-codigo .rot-bairro .rb-cod{display:inline}
 /* Número da quadra vindo do CONTORNO gravado — só no nível das quadras; no dos
    lotes, quem rotula a quadra são os próprios lotes (desenharRotulosDeGrupo). */
 .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:none}
