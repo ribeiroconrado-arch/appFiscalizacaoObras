@@ -955,6 +955,45 @@ function multiplicadoresDoDoc() {
     .map(id => [id, fdState.multiplicadores[id]]))
 }
 
+/** De quais peças cada documento pode nascer (Documento::ORIGENS). */
+const ORIGENS_DO_DOC = ['auto_infracao', 'auto_embargo']
+
+/** A peça de origem escolhida — só nos autos, que são os que nascem de outra peça. */
+function origemDoDoc() {
+  if (!ORIGENS_DO_DOC.includes(document.getElementById('nd-tipo').value)) return null
+  return Number(document.getElementById('nd-origem').value) || null
+}
+
+/**
+ * DOCUMENTO DE ORIGEM: as peças lavradas do imóvel de que este auto pode
+ * nascer — a notificação ou o embargo que veio antes. É a que o texto de
+ * ciência cita pelo marcador {origem}.
+ */
+async function carregarOrigensDoc() {
+  const sel = document.getElementById('nd-origem')
+  const tipo = document.getElementById('nd-tipo').value
+  document.getElementById('nd-bloco-origem').style.display = ORIGENS_DO_DOC.includes(tipo) ? '' : 'none'
+  if (!ORIGENS_DO_DOC.includes(tipo)) return
+
+  const atual = sel.value || String(fdState.origemId || '')
+  let origens = []
+  if (fdState.lote?.id) {
+    const p = new URLSearchParams({ tipo, lote_id: fdState.lote.id })
+    if (fdState.id) p.set('exceto', fdState.id)
+    try {
+      const r = await fetch('/api/documentos/origens?' + p, { headers: { Accept: 'application/json' } })
+      if (r.ok) origens = (await r.json()).origens
+    } catch (_) { /* sem lista: fica só o "sem origem" */ }
+  }
+  // A peça reaberta mostra a origem que tem, mesmo fora da lista.
+  if (atual && fdState.origemRotulo && !origens.some(o => String(o.id) === atual)) {
+    origens.unshift({ id: Number(atual), rotulo: fdState.origemRotulo, data: '' })
+  }
+  sel.innerHTML = '<option value="">Direta — sem documento de origem</option>' + origens.map(o =>
+    `<option value="${o.id}">${esc(o.rotulo)}${o.data ? ' · ' + esc(o.data) : ''}</option>`).join('')
+  sel.value = origens.some(o => String(o.id) === atual) ? atual : ''
+}
+
 /** O auto anterior escolhido como base da reincidência (só em Auto de Infração). */
 function reincidenciaDoDoc() {
   if (document.getElementById('nd-tipo').value !== 'auto_infracao') return null

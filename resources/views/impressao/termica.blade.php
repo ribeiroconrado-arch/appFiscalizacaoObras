@@ -211,7 +211,8 @@
 
 @if ($ciencia)
   <div class="faixa">Ciência / Intimação</div>
-  <div class="par">{{ $ciencia }}</div>
+  {{-- Já escapado, com o **negrito** resolvido (DocumentoImpressao::negrito). --}}
+  <div class="par">{!! $ciencia !!}</div>
 @endif
 
 @if ($doc->observacoes)

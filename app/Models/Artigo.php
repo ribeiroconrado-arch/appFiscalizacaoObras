@@ -344,6 +344,34 @@ class Artigo extends Model
         return trim(preg_replace('/\s+/', ' ', mb_strtolower(Str::ascii($texto))));
     }
 
+    /**
+     * Chave de ordenação NATURAL: pelo número do artigo, depois parágrafo,
+     * depois inciso. Ordenar o texto punha "Art. 121" antes de "Art. 13" e
+     * "Art. 4º" depois de todos.
+     *
+     *   Art. 4º < Art. 13 < Art. 22, §1º < Art. 22, §5º < Art. 34, caput
+     *   < Art. 34, §1º < Art. 120, parágrafo único < Art. 121-A, I < Art. 121-A, II
+     */
+    public function ordem(): string
+    {
+        $t = (string) $this->numero;
+        preg_match('/(\d+)(?:-([A-Za-z]))?/', $t, $m);
+        $resto = isset($m[0]) ? substr($t, strpos($t, $m[0]) + strlen($m[0])) : $t;
+        $paragrafo = preg_match('/§{1,2}\s*(\d+)/u', $resto, $p) ? (int) $p[1]
+            : (preg_match('/par[aá]grafo\s+[uú]nico/iu', $resto) ? 1 : 0);
+        $inciso = 0;
+        if (preg_match('/,\s*([IVXLC]+)\b/', $resto, $i)) {
+            $valores = ['I' => 1, 'V' => 5, 'X' => 10, 'L' => 50, 'C' => 100];
+            $letras = str_split($i[1]);
+            foreach ($letras as $k => $l) {
+                $v = $valores[$l];
+                $inciso += isset($letras[$k + 1]) && $valores[$letras[$k + 1]] > $v ? -$v : $v;
+            }
+        }
+
+        return sprintf('%06d%s|%03d|%03d|%s', (int) ($m[1] ?? 999999), strtoupper($m[2] ?? ' '), $paragrafo, $inciso, $t);
+    }
+
     public function scopeAtivos(Builder $q): Builder
     {
         return $q->where('ativo', true)->orderBy('numero');

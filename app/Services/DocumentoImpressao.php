@@ -44,7 +44,8 @@ class DocumentoImpressao
             'brasao'      => $this->brasao($paraPdf),
             'imovel'      => $this->imovel($doc),
             'origemTexto' => $this->origem($doc),
-            'ciencia'     => $doc->legislacao?->ciencia($doc->tipo, $prazoDias),
+            // Já em HTML seguro: escapado, com o **negrito** virando <strong>.
+            'ciencia'     => self::negrito($doc->legislacao?->ciencia($doc->tipo, $prazoDias, $doc->origem)),
             'memoria'     => $this->memoria($doc),
             'anexos'      => $comAnexos ? $this->anexos($doc, $paraPdf) : [],
             'termoRecusa' => Parametro::get('termo_recusa'),
@@ -98,6 +99,20 @@ class DocumentoImpressao
         }
 
         return mb_strtoupper($doc->origem->rotuloTipo()) . ' Nº ' . $doc->origem->numeroFormatado();
+    }
+
+    /**
+     * **texto** vira negrito na impressão — e só isso. O texto é ESCAPADO
+     * antes, então nada que o administrador digite em Parâmetros vira marcação:
+     * as vistas imprimem o resultado sem escapar de novo ({!! !!}).
+     */
+    public static function negrito(?string $texto): ?string
+    {
+        if ($texto === null || $texto === '') {
+            return null;
+        }
+
+        return nl2br(preg_replace('/\*\*(.+?)\*\*/us', '<strong>$1</strong>', e($texto)));
     }
 
     /**

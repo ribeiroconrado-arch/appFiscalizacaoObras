@@ -746,3 +746,26 @@ function melhorPosicaoGps({ aCadaMelhora, alvoM = GPS_ALVO_M, esperaMs = GPS_ESP
     const relogio = setTimeout(() => fim(), esperaMs)
   })
 }
+
+// ── CAIXA ALTA NOS FORMULÁRIOS DE PREENCHIMENTO ──────────────
+
+/**
+ * Tudo que se DIGITA nos formulários marcados com `data-caixa-alta` vira
+ * maiúsculo na hora — e é assim que é gravado e impresso, sem depender de
+ * quem digitou ter lembrado do Caps Lock.
+ *
+ * Só campos de texto: número, data, e-mail e senha ficam como são. Um campo
+ * (ou bloco) que precise de minúsculas leva `data-caixa-livre`.
+ * O cursor é reposto: sem isso, corrigir uma letra no meio do texto jogava
+ * o cursor para o fim.
+ */
+document.addEventListener('input', e => {
+  const el = e.target
+  if (!(el instanceof HTMLTextAreaElement) && !(el instanceof HTMLInputElement && ['text', 'search', ''].includes(el.getAttribute('type') || ''))) return
+  if (!el.closest('[data-caixa-alta]') || el.closest('[data-caixa-livre]')) return
+  const alta = el.value.toUpperCase()
+  if (alta === el.value) return
+  const ini = el.selectionStart, fim = el.selectionEnd
+  el.value = alta
+  try { el.setSelectionRange(ini, fim) } catch (_) { /* campo sem seleção de texto */ }
+}, true)

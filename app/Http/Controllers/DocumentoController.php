@@ -280,7 +280,7 @@ class DocumentoController extends Controller
                     'rotulo'             => $l->rotulo(),
                     'prazo_defesa_dias'  => $l->prazo_defesa_dias,
                     'prazo_cumpr_dias'   => $l->prazo_cumprimento_dias,
-                    'artigos'            => $l->artigos->map(fn ($a) => [
+                    'artigos'            => $l->artigos->sortBy(fn ($a) => $a->ordem())->values()->map(fn ($a) => [
                         'id' => $a->id, 'numero' => $a->numero, 'rotulo' => $a->rotulo(),
                         'conduta' => $a->conduta,
                         // Os termos de busca do artigo: o campo de artigo do
@@ -420,9 +420,13 @@ class DocumentoController extends Controller
         if ($recusa = $this->recusarArtigosForaDoTipo($d['tipo'], $d['artigos'] ?? [])) {
             return $recusa;
         }
+        if ($msg = $this->recusaDaOrigem($d['tipo'], $d['origem_id'] ?? null)) {
+            return response()->json(['message' => $msg], 422);
+        }
 
         $doc = Documento::create([
             'tipo'          => $d['tipo'],
+            'origem_id'     => $d['origem_id'] ?? null,
             'lote_id'       => $lote?->id,
             'vistoria_id'   => $d['vistoria_id'] ?? null,
             'legislacao_id' => $d['legislacao_id'] ?? null,
@@ -478,7 +482,56 @@ class DocumentoController extends Controller
         'multiplicadores.*' => ['nullable', 'numeric', 'min:0', 'max:999999'],
         // O auto anterior, de que este é reincidência (a multa dobra).
         'reincidencia_de_id' => ['nullable', 'integer', 'exists:documentos,id'],
+        // A peça de que esta nasceu (notificação ou embargo anterior).
+        'origem_id'          => ['nullable', 'integer', 'exists:documentos,id'],
     ];
+
+    /**
+     * GET /api/documentos/origens — as peças lavradas do imóvel de que um
+     * auto pode NASCER (Documento::ORIGENS): a notificação ou o embargo que
+     * veio antes. É o que o marcador {origem} cita no texto de ciência.
+     */
+    public function origens(Request $request): JsonResponse
+    {
+        $d = $request->validate([
+            'tipo'    => ['required', Rule::in(array_keys(Documento::TIPOS))],
+            'lote_id' => ['nullable', 'integer'],
+            'exceto'  => ['nullable', 'integer'],
+        ]);
+        $tipos = Documento::ORIGENS[$d['tipo']] ?? [];
+        if (! $tipos || empty($d['lote_id'])) {
+            return response()->json(['origens' => []]);
+        }
+
+        $pecas = Documento::where('lote_id', $d['lote_id'])->whereIn('tipo', $tipos)
+            ->whereNotIn('status', ['rascunho', 'anulado'])
+            ->when($d['exceto'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
+            ->orderByDesc('data_lavratura')->limit(40)->get();
+
+        return response()->json(['origens' => $pecas->map(fn (Documento $p) => [
+            'id'     => $p->id,
+            'rotulo' => $p->rotuloTipo() . ' nº ' . $p->numeroFormatado(),
+            'data'   => $p->data_lavratura?->format('d/m/Y'),
+        ])]);
+    }
+
+    /**
+     * A origem informada serve a esta peça? Tem de ser peça LAVRADA, de um
+     * tipo de que esta pode nascer. Devolve a mensagem da recusa, ou null.
+     */
+    private function recusaDaOrigem(string $tipo, ?int $origemId, ?int $proprioId = null): ?string
+    {
+        if (! $origemId) {
+            return null;
+        }
+        $origem = Documento::find($origemId);
+        if (! $origem || $origem->id === $proprioId || in_array($origem->status, ['rascunho', 'anulado'], true)
+            || ! in_array($origem->tipo, Documento::ORIGENS[$tipo] ?? [], true)) {
+            return 'O documento de origem tem de ser uma peça lavrada e não anulada, de um tipo que anteceda ' . Documento::TIPOS[$tipo][0] . '.';
+        }
+
+        return null;
+    }
 
     /**
      * GET /api/documentos/autos-anteriores — os Autos de Infração lavrados de
@@ -634,6 +687,8 @@ class DocumentoController extends Controller
             'agente'         => $documento->agente?->name,
             'matricula'      => $documento->agente?->matricula,
             'origem'         => $documento->origem?->numeroFormatado(),
+            'origem_id'      => $documento->origem_id,
+            'origem_rotulo'  => $documento->origem ? $documento->origem->rotuloTipo() . ' nº ' . $documento->origem->numeroFormatado() : null,
 
             'imovel' => [
                 // O id do lote: é por ele que o formulário lê o cadastro
@@ -820,6 +875,10 @@ class DocumentoController extends Controller
 
         // array_merge, e não `+`: o texto único montado das partes tem de VENCER o
         // que veio no pedido.
+        if ($msg = $this->recusaDaOrigem($d['tipo'], $d['origem_id'] ?? null, $documento->id)) {
+            return response()->json(['message' => $msg], 422);
+        }
+
         try {
             $documento->tipo = $d['tipo'];
             $this->lavratura->vincularReincidencia($documento, $d['reincidencia_de_id'] ?? null);

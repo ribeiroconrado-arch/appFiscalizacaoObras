@@ -1380,7 +1380,7 @@
      das vistorias, e obrigá-la a atravessar todos os passos custaria mais do
      que a informação que eles coletam.
      ══════════════════════════════════════════════ --}}
-<div class="modal-bg" id="m-vistoria" onclick="fModal()">
+<div class="modal-bg" id="m-vistoria" onclick="fModal()" data-caixa-alta>
   <div class="modal modal-flex" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fecharVistoria()">&#10005;</button>
 
@@ -1741,7 +1741,7 @@
 
      Editar em quatro telas separadas quebraria justamente o que o item existe
      para juntar. --}}
-<div class="modal-bg" id="m-vs-item" onclick="fModal()">
+<div class="modal-bg" id="m-vs-item" onclick="fModal()" data-caixa-alta>
   <div class="modal modal-flex" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fecharItemRelatorio()">&#10005;</button>
 
@@ -2008,7 +2008,7 @@
      de Embargo. A vistoria usa o mesmo invólucro, sem a parte de sanção — ela
      ganha formulário próprio depois.
      ══════════════════════════════════════════════ --}}
-<div class="modal-bg" id="m-doc" onclick="fModal()">
+<div class="modal-bg" id="m-doc" onclick="fModal()" data-caixa-alta>
 <div class="modal modal-flex" onclick="event.stopPropagation()">
   <button class="modal-x" onclick="fecharFormDoc()">&#10005;</button>
 
@@ -2265,6 +2265,17 @@
         <div id="nd-bloco-informados" style="display:none">
           <div class="sec-title">Multa a critério do fiscal</div>
           <div class="g2" id="nd-multiplicadores"></div>
+        </div>
+        {{-- De qual peça o auto nasceu (a notificação ou o embargo anterior).
+             É a que o texto de ciência cita pelo marcador {origem}. --}}
+        <div id="nd-bloco-origem" style="display:none">
+          <div class="sec-title">Documento de origem</div>
+          <div class="field">
+            <label for="nd-origem">Este documento decorre de</label>
+            <select id="nd-origem" data-lock onfocus="carregarOrigensDoc()">
+              <option value="">Direta — sem documento de origem</option>
+            </select>
+          </div>
         </div>
         {{-- Reincidência (art. 121-B, §2º): o auto é lavrado a partir de outro
              auto, e a multa dos artigos marcados dobra. Só em Auto de Infração. --}}
@@ -2740,7 +2751,7 @@
 {{-- ══════ NOVA ORDEM DE SERVIÇO ══════
      A ordem responde quatro coisas, e o formulário segue essa ordem: o QUE se
      determina, a QUEM, QUANDO, e com que peso. --}}
-<div class="modal-bg" id="m-os-nova" onclick="fModal()">
+<div class="modal-bg" id="m-os-nova" onclick="fModal()" data-caixa-alta>
   <div class="modal modal-flex" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fModalBtn('m-os-nova')">&#10005;</button>
     <div class="vs-head">
@@ -2875,7 +2886,7 @@
      gravação: o painel cobrava "vistorias irregulares sem documento" e não
      havia por onde fechar. Vistoria regular não abre esta janela — nada
      aconteceu, e está certo. --}}
-<div class="modal-bg" id="m-vist-ato" onclick="fModal()">
+<div class="modal-bg" id="m-vist-ato" onclick="fModal()" data-caixa-alta>
   <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
     <button class="modal-x" onclick="fModalBtn('m-vist-ato')">&#10005;</button>
     <h3 class="fi-cabeca">
@@ -3071,7 +3082,7 @@
 </div>
 
 {{-- NOVO PROTOCOLO --}}
-<div class="modal-bg" id="m-novo-proto" onclick="fModal()">
+<div class="modal-bg" id="m-novo-proto" onclick="fModal()" data-caixa-alta>
   <div class="modal" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fModalBtn('m-novo-proto')">&#10005;</button>
     <h3>

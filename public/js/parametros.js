@@ -433,6 +433,7 @@ function formLei(l, ver = false) {
       ${parRot('Número', parInp('numero', l.numero, 'class="mono" maxlength="40"'), 'max-width:190px')}
       ${parRot('Nome', parInp('nome', l.nome, 'maxlength="160"'), 'flex:2')}
       ${parRot('Ano', parInp('ano', l.ano ?? new Date().getFullYear(), 'type="number" min="1900" max="2100"'), 'max-width:110px')}
+      ${parRot('Data da lei', parInp('data_publicacao', l.data_publicacao, 'type="date"'), 'max-width:170px')}
     </div>
     <div class="cad-row">${parRot('Ementa', parTxt('ementa', l.ementa))}</div>
     <div class="cad-row">
@@ -446,6 +447,7 @@ function formLei(l, ver = false) {
 function corpoDaLei(l) {
   return {
     id: l.id ?? null, numero: l.numero, nome: l.nome, ano: l.ano || null, ementa: l.ementa || null,
+    data_publicacao: l.data_publicacao || null,
     prazo_defesa_dias: l.prazo_defesa_dias, prazo_cumprimento_dias: l.prazo_cumprimento_dias,
     ciencia_notificacao: l.ciencia_notificacao || null, ciencia_auto: l.ciencia_auto || null,
     ativa: !!l.ativa,
@@ -460,6 +462,7 @@ async function salvarLei() {
   const d = await parGravar('/api/legislacao', corpoDaLei({
     ...atual, numero, nome,
     ano: parCampo('ano'), ementa: parCampo('ementa'),
+    data_publicacao: parCampo('data_publicacao') || null,
     prazo_defesa_dias: parCampo('prazo_defesa_dias'),
     prazo_cumprimento_dias: parCampo('prazo_cumprimento_dias'),
     ativa: parCampo('ativa'),
@@ -565,8 +568,8 @@ function renderDetalheLei(l) {
     + (artigos.map(a => parEditando('artigos', a.id) ? formArtigo(a) : `
       <div class="par-linha${a.ativo ? '' : ' par-linha-inativa'}">
         ${parPrincipal('artigos', a.id)}
-          <b>${esc(a.apelido || a.numero)}</b>
-          <span>${esc(a.numero)} · ${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'}${a.documentos_rotulo ? ` · <span class="art-embargo">${esc(a.documentos_rotulo)}</span>` : ''} · ${a.termos?.length
+          <b>${esc(a.numero)}${a.apelido && a.apelido !== a.numero ? ' - ' + esc(a.apelido) : ''}</b>
+          <span>${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'}${a.documentos_rotulo ? ` · <span class="art-embargo">${esc(a.documentos_rotulo)}</span>` : ''} · ${a.termos?.length
             ? 'busca: ' + a.termos.map(t => esc(t)).join(', ')
             : '<span class="art-sem-termos">sem termos de busca</span>'}</span>
         </div>
@@ -811,9 +814,13 @@ function excluirArtigo(id) {
  * Marcadores que o sistema troca na hora de emitir (Legislacao::ciencia).
  * Texto sem marcador não ganha quadro de dica — ele só aparece onde ajuda.
  */
+const MARCADOR_LEI = ['{lei oficial}', 'a citação desta lei, com a data da aba Dados gerais. Outra lei citada no texto, escreva por extenso']
 const MARCADORES = {
-  ciencia_notificacao: [['{prazo}', 'vira "no prazo de N dias" ou "de imediato", conforme o prazo do documento']],
-  ciencia_auto: [],
+  ciencia_notificacao: [['{prazo}', 'vira "no prazo de N dias" ou "de imediato", conforme o prazo do documento'], MARCADOR_LEI],
+  ciencia_auto: [
+    ['{origem}', 'o documento de que o auto nasceu, já com o artigo: "a Notificação de Embargo nº 12/2026", "o Auto de Embargo nº 3/2026". Auto sem origem: o marcador some'],
+    MARCADOR_LEI,
+  ],
 }
 
 const TEXTOS_DA_LEI = [
@@ -839,7 +846,8 @@ function dicaMarcadores(marcadores) {
   return `<div class="dica-tags"><b>Marcadores deste texto</b> — clique para inserir onde está o cursor. Na emissão, o sistema troca pelo valor do documento.
     <div class="tags">${marcadores.map(([m, desc]) => `
       <button type="button" class="tag" onmousedown="event.preventDefault()" onclick="inserirMarcador('${m}')">${m}</button>
-      <span class="tag-desc">${esc(desc)}</span>`).join('')}</div></div>`
+      <span class="tag-desc">${esc(desc)}</span>`).join('')}</div>
+    <div class="dica-negrito">Use <b>**texto**</b> para deixar um trecho em negrito na impressão.</div></div>`
 }
 
 /** @param {string} m */

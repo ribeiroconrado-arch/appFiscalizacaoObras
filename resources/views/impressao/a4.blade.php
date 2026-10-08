@@ -224,7 +224,8 @@
       <div class="sec">
         <div class="sec-tit">{{ $sec(4, 'Ciência / intimação') }}</div>
         @if ($ciencia)
-          <p>{{ $ciencia }}</p>
+          {{-- Já escapado, com o **negrito** resolvido (DocumentoImpressao::negrito). --}}
+          <p>{!! $ciencia !!}</p>
         @endif
         @if ($prazo)
           <p><strong>{{ $prazo['rotulo'] }}: até {{ $prazo['data'] }}.</strong> {{ $prazo['nota'] }}</p>

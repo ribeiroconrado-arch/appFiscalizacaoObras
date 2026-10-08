@@ -143,6 +143,28 @@ class Documento extends Model
     public function rotuloTipo(): string { return self::TIPOS[$this->tipo][0] ?? $this->tipo; }
     public function sigla(): string      { return self::TIPOS[$this->tipo][1] ?? '?'; }
 
+    /**
+     * Como OUTRA peça se refere a esta, já com o artigo: "a Notificação de
+     * Embargo nº 12/2026", "o Auto de Embargo nº 3/2026". É o que o marcador
+     * {origem} escreve no texto de ciência.
+     */
+    public function referencia(): string
+    {
+        $artigo = str_starts_with($this->tipo, 'auto') ? 'o' : 'a';
+
+        return $artigo . ' ' . $this->rotuloTipo() . ' nº ' . $this->numeroFormatado();
+    }
+
+    /**
+     * De quais tipos uma peça pode NASCER. O auto de infração vem de uma
+     * notificação ou de um embargo descumprido; o auto de embargo, de uma
+     * notificação. Notificação é o começo: não tem origem.
+     */
+    public const ORIGENS = [
+        'auto_infracao' => ['notificacao', 'notificacao_embargo', 'auto_embargo'],
+        'auto_embargo'  => ['notificacao', 'notificacao_embargo'],
+    ];
+
     /** "NOT 2026/0231" — ou "Sem número" enquanto rascunho. */
     public function numeroFormatado(): string
     {

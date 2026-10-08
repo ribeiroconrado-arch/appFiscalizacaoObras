@@ -41,13 +41,16 @@ class LegislacaoController extends Controller
                 'numero'            => $l->numero,
                 'nome'              => $l->nome,
                 'ano'               => $l->ano,
+                'data_publicacao'   => $l->data_publicacao?->format('Y-m-d'),
+                'citacao'           => $l->citacaoOficial(),
                 'ementa'            => $l->ementa,
                 'prazo_defesa_dias' => $l->prazo_defesa_dias,
                 'prazo_cumprimento_dias' => $l->prazo_cumprimento_dias,
                 'ciencia_notificacao' => $l->ciencia_notificacao,
                 'ciencia_auto'      => $l->ciencia_auto,
                 'ativa'             => $l->ativa,
-                'artigos'           => $l->artigos->map(fn (Artigo $a) => [
+                // Pelo NÚMERO do artigo (Artigo::ordem), e não pelo texto.
+                'artigos'           => $l->artigos->sortBy(fn (Artigo $a) => $a->ordem())->values()->map(fn (Artigo $a) => [
                     'id'            => $a->id,
                     'numero'        => $a->numero,
                     'apelido'       => $a->apelido,
@@ -85,6 +88,8 @@ class LegislacaoController extends Controller
             'numero'                 => ['required', 'string', 'max:40'],
             'nome'                   => ['required', 'string', 'max:160'],
             'ano'                    => ['nullable', 'integer', 'min:1900', 'max:2100'],
+            // Para a citação oficial ({lei oficial} nos textos de ciência).
+            'data_publicacao'        => ['nullable', 'date'],
             'ementa'                 => ['nullable', 'string', 'max:2000'],
             'prazo_defesa_dias'      => ['required', 'integer', 'min:1', 'max:120'],
             'prazo_cumprimento_dias' => ['required', 'integer', 'min:0', 'max:365'],
