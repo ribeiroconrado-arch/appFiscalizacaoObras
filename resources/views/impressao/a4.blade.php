@@ -93,10 +93,13 @@
   .assina-linha { border-top: 1px solid #111; padding-top: 3px; margin-top: 3px; font-size: 8.5px; }
 
   /* ── Anexos ── */
-  .anexo { page-break-inside: avoid; margin-bottom: 10px; }
-  .anexo img { max-width: 100%; max-height: 300px; border: 1px solid #ccc; }
-  .anexo-tit { font-size: 9.5px; font-weight: bold; margin-top: 3px; }
-  .anexo-obs { font-size: 8.5px; color: #555; }
+  table.anexo { width: 100%; table-layout: fixed; border-collapse: collapse;
+                border: 1px solid #ddd; page-break-inside: avoid; margin-bottom: 10px; }
+  table.anexo td { padding: 10px; vertical-align: middle; }
+  table.anexo td.anexo-foto { width: 150px; padding-right: 2px; text-align: center; }
+  .anexo img { max-width: 150px; max-height: 110px; width: auto; height: auto; }
+  .anexo-tit { font-size: 9.5px; font-weight: bold; overflow-wrap: break-word; }
+  .anexo-obs { font-size: 8.5px; color: #555; overflow-wrap: break-word; white-space: pre-line; }
 
   /* ── Marca d'água ── */
   .marca { position: fixed; top: 40%; left: 12%; font-size: 96px; font-weight: bold;
@@ -294,15 +297,18 @@
         <div class="sec">
           <div class="sec-tit">{{ $sec(6, 'Anexos') }}</div>
           @foreach ($anexos as $a)
-            <div class="anexo">
-              @if ($a['foto'])
-                <img src="{{ $a['src'] }}" alt="">
-              @endif
-              <div class="anexo-tit">{{ $a['titulo'] ?: '—' }}</div>
-              @if ($a['descricao'] || $a['dataHora'])
-                <div class="anexo-obs">{{ collect([$a['dataHora'], $a['descricao']])->filter()->implode(' · ') }}</div>
-              @endif
-            </div>
+            <table class="anexo">
+              <tr>
+                @if ($a['foto'] && $a['src'])
+                  <td class="anexo-foto" style="width:24%"><img src="{{ $a['src'] }}" alt="{{ $a['titulo'] ?: 'Imagem do anexo' }}"></td>
+                @endif
+                <td class="anexo-dados" style="width:{{ $a['foto'] && $a['src'] ? '76%' : '100%' }}">
+                  <div class="anexo-tit">{{ $a['titulo'] ?: '—' }}</div>
+                  @if ($a['dataHora'])<div class="anexo-obs">{{ $a['dataHora'] }}</div>@endif
+                  @if ($a['descricao'])<div class="anexo-obs">{{ $a['descricao'] }}</div>@endif
+                </td>
+              </tr>
+            </table>
           @endforeach
         </div>
       @endif
