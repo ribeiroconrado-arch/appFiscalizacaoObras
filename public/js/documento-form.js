@@ -747,7 +747,12 @@ function sairEdicaoDoc() {
 }
 
 /** Grava um novo documento ou atualiza o rascunho aberto. */
-async function gravarDoc() {
+/**
+ * O que o formulário manda ao servidor. Uma função só, porque dois pedidos
+ * mandam EXATAMENTE isto: o Gravar e a prévia do resumo (a via A4 do que está
+ * na tela) — se divergissem, o resumo mostraria uma peça e o Gravar faria outra.
+ */
+function corpoDoDoc() {
   const tipo = document.getElementById('nd-tipo').value
   const t = dState.opcoes.tipos.find(x => x.valor === tipo)
 
@@ -789,6 +794,15 @@ async function gravarDoc() {
 
   // Num rascunho já gravado, o imóvel vinculado depois viaja no PATCH.
   if (fdState.id && fdState.lote?.id) corpo.lote_id = fdState.lote.id
+
+  return corpo
+}
+
+async function gravarDoc() {
+  const tipo = document.getElementById('nd-tipo').value
+  const t = dState.opcoes.tipos.find(x => x.valor === tipo)
+
+  const corpo = corpoDoDoc()
 
   try {
     // Sem imóvel, o documento nasce pela rota que não o exige. A cobrança
@@ -877,93 +891,45 @@ function fecharFormDoc() {
  */
 function renderResumoDoc() {
   const caixa = document.getElementById('nd-resumo')
-  // PEÇA GRAVADA: o resumo é a PRÓPRIA via A4, a mesma que sai impressa — é
-  // nela que o autuado lê o que está assinando. Só enquanto a peça não foi
-  // gravada (ou está em edição, com mudança que o servidor ainda não tem)
-  // vale o resumo montado na tela, abaixo.
+  // O RESUMO É SEMPRE A VIA A4 — a mesma página que sai impressa, e é nela
+  // que o autuado lê o que está assinando.
+  //   · peça gravada e sem edição em curso: a via do que está no servidor;
+  //   · peça nova ou em edição: a via do que está NA TELA, montada pelo
+  //     servidor sem gravar nada (POST /api/documentos/previa).
   if (fdState.id && fdState.estado !== 'novo' && !fdState.editando) {
-    mostrarViaA4NoResumo(caixa)
+    mostrarViaA4NoResumo(caixa, { url: `/documentos/${fdState.id}/impressao?formato=a4&previa=1&t=${Date.now()}` })
     return
   }
-  caixa.classList.remove('rs-a4')
-
-  const tipoSel = document.getElementById('nd-tipo')
-  const rotulo = tipoSel.options[tipoSel.selectedIndex]?.textContent || 'Documento'
-  const lei = dState.opcoes.leis.find(l => String(l.id) === document.getElementById('nd-lei').value)
-  const artigos = (lei?.artigos || []).filter(a => fdState.artigos.includes(a.id))
-  const p = fdState.lote || {}
-  const t = dState.opcoes.tipos.find(x => x.valor === tipoSel.value)
-
-  let n = 0
-  const sec = titulo => `<div class="rs-sec"><span class="rs-num">${++n}</span>${esc(titulo)}</div>`
-  const linha = (r, v) => v
-    ? `<div class="rs-linha"><span>${esc(r)}</span><b>${esc(v)}</b></div>` : ''
-
-  const dataFato = document.getElementById('nd-data').value
-  const dataBr = dataFato ? dataFato.split('-').reverse().join('/') : '—'
-
-  document.getElementById('nd-resumo').innerHTML = `
-    <div class="rs-cab">
-      <img class="rs-brasao" src="/img/brasao-prefeitura.png" alt=""
-           onerror="this.style.display='none'">
-      <div class="rs-cab-tit">
-        <div class="rs-cab-doc">${esc(rotulo.toUpperCase())}</div>
-        <div class="rs-cab-org">Prefeitura Municipal de Primavera do Leste – MT</div>
-        <div class="rs-cab-meta">Nº ${esc(document.getElementById('fd-numero').textContent)}
-          · Fato em ${esc(dataBr)} ${esc(document.getElementById('nd-hora').value || '')}</div>
-      </div>
-    </div>
-
-    ${sec('Autuado')}
-    ${linha('Nome', document.getElementById('nd-autuado').value) || '<div class="rs-linha"><span>Nome</span><b>—</b></div>'}
-    ${linha('CPF/CNPJ', document.getElementById('nd-autuado-doc').value)}
-    ${linha('Endereço', enderecoAutuadoDoc())}
-
-    ${sec('Imóvel')}
-    ${linha('Inscrição', document.getElementById('nd-im-inscricao').value || 'sem inscrição')}
-    ${linha('Bairro', document.getElementById('nd-im-bairro').value)}
-    ${linha('Quadra / Lote', `${document.getElementById('nd-im-quadra').value || '—'} / ${document.getElementById('nd-im-lote').value || '—'}`)}
-    ${linha('Área do terreno', document.getElementById('nd-area-terreno').value ? fmtNum(document.getElementById('nd-area-terreno').value) + ' m²' : '')}
-    ${linha('Endereço da obra', enderecoObraDoc())}
-
-    ${document.getElementById('nd-descricao').value
-      ? sec('Constatação') + `<p class="rs-texto">${esc(document.getElementById('nd-descricao').value)}</p>` : ''}
-
-    ${t?.exige_artigos ? `
-      ${sec('Legislação infringida')}
-      ${lei ? `<div class="rs-linha"><span>Lei</span><b>${esc(lei.rotulo)}</b></div>` : ''}
-      <div class="rs-artigos">
-        ${artigos.length
-          ? artigos.map(a => `<div class="rs-artigo"><strong>Art. ${esc(String(a.numero).replace(/^Art\.?\s*/i, ''))}.</strong> ${esc(a.conduta || '')}</div>`).join('')
-          : '<div class="rs-artigo">—</div>'}
-      </div>
-      ${resumoMulta(artigos)}
-    ` : ''}
-
-    ${t?.prazo === 'cumprimento'
-      ? sec('Prazo para cumprimento') + `<div class="rs-linha"><span>Prazo</span><b>${esc(document.getElementById('nd-prazo').value)} dias</b></div>`
-      : t?.prazo === 'defesa'
-        ? sec('Prazo de defesa') + `<div class="rs-linha"><span>Prazo</span><b>${lei ? esc(String(lei.prazo_defesa_dias)) + ' dias úteis da lavratura' : 'definido pela lei'}</b></div>`
-        : ''}
-
-    ${typeof resumoAssinaturasDoc === 'function' ? resumoAssinaturasDoc() : ''}`
+  previaA4DoFormulario(caixa)
 }
 
 /**
- * Bloco de multa do resumo — a memória de cálculo, como sai impressa.
- * Mostra a MESMA conta da aba de infração (fdState.multa, vinda do servidor).
+ * A via A4 do que está digitado, sem gravar. Se o servidor recusar a peça
+ * como está (artigo que não serve ao documento, por exemplo), o resumo diz
+ * o motivo em vez de mostrar uma folha — é o mesmo motivo que o Gravar daria.
+ * @param {HTMLElement} caixa
  */
-function resumoMulta(artigos) {
-  const m = fdState.multa
-  if (!m || !artigos.some(a => a.base_multa !== 'sem_multa')) return ''
-
-  const linhas = m.linhas.filter(l => l.base !== 'sem_multa').map(l => `<div class="rs-linha"><span>${esc(l.numero)}</span>${
-    l.pendencia ? `<b style="color:var(--red)">falta informar ${esc(l.pendencia)}</b>` : `<b>${esc(l.memoria)}</b>`}</div>`).join('')
-
-  return `<div class="rs-sec"><span class="rs-num">•</span>Penalidade</div>${linhas}
-    <div class="rs-linha rs-total"><span>Total${m.gravada ? '' : ' estimado'}</span><b>${fmtNum(m.total_upf || 0)} UPF${
-      m.total_reais ? ' · R$ ' + fmtNum(m.total_reais) : ''}</b></div>
-    ${m.gravada ? '' : '<p class="rs-nota">O valor definitivo é calculado na lavratura, com a UPF do exercício.</p>'}`
+async function previaA4DoFormulario(caixa) {
+  caixa.classList.add('rs-a4')
+  caixa.innerHTML = '<div class="rs-a4-aviso">Montando a via do documento…</div>'
+  const pedido = previaA4DoFormulario.ultimo = (previaA4DoFormulario.ultimo || 0) + 1
+  try {
+    const r = await fetch('/api/documentos/previa', {
+      method: 'POST',
+      headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json', Accept: 'text/html, application/json' },
+      body: JSON.stringify({ ...corpoDoDoc(), documento_id: fdState.id || null, lote_id: fdState.lote?.id || null }),
+    })
+    // Resposta de um pedido antigo (o fiscal já mudou de aba e voltou).
+    if (pedido !== previaA4DoFormulario.ultimo || fdState.aba !== 'resumo') return
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}))
+      throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
+    }
+    mostrarViaA4NoResumo(caixa, { html: await r.text() })
+  } catch (e) {
+    if (pedido !== previaA4DoFormulario.ultimo) return
+    caixa.innerHTML = `<div class="rs-a4-aviso rs-a4-erro">Não foi possível montar a via do documento: ${esc(e.message || 'falha de comunicação')}</div>`
+  }
 }
 
 // ── O RESUMO COMO A VIA A4 ───────────────────────────────────
@@ -980,19 +946,21 @@ const LARGURA_A4_PX = 794
  * na largura; ampliar é o gesto de pinça do próprio aparelho.
  *
  * @param {HTMLElement} caixa
+ * @param {{url?: string|null, html?: string|null}} origem a via gravada (endereço) ou a prévia (HTML)
  */
-function mostrarViaA4NoResumo(caixa) {
+function mostrarViaA4NoResumo(caixa, { url = null, html = null }) {
   caixa.classList.add('rs-a4')
-  // O carimbo evita a via antiga guardada pelo navegador depois de gravar.
-  const url = `/documentos/${fdState.id}/impressao?formato=a4&previa=1&t=${Date.now()}`
   caixa.innerHTML = `<div class="rs-a4-aviso">Carregando a via do documento…</div>
-    <div class="rs-a4-folha"><iframe class="rs-a4-quadro" title="Via A4 do documento" scrolling="no" src="${url}"></iframe></div>`
+    <div class="rs-a4-folha"><iframe class="rs-a4-quadro" title="Via A4 do documento" scrolling="no"></iframe></div>`
 
   const quadro = caixa.querySelector('iframe')
   quadro.addEventListener('load', () => {
     caixa.querySelector('.rs-a4-aviso')?.remove()
     ajustarViaA4NoResumo()
   })
+  // A peça gravada vem pelo endereço; a prévia, pelo HTML já em mãos.
+  if (html !== null) quadro.srcdoc = html
+  else quadro.src = url
 }
 
 /** Recalcula a escala da via A4 para a largura atual do resumo. */

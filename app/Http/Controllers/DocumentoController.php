@@ -1007,6 +1007,44 @@ class DocumentoController extends Controller
     }
 
     /**
+     * POST /api/documentos/previa — a via A4 do que está NA TELA, sem gravar.
+     *
+     * O resumo do formulário mostra sempre a via A4. Para a peça gravada, ela
+     * vem de /documentos/{id}/impressao; para a que ainda não foi gravada (ou
+     * está em edição), vem daqui: o pedido é o MESMO do Gravar, a peça é
+     * criada ou alterada dentro de uma transação, a página é montada e a
+     * transação é DESFEITA. Nada fica no banco — e a prévia passa exatamente
+     * pelas mesmas regras e pela mesma impressão da peça de verdade.
+     *
+     * `documento_id` diz qual rascunho está em edição; sem ele é peça nova, e
+     * `lote_id` (opcional) é o imóvel escolhido.
+     */
+    public function previa(Request $request, DocumentoImpressao $impressao): Response|JsonResponse
+    {
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            if ($id = $request->input('documento_id')) {
+                $doc = Documento::findOrFail($id);
+                $resposta = $this->update($request, $doc);
+            } else {
+                $lote = $request->input('lote_id') ? Lote::find($request->input('lote_id')) : null;
+                $resposta = $this->store($request, $lote);
+                $doc = Documento::find($resposta->getData(true)['documento']['id'] ?? 0);
+            }
+            if ($resposta->getStatusCode() >= 400 || ! $doc) {
+                return $resposta;
+            }
+
+            $html = view('impressao.a4', $impressao->montar($doc->fresh(), paraPdf: false, comAnexos: true)
+                + ['navegador' => false, 'previa' => true])->render();
+
+            return response($html)->header('Content-Type', 'text/html; charset=utf-8');
+        } finally {
+            \Illuminate\Support\Facades\DB::rollBack();
+        }
+    }
+
+    /**
      * GET /documentos/{documento}/impressao?formato=a4|termica&anexos=0|1
      *
      * Página HTML que se manda para a impressora sozinha. Existe ao lado do

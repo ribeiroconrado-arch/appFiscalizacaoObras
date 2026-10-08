@@ -225,22 +225,3 @@ function confirmarLavraturaDoc() {
     },
   })
 }
-
-// ── NO RESUMO DA PEÇA ────────────────────────────────────────
-
-/**
- * O bloco de assinaturas do resumo: linhas em branco enquanto é rascunho; as
- * assinaturas colhidas depois de lavrado — e, havendo recusa, a testemunha.
- */
-function resumoAssinaturasDoc() {
-  const a = fdState.estado === 'lavrado' ? fdState.assinaturas : null
-  const campo = (img, rotulo) => `<div>${img ? `<img src="${esc(img)}" alt="">` : '<div class="rs-assina-vazio"></div>'}
-    <div class="rs-assina-linha"></div>${rotulo}</div>`
-
-  return `<div class="rs-assinaturas">
-      ${campo(a?.agente, 'Fiscal')}
-      ${campo(a?.autuado, 'Autuado / Preposto')}
-    </div>${a?.recusa ? `<div class="rs-recusa"><b>Recusa de assinatura.</b> O autuado se recusou a assinar.
-      ${a.testemunha_nome ? `Testemunha: <b>${esc(a.testemunha_nome)}</b>.` : ''}
-      ${a.testemunha ? `<div class="rs-assinaturas" style="margin-top:10px">${campo(a.testemunha, 'Testemunha')}<div></div></div>` : ''}</div>` : ''}`
-}

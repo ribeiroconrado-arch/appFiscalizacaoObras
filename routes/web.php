@@ -266,6 +266,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Sem imóvel: o fiscal abre a peça em campo e amarra o lote depois.
         // A obrigatoriedade não sumiu — mudou para a lavratura.
         Route::post('/documentos', [DocumentoController::class, 'storeSemLote']);
+        // A via A4 do que está na tela, sem gravar (o resumo do formulário).
+        Route::post('/documentos/previa', [DocumentoController::class, 'previa']);
         Route::post('/documentos/{documento}/lavrar', [DocumentoController::class, 'lavrar']);
         // Depois de /documentos/opcoes: registrada antes, a rota curinga
         // engoliria "opcoes" como se fosse o id de um documento.

@@ -126,6 +126,35 @@ try {
     [, $f] = chamar($admin, 'ficha', [], ['documento' => $rascunho()], 'GET');
     confere($f['assinaturas'] === null, 'rascunho não tem assinaturas');
 
+    echo "Prévia A4 do que está na tela (sem gravar)\n";
+    $previa = function (array $corpo) use ($admin, $app) {
+        Auth::guard('web')->setUser($admin);
+        $req = Illuminate\Http\Request::create('/x', 'POST', $corpo, [], [], ['HTTP_ACCEPT' => 'application/json']);
+        $req->setUserResolver(fn () => $admin);
+        $app->instance('request', $req);
+        try {
+            $r = $app->call([$app->make(DocumentoController::class), 'previa'], ['request' => $req]);
+        } catch (Illuminate\Validation\ValidationException $e) {
+            return [422, ''];
+        }
+        return [$r->getStatusCode(), (string) $r->getContent()];
+    };
+    $antes = Documento::count();
+    [$s, $html] = $previa(['tipo' => 'notificacao', 'legislacao_id' => $lei->id, 'artigos' => [$art->id], 'prazo_dias' => 7,
+        'autuado_nome' => 'CICLANO DA PREVIA', 'descricao' => 'OBRA SEM TAPUME', 'lote_id' => $lote->id]);
+    confere($s === 200 && str_contains($html, 'CICLANO DA PREVIA') && str_contains($html, 'OBRA SEM TAPUME') && str_contains($html, 'TESTE LAV 1/2099'),
+        'peça nova: a via A4 traz o que foi digitado');
+    confere(! str_contains($html, 'imp-barra') && ! str_contains($html, 'window.print'), 'sem a barra nem a impressão automática');
+    confere(Documento::count() === $antes, 'e NADA fica gravado');
+
+    $rasc = $rascunho();
+    [$s, $html] = $previa(['documento_id' => $rasc->id, 'tipo' => 'notificacao', 'data_fato' => now()->format('Y-m-d\TH:i'),
+        'legislacao_id' => $lei->id, 'artigos' => [$art->id], 'prazo_dias' => 5, 'autuado_nome' => 'NOME ALTERADO NA TELA']);
+    confere($s === 200 && str_contains($html, 'NOME ALTERADO NA TELA'), 'rascunho em edição: a via mostra a alteração ainda não gravada');
+    confere($rasc->fresh()->autuado_nome === 'FULANO DE TAL', 'e o rascunho no banco continua como estava');
+    [$s] = $previa(['tipo' => 'notificacao', 'artigos' => [999999999]]);
+    confere($s === 422, 'peça que o Gravar recusaria também é recusada na prévia');
+
     echo "\n{$ok} verificações passaram.\n";
 } finally {
     DB::rollBack();
