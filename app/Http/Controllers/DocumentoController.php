@@ -1028,6 +1028,11 @@ class DocumentoController extends Controller
             comAnexos: $request->boolean('anexos', true),
         );
 
-        return response()->view('impressao.' . $formato, $dados + ['navegador' => true]);
+        // PRÉVIA (?previa=1): a MESMA via A4, sem a barra nem a impressão
+        // automática — é o que o resumo do documento embute na tela, para o
+        // autuado ler exatamente o que vai assinar.
+        $previa = $request->boolean('previa');
+
+        return response()->view('impressao.' . $formato, $dados + ['navegador' => ! $previa, 'previa' => $previa]);
     }
 }

@@ -2407,9 +2407,9 @@
         <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>
       </svg>Editar</button>
     <button class="btn primary" id="fd-gravar" onclick="gravarDoc()" hidden>Gravar</button>
-    <button class="btn atencao" id="fd-lavrar" onclick="lavrarDocumento()" hidden>Lavrar</button>
+    <button class="btn lavrar" id="fd-lavrar" onclick="lavrarDocumento()" hidden>Lavrar</button>
     <button class="btn" id="fd-lavrar-cancelar" onclick="cancelarLavraturaDoc()" hidden>Cancelar</button>
-    <button class="btn atencao" id="fd-lavrar-ok" onclick="confirmarLavraturaDoc()" hidden>Confirmar lavratura</button>
+    <button class="btn lavrar" id="fd-lavrar-ok" onclick="confirmarLavraturaDoc()" hidden>Confirmar lavratura</button>
   </div>
 </div>
 </div>

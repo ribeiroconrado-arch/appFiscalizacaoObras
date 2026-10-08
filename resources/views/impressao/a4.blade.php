@@ -58,7 +58,9 @@
   .sec-tit { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em;
              border-bottom: 1px solid #d5d5d5; padding: 0 0 5px; margin: 10px 0 7px;
              page-break-after: avoid; }
-  .sec p { margin: 0 0 5px; text-align: justify; }
+  /* CPDF insere separadores NUL nos ajustes de espaço de texto Unicode
+     justificado, incompatíveis com alguns importadores de PDF. */
+  .sec p { margin: 0 0 5px; text-align: left; }
 
   table.campos { width: 100%; border-collapse: collapse; }
   table.campos td { border: 0; padding: 3px 12px 5px 0; vertical-align: top; font-weight: normal; }
@@ -120,6 +122,11 @@
   .imp-print { background: #006B28; color: #fff; }
   body { padding-bottom: 62px; }
   @media print { .imp-barra { display: none; } body { padding-bottom: 0; } }
+@endif
+@if (! empty($previa))
+  /* Prévia embutida no resumo do documento: as margens que o papel dá pelo
+     @page, aqui vêm no corpo — a tela não tem margem de impressão. */
+  body { padding: 8mm 10mm 10mm; background: #fff; }
 @endif
 </style>
 </head>

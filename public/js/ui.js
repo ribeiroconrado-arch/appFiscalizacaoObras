@@ -202,6 +202,48 @@ function esconderCarregandoTela() {
   falta > 0 ? setTimeout(fechar, falta) : fechar()
 }
 
+/**
+ * Roda uma tarefa com o aviso de carregamento na tela, dizendo O QUE está
+ * sendo carregado. O aviso sai mesmo se a tarefa falhar.
+ *
+ * Tarefas aninhadas (abrir a peça, que carrega as opções, que…) contam: o
+ * aviso só sai quando a de FORA termina — sem isso a de dentro o apagaria no
+ * meio do caminho.
+ *
+ * @template T
+ * @param {string} texto @param {() => Promise<T>|T} tarefa @returns {Promise<T>}
+ */
+async function comCarregando(texto, tarefa) {
+  comCarregando.nivel = (comCarregando.nivel || 0) + 1
+  if (comCarregando.nivel === 1) mostrarCarregandoTela(texto)
+  try {
+    return await tarefa()
+  } finally {
+    comCarregando.nivel--
+    if (comCarregando.nivel === 0) esconderCarregandoTela()
+  }
+}
+
+/**
+ * Liga o aviso de carregamento a funções que já existem, pelo nome: a função
+ * continua igual, só passa a anunciar o que faz enquanto trabalha. Nome que
+ * não existe nesta tela (script que só o administrador recebe) é ignorado.
+ *
+ * Carga rápida não chega a mostrar nada — o aviso só aparece depois de
+ * CARREGANDO_ATRASO —, então ligar aqui não faz a tela piscar.
+ *
+ * @param {Object<string, string>} tabela nome da função → o que dizer
+ */
+function anunciarCarregamento(tabela) {
+  for (const [nome, texto] of Object.entries(tabela)) {
+    const original = window[nome]
+    if (typeof original !== 'function' || original.anunciada) continue
+    const anunciada = function (...args) { return comCarregando(texto, () => original.apply(this, args)) }
+    anunciada.anunciada = true
+    window[nome] = anunciada
+  }
+}
+
 /* ── FILTRO ALTERADO E AINDA NÃO BUSCADO ──
    Tirar a busca instantânea resolve um problema e cria outro: a pessoa troca o
    seletor, NADA acontece, e ela não sabe se o filtro não pegou ou se a lista já

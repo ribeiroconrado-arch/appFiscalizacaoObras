@@ -1036,3 +1036,35 @@ async function preencherIntegracao(loteId) {
     }
   } catch { /* fica o travessão */ }
 }
+
+// ── AVISO DE CARREGAMENTO ────────────────────────────────────
+//
+// Toda ação que busca ou grava dados diz o que está fazendo enquanto o
+// servidor não responde (anunciarCarregamento, ui.js). Fica aqui, no último
+// script da página, porque é onde todas as funções já existem.
+anunciarCarregamento({
+  // Documentos
+  abrirDocumento: 'Carregando o documento…',
+  acaoDocDaLista: 'Carregando o documento…',
+  abrirFormDoc: 'Preparando o documento…',
+  gravarDoc: 'Gravando o documento…',
+  confirmarAnulacaoDoc: 'Anulando o documento…',
+  procurarImovelDoc: 'Buscando imóveis…',
+  vincularImovelDoc: 'Carregando os dados do imóvel…',
+  // Vistorias
+  verVistoria: 'Carregando a vistoria…',
+  enviarVistoria: 'Gravando a vistoria…',
+  procurarImovelVistoria: 'Buscando imóveis…',
+  // Ordens de serviço e protocolos
+  abrirOs: 'Carregando a ordem de serviço…',
+  enviarOs: 'Gravando a ordem de serviço…',
+  abrirProtocolo: 'Carregando o protocolo…',
+  salvarProtocolo: 'Gravando o protocolo…',
+  salvarNovoProtocolo: 'Gravando o protocolo…',
+  // Parâmetros e cadastro
+  carregarParametros: 'Carregando os parâmetros…',
+  recarregarLegislacao: 'Carregando a legislação…',
+  postParametro: 'Gravando…',
+  excluirParametro: 'Excluindo…',
+  carregarHistoricoCadastral: 'Carregando o histórico…',
+})

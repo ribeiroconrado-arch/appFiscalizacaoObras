@@ -645,6 +645,8 @@ function passoAbaDoc(passo) {
 function aplicarEstadoDoc() {
   travarCamposDoc(fdState.estado !== 'novo' && !fdState.editando)
   renderRodapeDoc()
+  // O resumo depende do estado: gravada, a peça passa a mostrar a via A4.
+  if (fdState.aba === 'resumo') renderResumoDoc()
 }
 
 /**
@@ -874,6 +876,17 @@ function fecharFormDoc() {
  * serve para nada.
  */
 function renderResumoDoc() {
+  const caixa = document.getElementById('nd-resumo')
+  // PEÇA GRAVADA: o resumo é a PRÓPRIA via A4, a mesma que sai impressa — é
+  // nela que o autuado lê o que está assinando. Só enquanto a peça não foi
+  // gravada (ou está em edição, com mudança que o servidor ainda não tem)
+  // vale o resumo montado na tela, abaixo.
+  if (fdState.id && fdState.estado !== 'novo' && !fdState.editando) {
+    mostrarViaA4NoResumo(caixa)
+    return
+  }
+  caixa.classList.remove('rs-a4')
+
   const tipoSel = document.getElementById('nd-tipo')
   const rotulo = tipoSel.options[tipoSel.selectedIndex]?.textContent || 'Documento'
   const lei = dState.opcoes.leis.find(l => String(l.id) === document.getElementById('nd-lei').value)
@@ -952,3 +965,53 @@ function resumoMulta(artigos) {
       m.total_reais ? ' · R$ ' + fmtNum(m.total_reais) : ''}</b></div>
     ${m.gravada ? '' : '<p class="rs-nota">O valor definitivo é calculado na lavratura, com a UPF do exercício.</p>'}`
 }
+
+// ── O RESUMO COMO A VIA A4 ───────────────────────────────────
+
+/** Largura de uma folha A4 na tela (210 mm a 96 pontos por polegada). */
+const LARGURA_A4_PX = 794
+
+/**
+ * Põe no resumo a via A4 do documento — a mesma página do PDF, pedida ao
+ * servidor em modo de prévia — e a ENCOLHE até caber na largura da tela.
+ *
+ * Encolhida, e não reorganizada: o que o autuado vê é o desenho exato do
+ * papel, com todas as seções, só que menor. Num tablet a folha cabe inteira
+ * na largura; ampliar é o gesto de pinça do próprio aparelho.
+ *
+ * @param {HTMLElement} caixa
+ */
+function mostrarViaA4NoResumo(caixa) {
+  caixa.classList.add('rs-a4')
+  // O carimbo evita a via antiga guardada pelo navegador depois de gravar.
+  const url = `/documentos/${fdState.id}/impressao?formato=a4&previa=1&t=${Date.now()}`
+  caixa.innerHTML = `<div class="rs-a4-aviso">Carregando a via do documento…</div>
+    <div class="rs-a4-folha"><iframe class="rs-a4-quadro" title="Via A4 do documento" scrolling="no" src="${url}"></iframe></div>`
+
+  const quadro = caixa.querySelector('iframe')
+  quadro.addEventListener('load', () => {
+    caixa.querySelector('.rs-a4-aviso')?.remove()
+    ajustarViaA4NoResumo()
+  })
+}
+
+/** Recalcula a escala da via A4 para a largura atual do resumo. */
+function ajustarViaA4NoResumo() {
+  const caixa = document.getElementById('nd-resumo')
+  const folha = caixa?.querySelector('.rs-a4-folha')
+  const quadro = caixa?.querySelector('.rs-a4-quadro')
+  if (!folha || !quadro || !folha.clientWidth) return
+  let altura = 1123   // uma folha A4, se a página ainda não puder ser medida
+  try { altura = Math.max(quadro.contentDocument.documentElement.scrollHeight, 400) } catch (_) { /* fica a folha padrão */ }
+
+  const escala = Math.min(1, folha.clientWidth / LARGURA_A4_PX)
+  quadro.style.width = LARGURA_A4_PX + 'px'
+  quadro.style.height = altura + 'px'
+  quadro.style.transform = `scale(${escala})`
+  // O transform não muda o espaço que o elemento ocupa: a altura da moldura
+  // é que acompanha a folha encolhida.
+  folha.style.height = Math.ceil(altura * escala) + 'px'
+}
+
+// Girar o tablet ou redimensionar a janela muda a largura disponível.
+window.addEventListener('resize', () => { if (fdState.aba === 'resumo') ajustarViaA4NoResumo() })

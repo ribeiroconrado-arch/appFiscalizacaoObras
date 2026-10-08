@@ -60,8 +60,9 @@ async function abrirAreaLavratura() {
   // (setTimeout, e não requestAnimationFrame: com a aba do navegador em segundo
   // plano o quadro não chega, e o campo ficaria sem preparar.)
   setTimeout(() => {
+    // SEM rolar até aqui: a tela fica na peça, que é o que o autuado lê
+    // antes de assinar. As assinaturas vêm logo abaixo dela.
     Object.keys(PADS_LAVRATURA).forEach(prepararPadLavratura)
-    g('nd-lavratura').scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, 60)
 }
 
@@ -202,12 +203,14 @@ function confirmarLavraturaDoc() {
             + (recusa ? ' Será registrada a recusa de assinatura, com a testemunha informada.' : ''),
     textoBtn: 'Lavrar',
     onConfirm: async () => {
-      const r = await fetch(`/api/documentos/${fdState.id}/lavrar`, {
-        method: 'POST',
-        headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(corpo),
+      const [r, d] = await comCarregando('Lavrando o documento…', async () => {
+        const r = await fetch(`/api/documentos/${fdState.id}/lavrar`, {
+          method: 'POST',
+          headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(corpo),
+        })
+        return [r, await r.json().catch(() => ({}))]
       })
-      const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.message || Object.values(d.errors || {})[0]?.[0] || 'HTTP ' + r.status)
       toast(d.message)
       fdState.lavrando = false
