@@ -971,26 +971,25 @@ function capturarGpsVistoria() {
 
   btn.disabled = true
   btn.textContent = 'Capturando…'
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      vState.gps = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
-        prec: pos.coords.accuracy,
-      }
-      pintarGps()
-      btn.disabled = false
-    },
-    err => {
-      btn.disabled = false
-      btn.textContent = vState.gps ? 'Atualizar' : 'Capturar'
-      // O tratamento de permissão negada já existe e ensina a liberar —
-      // "erro ao obter posição" não resolve nada para quem está em campo.
-      if (err.code === err.PERMISSION_DENIED) { comoLiberarLocalizacao() }
-      else { toast('Não foi possível obter a posição', 'err') }
-    },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
-  )
+  // A melhor leitura em alguns segundos, e não a primeira (melhorPosicaoGps,
+  // ui.js): é esta coordenada que fica na vistoria como prova de presença.
+  melhorPosicaoGps({
+    aCadaMelhora: p => { vState.gps = p; pintarGps(); btn.textContent = 'Afinando…' },
+  }).then(p => {
+    vState.gps = p
+    pintarGps()
+    btn.disabled = false
+    if (p.prec > GPS_FRACO_M) {
+      toast(`Sinal de GPS fraco (±${Math.round(p.prec)} m). A céu aberto, toque em Atualizar para melhorar.`, 'aviso')
+    }
+  }).catch(err => {
+    btn.disabled = false
+    btn.textContent = vState.gps ? 'Atualizar' : 'Capturar'
+    // O tratamento de permissão negada já existe e ensina a liberar —
+    // "erro ao obter posição" não resolve nada para quem está em campo.
+    if (err?.code === 1) { comoLiberarLocalizacao() }
+    else { toast('Não foi possível obter a posição', 'err') }
+  })
 }
 
 function pintarGps() {

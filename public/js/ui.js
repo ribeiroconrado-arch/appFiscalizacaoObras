@@ -692,3 +692,57 @@ document.addEventListener('DOMContentLoaded', () => {
     b.setAttribute('aria-label', b.title)
   }
 })
+
+// ── GPS: A MELHOR LEITURA, E NÃO A PRIMEIRA ──────────────────
+
+/** Precisão (m) a partir da qual a leitura já serve e a espera acaba. */
+const GPS_ALVO_M = 10
+/** Quanto tempo se espera o GPS firmar antes de ficar com a melhor leitura. */
+const GPS_ESPERA_MS = 12000
+/** Acima disto (m) a posição não aponta um lote com segurança: o fiscal é avisado. */
+const GPS_FRACO_M = 30
+
+/**
+ * A posição do aparelho, com a MELHOR precisão que ele der em alguns segundos.
+ *
+ * A primeira leitura do GPS é quase sempre a pior: ele acabou de ligar e
+ * ainda está usando Wi-Fi e antena de celular. Em vez de ficar com ela
+ * (getCurrentPosition), acompanha as leituras (watchPosition), guarda a de
+ * menor erro e para quando chega a GPS_ALVO_M ou quando o tempo acaba.
+ *
+ * `aCadaMelhora` é chamada a cada leitura melhor que a anterior — é o que
+ * deixa o ponto ir se ajustando no mapa enquanto o fiscal espera.
+ *
+ * Rejeita com o erro do navegador (code 1 = permissão negada) só quando NENHUMA
+ * leitura veio.
+ *
+ * @param {{aCadaMelhora?: (p:{lat:number,lon:number,prec:number}) => void, alvoM?: number, esperaMs?: number}} [o]
+ * @returns {Promise<{lat:number, lon:number, prec:number}>}
+ */
+function melhorPosicaoGps({ aCadaMelhora, alvoM = GPS_ALVO_M, esperaMs = GPS_ESPERA_MS } = {}) {
+  return new Promise((resolve, reject) => {
+    let melhor = null, acabou = false
+    const fim = erro => {
+      if (acabou) return
+      acabou = true
+      navigator.geolocation.clearWatch(vigia)
+      clearTimeout(relogio)
+      if (melhor) resolve(melhor)
+      else reject(erro || { code: 3 })
+    }
+    const vigia = navigator.geolocation.watchPosition(
+      pos => {
+        const p = { lat: pos.coords.latitude, lon: pos.coords.longitude, prec: pos.coords.accuracy }
+        if (!melhor || p.prec < melhor.prec) {
+          melhor = p
+          try { aCadaMelhora?.(p) } catch (_) { /* a tela não derruba a leitura */ }
+        }
+        if (melhor.prec <= alvoM) fim()
+      },
+      // Erro com leitura já em mãos não é falha: fica-se com ela.
+      erro => { if (erro.code === 1 || !melhor) fim(erro) },
+      { enableHighAccuracy: true, timeout: esperaMs + 3000, maximumAge: 0 },
+    )
+    const relogio = setTimeout(() => fim(), esperaMs)
+  })
+}

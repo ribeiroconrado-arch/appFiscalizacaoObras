@@ -691,43 +691,53 @@ function usarMinhaLocalizacao() {
   btn.disabled = true
   rotuloGps('Localizando…')
 
-  navigator.geolocation.getCurrentPosition(
-    async pos => {
-      btn.disabled = false
-      const { latitude: lat, longitude: lon, accuracy: prec } = pos.coords
-      state.pos = { lat, lon, prec }
+  // O ponto aparece na primeira leitura e vai se ajustando enquanto o GPS
+  // firma (melhorPosicaoGps, ui.js): a primeira leitura é quase sempre a pior.
+  let centrado = false
+  melhorPosicaoGps({
+    aCadaMelhora: ({ lat, lon, prec }) => {
       marcarMinhaPosicao(lat, lon, prec)
-      btn.classList.add('gps-ativo')
-      btn.dataset.gpsCapturado = '1'
-      rotuloGps('Remover GPS')
-      mapaState.obj.setView([lat, lon], ZOOM_DO_LOTE)
-      await identificarNoServidor(lat, lon, prec)
+      rotuloGps(`Afinando… ±${Math.round(prec)} m`)
+      if (!centrado) { mapaState.obj.setView([lat, lon], ZOOM_DO_LOTE); centrado = true }
     },
-    err => {
-      btn.disabled = false
-      rotuloGps('Usar minha localização')
+  }).then(async ({ lat, lon, prec }) => {
+    btn.disabled = false
+    state.pos = { lat, lon, prec }
+    marcarMinhaPosicao(lat, lon, prec)
+    btn.classList.add('gps-ativo')
+    btn.dataset.gpsCapturado = '1'
+    rotuloGps('Remover GPS')
+    mapaState.obj.setView([lat, lon], ZOOM_DO_LOTE)
+    // Sinal fraco: o lote sugerido pode ser o vizinho. O fiscal fica sabendo
+    // ANTES de confirmar — o círculo azul no mapa mostra o tamanho da dúvida.
+    if (prec > GPS_FRACO_M) {
+      toast(`Sinal de GPS fraco (±${Math.round(prec)} m). Confira o lote no mapa antes de confirmar.`, 'aviso')
+    }
+    await identificarNoServidor(lat, lon, prec)
+  }).catch(err => {
+    btn.disabled = false
+    rotuloGps('Usar minha localização')
+    limparMinhaPosicao()
 
-      // Permissão negada não é um aviso passageiro: é uma trava que só o
-      // usuário destrava, e num lugar que ele não vai adivinhar. Por isso vai
-      // para um modal com o caminho exato, e não para um toast que some em
-      // dois segundos deixando o fiscal sem saber o que fazer.
-      if (err.code === 1) {
-        confirmarAcao({
-          titulo: 'Localização bloqueada',
-          mensagem: comoLiberarLocalizacao(),
-          textoBtn: 'Entendi',
-          onConfirm: () => {},
-        })
+    // Permissão negada não é um aviso passageiro: é uma trava que só o
+    // usuário destrava, e num lugar que ele não vai adivinhar. Por isso vai
+    // para um modal com o caminho exato, e não para um toast que some em
+    // dois segundos deixando o fiscal sem saber o que fazer.
+    if (err?.code === 1) {
+      confirmarAcao({
+        titulo: 'Localização bloqueada',
+        mensagem: comoLiberarLocalizacao(),
+        textoBtn: 'Entendi',
+        onConfirm: () => {},
+      })
 
-        return
-      }
+      return
+    }
 
-      toast({ 2: 'Sinal de GPS fraco. Tente a céu aberto.',
-              3: 'O GPS demorou demais para responder. Tente de novo.' }[err.code]
-            || 'Erro ao obter GPS', 'err')
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  )
+    toast({ 2: 'Sinal de GPS fraco. Tente a céu aberto.',
+            3: 'O GPS demorou demais para responder. Tente de novo.' }[err?.code]
+          || 'Erro ao obter GPS', 'err')
+  })
 }
 
 /** Quebra de linha das instruções — ver o `white-space` de #mcg-msg. */
