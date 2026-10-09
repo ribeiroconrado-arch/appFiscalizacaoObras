@@ -199,11 +199,9 @@
             <td style="width:56%"><span class="lbl">Nome / Razão social</span>{{ $doc->autuado_nome ?: '—' }}</td>
             <td><span class="lbl">CPF / CNPJ</span>{{ $doc->autuado_documento ?: '—' }}</td>
           </tr>
-          @if ($doc->autuado_endereco)
           <tr>
-            <td colspan="2"><span class="lbl">Endereço:</span>{{ preg_replace('/(?:[,;\s]|—|-)*CEP\s*:?\s*\d{5}-?\d{3}/iu', '', $doc->autuado_endereco) }}</td>
+            <td colspan="2"><span class="lbl">Endereço:</span>{{ \App\Services\DocumentoImpressao::enderecoDestinatario($doc) }}</td>
           </tr>
-          @endif
         </table>
       </div>
 

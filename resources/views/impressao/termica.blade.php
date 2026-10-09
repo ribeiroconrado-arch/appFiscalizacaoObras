@@ -152,12 +152,10 @@
   <div class="lbl">CPF / CNPJ</div>
   <div class="val">{{ $doc->autuado_documento ?: '—' }}</div>
 </div>
-@if ($doc->autuado_endereco)
 <div class="campo">
   <div class="lbl">Endereço</div>
-  <div class="val">{{ preg_replace('/(?:[,;\s]|—|-)*CEP\s*:?\s*\d{5}-?\d{3}/iu', '', $doc->autuado_endereco) }}</div>
+  <div class="val">{{ \App\Services\DocumentoImpressao::enderecoDestinatario($doc) }}</div>
 </div>
-@endif
 
 <div class="faixa">{{ $sec('Local da infração e identificação do imóvel') }}</div>
 <div class="campo">

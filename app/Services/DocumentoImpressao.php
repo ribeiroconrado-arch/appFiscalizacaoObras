@@ -22,6 +22,21 @@ use Illuminate\Support\Facades\Storage;
  */
 class DocumentoImpressao
 {
+    /** Usa somente o endereço guardado na peça, sem confundi-lo com o imóvel. */
+    public static function enderecoDestinatario(Documento $doc): string
+    {
+        $endereco = trim((string) $doc->autuado_endereco);
+        if ($endereco === '') {
+            $p = array_map(fn ($v) => trim((string) $v), $doc->autuado_endereco_partes ?? []);
+            $preenchido = fn ($v) => $v !== null && $v !== '';
+            $rua = implode(', ', array_filter([$p['logradouro'] ?? null, $p['numero'] ?? null], $preenchido));
+            $cidade = implode('/', array_filter([$p['cidade'] ?? null, $p['uf'] ?? null], $preenchido));
+            $endereco = implode(' — ', array_filter([$rua, $p['bairro'] ?? null, $cidade], $preenchido));
+        }
+
+        return trim(preg_replace('/(?:[,;\s]|—|-)*CEP\s*:?\s*\d{5}-?\d{3}/iu', '', $endereco)) ?: 'Não informado';
+    }
+
     /**
      * @param  bool  $paraPdf   true quando o destino é o dompdf: a imagem
      *                          precisa virar data URI, porque o dompdf não
