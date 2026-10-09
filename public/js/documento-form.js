@@ -939,8 +939,12 @@ async function previaA4DoFormulario(caixa) {
  * da folha A4 (190 mm, sem as margens de impressão), e não a folha inteira.
  * Sem as margens em branco, o mesmo desenho ocupa a tela toda e a letra sai
  * maior.
+ *
+ * 658, e não os 720 da área útil: desenhada mais estreita e ajustada à mesma
+ * tela, a folha sai com a letra UM PONTO maior (10,5 → 11,5), em todos os
+ * textos na mesma proporção. Só a tela muda; o PDF segue no tamanho do papel.
  */
-const LARGURA_A4_PX = 720
+const LARGURA_A4_PX = 658
 
 /**
  * Põe no resumo a via A4 do documento — a mesma página do PDF, pedida ao

@@ -28,7 +28,10 @@
      ser alcancado. As CINCO telas sobem juntas porque leem este token: ficha,
      vistoria, vistoria de embargo, auto de infracao e auto de embargo. */
   --modal-trabalho:740px;   /* era 672: +10%, para o formulário de documento e a ficha */
-  --modal-trabalho-alt:min(96vh, 988px);
+  /* +15% na altura (era 988px). E o limite pela tela passa de 96vh para a tela
+     inteira menos a folga do véu (14px em cima e embaixo): em tela baixa quem
+     manda é ele, e sem subir junto o pedido não teria efeito nenhum. */
+  --modal-trabalho-alt:min(calc(100vh - 28px), 1136px);
 }
 
 /* Cabeçalho do app no degradê mais claro (app.css usa --gxd → --gd). */
