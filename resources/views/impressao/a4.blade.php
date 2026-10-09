@@ -25,6 +25,10 @@
       ? str_replace(['AUTUADO', 'Autuado', 'autuado'], ['NOTIFICADO', 'Notificado', 'notificado'], $texto ?? '')
       : ($texto ?? '');
   $numeroA4 = $doc->numero ? sprintf('%d/%04d', $doc->exercicio, $doc->numero) : 'Sem número';
+  $contatoRodape = collect([
+      $orgao['endereco'] ?? null, $orgao['municipio'] ?? null, $orgao['telefone'] ?? null,
+      empty($orgao['cnpj']) ? null : 'CNPJ: ' . $orgao['cnpj'],
+  ])->filter(fn ($valor) => trim((string) $valor) !== '')->implode(' · ');
 
   $navegador = $navegador ?? false;
   $fmt = fn ($v, $c = 2) => $v === null ? '—' : number_format((float) $v, $c, ',', '.');
@@ -52,12 +56,14 @@
 @include('impressao._cabecalho-css')
 
   /* Ajustes exclusivos do A4 dos documentos; OS e bobina conservam seus modelos. */
+  .cab-brasao { width: 64px; }
+  .cab-brasao img { width: 54px; height: auto; }
   .cab-orgao { font-size: 10px; }
   .cab-depto, .cab-end { font-size: 9px; margin-top: 1px; }
   .cab-selo { font-size: 9px; }
   @unless ($navegador)
-    @page { margin-top: 33mm; }
-    .cab-fixo { top: -25mm; height: 24mm; }
+    @page { margin-top: 29mm; }
+    .cab-fixo { top: -21mm; height: 20mm; }
   @endunless
   .cab-regua { border-bottom: 1px solid #50565b; }
   .cab-num-lbl, .topo-lbl { font-weight: normal; }
@@ -127,6 +133,16 @@
 
   .rodape-inst { border-top: 1px solid #ccc; margin-top: 10px; padding-top: 5px;
                  font-size: 7.5px; color: #666; text-align: center; line-height: 1.4; }
+  .rodape-a4 { font-size: 7pt; color: #555; line-height: 1.3;
+               border-top: 1px solid #bbb; padding-top: 4px; margin-top: 12px; }
+  .rodape-a4 table { width: 100%; border-collapse: collapse; }
+  .rodape-a4 td { padding: 0; vertical-align: top; }
+  .rodape-a4 .documento { text-align: right; width: 42%; }
+  .rodape-a4 .contato { margin-top: 3px; white-space: pre-line; }
+  @unless ($navegador || ! empty($previa))
+    @page { margin-bottom: 22mm; }
+    .rodape-a4 { position: fixed; bottom: -15mm; left: 0; right: 0; margin-top: 0; }
+  @endunless
 
 @if ($navegador)
   /* Barra só da janela de impressão — some no papel. Existe porque o app
@@ -154,6 +170,10 @@
 @if ($marca)
   <div class="marca">{{ $marca }}</div>
 @endif
+
+@unless ($navegador || ! empty($previa))
+  @include('impressao._rodape-a4')
+@endunless
 
 @include('impressao._pagina-abre', ['numero' => $numeroA4, 'cabecalhoA4Compacto' => true])
 
@@ -380,6 +400,10 @@
       @endif
 
 @include('impressao._pagina-fecha')
+
+@if ($navegador || ! empty($previa))
+  @include('impressao._rodape-a4')
+@endif
 
 @if ($navegador)
   <div class="imp-barra">

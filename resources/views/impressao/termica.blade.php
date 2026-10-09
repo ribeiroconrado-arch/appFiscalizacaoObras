@@ -15,6 +15,15 @@
 @php
   $navegador = $navegador ?? true;
   $fmt = fn ($v, $c = 2) => $v === null ? '—' : number_format((float) $v, $c, ',', '.');
+  $numeroSecao = 0;
+  $sec = function ($titulo) use (&$numeroSecao) { return (++$numeroSecao).' - '.$titulo; };
+  $notificacao = in_array($doc->tipo, \App\Models\Documento::COM_CUMPRIMENTO, true);
+  $destinatario = $notificacao ? 'Notificado' : ($doc->exigeFundamentacao() ? 'Autuado' : 'Interessado');
+  $textoDestinatario = fn ($texto) => $notificacao
+      ? str_replace(['AUTUADO', 'Autuado', 'autuado'], ['NOTIFICADO', 'Notificado', 'notificado'], $texto ?? '') : ($texto ?? '');
+  $numero = $doc->numero ? sprintf('%d/%04d', $doc->exercicio, $doc->numero) : 'Sem número';
+  $contato = collect([$orgao['endereco'] ?? null, $orgao['municipio'] ?? null, $orgao['telefone'] ?? null,
+      empty($orgao['cnpj']) ? null : 'CNPJ: '.$orgao['cnpj']])->filter()->implode(' · ');
 @endphp
 <!doctype html>
 <html lang="pt-BR">
@@ -30,27 +39,39 @@
          font-family: 'Courier New', Courier, monospace;
          -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  .cab { text-align: center; padding: 4px 3px 2px; }
-  .cab img { width: 34px; height: auto; margin-bottom: 2px; }
+  * { box-sizing: border-box; }
+  .cab { display: flex; align-items: center; gap: 5px; text-align: center; padding: 4px 3px 2px; }
+  .cab img { width: 38px; height: auto; flex-shrink: 0; }
+  .cab .instituicao { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .cab .org { font-size: 8px; font-weight: bold; line-height: 1.25; }
   .cab .end { font-size: 7px; }
-  .cab .tit { font-size: 12px; font-weight: bold; margin-top: 4px; letter-spacing: .05em; }
-  .cab .num { font-size: 11px; font-weight: bold; }
+  .tit { background: #C8C8C8; font-size: 10px; font-weight: bold; text-align: center; padding: 3px; }
+  .grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grade.meta { grid-template-columns: .6fr .9fr 1.5fr; margin-top: 3px; }
+  .grade .campo { min-width: 0; }
+  .meta .val { font-size: 8px; }
 
   .faixa { background: #C8C8C8; font-size: 8px; font-weight: bold; letter-spacing: .06em;
            padding: 2px 4px; margin: 5px 0 3px; text-transform: uppercase; }
 
   .campo { padding: 0 4px 3px; }
   .campo .lbl { font-size: 7px; text-transform: uppercase; letter-spacing: .04em; }
-  .campo .val { font-size: 9.5px; font-weight: bold; word-wrap: break-word; }
+  .campo .val { font-size: 9px; overflow-wrap: anywhere; }
+  .meta .val, .datas .val { font-weight: bold; }
 
-  .par { padding: 0 4px 3px; text-align: justify; }
+  .par { padding: 0 4px 3px; text-align: left; overflow-wrap: anywhere; }
   .par b { font-weight: bold; }
 
   .calc { width: 100%; border-collapse: collapse; font-size: 8px; }
   .calc td { padding: 1px 4px; vertical-align: top; }
   .calc td.dir { text-align: right; white-space: nowrap; }
   .calc tr.total td { border-top: 1px solid #000; font-weight: bold; font-size: 9px; padding-top: 2px; }
+  .infracao { margin: 0 4px; padding: 3px 0; border-bottom: 1px solid #ccc; overflow-wrap: anywhere; }
+  .infracao .par { padding: 0; }
+  .calculo { display: flex; justify-content: space-between; gap: 5px; font-size: 7.5px; margin-top: 2px; }
+  .calculo strong { white-space: nowrap; }
+  .assinaturas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 4px; }
+  .assinaturas .ass { padding-left: 0; padding-right: 0; min-width: 0; overflow-wrap: anywhere; }
 
   .ass { padding: 12px 4px 0; text-align: center; }
   .ass img { max-height: 34px; max-width: 90%; display: block; margin: 0 auto; }
@@ -62,7 +83,7 @@
   .anexo .t { font-size: 8px; font-weight: bold; }
   .anexo .o { font-size: 7px; }
 
-  .rodape { text-align: center; font-size: 6.5px; padding: 6px 4px 14px; line-height: 1.3; }
+  .rodape { text-align: center; font-size: 7px; padding: 5px 4px 4px; line-height: 1.3; overflow-wrap: anywhere; border-top: 1px dotted #777; margin-top: 5px; }
 
   .marca { position: fixed; top: 40%; left: 50%; transform: translate(-50%,-50%) rotate(-30deg);
            font-size: 28px; font-weight: bold; color: rgba(0,0,0,.18); letter-spacing: 3px;
@@ -91,20 +112,27 @@
   @if ($brasao)
     <img src="{{ $brasao }}" alt="">
   @endif
+  <div class="instituicao">
   <div class="org">{{ $orgao['secretaria'] }}</div>
   <div class="org">{{ $orgao['nome'] }}</div>
+  @if (!empty($orgao['departamento']))<div class="end">{{ $orgao['departamento'] }}</div>@endif
   @if ($orgao['divisao'])
     <div class="end">{{ $orgao['divisao'] }}</div>
   @endif
   <div class="end">{{ collect([$orgao['endereco'], $orgao['telefone']])->filter()->implode(' – ') }}</div>
-  <div class="tit">{{ $titulo }}</div>
-  <div class="num">{{ $doc->numeroFormatado() }}</div>
+  </div>
 </div>
+<div class="tit">{{ $titulo }} · Nº {{ $numero }}</div>
 
+<div class="grade meta">
+<div class="campo"><div class="lbl">Exercício</div><div class="val">{{ $doc->exercicio ?: '—' }}</div></div>
 <div class="campo">
-  <div class="lbl">Agente / Matrícula</div>
-  <div class="val">{{ $doc->agente?->name }}{{ $doc->agente?->matricula ? ' — ' . $doc->agente->matricula : '' }}</div>
+  <div class="lbl">Matrícula do agente</div>
+  <div class="val">{{ $doc->agente?->matricula ?: '—' }}</div>
 </div>
+<div class="campo"><div class="lbl">Origem</div><div class="val">{{ $origemTexto }}</div></div>
+</div>
+<div class="grade datas">
 <div class="campo">
   <div class="lbl">Fato</div>
   <div class="val">{{ $doc->data_fato?->format('d/m/Y H:i') ?? '—' }}</div>
@@ -113,14 +141,9 @@
   <div class="lbl">Lavratura</div>
   <div class="val">{{ $doc->data_lavratura?->format('d/m/Y H:i') ?? '—' }}</div>
 </div>
-@if ($origemTexto !== 'DIRETA')
-  <div class="campo">
-    <div class="lbl">Origem</div>
-    <div class="val">{{ $origemTexto }}</div>
-  </div>
-@endif
+</div>
 
-<div class="faixa">Autuado</div>
+<div class="faixa">{{ $sec('Identificação do '.mb_strtolower($destinatario)) }}</div>
 <div class="campo">
   <div class="lbl">Nome</div>
   <div class="val">{{ $doc->autuado_nome ?: '—' }}</div>
@@ -131,12 +154,12 @@
 </div>
 @if ($doc->autuado_endereco)
 <div class="campo">
-  <div class="lbl">Endereço do autuado</div>
-  <div class="val">{{ $doc->autuado_endereco }}</div>
+  <div class="lbl">Endereço</div>
+  <div class="val">{{ preg_replace('/(?:[,;\s]|—|-)*CEP\s*:?\s*\d{5}-?\d{3}/iu', '', $doc->autuado_endereco) }}</div>
 </div>
 @endif
 
-<div class="faixa">Imóvel</div>
+<div class="faixa">{{ $sec('Local da infração e identificação do imóvel') }}</div>
 <div class="campo">
   <div class="lbl">Inscrição imobiliária</div>
   <div class="val">{{ $imovel['inscricao'] ?: '—' }}</div>
@@ -162,71 +185,47 @@
 @endif
 
 @if ($doc->descricao)
-  <div class="faixa">Constatação</div>
-  <div class="par">{{ $doc->descricao }}</div>
+  <div class="par"><b>Constatação:</b> {{ $doc->descricao }}</div>
 @endif
 
 @if ($doc->exigeFundamentacao())
-  <div class="faixa">Legislação Infringida</div>
-  @if ($doc->legislacao)
-    <div class="par"><b>{{ $doc->legislacao->rotulo() }}</b></div>
-  @endif
-  @forelse ($doc->artigos as $a)
-    <div class="par"><b>Art. {{ preg_replace('/^Art\.?\s*/i', '', $a->numero) }}.</b> {{ $a->conduta }}</div>
+  <div class="faixa">{{ $sec($memoria['total'] !== null ? 'Infração / legislação infringida / multa e penalidade' : 'Infração / legislação infringida') }}</div>
+  <div class="par"><b>Lei infringida:</b> {{ $doc->legislacao?->rotulo() ?: '—' }}</div>
+  @forelse ($memoria['linhas'] as $l)
+    <div class="infracao">
+      <div class="par"><b>Art. {{ preg_replace('/^Art\.?\s*/i', '', $l['numero']) }}.</b> {{ $l['conduta'] ?: '—' }}@if ($l['sancao']) {{ $l['sancao'] }}@endif</div>
+      @if ($memoria['total'] !== null)
+        <div class="calculo">
+          <span>{{ $l['base'] === 'Valor fixo' ? $l['base'] : $l['conta'] }}@if ($l['limite']) · {{ $l['limite'] }}@endif</span>
+          <strong>{{ $l['valor'] !== null ? $fmt($l['valor']).' UPF' : '—' }}</strong>
+        </div>
+      @endif
+    </div>
   @empty
     <div class="par">—</div>
   @endforelse
-
-  {{-- Olha o valor, não os artigos: a notificação cita artigo mas não impõe
-       multa. Ver o mesmo raciocínio em impressao/a4.blade.php. --}}
-  @if ($memoria['total'] !== null)
-    <div class="faixa">Multa — Memória de Cálculo</div>
-    <table class="calc">
-      @foreach ($memoria['linhas'] as $l)
-        <tr>
-          <td>
-            <b>{{ $l['numero'] }}</b><br>{{ $l['conta'] }}
-            @if ($l['limite'])<br>({{ $l['limite'] }})@endif
-          </td>
-          <td class="dir">{{ $l['valor'] !== null ? $fmt($l['valor']) . ' UPF' : '—' }}</td>
-        </tr>
-      @endforeach
-      @if ($memoria['total'] !== null)
-        <tr class="total">
-          <td>TOTAL</td>
-          <td class="dir">
-            {{ $fmt($memoria['total']) }} UPF
-            @if ($memoria['emReais'])<br>R$ {{ $fmt($memoria['emReais']) }}@endif
-          </td>
-        </tr>
-      @endif
-    </table>
-  @endif
 @endif
 
-@if ($prazo)
-  <div class="faixa">{{ $prazo['rotulo'] }}</div>
-  <div class="par"><b>Até {{ $prazo['data'] }}.</b> {{ $prazo['nota'] }}</div>
-@endif
-
+<div class="faixa">{{ $sec('Ciência / Intimação') }}</div>
 @if ($ciencia)
-  <div class="faixa">Ciência / Intimação</div>
-  {{-- Já escapado, com o **negrito** resolvido (DocumentoImpressao::negrito). --}}
-  <div class="par">{!! $ciencia !!}</div>
+  {{-- Texto escapado pelo serviço, permitindo apenas o negrito configurado. --}}
+  <div class="par">{!! $textoDestinatario($ciencia) !!}</div>
 @endif
-
+@if ($prazo)
+  <div class="par"><b>{{ $prazo['rotulo'] }}: {{ $prazo['data'] }}.</b> {{ $prazo['nota'] }}</div>
+@endif
 @if ($doc->observacoes)
-  <div class="faixa">Observações</div>
-  <div class="par">{{ $doc->observacoes }}</div>
+  <div class="par"><b>Observações:</b> {{ $doc->observacoes }}</div>
 @endif
 
+<div class="assinaturas">
 <div class="ass">
   @if ($doc->assinatura_agente)
     <img src="{{ $doc->assinatura_agente }}" alt="">
   @else
     <div class="vazio"></div>
   @endif
-  <div class="linha">Fiscal{{ $doc->agente?->matricula ? ' — Matrícula: ' . $doc->agente->matricula : '' }}</div>
+  <div class="linha">{{ $doc->agente?->name }}<br>Fiscal{{ $doc->agente?->matricula ? ' — Matrícula: ' . $doc->agente->matricula : '' }}</div>
 </div>
 
 <div class="ass">
@@ -235,12 +234,13 @@
   @else
     <div class="vazio"></div>
   @endif
-  <div class="linha">Autuado / Preposto{{ $doc->autuado_documento ? ' — ' . $doc->autuado_documento : '' }}</div>
+  <div class="linha">{{ $doc->autuado_nome }}<br>{{ $destinatario }} / Preposto</div>
+</div>
 </div>
 
 @if ($doc->recusa_assinatura)
-  <div class="faixa">Termo de Recusa</div>
-  <div class="par">{{ $termoRecusa }}</div>
+  <div class="faixa">{{ $sec('Termo de Recusa') }}</div>
+  <div class="par">{{ $textoDestinatario($termoRecusa) }}</div>
   @if ($doc->testemunha_nome)
     <div class="ass">
       @if ($doc->assinatura_testemunha)
@@ -256,7 +256,7 @@
 @endif
 
 @if (count($anexos))
-  <div class="faixa">Anexos</div>
+  <div class="faixa">{{ $sec('Anexos') }}</div>
   @foreach ($anexos as $a)
     <div class="anexo">
       @if ($a['foto'])
@@ -274,7 +274,16 @@
   @foreach ($rodape as $linha)
     <div>{{ $linha }}</div>
   @endforeach
-  <div>Emitido pelo Sistema Municipal de Fiscalização de Obras</div>
+  @if ($contato)<div>{{ $contato }}</div>@endif
+  @if ($doc->status !== 'rascunho')
+    <div>
+      @if ($doc->cadastro_consultado_em)
+        Dados cadastrais integrados em {{ $doc->cadastro_consultado_em->format('d/m/Y') }}.
+      @else
+        Lavrado sem dado do cadastro municipal.
+      @endif
+    </div>
+  @endif
 </div>
 
 @if ($navegador)

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Parametro;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * O cabeçalho institucional das peças impressas — de onde quer que elas saiam.
@@ -42,14 +43,23 @@ class CabecalhoOficial
      */
     public function brasao(bool $paraPdf): ?string
     {
-        foreach (['img/brasao-prefeitura.png', 'img/brasao.png'] as $relativo) {
-            $caminho = public_path($relativo);
-            if (is_file($caminho)) {
-                return $paraPdf ? $caminho : '/' . $relativo;
-            }
+        $url = Parametro::get('brasao_url');
+        if (! $url) {
+            return null;
         }
 
-        return null;
+        // Uploads de Parâmetros → Formulários ficam no disco público.
+        // O PDF recebe a imagem embutida, sem depender de URL, sessão ou symlink.
+        $nome = basename(parse_url($url, PHP_URL_PATH) ?: '');
+        $disco = Storage::disk('public');
+        $arquivo = 'orgao/' . $nome;
+        if (! $nome || ! $disco->exists($arquivo)) {
+            return null;
+        }
+
+        return $paraPdf
+            ? 'data:' . ($disco->mimeType($arquivo) ?: 'image/png') . ';base64,' . base64_encode($disco->get($arquivo))
+            : $url;
     }
 
     /** @return array<int, string> */

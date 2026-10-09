@@ -52,6 +52,14 @@ $check = function (bool $ok, string $mensagem) use (&$checks) {
 };
 $render = fn (array $d) => view('impressao.a4', $d)->render();
 $html = $render($dados);
+$check(str_contains($html, 'class="rodape-a4"'), 'Rodapé institucional ausente');
+$check(str_contains($html, $dados['orgao']['endereco']), 'Endereço configurado ausente');
+$rodapeTeste = array_replace($dados, ['orgao' => array_replace($dados['orgao'], [
+    'endereco' => 'Endereço configurado & atualizado', 'telefone' => '(00) 1234-5678', 'cnpj' => '12.345.678/0001-00',
+])]);
+$htmlRodape = $render($rodapeTeste);
+$check(str_contains($htmlRodape, 'Endereço configurado &amp; atualizado'), 'Endereço não respeita configuração/escape');
+$check(str_contains($htmlRodape, 'CNPJ: 12.345.678/0001-00'), 'CNPJ configurado ausente do rodapé');
 foreach (['1 - Identificação', '2 - Local', '3 - Infração', '4 - Ciência', $doc->descricao,
     $doc->observacoes, '0,3500 UPF/m² × 120,00 m²', 'Multa e embargo.', '20/08/2026', 'Fiscal de Teste'] as $texto) {
     $check(str_contains($html, $texto), 'Conteúdo ausente: '.$texto);
