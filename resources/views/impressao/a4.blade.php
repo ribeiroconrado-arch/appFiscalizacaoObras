@@ -124,9 +124,10 @@
   @media print { .imp-barra { display: none; } body { padding-bottom: 0; } }
 @endif
 @if (! empty($previa))
-  /* Prévia embutida no resumo do documento: as margens que o papel dá pelo
-     @page, aqui vêm no corpo — a tela não tem margem de impressão. */
-  body { padding: 8mm 10mm 10mm; background: #fff; }
+  /* Prévia embutida no resumo do documento: só uma folga mínima nas
+     bordas. A margem do papel (o @page) não se repete aqui: na tela ela seria
+     espaço em branco, e é esse espaço que deixa a letra maior. */
+  body { padding: 3mm 3mm 4mm; background: #fff; }
 @endif
 </style>
 </head>

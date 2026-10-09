@@ -934,8 +934,13 @@ async function previaA4DoFormulario(caixa) {
 
 // ── O RESUMO COMO A VIA A4 ───────────────────────────────────
 
-/** Largura de uma folha A4 na tela (210 mm a 96 pontos por polegada). */
-const LARGURA_A4_PX = 794
+/**
+ * Largura em que a via é desenhada antes de ser ajustada à tela: a ÁREA ÚTIL
+ * da folha A4 (190 mm, sem as margens de impressão), e não a folha inteira.
+ * Sem as margens em branco, o mesmo desenho ocupa a tela toda e a letra sai
+ * maior.
+ */
+const LARGURA_A4_PX = 720
 
 /**
  * Põe no resumo a via A4 do documento — a mesma página do PDF, pedida ao
@@ -972,7 +977,9 @@ function ajustarViaA4NoResumo() {
   let altura = 1123   // uma folha A4, se a página ainda não puder ser medida
   try { altura = Math.max(quadro.contentDocument.documentElement.scrollHeight, 400) } catch (_) { /* fica a folha padrão */ }
 
-  const escala = Math.min(1, folha.clientWidth / LARGURA_A4_PX)
+  // Ocupa a largura toda: encolhe em tela estreita e AMPLIA em tela larga (até
+  // 1,5×, para a folha não virar um cartaz num monitor grande).
+  const escala = Math.min(1.5, folha.clientWidth / LARGURA_A4_PX)
   quadro.style.width = LARGURA_A4_PX + 'px'
   quadro.style.height = altura + 'px'
   quadro.style.transform = `scale(${escala})`
