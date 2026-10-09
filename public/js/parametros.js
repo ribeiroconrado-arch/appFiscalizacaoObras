@@ -215,7 +215,7 @@ const parRot = (rot, html, estilo = '') => `<label class="ed-campo"${estilo ? ` 
 const parInp = (nome, valor, extra = '') => `<input name="${nome}" value="${esc(valor ?? '')}" ${extra}>`
 const parTxt = (nome, valor, linhas = 2) => `<textarea name="${nome}" rows="${linhas}">${esc(valor ?? '')}</textarea>`
 const parSel = (nome, valor, opcoes, extra = '') =>
-  `<select name="${nome}" ${extra}>${opcoes.map(([k, r]) => `<option value="${k}"${k === valor ? ' selected' : ''}>${r}</option>`).join('')}</select>`
+  `<select data-combo name="${nome}" ${extra}>${opcoes.map(([k, r]) => `<option value="${k}"${k === valor ? ' selected' : ''}>${r}</option>`).join('')}</select>`
 const parChk = (nome, marcado, rot) =>
   `<label class="lembrar"><input type="checkbox" name="${nome}"${marcado ? ' checked' : ''}> ${rot}</label>`
 

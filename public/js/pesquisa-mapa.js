@@ -397,13 +397,25 @@ const _pesqSemAcento = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').t
 function _pesqMontarSeletores() {
   document.querySelectorAll('#pesq-barra .pesq-sel').forEach(el => {
     const campo = el.dataset.campo
+    // O COMBOBOX PADRÃO do sistema (docs/ai/DESIGN-SYSTEM.md), na variante de
+    // escolher VÁRIOS: campo que se digita, × para limpar e a lista flutuante
+    // (.ac-list / .ac-item). O que se escolhe vira etiqueta dentro do campo.
     el.innerHTML = `<span class="pesq-tks"></span>
       <input type="text" autocomplete="off" placeholder="${esc(el.dataset.dica)}" aria-label="${esc(el.dataset.dica)}">
-      <div class="pesq-drop" hidden></div>`
+      <button class="clr-btn" type="button" tabindex="-1" title="Limpar" hidden>&times;</button>
+      <div class="ac-list"></div>`
     const inp = el.querySelector('input')
     inp.addEventListener('focus', () => _pesqPintarDrop(el))
     inp.addEventListener('input', () => _pesqPintarDrop(el))
-    inp.addEventListener('blur', () => setTimeout(() => { el.querySelector('.pesq-drop').hidden = true }, 150))
+    inp.addEventListener('blur', () => setTimeout(() => { el.querySelector('.ac-list').classList.remove('open') }, 150))
+    // O × tira tudo o que foi escolhido neste campo, e o que estava digitado.
+    const limpar = el.querySelector('.clr-btn')
+    limpar.addEventListener('mousedown', e => e.preventDefault())
+    limpar.addEventListener('click', () => {
+      pesqState.rasc[campo] = []
+      inp.value = ''
+      _pesqPintarTks(el); _pesqPintarDrop(el); inp.focus()
+    })
     inp.addEventListener('keydown', e => {
       const escolhidos = pesqState.rasc[campo] || []
       if (e.key === 'Enter') {
@@ -431,6 +443,13 @@ function _pesqPintarTks(el) {
     })
     tk.appendChild(b); cx.appendChild(tk)
   }
+  _pesqPintarLimpar(el)
+}
+
+/** O × só aparece quando há o que limpar: algo escolhido ou digitado. */
+function _pesqPintarLimpar(el) {
+  const limpar = el.querySelector('.clr-btn')
+  if (limpar) limpar.hidden = !(pesqState.rasc[el.dataset.campo] || []).length && !el.querySelector('input').value
 }
 
 /** As opções que ainda não foram escolhidas e casam com o que se digitou. */
@@ -443,7 +462,7 @@ function _pesqSugestoes(el) {
 }
 
 function _pesqPintarDrop(el) {
-  const drop = el.querySelector('.pesq-drop'), achadas = _pesqSugestoes(el)
+  const drop = el.querySelector('.ac-list'), achadas = _pesqSugestoes(el)
   const termo = el.querySelector('input').value.trim()
   const realce = rot => {
     const i = termo ? _pesqSemAcento(rot).indexOf(_pesqSemAcento(termo)) : -1
@@ -452,21 +471,22 @@ function _pesqPintarDrop(el) {
   drop.innerHTML = ''
   if (!achadas.length) {
     const total = Object.keys(_pesqOpcoes(el.dataset.campo)).length
-    drop.innerHTML = `<div class="pesq-nada">${!pesqState.opcoes ? 'Carregando a lista…'
+    drop.innerHTML = `<div class="ac-empty">${!pesqState.opcoes ? 'Carregando a lista…'
       : termo ? 'Nada com "' + esc(termo) + '" na lista.'
       : total ? 'Todos já foram escolhidos.' : 'A lista está vazia.'}</div>`
   }
   // Teto de 60 sugestões à vista: a lista de ruas tem centenas, e digitar estreita.
   achadas.slice(0, 60).forEach(([k, o], i) => {
-    const b = document.createElement('button'); b.type = 'button'
-    if (i === 0 && termo) b.className = 'at'
-    b.innerHTML = realce(o.rot) + (o.sub ? ` <small>· ${esc(o.sub)}</small>` : '')
-    b.addEventListener('mousedown', e => e.preventDefault())
-    b.addEventListener('click', () => _pesqEscolher(el, k))
-    drop.appendChild(b)
+    const item = document.createElement('div')
+    item.className = 'ac-item' + (i === 0 && termo ? ' ativo' : '')
+    item.innerHTML = realce(o.rot) + (o.sub ? `<span class="ac-sub">${esc(o.sub)}</span>` : '')
+    // mousedown, e não click: acontece antes do blur que fecharia a lista.
+    item.addEventListener('mousedown', e => { e.preventDefault(); _pesqEscolher(el, k) })
+    drop.appendChild(item)
   })
-  if (achadas.length > 60) drop.insertAdjacentHTML('beforeend', `<div class="pesq-nada">+ ${achadas.length - 60}. Digite para estreitar.</div>`)
-  drop.hidden = false
+  if (achadas.length > 60) drop.insertAdjacentHTML('beforeend', `<div class="ac-empty">+ ${achadas.length - 60}. Digite para estreitar.</div>`)
+  drop.classList.add('open')
+  _pesqPintarLimpar(el)
 }
 
 function _pesqEscolher(el, valor) {

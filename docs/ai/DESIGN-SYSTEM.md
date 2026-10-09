@@ -103,26 +103,104 @@ Variações: `.g2` (dois lado a lado), `.campo-add` (com botão dentro),
 | `.btn.out-verde` | contorno verde — `+add`, "Consultar cadastro" |
 | `.btn.out-cinza` | contorno neutro — Câmera / Galeria |
 | `.btn.edit-verde` | Editar, com lápis |
-| `.btn.atencao` | Lavrar (âmbar) |
+| `.btn.atencao` | ação de atenção (âmbar) |
+| `.btn.lavrar` | Lavrar e Confirmar lavratura (amarelo, texto escuro) |
 | `.btn.sm` | 31px; em campo, 44px (ver `DECISOES-UX.md`) |
 
 **O padrão de exclusão do sistema é botão com a palavra "Excluir"**, não ícone
 de lixeira. (O `.acao-x` sem moldura existe em listas antigas de Feriados/UPF.)
 
-### Combobox
+### Combobox — O PADRÃO DO SISTEMA
+
+**Todo campo de escolha em lista é este combobox pesquisável**, e não `<select>`
+nativo. A referência é "Artigo infringido" / "Lei infringida" do formulário de
+documento (`mapa.blade.php`, `#nd-artigo-busca`; `documentos.js`,
+`buscarArtigoDoc`). Definido pelo usuário em 09/10/2026.
 
 ```html
-<div class="ac-wrap">
-  <div class="field campo-add">
-    <div class="campo-add-corpo"><label>…</label><input …></div>
-    <button class="btn out-verde sm">+add</button>
+<div class="field">
+  <label for="x-busca">Rótulo</label>
+  <div class="ac-linha">
+    <div class="ac-wrap">
+      <input type="text" id="x-busca" placeholder="Digite para buscar…" autocomplete="off"
+             oninput="buscarX(this)" onfocus="buscarX(this)" onblur="fecharAcDoc('ac-x')">
+      <button class="clr-btn" type="button" tabindex="-1" title="Limpar">&times;</button>
+      <div class="ac-list" id="ac-x"></div>          <!-- .open mostra -->
+    </div>
+    <button type="button" class="btn out-verde sm">+add</button>   <!-- só onde se escolhem VÁRIOS -->
   </div>
-  <div class="ac-list" id="…"></div>   <!-- .open mostra -->
 </div>
 ```
 
-`.ac-list` flutua ancorada no campo, rolagem própria, fecha ao clicar fora.
-Mesmo contrato do AppPOSTURAS, para os dois sistemas se lerem igual.
+Cada opção é `<div class="ac-item" onmousedown="event.preventDefault(); escolher(id)">`;
+o detalhe secundário vai em `<span class="ac-sub">`; lista sem resultado mostra
+`<div class="ac-empty">` dizendo **por quê** (não só "nada encontrado").
+
+O que faz dele o padrão — e o que um combo novo tem de cumprir:
+
+- **É o próprio campo "Modelo E"**: rótulo pequeno em cima, texto digitável embaixo.
+- **Abre ao receber foco**, já com todas as opções; **digitar filtra**, sem
+  diferenciar maiúsculas nem acentos.
+- **`×` à direita** limpa a escolha (some em modo só leitura, `.so-leitura`).
+- **Lista flutuante** ancorada no campo, por cima do conteúdo (não empurra o
+  formulário), com rolagem própria (máx. 230px) e uma linha fina entre as opções.
+- **Escolhe no `mousedown`** (antes do `blur`), e fecha sozinha ao sair do campo.
+- **`+add`** (`.btn.out-verde.sm`) só quando se escolhem vários; `Enter` no campo
+  faz o mesmo.
+- Mesmo contrato do `.ac-list` do AppPOSTURAS, para os dois sistemas se lerem igual.
+
+**Para transformar um `<select>` no padrão, basta `data-combo`:**
+
+```html
+<select id="x" data-combo onchange="…">…</select>
+```
+
+`comboDeSelect` (`ui.js`) veste o select com o combobox e o deixa escondido na
+página como fonte da verdade: quem lê `sel.value`, troca as opções por
+`innerHTML` ou escuta o `change` continua funcionando sem mudar nada. O campo
+visível ganha o id `x-busca`. Vale também para select montado em JavaScript
+depois (a página observa e veste). A opção de valor vazio vira o texto de
+exemplo, e é para ela que o `×` volta; `<optgroup>` vira título de grupo.
+
+A definição de `.ac-wrap`/`.ac-list`/`.ac-item` em `tema-f.css` é UMA só (bloco
+"COMBOBOX PADRÃO"). Fora do campo "Modelo E" (barras de filtro) o combo leva
+`.combo-solto`, posto sozinho pelo `comboDeSelect`.
+
+#### Já no padrão (etapas 1 e 2, 09/10/2026)
+
+Lei e artigo do documento; Consulta › logradouro e bairro; item da vistoria ›
+problema ou artigo; Painel › bairro e agente; Protocolos › responsável; filtros
+de Documentos › agente; documento › origem, reincidência e testemunha da
+recusa; vistoria › protocolo; Desmembramento e Conferência › bairro; Importação
+› vínculo do bairro; usuário › cargo.
+
+**Variante de escolher VÁRIOS, com etiquetas** — Mapa › filtros da pesquisa
+(`.pesq-sel`, `pesquisa-mapa.js`): bairro, rua, pendência e situação da
+vistoria. A lista é a mesma (`.ac-list`/`.ac-item`/`.ac-sub`/`.ac-empty`); o que
+se escolhe vira etiqueta (`.pesq-tk`) dentro do campo, o trecho digitado sai em
+destaque (`<mark>`) e o `×` tira todas as etiquetas de uma vez. Não tem `+add`:
+escolher já adiciona.
+
+**Listas curtas e fixas (etapa 3, 09/10/2026)** — também pelo `data-combo`:
+vistoria (finalidade, alvará, método da área, fase, situação, quem acompanhou) e
+item da vistoria › tipo de citação; Protocolos › tipo e situação (filtros, nova
+situação e novo protocolo); filtros de Documentos › tipo e status; Consulta ›
+situação da vistoria; Painel › período; Histórico do cadastro › escopo e
+período; usuário › perfil; Parâmetros (`parSel`: forma e área da multa, tipo de
+feriado) e a escolha da carga do cadastro municipal.
+
+#### Ainda `<select>` nativo — e por quê
+
+**Select novo nasce com `data-combo`.** Estes ficaram de fora de propósito:
+
+- `#nd-tipo` (documento): está escondido; o tipo é escolhido antes de o
+  formulário abrir. Não é campo de tela.
+- BCI › progressividade (`.bci-sel`): vive dentro de uma linha de leitura de
+  22px, sem moldura de campo; o combobox quebraria a ficha "sóbria".
+- Nomes de rua › logradouro: `<datalist>` (texto livre) ou `<select>` dentro de
+  um balão do mapa (`ruas-manuais.js`), onde a lista flutuante pode ser cortada.
+- Prancheta cadastral (`prancheta-cadastral.js`): interface própria, com os
+  seus campos.
 
 ### Abas
 

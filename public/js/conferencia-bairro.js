@@ -170,7 +170,7 @@ function _confMontarItens() {
 function pintarJanelaConferencia() {
   const r = confState.resultado
   const lista = confState.bairros || []
-  const sel = `<select id="conf-bairro" onchange="_confCarregar(this.value).catch(e => toast(e.message, 'err'))">
+  const sel = `<select id="conf-bairro" data-combo onchange="_confCarregar(this.value).catch(e => toast(e.message, 'err'))">
       ${lista.map(b => `<option value="${esc(b.bairro)}" ${b.bairro === confState.bairro ? 'selected' : ''}>
         ${esc(b.oficial || b.bairro)}${b.divergencias !== null ? ` · ${b.divergencias} pendência(s)` : ' · não conferido'}${b.ligado ? '' : ' · sem vínculo'}</option>`).join('')}
     </select>`

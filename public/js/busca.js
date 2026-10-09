@@ -81,8 +81,7 @@ async function buscarLogradouro(texto) {
 
   alvo.classList.toggle('open', achados.length > 0)
   alvo.innerHTML = achados.map(r =>
-    `<button type="button" class="ac-item" onclick="escolherLogradouro(${jsArg(r)})">
-       <b>${esc(r)}</b></button>`).join('')
+    `<div class="ac-item" onmousedown="event.preventDefault(); escolherLogradouro(${jsArg(r)})">${esc(r)}</div>`).join('')
 }
 
 /** @param {string} rua */
@@ -101,7 +100,7 @@ function fecharListaLogradouro() {
 
 // Clicar fora fecha — é o que se espera de um dropdown.
 document.addEventListener('mousedown', ev => {
-  if (!ev.target.closest('#bs-logr-sugestoes') && !ev.target.closest('.bc-logr')) {
+  if (!ev.target.closest('.bc-logr')) {
     fecharListaLogradouro()
   }
 })

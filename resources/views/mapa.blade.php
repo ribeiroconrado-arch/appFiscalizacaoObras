@@ -190,16 +190,16 @@
     </div>
 
     <div class="linha-filtro" id="pn-filtros" hidden>
-      <select aria-label="Período" onchange="filtrarPainel('dias', this.value)">
+      <select data-combo aria-label="Período" onchange="filtrarPainel('dias', this.value)">
         <option value="30">Últimos 30 dias</option>
         <option value="7">Últimos 7 dias</option>
         <option value="90">Últimos 90 dias</option>
         <option value="365">Últimos 365 dias</option>
       </select>
-      <select id="pn-bairro" aria-label="Bairro" onchange="filtrarPainel('bairro', this.value)">
+      <select data-combo id="pn-bairro" aria-label="Bairro" onchange="filtrarPainel('bairro', this.value)">
         <option value="">Todos os bairros</option>
       </select>
-      <select aria-label="Agente" onchange="filtrarPainel('agente', this.value)">
+      <select data-combo aria-label="Agente" onchange="filtrarPainel('agente', this.value)">
         <option value="todos">Todos os agentes</option>
         <option value="eu">Meus registros</option>
       </select>
@@ -721,15 +721,18 @@
            combo só oferece ruas que PODEM achar alguma coisa — as dos bairros
            cujo cadastro já foi carregado e amarrado (ver /api/imoveis/
            logradouros). Oferecer o resto seria oferecer busca vazia. --}}
-      <div class="ac-wrap bc-logr">
-        <div class="field">
-          <label for="bs-logradouro">Logradouro</label>
+      {{-- Combobox padrão (docs/ai/DESIGN-SYSTEM.md): campo, × e lista. --}}
+      <div class="field bc-logr">
+        <label for="bs-logradouro">Logradouro</label>
+        <div class="ac-wrap">
           <input type="text" id="bs-logradouro" autocomplete="off"
                  placeholder="Digite para buscar a rua…"
                  oninput="buscarLogradouro(this.value); marcarPrecedencia()"
                  onfocus="buscarLogradouro(this.value)">
+          <button class="clr-btn" type="button" tabindex="-1" title="Limpar"
+                  onclick="escolherLogradouro(''); document.getElementById('bs-logradouro').focus()">&times;</button>
+          <div class="ac-list" id="bs-logr-sugestoes"></div>
         </div>
-        <div class="ac-list" id="bs-logr-sugestoes"></div>
       </div>
       <div class="field bc-num">
         <label for="bs-numero">Número</label>
@@ -751,7 +754,7 @@
            precisa dele, e quem só tem o bairro começa por ele mesmo. --}}
       <div class="field bc-bairro">
         <label for="bs-bairro">Bairro / loteamento</label>
-        <select id="bs-bairro" onchange="marcarPrecedencia()">
+        <select data-combo id="bs-bairro" onchange="marcarPrecedencia()">
           <option value="">— todos —</option>
         </select>
       </div>
@@ -784,7 +787,7 @@
         </div>
         <div class="field bc-bairro">
           <label for="bs-vistoria">Situação da última vistoria</label>
-          <select id="bs-vistoria" onchange="marcarPrecedencia()">
+          <select data-combo id="bs-vistoria" onchange="marcarPrecedencia()">
             <option value="">— qualquer —</option>
             @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
               <option value="{{ $valor }}">{{ $rotulo }}</option>
@@ -923,7 +926,7 @@
   <div class="busca-form lista-form">
     <div class="filtros-lista">
       <div class="linha-filtro">
-        <div class="lista-campo"><label for="dm-tipo">Tipo</label><select id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
+        <div class="lista-campo"><label for="dm-tipo">Tipo</label><select data-combo id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
           <option value="">Protocolos e ordens</option>
           <option value="protocolo">Só protocolos</option>
           <option value="os">Só ordens de serviço</option>
@@ -931,7 +934,7 @@
         {{-- "Todos" e não "meus": protocolo chega SEM DONO, e abrir a fila
              filtrada pelo agente esconderia justamente o que ninguém assumiu.
              Vale para a lista inteira agora. --}}
-        <div class="lista-campo"><label for="dm-agente">Responsável</label><select id="dm-agente" onchange="filtrarDemandas('agente', this.value)">
+        <div class="lista-campo"><label for="dm-agente">Responsável</label><select data-combo id="dm-agente" onchange="filtrarDemandas('agente', this.value)">
           <option value="todos">Todos os responsáveis</option>
           <option value="eu">Meus</option>
           <option value="sem_dono">Não distribuídos</option>
@@ -942,7 +945,7 @@
                oninput="filtrarDemandas('busca', this.value)"></div>
         {{-- Agrupada por tipo: "Deferido" e "Concluída" não são alternativas
              da mesma pergunta. --}}
-        <div class="lista-campo"><label for="dm-situacao">Situação</label><select id="dm-situacao" onchange="filtrarDemandas('situacao', this.value)">
+        <div class="lista-campo"><label for="dm-situacao">Situação</label><select data-combo id="dm-situacao" onchange="filtrarDemandas('situacao', this.value)">
           <option value="">Todas as situações</option>
         </select></div>
       </div>
@@ -1462,7 +1465,7 @@
            "Fiscalização de obras", que por isso já vem selecionada. --}}
       <div class="field" style="margin-top:9px">
         <label for="nv-finalidade">Para que é esta vistoria</label>
-        <select id="nv-finalidade" onchange="escolherFinalidade(this.value)">
+        <select data-combo id="nv-finalidade" onchange="escolherFinalidade(this.value)">
           @foreach (\App\Models\Vistoria::FINALIDADES as $valor => $f)
             <option value="{{ $valor }}" data-obs="{{ $f['obs'] }}" @selected($valor === 'obras')>{{ $f['rotulo'] }}</option>
           @endforeach
@@ -1481,7 +1484,7 @@
         <label for="nv-alvara">Alvará</label>
         {{-- "Não verificado" é estado legítimo, distinto de "não possui": o
              fiscal pode não ter conseguido conferir. --}}
-        <select id="nv-alvara" onchange="escolherAlvara(this.value)">
+        <select data-combo id="nv-alvara" onchange="escolherAlvara(this.value)">
           <option value="">—</option>
           @foreach (\App\Models\Vistoria::ALVARA as $valor => $rotulo)
             <option value="{{ $valor }}">{{ $rotulo }}</option>
@@ -1522,7 +1525,7 @@
         </div>
         <div class="field" style="margin:0">
           <label for="nv-area-metodo">Como foi obtida</label>
-          <select id="nv-area-metodo">
+          <select data-combo id="nv-area-metodo">
             <option value="">—</option>
             @foreach (\App\Models\Vistoria::METODOS_AREA as $valor => $rotulo)
               <option value="{{ $valor }}">{{ $rotulo }}</option>
@@ -1537,7 +1540,7 @@
       <div data-bloco="fase">
       <div class="field" style="margin-top:9px">
         <label for="nv-fase">Fase da obra</label>
-        <select id="nv-fase" onchange="escolherFase(this.value)">
+        <select data-combo id="nv-fase" onchange="escolherFase(this.value)">
           <option value="">—</option>
           @foreach (\App\Models\Vistoria::FASES_OBRA as $valor => $rotulo)
             <option value="{{ $valor }}">{{ $rotulo }}</option>
@@ -1586,7 +1589,7 @@
       <div class="g2">
         <div class="field" style="margin:0">
           <label for="nv-situacao">Situação constatada</label>
-          <select id="nv-situacao">
+          <select data-combo id="nv-situacao">
             @foreach (\App\Models\Vistoria::SITUACOES as $valor => $rotulo)
               <option value="{{ $valor }}">{{ $rotulo }}</option>
             @endforeach
@@ -1613,7 +1616,7 @@
         </div>
         <div class="field" style="margin:0">
           <label for="nv-acomp-qual">Qualificação</label>
-          <select id="nv-acomp-qual">
+          <select data-combo id="nv-acomp-qual">
             <option value="">—</option>
             @foreach (\App\Models\Vistoria::QUALIFICACOES as $valor => $rotulo)
               <option value="{{ $valor }}">{{ $rotulo }}</option>
@@ -1629,7 +1632,7 @@
         <div class="sec-title">Processo atendido</div>
         <div class="field">
           <label for="nv-protocolo">Esta vistoria atende ao protocolo</label>
-          <select id="nv-protocolo"><option value="">— nenhum —</option></select>
+          <select data-combo id="nv-protocolo"><option value="">— nenhum —</option></select>
         </div>
       </div>
 
@@ -1800,11 +1803,16 @@
             <div class="field campo-add" style="margin:0">
               <div class="campo-add-corpo">
                 <label for="vsi-artigo-busca">Problema ou artigo</label>
-                <input type="text" id="vsi-artigo-busca" autocomplete="off"
-                       placeholder="Ex.: escavação, calçada, art. 12…"
-                       oninput="buscarArtigo(this.value)"
-                       onfocus="buscarArtigo(this.value)"
-                       onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+                {{-- Combobox padrão: o × limpa o que foi digitado. --}}
+                <div class="ac-wrap">
+                  <input type="text" id="vsi-artigo-busca" autocomplete="off"
+                         placeholder="Ex.: escavação, calçada, art. 12…"
+                         oninput="buscarArtigo(this.value)"
+                         onfocus="buscarArtigo(this.value)"
+                         onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarArtigoAoItem()}">
+                  <button class="clr-btn" type="button" tabindex="-1" title="Limpar"
+                          onclick="const c = document.getElementById('vsi-artigo-busca'); c.value = ''; buscarArtigo(''); c.focus()">&times;</button>
+                </div>
               </div>
               <button type="button" class="btn out-verde sm"
                       onclick="adicionarArtigoAoItem()">+add</button>
@@ -1814,7 +1822,7 @@
           <div class="field vsi-campo-curto" style="margin:0">
             <label for="vsi-artigo-tipo">Como entra</label>
             {{-- Citação vira FATO na peça; parecer vira FUNDAMENTAÇÃO. --}}
-            <select id="vsi-artigo-tipo">
+            <select data-combo id="vsi-artigo-tipo">
               <option value="citacao">Citação</option>
               <option value="parecer">Parecer</option>
             </select>
@@ -2148,12 +2156,17 @@
         <div id="nd-bci"></div>
       </div>
 
-      <div class="sec-title">Origem</div>
-      <div class="field">
-        <label for="nd-origem">Documento que originou este</label>
-        <select id="nd-origem" data-lock>
-          <option value="">Direta — sem documento anterior</option>
-        </select>
+      {{-- De qual peça o auto nasceu (a notificação ou o embargo anterior). É
+           a que o texto de ciência cita pelo marcador {origem}. Só nos autos
+           (carregarOrigensDoc, documentos.js). --}}
+      <div id="nd-bloco-origem" style="display:none">
+        <div class="sec-title">Origem</div>
+        <div class="field">
+          <label for="nd-origem">Documento que originou este</label>
+          <select data-combo id="nd-origem" data-lock onfocus="carregarOrigensDoc()">
+            <option value="">Direta — sem documento de origem</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -2266,24 +2279,13 @@
           <div class="sec-title">Multa a critério do fiscal</div>
           <div class="g2" id="nd-multiplicadores"></div>
         </div>
-        {{-- De qual peça o auto nasceu (a notificação ou o embargo anterior).
-             É a que o texto de ciência cita pelo marcador {origem}. --}}
-        <div id="nd-bloco-origem" style="display:none">
-          <div class="sec-title">Documento de origem</div>
-          <div class="field">
-            <label for="nd-origem">Este documento decorre de</label>
-            <select id="nd-origem" data-lock onfocus="carregarOrigensDoc()">
-              <option value="">Direta — sem documento de origem</option>
-            </select>
-          </div>
-        </div>
         {{-- Reincidência (art. 121-B, §2º): o auto é lavrado a partir de outro
              auto, e a multa dos artigos marcados dobra. Só em Auto de Infração. --}}
         <div id="nd-bloco-reincidencia" style="display:none">
           <div class="sec-title">Reincidência</div>
           <div class="field">
             <label for="nd-reincidencia">Reincidência do auto</label>
-            <select id="nd-reincidencia" data-lock onfocus="carregarAutosAnterioresDoc()" onchange="recalcularMultaDoc()">
+            <select data-combo id="nd-reincidencia" data-lock onfocus="carregarAutosAnterioresDoc()" onchange="recalcularMultaDoc()">
               <option value="">Não é reincidência</option>
             </select>
           </div>
@@ -2357,7 +2359,7 @@
           <div class="g2">
             <div class="field">
               <label for="lav-testemunha">Testemunha</label>
-              <select id="lav-testemunha" onchange="alternarRecusaLavratura()">
+              <select data-combo id="lav-testemunha" onchange="alternarRecusaLavratura()">
                 <option value="">Selecione…</option>
               </select>
             </div>
@@ -2629,7 +2631,7 @@
              (Parâmetros › Bairros). --}}
         <div class="field" style="margin:10px 0 6px">
           <label for="des-bairro">Bairro</label>
-          <select id="des-bairro"><option value="">— escolha —</option></select>
+          <select data-combo id="des-bairro"><option value="">— escolha —</option></select>
         </div>
         <div class="g2" style="margin-bottom:6px">
           <div class="field" style="margin:0">
@@ -2701,11 +2703,11 @@
          outro público, e não cabe na coluna de trabalho do cadastro. --}}
     <div class="cad-painel" id="cadp-historico" hidden>
       <div class="hc-filtros">
-        <select id="hc-escopo" onchange="carregarHistoricoCadastral()">
+        <select data-combo id="hc-escopo" onchange="carregarHistoricoCadastral()">
           <option value="tudo">Todo o cadastro</option>
           <option value="marcados">Só os lotes marcados</option>
         </select>
-        <select id="hc-dias" onchange="carregarHistoricoCadastral()">
+        <select data-combo id="hc-dias" onchange="carregarHistoricoCadastral()">
           <option value="7">Últimos 7 dias</option>
           <option value="30">Últimos 30 dias</option>
           <option value="90">Últimos 90 dias</option>
@@ -3030,7 +3032,7 @@
 
     <div class="field">
       <label for="doc-f-tipo">Tipo de peça</label>
-      <select id="doc-f-tipo">
+      <select data-combo id="doc-f-tipo">
         <option value="">Tudo — peças e vistorias</option>
         @foreach (\App\Models\Documento::TIPOS as $valor => $t)
           <option value="{{ $valor }}">{{ $t[0] }}</option>
@@ -3044,7 +3046,7 @@
 
     <div class="field">
       <label for="doc-f-status">Status</label>
-      <select id="doc-f-status">
+      <select data-combo id="doc-f-status">
         <option value="">Todos os status</option>
         <option value="rascunho">Rascunho</option>
         <option value="lavrado">Lavrado</option>
@@ -3055,7 +3057,7 @@
 
     <div class="field">
       <label for="doc-f-agente">Agente</label>
-      <select id="doc-f-agente">
+      <select data-combo id="doc-f-agente">
         <option value="eu">Meus documentos</option>
         <option value="todos">Todos os agentes</option>
       </select>
@@ -3105,7 +3107,7 @@
       <div class="sec-title">Tramitação</div>
       <div class="field">
         <label for="pf-situacao">Nova situação</label>
-        <select id="pf-situacao">
+        <select data-combo id="pf-situacao">
           <option value="">— manter como está —</option>
           @foreach (\App\Models\Protocolo::SITUACOES as $valor => $s)
             <option value="{{ $valor }}">{{ $s[0] }}</option>
@@ -3154,7 +3156,7 @@
     </div>
     <div class="field">
       <label for="np-tipo">Tipo de requerimento</label>
-      <select id="np-tipo">
+      <select data-combo id="np-tipo">
         @foreach (\App\Models\Protocolo::TIPOS as $valor => $rotulo)
           <option value="{{ $valor }}">{{ $rotulo }}</option>
         @endforeach
@@ -3262,7 +3264,7 @@
     <div class="sec-title">Acesso</div>
     <div class="field">
       <label for="us-cargo">Cargo</label>
-      <select id="us-cargo" onchange="ajustarPerfilDoCargo()">
+      <select data-combo id="us-cargo" onchange="ajustarPerfilDoCargo()">
         <option value="agente">Agente de fiscalização</option>
         <option value="coordenador">Coordenador</option>
         <option value="secretario">Secretário</option>
@@ -3278,7 +3280,7 @@
     <div class="field">
       {{-- Só agente pode ter perfil acima de viewer — regra em User::perfilEfetivo(). --}}
       <label for="us-perfil">Perfil</label>
-      <select id="us-perfil">
+      <select data-combo id="us-perfil">
         <option value="admin">Administrador</option>
         <option value="comum">Comum</option>
         <option value="viewer">Visualizador</option>

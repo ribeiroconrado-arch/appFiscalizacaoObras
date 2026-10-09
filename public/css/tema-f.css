@@ -2699,18 +2699,8 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    era um bloco no fluxo: abrir o combo empurrava o formulário para baixo e a
    própria lista ganhava uma barra de rolagem no meio da tela, que é o oposto
    do que um combo faz. */
-.ac-wrap{position:relative}
-.ac-list{position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:400;
-  display:none;flex-direction:column;background:var(--sur);
-  border:1.5px solid var(--tx3);border-radius:var(--r);
-  max-height:230px;overflow-y:auto;box-shadow:0 10px 26px rgba(0,0,0,.16)}
-.ac-list.open{display:flex}
-.ac-item{display:block;width:100%;text-align:left;cursor:pointer;font:inherit;
-  background:none;border:none;border-bottom:1px solid var(--blt);padding:8px 11px}
-.ac-item:last-child{border-bottom:none}
-.ac-item:hover{background:var(--blt)}
-.ac-item b{display:block;font-size:12.5px;color:var(--tx);font-weight:600}
-.ac-item span{display:block;font-size:11px;color:var(--tx3);margin-top:1px}
+/* (a definição do combobox é UMA só, mais abaixo: "COMBOBOX PADRÃO".) */
+
 
 /* ── O RESUMO ──
    Fixo fora das abas, igual em qualquer uma delas. `flex:1` para ocupar o
@@ -3150,16 +3140,12 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
   padding:2px 4px 2px 9px;font-size:12px;font-weight:600}
 .pesq-tk button{border:0;background:rgb(var(--tinta) / .1);color:inherit;border-radius:50%;width:17px;height:17px;
   line-height:1;cursor:pointer;font-size:10px;padding:0}
-.pesq-drop{position:absolute;left:-1.5px;right:-1.5px;top:calc(100% + 4px);z-index:9;background:var(--sur);
-  border:1.5px solid var(--gm);border-radius:var(--r);box-shadow:0 8px 22px rgb(var(--tinta) / .18);
-  max-height:210px;overflow-y:auto;padding:4px}
-.pesq-drop[hidden]{display:none}
-.pesq-drop button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:6px 8px;border-radius:6px;
-  cursor:pointer;font-size:12.5px;color:var(--tx)}
-.pesq-drop button:hover,.pesq-drop button.at{background:var(--gl);color:var(--gd)}
-.pesq-drop small{color:var(--tx3);font-weight:400}
-.pesq-drop mark{background:transparent;color:var(--gd);font-weight:700}
-.pesq-nada{padding:6px 8px;color:var(--tx3);font-size:12px}
+/* A lista é a do COMBOBOX PADRÃO (.ac-list/.ac-item); aqui só a âncora: o
+   campo já é a moldura inteira, sem o recuo de 12px do "Modelo E". */
+.pesq-sel{padding-right:28px}
+.pesq-sel > .ac-list{left:-1.5px;right:-1.5px;top:calc(100% + 4px);z-index:9}
+.pesq-sel .ac-item mark{background:transparent;color:var(--gd);font-weight:700}
+
 /* Resultado */
 .pesq-resultado{margin-top:9px;padding-top:7px;border-top:1px solid var(--blt);max-height:min(38vh, 300px);overflow-y:auto}
 .pesq-resultado:empty{display:none}
@@ -3496,20 +3482,51 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 /* ══════════════════════════════════════════════
    FORMULÁRIO DE DOCUMENTO — lei e artigo pesquisáveis (padrão AppPOSTURAS),
    quadros dos artigos, BCI e campos só de leitura. */
+/* ── COMBOBOX PADRÃO (docs/ai/DESIGN-SYSTEM.md) ──
+   A ÚNICA definição: havia duas (a do item da vistoria e a do formulário de
+   documento), e o que se via na tela era a soma. Vale para o combo escrito à
+   mão e para o `<select data-combo>` vestido por comboDeSelect (ui.js). */
 .ac-wrap{position:relative;flex:1;min-width:0}
-.ac-wrap > input{padding-right:28px}
+.ac-wrap > input{padding-right:28px;width:100%}
 .clr-btn{position:absolute;right:2px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--tx3);
   font-size:18px;line-height:1;cursor:pointer;padding:2px 6px}
 .clr-btn:hover{color:var(--red)}
-.so-leitura .clr-btn{display:none}
-.ac-list{display:none;position:absolute;left:-12px;right:-12px;top:calc(100% + 8px);z-index:30;background:var(--sur);
+.clr-btn[hidden],.so-leitura .clr-btn{display:none}
+/* A lista FLUTUA sobre o conteúdo, ancorada no campo — abrir o combo não
+   empurra o formulário. Os -12px levam a lista até a moldura do campo
+   "Modelo E", que tem 12px de recuo. */
+.ac-list{display:none;position:absolute;left:-12px;right:-12px;top:calc(100% + 8px);z-index:400;background:var(--sur);
   border:1.5px solid var(--gm);border-radius:var(--r);box-shadow:0 8px 22px rgb(var(--tinta) / .18);
-  max-height:230px;overflow-y:auto;padding:4px}
+  max-height:230px;overflow-y:auto;padding:4px;text-align:left}
 .ac-list.open{display:block}
-.ac-item{padding:7px 9px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--tx)}
-.ac-item:hover{background:var(--gl);color:var(--gd)}
-.ac-sub{color:var(--tx3);font-size:11px}
+.ac-item{display:block;padding:7px 9px;border-radius:6px;border-bottom:1px solid var(--blt);cursor:pointer;
+  font-size:13px;color:var(--tx);text-transform:none}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.ativo{background:var(--gl);color:var(--gd)}
+.ac-item.escolhido{font-weight:700}
+.ac-sub{display:block;color:var(--tx3);font-size:11px;margin-top:1px}
 .ac-empty{padding:7px 9px;color:var(--tx3);font-size:12px}
+.ac-grupo{padding:8px 9px 3px;font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em}
+/* O select vestido continua na página, só não aparece. */
+select.combo-oculto{display:none !important}
+/* Fora do campo "Modelo E" (barras de filtro): o campo é a própria moldura, e
+   a lista se alinha a ele. */
+.combo-solto{flex:1;min-width:130px;display:flex}
+.combo-solto > input{flex:1;min-width:0;font-size:13px;padding:8px 28px 8px 10px;border:1.5px solid var(--f-bord);border-radius:var(--r);
+  background:#fff;color:var(--chumbo);outline:none;font-family:inherit}
+.combo-solto > input:focus{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+.combo-solto > .ac-list{left:0;right:0;top:calc(100% + 4px)}
+/* Em Parâmetros o campo acompanha os vizinhos do cartão em edição. */
+.ed-campo .combo-solto > input{font-size:13.5px;padding:9px 28px 9px 12px}
+.hc-filtros .combo-solto > input{font-size:12.5px;padding:7px 28px 7px 9px}
+.combo-sel > input:disabled{background:transparent;color:var(--tx);-webkit-text-fill-color:var(--tx);opacity:1}
+/* Item da vistoria: a lista fica sob o campo com o botão +add, que já é a
+   moldura inteira — sem os 12px de recuo. */
+.campo-add + .ac-list{left:0;right:0;top:calc(100% + 3px)}
+.field.bc-logr{margin-bottom:9px}
+/* Consulta: ali o campo não tem o recuo de 12px (a moldura é do próprio
+   input), então a lista se alinha a ele sem avançar para os lados. */
+.busca-campos .ac-list{left:0;right:0;top:calc(100% + 4px)}
 .ac-linha{display:flex;gap:7px;align-items:center}
 .ac-dica{font-size:11px;color:var(--tx3);margin:-4px 0 10px}
 .ac-dica[hidden]{display:none}

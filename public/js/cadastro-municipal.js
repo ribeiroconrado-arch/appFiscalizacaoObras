@@ -267,7 +267,7 @@ function desenharAlteracoes(c, d, campo) {
   const tipo = { novo: 'Novo', alterado: 'Alterado', ausente: 'Fora do cadastro', reapareceu: 'Reapareceu' }
   return `
     <div class="lista-campo" style="margin:6px 0">
-      <select onchange="abrirCargaDoCadastro(${Number(c.id)}, this.value, 1)">${opcoes}</select>
+      <select data-combo onchange="abrirCargaDoCadastro(${Number(c.id)}, this.value, 1)">${opcoes}</select>
       <span class="imp-sub">${cmNum(d.total)} registros · página ${d.pagina} de ${Math.max(1, d.paginas)}</span>
     </div>
     <div class="imp-tabela-rolagem"><table class="imp-tabela">

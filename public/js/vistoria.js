@@ -1654,9 +1654,8 @@ function pintarSugestoes(idAlvo, itens, formatar, aoEscolherFn) {
   alvo.classList.toggle('open', itens.length > 0)
   alvo.innerHTML = itens.map((it, i) => {
     const f = formatar(it)
-    return `<button type="button" class="ac-item" onclick="${aoEscolherFn}(${i})">
-      <b>${esc(f.titulo)}</b>${f.sub ? `<span>${esc(f.sub)}</span>` : ''}
-    </button>`
+    return `<div class="ac-item" onmousedown="event.preventDefault(); ${aoEscolherFn}(${i})">${esc(f.titulo)}${
+      f.sub ? `<span class="ac-sub">${esc(f.sub)}</span>` : ''}</div>`
   }).join('')
 }
 

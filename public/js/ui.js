@@ -61,7 +61,8 @@ const TIPOS_AVISO = {
  * @param {string} id
  */
 function marcarCampoInvalido(id) {
-  const el = document.getElementById(id)
+  // Select vestido de combobox: quem se vê (e recebe o foco) é o campo dele.
+  const el = document.getElementById(id + '-busca') || document.getElementById(id)
   if (!el) return
 
   el.classList.add('campo-invalido')
@@ -811,3 +812,172 @@ document.addEventListener('input', e => {
   el.value = alta
   try { el.setSelectionRange(ini, fim) } catch (_) { /* campo sem seleção de texto */ }
 }, true)
+
+// ── COMBOBOX PADRÃO SOBRE UM <select> ────────────────────────
+
+/** Texto comparável: sem acento e sem caixa. */
+const _semAcento = t => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/**
+ * Veste um `<select data-combo>` com o COMBOBOX PADRÃO do sistema (o do
+ * "Artigo infringido": campo que se digita, lista flutuante, × para limpar —
+ * ver docs/ai/DESIGN-SYSTEM.md).
+ *
+ * O `<select>` CONTINUA NA PÁGINA, escondido, e continua sendo a fonte da
+ * verdade: quem lê `sel.value`, troca as opções por `innerHTML` ou escuta o
+ * `change` não percebe diferença. Por isso converter um campo é só marcar
+ * `data-combo` — nenhuma tela precisa ser reescrita.
+ *
+ *  - escolher uma opção grava no select e dispara o `change` dele;
+ *  - o que o código gravar no select (valor ou opções novas) aparece no campo;
+ *  - `disabled` do select trava o campo; o `onfocus` do select (usado para
+ *    carregar as opções na hora) dispara quando o campo recebe o foco;
+ *  - a opção de valor vazio ("Todos os bairros", "— escolha —") vira o texto
+ *    de exemplo do campo, e é para ela que o × volta.
+ *
+ * @param {HTMLSelectElement} sel
+ */
+function comboDeSelect(sel) {
+  if (sel.dataset.comboPronto) return
+  sel.dataset.comboPronto = '1'
+
+  const solto = !sel.closest('.field')   // fora do campo "Modelo E": barras de filtro
+  const caixa = document.createElement('div')
+  caixa.className = 'ac-wrap combo-sel' + (solto ? ' combo-solto' : '')
+  caixa.innerHTML = `<input type="text" class="combo-entrada" autocomplete="off" role="combobox" aria-expanded="false">
+    <button class="clr-btn" type="button" tabindex="-1" title="Limpar">&times;</button>
+    <div class="ac-list"></div>`
+  sel.after(caixa)
+  sel.classList.add('combo-oculto')
+
+  const inp = caixa.querySelector('input'), limpar = caixa.querySelector('.clr-btn'), lista = caixa.querySelector('.ac-list')
+  if (sel.id) {
+    inp.id = sel.id + '-busca'
+    document.querySelectorAll(`label[for="${sel.id}"]`).forEach(l => { l.htmlFor = inp.id })
+  }
+  if (sel.getAttribute('aria-label')) inp.setAttribute('aria-label', sel.getAttribute('aria-label'))
+
+  let digitando = false   // só filtra depois de digitar: no foco, mostra tudo
+  let ativo = -1          // a opção realçada pelas setas
+
+  const opcaoVazia = () => [...sel.options].find(o => o.value === '')
+  const escolhida = () => sel.options[sel.selectedIndex] || null
+
+  /** Põe no campo o que o select tem agora. */
+  const sincronizar = () => {
+    const o = escolhida(), vazia = opcaoVazia()
+    inp.placeholder = (vazia?.textContent || 'Digite para buscar…').trim()
+    if (document.activeElement !== inp || !digitando) inp.value = o && o.value !== '' ? o.textContent.trim() : ''
+    // :disabled, e não só o atributo: o select pode estar travado por um
+    // <fieldset disabled> em volta (a visualização de Parâmetros).
+    const travado = sel.matches(':disabled')
+    inp.disabled = sel.disabled
+    caixa.classList.toggle('so-leitura', travado)
+    // O × só existe quando há para onde voltar (a opção vazia) e algo escolhido.
+    limpar.hidden = !vazia || !o || o.value === '' || travado
+  }
+
+  /** As opções que casam com o que foi digitado, com o rótulo do grupo de cada uma. */
+  const filtradas = () => {
+    const q = digitando ? _semAcento(inp.value.trim()) : ''
+    return [...sel.options].filter(o => o.value !== '' && !o.disabled && (!q || _semAcento(o.textContent).includes(q)))
+  }
+
+  const pintar = () => {
+    const ops = filtradas()
+    let grupo = null
+    lista.innerHTML = ops.length
+      ? ops.map((o, i) => {
+        const g = o.parentElement.tagName === 'OPTGROUP' ? o.parentElement.label : null
+        const cab = g && g !== grupo ? `<div class="ac-grupo">${esc(g)}</div>` : ''
+        grupo = g
+        return `${cab}<div class="ac-item${i === ativo ? ' ativo' : ''}${o.selected ? ' escolhido' : ''}" data-i="${i}" role="option">${esc(o.textContent.trim())}</div>`
+      }).join('')
+      : `<div class="ac-empty">${sel.options.length > (opcaoVazia() ? 1 : 0) ? 'Nenhuma opção encontrada' : 'Nenhuma opção disponível'}</div>`
+    lista.classList.add('open')
+    inp.setAttribute('aria-expanded', 'true')
+    lista.querySelector('.ac-item.ativo')?.scrollIntoView({ block: 'nearest' })
+  }
+
+  const fechar = () => {
+    lista.classList.remove('open')
+    inp.setAttribute('aria-expanded', 'false')
+    digitando = false
+    ativo = -1
+    sincronizar()
+  }
+
+  /** Grava a escolha no select e avisa quem escuta. @param {string} valor */
+  const escolher = valor => {
+    valorNativo.set.call(sel, valor)
+    digitando = false
+    fechar()
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+
+  inp.addEventListener('focus', () => {
+    // O select pode carregar as opções só agora (onfocus dele).
+    sel.dispatchEvent(new Event('focus'))
+    digitando = false
+    inp.select()
+    pintar()
+  })
+  inp.addEventListener('input', () => { digitando = true; ativo = -1; pintar() })
+  inp.addEventListener('blur', () => setTimeout(fechar, 150))
+  inp.addEventListener('keydown', ev => {
+    const ops = filtradas()
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault()
+      if (!lista.classList.contains('open')) { pintar(); return }
+      ativo = Math.max(0, Math.min(ops.length - 1, ativo + (ev.key === 'ArrowDown' ? 1 : -1)))
+      pintar()
+    } else if (ev.key === 'Enter' && lista.classList.contains('open')) {
+      ev.preventDefault()
+      const o = ops[ativo >= 0 ? ativo : 0]
+      if (o) { escolher(o.value); inp.blur() }
+    } else if (ev.key === 'Escape' && lista.classList.contains('open')) {
+      ev.stopPropagation()
+      fechar()
+      inp.blur()
+    }
+  })
+  // mousedown, e não click: acontece ANTES do blur que fecharia a lista.
+  lista.addEventListener('mousedown', ev => {
+    const item = ev.target.closest('.ac-item')
+    if (!item) return
+    ev.preventDefault()
+    const o = filtradas()[Number(item.dataset.i)]
+    if (o) { escolher(o.value); inp.blur() }
+  })
+  limpar.addEventListener('click', () => { escolher(''); inp.focus() })
+
+  // O QUE O CÓDIGO GRAVA NO SELECT APARECE NO CAMPO. Atribuir `sel.value` não
+  // dispara evento nenhum, então a atribuição é interceptada NESTE select.
+  const valorNativo = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')
+  const indiceNativo = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex')
+  Object.defineProperty(sel, 'value', { configurable: true, get() { return valorNativo.get.call(this) },
+    set(v) { valorNativo.set.call(this, v); sincronizar() } })
+  Object.defineProperty(sel, 'selectedIndex', { configurable: true, get() { return indiceNativo.get.call(this) },
+    set(v) { indiceNativo.set.call(this, v); sincronizar() } })
+  // Opções trocadas (innerHTML) ou campo travado/destravado.
+  new MutationObserver(() => { sincronizar(); if (lista.classList.contains('open')) pintar() })
+    .observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'selected'] })
+  sel.addEventListener('change', sincronizar)
+
+  sincronizar()
+}
+
+/** Veste todos os `select[data-combo]` de um trecho da página. @param {ParentNode} [raiz] */
+function vestirCombos(raiz = document) {
+  raiz.querySelectorAll?.('select[data-combo]').forEach(comboDeSelect)
+  if (raiz instanceof HTMLSelectElement && raiz.dataset.combo !== undefined) comboDeSelect(raiz)
+}
+
+// Os que já estão na página, e os que as telas montarem depois (janelas e
+// listas desenhadas em JavaScript): basta o select nascer com data-combo.
+document.addEventListener('DOMContentLoaded', () => {
+  vestirCombos()
+  new MutationObserver(mudancas => {
+    for (const m of mudancas) for (const no of m.addedNodes) if (no.nodeType === 1) vestirCombos(no)
+  }).observe(document.body, { childList: true, subtree: true })
+})

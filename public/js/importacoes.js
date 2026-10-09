@@ -293,7 +293,7 @@ function _htmlVinculoBairro(nome, v, modo) {
       : `<div class="cad-nota cad-aviso"><b>${esc(nome)}</b> ainda não está ligado a um bairro do cadastro.
           Sem o vínculo os lotes ficam sem inscrição e a conferência com o cadastro não roda.</div>`}
     <div class="imp-vinculo-escolha" id="imp-vinculo-escolha" ${a ? 'hidden' : ''}>
-      <select id="imp-vinculo" data-atual="${a ? a.id : ''}">
+      <select id="imp-vinculo" data-combo data-atual="${a ? a.id : ''}">
         <option value="">— escolha o bairro do cadastro —</option>
         ${sugeridos.length ? `<optgroup label="Parecidos pelo nome">${sugeridos.map(opcao).join('')}</optgroup>` : ''}
         <optgroup label="Todos os bairros do município">${v.bairros.map(opcao).join('')}</optgroup>
