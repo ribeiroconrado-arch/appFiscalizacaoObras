@@ -99,6 +99,46 @@ try {
     confere(str_contains($direto['ciencia'], 'descumprimento d, fica') && $direto['origemTexto'] === 'DIRETA', 'auto sem origem: o marcador some');
     confere(DocumentoImpressao::negrito(null) === null && DocumentoImpressao::negrito("a\nb") === "a<br />\nb", 'texto vazio e quebra de linha');
 
+    echo "Origem da notificação (direta, ordem de serviço, ouvidoria)\n";
+    [$s, $d] = $peca('notificacao');
+    $n = Documento::find($d['documento']['id']);
+    confere($s === 201 && $n->origem_motivo === 'direta' && $n->origemTexto() === 'DIRETA', 'sem dizer nada, a notificação é de origem direta');
+    [$s, $d] = $peca('notificacao', ['origem_motivo' => 'ouvidoria']);
+    confere($s === 422 && str_contains($d['message'], 'ouvidoria'), 'ouvidoria sem o número da denúncia é recusada');
+    [$s] = $peca('notificacao', ['origem_motivo' => 'ordem_servico']);
+    confere($s === 422, 'ordem de serviço sem dizer qual é recusada');
+    [$s, $d] = $peca('notificacao', ['origem_motivo' => 'ouvidoria', 'origem_referencia' => ' 4471/2026 ']);
+    $ouv = Documento::find($d['documento']['id'] ?? 0);
+    confere($s === 201 && $ouv->origemTexto() === 'OUVIDORIA Nº 4471/2026', 'denúncia da ouvidoria grava o número e sai no topo da peça');
+    [$s, $d] = $peca('auto_infracao', ['origem_motivo' => 'ouvidoria', 'origem_referencia' => '1']);
+    confere($s === 201 && Documento::find($d['documento']['id'])->origem_motivo === null, 'auto não tem motivo de origem: o que vier é ignorado');
+
+    $os = App\Models\OrdemServico::first();
+    $lavrada = app(LavraturaService::class)->lavrar($ouv);
+    [, $f] = chamar($admin, DocumentoController::class, 'ficha', [], [$lavrada], 'GET');
+    confere($f['origem_motivo'] === 'ouvidoria' && $f['pode_editar_origem'] === true && $f['origem_texto'] === 'OUVIDORIA Nº 4471/2026',
+        'a ficha da peça lavrada traz a origem e diz que o autor pode corrigi-la');
+    [$s] = chamar($admin, DocumentoController::class, 'update', ['tipo' => 'notificacao', 'data_fato' => now()->format('Y-m-d H:i'), 'autuado_nome' => 'X'], [$lavrada]);
+    confere($s === 422, 'peça lavrada continua fechada para o resto');
+    [$s, $d] = chamar($admin, DocumentoController::class, 'atualizarOrigem', ['origem_motivo' => 'direta'], [$lavrada]);
+    confere($s === 200 && $lavrada->fresh()->origem_motivo === 'direta' && $lavrada->fresh()->origem_referencia === null && $d['origem_texto'] === 'DIRETA',
+        'mas a origem se corrige depois da lavratura — e a referência antiga é limpa');
+    if ($os) {
+        [$s, $d] = chamar($admin, DocumentoController::class, 'atualizarOrigem', ['origem_motivo' => 'ordem_servico', 'origem_os_id' => $os->id], [$lavrada]);
+        confere($s === 200 && $d['origem_texto'] === 'ORDEM DE SERVIÇO Nº ' . $os->numero, 'ordem de serviço: o topo cita o número dela');
+        [, $d] = chamar($admin, DocumentoController::class, 'ordensParaOrigem', [], [], 'GET');
+        confere(collect($d['ordens'])->contains('id', $os->id), 'a lista de ordens para a origem traz as ordens de serviço');
+    } else {
+        echo "  --  sem ordem de serviço no banco local: esse caminho não foi conferido\n";
+    }
+    $outro = User::where('id', '!=', $admin->id)->where('perfil', '!=', 'admin')->first();
+    if ($outro) {
+        [$s] = chamar($outro, DocumentoController::class, 'atualizarOrigem', ['origem_motivo' => 'direta'], [$lavrada]);
+        confere($s === 403, 'quem não é o autor nem administrador não altera a origem');
+    }
+    [$s] = chamar($admin, DocumentoController::class, 'atualizarOrigem', ['origem_motivo' => 'direta'], [$auto]);
+    confere($s === 403, 'auto (ou rascunho) não passa por esta rota');
+
     echo "Ordem dos artigos\n";
     foreach (['Art. 121-A, II', 'Art. 4º', 'Art. 34, §1º', 'Art. 121-A, I', 'Art. 34, caput', 'Art. 120, parágrafo único', 'Art. 13', 'Art. 22, §5º', 'Art. 121-B', 'Art. 22, §1º', 'Art. 121'] as $n) {
         $novo($n, ['notificacao']);

@@ -259,6 +259,16 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/documentos/autos-anteriores', [DocumentoController::class, 'autosAnteriores']);
         Route::get('/documentos/origens', [DocumentoController::class, 'origens']);
         Route::get('/documentos/testemunhas', [DocumentoController::class, 'testemunhas']);
+        Route::get('/documentos/ordens-de-servico', [DocumentoController::class, 'ordensParaOrigem']);
+        // Anexos próprios do documento (aba Anexos do formulário).
+        Route::get('/documentos/{documento}/anexos', [\App\Http\Controllers\DocumentoAnexoController::class, 'index']);
+        Route::post('/documentos/{documento}/anexos', [\App\Http\Controllers\DocumentoAnexoController::class, 'store']);
+        Route::post('/documentos/{documento}/anexos/trazer', [\App\Http\Controllers\DocumentoAnexoController::class, 'trazer']);
+        Route::post('/documentos/{documento}/anexos/ordem', [\App\Http\Controllers\DocumentoAnexoController::class, 'ordenar']);
+        Route::patch('/documentos/anexos/{anexo}', [\App\Http\Controllers\DocumentoAnexoController::class, 'update']);
+        Route::delete('/documentos/anexos/{anexo}', [\App\Http\Controllers\DocumentoAnexoController::class, 'destroy']);
+        // A origem da notificação: o único dado que se corrige depois da lavratura.
+        Route::patch('/documentos/{documento}/origem', [DocumentoController::class, 'atualizarOrigem']);
         // Consulta de CNPJ para o autuado — feita pelo servidor, com limite próprio.
         Route::get('/cnpj/{cnpj}', [\App\Http\Controllers\CnpjController::class, 'mostrar'])->middleware('throttle:pesado');
         Route::get('/vistorias/{vistoria}/sugestao', [DocumentoController::class, 'sugestao']);
@@ -354,6 +364,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::get('/vistorias/{vistoria}/pdf', [VistoriaController::class, 'pdf'])
         ->middleware('throttle:pesado')
         ->name('vistoria.pdf');
+    // O arquivo de um anexo do documento — fora do /api, como o da evidência.
+    Route::get('/documentos/anexos/{anexo}/arquivo', [\App\Http\Controllers\DocumentoAnexoController::class, 'arquivo'])
+        ->name('documento.anexo.arquivo');
     Route::get('/documentos/{documento}/pdf', [DocumentoController::class, 'pdf'])
         ->middleware('throttle:pesado')
         ->name('documento.pdf');

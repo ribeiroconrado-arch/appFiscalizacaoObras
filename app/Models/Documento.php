@@ -87,6 +87,76 @@ class Documento extends Model
     public function agente(): BelongsTo     { return $this->belongsTo(User::class, 'agente_id'); }
     public function origem(): BelongsTo     { return $this->belongsTo(Documento::class, 'origem_id'); }
     public function derivados(): HasMany    { return $this->hasMany(Documento::class, 'origem_id'); }
+    /** Os anexos próprios da peça, na ordem em que saem na via impressa. */
+    public function anexos(): HasMany
+    {
+        return $this->hasMany(DocumentoAnexo::class)->orderBy('ordem')->orderBy('id');
+    }
+
+    /**
+     * Quem JUNTA anexo. Em rascunho, o autor. Com a peça lavrada a juntada
+     * continua aberta — ao autor e ao administrador —, e o anexo sai marcado
+     * como "juntado depois". Peça anulada não recebe mais nada.
+     * (Excluir é outra regra, mais estreita: DocumentoAnexo::podeSerExcluidoPor.)
+     */
+    public function podeJuntarAnexo(User $u): bool
+    {
+        if ($this->status === 'anulado') {
+            return false;
+        }
+
+        return $this->agente_id === $u->id || ($this->status !== 'rascunho' && $u->isAdmin());
+    }
+
+    /** A ordem de serviço que determinou a notificação (origem_motivo = ordem_servico). */
+    public function origemOs(): BelongsTo { return $this->belongsTo(OrdemServico::class, 'origem_os_id'); }
+
+    /**
+     * O QUE LEVOU À NOTIFICAÇÃO — a origem das peças que começam a cadeia.
+     * (O auto nasce de outra peça: ver ORIGENS e `origem_id`.)
+     */
+    public const MOTIVOS_DE_ORIGEM = [
+        'direta'        => 'Direta — vistoria em campo',
+        'ordem_servico' => 'Ordem de serviço',
+        'ouvidoria'     => 'Denúncia da ouvidoria',
+    ];
+
+    /** Só as notificações têm motivo de origem; os autos têm peça de origem. */
+    public function temMotivoDeOrigem(): bool
+    {
+        return in_array($this->tipo, self::COM_CUMPRIMENTO, true);
+    }
+
+    /**
+     * A origem como sai no topo da peça impressa: "DIRETA", "ORDEM DE SERVIÇO
+     * Nº 12/2026", "OUVIDORIA Nº 4471/2026" — ou, nos autos, a peça anterior.
+     */
+    public function origemTexto(): string
+    {
+        if ($this->origem) {
+            return mb_strtoupper($this->origem->rotuloTipo()) . ' Nº ' . $this->origem->numeroFormatado();
+        }
+        if ($this->origem_motivo === 'ordem_servico') {
+            return 'ORDEM DE SERVIÇO' . ($this->origemOs ? ' Nº ' . $this->origemOs->numero : '');
+        }
+        if ($this->origem_motivo === 'ouvidoria') {
+            return 'OUVIDORIA' . ($this->origem_referencia ? ' Nº ' . $this->origem_referencia : '');
+        }
+
+        return 'DIRETA';
+    }
+
+    /**
+     * Quem pode mexer na origem de uma notificação JÁ LAVRADA: o autor, ou o
+     * administrador. Peça anulada não se altera mais.
+     */
+    public function podeEditarOrigem(User $u): bool
+    {
+        return $this->temMotivoDeOrigem()
+            && in_array($this->status, ['lavrado', 'atendido'], true)
+            && ($this->agente_id === $u->id || $u->isAdmin());
+    }
+
     /** O auto de infração anterior, de que este é reincidência. */
     public function reincidenciaDe(): BelongsTo { return $this->belongsTo(Documento::class, 'reincidencia_de_id'); }
 

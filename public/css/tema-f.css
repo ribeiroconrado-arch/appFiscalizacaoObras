@@ -1429,6 +1429,38 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .rs-assina-vazio{height:70px}
 .rs-recusa{margin-top:14px;padding:10px 12px;border:1px solid var(--f-bord);border-radius:10px;font-size:12px;color:var(--tx2)}
 .rs-recusa b{color:var(--chumbo)}
+/* ABA ANEXOS do documento (documento-anexos.js). */
+.anx-acoes{display:flex;gap:8px;flex-wrap:wrap}
+.anx-nota{font-size:12px;color:var(--tx3);margin:8px 0 4px}
+.anx-lista{display:flex;flex-direction:column;gap:8px}
+.anx{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:12px;align-items:start;
+  border:1.5px solid var(--bord);border-radius:var(--r);padding:10px;background:var(--sur)}
+.anx.anx-fixo{background:var(--blt)}
+.anx-mini{display:block;width:76px;height:60px;border-radius:8px;object-fit:cover;background:var(--blt);border:1px solid var(--bord)}
+.anx-pdf{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--tx3);text-decoration:none}
+.anx-tit{width:100%;border:0;border-bottom:1px dashed transparent;background:transparent;padding:2px 0;
+  font:inherit;font-size:13.5px;font-weight:600;color:var(--tx);outline:none}
+.anx-tit:not([readonly]):hover,.anx-tit:not([readonly]):focus{border-bottom-color:var(--tx3)}
+.anx-tit-fixo{font-size:13.5px;font-weight:600;color:var(--tx)}
+.anx-meta{font-size:11.5px;color:var(--tx3);margin-top:2px}
+.anx-etqs{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.anx-etqs:empty{display:none}
+.anx-etq{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--blt);color:var(--tx2)}
+.anx-etq.vist,.anx-etq.orig{background:var(--gl);color:var(--gd)}
+.anx-etq.depois{background:#E7EEF7;color:#2B5C8A}
+.anx-imprime{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--tx2);margin-top:7px;cursor:pointer}
+.anx-imprime input{width:auto;margin:0;accent-color:var(--g)}
+.anx-lado{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.anx-setas{display:flex;gap:4px}
+.anx-btn{border:1px solid var(--bord);background:var(--sur);color:var(--tx2);border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer}
+.anx-btn:disabled{opacity:.35;cursor:not-allowed}
+@media(max-width:520px){.anx{grid-template-columns:60px minmax(0,1fr)}.anx-mini{width:60px;height:48px}
+  .anx-lado{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}}
+/* Preparar a foto: o que se vê é o que sobe. */
+.anxf-palco{background:#111;border-radius:var(--r);overflow:hidden;display:flex;justify-content:center}
+#anxf-canvas{display:block;max-width:100%;max-height:56vh;height:auto;cursor:crosshair;touch-action:manipulation}
+.anxf-ferr{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--tx2)}
+.anxf-ferr input[type=range]{flex:1;min-width:120px;accent-color:var(--g)}
 /* LAVRATURA no resumo do documento: as assinaturas do ato. */
 .lav{margin-top:22px;padding-top:6px;border-top:2px solid var(--f-bord)}
 .lav-quando{font-size:15px;font-weight:700;color:var(--chumbo);padding:10px 0}

@@ -52,11 +52,11 @@ $check = function (bool $ok, string $mensagem) use (&$checks) {
 };
 $render = fn (array $d) => view('impressao.a4', $d)->render();
 $html = $render($dados);
-foreach (['01   Identificação', '02   Local', '03   Infração', '04   Ciência', $doc->descricao,
+foreach (['1 - Identificação', '2 - Local', '3 - Infração', '4 - Ciência', $doc->descricao,
     $doc->observacoes, '0,3500 UPF/m² × 120,00 m²', 'Multa e embargo.', '20/08/2026', 'Fiscal de Teste'] as $texto) {
     $check(str_contains($html, $texto), 'Conteúdo ausente: '.$texto);
 }
-foreach (['Total da multa', '58,00 UPF', 'R$ 337', 'CEP 78850', '05   Termo', '06   Anexos'] as $texto) {
+foreach (['Total da multa', '58,00 UPF', 'R$ 337', 'CEP 78850', '5 - Termo', '6 - Anexos'] as $texto) {
     $check(! str_contains($html, $texto), 'Conteúdo indevido: '.$texto);
 }
 $check(strpos($html, '>Cálculo<') < strpos($html, '>Multa · UPF<'), 'Ordem das colunas incorreta');
@@ -71,10 +71,10 @@ if (isset($argv[1])) {
 $doc->recusa_assinatura = 'Recusou-se a assinar após a leitura.';
 $dados['anexos'] = [['foto' => false, 'src' => null, 'titulo' => 'Anexo de teste', 'descricao' => 'Evidência registrada.', 'dataHora' => '23/07/2026 18:14']];
 $html = $render($dados);
-$check(str_contains($html, '05   Termo de Recusa'), 'Recusa não exibida');
+$check(str_contains($html, '5 - Termo de Recusa'), 'Recusa não exibida');
 $check(str_contains($html, $doc->recusa_assinatura), 'Relato da recusa perdido');
 $doc->recusa_assinatura = null;
-$check(str_contains($render($dados), '06   Anexos'), 'Anexos renumerados sem recusa');
+$check(str_contains($render($dados), '5 - Anexos'), 'Anexos devem seguir a ciência quando não há recusa');
 $dados['memoria']['linhas'][2]['limite'] = 'teto da lei aplicado';
 $check(str_contains($render($dados), 'teto da lei aplicado'), 'Limite legal omitido');
 $doc->tipo = 'notificacao';
@@ -82,6 +82,19 @@ $dados['memoria']['total'] = null;
 $html = $render($dados);
 $check(! str_contains($html, '>Multa · UPF<'), 'Notificação anuncia multa não aplicada');
 $check(str_contains($html, 'Manter obra sem placa'), 'Notificação perdeu enquadramento');
+
+// Numeração e destinatário não dependem de quais blocos opcionais existem.
+foreach (['auto_infracao', 'auto_embargo', 'notificacao', 'notificacao_embargo', 'vistoria'] as $tipo) {
+    $doc->tipo = $tipo;
+    foreach ([null, 'Recusou-se a assinar.'] as $recusa) {
+        $doc->recusa_assinatura = $recusa;
+        $html = $render($dados);
+        preg_match_all('/class="sec-tit">(\d+) - /', $html, $grupos);
+        $check(array_map('intval', $grupos[1]) === range(1, count($grupos[1])), 'Numeração descontínua: '.$tipo);
+        $nome = in_array($tipo, Documento::COM_CUMPRIMENTO, true) ? 'notificado' : ($tipo === 'vistoria' ? 'interessado' : 'autuado');
+        $check(str_contains($html, 'Identificação do '.$nome), 'Destinatário incorreto: '.$tipo);
+    }
+}
 
 // Conteúdo longo: validar o motor PDF e fornecer páginas para inspeção visual.
 if (isset($argv[1])) {

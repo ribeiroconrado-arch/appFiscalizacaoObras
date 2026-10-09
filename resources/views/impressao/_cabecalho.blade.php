@@ -38,10 +38,12 @@
           <td>
             <div class="cab-orgao">{{ $orgao['secretaria'] }}</div>
             <div class="cab-depto">{{ $orgao['nome'] }}@if ($orgao['departamento']) – {{ $orgao['departamento'] }}@endif</div>
-            @if ($orgao['divisao'])
+            @if ($orgao['divisao'] && ! ($cabecalhoA4Compacto ?? false))
               <div class="cab-depto">{{ $orgao['divisao'] }}</div>
             @endif
-            <div class="cab-end">{{ collect([$orgao['endereco'], $orgao['telefone'], $orgao['municipio']])->filter()->implode(' – ') }}</div>
+            <div class="cab-end">{{ collect(($cabecalhoA4Compacto ?? false)
+                ? [$orgao['divisao'], $orgao['telefone'], $orgao['endereco'], $orgao['municipio']]
+                : [$orgao['endereco'], $orgao['telefone'], $orgao['municipio']])->filter()->implode(' – ') }}</div>
           </td>
           @if ($orgao['selo'])
             {{-- Quebra sozinho em duas linhas ("FISCALIZAÇÃO / DE OBRAS")

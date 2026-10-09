@@ -955,6 +955,91 @@ function multiplicadoresDoDoc() {
     .map(id => [id, fdState.multiplicadores[id]]))
 }
 
+// ── ORIGEM DA NOTIFICAÇÃO ────────────────────────────────────
+
+/** As peças que têm MOTIVO de origem, e não peça de origem (Documento::COM_CUMPRIMENTO). */
+const NOTIFICACOES_DOC = ['notificacao', 'notificacao_embargo']
+
+/**
+ * Mostra o bloco de origem da notificação, os campos do motivo escolhido
+ * (qual ordem de serviço / qual denúncia) e decide se dá para editar:
+ *
+ *   peça nova ou rascunho em edição   edita, e vai junto no Gravar;
+ *   rascunho só aberto                 travado, como o resto;
+ *   LAVRADA                            EDITA, com o botão "Salvar origem" —
+ *                                      é o único dado que se corrige depois.
+ */
+function aplicarOrigemNotifDoc() {
+  const g = id => document.getElementById(id)
+  const ehNotificacao = NOTIFICACOES_DOC.includes(g('nd-tipo').value)
+  g('nd-bloco-motivo').style.display = ehNotificacao ? '' : 'none'
+  if (!ehNotificacao) return
+
+  const motivo = g('nd-origem-motivo').value
+  g('nd-origem-os-campo').hidden = motivo !== 'ordem_servico'
+  g('nd-origem-ref-campo').hidden = motivo !== 'ouvidoria'
+  if (motivo === 'ordem_servico') carregarOrdensDoc()
+
+  const lavrado = fdState.estado === 'lavrado'
+  const edita = lavrado ? !!fdState.podeEditarOrigem : !docTravado()
+  for (const id of ['nd-origem-motivo', 'nd-origem-os', 'nd-origem-ref']) g(id).disabled = !edita
+  g('nd-origem-salvar-linha').hidden = !(lavrado && fdState.podeEditarOrigem)
+}
+
+/** As ordens de serviço, para a origem. Carregadas uma vez por abertura do formulário. */
+async function carregarOrdensDoc() {
+  const sel = document.getElementById('nd-origem-os')
+  if (sel.dataset.carregado) return
+  sel.dataset.carregado = '1'
+  const atual = sel.value || String(fdState.origemOsId || '')
+  let ordens = []
+  try {
+    const r = await fetch('/api/documentos/ordens-de-servico', { headers: { Accept: 'application/json' } })
+    if (r.ok) ordens = (await r.json()).ordens
+  } catch (_) { sel.dataset.carregado = '' }
+  // A peça reaberta mostra a ordem que tem, mesmo que não venha na lista.
+  if (atual && fdState.origemOsRotulo && !ordens.some(o => String(o.id) === atual)) {
+    ordens.unshift({ id: Number(atual), rotulo: fdState.origemOsRotulo })
+  }
+  sel.innerHTML = '<option value="">Escolha a ordem de serviço…</option>'
+    + ordens.map(o => `<option value="${o.id}">${esc(o.rotulo)}</option>`).join('')
+  sel.value = ordens.some(o => String(o.id) === atual) ? atual : ''
+}
+
+/** O motivo de origem como vai no pedido — vazio para as peças que não o têm. */
+function motivoDeOrigemDoDoc() {
+  const g = id => document.getElementById(id)
+  if (!NOTIFICACOES_DOC.includes(g('nd-tipo').value)) return {}
+  const motivo = g('nd-origem-motivo').value || 'direta'
+  return {
+    origem_motivo: motivo,
+    origem_os_id: motivo === 'ordem_servico' ? Number(g('nd-origem-os').value) || null : null,
+    origem_referencia: motivo === 'ouvidoria' ? g('nd-origem-ref').value.trim() || null : null,
+  }
+}
+
+/** Grava a origem de uma notificação já lavrada (o único dado que ela ainda aceita). */
+async function salvarOrigemNotifDoc() {
+  const corpo = motivoDeOrigemDoDoc()
+  if (corpo.origem_motivo === 'ordem_servico' && !corpo.origem_os_id) { exigirCampo('nd-origem-os', 'Escolha a ordem de serviço.'); return }
+  if (corpo.origem_motivo === 'ouvidoria' && !corpo.origem_referencia) { exigirCampo('nd-origem-ref', 'Informe o número da denúncia.'); return }
+  await comCarregando('Gravando a origem…', async () => {
+    try {
+      const r = await fetch(`/api/documentos/${fdState.id}/origem`, {
+        method: 'PATCH', headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
+      toast(d.message)
+      // A via A4 do resumo traz a origem no topo: da próxima vez ela vem nova.
+      if (fdState.aba === 'resumo') renderResumoDoc()
+      carregarDocumentos()
+    } catch (e) {
+      toast(e.message || 'Falha ao gravar a origem', 'err')
+    }
+  })
+}
+
 /** De quais peças cada documento pode nascer (Documento::ORIGENS). */
 const ORIGENS_DO_DOC = ['auto_infracao', 'auto_embargo']
 
@@ -973,6 +1058,7 @@ async function carregarOrigensDoc() {
   const sel = document.getElementById('nd-origem')
   const tipo = document.getElementById('nd-tipo').value
   document.getElementById('nd-bloco-origem').style.display = ORIGENS_DO_DOC.includes(tipo) ? '' : 'none'
+  aplicarOrigemNotifDoc()   // o bloco irmão, das notificações
   if (!ORIGENS_DO_DOC.includes(tipo)) return
 
   const atual = sel.value || String(fdState.origemId || '')
@@ -1089,6 +1175,14 @@ async function sugerirDaVistoria(vistoriaId) {
   const caixa = document.getElementById('nd-sugestao')
   caixa.innerHTML = ''
   if (!vistoriaId) { return }
+  // AUTO DE INFRAÇÃO NÃO SE VINCULA A VISTORIA: nasce de uma notificação ou
+  // de um embargo (campo Origem). O servidor ignoraria o vínculo; a tela
+  // avisa, para o fiscal não achar que ficou amarrado.
+  if (document.getElementById('nd-tipo').value === 'auto_infracao') {
+    fdState.vistoriaId = null
+    toast('Auto de Infração não se vincula a vistoria: informe em Origem a notificação ou o embargo de que ele decorre.', 'aviso')
+    return
+  }
 
   try {
     fdState.vistoriaId = vistoriaId

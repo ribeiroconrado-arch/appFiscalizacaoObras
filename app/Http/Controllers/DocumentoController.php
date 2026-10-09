@@ -423,12 +423,22 @@ class DocumentoController extends Controller
         if ($msg = $this->recusaDaOrigem($d['tipo'], $d['origem_id'] ?? null)) {
             return response()->json(['message' => $msg], 422);
         }
+        $motivo = $this->motivoDeOrigem($d['tipo'], $d);
+        if (is_string($motivo)) {
+            return response()->json(['message' => $motivo], 422);
+        }
 
         $doc = Documento::create([
             'tipo'          => $d['tipo'],
             'origem_id'     => $d['origem_id'] ?? null,
+            ...$motivo,
             'lote_id'       => $lote?->id,
-            'vistoria_id'   => $d['vistoria_id'] ?? null,
+            // AUTO DE INFRAÇÃO NÃO SE VINCULA A VISTORIA: nasce de uma
+            // notificação ou de um embargo (origem_id). O que vier é ignorado.
+            'vistoria_id'   => $d['tipo'] === 'auto_infracao' ? null : ($d['vistoria_id'] ?? null),
+            // Peça nova: os anexos são os que o fiscal escolher, e não mais
+            // todas as fotos da vistoria (ver DocumentoImpressao::anexos).
+            'anexos_proprios' => true,
             'legislacao_id' => $d['legislacao_id'] ?? null,
             'agente_id'     => $request->user()->id,
             'status'        => 'rascunho',
@@ -484,7 +494,83 @@ class DocumentoController extends Controller
         'reincidencia_de_id' => ['nullable', 'integer', 'exists:documentos,id'],
         // A peça de que esta nasceu (notificação ou embargo anterior).
         'origem_id'          => ['nullable', 'integer', 'exists:documentos,id'],
+        ...self::REGRAS_DO_MOTIVO,
     ];
+
+    /**
+     * O que levou à notificação: direta, ordem de serviço (qual) ou denúncia
+     * da ouvidoria (o número dela). Ver Documento::MOTIVOS_DE_ORIGEM.
+     */
+    private const REGRAS_DO_MOTIVO = [
+        'origem_motivo'     => ['nullable', 'in:direta,ordem_servico,ouvidoria'],
+        'origem_os_id'      => ['nullable', 'integer', 'exists:ordens_servico,id'],
+        'origem_referencia' => ['nullable', 'string', 'max:80'],
+    ];
+
+    /**
+     * O motivo de origem como vai para o banco, ou a mensagem da recusa.
+     * Só notificação tem motivo; ordem de serviço pede a ordem, ouvidoria pede
+     * o número da denúncia — origem pela metade não serve de prova depois.
+     *
+     * @return array<string,mixed>|string
+     */
+    private function motivoDeOrigem(string $tipo, array $d): array|string
+    {
+        $limpo = ['origem_motivo' => null, 'origem_os_id' => null, 'origem_referencia' => null];
+        if (! in_array($tipo, Documento::COM_CUMPRIMENTO, true)) {
+            return $limpo;
+        }
+        $motivo = $d['origem_motivo'] ?? 'direta';
+        if ($motivo === 'ordem_servico') {
+            if (empty($d['origem_os_id'])) {
+                return 'Informe a ordem de serviço que originou a notificação.';
+            }
+
+            return ['origem_motivo' => $motivo, 'origem_os_id' => (int) $d['origem_os_id']] + $limpo;
+        }
+        if ($motivo === 'ouvidoria') {
+            $ref = trim((string) ($d['origem_referencia'] ?? ''));
+            if ($ref === '') {
+                return 'Informe o número da denúncia da ouvidoria.';
+            }
+
+            return ['origem_motivo' => $motivo, 'origem_referencia' => $ref] + $limpo;
+        }
+
+        return ['origem_motivo' => 'direta'] + $limpo;
+    }
+
+    /**
+     * PATCH /api/documentos/{documento}/origem — corrige a origem de uma
+     * notificação JÁ LAVRADA.
+     *
+     * É a única coisa da peça que se altera depois da lavratura (além dos
+     * anexos): a origem é dado de processo — a denúncia que só foi vinculada
+     * depois, a ordem de serviço informada errada —, e não conteúdo do ato.
+     * A alteração fica na trilha de auditoria, como toda mudança do documento.
+     */
+    public function atualizarOrigem(Request $request, Documento $documento): JsonResponse
+    {
+        if (! $documento->podeEditarOrigem($request->user())) {
+            return response()->json(['message' => 'Só o autor (ou o administrador) altera a origem de uma notificação lavrada.'], 403);
+        }
+        $d = $request->validate(self::REGRAS_DO_MOTIVO);
+        $motivo = $this->motivoDeOrigem($documento->tipo, $d);
+        if (is_string($motivo)) {
+            return response()->json(['message' => $motivo], 422);
+        }
+        $documento->update($motivo);
+
+        return response()->json(['message' => 'Origem atualizada.', 'origem_texto' => $documento->fresh()->origemTexto()]);
+    }
+
+    /** GET /api/documentos/ordens-de-servico — as ordens que podem ter originado uma notificação. */
+    public function ordensParaOrigem(Request $request): JsonResponse
+    {
+        return response()->json(['ordens' => \App\Models\OrdemServico::orderByDesc('ano')->orderByDesc('sequencia')
+            ->limit(200)->get(['id', 'numero', 'objeto'])
+            ->map(fn ($o) => ['id' => $o->id, 'rotulo' => 'OS ' . $o->numero . ($o->objeto ? ' — ' . \Illuminate\Support\Str::limit($o->objeto, 60) : '')])]);
+    }
 
     /**
      * GET /api/documentos/origens — as peças lavradas do imóvel de que um
@@ -718,7 +804,7 @@ class DocumentoController extends Controller
      */
     public function ficha(Request $request, Documento $documento): JsonResponse
     {
-        $documento->load(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'anuladoPor', 'vistoria.evidencias']);
+        $documento->load(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'origemOs', 'anuladoPor', 'vistoria.evidencias']);
 
         [$stTxt, $stCls] = $documento->statusBadge();
         $prazo = $documento->situacaoPrazo();
@@ -738,6 +824,14 @@ class DocumentoController extends Controller
             'matricula'      => $documento->agente?->matricula,
             'origem'         => $documento->origem?->numeroFormatado(),
             'origem_id'      => $documento->origem_id,
+            // O motivo de origem das notificações — e se este usuário ainda
+            // pode corrigi-lo com a peça já lavrada.
+            'origem_motivo'      => $documento->temMotivoDeOrigem() ? ($documento->origem_motivo ?: 'direta') : null,
+            'origem_os_id'       => $documento->origem_os_id,
+            'origem_os_rotulo'   => $documento->origemOs ? 'OS ' . $documento->origemOs->numero : null,
+            'origem_referencia'  => $documento->origem_referencia,
+            'origem_texto'       => $documento->origemTexto(),
+            'pode_editar_origem' => $documento->podeEditarOrigem($request->user()),
             'origem_rotulo'  => $documento->origem ? $documento->origem->rotuloTipo() . ' nº ' . $documento->origem->numeroFormatado() : null,
 
             'imovel' => [
@@ -823,7 +917,10 @@ class DocumentoController extends Controller
             'prazo_ate'  => $documento->prazo_ate?->format('d/m/Y'),
             'defesa_ate' => $documento->defesa_ate?->format('d/m/Y'),
 
-            'anexos' => $documento->vistoria?->evidencias->count() ?? 0,
+            'anexos' => $documento->anexos_proprios
+                ? $documento->anexos()->count()
+                : ($documento->vistoria?->evidencias->count() ?? 0),
+            'vistoria_id' => $documento->vistoria_id,
 
             // As assinaturas colhidas na lavratura, para o resumo da peça.
             'assinaturas' => $documento->status === 'rascunho' ? null : [
@@ -938,15 +1035,23 @@ class DocumentoController extends Controller
             return response()->json(['message' => $msg], 422);
         }
 
+        $motivo = $this->motivoDeOrigem($d['tipo'], $d);
+        if (is_string($motivo)) {
+            return response()->json(['message' => $motivo], 422);
+        }
+
         try {
             $documento->tipo = $d['tipo'];
+            if ($d['tipo'] === 'auto_infracao') {
+                $documento->vistoria_id = null;   // auto de infração não se vincula a vistoria
+            }
             $this->lavratura->vincularReincidencia($documento, $d['reincidencia_de_id'] ?? null);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
         $documento->update(array_merge(
-            collect($d)->except(['artigos', 'multiplicadores', 'reincidencia_de_id', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d)));
+            collect($d)->except(['artigos', 'multiplicadores', 'reincidencia_de_id', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d), $motivo));
 
         // Os artigos são refixados por inteiro: manter os antigos e somar os
         // novos deixaria no documento um enquadramento que o fiscal removeu
@@ -974,6 +1079,13 @@ class DocumentoController extends Controller
             return response()->json(['message' => 'Só o autor pode excluir o próprio rascunho.'], 403);
         }
 
+        // Os arquivos que eram SÓ deste rascunho saem com ele; os trazidos da
+        // vistoria ou de outra peça ficam com quem os cedeu.
+        foreach ($documento->anexos()->where('origem', 'proprio')->get() as $anexo) {
+            if (! \App\Models\DocumentoAnexo::where('arquivo', $anexo->arquivo)->where('documento_id', '!=', $documento->id)->exists()) {
+                \Illuminate\Support\Facades\Storage::disk('private')->delete($anexo->arquivo);
+            }
+        }
         $documento->artigos()->delete();
         $documento->delete();
 

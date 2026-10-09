@@ -32,7 +32,7 @@ class DocumentoImpressao
      */
     public function montar(Documento $doc, bool $paraPdf = false, bool $comAnexos = true): array
     {
-        $doc->loadMissing(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'vistoria.evidencias']);
+        $doc->loadMissing(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'origemOs', 'vistoria.evidencias']);
 
         $prazoDias = in_array($doc->tipo, Documento::COM_CUMPRIMENTO, true) ? $doc->prazo_dias : null;
 
@@ -94,11 +94,9 @@ class DocumentoImpressao
     /** "DIRETA", ou o documento que originou este. */
     private function origem(Documento $doc): string
     {
-        if (! $doc->origem) {
-            return 'DIRETA';
-        }
-
-        return mb_strtoupper($doc->origem->rotuloTipo()) . ' Nº ' . $doc->origem->numeroFormatado();
+        // A regra é do documento: peça anterior (autos) ou o motivo da
+        // notificação — direta, ordem de serviço, ouvidoria.
+        return $doc->origemTexto();
     }
 
     /**
@@ -202,6 +200,29 @@ class DocumentoImpressao
      */
     private function anexos(Documento $doc, bool $paraPdf): array
     {
+        // PEÇA COM ANEXOS PRÓPRIOS: saem os que o fiscal marcou, na ordem que
+        // ele deu — fotos e PDFs juntados na peça, e o que ele TROUXE da
+        // vistoria ou da peça de origem. A peça antiga (sem a marca) continua
+        // imprimindo as fotos da vistoria vinculada, como sempre imprimiu.
+        if ($doc->anexos_proprios) {
+            return $doc->anexos()->where('imprime', true)->get()
+                ->map(function (\App\Models\DocumentoAnexo $a) use ($paraPdf) {
+                    $ehFoto = $a->ehFoto();
+
+                    return [
+                        'foto'      => $ehFoto,
+                        'titulo'    => $a->titulo ?: $a->nome_original,
+                        'descricao' => trim(($ehFoto ? '' : 'Arquivo PDF, juntado aos autos. ')
+                            . ($a->juntado_depois ? 'Juntado depois da lavratura, em ' . $a->created_at?->format('d/m/Y H:i') . '.' : '')) ?: null,
+                        'dataHora'  => ($a->data_hora ?? $a->created_at)?->format('d/m/Y H:i'),
+                        'src'       => $ehFoto ? $this->fonteDoArquivo($a->arquivo, $a->mime, route('documento.anexo.arquivo', $a), $paraPdf) : null,
+                    ];
+                })
+                ->filter(fn ($a) => ! $a['foto'] || $a['src'])
+                ->values()
+                ->all();
+        }
+
         $evidencias = $doc->vistoria?->evidencias ?? collect();
 
         return $evidencias
@@ -219,6 +240,19 @@ class DocumentoImpressao
             ->filter(fn ($a) => ! $a['foto'] || $a['src'])
             ->values()
             ->all();
+    }
+
+    /** A imagem para a view: endereço no navegador, conteúdo embutido no PDF. */
+    private function fonteDoArquivo(string $arquivo, ?string $mime, string $url, bool $paraPdf): ?string
+    {
+        if (! $paraPdf) {
+            return $url;
+        }
+        $disco = Storage::disk('private');
+
+        return $disco->exists($arquivo)
+            ? 'data:' . ($mime ?: 'image/jpeg') . ';base64,' . base64_encode($disco->get($arquivo))
+            : null;
     }
 
     /**

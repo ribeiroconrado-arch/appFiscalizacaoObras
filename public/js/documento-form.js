@@ -35,6 +35,9 @@ const fdState = {
   /** @type {Object|null} a conta que a peça reaberta guardou */ multaGravada: null,
   /** @type {boolean} a área de lavratura (assinaturas) está aberta no resumo */ lavrando: false,
   /** @type {Object|null} as assinaturas da peça lavrada */ assinaturas: null,
+  /** @type {number|null} a ordem de serviço que originou a notificação */ origemOsId: null,
+  /** @type {string|null} */ origemOsRotulo: null,
+  /** @type {boolean} este usuário pode corrigir a origem da peça lavrada */ podeEditarOrigem: false,
   /** @type {number|null} a peça de que esta nasceu */ origemId: null,
   /** @type {string|null} */ origemRotulo: null,
   /** @type {number|null} o auto de que este é reincidência */ reincidenciaId: null,
@@ -170,6 +173,9 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
       .filter(a => a.artigo_id && a.multiplicador !== null).map(a => [a.artigo_id, a.multiplicador]))
     // A conta como a peça a guardou: é o que se mostra enquanto ela está só
     // aberta para leitura. Ao editar, a prévia volta a vir do servidor.
+    fdState.origemOsId = documento.origem_os_id ?? null
+    fdState.origemOsRotulo = documento.origem_os_rotulo ?? null
+    fdState.podeEditarOrigem = !!documento.pode_editar_origem
     fdState.origemId = documento.origem_id ?? null
     fdState.origemRotulo = documento.origem_rotulo ?? null
     fdState.reincidenciaId = documento.reincidencia?.id ?? null
@@ -198,6 +204,8 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     fdState.multaGravada = null
     fdState.reincidenciaId = fdState.reincidenciaNumero = fdState.reincidenciaFator = null
     fdState.origemId = fdState.origemRotulo = null
+    fdState.origemOsId = fdState.origemOsRotulo = null
+    fdState.podeEditarOrigem = false
     fdState.anexos = 0
     fdState.vistoriaId = null
     fdState.lote = lote
@@ -229,6 +237,16 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   // O cadastro municipal do imóvel: sempre mostrado; em peça nova, também
   // sugere o autuado, os endereços e a área do terreno.
   renderBciDoc({ sugerir: !documento })
+  // A origem da notificação (direta, ordem de serviço, ouvidoria).
+  {
+    const os = document.getElementById('nd-origem-os')
+    os.dataset.carregado = ''
+    os.innerHTML = '<option value="">Escolha a ordem de serviço…</option>'
+      + (fdState.origemOsId ? `<option value="${fdState.origemOsId}">${esc(fdState.origemOsRotulo || 'Ordem de serviço')}</option>` : '')
+    os.value = fdState.origemOsId ? String(fdState.origemOsId) : ''
+    document.getElementById('nd-origem-motivo').value = documento?.origem_motivo || 'direta'
+    document.getElementById('nd-origem-ref').value = documento?.origem_referencia || ''
+  }
   // As peças de que este auto pode nascer, para o campo de origem.
   document.getElementById('nd-origem').innerHTML = '<option value="">Direta — sem documento de origem</option>'
   carregarOrigensDoc()
@@ -603,10 +621,9 @@ async function vincularImovelDoc(id) {
   }
 }
 
+/** A aba Anexos é de documento-anexos.js: os anexos próprios da peça. */
 function renderAnexosDoc() {
-  document.getElementById('nd-anexos').innerHTML = fdState.anexos
-    ? `<div class="df-val">${fdState.anexos} evidência(s) da vistoria vinculada entram na via impressa.</div>`
-    : '<div class="lista-vazia">Nenhum anexo — a vistoria vinculada não tem evidência registrada.</div>'
+  if (typeof carregarAnexosDoc === 'function') carregarAnexosDoc()
 }
 
 // ── ABAS ─────────────────────────────────────────────────────
@@ -628,6 +645,8 @@ function irAbaDoc(nome) {
   document.getElementById('fd-body').scrollTop = 0
 
   if (nome === 'resumo') renderResumoDoc()
+  // Sempre do servidor: gravar a peça, lavrar ou trocar a origem muda o que a aba mostra.
+  if (nome === 'anexos') renderAnexosDoc()
   // O rodapé já liga e desliga as quatro setas — ver `renderRodapeDoc`.
   renderRodapeDoc()
 }
@@ -645,6 +664,8 @@ function passoAbaDoc(passo) {
 function aplicarEstadoDoc() {
   travarCamposDoc(fdState.estado !== 'novo' && !fdState.editando)
   renderRodapeDoc()
+  // A origem da notificação tem trava própria: continua editável com a peça lavrada.
+  if (typeof aplicarOrigemNotifDoc === 'function') aplicarOrigemNotifDoc()
   // O resumo depende do estado: gravada, a peça passa a mostrar a via A4.
   if (fdState.aba === 'resumo') renderResumoDoc()
 }
@@ -791,6 +812,7 @@ function corpoDoDoc() {
   corpo.multiplicadores = multiplicadoresDoDoc()
   corpo.reincidencia_de_id = reincidenciaDoDoc()
   corpo.origem_id = origemDoDoc()
+  Object.assign(corpo, motivoDeOrigemDoDoc())
 
   // Num rascunho já gravado, o imóvel vinculado depois viaja no PATCH.
   if (fdState.id && fdState.lote?.id) corpo.lote_id = fdState.lote.id

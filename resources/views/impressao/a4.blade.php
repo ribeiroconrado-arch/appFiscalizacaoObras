@@ -14,8 +14,17 @@
   assinaturas, termo de recusa (condicional) e anexos (condicional).
 --}}
 @php
-  // Referências estáveis: a ausência de recusa não renumera os anexos.
-  $sec = fn (int $numero, string $titulo) => sprintf('%02d   %s', $numero, $titulo);
+  // Contar somente os grupos efetivamente exibidos, inclusive recusa e anexos.
+  $numeroSecao = 0;
+  $sec = function (string $titulo) use (&$numeroSecao) {
+      return (++$numeroSecao) . ' - ' . $titulo;
+  };
+  $notificacao = in_array($doc->tipo, \App\Models\Documento::COM_CUMPRIMENTO, true);
+  $destinatario = $notificacao ? 'Notificado' : ($doc->exigeFundamentacao() ? 'Autuado' : 'Interessado');
+  $textoDestinatario = fn ($texto) => $notificacao
+      ? str_replace(['AUTUADO', 'Autuado', 'autuado'], ['NOTIFICADO', 'Notificado', 'notificado'], $texto ?? '')
+      : ($texto ?? '');
+  $numeroA4 = $doc->numero ? sprintf('%d/%04d', $doc->exercicio, $doc->numero) : 'Sem número';
 
   $navegador = $navegador ?? false;
   $fmt = fn ($v, $c = 2) => $v === null ? '—' : number_format((float) $v, $c, ',', '.');
@@ -28,7 +37,7 @@
 <style>
   @page { size: A4; margin: 8mm 10mm 10mm 10mm; }
 
-  body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10.5px; color: #111;
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; color: #111;
          line-height: 1.3; margin: 0; }
 
   /* ── Cabeçalho institucional (repete em toda página) ── */
@@ -43,38 +52,47 @@
 @include('impressao._cabecalho-css')
 
   /* Ajustes exclusivos do A4 dos documentos; OS e bobina conservam seus modelos. */
+  .cab-orgao { font-size: 10px; }
+  .cab-depto, .cab-end { font-size: 9px; margin-top: 1px; }
+  .cab-selo { font-size: 9px; }
+  @unless ($navegador)
+    @page { margin-top: 33mm; }
+    .cab-fixo { top: -25mm; height: 24mm; }
+  @endunless
   .cab-regua { border-bottom: 1px solid #50565b; }
   .cab-num-lbl, .topo-lbl { font-weight: normal; }
   .cab-num-val, .topo-val { font-weight: bold; }
   table.topo { margin-top: 0; background: #f1f1f1; table-layout: fixed; }
-  table.topo td { padding: 7px 6px; }
+  table.topo td { padding: 4px 3px; }
   table.topo td:last-child { padding-right: 6px; }
   .topo-lbl { font-size: 7px; white-space: normal; }
   .topo-val { font-size: 9px; }
-  .topo-regua { border-bottom: 1px solid #50565b; margin-bottom: 14px; }
+  .topo-regua { border-bottom: 1px solid #50565b; margin-bottom: 8px; }
 
   /* ── Seções ── */
   .sec { margin-bottom: 6px; }
-  .sec-tit { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em;
-             border-bottom: 1px solid #d5d5d5; padding: 0 0 5px; margin: 10px 0 7px;
+  .sec-tit { font-size: 10px; font-weight: bold; text-transform: uppercase;
+             border-bottom: 1px solid #d5d5d5; padding: 0 0 5px; margin: 10px 0 5px;
              page-break-after: avoid; }
   /* CPDF insere separadores NUL nos ajustes de espaço de texto Unicode
      justificado, incompatíveis com alguns importadores de PDF. */
   .sec p { margin: 0 0 5px; text-align: left; }
 
   table.campos { width: 100%; border-collapse: collapse; }
-  table.campos td { border: 0; padding: 3px 12px 5px 0; vertical-align: top; font-weight: normal; }
+  table.campos td { border: 0; padding: 2px 12px 4px 0; vertical-align: top; font-weight: normal; }
   table.campos .lbl { display: block; font-size: 7.5px; color: #666; text-transform: uppercase;
                       letter-spacing: .04em; font-weight: normal; }
 
   /* ── Memória de cálculo da multa (específico de obras) ── */
-  .lei-cab { border: 1px solid #d3d3d3; border-bottom: 0; padding: 8px 9px;
+  .lei-cab { font-family: 'Times New Roman', Times, serif; padding: 8px 9px 5px;
              page-break-after: avoid; }
   .lei-cab .lbl { font-size: 7.5px; color: #666; margin-right: 7px; }
-  table.multa { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 4px; }
+  table.multa { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 16px;
+                font-family: 'Times New Roman', Times, serif; }
   table.multa th { background: #f5f5f5; border: 1px solid #ddd; padding: 6px 8px;
                    font-size: 8px; text-align: left; }
-  table.multa td { border: 1px solid #ddd; padding: 8px; font-size: 10px; vertical-align: top; }
+  table.multa td { border-bottom: 1px solid #ddd; padding: 8px; font-size: 10.5px; vertical-align: top; line-height: 1.45; }
+  table.multa td + td { border-left: 1px solid #ddd; }
   table.multa td.dir { text-align: right; white-space: nowrap; font-weight: bold; }
   table.multa .calculo { color: #555; font-size: 8px; }
   table.multa .limite { font-size: 8px; }
@@ -137,7 +155,7 @@
   <div class="marca">{{ $marca }}</div>
 @endif
 
-@include('impressao._pagina-abre', ['numero' => $doc->numeroFormatado()])
+@include('impressao._pagina-abre', ['numero' => $numeroA4, 'cabecalhoA4Compacto' => true])
 
       {{-- Faixa do topo: identifica quem lavrou e quando. Fica no tbody de
            propósito — só faz sentido na primeira página. --}}
@@ -155,7 +173,7 @@
 
       {{-- 1 — Autuado --}}
       <div class="sec">
-        <div class="sec-tit">{{ $sec(1, $doc->exigeFundamentacao() ? 'Identificação do autuado' : 'Identificação do interessado') }}</div>
+        <div class="sec-tit">{{ $sec('Identificação do ' . mb_strtolower($destinatario)) }}</div>
         <table class="campos">
           <tr>
             <td style="width:56%"><span class="lbl">Nome / Razão social</span>{{ $doc->autuado_nome ?: '—' }}</td>
@@ -163,7 +181,7 @@
           </tr>
           @if ($doc->autuado_endereco)
           <tr>
-            <td colspan="2"><span class="lbl">Domicílio fiscal / correspondência</span>{{ preg_replace('/(?:[,;\s]|—|-)*CEP\s*:?\s*\d{5}-?\d{3}/iu', '', $doc->autuado_endereco) }}</td>
+            <td colspan="2"><span class="lbl">Endereço:</span>{{ preg_replace('/(?:[,;\s]|—|-)*CEP\s*:?\s*\d{5}-?\d{3}/iu', '', $doc->autuado_endereco) }}</td>
           </tr>
           @endif
         </table>
@@ -173,17 +191,18 @@
            inscrição imobiliária: é por ela que o processo é indexado e é ela
            que amarra o documento ao cadastro do município. --}}
       <div class="sec">
-        <div class="sec-tit">{{ $sec(2, 'Local da infração e identificação do imóvel') }}</div>
+        <div class="sec-tit">{{ $sec('Local da infração e identificação do imóvel') }}</div>
         <table class="campos">
           <tr>
-            <td style="width:56%"><span class="lbl">Inscrição imobiliária</span>{{ $imovel['inscricao'] ?: '—' }}</td>
-            <td><span class="lbl">Bairro · quadra · lote</span>{{ $imovel['bairro'] ?: '—' }} · {{ $imovel['quadra'] ?? '—' }} · {{ $imovel['lote'] ?? '—' }}</td>
+            <td style="width:24%"><span class="lbl">Inscrição imobiliária</span>{{ $imovel['inscricao'] ?: '—' }}</td>
+            <td style="width:38%"><span class="lbl">Logradouro</span>{{ $imovel['endereco'] ?: '—' }}</td>
+            <td style="width:14%"><span class="lbl">Quadra</span>{{ $imovel['quadra'] ?? '—' }}</td>
+            <td style="width:24%"><span class="lbl">Lote</span>{{ $imovel['lote'] ?? '—' }}</td>
           </tr>
           <tr>
-            <td colspan="2"><span class="lbl">Endereço / referência de localização</span>{{ $imovel['endereco'] ?: '—' }}</td>
-          </tr>
-          <tr>
-            <td colspan="2"><span class="lbl">Terreno · área construída aferida</span>{{ $doc->area_terreno_m2 !== null ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }} · {{ $doc->area_construida_m2 !== null ? $fmt($doc->area_construida_m2) . ' m²' : '—' }}</td>
+            <td colspan="2"><span class="lbl">Bairro / loteamento</span>{{ $imovel['bairro'] ?: '—' }}</td>
+            <td><span class="lbl">Área lote</span>{{ $doc->area_terreno_m2 !== null ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }}</td>
+            <td><span class="lbl">Área construída</span>{{ $doc->area_construida_m2 !== null ? $fmt($doc->area_construida_m2) . ' m²' : '—' }}</td>
           </tr>
         </table>
       </div>
@@ -198,13 +217,13 @@
 
       @if ($doc->exigeFundamentacao())
         <div class="sec">
-          <div class="sec-tit">{{ $sec(3, $memoria['total'] !== null ? 'Infração / legislação infringida / multa e penalidade' : 'Infração / legislação infringida') }}</div>
+          <div class="sec-tit">{{ $sec($memoria['total'] !== null ? 'Infração / legislação infringida / multa e penalidade' : 'Infração / legislação infringida') }}</div>
           <div class="lei-cab"><span class="lbl">LEI INFRINGIDA:</span> <strong>{{ $doc->legislacao?->rotulo() ?: '—' }}</strong></div>
           <table class="multa">
             <thead>
               <tr>
-                <th style="width:10%">Artigo</th>
-                <th>Texto da legislação infringida</th>
+                <th style="width:10%">ARTIGO(S)</th>
+                <th>@if ($memoria['total'] !== null) Texto da legislação infringida @endif</th>
                 @if ($memoria['total'] !== null)
                   <th style="width:17%">Cálculo</th>
                   <th style="width:11%;text-align:right">Multa · UPF</th>
@@ -233,10 +252,10 @@
       @endif
 
       <div class="sec">
-        <div class="sec-tit">{{ $sec(4, 'Ciência / intimação') }}</div>
+        <div class="sec-tit">{{ $sec('Ciência / intimação') }}</div>
         @if ($ciencia)
           {{-- Já escapado, com o **negrito** resolvido (DocumentoImpressao::negrito). --}}
-          <p>{!! $ciencia !!}</p>
+          <p>{!! $textoDestinatario($ciencia) !!}</p>
         @endif
         @if ($prazo)
           <p><strong>{{ $prazo['rotulo'] }}: até {{ $prazo['data'] }}.</strong> {{ $prazo['nota'] }}</p>
@@ -270,7 +289,7 @@
               <div class="assina-vazio"></div>
             @endif
             <div class="assina-linha">
-              {{ $doc->autuado_nome ?: 'Autuado / Interessado' }}@if ($doc->autuado_documento) — {{ $doc->autuado_documento }}@endif
+              {{ $doc->autuado_nome ?: $destinatario }}@if ($doc->autuado_documento) — {{ $doc->autuado_documento }}@endif
             </div>
           </td>
         </tr>
@@ -278,8 +297,8 @@
 
       @if ($doc->recusa_assinatura)
         <div class="sec">
-          <div class="sec-tit">{{ $sec(5, 'Termo de Recusa') }}</div>
-          <p>{{ $termoRecusa }}</p>
+          <div class="sec-tit">{{ $sec('Termo de Recusa') }}</div>
+          <p>{{ $textoDestinatario($termoRecusa) }}</p>
           @if ($doc->testemunha_nome)
             {{-- Com recusa, quem assina é a testemunha. --}}
             <table class="assina">
@@ -303,7 +322,7 @@
 
       @if (count($anexos))
         <div class="sec">
-          <div class="sec-tit">{{ $sec(6, 'Anexos') }}</div>
+          <div class="sec-tit">{{ $sec('Anexos') }}</div>
           @foreach ($anexos as $a)
             <table class="anexo">
               <tr>

@@ -2156,6 +2156,39 @@
         <div id="nd-bci"></div>
       </div>
 
+      {{-- DE ONDE VEIO A NOTIFICAÇÃO: direta (vistoria em campo), ordem de
+           serviço ou denúncia da ouvidoria. Só nas notificações. SEM data-lock
+           de propósito: é o único dado que continua editável depois da
+           lavratura — quem trava e destrava é aplicarOrigemNotifDoc
+           (documentos.js). --}}
+      <div id="nd-bloco-motivo" style="display:none">
+        <div class="sec-title">Origem</div>
+        <div class="g2">
+          <div class="field">
+            <label for="nd-origem-motivo">O que originou esta notificação</label>
+            <select data-combo id="nd-origem-motivo" onchange="aplicarOrigemNotifDoc()">
+              <option value="direta">Direta — vistoria em campo</option>
+              <option value="ordem_servico">Ordem de serviço</option>
+              <option value="ouvidoria">Denúncia da ouvidoria</option>
+            </select>
+          </div>
+          <div class="field" id="nd-origem-os-campo" hidden>
+            <label for="nd-origem-os">Ordem de serviço</label>
+            <select data-combo id="nd-origem-os" onfocus="carregarOrdensDoc()">
+              <option value="">Escolha a ordem de serviço…</option>
+            </select>
+          </div>
+          <div class="field" id="nd-origem-ref-campo" hidden>
+            <label for="nd-origem-ref">Nº da denúncia na ouvidoria</label>
+            <input type="text" id="nd-origem-ref" maxlength="80" placeholder="Ex.: 4471/2026">
+          </div>
+        </div>
+        <div class="btn-row" id="nd-origem-salvar-linha" style="justify-content:flex-end;margin-top:6px" hidden>
+          <span class="imp-sub" style="margin-right:auto">A origem pode ser corrigida mesmo com a peça lavrada.</span>
+          <button type="button" class="btn out-verde sm" onclick="salvarOrigemNotifDoc()">Salvar origem</button>
+        </div>
+      </div>
+
       {{-- De qual peça o auto nasceu (a notificação ou o embargo anterior). É
            a que o texto de ciência cita pelo marcador {origem}. Só nos autos
            (carregarOrigensDoc, documentos.js). --}}
@@ -2314,13 +2347,14 @@
 
     {{-- ANEXOS --}}
     <div class="doc-painel" id="fdp-anexos">
-      <div class="sec-title">Anexos</div>
+      {{-- Os anexos PRÓPRIOS da peça: foto e PDF juntados aqui, e o que o
+           fiscal escolhe trazer da vistoria ou da peça de origem. Desenhado
+           por documento-anexos.js. --}}
+      <div class="sec-title">Juntar ao documento</div>
       <div id="nd-anexos"></div>
-      <p class="aviso-legal">
-        Os anexos deste documento são as evidências da vistoria vinculada —
-        em obras a prova é fotografada na vistoria, e é ela que instrui o auto.
-        Para acrescentar fotos, registre-as na vistoria do imóvel.
-      </p>
+      <input type="file" id="anx-camera" accept="image/*" capture="environment" hidden onchange="escolherFotoAnexo(this, true)">
+      <input type="file" id="anx-galeria" accept="image/*" hidden onchange="escolherFotoAnexo(this, false)">
+      <input type="file" id="anx-pdf" accept="application/pdf" hidden onchange="escolherPdfAnexo(this)">
     </div>
 
     {{-- RESUMO --}}
@@ -3471,6 +3505,32 @@
 {{-- ANULAÇÃO
      Motivo obrigatório: anulação sem motivação declarada não é ato
      administrativo. O documento não é apagado — passa a sair com marca. --}}
+{{-- ══════ PREPARAR A FOTO DO ANEXO ══════
+     A foto é mostrada como vai ficar: com a data e a hora, a marca d'água do
+     brasão e os rostos borrados. Tocar na foto borra ali. O que sobe para o
+     servidor é esta imagem, já pronta (documento-anexos.js). --}}
+<div class="modal-bg" id="m-anexo-foto" data-caixa-alta>
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:720px">
+    <button class="modal-x" onclick="fecharFotoAnexo()">&#10005;</button>
+    <h3>Preparar a foto</h3>
+    <p class="anx-nota" id="anxf-status">Toque sobre cada rosto para borrar.</p>
+    <div class="anxf-palco"><canvas id="anxf-canvas" onclick="borrarNaFotoAnexo(event)"></canvas></div>
+    <div class="anxf-ferr">
+      <label for="anxf-raio">Tamanho do borrão</label>
+      <input type="range" id="anxf-raio" min="3" max="18" value="6">
+      <button type="button" class="btn sm" onclick="desfazerBorraoAnexo()">Desfazer borrão</button>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label for="anxf-titulo">Título do anexo</label>
+      <input type="text" id="anxf-titulo" maxlength="160" placeholder="Ex.: fachada da obra, vista da rua">
+    </div>
+    <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+      <button type="button" class="btn" onclick="fecharFotoAnexo()">Cancelar</button>
+      <button type="button" class="btn primary" onclick="juntarFotoAnexo()">Juntar ao documento</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="m-doc-anular" onclick="fModal()">
   <div class="modal sm" onclick="event.stopPropagation()" style="max-width:460px">
     <button class="modal-x" onclick="fModalBtn('m-doc-anular')">&#10005;</button>
@@ -3591,6 +3651,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/documentos.js')"></script>
 <script src="@assetv('js/documento-form.js')"></script>
 <script src="@assetv('js/documento-lavratura.js')"></script>
+<script src="@assetv('js/documento-anexos.js')"></script>
 <script src="@assetv('js/protocolos.js')"></script>
 <script src="@assetv('js/os.js')"></script>
 {{-- Depois dos dois: a fila lê as duas fontes e abre a ficha de cada uma. --}}
