@@ -142,3 +142,25 @@ test('ruas: as quadras continuam iguais com o cálculo das ruas junto', () => {
   const ls = quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA NORTE')
   assert.equal(JSON.stringify(ctx.calcularQuadras(ls)), JSON.stringify(ctx.calcularQuadrasERuas(ls).quadras))
 })
+
+test('ruas: quadras encostadas pelos fundos, sem rua entre elas, não ganham nome ali', () => {
+  // 20 cm de fresta entre as duas, como no DWG: não é rua.
+  const rs = ruas([...quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA FANTASMA'), ...quadraComRuas('02', 0, 50.2, 5, 'RUA FANTASMA', 'RUA NORTE')])
+  const noMeio = rs.filter(r => Math.abs(r.ang) < 1 && r.y > 30 && r.y < 70)
+  assert.equal(noMeio.length, 0, 'nenhum trecho dentro das quadras: ' + JSON.stringify(noMeio))
+  assert.ok(rs.some(r => r.nome === 'RUA SUL') && rs.some(r => r.nome === 'RUA NORTE'), 'as ruas de verdade continuam')
+})
+
+test('exibição: nome de rua gravado que cai dentro de uma quadra não é desenhado', () => {
+  // As quadras carregadas no mapa, como /api/mapa/quadras as devolve.
+  const { quadras } = ctx.calcularQuadrasERuas([...quadra('01', 0, 0, 5), ...quadra('02', 0, 64, 5)])
+  ctx.feicoesDeTeste = quadras.map(q => ({ type: 'Feature', geometry: q.geometry, properties: { numero: q.numero } }))
+  vm.runInContext("quadraState.porBairro.set('TESTE', { feicoes: feicoesDeTeste, camada: null, ruas: [] })", ctx)
+  const dentro = (x, y) => { const [lon, lat] = plano.de([x, y]); ctx.ponto = [lat, lon]; return vm.runInContext('_pontoDentroDeQuadra(ponto[0], ponto[1])', ctx) }
+  assert.equal(dentro(30, 25), true, 'meio da quadra 01')
+  assert.equal(dentro(30, 43), true, '7 m para dentro do lado norte da 01 (o caso das quadras encostadas)')
+  assert.equal(dentro(30, 57), false, 'meio da rua entre as duas')
+  assert.equal(dentro(30, -7), false, 'meio da rua ao sul')
+  assert.equal(dentro(500, 500), false, 'longe de tudo')
+  vm.runInContext("quadraState.porBairro.delete('TESTE')", ctx)
+})

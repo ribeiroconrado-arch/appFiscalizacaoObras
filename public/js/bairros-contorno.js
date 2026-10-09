@@ -236,6 +236,12 @@ function _desenharRotulosDeRua() {
     for (const t of b.ruas) {
       if (!t.nome || t.origem === 'oculto' || t.origem === 'sem_nome') continue
       const meio = L.latLng((t.de[0] + t.ate[0]) / 2, (t.de[1] + t.ate[1]) / 2)
+      // RUA NÃO PASSA POR DENTRO DE QUADRA. O trecho gerado fica 7 m para
+      // fora do lado da quadra (o meio da rua); em duas quadras encostadas
+      // pelos fundos, sem rua entre elas, esse "fora" cai dentro da vizinha, e
+      // o nome saía no meio dos lotes, por cima do número da quadra. O que o
+      // curador desenhou à mão (manual) fica: ele sabe onde pôs.
+      if (t.origem !== 'manual' && _pontoDentroDeQuadra(meio.lat, meio.lng)) continue
       const lista = ruas.get(t.nome) || ruas.set(t.nome, []).get(t.nome)
       lista.push({ t, meio, abs: mapa.project(meio, zoom) })
     }
@@ -275,6 +281,49 @@ function _desenharRotulosDeRua() {
       }
     }
   }
+}
+
+/**
+ * O ponto está dentro de alguma quadra carregada (de qualquer bairro)?
+ * Raio para a direita contra cada anel externo; a caixa de cada quadra é
+ * calculada uma vez e descarta quase todas sem percorrer os vértices.
+ * @param {number} lat @param {number} lon
+ */
+function _pontoDentroDeQuadra(lat, lon) {
+  for (const b of quadraState.porBairro.values()) {
+    if (b === 'carregando') continue
+    for (const feicao of b.feicoes || []) {
+      const g = feicao.geometry
+      if (!g) continue
+      const poligonos = g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates]
+      const caixa = feicao._caixa || (feicao._caixa = _caixaDosAneis(poligonos.map(p => p[0])))
+      if (lon < caixa[0] || lon > caixa[2] || lat < caixa[1] || lat > caixa[3]) continue
+      if (poligonos.some(p => _pontoNoAnel(lon, lat, p[0]))) return true
+    }
+  }
+  return false
+}
+
+/** [oeste, sul, leste, norte] de um conjunto de anéis em [lon, lat]. */
+function _caixaDosAneis(aneis) {
+  const c = [Infinity, Infinity, -Infinity, -Infinity]
+  for (const anel of aneis) for (const [x, y] of anel) {
+    if (x < c[0]) c[0] = x
+    if (y < c[1]) c[1] = y
+    if (x > c[2]) c[2] = x
+    if (y > c[3]) c[3] = y
+  }
+  return c
+}
+
+/** Ponto dentro do anel (regra par-ímpar). @param {number} x @param {number} y @param {number[][]} anel */
+function _pontoNoAnel(x, y, anel) {
+  let dentro = false
+  for (let i = 0, j = anel.length - 1; i < anel.length; j = i++) {
+    const [xi, yi] = anel[i], [xj, yj] = anel[j]
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) dentro = !dentro
+  }
+  return dentro
 }
 
 /**
@@ -488,6 +537,8 @@ const RUA_FUSAO = 12
  *      dele iria para o lado errado. Vence o mais votado com soma ≥ 1; sem
  *      isso o lado fica SEM NOME (null), para o curador informar.
  *   3. O trecho vai RUA_AFASTAMENTO para fora da quadra, que é o meio da rua.
+ *      Se esse ponto cai dentro de OUTRA quadra, as duas se encostam pelos
+ *      fundos e não há rua ali: o lado é descartado.
  *   4. Os dois lados da rua (quadras frente a frente) viram um trecho só, e
  *      um lado sem nome herda o do lado de lá.
  */
@@ -511,7 +562,7 @@ function calcularQuadrasERuas(lotes) {
     })
   }
 
-  const quadras = [], lados = []
+  const quadras = [], lados = [], todasAsPartes = []
   for (const [numero, ls] of grupos) {
     const f = ls[0].g.getFactory()
     let g = J.operation.union.UnaryUnionOp.union(f.createGeometryCollection(ls.map(l => l.g)))
@@ -536,9 +587,19 @@ function calcularQuadrasERuas(lotes) {
       lotes: ls.length,
     })
     lados.push(..._ladosDaQuadra(partes, ls, J, f))
+    todasAsPartes.push(...partes)
   }
 
-  const ruas = _fundirLados(lados).map(t => {
+  // LADO QUE DÁ PARA OUTRA QUADRA NÃO É RUA. O trecho já está deslocado para
+  // onde seria o meio da rua; se esse ponto cai DENTRO de uma quadra, é
+  // porque as duas se encostam pelos fundos, sem rua entre elas.
+  const fabrica = todasAsPartes[0]?.getFactory()
+  const deRua = lados.filter(t => {
+    const meio = fabrica.createPoint(new J.geom.Coordinate((t.a[0] + t.b[0]) / 2, (t.a[1] + t.b[1]) / 2))
+    return !todasAsPartes.some(p => p.contains(meio))
+  })
+
+  const ruas = _fundirLados(deRua).map(t => {
     const [lon1, lat1] = plano.de(t.a), [lon2, lat2] = plano.de(t.b)
     return { nome: t.nome, de: [Number(lat1.toFixed(7)), Number(lon1.toFixed(7))], ate: [Number(lat2.toFixed(7)), Number(lon2.toFixed(7))] }
   })
