@@ -6,7 +6,7 @@
 // da peça de origem. Nada entra sozinho.
 //
 // A FOTO É PREPARADA NA TELA antes de ir para o servidor: reduzida, com a
-// marca d'água do brasão, o carimbo de data e hora e os rostos borrados — os
+// marca d'água do brasão, o carimbo (data, hora, latitude e longitude) e os rostos borrados — os
 // que o aparelho reconhece sozinho e os que o fiscal toca. O que sobe já é a
 // imagem final; a original não sai do aparelho.
 //
@@ -19,7 +19,7 @@
 
 const anxState = {
   /** @type {Object|null} a resposta de GET /api/documentos/{id}/anexos */ dados: null,
-  /** @type {{img:CanvasImageSource, w:number, h:number, quando:Date, borroes:{x:number,y:number,r:number}[]}|null} */ foto: null,
+  /** @type {{img:CanvasImageSource, w:number, h:number, quando:Date, pos:{lat:number,lon:number}|null, borroes:{x:number,y:number,r:number}[]}|null} */ foto: null,
   /** @type {HTMLCanvasElement|null} o brasão já em tons de cinza */ brasao: null,
 }
 
@@ -241,7 +241,9 @@ async function escolherFotoAnexo(inp, daCamera) {
     img, w: Math.round(lw * escala), h: Math.round(lh * escala),
     quando: daCamera ? new Date() : new Date(arq.lastModified || Date.now()),
     borroes: [],
+    pos: null,
   }
+  buscarPosicaoFotoAnexo(anxState.foto, arq, daCamera)
   document.getElementById('anxf-titulo').value = ''
   document.getElementById('anxf-raio').value = '6'
   await prepararBrasaoAnexo()
@@ -288,9 +290,43 @@ async function prepararBrasaoAnexo() {
       const cinza = 0.299 * px.data[i] + 0.587 * px.data[i + 1] + 0.114 * px.data[i + 2]
       px.data[i] = px.data[i + 1] = px.data[i + 2] = cinza
     }
+    tirarFundoBrancoAnexo(px)
     ctx.putImageData(px, 0, 0)
     anxState.brasao = c
   } catch (_) { /* fica sem marca d'água */ }
+}
+
+/**
+ * Tira o FUNDO BRANCO do brasão: torna transparente o branco que está LIGADO
+ * À BORDA da imagem, alastrando de fora para dentro. O branco de dentro do
+ * escudo (faixas, letras) não é fundo e fica — por isso não basta apagar todo
+ * pixel claro. Espera a imagem já em tons de cinza.
+ * @param {ImageData} px
+ */
+function tirarFundoBrancoAnexo(px) {
+  const { width: w, height: h, data } = px
+  const LIMIAR = 236   // de cinza para cima, é fundo
+  const fundo = i => data[i * 4 + 3] < 16 || data[i * 4] >= LIMIAR
+  const visto = new Uint8Array(w * h), fila = []
+  const entra = i => { if (!visto[i] && fundo(i)) { visto[i] = 1; fila.push(i) } }
+  for (let x = 0; x < w; x++) { entra(x); entra((h - 1) * w + x) }
+  for (let y = 0; y < h; y++) { entra(y * w); entra(y * w + w - 1) }
+  while (fila.length) {
+    const i = fila.pop(), x = i % w
+    data[i * 4 + 3] = 0
+    if (x > 0) entra(i - 1)
+    if (x < w - 1) entra(i + 1)
+    if (i >= w) entra(i - w)
+    if (i < w * (h - 1)) entra(i + w)
+  }
+  // A borda do desenho guarda um resto de branco misturado: fica meio
+  // transparente, para o recorte não deixar um fio claro em volta.
+  for (let i = 0; i < w * h; i++) {
+    if (visto[i] || data[i * 4] < 200) continue
+    const x = i % w
+    const vizinhoFundo = (x > 0 && visto[i - 1]) || (x < w - 1 && visto[i + 1]) || (i >= w && visto[i - w]) || (i < w * (h - 1) && visto[i + w])
+    if (vizinhoFundo) data[i * 4 + 3] = Math.round(data[i * 4 + 3] * (LIMIAR - data[i * 4]) / (LIMIAR - 200) * 0.8 + data[i * 4 + 3] * 0.2)
+  }
 }
 
 /**
@@ -357,16 +393,145 @@ function desenharFotoAnexo() {
     ctx.restore()
   }
 
-  // CARIMBO de data e hora, no canto inferior esquerdo.
-  const texto = f.quando.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) + '  ·  Fiscalização de Obras'
-  const corpo = Math.max(13, Math.round(f.w * 0.022))
-  ctx.font = `600 ${corpo}px Arial, sans-serif`
-  const largura = ctx.measureText(texto).width, margem = Math.round(corpo * 0.6)
-  ctx.fillStyle = 'rgba(0,0,0,.55)'
-  ctx.fillRect(margem, f.h - corpo * 1.9 - margem, largura + corpo, corpo * 1.9)
-  ctx.fillStyle = '#fff'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(texto, margem + corpo / 2, f.h - corpo * 0.95 - margem)
+  carimbarFotoAnexo(ctx, f)
+}
+
+/** Quanto do quadro do carimbo é branco: o resto deixa a foto aparecer. */
+const ANX_CARIMBO_FUNDO = 0.45
+
+/**
+ * CARIMBO da foto: uma etiqueta no canto inferior direito, com o brasão em
+ * cinza à esquerda e, à direita, a data e a hora em destaque, a latitude e a
+ * longitude (quando há), a quadra e o lote do documento e o nome do órgão.
+ *
+ * O quadro é meio transparente; por isso cada letra leva um contorno claro
+ * fino, que segura a leitura sobre foto escura.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {{w:number, h:number, quando:Date, pos:{lat:number,lon:number}|null}} f
+ */
+function carimbarFotoAnexo(ctx, f) {
+  const base = Math.min(f.w, f.h)
+  const corpoG = Math.max(15, Math.round(base * 0.04)), corpoP = Math.max(11, Math.round(base * 0.024))
+  const passo = corpoP * 1.38, p = Math.round(base * 0.022), margem = Math.round(base * 0.025)
+
+  const titulo = f.quando.toLocaleDateString('pt-BR') + '  '
+    + f.quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const linhas = []
+  if (f.pos) linhas.push('Lat  ' + f.pos.lat.toFixed(6), 'Lon  ' + f.pos.lon.toFixed(6))
+  const quadra = document.getElementById('nd-im-quadra')?.value.trim()
+  const lote = document.getElementById('nd-im-lote')?.value.trim()
+  if (quadra || lote) linhas.push([quadra && 'Qd. ' + quadra, lote && 'Lt. ' + lote].filter(Boolean).join(' · '))
+  linhas.push('Fiscalização de Obras')
+
+  // O quadro tem a largura do texto mais comprido, sem passar da foto.
+  ctx.font = `700 ${corpoG}px Arial, sans-serif`
+  let larguraTexto = ctx.measureText(titulo).width
+  ctx.font = `600 ${corpoP}px Arial, sans-serif`
+  for (const l of linhas) larguraTexto = Math.max(larguraTexto, ctx.measureText(l).width)
+
+  const alt = corpoG * 1.5 + linhas.length * passo + p * 1.4
+  const brasao = anxState.brasao || null
+  const bh = brasao ? Math.min(alt - p * 1.6, base * 0.15) : 0
+  const bw = brasao ? bh * brasao.width / brasao.height : 0
+  const larg = Math.min(f.w - margem * 2, p * (brasao ? 3 : 2) + bw + larguraTexto)
+  const x = f.w - larg - margem, y = f.h - alt - margem, raio = Math.round(base * 0.015)
+
+  const quadro = () => {
+    ctx.beginPath()
+    ctx.moveTo(x + raio, y)
+    ctx.arcTo(x + larg, y, x + larg, y + alt, raio); ctx.arcTo(x + larg, y + alt, x, y + alt, raio)
+    ctx.arcTo(x, y + alt, x, y, raio); ctx.arcTo(x, y, x + larg, y, raio)
+    ctx.closePath()
+  }
+  ctx.save()
+  ctx.fillStyle = `rgba(255,255,255,${ANX_CARIMBO_FUNDO})`; quadro(); ctx.fill()
+  ctx.strokeStyle = 'rgba(30,40,36,.2)'; ctx.lineWidth = Math.max(1, base * 0.002); quadro(); ctx.stroke()
+  if (brasao) ctx.drawImage(brasao, x + p, y + (alt - bh) / 2, bw, bh)
+
+  const tx = x + p * (brasao ? 2 : 1) + bw
+  ctx.textBaseline = 'alphabetic'; ctx.lineJoin = 'round'
+  const escreve = (txt, ty, corpo, peso, cor) => {
+    ctx.font = `${peso} ${corpo}px Arial, sans-serif`
+    ctx.strokeStyle = 'rgba(255,255,255,.62)'; ctx.lineWidth = Math.max(2, corpo * 0.14); ctx.strokeText(txt, tx, ty)
+    ctx.fillStyle = cor; ctx.fillText(txt, tx, ty)
+  }
+  let ty = y + p * 0.7 + corpoG
+  escreve(titulo, ty, corpoG, '700', '#14201D')
+  ty += corpoG * 0.5
+  for (const l of linhas) { ty += passo; escreve(l, ty, corpoP, '600', '#24322F') }
+  ctx.restore()
+}
+
+// ── ONDE A FOTO FOI FEITA ────────────────────────────────────
+
+/**
+ * Procura a posição da foto e redesenha o carimbo quando ela chega.
+ *
+ * Da CÂMERA, é o GPS do aparelho agora (a melhor leitura, como na vistoria).
+ * Da GALERIA, é a posição que a câmera gravou dentro do arquivo (EXIF) — a de
+ * agora seria a de onde o fiscal está, não a de onde a foto foi feita.
+ * Sem nenhuma das duas, o carimbo sai sem as linhas de latitude e longitude.
+ *
+ * @param {Object} f a foto em preparo (anxState.foto) @param {File} arq @param {boolean} daCamera
+ */
+async function buscarPosicaoFotoAnexo(f, arq, daCamera) {
+  const chegou = pos => {
+    if (anxState.foto !== f) return   // a janela já foi fechada ou trocada
+    f.pos = { lat: pos.lat, lon: pos.lon }
+    desenharFotoAnexo()
+  }
+  try {
+    if (!daCamera) {
+      const pos = await posicaoExifAnexo(arq)
+      if (pos) chegou(pos)
+      return
+    }
+    if (!navigator.geolocation) return
+    await melhorPosicaoGps({ aCadaMelhora: chegou, esperaMs: 12000 })
+  } catch (_) { /* sem posição: o carimbo sai sem ela */ }
+}
+
+/**
+ * Lê a latitude e a longitude gravadas num JPEG (bloco EXIF, diretório GPS).
+ * @param {File} arq @returns {Promise<{lat:number, lon:number}|null>}
+ */
+async function posicaoExifAnexo(arq) {
+  // O EXIF fica no começo do arquivo; 256 KB cobrem com folga.
+  const v = new DataView(await arq.slice(0, 262144).arrayBuffer())
+  if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return null
+  let o = 2
+  while (o + 4 <= v.byteLength) {
+    const marca = v.getUint16(o), tam = v.getUint16(o + 2)
+    if (marca === 0xFFE1 && o + 10 <= v.byteLength && v.getUint32(o + 4) === 0x45786966) {   // "Exif"
+      const t = o + 10                                   // início do TIFF
+      const le = v.getUint16(t) === 0x4949               // "II" = little-endian
+      const u16 = p => v.getUint16(p, le), u32 = p => v.getUint32(p, le)
+      /** Posição do valor de uma etiqueta num diretório, ou 0. */
+      const achar = (dir, etiqueta) => {
+        for (let i = 0, n = u16(dir); i < n; i++) if (u16(dir + 2 + i * 12) === etiqueta) return dir + 2 + i * 12 + 8
+        return 0
+      }
+      const gps = achar(t + u32(t + 4), 0x8825)
+      if (!gps) return null
+      const dir = t + u32(gps)
+      /** Graus, minutos e segundos (três frações) em graus decimais. */
+      const graus = etiqueta => {
+        const onde = achar(dir, etiqueta)
+        if (!onde) return null
+        const p = t + u32(onde)
+        const fr = i => u32(p + i * 8) / (u32(p + i * 8 + 4) || 1)
+        return fr(0) + fr(1) / 60 + fr(2) / 3600
+      }
+      const sinal = etiqueta => { const onde = achar(dir, etiqueta); return onde ? String.fromCharCode(v.getUint8(onde)) : '' }
+      const lat = graus(2), lon = graus(4)
+      if (lat === null || lon === null || (!lat && !lon)) return null
+      return { lat: sinal(1) === 'S' ? -lat : lat, lon: sinal(3) === 'W' ? -lon : lon }
+    }
+    if ((marca & 0xFF00) !== 0xFF00 || marca === 0xFFDA) return null
+    o += 2 + tam
+  }
+  return null
 }
 
 /** Toque na foto: borra ali. O raio vem do controle de tamanho. @param {MouseEvent} ev */

@@ -2443,9 +2443,18 @@
         <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>
       </svg>Editar</button>
     <button class="btn primary" id="fd-gravar" onclick="gravarDoc()" hidden>Gravar</button>
-    <button class="btn lavrar" id="fd-lavrar" onclick="lavrarDocumento()" hidden>Lavrar</button>
+    {{-- Mesmo corpo do Editar ao lado: ícone de 18px e o rótulo. --}}
+    <button class="btn lavrar" id="fd-lavrar" onclick="lavrarDocumento()" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
+        <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+      </svg>Lavrar</button>
     <button class="btn" id="fd-lavrar-cancelar" onclick="cancelarLavraturaDoc()" hidden>Cancelar</button>
-    <button class="btn lavrar" id="fd-lavrar-ok" onclick="confirmarLavraturaDoc()" hidden>Confirmar lavratura</button>
+    <button class="btn lavrar" id="fd-lavrar-ok" onclick="confirmarLavraturaDoc()" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
+        <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+      </svg>Confirmar lavratura</button>
   </div>
 </div>
 </div>

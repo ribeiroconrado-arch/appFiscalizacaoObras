@@ -1380,7 +1380,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .btn.atencao{background:var(--gold);border-color:var(--gold-dk);color:#fff}
 .btn.atencao:hover{background:var(--gold-dk)}
 /* Lavrar: amarelo — o ato que fecha a peça, distinto do Editar e do Gravar. */
-.btn.lavrar{background:#FACC15;border-color:#EAB308;color:#3B2A00;font-weight:700}
+.btn.lavrar{background:#FACC15;border-color:#EAB308;color:#3B2A00}
 .btn.lavrar:hover{background:#EAB308}
 
 /* Modo leitura: campo travado precisa PARECER travado, senão o usuário tenta

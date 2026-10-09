@@ -215,13 +215,18 @@ function confirmarLavraturaDoc() {
       toast(d.message)
       fdState.lavrando = false
       fecharAreaLavratura()
-      fModalBtn('m-doc')
-      // Quem lavrou de dentro da ficha volta para o imóvel, com o documento
-      // já na linha do tempo. Quem lavrou da lista continua na lista.
-      if (!voltarAFicha()) {
-        irPara('documentos')
-        carregarDocumentos()
+      // A PEÇA FICA ABERTA, já lavrada: é agora que o fiscal imprime a via do
+      // autuado, e o menu de Opções tem de estar ali. Antes a janela fechava
+      // e era preciso procurar o documento na lista para imprimir.
+      const doc = await atualizarFichaDoc()
+      if (doc) {
+        await abrirFormDoc({ documento: doc })
+        dFicha.opcoes = doc.opcoes || []
+        irAbaDoc('resumo')
+      } else {
+        fModalBtn('m-doc')
       }
+      carregarDocumentos()
     },
   })
 }

@@ -847,6 +847,10 @@ async function gravarDoc() {
     fdState.editando = false
     aplicarEstadoDoc()
     toast(d.message)
+    // O menu de Opções (imprimir, lavrar, excluir) lê a ficha do servidor.
+    // Sem buscá-la aqui, a peça recém-gravada ficava sem opção nenhuma até
+    // ser fechada e aberta de novo.
+    await atualizarFichaDoc()
     // Avisos do servidor (Auto de Embargo por artigo que pede prazo, sem
     // Notificação de Embargo vencida): não impedem gravar nem lavrar.
     ;(d.avisos || []).forEach(a => toast(a, 'aviso'))
@@ -854,6 +858,26 @@ async function gravarDoc() {
   } catch (e) {
     console.error(e)
     toast(e.message || 'Falha ao gravar o documento', 'err')
+  }
+}
+
+/**
+ * Busca a ficha da peça aberta e a entrega ao menu de Opções (dFicha, em
+ * documentos.js). Chamada depois de gravar: é a ficha que diz o que este
+ * usuário pode fazer com a peça AGORA.
+ * @returns {Promise<Object|null>} a ficha, ou null se não deu para buscar
+ */
+async function atualizarFichaDoc() {
+  if (!fdState.id) return null
+  try {
+    const r = await fetch('/api/documentos/' + fdState.id, { headers: { Accept: 'application/json' } })
+    if (!r.ok) return null
+    const doc = await r.json()
+    dFicha.doc = doc
+    dFicha.opcoes = doc.opcoes || []
+    return doc
+  } catch (_) {
+    return null
   }
 }
 
