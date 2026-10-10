@@ -16,7 +16,10 @@
       data-src-institucional="@assetv('img/favicon-16.png')" data-src-f="@assetv('img/favicon-16-ambar.png')" data-src-cinza="@assetv('img/favicon-16-cinza.png')">
 <link rel="apple-touch-icon" sizes="180x180" href="@assetv('img/apple-touch-icon.png')"
       data-src-institucional="@assetv('img/apple-touch-icon.png')" data-src-f="@assetv('img/apple-touch-icon-ambar.png')" data-src-cinza="@assetv('img/apple-touch-icon-cinza.png')">
-<link rel="manifest" href="@assetv('manifest.json')">
+{{-- O manifesto também troca com o tema: é dele que saem o ícone e a tela de
+     abertura do app instalado (ver js/tema.js). --}}
+<link rel="manifest" href="@assetv('manifest.json')"
+      data-src-institucional="@assetv('manifest.json')" data-src-f="@assetv('manifest-ambar.json')" data-src-cinza="@assetv('manifest-cinza.json')">
 {{-- Leaflet servido daqui (public/vendor), não da CDN: script de terceiro roda
      com a sessão do fiscal, e uma CDN comprometida seria o sistema comprometido. --}}
 <link rel="stylesheet" href="{{ asset('vendor/leaflet-1.9.4/leaflet.css') }}">
@@ -2849,6 +2852,9 @@
   <div class="tela-carregando-txt" id="tela-carregando-txt" role="status"
        aria-live="polite">Carregando...</div>
 </div>
+{{-- Já aqui, e não só no fim da página: a tela de carregamento aparece antes
+     de o documento terminar de chegar, e abriria com a marca verde. --}}
+<script>aplicarTema(temaSalvo())</script>
 
 <div id="toast"></div>
 
@@ -3522,6 +3528,35 @@
 {{-- ANULAÇÃO
      Motivo obrigatório: anulação sem motivação declarada não é ato
      administrativo. O documento não é apagado — passa a sair com marca. --}}
+{{-- ══════ VISUALIZAR ANEXO (#m-anexo-view) ══════
+     Igual ao do AppPOSTURAS: aberto pelo olho (ou pela miniatura) de cada
+     anexo. Foto vai no <img>; PDF, no <iframe>. As setas andam pelos outros
+     anexos da MESMA lista e somem quando só há um (documento-anexos.js). --}}
+<div class="modal-bg" id="m-anexo-view" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharVisualizadorAnexo()">&#10005;</button>
+    <h3 id="anexo-view-titulo">Anexo</h3>
+    <div class="anexo-view-box">
+      <button type="button" class="anexo-view-nav anexo-view-prev" id="anexo-view-prev" title="Anterior" onclick="navegarAnexoDoc(-1)" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <img id="anexo-view-img" alt="" style="display:none">
+      <iframe id="anexo-view-frame" title="Anexo em PDF" style="display:none"></iframe>
+      <button type="button" class="anexo-view-nav anexo-view-next" id="anexo-view-next" title="Próximo" onclick="navegarAnexoDoc(1)" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    <div id="anexo-view-contador" class="anexo-view-contador"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="fecharVisualizadorAnexo()">Fechar</button>
+      <a class="btn out-verde" id="anexo-view-baixar" href="#" download target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Baixar
+      </a>
+    </div>
+  </div>
+</div>
+
 {{-- ══════ PREPARAR A FOTO DO ANEXO ══════
      A foto é mostrada como vai ficar: com a data e a hora, a marca d'água do
      brasão e os rostos borrados. Tocar na foto borra ali. O que sobe para o

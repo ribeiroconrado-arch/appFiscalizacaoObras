@@ -66,13 +66,17 @@ function pintarAnexosDoc() {
   const cheio = d.anexos.length >= d.maximo
   const pode = d.pode_juntar && !cheio
 
-  const miniatura = a => a.foto
-    ? `<a href="${esc(a.url)}" target="_blank" rel="noopener"><img class="anx-mini" src="${esc(a.url)}" alt="" loading="lazy"></a>`
-    : `<a class="anx-mini anx-pdf" href="${esc(a.url)}" target="_blank" rel="noopener">PDF</a>`
+  // A miniatura e o olho abrem o VISUALIZADOR (#m-anexo-view), que anda pelos
+  // anexos da mesma lista — e não uma aba nova do navegador.
+  const mini = (foto, url, lista, i) => foto
+    ? `<button type="button" class="anx-mini-btn" title="Visualizar" onclick="verAnexoDoc('${lista}', ${i})"><img class="anx-mini" src="${esc(url)}" alt="" loading="lazy"></button>`
+    : `<button type="button" class="anx-mini-btn anx-mini anx-pdf" title="Visualizar" onclick="verAnexoDoc('${lista}', ${i})">PDF</button>`
+  const olho = (lista, i) => `<button type="button" class="anx-btn anx-ver" title="Visualizar" aria-label="Visualizar" onclick="verAnexoDoc('${lista}', ${i})">
+      <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`
 
   const proprios = d.anexos.length ? d.anexos.map((a, i) => `
     <div class="anx${a.pode_excluir ? '' : ' anx-fixo'}">
-      ${miniatura(a)}
+      ${mini(a.foto, a.url, 'anexos', i)}
       <div class="anx-corpo">
         <input type="text" class="anx-tit" id="anx-tit-${a.id}" value="${esc(a.titulo || '')}" maxlength="160" aria-label="Título do anexo"
                ${d.pode_alterar ? '' : 'readonly'} onchange="alterarAnexoDoc(${a.id}, { titulo: this.value })">
@@ -86,6 +90,7 @@ function pintarAnexosDoc() {
           onchange="alterarAnexoDoc(${a.id}, { imprime: this.checked })"> sai na impressão</label>
       </div>
       <div class="anx-lado">
+        ${olho('anexos', i)}
         ${d.pode_alterar ? `<div class="anx-setas">
           <button type="button" class="anx-btn" title="Subir" ${i === 0 ? 'disabled' : ''} onclick="moverAnexoDoc(${i}, -1)">&uarr;</button>
           <button type="button" class="anx-btn" title="Descer" ${i === d.anexos.length - 1 ? 'disabled' : ''} onclick="moverAnexoDoc(${i}, 1)">&darr;</button>
@@ -99,12 +104,11 @@ function pintarAnexosDoc() {
   const paraTrazer = (titulo, nota, itens, de) => itens.length ? `
     <div class="sec-title">${titulo}</div>
     <p class="anx-nota">${nota}</p>
-    <div class="anx-lista">${itens.map(v => `
+    <div class="anx-lista">${itens.map((v, i) => `
       <div class="anx">
-        ${v.foto === false ? `<a class="anx-mini anx-pdf" href="${esc(v.url)}" target="_blank" rel="noopener">PDF</a>`
-          : `<a href="${esc(v.url)}" target="_blank" rel="noopener"><img class="anx-mini" src="${esc(v.url)}" alt="" loading="lazy"></a>`}
+        ${mini(v.foto !== false, v.url, de === 'vistoria' ? 'da_vistoria' : 'da_origem', i)}
         <div class="anx-corpo"><div class="anx-tit-fixo">${esc(v.titulo || '—')}</div><div class="anx-meta">${esc(v.quando || '')}</div></div>
-        <div class="anx-lado"><button type="button" class="btn out-verde sm" ${v.usada || !pode ? 'disabled' : ''}
+        <div class="anx-lado">${olho(de === 'vistoria' ? 'da_vistoria' : 'da_origem', i)}<button type="button" class="btn out-verde sm" ${v.usada || !pode ? 'disabled' : ''}
           onclick="trazerAnexoDoc('${de}', ${v.id})">${v.usada ? 'Já está no documento' : 'Usar neste documento'}</button></div>
       </div>`).join('')}</div>` : ''
 
@@ -123,6 +127,74 @@ function pintarAnexosDoc() {
     ${d.vistoria ? paraTrazer('Fotos da vistoria vinculada', `Vistoria ${esc(d.vistoria)}. As fotos não entram sozinhas: escolha quais acompanham esta peça. Cada uma passa pelo preparo e ganha o carimbo.`, d.da_vistoria, 'vistoria') : ''}
     ${d.origem ? paraTrazer('Anexos da peça de origem', `${esc(d.origem)}. Traga os que este documento deve herdar.`, d.da_origem, 'documento') : ''}`
 }
+
+// ── O VISUALIZADOR (#m-anexo-view) ───────────────────────────
+//
+// O mesmo do AppPOSTURAS: o anexo grande, as setas andando pelos anexos da
+// MESMA lista (dando a volta nas pontas, como o visualizador de fotos do
+// Windows), o contador "N de M" e o Baixar. Foto vai num <img>; PDF, num
+// <iframe>.
+
+/** @type {{itens:{titulo:string,url:string,foto:boolean}[], i:number}} o que o visualizador está mostrando */
+const anxVista = { itens: [], i: -1 }
+
+/**
+ * Abre o visualizador num anexo de uma das listas da aba.
+ * @param {'anexos'|'da_vistoria'|'da_origem'} lista @param {number} i posição na lista
+ */
+function verAnexoDoc(lista, i) {
+  const itens = (anxState.dados?.[lista] || []).map(a => ({ titulo: a.titulo || 'Anexo', url: a.url, foto: a.foto !== false }))
+  if (!itens[i]) return
+  anxVista.itens = itens
+  anxVista.i = i
+  pintarVisualizadorAnexo()
+  openModal('m-anexo-view')
+}
+
+/** @param {number} d -1 anterior, 1 próximo — dá a volta nas pontas. */
+function navegarAnexoDoc(d) {
+  const n = anxVista.itens.length
+  if (n < 2) return
+  anxVista.i = (anxVista.i + d + n) % n
+  pintarVisualizadorAnexo()
+}
+
+function pintarVisualizadorAnexo() {
+  const a = anxVista.itens[anxVista.i]
+  if (!a) return
+  const g = id => document.getElementById(id)
+  g('anexo-view-titulo').textContent = a.titulo
+  const img = g('anexo-view-img'), quadro = g('anexo-view-frame')
+  if (a.foto) {
+    img.src = a.url; img.style.display = 'block'
+    quadro.removeAttribute('src'); quadro.style.display = 'none'
+  } else {
+    quadro.src = a.url; quadro.style.display = 'block'
+    img.removeAttribute('src'); img.style.display = 'none'
+  }
+  const baixar = g('anexo-view-baixar')
+  baixar.href = a.url
+  baixar.download = a.titulo + (a.foto ? '.jpg' : '.pdf')
+
+  // Setas e contador só quando há para onde ir.
+  const multi = anxVista.itens.length > 1
+  g('anexo-view-prev').style.display = g('anexo-view-next').style.display = multi ? '' : 'none'
+  g('anexo-view-contador').textContent = multi ? `${anxVista.i + 1} de ${anxVista.itens.length}` : ''
+}
+
+function fecharVisualizadorAnexo() {
+  anxVista.itens = []
+  anxVista.i = -1
+  document.getElementById('anexo-view-frame').removeAttribute('src')
+  fModalBtn('m-anexo-view')
+}
+
+// Setas do teclado passam os anexos, com o visualizador aberto.
+document.addEventListener('keydown', ev => {
+  if (anxVista.i < 0 || !document.getElementById('m-anexo-view')?.classList.contains('open')) return
+  if (ev.key === 'ArrowLeft') navegarAnexoDoc(-1)
+  else if (ev.key === 'ArrowRight') navegarAnexoDoc(1)
+})
 
 // ── AÇÕES SOBRE A LISTA ──────────────────────────────────────
 

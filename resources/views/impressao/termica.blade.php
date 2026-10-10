@@ -96,7 +96,8 @@
   .imp-barra button { width: 48%; border: 0; border-radius: 999px; padding: 12px 0;
                       font-size: 15px; font-weight: bold; font-family: Arial, sans-serif; }
   .imp-fechar { background: #ECEFF1; color: #37474F; }
-  .imp-print { background: #006B28; color: #fff; }
+  /* A cor é a do tema escolhido pelo usuário (_tema-janela); o verde é o padrão. */
+  .imp-print { background: var(--imp-cor, #006B28); color: #fff; }
   body { padding-bottom: 62px; }
   @media print { .imp-barra { display: none; } body { padding-bottom: 0; width: 72mm; } }
 @endif
@@ -285,6 +286,7 @@
 </div>
 
 @if ($navegador)
+  @include('impressao._tema-janela')
   <div class="imp-barra">
     <button type="button" class="imp-fechar" onclick="window.close()">Fechar</button>
     <button type="button" class="imp-print" onclick="window.print()">Imprimir</button>

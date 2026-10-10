@@ -5,17 +5,17 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F2F5F2",
-  "theme_color": "#004D1C",
+  "theme_color": "#B4470D",
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/img/icone-192.png",
+      "src": "/img/icone-192-ambar.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/img/icone-512.png",
+      "src": "/img/icone-512-ambar.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
