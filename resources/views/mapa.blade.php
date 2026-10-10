@@ -3542,6 +3542,23 @@
       </button>
       <img id="anexo-view-img" alt="" style="display:none">
       <iframe id="anexo-view-frame" title="Anexo em PDF" style="display:none"></iframe>
+      {{-- LEITOR DE PDF DO SISTEMA (PDF.js). Celular (Chrome do Android, app
+           instalado) não mostra PDF dentro da página; aqui as folhas são
+           desenhadas uma embaixo da outra, e rolam dentro do visualizador. --}}
+      <div id="anexo-view-pdf" class="anexo-view-pdf" style="display:none">
+        <div class="anexo-view-zoom">
+          <button type="button" title="Diminuir" aria-label="Diminuir" onclick="zoomPdfAnexo(-1)">&minus;</button>
+          <span id="anexo-view-zoom-v">100%</span>
+          <button type="button" title="Aumentar" aria-label="Aumentar" onclick="zoomPdfAnexo(1)">+</button>
+        </div>
+        <div id="anexo-view-folhas" class="anexo-view-folhas"></div>
+      </div>
+      {{-- Só se o leitor não conseguir abrir o arquivo. --}}
+      <div id="anexo-view-semleitor" class="anexo-view-semleitor" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p>Não foi possível mostrar este PDF aqui.</p>
+        <a class="btn primary" id="anexo-view-abrir" href="#" target="_blank" rel="noopener">Abrir o PDF</a>
+      </div>
       <button type="button" class="anexo-view-nav anexo-view-next" id="anexo-view-next" title="Próximo" onclick="navegarAnexoDoc(1)" style="display:none">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>

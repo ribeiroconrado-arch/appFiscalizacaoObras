@@ -1,0 +1,6 @@
+PDF.js 3.11.174 (Mozilla) - licença Apache 2.0
+https://www.npmjs.com/package/pdfjs-dist  (pasta legacy/build do pacote)
+
+Usado por public/js/documento-anexos.js para mostrar PDF dentro do
+visualizador de anexos nos aparelhos cujo navegador não mostra PDF na página
+(Chrome do Android, app instalado). Roda no aparelho; nada vai a serviço externo.

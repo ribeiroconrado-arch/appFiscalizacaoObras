@@ -1475,6 +1475,23 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .anexo-view-prev{left:10px}
 .anexo-view-next{right:10px}
 #m-anexo-view a.btn{text-decoration:none}
+/* Leitor de PDF do sistema: as folhas empilhadas, rolando dentro do palco. */
+.anexo-view-pdf{width:100%;position:relative}
+.anexo-view-folhas{max-height:70vh;overflow:auto;-webkit-overflow-scrolling:touch;background:#52565A;padding:8px;
+  display:flex;flex-direction:column;gap:8px;min-height:160px}
+/* margin auto, e não align-items: folha ampliada tem de poder rolar até a borda esquerda. */
+.anexo-view-folhas canvas{display:block;margin:0 auto;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);flex:none}
+.anexo-view-folhas .anexo-view-aviso{color:#fff;font-size:13px;text-align:center;padding:30px 10px}
+.anexo-view-zoom{position:absolute;top:8px;right:8px;z-index:2;display:flex;align-items:center;gap:2px;
+  background:rgba(255,255,255,.94);border:1px solid var(--bord);border-radius:999px;padding:2px;box-shadow:var(--sh)}
+.anexo-view-zoom button{width:32px;height:32px;border:0;border-radius:50%;background:none;font-size:19px;line-height:1;
+  color:var(--tx2);cursor:pointer}
+.anexo-view-zoom button:hover{background:var(--blt)}
+.anexo-view-zoom span{font-size:11.5px;font-weight:700;color:var(--tx2);min-width:42px;text-align:center}
+.anexo-view-semleitor{flex-direction:column;align-items:center;gap:10px;padding:44px 20px;text-align:center;color:var(--tx2);font-size:13.5px}
+.anexo-view-semleitor svg{width:44px;height:44px;fill:none;stroke:#E2231A;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.anexo-view-semleitor p{margin:0}
+.anexo-view-semleitor a.btn{text-decoration:none}
 .anexo-view-contador{text-align:center;font-size:12px;color:var(--tx3);margin-top:6px;min-height:15px}
 /* Preparar a foto: o que se vê é o que sobe. */
 .anxf-palco{background:#111;border-radius:var(--r);overflow:hidden;display:flex;justify-content:center}

@@ -135,8 +135,102 @@ function pintarAnexosDoc() {
 // Windows), o contador "N de M" e o Baixar. Foto vai num <img>; PDF, num
 // <iframe>.
 
-/** @type {{itens:{titulo:string,url:string,foto:boolean}[], i:number}} o que o visualizador está mostrando */
-const anxVista = { itens: [], i: -1 }
+/** @type {{itens:{titulo:string,url:string,foto:boolean}[], i:number, zoom:number, vez:number, pdf:Object|null}} o que o visualizador está mostrando */
+const anxVista = { itens: [], i: -1, zoom: 1, vez: 0, pdf: null }
+
+/** Onde está o leitor de PDF (PDF.js, da Mozilla — public/vendor). */
+const ANX_PDFJS = '/vendor/pdfjs-3.11.174/'
+/** @type {Promise<Object>|null} o PDF.js, carregado uma vez */
+let anxPdfjs = null
+
+/**
+ * Carrega o PDF.js na primeira vez que um PDF é aberto num aparelho que não
+ * mostra PDF dentro da página. Cerca de 1,5 MB, guardados pelo navegador.
+ * @returns {Promise<Object>} o `pdfjsLib`
+ */
+function carregarLeitorPdf() {
+  if (!anxPdfjs) {
+    anxPdfjs = new Promise((ok, falha) => {
+      const s = document.createElement('script')
+      s.src = ANX_PDFJS + 'pdf.min.js'
+      s.onload = () => {
+        if (!window.pdfjsLib) { falha(new Error('pdfjs')); return }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = ANX_PDFJS + 'pdf.worker.min.js'
+        ok(window.pdfjsLib)
+      }
+      s.onerror = () => falha(new Error('pdfjs'))
+      document.head.appendChild(s)
+    })
+    anxPdfjs.catch(() => { anxPdfjs = null })
+  }
+  return anxPdfjs
+}
+
+/**
+ * Mostra um PDF no leitor do sistema: abre o arquivo e desenha as folhas.
+ * Se o usuário passar para outro anexo no meio do caminho, desiste (`vez`).
+ * @param {string} url
+ */
+async function mostrarPdfNoLeitor(url) {
+  const vez = ++anxVista.vez
+  const folhas = document.getElementById('anexo-view-folhas')
+  folhas.innerHTML = '<div class="anexo-view-aviso">Abrindo o PDF…</div>'
+  anxVista.zoom = 1
+  anxVista.pdf = null
+  try {
+    const lib = await carregarLeitorPdf()
+    const pdf = await lib.getDocument({ url, withCredentials: true }).promise
+    if (vez !== anxVista.vez) return
+    anxVista.pdf = pdf
+    await desenharFolhasPdf()
+  } catch (e) {
+    if (vez !== anxVista.vez) return
+    console.warn('Leitor de PDF:', e)
+    // Não deu: fica o botão que abre o arquivo no leitor do aparelho.
+    document.getElementById('anexo-view-pdf').style.display = 'none'
+    document.getElementById('anexo-view-semleitor').style.display = 'flex'
+  }
+}
+
+/** Desenha (ou redesenha, ao mudar o zoom) as folhas do PDF aberto. */
+async function desenharFolhasPdf() {
+  const pdf = anxVista.pdf, vez = anxVista.vez
+  if (!pdf) return
+  const folhas = document.getElementById('anexo-view-folhas')
+  document.getElementById('anexo-view-zoom-v').textContent = Math.round(anxVista.zoom * 100) + '%'
+  // Em 100% a folha ocupa a largura do palco. O desenho é feito com os pixels
+  // da tela (até 2×), para o texto não sair borrado no celular.
+  const larguraUtil = Math.max(200, folhas.clientWidth - 16)
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  const novas = document.createDocumentFragment()
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const pagina = await pdf.getPage(n)
+    if (vez !== anxVista.vez) return
+    const larguraCss = larguraUtil * anxVista.zoom
+    const escala = larguraCss / pagina.getViewport({ scale: 1 }).width
+    const vista = pagina.getViewport({ scale: escala * dpr })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(vista.width); canvas.height = Math.round(vista.height)
+    canvas.style.width = Math.round(larguraCss) + 'px'
+    canvas.style.height = Math.round(vista.height / dpr) + 'px'
+    await pagina.render({ canvasContext: canvas.getContext('2d'), viewport: vista }).promise
+    if (vez !== anxVista.vez) return
+    novas.appendChild(canvas)
+    // A primeira folha aparece logo; as demais vão chegando.
+    if (n === 1) { folhas.innerHTML = ''; folhas.scrollTop = 0 }
+    folhas.appendChild(novas)
+  }
+}
+
+/** @param {number} d -1 diminui, 1 aumenta — de 50% a 300%. */
+async function zoomPdfAnexo(d) {
+  if (!anxVista.pdf) return
+  const novo = Math.min(3, Math.max(0.5, Math.round((anxVista.zoom + d * 0.25) * 100) / 100))
+  if (novo === anxVista.zoom) return
+  anxVista.zoom = novo
+  anxVista.vez++
+  await desenharFolhasPdf()
+}
 
 /**
  * Abre o visualizador num anexo de uma das listas da aba.
@@ -164,13 +258,28 @@ function pintarVisualizadorAnexo() {
   if (!a) return
   const g = id => document.getElementById(id)
   g('anexo-view-titulo').textContent = a.titulo
-  const img = g('anexo-view-img'), quadro = g('anexo-view-frame')
+  const img = g('anexo-view-img'), quadro = g('anexo-view-frame'), leitor = g('anexo-view-pdf')
+  // O navegador diz se mostra PDF dentro da página (pdfViewerEnabled). O do
+  // computador mostra, com as ferramentas dele. O do celular não: o quadro
+  // ficaria em branco, e quem mostra é o leitor do sistema (PDF.js).
+  const pdfNoNavegador = navigator.pdfViewerEnabled !== false
+  anxVista.vez++   // o que estava sendo desenhado de outro anexo para aqui
+  anxVista.pdf = null
+  g('anexo-view-semleitor').style.display = 'none'
+  g('anexo-view-abrir').href = a.url
   if (a.foto) {
     img.src = a.url; img.style.display = 'block'
     quadro.removeAttribute('src'); quadro.style.display = 'none'
-  } else {
-    quadro.src = a.url; quadro.style.display = 'block'
+    leitor.style.display = 'none'
+  } else if (pdfNoNavegador) {
     img.removeAttribute('src'); img.style.display = 'none'
+    quadro.src = a.url; quadro.style.display = 'block'
+    leitor.style.display = 'none'
+  } else {
+    img.removeAttribute('src'); img.style.display = 'none'
+    quadro.removeAttribute('src'); quadro.style.display = 'none'
+    leitor.style.display = 'block'
+    mostrarPdfNoLeitor(a.url)
   }
   const baixar = g('anexo-view-baixar')
   baixar.href = a.url
@@ -185,6 +294,9 @@ function pintarVisualizadorAnexo() {
 function fecharVisualizadorAnexo() {
   anxVista.itens = []
   anxVista.i = -1
+  anxVista.vez++
+  anxVista.pdf = null
+  document.getElementById('anexo-view-folhas').innerHTML = ''
   document.getElementById('anexo-view-frame').removeAttribute('src')
   fModalBtn('m-anexo-view')
 }
