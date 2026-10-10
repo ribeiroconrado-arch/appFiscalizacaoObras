@@ -243,6 +243,21 @@ function vistoriarDaSinalizacao(loteId) {
   if (typeof novaVistoria === 'function') novaVistoria()
 }
 
+/**
+ * "Fazer vistoria" a partir do painel — o mesmo atalho do balão da bandeira.
+ * No painel o lote pode ainda não estar carregado no mapa: vai até ele, espera
+ * chegar e só então abre a vistoria (que resolve as sinalizações do imóvel).
+ * @param {number} loteId
+ */
+async function fazerVistoriaDoPainel(loteId) {
+  if (!state.lotes?.get(loteId)) {
+    await irAoLoteNoMapa(loteId)
+    for (let t = 0; t < 40 && !state.lotes?.get(loteId); t++) await new Promise(r => setTimeout(r, 250))
+  }
+  if (!state.lotes?.get(loteId)) { toast('Não foi possível carregar o imóvel para a vistoria.', 'err'); return }
+  vistoriarDaSinalizacao(loteId)
+}
+
 // ── 3 · É RESOLVIDA: o "Resolvido" de um toque ───────────────
 
 /** Troca os botões por um campo de uma palavra + confirmar. */
@@ -315,6 +330,7 @@ async function carregarParaHoje() {
           <b>${esc(s.tipo === 'lembrete' ? 'Voltar' : s.rotulo)}</b> · ${esc(s.imovel)}
           <div class="sin-linha-sub">${esc(s.comentario || '')}${s.comentario ? ' · ' : ''}${esc(s.ha || '')} · ${esc(s.autor)}</div>
         </div>
+        ${window.PODE_EDITAR ? `<button type="button" class="btn sm sin-registrar sin-vistoriar" onclick="fazerVistoriaDoPainel(${Number(s.lote_id)})">${_sinSvg('lapis')}Fazer vistoria</button>` : ''}
         <button type="button" class="btn sm sin-registrar" id="pn-registrar-${s.id}" aria-expanded="false" aria-controls="pn-atendimento-${s.id}" onclick="abrirAtendimentoPainel(${s.id})">Registrar atendimento</button>
         <div class="sin-atendimento" id="pn-atendimento-${s.id}" hidden></div>
       </div>`).join('')

@@ -86,20 +86,16 @@
   .tabela-lista .tl-sub{display:none}
   .tl-forte{font-weight:500}
 
-  /* Selos retangulares e baixos, uma linha só. */
+  /* AS TAGS SÃO AS DO SISTEMA ("Modelo D", tema-f.css): degradê do tom da
+     situação, borda, ícone e texto cinza-chumbo — as mesmas dos cartões e das
+     fichas. Na tabela elas só ficam mais baixas, para caber na linha. (Já
+     foram retângulos de cor chapada, sem ícone; pareciam de outro sistema.) */
   .tabela-lista .badge,
   .bs-tabela .badge,
   .imp-tabela .badge,
   .tabela-m1 .badge{
-    border-radius:4px;padding:1px 7px;font-size:10.5px;font-weight:600;
-    background-image:none;box-shadow:none;border:0}
-  .tabela-lista .badge:before,.tabela-m1 .badge:before{display:none}
-  /* Cor SÓLIDA por situação: o selo do tema é degradê com ícone, e aqui ele
-     fica só o retângulo baixo do M1 — sem perder o código de cores. */
-  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge.bd-ok{background:#E7F6EC;color:#2E7D32}
-  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge:is(.bd-pe,.bd-al){background:#FFF6DD;color:#8A6100}
-  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge:is(.bd-er,.bd-cx){background:#FCEAE9;color:#C62828}
-  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge.bd-in{background:#F1F5F9;color:#6B7280}
+    border-radius:7px;padding:2px 8px 2px 6px;gap:4px;font-size:11px;font-weight:600;white-space:nowrap}
+  :is(.tabela-lista,.bs-tabela,.imp-tabela,.tabela-m1) .badge::before{width:10px;height:10px}
   .tl-tags{flex-direction:row;flex-wrap:nowrap;gap:4px;align-items:center}
 
   /* O menu ⋮ ocupa só o necessário. */

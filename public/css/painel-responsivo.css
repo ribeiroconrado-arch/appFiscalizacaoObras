@@ -62,6 +62,8 @@
 #t-painel .sin-atendimento-acoes{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap}
 #t-painel .sin-linha{flex-wrap:wrap}
 #t-painel .sin-registrar{font-size:12px;min-height:44px}
+#t-painel .sin-vistoriar{display:inline-flex;align-items:center;gap:6px}
+#t-painel .sin-vistoriar svg{width:14px;height:14px}
 @media(max-width:999px){
   #t-painel.at{padding:14px;gap:16px}
   .painel-operacional{grid-template-columns:1fr}
