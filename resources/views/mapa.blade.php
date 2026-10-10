@@ -2378,6 +2378,14 @@
           </div>
         </div>
 
+        {{-- O autuado assina NA PRÓPRIA VIA, em cima do nome dele: o campo é
+             posto dentro da folha acima. Esta caixa só aparece se a folha
+             não puder receber o campo. --}}
+        <p class="lav-dica" id="lav-autuado-dica" hidden>
+          O autuado / preposto assina na própria folha, no campo amarelo acima do nome dele.
+          <button type="button" class="btn sm" onclick="irAoCampoDaVia()">Ir ao campo</button>
+          <button type="button" class="btn sm" onclick="limparPadLavratura('autuado')">Limpar assinatura</button>
+        </p>
         <div class="lav-caixa" id="lav-autuado-caixa">
           <div class="lav-cap">Assinatura do autuado / preposto</div>
           <canvas class="lav-canvas" id="lav-autuado"></canvas>

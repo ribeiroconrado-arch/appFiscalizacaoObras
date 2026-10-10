@@ -10,6 +10,12 @@
 // que o aparelho reconhece sozinho e os que o fiscal toca. O que sobe já é a
 // imagem final; a original não sai do aparelho.
 //
+// OS ROSTOS SÃO RECONHECIDOS NO APARELHO, pelo MediaPipe (biblioteca do Google,
+// hospedada aqui mesmo em /vendor — nada vai a serviço externo). Ela pesa uns
+// 10 MB e só é baixada uma vez por aparelho; por isso é adiantada em segundo
+// plano depois do login, e a foto NUNCA espera por ela: abre na hora, e os
+// borrões automáticos entram quando o reconhecimento termina.
+//
 // As regras de quem junta, altera e exclui são do servidor
 // (DocumentoAnexoController); a tela só mostra o que ele diz que pode.
 //
@@ -19,9 +25,14 @@
 
 const anxState = {
   /** @type {Object|null} a resposta de GET /api/documentos/{id}/anexos */ dados: null,
-  /** @type {{img:CanvasImageSource, w:number, h:number, quando:Date, pos:{lat:number,lon:number}|null, borroes:{x:number,y:number,r:number}[]}|null} */ foto: null,
+  /** @type {{img:CanvasImageSource, w:number, h:number, quando:Date, pos:{lat:number,lon:number}|null, daVistoria?:number, borroes:{x:number,y:number,r:number}[]}|null} */ foto: null,
   /** @type {HTMLCanvasElement|null} o brasão já em tons de cinza */ brasao: null,
+  /** @type {Promise<Object>|null} o reconhecedor de rostos, carregado uma vez */ detector: null,
+  /** @type {boolean} a procura de rostos da foto aberta ainda não terminou */ procurando: false,
 }
+
+/** Onde está a biblioteca de reconhecimento de rostos (public/vendor). */
+const ANX_MEDIAPIPE = '/vendor/mediapipe-0.10.14/'
 
 /** Lado maior da foto que sobe: nítida no papel, leve no celular. */
 const ANX_LADO_MAX = 1600
@@ -106,10 +117,10 @@ function pintarAnexosDoc() {
     <p class="anx-nota">${!d.pode_juntar ? 'Este documento não recebe mais anexos de você.'
       : cheio ? `O documento já tem ${d.maximo} anexos, que é o limite.`
       : d.lavrado ? 'Documento lavrado: o que for juntado agora sai marcado como “juntado depois”, com a data e o seu nome.'
-      : `A foto ganha a data, a hora e a marca d'água antes de ser juntada. PDF até 10 MB. No máximo ${d.maximo} anexos.`}</p>
+      : `Toda foto ganha o carimbo (data, hora e posição) e a marca d'água antes de ser juntada. PDF até 10 MB. No máximo ${d.maximo} anexos.`}</p>
     <div class="sec-title">Anexos deste documento</div>
     <div class="anx-lista">${proprios}</div>
-    ${d.vistoria ? paraTrazer('Fotos da vistoria vinculada', `Vistoria ${esc(d.vistoria)}. As fotos não entram sozinhas: escolha quais acompanham esta peça.`, d.da_vistoria, 'vistoria') : ''}
+    ${d.vistoria ? paraTrazer('Fotos da vistoria vinculada', `Vistoria ${esc(d.vistoria)}. As fotos não entram sozinhas: escolha quais acompanham esta peça. Cada uma passa pelo preparo e ganha o carimbo.`, d.da_vistoria, 'vistoria') : ''}
     ${d.origem ? paraTrazer('Anexos da peça de origem', `${esc(d.origem)}. Traga os que este documento deve herdar.`, d.da_origem, 'documento') : ''}`
 }
 
@@ -155,6 +166,9 @@ async function moverAnexoDoc(i, d) {
 
 /** @param {'vistoria'|'documento'} de @param {number} id */
 async function trazerAnexoDoc(de, id) {
+  // FOTO DA VISTORIA: não vem crua. Passa pela mesma janela de preparo das
+  // outras — carimbo, marca d'água e borrão — e sobe como imagem nova.
+  if (de === 'vistoria') { await prepararFotoDaVistoriaAnexo(id); return }
   await comCarregando('Trazendo o anexo…', async () => {
     try {
       const d = await pedirAnexoDoc(`/api/documentos/${fdState.id}/anexos/trazer`, 'POST', { de, id })
@@ -181,10 +195,39 @@ function excluirAnexoDoc(id) {
   })
 }
 
+/**
+ * Abre a janela de preparo com uma foto da vistoria vinculada. A data do
+ * carimbo é a da foto na vistoria; a posição, a gravada no arquivo ou, na
+ * falta, a da vistoria.
+ * @param {number} id a evidência
+ */
+async function prepararFotoDaVistoriaAnexo(id) {
+  const v = anxState.dados?.da_vistoria.find(x => x.id === id)
+  if (!v) return
+  let arq
+  try {
+    arq = await comCarregando('Abrindo a foto…', async () => {
+      const r = await fetch(v.url)
+      if (!r.ok) throw new Error('HTTP ' + r.status)
+      return r.blob()
+    })
+  } catch (_) {
+    toast('Não foi possível abrir essa foto.', 'err')
+    return
+  }
+  await abrirPreparoFotoAnexo(arq, {
+    quando: v.data ? new Date(v.data.replace(' ', 'T')) : new Date(),
+    titulo: v.titulo || '',
+    daVistoria: id,
+    posReserva: v.lat != null && v.lon != null ? { lat: Number(v.lat), lon: Number(v.lon) } : null,
+  })
+}
+
 /** Sobe um arquivo já pronto (a foto preparada, ou o PDF). */
-async function enviarAnexoDoc(arquivo, nome, titulo, quando) {
+async function enviarAnexoDoc(arquivo, nome, titulo, quando, daVistoria = null) {
   const corpo = new FormData()
   corpo.append('arquivo', arquivo, nome)
+  if (daVistoria) corpo.append('da_vistoria', daVistoria)
   if (titulo) corpo.append('titulo', titulo)
   // Hora LOCAL, sem fuso: o servidor guarda a hora como o fiscal a vê. O
   // toISOString mandaria em UTC, e a foto das 15h10 apareceria como das 19h10.
@@ -228,6 +271,20 @@ async function escolherFotoAnexo(inp, daCamera) {
   const arq = inp.files?.[0]
   inp.value = ''
   if (!arq) return
+  await abrirPreparoFotoAnexo(arq, {
+    quando: daCamera ? new Date() : new Date(arq.lastModified || Date.now()),
+    daCamera,
+  })
+}
+
+/**
+ * Abre a janela de preparo com uma imagem — a escolhida no aparelho ou a
+ * trazida da vistoria. É por aqui que TODA foto passa antes de entrar na peça.
+ *
+ * @param {Blob} arq
+ * @param {{quando:Date, daCamera?:boolean, titulo?:string, daVistoria?:number, posReserva?:{lat:number,lon:number}|null}} o
+ */
+async function abrirPreparoFotoAnexo(arq, { quando, daCamera = false, titulo = '', daVistoria = null, posReserva = null }) {
   let img
   try {
     img = await carregarImagemAnexo(arq)
@@ -239,24 +296,31 @@ async function escolherFotoAnexo(inp, daCamera) {
   const escala = Math.min(1, ANX_LADO_MAX / Math.max(lw, lh))
   anxState.foto = {
     img, w: Math.round(lw * escala), h: Math.round(lh * escala),
-    quando: daCamera ? new Date() : new Date(arq.lastModified || Date.now()),
+    quando,
     borroes: [],
-    pos: null,
+    pos: posReserva,
+    daVistoria,
   }
   buscarPosicaoFotoAnexo(anxState.foto, arq, daCamera)
-  document.getElementById('anxf-titulo').value = ''
+  document.getElementById('anxf-titulo').value = titulo
   document.getElementById('anxf-raio').value = '6'
   await prepararBrasaoAnexo()
   openModal('m-anexo-foto')
   desenharFotoAnexo()
   // Rostos que o aparelho reconhece sozinho já entram borrados; o fiscal
-  // completa com o toque, e desfaz o que não devia.
-  const achados = await detectarRostosAnexo()
+  // completa com o toque, e desfaz o que não devia. A foto não espera: com
+  // internet ruim o reconhecedor pode demorar a chegar na primeira vez.
+  const f = anxState.foto
   const status = document.getElementById('anxf-status')
-  if (achados === null) status.textContent = 'Toque sobre cada rosto para borrar.'
+  status.textContent = 'Procurando rostos na foto… Você já pode borrar pelo toque.'
+  anxState.procurando = true
+  const achados = await detectarRostosAnexo()
+  if (anxState.foto !== f) return   // a janela já foi fechada ou trocada
+  anxState.procurando = false
+  if (achados === null) status.textContent = 'A procura automática de rostos não funcionou neste aparelho. Toque sobre cada rosto para borrar.'
   else status.textContent = achados
-    ? `${achados} rosto(s) borrado(s) automaticamente. Toque para borrar outros.`
-    : 'Nenhum rosto reconhecido. Toque sobre um rosto para borrar.'
+    ? `${achados} rosto(s) borrado(s) automaticamente. Confira, e toque para borrar outros.`
+    : 'Nenhum rosto reconhecido. Se houver algum, toque sobre ele para borrar.'
 }
 
 /** @param {File} arq @returns {Promise<HTMLImageElement>} */
@@ -330,29 +394,119 @@ function tirarFundoBrancoAnexo(px) {
 }
 
 /**
- * Rostos reconhecidos pelo próprio aparelho (API FaceDetector, onde existe —
- * hoje o Chrome do Android). Devolve quantos achou, ou null se o navegador
- * não tem o recurso: aí o borrão é só pelo toque.
+ * Carrega o reconhecedor de rostos (MediaPipe), uma vez por sessão. A promessa
+ * é guardada: quem chama de novo espera a mesma carga. Se falhar (sem sinal),
+ * a próxima chamada tenta de novo.
+ * @returns {Promise<Object>} o detector, com `detect(canvas)`
+ */
+function carregarDetectorRostos() {
+  if (!anxState.detector) {
+    anxState.detector = (async () => {
+      const mp = await import(ANX_MEDIAPIPE + 'vision_bundle.js')
+      const arquivos = await mp.FilesetResolver.forVisionTasks(ANX_MEDIAPIPE + 'wasm')
+      return mp.FaceDetector.createFromOptions(arquivos, {
+        baseOptions: { modelAssetPath: ANX_MEDIAPIPE + 'blaze_face_short_range.tflite' },
+        runningMode: 'IMAGE',
+        minDetectionConfidence: 0.5,
+      })
+    })()
+    anxState.detector.catch(() => { anxState.detector = null })
+  }
+  return anxState.detector
+}
+
+/**
+ * Adianta o download do reconhecedor para o navegador guardar: quem entra no
+ * sistema com sinal bom (o Wi-Fi da prefeitura) sai a campo com ele pronto.
+ * Só baixa — não liga o reconhecedor, que ocupa memória. Não roda com a
+ * economia de dados do aparelho ligada.
+ */
+function adiantarDetectorRostos() {
+  if (navigator.connection?.saveData || !window.WebAssembly) return
+  for (const arq of ['vision_bundle.js', 'wasm/vision_wasm_internal.js', 'wasm/vision_wasm_internal.wasm', 'blaze_face_short_range.tflite']) {
+    fetch(ANX_MEDIAPIPE + arq).then(r => r.arrayBuffer()).catch(() => { /* fica para a hora da foto */ })
+  }
+}
+// Bem depois de a tela abrir, para não disputar a rede com o mapa.
+window.addEventListener('load', () => setTimeout(adiantarDetectorRostos, 20000))
+
+/**
+ * Os pedaços da foto em que se procura rosto: a foto inteira e, por cima, uma
+ * grade de recortes que se sobrepõem. O modelo foi treinado para rosto perto
+ * da câmera; numa foto de obra as pessoas estão longe e saem pequenas — no
+ * recorte, o mesmo rosto ocupa mais da imagem e passa a ser reconhecido.
+ * @param {number} w @param {number} h @returns {{x:number,y:number,w:number,h:number}[]}
+ */
+function recortesParaRostos(w, h) {
+  const lista = [{ x: 0, y: 0, w, h }]
+  for (const n of [2, 3]) {
+    // Cada recorte tem 1/n da foto mais 30% de sobra para os lados, para o
+    // rosto que cai na emenda aparecer inteiro em algum deles.
+    const lw = w / n * 1.3, lh = h / n * 1.3
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      lista.push({
+        x: Math.round(Math.min(w - lw, Math.max(0, i * w / n - (lw - w / n) / 2))),
+        y: Math.round(Math.min(h - lh, Math.max(0, j * h / n - (lh - h / n) / 2))),
+        w: Math.round(lw), h: Math.round(lh),
+      })
+    }
+  }
+  return lista
+}
+
+/**
+ * Procura rostos na foto aberta e borra os que achar. Usa o MediaPipe; se ele
+ * não carregar, tenta o reconhecimento do próprio navegador (FaceDetector,
+ * onde existe). Devolve quantos rostos borrou, ou null se nenhum dos dois
+ * funcionou — aí o borrão é só pelo toque.
  * @returns {Promise<number|null>}
  */
 async function detectarRostosAnexo() {
   const f = anxState.foto
-  if (!f || typeof window.FaceDetector !== 'function') return null
+  if (!f) return null
+  const base = document.createElement('canvas')
+  base.width = f.w; base.height = f.h
+  base.getContext('2d').drawImage(f.img, 0, 0, f.w, f.h)
+
+  /** @type {{x:number,y:number,w:number,h:number}[]} caixas dos rostos, em pixels da foto */
+  let caixas = null
   try {
-    const base = document.createElement('canvas')
-    base.width = f.w; base.height = f.h
-    base.getContext('2d').drawImage(f.img, 0, 0, f.w, f.h)
-    const rostos = await new window.FaceDetector({ fastMode: false, maxDetectedFaces: 12 }).detect(base)
+    const detector = await carregarDetectorRostos()
     if (anxState.foto !== f) return null   // a janela já foi fechada ou trocada
-    for (const r of rostos) {
-      const b = r.boundingBox
-      f.borroes.push({ x: b.x + b.width / 2, y: b.y + b.height / 2, r: Math.max(b.width, b.height) * 0.65 })
+    caixas = []
+    const pedaco = document.createElement('canvas')
+    for (const r of recortesParaRostos(f.w, f.h)) {
+      pedaco.width = r.w; pedaco.height = r.h
+      pedaco.getContext('2d').drawImage(base, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h)
+      for (const d of detector.detect(pedaco).detections || []) {
+        const b = d.boundingBox
+        if (b && b.width >= 10 && b.height >= 10) caixas.push({ x: r.x + b.originX, y: r.y + b.originY, w: b.width, h: b.height })
+      }
     }
-    if (rostos.length) desenharFotoAnexo()
-    return rostos.length
-  } catch (_) {
-    return null
+  } catch (e) {
+    console.warn('Reconhecimento de rostos (MediaPipe) indisponível:', e)
+    caixas = null
   }
+
+  if (caixas === null && typeof window.FaceDetector === 'function') {
+    try {
+      const rostos = await new window.FaceDetector({ fastMode: false, maxDetectedFaces: 12 }).detect(base)
+      caixas = rostos.map(r => ({ x: r.boundingBox.x, y: r.boundingBox.y, w: r.boundingBox.width, h: r.boundingBox.height }))
+    } catch (_) { /* fica só o toque */ }
+  }
+  if (caixas === null || anxState.foto !== f) return null
+
+  // O mesmo rosto aparece em mais de um recorte: entra uma vez só. Os maiores
+  // primeiro, para o borrão que fica cobrir o rosto todo.
+  let novos = 0
+  for (const c of caixas.sort((a, b) => b.w * b.h - a.w * a.h)) {
+    const x = c.x + c.w / 2, y = c.y + c.h / 2, r = Math.max(c.w, c.h) * 0.65
+    if (f.borroes.some(b => Math.hypot(b.x - x, b.y - y) < b.r)) continue
+    f.borroes.push({ x, y, r })
+    novos++
+  }
+  if (novos) desenharFotoAnexo()
+  return novos
 }
 
 /** Redesenha a foto: imagem, borrões, marca d'água e carimbo de data. */
@@ -473,7 +627,7 @@ function carimbarFotoAnexo(ctx, f) {
  * agora seria a de onde o fiscal está, não a de onde a foto foi feita.
  * Sem nenhuma das duas, o carimbo sai sem as linhas de latitude e longitude.
  *
- * @param {Object} f a foto em preparo (anxState.foto) @param {File} arq @param {boolean} daCamera
+ * @param {Object} f a foto em preparo (anxState.foto) @param {Blob} arq @param {boolean} daCamera
  */
 async function buscarPosicaoFotoAnexo(f, arq, daCamera) {
   const chegou = pos => {
@@ -556,18 +710,30 @@ function desfazerBorraoAnexo() {
 
 function fecharFotoAnexo() {
   anxState.foto = null
+  anxState.procurando = false
   fModalBtn('m-anexo-foto')
 }
 
 /** Junta a foto como está na tela — já com carimbo, marca d'água e borrões. */
-function juntarFotoAnexo() {
+function juntarFotoAnexo(mesmoProcurando = false) {
   const f = anxState.foto
   if (!f) return
+  // A procura de rostos ainda não terminou: a foto subiria sem os borrões
+  // automáticos. O fiscal decide — pode já ter borrado pelo toque.
+  if (anxState.procurando && !mesmoProcurando) {
+    confirmarAcao({
+      titulo: 'A procura de rostos não terminou',
+      mensagem: 'Os rostos que você não borrou pelo toque vão aparecer na foto. Juntar assim mesmo?',
+      textoBtn: 'Juntar assim mesmo',
+      onConfirm: async () => juntarFotoAnexo(true),
+    })
+    return
+  }
   const titulo = document.getElementById('anxf-titulo').value.trim()
   document.getElementById('anxf-canvas').toBlob(async blob => {
     if (!blob) { toast('Não foi possível preparar a foto.', 'err'); return }
     const carimbo = horaLocalAnexo(f.quando).slice(0, 16).replace(/[-: ]/g, '')
     fecharFotoAnexo()
-    await enviarAnexoDoc(blob, `foto-${carimbo}.jpg`, titulo || 'Foto', f.quando)
+    await enviarAnexoDoc(blob, `foto-${carimbo}.jpg`, titulo || 'Foto', f.quando, f.daVistoria)
   }, 'image/jpeg', 0.86)
 }

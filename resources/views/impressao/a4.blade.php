@@ -300,7 +300,9 @@
               {{ $doc->agente?->name }} — Agente de fiscalização{{ $doc->agente?->matricula ? ', matrícula ' . $doc->agente->matricula : '' }}
             </div>
           </td>
-          <td>
+          {{-- data-assina: na lavratura, a tela põe aqui o campo em que o
+               autuado assina, em cima do nome dele (documento-lavratura.js). --}}
+          <td data-assina="autuado">
             @if ($doc->assinatura_autuado && ! $doc->recusa_assinatura)
               <img class="assina-img" src="{{ $doc->assinatura_autuado }}" alt="">
             @else

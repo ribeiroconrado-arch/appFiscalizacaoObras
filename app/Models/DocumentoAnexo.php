@@ -48,7 +48,10 @@ class DocumentoAnexo extends Model
      */
     public function donoDoArquivo(): bool
     {
-        return $this->origem === 'proprio';
+        // A foto da vistoria preparada na tela (carimbo e marca d'água) sobe
+        // como imagem nova, na pasta desta peça: também é dela.
+        return $this->origem === 'proprio'
+            || str_starts_with((string) $this->arquivo, 'documentos/' . $this->documento_id . '/');
     }
 
     /**

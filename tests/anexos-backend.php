@@ -142,6 +142,23 @@ try {
     [$s] = chamar($admin, Anexos::class, 'destroy', [], ['anexo' => $trazido], 'DELETE');
     confere($s === 200 && Storage::disk('private')->exists($ev->arquivo), 'excluir o trazido não apaga o arquivo da vistoria');
 
+    // A foto da vistoria PREPARADA NA TELA (carimbo e marca d'água) sobe como
+    // imagem nova, e o anexo guarda de qual evidência saiu.
+    [$s, $d] = chamar($admin, Anexos::class, 'store', ['da_vistoria' => $ev->id, 'titulo' => 'TAPUME AUSENTE'], ['documento' => $comVistoria], 'POST', ['arquivo' => foto('carimbada.jpg')]);
+    $carimbada = $comVistoria->anexos()->first();
+    confere($s === 201 && $carimbada->origem === 'vistoria' && (int) $carimbada->origem_ref === $ev->id && $carimbada->arquivo !== $ev->arquivo,
+        'foto da vistoria carimbada entra como arquivo novo, ligada à evidência');
+    [, $l] = chamar($admin, Anexos::class, 'index', [], ['documento' => $comVistoria], 'GET');
+    confere($l['da_vistoria'][0]['usada'] === true && array_key_exists('data', $l['da_vistoria'][0]), 'a evidência aparece como já usada, e a lista traz a data para o carimbo');
+    [$s] = chamar($admin, Anexos::class, 'store', ['da_vistoria' => $ev->id], ['documento' => $comVistoria], 'POST', ['arquivo' => foto()]);
+    confere($s === 422, 'a mesma evidência não entra carimbada duas vezes');
+    [$s] = chamar($admin, Anexos::class, 'store', ['da_vistoria' => $ev->id], ['documento' => $not], 'POST', ['arquivo' => foto()]);
+    confere($s === 422, 'evidência de outra vistoria é recusada');
+    $arquivoCarimbado = $carimbada->arquivo;
+    [$s] = chamar($admin, Anexos::class, 'destroy', [], ['anexo' => $carimbada], 'DELETE');
+    confere($s === 200 && ! Storage::disk('private')->exists($arquivoCarimbado) && Storage::disk('private')->exists($ev->arquivo),
+        'excluir a carimbada apaga a cópia dela e preserva a foto da vistoria');
+
     echo "Auto de infração: sem vistoria, com os anexos da peça de origem\n";
     $admin->forceFill(['assinatura' => $admin->assinatura ?: 'data:image/png;base64,AAAA'])->save();
     $a1->update(['imprime' => true]);

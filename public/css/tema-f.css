@@ -1476,6 +1476,9 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .lav-recusa{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--tx2);margin:16px 0 12px;cursor:pointer}
 .lav-recusa input{width:auto;flex:none}
 .lav-caixa.desligada{opacity:.4;pointer-events:none}
+.lav-dica{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--tx2);margin:12px 0 0;
+  padding:10px 12px;border-radius:10px;background:#FEF9C3;border:1px solid #EAB308;color:#3B2A00}
+.lav-dica.desligada{opacity:.4;pointer-events:none}
 
 /* ══════════════════════════════════════════════
    PARÂMETROS — USUÁRIOS E LEIS

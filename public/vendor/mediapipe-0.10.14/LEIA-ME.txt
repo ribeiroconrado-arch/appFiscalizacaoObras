@@ -1,0 +1,12 @@
+MediaPipe Tasks Vision 0.10.14 (Google) - licença Apache 2.0
+https://www.npmjs.com/package/@mediapipe/tasks-vision
+
+Usado por public/js/documento-anexos.js para reconhecer rostos NO APARELHO e
+borrá-los na foto antes de ela ser juntada ao documento. Nada é enviado a
+serviço externo.
+
+vision_bundle.js  = vision_bundle.mjs do pacote (mesmo conteúdo, extensão .js
+                    para o servidor entregar como JavaScript)
+wasm/             = pasta wasm do pacote
+blaze_face_short_range.tflite = modelo de detecção de rostos (float16, v1)
+  https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite

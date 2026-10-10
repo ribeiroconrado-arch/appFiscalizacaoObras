@@ -40,6 +40,11 @@ class DocumentoAnexoController extends Controller
                     'id'     => $e->id,
                     'titulo' => $e->titulo ?: $e->nome_original,
                     'quando' => $e->data_hora?->format('d/m/Y H:i'),
+                    // Para o carimbo: a foto da vistoria é preparada na tela
+                    // (data, hora, posição e brasão) antes de entrar na peça.
+                    'data'   => $e->data_hora?->format('Y-m-d H:i:s'),
+                    'lat'    => $documento->vistoria?->latitude,
+                    'lon'    => $documento->vistoria?->longitude,
                     'url'    => route('evidencia.arquivo', $e),
                     'usada'  => in_array($e->id, $jaTrazidos('vistoria'), true),
                 ])->values()
@@ -83,16 +88,34 @@ class DocumentoAnexoController extends Controller
             'arquivo'   => ['required', 'file', 'max:10240', 'mimetypes:image/jpeg,image/png,image/webp,application/pdf'],
             'titulo'    => ['nullable', 'string', 'max:160'],
             'data_hora' => ['nullable', 'date'],
+            // A foto veio da vistoria vinculada, e foi preparada na tela como
+            // qualquer outra: sobe uma imagem NOVA, carimbada, e o anexo guarda
+            // de qual evidência ela saiu.
+            'da_vistoria' => ['nullable', 'integer'],
         ], [
             'arquivo.max'       => 'O arquivo passa de 10 MB.',
             'arquivo.mimetypes' => 'Só foto (JPG, PNG, WEBP) ou PDF.',
         ]);
 
+        $origem = ['origem' => 'proprio'];
+        if (! empty($d['da_vistoria'])) {
+            // As mesmas travas do "trazer": a evidência é da vistoria desta
+            // peça, auto de infração não tem vistoria, e não entra duas vezes.
+            $daPeca = $documento->tipo !== 'auto_infracao' && $documento->vistoria_id
+                && Evidencia::where('vistoria_id', $documento->vistoria_id)->whereKey($d['da_vistoria'])->exists();
+            if (! $daPeca) {
+                return response()->json(['message' => 'Essa foto não é da vistoria vinculada a este documento.'], 422);
+            }
+            if ($documento->anexos()->where('origem', 'vistoria')->where('origem_ref', $d['da_vistoria'])->exists()) {
+                return response()->json(['message' => 'Este já está no documento.'], 422);
+            }
+            $origem = ['origem' => 'vistoria', 'origem_ref' => $d['da_vistoria']];
+        }
+
         $arquivo = $d['arquivo'];
         $caminho = $arquivo->store('documentos/' . $documento->id, 'private');
 
-        $anexo = $this->criar($documento, $request, [
-            'origem'        => 'proprio',
+        $anexo = $this->criar($documento, $request, $origem + [
             'arquivo'       => $caminho,
             'mime'          => $arquivo->getMimeType() ?: 'application/octet-stream',
             'nome_original' => mb_substr($arquivo->getClientOriginalName(), 0, 255),

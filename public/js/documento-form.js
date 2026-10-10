@@ -1011,6 +1011,8 @@ function mostrarViaA4NoResumo(caixa, { url = null, html = null }) {
   const quadro = caixa.querySelector('iframe')
   quadro.addEventListener('load', () => {
     caixa.querySelector('.rs-a4-aviso')?.remove()
+    // Em plena lavratura, a folha nova recebe o campo de assinatura do autuado.
+    if (fdState.lavrando && typeof montarAssinaturaNaVia === 'function') montarAssinaturaNaVia()
     ajustarViaA4NoResumo()
   })
   // A peça gravada vem pelo endereço; a prévia, pelo HTML já em mãos.
