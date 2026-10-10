@@ -205,16 +205,39 @@ async function _sinCarregar() {
   try {
     const d = await _sinPedir('/api/sinalizacoes?bbox=' + bbox)
     sinState.camada.clearLayers()
+    // UMA BANDEIRA POR IMÓVEL. Todas as sinalizações do lote ficam no mesmo
+    // ponto (o meio dele): desenhadas uma a uma, caíam uma em cima da outra, e
+    // só a de cima abria — o imóvel com dois avisos de tipos diferentes parecia
+    // ter um só. Agora a bandeira reúne as do lote, e o balão lista todas.
+    const porLote = new Map()
     for (const s of d.sinalizacoes) {
-      const lembrete = s.tipo === 'lembrete'
-      L.marker([s.lat, s.lon], {
+      if (!porLote.has(s.lote_id)) porLote.set(s.lote_id, [])
+      porLote.get(s.lote_id).push(s)
+    }
+    for (const lista of porLote.values()) {
+      const p = lista[0]
+      // Azul só quando tudo ali é lembrete; havendo sinalização, a bandeira é dela.
+      const lembrete = lista.every(s => s.tipo === 'lembrete')
+      // O número: quantos avisos o imóvel tem ao todo (sinalizações e pessoas).
+      const total = lista.reduce((n, s) => n + (s.avisos || 1), 0)
+      const dica = lista.map(s => s.rotulo).join(' · ') + (total > 1 ? ' · ' + total + ' avisos' : '')
+      L.marker([p.lat, p.lon], {
         pane: 'sinalizacoes',
         icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [4, 26], popupAnchor: [9, -24],
-          // Mais de uma pessoa avisou: a bandeira leva o número.
-          html: `<div class="sin-pino${lembrete ? ' lembrete' : ''}" title="${esc(s.rotulo)}${s.avisos > 1 ? ' · ' + s.avisos + ' avisos' : ''}">${_sinSvg(lembrete ? 'lembrete' : 'bandeira')}</div>${s.avisos > 1 ? `<span class="sin-pino-n">${s.avisos}</span>` : ''}` }),
-      }).bindPopup(() => _sinBalao(s), { className: 'popup-lote', maxWidth: 280 }).addTo(sinState.camada)
+          html: `<div class="sin-pino${lembrete ? ' lembrete' : ''}" title="${esc(dica)}">${_sinSvg(lembrete ? 'lembrete' : 'bandeira')}</div>${total > 1 ? `<span class="sin-pino-n">${total}</span>` : ''}` }),
+      }).bindPopup(() => _sinBalaoDoLote(lista), { className: 'popup-lote', maxWidth: 280 }).addTo(sinState.camada)
     }
   } catch (e) { console.warn('sinalizações:', e.message) }
+}
+
+/**
+ * O balão de um imóvel com sinalização: uma só, é o balão dela; mais de uma,
+ * todas empilhadas, cada qual com o próprio cabeçalho e as próprias ações.
+ * @param {Object[]} lista as sinalizações pendentes do lote
+ */
+function _sinBalaoDoLote(lista) {
+  if (lista.length === 1) return _sinBalao(lista[0])
+  return `<div class="sin-balao-grupo">${lista.map(_sinBalao).join('')}</div>`
 }
 
 /** O balão da bandeira, no mesmo modelo do balão do lote (D4). */
