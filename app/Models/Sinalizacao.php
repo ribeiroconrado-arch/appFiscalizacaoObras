@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Aviso rápido sobre um imóvel, ou lembrete de revistoria.
@@ -45,6 +46,19 @@ class Sinalizacao extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** Os avisos SOMADOS a esta: outras pessoas que sinalizaram a mesma coisa no imóvel. */
+    public function reforcos(): HasMany
+    {
+        return $this->hasMany(SinalizacaoReforco::class)->orderBy('id');
+    }
+
+    /** Quantas PESSOAS avisaram: quem abriu, mais quem somou depois. */
+    public function avisos(): int
+    {
+        return 1 + $this->reforcos->pluck('user_id')->filter()->unique()
+            ->reject(fn ($id) => (int) $id === (int) $this->user_id)->count();
+    }
+
     public function resolvedor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'resolvida_por');
@@ -67,11 +81,14 @@ class Sinalizacao extends Model
 
     /**
      * O que cada um enxerga: agente de fiscalização e administrador veem todas;
-     * qualquer outro usuário vê só as que ele mesmo criou (User::veTodasSinalizacoes).
+     * qualquer outro usuário vê só as que ele mesmo criou, e aquelas a que
+     * SOMOU o aviso dele (User::veTodasSinalizacoes).
      */
     public function scopeVisiveisPara(Builder $q, User $u): Builder
     {
-        return $u->veTodasSinalizacoes() ? $q : $q->where('user_id', $u->id);
+        return $u->veTodasSinalizacoes() ? $q : $q->where(fn (Builder $w) => $w
+            ->where('user_id', $u->id)
+            ->orWhereHas('reforcos', fn (Builder $r) => $r->where('user_id', $u->id)));
     }
 
     public function rotulo(): string

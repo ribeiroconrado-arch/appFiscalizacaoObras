@@ -79,3 +79,11 @@
 /* Sem a moldura clara do balão em volta do cabeçalho colorido: a cor vai até a
    borda. Vale para todo balão D4 (lote e sinalização). */
 .popup-lote:has(.balao4) .leaflet-popup-content-wrapper{border:0;overflow:hidden}
+
+/* AVISOS SOMADOS: mais de uma pessoa sinalizou a mesma coisa no imóvel. A
+   bandeira continua uma só e leva o número; a lista do painel também. */
+.sin-pino-n{position:absolute;top:-7px;left:17px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;
+  background:#B3261E;color:#fff;font:700 10.5px/17px Inter,system-ui,sans-serif;text-align:center;
+  box-shadow:0 0 0 1.5px #fff;font-variant-numeric:tabular-nums}
+.sin-n{color:#B45309;font-weight:700}
+.sin-soma{font-size:12.5px;color:var(--tx2);margin:8px 0 2px}

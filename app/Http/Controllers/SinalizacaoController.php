@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Lote;
 use App\Models\Sinalizacao;
+use App\Models\SinalizacaoReforco;
+use App\Models\User;
 use App\Models\Vistoria;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,13 +28,13 @@ class SinalizacaoController extends Controller
         [$o, $s, $l, $n] = array_map('floatval', explode(',', $d['bbox']));
 
         $lista = Sinalizacao::query()->pendentes()->visiveisPara($r->user())
-            ->with(['lote:id,bairro,quadra,numero_lote', 'autor:id,name'])
+            ->with(['lote:id,bairro,quadra,numero_lote', 'autor:id,name', 'reforcos.autor:id,name'])
             ->latest()->limit(500)->get();
 
         $pontos = $this->pontos($lista->pluck('lote_id')->unique()->all());
 
         return response()->json([
-            'sinalizacoes' => $lista->map(fn ($x) => $this->item($x, $pontos[$x->lote_id] ?? null))
+            'sinalizacoes' => $lista->map(fn ($x) => $this->item($x, $pontos[$x->lote_id] ?? null, $r->user()))
                 ->filter(fn ($i) => $i['lat'] !== null
                     && $i['lon'] >= $o && $i['lon'] <= $l && $i['lat'] >= $s && $i['lat'] <= $n)
                 ->values(),
@@ -43,19 +45,19 @@ class SinalizacaoController extends Controller
     public function hoje(Request $r): JsonResponse
     {
         $lista = Sinalizacao::query()->pendentes()->visiveisPara($r->user())
-            ->with(['lote:id,bairro,quadra,numero_lote', 'autor:id,name'])
+            ->with(['lote:id,bairro,quadra,numero_lote', 'autor:id,name', 'reforcos.autor:id,name'])
             // O lembrete é de quem o deixou; a sinalização é de todos.
             ->where(fn ($q) => $q->where('tipo', '<>', 'lembrete')->orWhere('user_id', $r->user()->id))
             ->orderBy('created_at')->limit(60)->get();
 
-        return response()->json(['itens' => $lista->map(fn ($x) => $this->item($x, null))]);
+        return response()->json(['itens' => $lista->map(fn ($x) => $this->item($x, null, $r->user()))]);
     }
 
     /** GET /api/lotes/{lote}/sinalizacoes — as abertas do lote (ficha e formulário da vistoria). */
     public function doLote(Request $r, Lote $lote): JsonResponse
     {
         $lista = Sinalizacao::where('lote_id', $lote->id)->where('status', 'aberta')
-            ->visiveisPara($r->user())->with('autor:id,name')->latest()->get();
+            ->visiveisPara($r->user())->with(['autor:id,name', 'reforcos.autor:id,name'])->latest()->get();
 
         // O QUE JÁ ESTÁ SINALIZADO NO LOTE, de qualquer pessoa — só o tipo e
         // desde quando. É o que permite avisar "isto já foi sinalizado" a quem
@@ -68,7 +70,7 @@ class SinalizacaoController extends Controller
 
         return response()->json([
             'ja_existem' => $jaExistem,
-            'pendentes' => $lista->map(fn ($x) => $this->item($x, null))->values(),
+            'pendentes' => $lista->map(fn ($x) => $this->item($x, null, $r->user()))->values(),
             'tipos'     => collect(Sinalizacao::TIPOS)->map(fn ($t, $k) => ['valor' => $k, 'rotulo' => $t])->values(),
         ]);
     }
@@ -80,21 +82,15 @@ class SinalizacaoController extends Controller
             'tipo'       => ['required', Rule::in(array_keys(Sinalizacao::TIPOS))],
             'comentario' => ['nullable', 'string', 'max:500'],
             'lembrar_em' => ['nullable', 'date', 'after_or_equal:today'],
-            'confirmar_duplicada' => ['nullable', 'boolean'],
         ], ['tipo.required' => 'Escolha o que você viu.']);
 
-        // A MESMA sinalização ainda pendente no lote: avisa antes de duplicar.
-        // A tela já avisa ao escolher o tipo; isto é a mesma regra no servidor,
-        // para quem chegou aqui sem ver o aviso. Enviar assim mesmo é possível,
-        // confirmando — às vezes é outro problema do mesmo tipo.
-        if ($d['tipo'] !== 'lembrete' && empty($d['confirmar_duplicada'])) {
+        // A MESMA COISA JÁ ESTÁ SINALIZADA E PENDENTE NO IMÓVEL: o aviso é SOMADO
+        // à sinalização que existe, e não vira uma segunda bandeira. (O lembrete
+        // é pessoal e fica de fora: cada um tem o seu.)
+        if ($d['tipo'] !== 'lembrete') {
             $existente = Sinalizacao::where('lote_id', $lote->id)->pendentes()->where('tipo', $d['tipo'])->oldest()->first();
             if ($existente) {
-                return response()->json([
-                    'message'   => 'Este imóvel já tem "' . $existente->rotulo() . '" sinalizado desde '
-                        . $existente->created_at->format('d/m/Y') . ', ainda pendente.',
-                    'duplicada' => true,
-                ], 409);
+                return $this->somar($existente, $r->user(), $d['comentario'] ?? null);
             }
         }
 
@@ -116,6 +112,39 @@ class SinalizacaoController extends Controller
                 : 'Sinalização enviada.',
             'id' => $s->id,
         ], 201);
+    }
+
+    /**
+     * Soma o aviso de mais uma pessoa a uma sinalização pendente.
+     *
+     * Quem já avisou (abriu a sinalização, ou já somou) não conta duas vezes:
+     * se voltar com um comentário, ele é guardado; sem comentário, só é
+     * lembrado de que o aviso dele continua valendo.
+     */
+    private function somar(Sinalizacao $s, User $u, ?string $comentario): JsonResponse
+    {
+        $comentario = trim((string) $comentario) ?: null;
+        $jaAvisou = (int) $s->user_id === (int) $u->id || $s->reforcos()->where('user_id', $u->id)->exists();
+
+        if ($jaAvisou && ! $comentario) {
+            return response()->json([
+                'message' => 'Você já sinalizou "' . $s->rotulo() . '" neste imóvel, e continua pendente.',
+                'somada'  => true, 'id' => $s->id, 'avisos' => $s->load('reforcos')->avisos(),
+            ]);
+        }
+
+        SinalizacaoReforco::create(['sinalizacao_id' => $s->id, 'user_id' => $u->id, 'comentario' => $comentario]);
+        // Mexer na sinalização a traz para o topo de quem ordena por atualização.
+        $s->touch();
+        $n = $s->load('reforcos')->avisos();
+
+        return response()->json([
+            'message' => $jaAvisou
+                ? 'Seu comentário foi acrescentado à sinalização.'
+                : 'Este imóvel já tinha "' . $s->rotulo() . '" sinalizado desde ' . $s->created_at->format('d/m/Y')
+                    . '. Seu aviso foi somado: ' . $n . ' pessoas já avisaram.',
+            'somada' => true, 'id' => $s->id, 'avisos' => $n,
+        ]);
     }
 
     /** POST /api/sinalizacoes/{sinalizacao}/resolver — o "Resolvido" de um toque. */
@@ -168,17 +197,30 @@ class SinalizacaoController extends Controller
         }
     }
 
-    /** @return array<string,mixed> */
-    private function item(Sinalizacao $x, ?array $ponto): array
+    /**
+     * A sinalização como a tela a mostra.
+     *
+     * QUEM VÊ O QUÊ: a fiscalização vê o autor, o comentário e cada aviso
+     * somado. Quem é de fora só chega aqui pelas próprias — as que abriu e as
+     * a que somou — e, numa que NÃO abriu, vê só a parte dele: não o nome nem o
+     * comentário de quem sinalizou primeiro, nem os dos outros.
+     *
+     * @return array<string,mixed>
+     */
+    private function item(Sinalizacao $x, ?array $ponto, ?User $u = null): array
     {
         $l = $x->lote;
+        $tudo = ! $u || $u->veTodasSinalizacoes();
+        $minha = $u && (int) $x->user_id === (int) $u->id;
+        $reforcos = $x->relationLoaded('reforcos') ? $x->reforcos : collect();
+        $visiveis = $tudo ? $reforcos : $reforcos->filter(fn ($r) => (int) $r->user_id === (int) $u->id);
 
         return [
             'id'         => $x->id,
             'tipo'       => $x->tipo,
             'rotulo'     => $x->rotulo(),
-            'comentario' => $x->comentario,
-            'autor'      => $x->autor?->name ?? '—',
+            'comentario' => ($tudo || $minha) ? $x->comentario : null,
+            'autor'      => ($tudo || $minha) ? ($x->autor?->name ?? '—') : 'outra pessoa',
             'criada_em'  => $x->created_at?->format('d/m/Y'),
             'ha'         => $x->created_at ? $this->ha($x->created_at) : null,
             'lembrar_em' => $x->lembrar_em?->format('d/m/Y'),
@@ -186,6 +228,13 @@ class SinalizacaoController extends Controller
             'imovel'     => $l ? sprintf('Q %s · Lt %s', $l->quadra ?? '—', $l->numero_lote ?? '—') : '—',
             'lat'        => $ponto['lat'] ?? null,
             'lon'        => $ponto['lon'] ?? null,
+            // Quantas pessoas avisaram, e os avisos somados que este usuário pode ler.
+            'avisos'     => $x->relationLoaded('reforcos') ? $x->avisos() : 1,
+            'reforcos'   => $visiveis->map(fn ($r) => [
+                'autor'      => $r->autor?->name ?? '—',
+                'comentario' => $r->comentario,
+                'em'         => $r->created_at?->format('d/m/Y'),
+            ])->values(),
         ];
     }
 

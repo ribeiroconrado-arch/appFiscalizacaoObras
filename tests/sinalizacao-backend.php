@@ -29,7 +29,11 @@ function chama(User $u, string $metodo, string $url, array $corpo = []): array {
     $req = Illuminate\Http\Request::create($url, $metodo, $corpo, [], [], ['HTTP_ACCEPT' => 'application/json']);
     $req->setUserResolver(fn () => $u);
     $app->instance('request', $req);
-    if ($metodo === 'GET') {
+    if ($metodo === 'GET' && preg_match('#/lotes/(\d+)/sinalizacoes$#', $url, $m)) {
+        // Direto no controlador: pelo kernel, só o PRIMEIRO pedido do script
+        // reconhece o usuário trocado — os seguintes voltavam "Unauthenticated".
+        $r = (new SinalizacaoController())->doLote($req, App\Models\Lote::findOrFail($m[1]));
+    } elseif ($metodo === 'GET') {
         $r = $kernel->handle($req);
     } else {
         $c = new SinalizacaoController();
@@ -59,21 +63,38 @@ try {
     echo "Criar e duplicada\n";
     [$s, $d] = chama($contrib, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'obra_sem_placa', 'comentario' => 'sem placa']);
     confere($s === 201, 'contribuinte sinaliza' . ($s === 201 ? '' : " (HTTP {$s}: " . json_encode($d) . ')'));
-    [$s, $d] = chama($coord, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'obra_sem_placa']);
-    confere($s === 409 && ! empty($d['duplicada']), 'a mesma sinalização pendente é avisada antes (' . ($d['message'] ?? '') . ')');
     [$s, $d] = chama($coord, 'GET', "/api/lotes/{$lote->id}/sinalizacoes");
     confere(collect($d['ja_existem'])->contains('tipo', 'obra_sem_placa') && $d['pendentes'] === [],
         'o coordenador sabe que já existe, sem ver a sinalização do outro');
-    [$s, $d] = chama($coord, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'obra_sem_placa', 'confirmar_duplicada' => true]);
-    confere($s === 201, 'confirmando, envia mesmo assim');
+
+    echo "O mesmo tipo é SOMADO, e não duplicado\n";
+    $bandeiras = fn () => Sinalizacao::where('lote_id', $lote->id)->where('tipo', 'obra_sem_placa')->where('status', 'aberta')->count();
+    [$s, $d] = chama($coord, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'obra_sem_placa', 'comentario' => 'vi também']);
+    confere($s === 200 && ! empty($d['somada']) && $d['avisos'] === 2 && $bandeiras() === 1,
+        'o aviso do coordenador é somado: continua uma bandeira, agora com 2 avisos (' . ($d['message'] ?? '') . ')');
+    [$s, $d] = chama($coord, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'obra_sem_placa']);
+    confere($s === 200 && $d['avisos'] === 2 && str_contains($d['message'], 'já sinalizou'), 'a mesma pessoa de novo, sem comentário, não conta duas vezes');
+    [$s, $d] = chama($contrib, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'obra_sem_placa', 'comentario' => 'continua sem placa']);
+    confere($s === 200 && $d['avisos'] === 2 && $bandeiras() === 1, 'quem abriu pode acrescentar um comentário, sem virar outro aviso');
+    [$s, $d] = chama($agente, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'obra_sem_placa']);
+    confere($s === 200 && $d['avisos'] === 3, 'um terceiro soma: 3 avisos');
     [$s, $d] = chama($coord, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'entulho']);
-    confere($s === 201, 'outro tipo no mesmo lote entra direto');
+    confere($s === 201, 'outro tipo no mesmo lote abre a própria bandeira');
 
     echo "Quem vê\n";
     $n = fn (User $u) => Sinalizacao::query()->pendentes()->visiveisPara($u)->where('lote_id', $lote->id)->count();
-    confere($n($agente) === 3 && $n($admin) === 3, 'agente e administrador veem as 3');
-    confere($n($coord) === 2, 'coordenador vê só as 2 dele');
+    confere($n($agente) === 2 && $n($admin) === 2, 'agente e administrador veem as 2 bandeiras');
+    confere($n($coord) === 2, 'coordenador vê a dele e a que ele reforçou');
     confere($n($contrib) === 1, 'contribuinte vê só a dele');
+    [, $d] = chama($agente, 'GET', "/api/lotes/{$lote->id}/sinalizacoes");
+    $placa = collect($d['pendentes'])->firstWhere('tipo', 'obra_sem_placa');
+    confere($placa['avisos'] === 3 && count($placa['reforcos']) === 3 && $placa['autor'] === 'Contrib T',
+        'a fiscalização vê quantos avisaram, quem abriu e cada aviso somado');
+    [, $d] = chama($coord, 'GET', "/api/lotes/{$lote->id}/sinalizacoes");
+    $placa = collect($d['pendentes'])->firstWhere('tipo', 'obra_sem_placa');
+    confere($placa['avisos'] === 3 && $placa['autor'] === 'outra pessoa' && $placa['comentario'] === null
+        && count($placa['reforcos']) === 1 && $placa['reforcos'][0]['comentario'] === 'vi também',
+        'quem só reforçou vê a contagem e o próprio aviso — não o nome nem o comentário dos outros');
 
     echo "Resolver\n";
     $doContrib = Sinalizacao::where('user_id', $contrib->id)->value('id');
@@ -94,7 +115,7 @@ try {
         'e deixou o lembrete de voltar em 30 dias');
     confere(Sinalizacao::query()->pendentes()->where('lote_id', $lote->id)->count() === 0, 'lembrete futuro ainda não pede nada');
     [$s, $d] = chama($agente, 'GET', "/api/lotes/{$lote->id}/historico");
-    confere(collect($d['eventos'])->where('tipo', 'sinalizacao')->count() >= 3, 'as resolvidas ficam no Histórico do imóvel');
+    confere(collect($d['eventos'])->where('tipo', 'sinalizacao')->count() >= 2, 'as resolvidas ficam no Histórico do imóvel');
 
     echo "\n{$ok} verificações passaram.\n";
 } finally {

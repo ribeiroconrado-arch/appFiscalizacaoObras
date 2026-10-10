@@ -102,20 +102,27 @@ function _sinPintarForm() {
   const comentario = document.getElementById('sin-comentario')?.value ?? ''
   const ja = (sinState.jaExistem || []).find(x => x.tipo === sinState.tipo)
   const jaTipos = new Set((sinState.jaExistem || []).map(x => x.tipo))
+  // O QUE JÁ ESTÁ PENDENTE NO IMÓVEL aparece antes de qualquer escolha, seja
+  // qual for o tipo: quem ia avisar de novo fica sabendo que já foi avisado.
+  const pendentes = (sinState.jaExistem || []).length
+    ? `<div class="sin-aviso">${_sinSvg('bandeira')}<span><b>Este imóvel já tem sinalização pendente:</b>
+        ${sinState.jaExistem.map(x => `${esc(x.rotulo)} (desde ${esc(x.desde)})`).join(' · ')}.
+        Se for a mesma coisa, o seu aviso é somado ao que existe.</span></div>` : ''
   document.getElementById('sin-corpo').innerHTML = `
+    ${pendentes}
     <div class="sin-sub">O que você viu?</div>
     <div class="sin-grade">${SIN_TIPOS.map(([k, t]) => `
       <button type="button" class="sin-op${sinState.tipo === k ? ' on' : ''}${jaTipos.has(k) ? ' ja' : ''}"
               onclick="sinState.tipo='${k}';sinState.duplicada=false;_sinPintarForm()">
         ${_sinSvg(k)}<span>${esc(t)}</span>${jaTipos.has(k) ? '<i class="sin-ja-marca" title="Já sinalizado">•</i>' : ''}</button>`).join('')}</div>
-    ${ja ? `<div class="sin-aviso">${_sinSvg('bandeira')}<span><b>Já sinalizado:</b> este imóvel tem "${esc(ja.rotulo)}"
-      pendente desde ${esc(ja.desde)}. Não é preciso enviar de novo — a fiscalização já foi avisada.</span></div>` : ''}
+    ${ja ? `<p class="sin-soma">"${esc(ja.rotulo)}" já está sinalizado desde ${esc(ja.desde)}. O seu aviso será
+      <b>somado</b> a ele: a bandeira continua uma só e passa a mostrar quantas pessoas avisaram.</p>` : ''}
     ${lembrete ? `<div class="sin-sub">Lembrar em</div>${_sinChipsLembrete('sin')}` : ''}
     <div class="field"><label for="sin-comentario">Comentário (opcional)</label>
       <input type="text" id="sin-comentario" maxlength="500" placeholder="${lembrete ? 'Conferir retirada do entulho' : 'Fundação começando, sem placa'}"></div>
     <div class="btn-row"><button class="btn" onclick="fModalBtn('m-sinalizar')">Cancelar</button>
-      <button class="btn ${ja ? '' : 'primary'}" id="sin-enviar" ${sinState.tipo ? '' : 'disabled'}
-        onclick="enviarSinalizacao(${ja ? 'true' : 'false'})">${ja ? 'Enviar mesmo assim' : 'Enviar'}</button></div>`
+      <button class="btn primary" id="sin-enviar" ${sinState.tipo ? '' : 'disabled'}
+        onclick="enviarSinalizacao()">${ja ? 'Somar meu aviso' : 'Enviar'}</button></div>`
   const c = document.getElementById('sin-comentario'); if (c) c.value = comentario
 }
 
@@ -146,32 +153,26 @@ function _sinDataEscolhida(prefixo) {
   return _sinDataDaqui(sinState.dias)
 }
 
-/** @param {boolean} confirmada o usuário já viu o aviso de "já sinalizado" */
-async function enviarSinalizacao(confirmada = false) {
+/**
+ * Envia a sinalização. Se o imóvel já tem o mesmo tipo pendente, o servidor
+ * SOMA o aviso ao que existe (em vez de abrir outra bandeira) e diz isso na
+ * resposta — não há mais "enviar mesmo assim".
+ */
+async function enviarSinalizacao() {
   if (!sinState.tipo || !sinState.lote) return
   const btn = document.getElementById('sin-enviar'); btn.disabled = true
   try {
-    const r = await fetch(`/api/lotes/${sinState.lote.id}/sinalizacoes`, {
+    const d = await _sinPedir(`/api/lotes/${sinState.lote.id}/sinalizacoes`, {
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': _sinCsrf() },
       body: JSON.stringify({
         tipo: sinState.tipo,
         comentario: document.getElementById('sin-comentario').value.trim() || null,
         lembrar_em: sinState.tipo === 'lembrete' ? _sinDataEscolhida('sin') : null,
-        confirmar_duplicada: confirmada,
       }),
     })
-    const d = await r.json().catch(() => ({}))
-    // O servidor achou a mesma sinalização pendente (a lista da tela pode
-    // estar velha): mostra o aviso e deixa a decisão com quem sinaliza.
-    if (r.status === 409 && d.duplicada) {
-      sinState.jaExistem = [...(sinState.jaExistem || []), { tipo: sinState.tipo,
-        rotulo: SIN_TIPOS.find(t => t[0] === sinState.tipo)?.[1], desde: (d.message.match(/desde (\S+),/) || [])[1] || '—' }]
-      _sinPintarForm(); return
-    }
-    if (!r.ok) throw new Error((d.errors && Object.values(d.errors)[0]?.[0]) || d.message || 'Falha ao enviar.')
     fModalBtn('m-sinalizar'); toast(d.message)
     recarregarSinalizacoes()
+    if (typeof carregarParaHoje === 'function') carregarParaHoje()
     if (document.getElementById('m-ficha')?.classList.contains('open') && typeof carregarHistorico === 'function') {
       carregarHistorico(sinState.lote.id)
     }
@@ -209,7 +210,8 @@ async function _sinCarregar() {
       L.marker([s.lat, s.lon], {
         pane: 'sinalizacoes',
         icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [4, 26], popupAnchor: [9, -24],
-          html: `<div class="sin-pino${lembrete ? ' lembrete' : ''}" title="${esc(s.rotulo)}">${_sinSvg(lembrete ? 'lembrete' : 'bandeira')}</div>` }),
+          // Mais de uma pessoa avisou: a bandeira leva o número.
+          html: `<div class="sin-pino${lembrete ? ' lembrete' : ''}" title="${esc(s.rotulo)}${s.avisos > 1 ? ' · ' + s.avisos + ' avisos' : ''}">${_sinSvg(lembrete ? 'lembrete' : 'bandeira')}</div>${s.avisos > 1 ? `<span class="sin-pino-n">${s.avisos}</span>` : ''}` }),
       }).bindPopup(() => _sinBalao(s), { className: 'popup-lote', maxWidth: 280 }).addTo(sinState.camada)
     }
   } catch (e) { console.warn('sinalizações:', e.message) }
@@ -228,6 +230,8 @@ function _sinBalao(s) {
         <tr><td>${lembrete ? 'Lembrete de' : 'Aberta'}</td><td>${esc(lembrete ? (s.lembrar_em || s.criada_em) : s.ha + ' · ' + s.criada_em)}</td></tr>
         <tr><td>Por</td><td>${esc(s.autor)}</td></tr>
         ${s.comentario ? `<tr><td>Comentário</td><td class="balao4-quebra">${esc(s.comentario)}</td></tr>` : ''}
+        ${s.avisos > 1 ? `<tr><td>Avisos</td><td><b>${s.avisos} pessoas</b> avisaram</td></tr>` : ''}
+        ${(s.reforcos || []).map(r => `<tr><td>${esc(r.em || '')}</td><td class="balao4-quebra">${esc(r.autor)}${r.comentario ? ' — ' + esc(r.comentario) : ''}</td></tr>`).join('')}
       </table>
       <div class="balao4-acoes" id="sin-acoes-${s.id}" style="grid-template-columns:repeat(${vistoriar ? 2 : 1},1fr)">
         ${vistoriar}
@@ -328,7 +332,7 @@ async function carregarParaHoje() {
         <span class="sin-linha-ico ${s.tipo === 'lembrete' ? 'lembrete' : ''}">${_sinSvg(s.tipo === 'lembrete' ? 'lembrete' : 'bandeira')}</span>
         <div class="sin-linha-txt" onclick="irAoLoteNoMapa(${Number(s.lote_id)})" title="Ver no mapa">
           <b>${esc(s.tipo === 'lembrete' ? 'Voltar' : s.rotulo)}</b> · ${esc(s.imovel)}
-          <div class="sin-linha-sub">${esc(s.comentario || '')}${s.comentario ? ' · ' : ''}${esc(s.ha || '')} · ${esc(s.autor)}</div>
+          <div class="sin-linha-sub">${esc(s.comentario || '')}${s.comentario ? ' · ' : ''}${esc(s.ha || '')} · ${esc(s.autor)}${s.avisos > 1 ? ` · <b class="sin-n">${s.avisos} avisos</b>` : ''}</div>
         </div>
         ${window.PODE_EDITAR ? `<button type="button" class="btn sm sin-registrar sin-vistoriar" onclick="fazerVistoriaDoPainel(${Number(s.lote_id)})">${_sinSvg('lapis')}Fazer vistoria</button>` : ''}
         <button type="button" class="btn sm sin-registrar" id="pn-registrar-${s.id}" aria-expanded="false" aria-controls="pn-atendimento-${s.id}" onclick="abrirAtendimentoPainel(${s.id})">Registrar atendimento</button>
@@ -346,7 +350,7 @@ function pintarAvisoSinalizacao(lista) {
   if (!lista.length) { el.innerHTML = ''; return }
   const p = lista[0]
   el.innerHTML = `<div class="sin-aviso">${_sinSvg('bandeira')}<span><b>${lista.length} sinalização(ões) pendente(s)</b>
-    · ${esc(p.rotulo)}${p.comentario ? ' — "' + esc(p.comentario) + '"' : ''} · ${esc(p.autor || '—')}, ${esc(p.criada_em || '')}</span></div>`
+    · ${esc(p.rotulo)}${p.comentario ? ' — "' + esc(p.comentario) + '"' : ''} · ${esc(p.autor || '—')}, ${esc(p.criada_em || '')}${p.avisos > 1 ? ' · ' + p.avisos + ' pessoas avisaram' : ''}</span></div>`
 }
 
 // ── NA VISTORIA: o que ela atende e o lembrete de voltar ─────
@@ -363,7 +367,7 @@ async function pintarSinalNaVistoria(loteId) {
     ${pendentes.length ? `<div class="sec-title">Sinalizações deste imóvel</div>
       ${pendentes.filter(s => s.tipo !== 'lembrete' || !s.lembrar_em || s.lembrar_em <= new Date().toLocaleDateString('pt-BR')).map(s => `
         <label class="sin-check"><input type="checkbox" class="nv-sinal-res" value="${s.id}" checked>
-          Resolver "${esc(s.rotulo)}"${s.comentario ? ' — ' + esc(s.comentario) : ''} <span class="sin-linha-sub">(${esc(s.criada_em)})</span></label>`).join('')}` : ''}
+          Resolver "${esc(s.rotulo)}"${s.comentario ? ' — ' + esc(s.comentario) : ''} <span class="sin-linha-sub">(${esc(s.criada_em)}${s.avisos > 1 ? ' · ' + s.avisos + ' avisos' : ''})</span></label>`).join('')}` : ''}
     <div class="sec-title">Lembrar de voltar neste imóvel?</div>
     ${_sinChipsLembrete('nv-lembrete', true)}
     <div class="field"><input type="text" id="nv-lembrete-motivo" maxlength="300" placeholder="Motivo (opcional) — ex.: conferir retirada do entulho"></div>`
