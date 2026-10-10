@@ -138,50 +138,11 @@
 
 {{-- ══════ ABA: PAINEL ══════ --}}
 <section class="tela at" id="t-painel">
-  {{-- ORDEM DA TELA = ORDEM DA PERGUNTA.
-       Quem abre o sistema de manhã não quer saber quantos autos saíram nos
-       últimos 30 dias: quer saber o que precisa dele hoje. Por isso o trabalho
-       vem primeiro e o número depois — e os filtros descem junto com o que
-       eles filtram, porque avisos, pendências e atividade NÃO são filtrados
-       por período, bairro ou agente. Deixá-los no topo dava a entender o
-       contrário. --}}
-
+  {{-- Visão por prioridades: indicadores, trabalho e atividade recente. --}}
   <header class="painel-cabecalho">
     <h1>Painel</h1>
     <p>Pendências e resultados da fiscalização.</p>
   </header>
-  <div class="painel-operacional">
-    <div class="bloco painel-pendencias">
-      <div class="sec-simples">Precisa de você <span class="cont" id="pn-atencao-n">0</span></div>
-      {{-- Prazos de documento, ordens de serviço designadas a mim e
-           protocolos sob minha responsabilidade — ver PainelController::atencao. --}}
-      <div id="pn-atencao"></div>
-    </div>
-
-    <div class="painel-lateral">
-    {{-- PARA HOJE — sinalizações em aberto e lembretes de revistoria que
-         venceram. Montado por sinalizacoes.js; some quando não há nada. --}}
-    <div class="bloco" id="pn-hoje-bloco" hidden>
-      <div class="sec-simples">Para hoje <span class="cont" id="pn-hoje-n">0</span></div>
-      <div id="pn-hoje"></div>
-    </div>
-    <div class="bloco painel-feed">
-      <div class="sec-simples">Atividade recente</div>
-      {{-- Alimentada pela tabela de auditoria — a mesma trilha que responde
-           "quem fez o quê" no processo administrativo, não um log paralelo. --}}
-      <div class="feed" id="pn-recentes"></div>
-      <button type="button" class="painel-mais" id="pn-recentes-mais" hidden
-              aria-expanded="false" aria-controls="pn-recentes" onclick="alternarRecentesPainel()">Mostrar mais atividades</button>
-    </div>
-    <div class="bloco" id="pn-avisos-bloco" hidden>
-      <div class="sec-simples">Outros avisos <span class="cont" id="pn-avisos-n">0</span></div>
-      <div id="pn-avisos"></div>
-    </div>
-    <p class="painel-aviso-agrupado" id="pn-avisos-agrupados" hidden></p>
-    </div>
-  </div>
-
-  {{-- FAIXA 3 — o dashboard, com os filtros que valem só para ele. --}}
   <div class="painel-dash">
     <div class="dash-tit">
       <div>
@@ -210,6 +171,27 @@
 
     <div class="metricas" id="pn-metricas"></div>
 
+  </div>
+  <div class="painel-operacional">
+    <div class="painel-coluna">
+    <div class="bloco painel-pendencias">
+      <div class="sec-simples">Prioridades para resolver <span class="cont" id="pn-atencao-n">0</span></div>
+      {{-- Prazos de documento, ordens de serviço designadas a mim e
+           protocolos sob minha responsabilidade — ver PainelController::atencao. --}}
+      <div id="pn-atencao"></div>
+    </div>
+
+    <div class="bloco" id="pn-avisos-bloco" hidden>
+      <div class="sec-simples">Outros avisos <span class="cont" id="pn-avisos-n">0</span></div>
+      <div id="pn-avisos"></div>
+    </div>
+    <p class="painel-aviso-agrupado" id="pn-avisos-agrupados" hidden></p>
+    </div>
+    <div class="painel-lateral">
+    <div class="bloco" id="pn-hoje-bloco" hidden>
+      <div class="sec-simples">Para hoje <span class="cont" id="pn-hoje-n">0</span></div>
+      <div id="pn-hoje"></div>
+    </div>
     <div class="painel-duo">
       <div class="bloco">
         <div class="sec-simples">Documentos por tipo</div>
@@ -220,7 +202,17 @@
         <div id="pn-infracoes"></div>
       </div>
     </div>
+    </div>
   </div>
+    <div class="bloco painel-feed">
+      <div class="sec-simples">Atividade recente</div>
+      {{-- Alimentada pela tabela de auditoria — a mesma trilha que responde
+           "quem fez o quê" no processo administrativo, não um log paralelo. --}}
+      <div class="feed" id="pn-recentes"></div>
+      <button type="button" class="painel-mais" id="pn-recentes-mais" hidden
+              aria-expanded="false" aria-controls="pn-recentes" onclick="alternarRecentesPainel()">Mostrar mais atividades</button>
+    </div>
+
 </section>
 
 {{-- ══════ ABA: MAPA ══════ --}}
@@ -418,7 +410,7 @@
             title="Pesquisar no mapa" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        <path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><circle cx="11" cy="11" r="4"/><path d="m14 14 3 3"/></svg>
     </button>
   </div>
 
@@ -1157,8 +1149,8 @@
   @unless ($externo)
   <button class="aba at" aria-current="page" data-destino="painel" title="Painel" onclick="irPara('painel')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-      <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/>
-      <rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+      <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
+      <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
     <span class="aba-txt">Painel</span>
   </button>
   @endunless
@@ -1184,13 +1176,13 @@
   <button class="aba" data-destino="documentos" title="Documentos" onclick="irPara('documentos')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
+      <path d="M14 2v6h6"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>
     <span class="aba-txt">Documentos</span>
   </button>
   <button class="aba" data-destino="protocolos" title="Protocolo e OS" onclick="irPara('protocolos')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
-      <rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 12h8M8 16h5"/></svg>
+      <rect x="9" y="2" width="6" height="4" rx="1"/><path d="m8 13 3 3 5-6"/></svg>
     <span class="aba-txt">Protocolo &amp; OS</span>
   </button>
   @endunless

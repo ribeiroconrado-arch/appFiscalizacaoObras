@@ -276,6 +276,29 @@ async function resolverSinalizacao(id) {
   } catch (e) { toast(e.message, 'err') }
 }
 
+/** Atendimento no painel mantém o contexto da sinalização e exige o relato. */
+function abrirAtendimentoPainel(id) {
+  const alvo = document.getElementById('pn-atendimento-' + id)
+  if (!alvo) return
+  alvo.hidden = false
+  alvo.innerHTML = `<label for="sin-res-${id}">O que foi realizado?</label>
+    <textarea id="sin-res-${id}" maxlength="300" required placeholder="Descreva as providências adotadas."></textarea>
+    <div class="sin-atendimento-acoes">
+      <button type="button" class="btn sm" onclick="fecharAtendimentoPainel(${id})">Cancelar</button>
+      <button type="button" class="btn sm" onclick="resolverSinalizacao(${id})">Salvar atendimento</button>
+    </div>`
+  document.getElementById('pn-registrar-' + id)?.setAttribute('aria-expanded', 'true')
+  document.getElementById('sin-res-' + id)?.focus()
+}
+
+function fecharAtendimentoPainel(id) {
+  const alvo = document.getElementById('pn-atendimento-' + id)
+  if (alvo) { alvo.hidden = true; alvo.innerHTML = '' }
+  const botao = document.getElementById('pn-registrar-' + id)
+  botao?.setAttribute('aria-expanded', 'false')
+  botao?.focus()
+}
+
 // ── O "PARA HOJE" DO PAINEL ──────────────────────────────────
 
 async function carregarParaHoje() {
@@ -292,7 +315,8 @@ async function carregarParaHoje() {
           <b>${esc(s.tipo === 'lembrete' ? 'Voltar' : s.rotulo)}</b> · ${esc(s.imovel)}
           <div class="sin-linha-sub">${esc(s.comentario || '')}${s.comentario ? ' · ' : ''}${esc(s.ha || '')} · ${esc(s.autor)}</div>
         </div>
-        <button type="button" class="sin-linha-ok" title="Resolvido" onclick="_sinPedirResolucao(${s.id}, 'pn-sin-${s.id}')">${_sinSvg('ok')}</button>
+        <button type="button" class="btn sm sin-registrar" id="pn-registrar-${s.id}" aria-expanded="false" aria-controls="pn-atendimento-${s.id}" onclick="abrirAtendimentoPainel(${s.id})">Registrar atendimento</button>
+        <div class="sin-atendimento" id="pn-atendimento-${s.id}" hidden></div>
       </div>`).join('')
   } catch { bloco.hidden = true }
 }

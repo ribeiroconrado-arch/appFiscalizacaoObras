@@ -22,6 +22,7 @@
   $textoDestinatario = fn ($texto) => $notificacao
       ? str_replace(['AUTUADO', 'Autuado', 'autuado'], ['NOTIFICADO', 'Notificado', 'notificado'], $texto ?? '') : ($texto ?? '');
   $numero = $doc->numero ? sprintf('%d/%04d', $doc->exercicio, $doc->numero) : 'Sem número';
+  $origemCabecalho = preg_split('/(?<=Nº)\s+/u', $origemTexto, 2);
   $contato = collect([$orgao['endereco'] ?? null, $orgao['municipio'] ?? null, $orgao['telefone'] ?? null,
       empty($orgao['cnpj']) ? null : 'CNPJ: '.$orgao['cnpj']])->filter()->implode(' · ');
 @endphp
@@ -47,9 +48,8 @@
   .cab .end { font-size: 7px; }
   .tit { background: #C8C8C8; font-size: 10px; font-weight: bold; text-align: center; padding: 3px; }
   .grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grade.meta { grid-template-columns: .6fr .9fr 1.5fr; margin-top: 3px; }
+  .grade.meta { grid-template-columns: 18% 27% 55%; margin-top: 3px; border-top: 1px dotted #333; padding-top: 2px; }
   .grade .campo { min-width: 0; }
-  .meta .val { font-size: 8px; }
 
   .faixa { background: #C8C8C8; font-size: 8px; font-weight: bold; letter-spacing: .06em;
            padding: 2px 4px; margin: 5px 0 3px; text-transform: uppercase; }
@@ -58,6 +58,10 @@
   .campo .lbl { font-size: 7px; text-transform: uppercase; letter-spacing: .04em; }
   .campo .val { font-size: 9px; overflow-wrap: anywhere; }
   .meta .val, .datas .val { font-weight: bold; }
+  .meta .campo { padding: 0 2px 3px; }
+  .meta .lbl { font-size: 6px; letter-spacing: 0; white-space: nowrap; line-height: 1.2; }
+  .meta .val { font-size: 9px; line-height: 1.2; }
+  .meta .origem-numero { display: block; }
 
   .par { padding: 0 4px 3px; text-align: left; overflow-wrap: anywhere; }
   .par b { font-weight: bold; }
@@ -128,10 +132,10 @@
 <div class="grade meta">
 <div class="campo"><div class="lbl">Exercício</div><div class="val">{{ $doc->exercicio ?: '—' }}</div></div>
 <div class="campo">
-  <div class="lbl">Matrícula do agente</div>
+  <div class="lbl">Matrícula AGEFIS</div>
   <div class="val">{{ $doc->agente?->matricula ?: '—' }}</div>
 </div>
-<div class="campo"><div class="lbl">Origem</div><div class="val">{{ $origemTexto }}</div></div>
+<div class="campo"><div class="lbl">Origem</div><div class="val">{{ $origemCabecalho[0] }}@if (isset($origemCabecalho[1]))<span class="origem-numero">{{ $origemCabecalho[1] }}</span>@endif</div></div>
 </div>
 <div class="grade datas">
 <div class="campo">

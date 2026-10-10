@@ -19,7 +19,8 @@
 #t-painel.at{gap:18px;padding:20px}
 .painel-cabecalho h1{font-size:23px;line-height:1.3;color:var(--tx);font-weight:700}
 .painel-cabecalho p{font-size:13px;color:var(--tx3);margin-top:4px}
-.painel-operacional{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px;align-items:start}
+.painel-operacional{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start}
+.painel-coluna{display:flex;flex-direction:column;gap:14px;min-width:0}
 .painel-operacional>*{min-width:0}
 .painel-lateral{display:flex;flex-direction:column;gap:14px;min-width:0}
 #t-painel .bloco{border-width:1px;border-radius:var(--r);padding:16px}
@@ -50,10 +51,18 @@
 #pn-filtros select{min-height:44px}
 #t-painel .metricas{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 #t-painel .mc{flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;border-width:1px;border-radius:var(--r);padding:15px}
-#t-painel .mc::after{width:28px;height:28px;border-radius:0 0 0 28px}
+#t-painel .mc::after{display:none}
 #t-painel .mc .l{font-size:11px;letter-spacing:0;text-transform:none}
-#t-painel .painel-duo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:799px){
+#t-painel .painel-duo{display:grid;grid-template-columns:1fr;gap:12px}
+#t-painel .item .ic{background:var(--blt);color:var(--tx2)}
+#t-painel .painel-mais{color:var(--tx2)}
+#t-painel .sin-atendimento{flex-basis:100%;padding:12px;background:var(--blt);border-radius:var(--r)}
+#t-painel .sin-atendimento label{display:block;font-size:12px;margin-bottom:6px}
+#t-painel .sin-atendimento textarea{width:100%;min-height:84px;font:inherit;padding:10px;border:1px solid var(--bord);border-radius:var(--r);background:var(--sur);color:var(--tx);resize:vertical}
+#t-painel .sin-atendimento-acoes{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap}
+#t-painel .sin-linha{flex-wrap:wrap}
+#t-painel .sin-registrar{font-size:12px;min-height:44px}
+@media(max-width:999px){
   #t-painel.at{padding:14px;gap:16px}
   .painel-operacional{grid-template-columns:1fr}
   #t-painel .metricas{grid-template-columns:1fr 1fr}
