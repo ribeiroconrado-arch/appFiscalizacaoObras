@@ -112,7 +112,7 @@ class DocumentoController extends Controller
             // só os atos de campo. Entra aqui porque, para quem usa, os dois
             // estão na mesma lista e o filtro é um só.
             'tipo'   => ['nullable', Rule::in([...array_keys(Documento::TIPOS), 'vistoria'])],
-            'status' => ['nullable', Rule::in(['rascunho', 'gravado', 'lavrado', 'atendido', 'anulado', 'cancelado', 'defendido'])],
+            'status' => ['nullable', Rule::in(['rascunho', 'gravado', 'lavrado', 'em_defesa', 'atendido', 'anulado', 'cancelado', 'defendido'])],
             'agente' => ['nullable', 'in:eu,todos'],
             'busca'  => ['nullable', 'string', 'max:80'],
         ]);
@@ -931,6 +931,9 @@ class DocumentoController extends Controller
                 'testemunha'      => $documento->assinatura_testemunha,
             ],
 
+            // A defesa do auto (nula nos tipos que não a têm).
+            'defesa' => $documento->defesaParaTela($request->user()),
+
             'anulacao' => $documento->anulado_em ? [
                 'em'     => $documento->anulado_em->format('d/m/Y H:i'),
                 'por'    => $documento->anuladoPor?->name,
@@ -995,6 +998,7 @@ class DocumentoController extends Controller
             return response()->json(['message' => 'Este documento não pode ser cancelado por você.'], 403);
         }
 
+        // (Em defesa também é peça lavrada: pede a senha do mesmo jeito.)
         if ($documento->status !== 'gravado'
             && ! \Illuminate\Support\Facades\Hash::check((string) ($d['senha'] ?? ''), (string) $request->user()->password)) {
             return response()->json(['message' => 'Senha incorreta. O cancelamento de documento lavrado exige a sua senha.'], 422);

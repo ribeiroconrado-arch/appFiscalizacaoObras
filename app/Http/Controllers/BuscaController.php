@@ -417,7 +417,7 @@ class BuscaController extends Controller
             $q->whereIn('id', function ($s) {
                 $s->from('documentos')->select('lote_id')
                   ->where('tipo', 'auto_embargo')
-                  ->whereIn('status', ['lavrado', 'atendido']);
+                  ->whereIn('status', ['lavrado', 'em_defesa', 'atendido']);
             });
             $usou = true;
         }

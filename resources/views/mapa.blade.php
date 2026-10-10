@@ -3107,6 +3107,7 @@
         <option value="rascunho">Rascunho</option>
         <option value="gravado">Gravado</option>
         <option value="lavrado">Lavrado</option>
+        <option value="em_defesa">Em defesa</option>
         <option value="atendido">Atendido</option>
         <option value="cancelado">Cancelado</option>
         <option value="defendido">Defendido</option>
@@ -3601,6 +3602,89 @@
   </div>
 </div>
 
+{{-- ══════ DEFESA DO AUTO (#m-doc-defesa) ══════
+     O procedimento do AppPOSTURAS, em duas sub-abas: o PROTOCOLO da defesa
+     (quem lavrou, ou o administrador) e o JULGAMENTO (só o administrador).
+     Deferida, a peça vira "defendido"; indeferida, volta a lavrada, apta.
+     Estado e regras em documento-defesa.js. --}}
+<div class="modal-bg" id="m-doc-defesa" onclick="fModal()" data-caixa-alta>
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
+    <button class="modal-x" onclick="fModalBtn('m-doc-defesa')">&#10005;</button>
+    <h3>Defesa <span class="mono" id="def-numero" style="font-size:13px;color:var(--tx3);font-weight:500"></span></h3>
+    <div class="doc-tabs" style="margin-bottom:14px">
+      <button type="button" class="doc-tab ativa" id="def-tab-dados" onclick="trocarAbaDefesa('dados')">Defesa</button>
+      <button type="button" class="doc-tab" id="def-tab-julgamento" onclick="trocarAbaDefesa('julgamento')">Julgamento</button>
+    </div>
+
+    <div id="def-aba-dados">
+      <div class="g2">
+        <div class="field">
+          <label for="def-protocolo">Protocolo da defesa</label>
+          <input type="text" id="def-protocolo" maxlength="60" placeholder="Nº do protocolo">
+        </div>
+        <div class="field">
+          <label for="def-data-protocolo">Data do protocolo</label>
+          <label class="date-ov">
+            <input type="date" id="def-data-protocolo" onfocus="preencherDataHojeSeVazio(this)" onchange="atualizarDisplayData(this)">
+            <span class="date-ov-txt vazio">dd/mm/aaaa</span>
+          </label>
+        </div>
+      </div>
+      <p class="anx-nota" id="def-prazo"></p>
+      <p class="aviso-legal" id="def-intempestiva" hidden>Protocolada depois do prazo de defesa do documento.</p>
+      <div class="sec-title">Arquivo da defesa</div>
+      <p class="anx-nota" id="def-anexo-atual"></p>
+      <div class="field" id="def-anexo-campo">
+        <label for="def-anexo">Juntar ou trocar o arquivo (PDF ou foto, até 10 MB)</label>
+        <input type="file" id="def-anexo" accept="application/pdf,image/*">
+      </div>
+      <p class="anx-nota" id="def-registrado"></p>
+    </div>
+
+    <div id="def-aba-julgamento" hidden>
+      <p class="anx-nota" id="def-julg-aviso"></p>
+      <div class="field">
+        <label>Resultado</label>
+        <div style="display:flex;gap:18px;padding:4px 0">
+          <label style="display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:var(--tx2);cursor:pointer;text-transform:none;letter-spacing:0">
+            <input type="radio" name="def-resultado" id="def-resultado-deferida" value="deferida" style="appearance:auto;-webkit-appearance:radio;width:18px;height:18px;flex:none;margin:0;accent-color:var(--g)"> Deferida
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:var(--tx2);cursor:pointer;text-transform:none;letter-spacing:0">
+            <input type="radio" name="def-resultado" id="def-resultado-indeferida" value="indeferida" style="appearance:auto;-webkit-appearance:radio;width:18px;height:18px;flex:none;margin:0;accent-color:var(--g)"> Indeferida
+          </label>
+        </div>
+      </div>
+      <div class="field" id="def-data-resultado-campo">
+        <label for="def-data-resultado">Data da decisão</label>
+        <label class="date-ov">
+          <input type="date" id="def-data-resultado" onfocus="preencherDataHojeSeVazio(this)" onchange="atualizarDisplayData(this)">
+          <span class="date-ov-txt vazio">dd/mm/aaaa</span>
+        </label>
+      </div>
+      <p class="anx-nota" id="def-data-resultado-lida" hidden></p>
+      <div class="field">
+        <label for="def-parecer">Texto da decisão</label>
+        <textarea id="def-parecer" rows="8" maxlength="10000" data-caixa-livre
+                  style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical;min-height:160px"
+                  placeholder="O parecer que fundamenta o julgamento da defesa…"></textarea>
+      </div>
+      <div class="sec-title">Arquivo da decisão</div>
+      <p class="anx-nota" id="def-julg-anexo-atual"></p>
+      <div class="field" id="def-julg-anexo-campo">
+        <label for="def-julg-anexo">Juntar o arquivo (PDF ou foto, até 10 MB)</label>
+        <input type="file" id="def-julg-anexo" accept="application/pdf,image/*">
+      </div>
+      <p class="anx-nota" id="def-julgado"></p>
+    </div>
+
+    <div class="btn-row" style="justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="fModalBtn('m-doc-defesa')">Fechar</button>
+      <button class="btn primary" id="def-salvar" onclick="salvarDefesaDoc()" hidden>Registrar defesa</button>
+      <button class="btn primary" id="def-julgar" onclick="julgarDefesaDoc()" hidden>Registrar julgamento</button>
+    </div>
+  </div>
+</div>
+
 {{-- CANCELAR DOCUMENTO. Gravado: só a justificativa. Lavrado: justificativa e a
      senha de quem cancela (o campo aparece nesse caso — documentos.js). --}}
 <div class="modal-bg" id="m-doc-anular" onclick="fModal()">
@@ -3725,6 +3809,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/documento-form.js')"></script>
 <script src="@assetv('js/documento-lavratura.js')"></script>
 <script src="@assetv('js/documento-anexos.js')"></script>
+<script src="@assetv('js/documento-defesa.js')"></script>
 <script src="@assetv('js/protocolos.js')"></script>
 <script src="@assetv('js/os.js')"></script>
 {{-- Depois dos dois: a fila lê as duas fontes e abre a ficha de cada uma. --}}

@@ -284,7 +284,7 @@ class PesquisaMapaController extends Controller
                 ->where(fn ($x) => $x->whereNull('lembrar_em')->orWhere('lembrar_em', '<=', $hoje))->select('lote_id')),
             // Embargo ativo: auto de embargo lavrado e ainda não anulado.
             'embargo' => $q->whereIn('lotes.id', fn ($x) => $x->from('documentos')->select('lote_id')
-                ->where('tipo', 'auto_embargo')->whereIn('status', ['lavrado', 'atendido'])),
+                ->where('tipo', 'auto_embargo')->whereIn('status', ['lavrado', 'em_defesa', 'atendido'])),
             // Lavrado e sem atendimento, com o prazo (de cumprimento ou de defesa) já passado.
             'prazo_vencido' => $q->whereIn('lotes.id', fn ($x) => $x->from('documentos')->select('lote_id')
                 ->where('status', 'lavrado')

@@ -284,6 +284,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/documentos/{documento}', [DocumentoController::class, 'ficha']);
         Route::post('/documentos/{documento}/gravar', [DocumentoController::class, 'gravar']);
         Route::post('/documentos/{documento}/cancelar', [DocumentoController::class, 'cancelar']);
+        // A defesa do auto: protocolo (autor ou administrador) e julgamento (administrador).
+        Route::post('/documentos/{documento}/defesa', [\App\Http\Controllers\DocumentoDefesaController::class, 'protocolar']);
+        Route::post('/documentos/{documento}/defesa/julgamento', [\App\Http\Controllers\DocumentoDefesaController::class, 'julgar']);
         Route::patch('/documentos/{documento}', [DocumentoController::class, 'update']);
         Route::delete('/documentos/{documento}', [DocumentoController::class, 'destroy']);
 
@@ -368,6 +371,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     // O arquivo de um anexo do documento — fora do /api, como o da evidência.
     Route::get('/documentos/anexos/{anexo}/arquivo', [\App\Http\Controllers\DocumentoAnexoController::class, 'arquivo'])
         ->name('documento.anexo.arquivo');
+    Route::get('/documentos/{documento}/defesa/arquivo/{qual}', [\App\Http\Controllers\DocumentoDefesaController::class, 'arquivo'])
+        ->where('qual', 'defesa|julgamento')->name('documento.defesa.arquivo');
     Route::get('/documentos/{documento}/pdf', [DocumentoController::class, 'pdf'])
         ->middleware('throttle:pesado')
         ->name('documento.pdf');

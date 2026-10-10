@@ -1313,6 +1313,12 @@ const OPCOES_DOC = {
     icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
       stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`,
   },
+  defesa: {
+    rotulo: 'Defesa',
+    obs: 'O protocolo da defesa do autuado e o julgamento dela.',
+    icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 7.9-8 9-4.8-1.1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>`,
+  },
   cancelar: {
     rotulo: 'Cancelar documento',
     obs: 'A peça continua na série, marcada como sem efeito.',
@@ -1330,7 +1336,7 @@ const OPCOES_DOC = {
 }
 
 /** A ordem do menu: primeiro o que produz papel, depois o que muda o estado. */
-const ORDEM_OPCOES_DOC = ['pdf', 'imprimir_termica', 'lavrar', 'cancelar', 'excluir']
+const ORDEM_OPCOES_DOC = ['pdf', 'imprimir_termica', 'lavrar', 'defesa', 'cancelar', 'excluir']
 
 /**
  * Abre o menu de opções do documento — o MESMO menu do botão "Novo documento".
@@ -1378,6 +1384,7 @@ function acaoDoc(chave) {
     case 'pdf':              return pedirAnexos('pdf')
     case 'imprimir_termica': return pedirAnexos('termica')
     case 'lavrar':           return lavrarDaFicha()
+    case 'defesa':           return abrirDefesaDoc()
     case 'cancelar':         return abrirCancelamentoDoc()
     case 'excluir':          return excluirRascunhoDoc()
   }

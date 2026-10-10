@@ -47,7 +47,11 @@ trait RegistraAuditoria
     {
         if (array_key_exists('status', $novos)) {
             return match ($novos['status']) {
-                'lavrado'   => 'lavrou',
+                // Voltar a "lavrado" junto com a defesa é o indeferimento, não uma lavratura.
+                'lavrado'   => array_key_exists('defesa', $novos) ? 'indeferiu defesa' : 'lavrou',
+                'gravado'   => 'gravou',
+                'em_defesa' => 'registrou defesa',
+                'defendido' => 'deferiu defesa',
                 'anulado'   => 'anulou',
                 'cancelado' => 'cancelou',
                 'atendido'  => 'atendeu',

@@ -26,6 +26,7 @@ class Documento extends Model
             'anulado_em'         => 'datetime',
             'prazo_ate'          => 'date',
             'defesa_ate'         => 'date',
+            'defesa'             => 'array',
             'valor_upf'          => 'float',
             'area_terreno_m2'    => 'float',
             'area_construida_m2' => 'float',
@@ -103,6 +104,78 @@ class Documento extends Model
     /** Encerrada sem efeito: cancelada (ou anulada, o nome antigo) ou defendida. */
     public const ENCERRADOS = ['anulado', 'cancelado', 'defendido'];
 
+    // ── A DEFESA (DocumentoDefesaController) ─────────────────────
+
+    /** Só os autos têm defesa — são os tipos com prazo de defesa. */
+    public function admiteDefesa(): bool
+    {
+        return in_array($this->tipo, self::COM_DEFESA, true);
+    }
+
+    /** A defesa já foi julgada? Julgada, não se altera mais. */
+    public function defesaJulgada(): bool
+    {
+        return ! empty($this->defesa['resultado']);
+    }
+
+    /**
+     * Quem REGISTRA O PROTOCOLO da defesa: quem lavrou o auto, ou o
+     * administrador — com o auto lavrado, ou já em defesa (para corrigir o
+     * registro) e ainda sem julgamento.
+     */
+    public function podeProtocolarDefesa(User $u): bool
+    {
+        return $this->admiteDefesa()
+            && in_array($this->status, ['lavrado', 'em_defesa'], true)
+            && ! $this->defesaJulgada()
+            && ($this->agente_id === $u->id || $u->isAdmin());
+    }
+
+    /** Quem JULGA: só o administrador, e só com a defesa protocolada. */
+    public function podeJulgarDefesa(User $u): bool
+    {
+        return $this->status === 'em_defesa' && ! $this->defesaJulgada() && $u->isAdmin();
+    }
+
+    /**
+     * A defesa como a tela a mostra: datas em dia/mês/ano, os endereços dos
+     * arquivos e o que este usuário pode fazer. Nulo em peça que não tem defesa.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function defesaParaTela(User $u): ?array
+    {
+        if (! $this->admiteDefesa()) {
+            return null;
+        }
+        $d = $this->defesa ?? [];
+        $br = fn (?string $data) => $data ? \Carbon\Carbon::parse($data)->format('d/m/Y') : null;
+        $arq = fn (string $chave, string $qual) => empty($d[$chave]) ? null : [
+            'nome' => $d[$chave]['nome'] ?? 'arquivo',
+            'pdf'  => ($d[$chave]['mime'] ?? '') === 'application/pdf',
+            'url'  => route('documento.defesa.arquivo', [$this, $qual]),
+        ];
+
+        return [
+            'protocolo'         => $d['protocolo'] ?? null,
+            'data_protocolo'    => $d['data_protocolo'] ?? null,
+            'data_protocolo_br' => $br($d['data_protocolo'] ?? null),
+            'intempestiva'      => (bool) ($d['intempestiva'] ?? false),
+            'prazo_ate'         => $this->defesa_ate?->format('d/m/Y'),
+            'registrado'        => empty($d['registrado_nome']) ? null
+                : $d['registrado_nome'] . ' em ' . \Carbon\Carbon::parse($d['registrado_em'])->format('d/m/Y H:i'),
+            'anexo'             => $arq('anexo', 'defesa'),
+            'resultado'         => $d['resultado'] ?? null,
+            'data_resultado_br' => $br($d['data_resultado'] ?? null),
+            'parecer'           => $d['parecer'] ?? null,
+            'julgado'           => empty($d['julgado_nome']) ? null
+                : $d['julgado_nome'] . ' em ' . \Carbon\Carbon::parse($d['julgado_em'])->format('d/m/Y H:i'),
+            'julgamento_anexo'  => $arq('julgamento_anexo', 'julgamento'),
+            'pode_protocolar'   => $this->podeProtocolarDefesa($u),
+            'pode_julgar'       => $this->podeJulgarDefesa($u),
+        ];
+    }
+
     /** Rascunho ou gravada: ainda se edita, ainda não foi assinada. */
     public function naoLavrado(): bool
     {
@@ -174,7 +247,7 @@ class Documento extends Model
     public function podeEditarOrigem(User $u): bool
     {
         return $this->temMotivoDeOrigem()
-            && in_array($this->status, ['lavrado', 'atendido'], true)
+            && in_array($this->status, ['lavrado', 'em_defesa', 'atendido'], true)
             && ($this->agente_id === $u->id || $u->isAdmin());
     }
 
@@ -232,10 +305,17 @@ class Documento extends Model
             return $opcoes;
         }
 
-        // LAVRADO: cancelar é ato do autor, ou do administrador quando o autor
-        // já não responde pelo documento (afastamento, desligamento) — com
-        // motivo e a senha de quem cancela. Encerrado não se cancela de novo.
-        if (in_array($this->status, ['lavrado', 'atendido'], true) && ($autor || $u->isAdmin())) {
+        // DEFESA: aparece no auto que pode recebê-la agora, e em todo auto que
+        // já tem uma registrada — para quem só vai consultar a decisão.
+        if ($this->admiteDefesa() && (! empty($this->defesa) || $this->podeProtocolarDefesa($u))) {
+            $opcoes[] = 'defesa';
+        }
+
+        // LAVRADO (ou em defesa): cancelar é ato do autor, ou do administrador
+        // quando o autor já não responde pelo documento (afastamento,
+        // desligamento) — com motivo e a senha de quem cancela. Encerrado não
+        // se cancela de novo.
+        if (in_array($this->status, ['lavrado', 'em_defesa', 'atendido'], true) && ($autor || $u->isAdmin())) {
             $opcoes[] = 'cancelar';
         }
 
@@ -298,6 +378,10 @@ class Documento extends Model
         if ($this->status === 'atendido' || $this->encerrado()) {
             return null;
         }
+        // Com a defesa protocolada, o prazo de defesa já cumpriu o papel dele.
+        if ($this->status === 'em_defesa' || $this->defesaJulgada()) {
+            return null;
+        }
         $limite = $this->defesa_ate ?? $this->prazo_ate;
         if (! $limite) {
             return null;
@@ -320,7 +404,9 @@ class Documento extends Model
         return match ($this->status) {
             'rascunho'  => ['Rascunho', 'bd-in'],
             'gravado'   => ['Gravado', 'bd-in'],
-            'lavrado'   => ['Lavrado', 'bd-al'],
+            // Defesa indeferida: a peça voltou a lavrada, agora apta à cobrança.
+            'lavrado'   => ($this->defesa['resultado'] ?? null) === 'indeferida' ? ['Lavrado · apto', 'bd-al'] : ['Lavrado', 'bd-al'],
+            'em_defesa' => ['Em defesa', 'bd-in'],
             'atendido'  => ['Atendido', 'bd-ok'],
             'anulado'   => ['Cancelado', 'bd-cx'],   // nome antigo do cancelamento
             'cancelado' => ['Cancelado', 'bd-cx'],

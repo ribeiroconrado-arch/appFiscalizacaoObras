@@ -2261,6 +2261,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .doc-card{border-left:3px solid var(--bord);padding-left:11px}
 .doc-card.st-rascunho{border-left-color:var(--gold)}
 .doc-card.st-gravado{border-left-color:var(--tx3)}
+.doc-card.st-em_defesa{border-left-color:var(--blue)}
 .doc-card.st-defendido{border-left-color:var(--tx3)}
 .doc-card.st-lavrado{border-left-color:var(--g)}
 .doc-card.st-atendido{border-left-color:var(--gd)}
@@ -2412,6 +2413,8 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .tabela-lista tbody tr.st-atendido td:first-child{border-left-color:#2E7D32}
 .tabela-lista tbody tr.st-anulado  td:first-child,
 .tabela-lista tbody tr.st-cancelado td:first-child{border-left-color:var(--red)}
+.tabela-lista tbody tr.st-em_defesa td:first-child{border-left-color:var(--blue)}
+#m-doc-defesa{z-index:2040}
 .tabela-lista tbody tr.st-gravado  td:first-child,
 .tabela-lista tbody tr.st-defendido td:first-child{border-left-color:var(--tx3)}
 
