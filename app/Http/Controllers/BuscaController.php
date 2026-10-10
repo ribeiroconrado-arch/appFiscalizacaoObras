@@ -607,7 +607,7 @@ class BuscaController extends Controller
 
         $documentos = Documento::where('lote_id', $lote->id)
             // Rascunho não é ato: quem é de fora não fica sabendo dele.
-            ->when(! auth()->user()?->podeVerDocumentos(), fn ($q) => $q->where('status', '<>', 'rascunho'))
+            ->when(! auth()->user()?->podeVerDocumentos(), fn ($q) => $q->whereNotIn('status', ['rascunho', 'gravado']))
             ->with('agente:id,name')
             ->latest('created_at')->limit(20)->get()
             ->map(function (Documento $doc) {

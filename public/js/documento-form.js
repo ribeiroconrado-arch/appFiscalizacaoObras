@@ -22,7 +22,12 @@
 const ABAS_DOC = ['autuado', 'infracao', 'anexos', 'resumo']
 
 const fdState = {
-  /** @type {'novo'|'rascunho'|'lavrado'} */ estado: 'novo',
+  // O CICLO DA PEÇA (o mesmo do AppPOSTURAS):
+  //   novo      ainda não foi ao servidor
+  //   rascunho  salvo, SEM número — edita livremente, pode ser excluído
+  //   gravado   COM número — edita pelo botão Editar, pode ser cancelado
+  //   lavrado   assinado (ou já encerrado) — não se edita
+  /** @type {'novo'|'rascunho'|'gravado'|'lavrado'} */ estado: 'novo',
   /** @type {boolean} */ editando: false,
   /** @type {number|null} */ id: null,
   /** @type {string} */ aba: 'autuado',
@@ -160,11 +165,12 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   fdState.assinaturas = documento?.assinaturas ?? null
   if (typeof fecharAreaLavratura === 'function') fecharAreaLavratura()
   fdState.aba = 'autuado'
+  fdState.sujo = false
   // A cópia do cadastro municipal guardada na lavratura (nula em rascunho).
   fdState.cadastro = documento?.cadastro ?? null
 
   if (documento) {
-    fdState.estado = documento.status.valor === 'rascunho' ? 'rascunho' : 'lavrado'
+    fdState.estado = ['rascunho', 'gravado'].includes(documento.status.valor) ? documento.status.valor : 'lavrado'
     fdState.id = documento.id
     // Os artigos e a lei da peça voltam ao formulário pelos ids: sem isto,
     // gravar um rascunho reaberto apagava o enquadramento dele.
@@ -662,7 +668,9 @@ function passoAbaDoc(passo) {
 
 /** Aplica o estado corrente ao cabeçalho, aos campos e ao rodapé. */
 function aplicarEstadoDoc() {
-  travarCamposDoc(fdState.estado !== 'novo' && !fdState.editando)
+  // Rascunho fica aberto à digitação, como a peça nova. A partir do número
+  // (gravado) os campos travam, e só o Editar os reabre.
+  travarCamposDoc(['gravado', 'lavrado'].includes(fdState.estado) && !fdState.editando)
   renderRodapeDoc()
   // A origem da notificação tem trava própria: continua editável com a peça lavrada.
   if (typeof aplicarOrigemNotifDoc === 'function') aplicarOrigemNotifDoc()
@@ -735,19 +743,25 @@ function renderRodapeDoc() {
 
   const novo = fdState.estado === 'novo'
   const rascunho = fdState.estado === 'rascunho'
+  const gravado = fdState.estado === 'gravado'
   const lavrado = fdState.estado === 'lavrado'
+  const semNumero = novo || rascunho
 
   // LAVRANDO: só os dois botões do ato — o resto sai de cena até decidir.
   const lavrando = fdState.lavrando
-  mostrar('fd-gravar', (novo || fdState.editando) && !lavrando)
+  // SALVAR RASCUNHO: na última aba, enquanto a peça não tem número.
+  mostrar('fd-rascunho', semNumero && fdState.aba === 'resumo' && !lavrando)
+  // GRAVAR dá o número; na edição de uma peça gravada, o mesmo botão é "Salvar".
+  mostrar('fd-gravar', (semNumero || fdState.editando) && !lavrando)
+  document.getElementById('fd-gravar').textContent = fdState.editando ? 'Salvar' : 'Gravar'
   mostrar('fd-sair-edicao', fdState.editando && !lavrando)
-  mostrar('fd-editar', rascunho && !fdState.editando && !lavrando)
-  mostrar('fd-lavrar', rascunho && !fdState.editando && !lavrando)
+  mostrar('fd-editar', gravado && !fdState.editando && !lavrando)
+  mostrar('fd-lavrar', gravado && !fdState.editando && !lavrando)
   mostrar('fd-lavrar-cancelar', lavrando)
   mostrar('fd-lavrar-ok', lavrando)
-  // Opções depende de haver documento gravado: antes disso não há nada para
-  // imprimir, anular ou excluir.
-  mostrar('fd-opcoes-wrap', (rascunho || lavrado) && !fdState.editando && !lavrando)
+  // Opções depende de haver documento no servidor: antes disso não há nada
+  // para imprimir, cancelar ou excluir.
+  mostrar('fd-opcoes-wrap', (rascunho || gravado || lavrado) && !fdState.editando && !lavrando)
 }
 
 // ── AÇÕES ────────────────────────────────────────────────────
@@ -767,7 +781,6 @@ function sairEdicaoDoc() {
   if (fdState.id) abrirDocumento(fdState.id)
 }
 
-/** Grava um novo documento ou atualiza o rascunho aberto. */
 /**
  * O que o formulário manda ao servidor. Uma função só, porque dois pedidos
  * mandam EXATAMENTE isto: o Gravar e a prévia do resumo (a via A4 do que está
@@ -820,45 +833,111 @@ function corpoDoDoc() {
   return corpo
 }
 
-async function gravarDoc() {
-  const tipo = document.getElementById('nd-tipo').value
-  const t = dState.opcoes.tipos.find(x => x.valor === tipo)
-
+/**
+ * Manda o formulário ao servidor: cria o rascunho ou atualiza a peça aberta.
+ * NÃO dá número — quem dá é o Gravar (POST …/gravar).
+ * @returns {Promise<Object>} a resposta do servidor
+ * @throws {Error} com a mensagem do servidor
+ */
+async function salvarFormularioDoc() {
   const corpo = corpoDoDoc()
+  // Sem imóvel, o documento nasce pela rota que não o exige. A cobrança
+  // continua existindo — na lavratura.
+  const url = fdState.id
+    ? `/api/documentos/${fdState.id}`
+    : (fdState.lote?.id ? `/api/lotes/${fdState.lote.id}/documentos` : '/api/documentos')
 
-  try {
-    // Sem imóvel, o documento nasce pela rota que não o exige. A cobrança
-    // continua existindo — na lavratura.
-    const url = fdState.id
-      ? `/api/documentos/${fdState.id}`
-      : (fdState.lote?.id ? `/api/lotes/${fdState.lote.id}/documentos` : '/api/documentos')
+  const r = await fetch(url, {
+    method: fdState.id ? 'PATCH' : 'POST',
+    headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(corpo),
+  })
+  if (r.status === 419) { setTimeout(() => location.reload(), 1500); throw new Error('Sessão expirada. Recarregando...') }
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
+  if (!fdState.id) fdState.id = d.documento.id
+  return d
+}
 
-    const r = await fetch(url, {
-      method: fdState.id ? 'PATCH' : 'POST',
-      headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(corpo),
-    })
-    if (r.status === 419) { toast('Sessão expirada. Recarregando...', 'err'); setTimeout(() => location.reload(), 1500); return }
-    const d = await r.json().catch(() => ({}))
-    if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
+/** Depois de salvar ou gravar: a tela passa a mostrar o que o servidor tem. */
+async function aposSalvarDoc(d) {
+  fdState.editando = false
+  fdState.sujo = false
+  aplicarEstadoDoc()
+  // O menu de Opções (imprimir, lavrar, cancelar, excluir) lê a ficha do
+  // servidor, e o cabeçalho, o número.
+  await atualizarFichaDoc()
+  // Avisos do servidor (Auto de Embargo por artigo que pede prazo, sem
+  // Notificação de Embargo vencida): não impedem gravar nem lavrar.
+  ;(d?.avisos || []).forEach(a => toast(a, 'aviso'))
+  carregarDocumentos()
+}
 
-    if (!fdState.id) fdState.id = d.documento.id
-    fdState.estado = 'rascunho'
-    fdState.editando = false
-    aplicarEstadoDoc()
-    toast(d.message)
-    // O menu de Opções (imprimir, lavrar, excluir) lê a ficha do servidor.
-    // Sem buscá-la aqui, a peça recém-gravada ficava sem opção nenhuma até
-    // ser fechada e aberta de novo.
-    await atualizarFichaDoc()
-    // Avisos do servidor (Auto de Embargo por artigo que pede prazo, sem
-    // Notificação de Embargo vencida): não impedem gravar nem lavrar.
-    ;(d.avisos || []).forEach(a => toast(a, 'aviso'))
-    carregarDocumentos()
-  } catch (e) {
-    console.error(e)
-    toast(e.message || 'Falha ao gravar o documento', 'err')
+/**
+ * SALVAR RASCUNHO: guarda o preenchimento, SEM número. O rascunho continua
+ * aberto à digitação e pode ser excluído.
+ */
+async function salvarRascunhoDoc() {
+  await comCarregando('Salvando o rascunho…', async () => {
+    try {
+      const d = await salvarFormularioDoc()
+      fdState.estado = 'rascunho'
+      toast(d.message || 'Rascunho salvo.')
+      await aposSalvarDoc(d)
+    } catch (e) {
+      console.error(e)
+      toast(e.message || 'Falha ao salvar o rascunho', 'err')
+    }
+  })
+}
+
+/**
+ * GRAVAR: a peça ganha NÚMERO. Daí em diante não se exclui mais — edita-se,
+ * lavra-se ou cancela-se. Por isso pede confirmação.
+ *
+ * Com uma peça gravada em edição, o mesmo botão é "Salvar": guarda as
+ * alterações, e o número é o mesmo.
+ */
+function gravarDoc() {
+  if (fdState.editando && fdState.estado === 'gravado') { salvarEdicaoDoc(); return }
+
+  if (!document.getElementById('nd-autuado').value.trim()) {
+    irAbaDoc('autuado')
+    exigirCampo('nd-autuado', 'Informe o nome do autuado: o documento gravado já recebe número.')
+    return
   }
+  confirmarAcao({
+    titulo: 'Gravar documento',
+    mensagem: 'O documento recebe número definitivo. Depois de gravado ele ainda pode ser editado, '
+            + 'mas não excluído — só cancelado, com justificativa.',
+    textoBtn: 'Gravar',
+    onConfirm: async () => {
+      const d = await salvarFormularioDoc()
+      // Já está no servidor: se o passo do número falhar, fica o rascunho.
+      if (fdState.estado === 'novo') fdState.estado = 'rascunho'
+      const r = await fetch(`/api/documentos/${fdState.id}/gravar`, { method: 'POST', headers: cabecalhoDoc() })
+      const g = await r.json().catch(() => ({}))
+      if (!r.ok) { await aposSalvarDoc(d); throw new Error(g.message || 'HTTP ' + r.status) }
+      fdState.estado = 'gravado'
+      toast(g.message)
+      await aposSalvarDoc(d)
+      irAbaDoc('resumo')
+    },
+  })
+}
+
+/** Salva as alterações de uma peça gravada em edição. */
+async function salvarEdicaoDoc() {
+  await comCarregando('Salvando as alterações…', async () => {
+    try {
+      const d = await salvarFormularioDoc()
+      toast(d.message || 'Alterações salvas.')
+      await aposSalvarDoc(d)
+    } catch (e) {
+      console.error(e)
+      toast(e.message || 'Falha ao salvar', 'err')
+    }
+  })
 }
 
 /**
@@ -875,6 +954,8 @@ async function atualizarFichaDoc() {
     const doc = await r.json()
     dFicha.doc = doc
     dFicha.opcoes = doc.opcoes || []
+    // O número nasce no Gravar: o cabeçalho deixa de dizer "Sem número".
+    renderCabecalhoDoc(doc)
     return doc
   } catch (_) {
     return null
@@ -914,7 +995,8 @@ function lavrarDocumento() {
 function fecharFormDoc() {
   const sair = () => { fModalBtn('m-doc'); voltarAFicha() }
 
-  if (fdState.estado === 'novo' || fdState.editando) {
+  // O rascunho fica aberto à digitação: só pergunta se algo foi mexido.
+  if (fdState.estado === 'novo' || fdState.editando || (fdState.estado === 'rascunho' && fdState.sujo)) {
     confirmarAcao({
       titulo: 'Descartar alterações',
       mensagem: 'O que foi digitado e não gravado será perdido.',
@@ -942,7 +1024,8 @@ function renderResumoDoc() {
   //   · peça gravada e sem edição em curso: a via do que está no servidor;
   //   · peça nova ou em edição: a via do que está NA TELA, montada pelo
   //     servidor sem gravar nada (POST /api/documentos/previa).
-  if (fdState.id && fdState.estado !== 'novo' && !fdState.editando) {
+  // (Rascunho fica aberto à digitação: a via dele é sempre a do que está na tela.)
+  if (fdState.id && ['gravado', 'lavrado'].includes(fdState.estado) && !fdState.editando) {
     mostrarViaA4NoResumo(caixa, { url: `/documentos/${fdState.id}/impressao?formato=a4&previa=1&t=${Date.now()}` })
     return
   }
@@ -1042,3 +1125,8 @@ function ajustarViaA4NoResumo() {
 
 // Girar o tablet ou redimensionar a janela muda a largura disponível.
 window.addEventListener('resize', () => { if (fdState.aba === 'resumo') ajustarViaA4NoResumo() })
+
+// Qualquer digitação ou escolha no formulário marca o rascunho como alterado,
+// para o Fechar perguntar antes de perder o que não foi salvo.
+document.addEventListener('input', ev => { if (ev.target.closest?.('#m-doc')) fdState.sujo = true })
+document.addEventListener('change', ev => { if (ev.target.closest?.('#m-doc')) fdState.sujo = true })

@@ -112,7 +112,7 @@ class DocumentoController extends Controller
             // só os atos de campo. Entra aqui porque, para quem usa, os dois
             // estão na mesma lista e o filtro é um só.
             'tipo'   => ['nullable', Rule::in([...array_keys(Documento::TIPOS), 'vistoria'])],
-            'status' => ['nullable', Rule::in(['rascunho', 'lavrado', 'atendido', 'anulado', 'cancelado'])],
+            'status' => ['nullable', Rule::in(['rascunho', 'gravado', 'lavrado', 'atendido', 'anulado', 'cancelado', 'defendido'])],
             'agente' => ['nullable', 'in:eu,todos'],
             'busca'  => ['nullable', 'string', 'max:80'],
         ]);
@@ -472,7 +472,7 @@ class DocumentoController extends Controller
         }
 
         return response()->json([
-            'message'   => 'Rascunho criado.',
+            'message'   => 'Rascunho salvo.',
             'documento' => ['id' => $doc->id, 'numero' => $doc->numeroFormatado()],
             'avisos'    => $this->lavratura->avisosDeEmbargo($doc),
         ], 201);
@@ -590,7 +590,7 @@ class DocumentoController extends Controller
         }
 
         $pecas = Documento::where('lote_id', $d['lote_id'])->whereIn('tipo', $tipos)
-            ->whereNotIn('status', ['rascunho', 'anulado'])
+            ->whereNotIn('status', Documento::SEM_VALOR_DE_ATO)
             ->when($d['exceto'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
             ->orderByDesc('data_lavratura')->limit(40)->get();
 
@@ -611,7 +611,7 @@ class DocumentoController extends Controller
             return null;
         }
         $origem = Documento::find($origemId);
-        if (! $origem || $origem->id === $proprioId || in_array($origem->status, ['rascunho', 'anulado'], true)
+        if (! $origem || $origem->id === $proprioId || in_array($origem->status, Documento::SEM_VALOR_DE_ATO, true)
             || ! in_array($origem->tipo, Documento::ORIGENS[$tipo] ?? [], true)) {
             return 'O documento de origem tem de ser uma peça lavrada e não anulada, de um tipo que anteceda ' . Documento::TIPOS[$tipo][0] . '.';
         }
@@ -635,7 +635,7 @@ class DocumentoController extends Controller
             return response()->json(['autos' => []]);
         }
 
-        $autos = Documento::where('tipo', 'auto_infracao')->whereNotIn('status', ['rascunho', 'anulado'])
+        $autos = Documento::where('tipo', 'auto_infracao')->whereNotIn('status', Documento::SEM_VALOR_DE_ATO)
             ->when($d['exceto'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
             ->where(fn ($q) => $q
                 ->when($d['lote_id'] ?? null, fn ($x, $id) => $x->orWhere('lote_id', $id))
@@ -869,7 +869,7 @@ class DocumentoController extends Controller
             // e para o PDF, e para lugar nenhum mais: é dado de conferência,
             // consultado quando alguém questiona — não coluna de lista nem
             // filtro, que seria pagar por ele a cada abertura de tela.
-            'cadastro'  => $documento->status === 'rascunho' ? null : [
+            'cadastro'  => $documento->naoLavrado() ? null : [
                 'consultado_em' => $documento->cadastro_consultado_em?->format('d/m/Y'),
                 'fonte'         => $documento->cadastro_fonte,
                 // QUANDO a cópia foi tirada: na lavratura. E a própria cópia —
@@ -923,7 +923,7 @@ class DocumentoController extends Controller
             'vistoria_id' => $documento->vistoria_id,
 
             // As assinaturas colhidas na lavratura, para o resumo da peça.
-            'assinaturas' => $documento->status === 'rascunho' ? null : [
+            'assinaturas' => $documento->naoLavrado() ? null : [
                 'agente'          => $documento->assinatura_agente,
                 'autuado'         => $documento->recusa_assinatura ? null : $documento->assinatura_autuado,
                 'recusa'          => (bool) $documento->recusa_assinatura,
@@ -945,33 +945,69 @@ class DocumentoController extends Controller
     }
 
     /**
-     * POST /api/documentos/{documento}/anular — cancela um documento lavrado.
-     *
-     * Não apaga: um auto anulado continua sendo peça do processo. Ele passa a
-     * sair impresso com a marca "ANULADO", e o motivo fica registrado com o
-     * nome de quem anulou — anulação sem motivo declarado não é ato, é sumiço.
+     * POST /api/documentos/{documento}/gravar — o rascunho ganha número e
+     * passa a "gravado" (LavraturaService::gravar). Daqui em diante a peça não
+     * se exclui: edita-se, lavra-se ou cancela-se.
      */
-    public function anular(Request $request, Documento $documento): JsonResponse
+    public function gravar(Request $request, Documento $documento): JsonResponse
+    {
+        if ($documento->agente_id !== $request->user()->id) {
+            return response()->json(['message' => 'Só o autor grava o próprio documento.'], 403);
+        }
+        if ($documento->status !== 'rascunho') {
+            return response()->json(['message' => 'Este documento já foi gravado.'], 422);
+        }
+        // O que a peça precisa ter para ganhar número: quem responde por ela.
+        // O imóvel e os artigos continuam sendo cobrados na lavratura.
+        if (! trim((string) $documento->autuado_nome)) {
+            return response()->json(['message' => 'Informe o nome do autuado antes de gravar.'], 422);
+        }
+
+        $this->lavratura->gravar($documento);
+
+        return response()->json([
+            'message'   => $documento->rotuloTipo() . ' gravado sob o número ' . $documento->numeroFormatado() . '.',
+            'documento' => ['id' => $documento->id, 'numero' => $documento->numeroFormatado()],
+        ]);
+    }
+
+    /**
+     * POST /api/documentos/{documento}/cancelar — encerra a peça que já tem
+     * número. Ela NÃO some: fica na série como cancelada, com quem, quando e
+     * por quê.
+     *
+     * GRAVADA (ainda não lavrada): basta o motivo.
+     * LAVRADA: é ato assinado — além do motivo, a SENHA de quem está
+     * cancelando, conferida aqui. Sessão aberta num aparelho esquecido não
+     * pode cancelar um auto.
+     */
+    public function cancelar(Request $request, Documento $documento): JsonResponse
     {
         $d = $request->validate([
             'motivo' => ['required', 'string', 'min:10', 'max:1000'],
+            'senha'  => ['nullable', 'string', 'max:200'],
         ], [
-            'motivo.required' => 'Informe o motivo da anulação.',
-            'motivo.min'      => 'Descreva o motivo com pelo menos 10 caracteres.',
+            'motivo.required' => 'Informe a justificativa do cancelamento.',
+            'motivo.min'      => 'Descreva a justificativa com pelo menos 10 caracteres.',
         ]);
 
-        if (! in_array('anular', $documento->opcoesPara($request->user()), true)) {
-            return response()->json(['message' => 'Este documento não pode ser anulado por você.'], 403);
+        if (! in_array('cancelar', $documento->opcoesPara($request->user()), true)) {
+            return response()->json(['message' => 'Este documento não pode ser cancelado por você.'], 403);
+        }
+
+        if ($documento->status !== 'gravado'
+            && ! \Illuminate\Support\Facades\Hash::check((string) ($d['senha'] ?? ''), (string) $request->user()->password)) {
+            return response()->json(['message' => 'Senha incorreta. O cancelamento de documento lavrado exige a sua senha.'], 422);
         }
 
         $documento->update([
-            'status'          => 'anulado',
+            'status'          => 'cancelado',
             'anulado_em'      => now(),
             'anulado_por'     => $request->user()->id,
             'anulacao_motivo' => $d['motivo'],
         ]);
 
-        return response()->json(['message' => 'Documento anulado.']);
+        return response()->json(['message' => 'Documento cancelado.']);
     }
 
     /**
@@ -983,11 +1019,11 @@ class DocumentoController extends Controller
      */
     public function update(Request $request, Documento $documento): JsonResponse
     {
-        if ($documento->status !== 'rascunho') {
-            return response()->json(['message' => 'Documento lavrado não pode ser alterado. Use a anulação.'], 422);
+        if (! $documento->naoLavrado()) {
+            return response()->json(['message' => 'Documento lavrado não pode ser alterado. Use o cancelamento.'], 422);
         }
         if ($documento->agente_id !== $request->user()->id) {
-            return response()->json(['message' => 'Só o autor pode alterar o próprio rascunho.'], 403);
+            return response()->json(['message' => 'Só o autor pode alterar o próprio documento.'], 403);
         }
 
         $d = $request->validate([
@@ -1040,6 +1076,11 @@ class DocumentoController extends Controller
             return response()->json(['message' => $motivo], 422);
         }
 
+        // GRAVADO NÃO TROCA DE TIPO: o número é da série do tipo dele.
+        if ($documento->status === 'gravado' && $documento->tipo !== $d['tipo']) {
+            return response()->json(['message' => 'Documento gravado já tem número na série do tipo dele e não muda de tipo. Cancele-o e abra outro.'], 422);
+        }
+
         try {
             $documento->tipo = $d['tipo'];
             if ($d['tipo'] === 'auto_infracao') {
@@ -1062,7 +1103,7 @@ class DocumentoController extends Controller
         }
 
         return response()->json([
-            'message' => 'Rascunho atualizado.',
+            'message' => $documento->status === 'gravado' ? 'Alterações salvas.' : 'Rascunho salvo.',
             'avisos'  => $this->lavratura->avisosDeEmbargo($documento),
         ]);
     }

@@ -278,7 +278,7 @@
     <div>{{ $linha }}</div>
   @endforeach
   @if ($contato)<div>{{ $contato }}</div>@endif
-  @if ($doc->status !== 'rascunho')
+  @if (! $doc->naoLavrado())
     <div>
       @if ($doc->cadastro_consultado_em)
         Dados cadastrais integrados em {{ $doc->cadastro_consultado_em->format('d/m/Y') }}.

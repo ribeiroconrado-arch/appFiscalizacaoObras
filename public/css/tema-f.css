@@ -2260,6 +2260,8 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    vinte, o selo sozinho obriga a ler um por um para achar o rascunho. */
 .doc-card{border-left:3px solid var(--bord);padding-left:11px}
 .doc-card.st-rascunho{border-left-color:var(--gold)}
+.doc-card.st-gravado{border-left-color:var(--tx3)}
+.doc-card.st-defendido{border-left-color:var(--tx3)}
 .doc-card.st-lavrado{border-left-color:var(--g)}
 .doc-card.st-atendido{border-left-color:var(--gd)}
 .doc-card.st-anulado,.doc-card.st-cancelado{border-left-color:var(--red)}
@@ -2408,7 +2410,10 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .tabela-lista tbody tr.st-rascunho td:first-child{border-left-color:var(--gold)}
 .tabela-lista tbody tr.st-lavrado  td:first-child{border-left-color:var(--g)}
 .tabela-lista tbody tr.st-atendido td:first-child{border-left-color:#2E7D32}
-.tabela-lista tbody tr.st-anulado  td:first-child{border-left-color:var(--red)}
+.tabela-lista tbody tr.st-anulado  td:first-child,
+.tabela-lista tbody tr.st-cancelado td:first-child{border-left-color:var(--red)}
+.tabela-lista tbody tr.st-gravado  td:first-child,
+.tabela-lista tbody tr.st-defendido td:first-child{border-left-color:var(--tx3)}
 
 /* A célula de identificação: número em cima, qualificação embaixo. É a única
    que quebra em duas linhas — o número é por onde a peça é citada e procurada,

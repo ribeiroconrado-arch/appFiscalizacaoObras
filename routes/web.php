@@ -282,7 +282,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Depois de /documentos/opcoes: registrada antes, a rota curinga
         // engoliria "opcoes" como se fosse o id de um documento.
         Route::get('/documentos/{documento}', [DocumentoController::class, 'ficha']);
-        Route::post('/documentos/{documento}/anular', [DocumentoController::class, 'anular']);
+        Route::post('/documentos/{documento}/gravar', [DocumentoController::class, 'gravar']);
+        Route::post('/documentos/{documento}/cancelar', [DocumentoController::class, 'cancelar']);
         Route::patch('/documentos/{documento}', [DocumentoController::class, 'update']);
         Route::delete('/documentos/{documento}', [DocumentoController::class, 'destroy']);
 

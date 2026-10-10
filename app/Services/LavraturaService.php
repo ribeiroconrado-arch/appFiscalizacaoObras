@@ -22,15 +22,43 @@ use RuntimeException;
 class LavraturaService
 {
     /**
-     * Atribui número ao documento e o marca como lavrado.
+     * GRAVAR: o rascunho ganha número e passa a "gravado".
      *
-     * O número só nasce AQUI, nunca na criação: numerar rascunho queima
-     * sequência e deixa buraco na série. Numa série de autos de infração, um
-     * número faltando é questionamento certo em defesa administrativa.
+     * O CICLO DA PEÇA (decisão da fiscalização, 10/10/2026 — o mesmo do
+     * AppPOSTURAS):
+     *
+     *   rascunho  sem número   edita e EXCLUI
+     *   gravado   com número   edita e CANCELA (com motivo)
+     *   lavrado   com número   não edita; CANCELA com motivo e a senha de quem cancela
+     *   cancelado / defendido  encerrados; o número continua na série
+     *
+     * O número nasce AQUI, e não no rascunho: rascunho se apaga, e número
+     * apagado é buraco na série — questionamento certo em defesa. A partir do
+     * número a peça não se exclui mais: cancela-se, e o cancelado fica na
+     * série com quem, quando e por quê.
      *
      * A linha do contador é travada com `lockForUpdate()` dentro da transação:
-     * dois fiscais lavrando no mesmo segundo não podem receber o mesmo número.
+     * dois fiscais gravando no mesmo segundo não podem receber o mesmo número.
      */
+    public function gravar(Documento $doc): Documento
+    {
+        if ($doc->status !== 'rascunho') {
+            throw new RuntimeException('Só rascunho pode ser gravado.');
+        }
+
+        return DB::transaction(function () use ($doc) {
+            if (! $doc->numero) {
+                ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo);
+                $doc->numero    = $numero;
+                $doc->exercicio = $exercicio;
+            }
+            $doc->status = 'gravado';
+            $doc->save();
+
+            return $doc;
+        });
+    }
+
     /**
      * O PRÓXIMO NÚMERO DE UMA SÉRIE, no exercício corrente.
      *
@@ -83,8 +111,10 @@ class LavraturaService
      */
     public function lavrar(Documento $doc, array $ato = []): Documento
     {
-        if ($doc->status !== 'rascunho') {
-            throw new RuntimeException('Só rascunho pode ser lavrado.');
+        // Lavra-se a peça GRAVADA. O rascunho também passa: é gravado e
+        // lavrado de uma vez, e recebe o número logo abaixo.
+        if (! $doc->naoLavrado()) {
+            throw new RuntimeException('Este documento já foi lavrado ou encerrado.');
         }
 
         // O imóvel é dispensado na CRIAÇÃO — o fiscal começa a peça com o que
@@ -140,10 +170,13 @@ class LavraturaService
                 }
             }
 
-            ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo);
-
-            $doc->numero         = $numero;
-            $doc->exercicio      = $exercicio;
+            // O número vem do Gravar (ver `gravar`). Só o rascunho lavrado
+            // direto chega aqui sem ele.
+            if (! $doc->numero) {
+                ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo);
+                $doc->numero    = $numero;
+                $doc->exercicio = $exercicio;
+            }
             $doc->status         = 'lavrado';
             $doc->data_lavratura = now();
 
@@ -382,7 +415,7 @@ class LavraturaService
 
         $vencida = Documento::where('lote_id', $doc->lote_id)
             ->where('tipo', 'notificacao_embargo')
-            ->whereNotIn('status', ['rascunho', 'anulado'])
+            ->whereNotIn('status', Documento::SEM_VALOR_DE_ATO)
             ->whereNotNull('prazo_ate')->where('prazo_ate', '<', now()->toDateString())
             ->exists();
 
@@ -411,7 +444,7 @@ class LavraturaService
         }
         $anterior = Documento::find($anteriorId);
         if (! $anterior || $anterior->id === $doc->id || $anterior->tipo !== 'auto_infracao'
-            || in_array($anterior->status, ['rascunho', 'anulado'], true)) {
+            || in_array($anterior->status, Documento::SEM_VALOR_DE_ATO, true)) {
             throw new RuntimeException('A reincidência tem de apontar para um Auto de Infração lavrado e não anulado.');
         }
         $doc->reincidencia_de_id = $anterior->id;

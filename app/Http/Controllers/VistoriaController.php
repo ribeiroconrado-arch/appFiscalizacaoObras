@@ -284,7 +284,7 @@ class VistoriaController extends Controller
         // fica sabendo do documento depois de lavrado.
         $externo = ! auth()->user()?->podeVerDocumentos();
         foreach (Documento::where('lote_id', $lote->id)
-                     ->when($externo, fn ($q) => $q->where('status', '<>', 'rascunho'))->get() as $d) {
+                     ->when($externo, fn ($q) => $q->whereNotIn('status', ['rascunho', 'gravado']))->get() as $d) {
             [$sTxt, $sCls] = $d->statusBadge();
             $eventos[] = [
                 'tipo'    => 'documento',

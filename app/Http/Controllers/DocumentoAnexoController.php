@@ -70,8 +70,8 @@ class DocumentoAnexoController extends Controller
             'vistoria'    => $documento->vistoria_id && $documento->tipo !== 'auto_infracao' ? $documento->vistoria?->numeroFormatado() : null,
             'origem'      => $origem ? $origem->rotuloTipo() . ' nº ' . $origem->numeroFormatado() : null,
             'pode_juntar' => $documento->podeJuntarAnexo($u),
-            'pode_alterar' => $documento->status !== 'anulado' && $documento->agente_id === $u->id,
-            'lavrado'     => ! in_array($documento->status, ['rascunho'], true),
+            'pode_alterar' => ! $documento->encerrado() && $documento->agente_id === $u->id,
+            'lavrado'     => ! $documento->naoLavrado(),
             'maximo'      => DocumentoAnexo::MAXIMO,
         ]);
     }
@@ -247,7 +247,7 @@ class DocumentoAnexoController extends Controller
             'ordem'          => (int) $documento->anexos()->max('ordem') + 1,
             'imprime'        => true,
             // Entrou com a peça já lavrada: a juntada posterior aparece como tal.
-            'juntado_depois' => $documento->status !== 'rascunho',
+            'juntado_depois' => ! $documento->naoLavrado(),
             'criado_por'     => $request->user()->id,
         ]);
     }

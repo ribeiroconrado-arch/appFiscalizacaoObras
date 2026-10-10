@@ -290,12 +290,14 @@ class DocumentoImpressao
             . base64_encode($disco->get($e->arquivo));
     }
 
-    /** Marca d'água — rascunho ainda não vale, anulado deixou de valer. */
+    /** Marca d'água — antes da lavratura a peça ainda não vale; cancelada ou defendida, deixou de valer. */
     private function marca(Documento $doc): ?string
     {
         return match ($doc->status) {
             'rascunho'             => 'RASCUNHO',
-            'anulado', 'cancelado' => 'ANULADO',
+            'gravado'              => 'NÃO LAVRADO',
+            'anulado', 'cancelado' => 'CANCELADO',
+            'defendido'            => 'DEFENDIDO',
             default                => null,
         };
     }

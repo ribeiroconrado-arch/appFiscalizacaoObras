@@ -67,6 +67,6 @@ class DocumentoAnexo extends Model
     {
         $doc = $this->documento;
 
-        return $doc && $doc->status !== 'anulado' && $doc->agente_id === $u->id;
+        return $doc && ! $doc->encerrado() && $doc->agente_id === $u->id;
     }
 }

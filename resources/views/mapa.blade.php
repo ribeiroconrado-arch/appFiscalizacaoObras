@@ -2356,6 +2356,10 @@
     <div class="doc-painel" id="fdp-resumo">
       <div class="doc-resumo" id="nd-resumo"></div>
 
+      {{-- RESERVA. A lavratura acontece DENTRO DA FOLHA acima (rubrica do
+           fiscal, assinatura do autuado, data e hora, recusa e testemunha —
+           documento-lavratura.js). Esta caixa guarda o estado dos campos e só
+           aparece se a folha não puder recebê-los. --}}
       {{-- LAVRATURA, na própria tela do resumo (aparece ao tocar em Lavrar):
            o fiscal confere a peça, colhe a assinatura do autuado — ou
            registra a recusa, com testemunha — e confirma. Estado em
@@ -2445,6 +2449,9 @@
         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
         <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>
       </svg>Editar</button>
+    {{-- O CICLO, como no AppPOSTURAS: Salvar rascunho (sem número, só na
+         última aba) → Gravar (dá o número) → Lavrar (colhe as assinaturas). --}}
+    <button class="btn" id="fd-rascunho" onclick="salvarRascunhoDoc()" hidden>Salvar rascunho</button>
     <button class="btn primary" id="fd-gravar" onclick="gravarDoc()" hidden>Gravar</button>
     {{-- Mesmo corpo do Editar ao lado: ícone de 18px e o rótulo. --}}
     <button class="btn lavrar" id="fd-lavrar" onclick="lavrarDocumento()" hidden>
@@ -3098,9 +3105,11 @@
       <select data-combo id="doc-f-status">
         <option value="">Todos os status</option>
         <option value="rascunho">Rascunho</option>
+        <option value="gravado">Gravado</option>
         <option value="lavrado">Lavrado</option>
         <option value="atendido">Atendido</option>
-        <option value="anulado">Anulado</option>
+        <option value="cancelado">Cancelado</option>
+        <option value="defendido">Defendido</option>
       </select>
     </div>
 
@@ -3592,23 +3601,26 @@
   </div>
 </div>
 
+{{-- CANCELAR DOCUMENTO. Gravado: só a justificativa. Lavrado: justificativa e a
+     senha de quem cancela (o campo aparece nesse caso — documentos.js). --}}
 <div class="modal-bg" id="m-doc-anular" onclick="fModal()">
   <div class="modal sm" onclick="event.stopPropagation()" style="max-width:460px">
     <button class="modal-x" onclick="fModalBtn('m-doc-anular')">&#10005;</button>
-    <h3>Anular documento</h3>
-    <div class="sub" style="color:var(--tx2);font-size:13px">
-      O documento continua no processo e passa a ser impresso com a marca
-      <b>ANULADO</b>. O motivo fica registrado com o seu nome.
-    </div>
+    <h3>Cancelar documento</h3>
+    <div class="sub" id="da-texto" style="color:var(--tx2);font-size:13px"></div>
     <div class="field">
-      <label for="da-motivo">Motivo da anulação</label>
+      <label for="da-motivo">Justificativa do cancelamento</label>
       <textarea id="da-motivo" rows="4" maxlength="1000"
                 style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
                 placeholder="Ex.: erro na identificação do imóvel autuado…"></textarea>
     </div>
+    <div class="field" id="da-senha-campo" hidden>
+      <label for="da-senha">Sua senha</label>
+      <input type="password" id="da-senha" autocomplete="current-password" maxlength="200">
+    </div>
     <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-doc-anular')">Cancelar</button>
-      <button class="btn danger" onclick="confirmarAnulacaoDoc()">Anular</button>
+      <button class="btn" onclick="fModalBtn('m-doc-anular')">Voltar</button>
+      <button class="btn danger" onclick="confirmarCancelamentoDoc()">Cancelar documento</button>
     </div>
   </div>
 </div>

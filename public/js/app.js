@@ -1048,7 +1048,6 @@ anunciarCarregamento({
   acaoDocDaLista: 'Carregando o documento…',
   abrirFormDoc: 'Preparando o documento…',
   gravarDoc: 'Gravando o documento…',
-  confirmarAnulacaoDoc: 'Anulando o documento…',
   procurarImovelDoc: 'Buscando imóveis…',
   vincularImovelDoc: 'Carregando os dados do imóvel…',
   // Vistorias

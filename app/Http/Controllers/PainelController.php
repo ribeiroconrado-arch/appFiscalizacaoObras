@@ -65,8 +65,8 @@ class PainelController extends Controller
             'vistorias'   => ['n' => (clone $vistorias)->count(), 'rotulo' => 'Vistorias no período', 'detalhe' => null],
             'irregulares' => ['n' => $irregulares, 'rotulo' => 'Vistorias irregulares', 'detalhe' => null],
             'documentos'  => ['n' => (clone $documentos)->count(), 'rotulo' => 'Documentos emitidos', 'detalhe' => null],
-            'rascunhos'   => ['n' => (clone $documentos)->where('status', 'rascunho')->count(),
-                              'rotulo' => 'Rascunhos', 'detalhe' => 'não lavrados'],
+            'rascunhos'   => ['n' => (clone $documentos)->whereIn('status', ['rascunho', 'gravado'])->count(),
+                              'rotulo' => 'Não lavrados', 'detalhe' => 'rascunhos e gravados'],
         ];
     }
 
@@ -369,16 +369,17 @@ class PainelController extends Controller
         $avisos = [];
 
         $docs = Documento::where('agente_id', $uid)
-            ->whereIn('status', ['lavrado', 'rascunho'])
+            ->whereIn('status', ['lavrado', 'rascunho', 'gravado'])
             ->with('lote:id,bairro,quadra,numero_lote')->get();
 
         foreach ($docs as $doc) {
             $imovel = sprintf('Quadra %s · Lote %s', $doc->lote?->quadra ?? '—', $doc->lote?->numero_lote ?? '—');
 
-            if ($doc->status === 'rascunho') {
+            if ($doc->naoLavrado()) {
                 $avisos[] = [
-                    'titulo'  => 'Rascunho não lavrado',
-                    'texto'   => $doc->rotuloTipo() . ' — ' . $imovel . '. Sem número enquanto não for lavrado.',
+                    'titulo'  => $doc->status === 'gravado' ? 'Documento gravado, ainda não lavrado' : 'Rascunho não gravado',
+                    'texto'   => $doc->rotuloTipo() . ' — ' . $imovel . '. '
+                        . ($doc->status === 'gravado' ? 'Nº ' . $doc->numeroFormatado() . ', aguardando a lavratura.' : 'Sem número enquanto não for gravado.'),
                     'quando'  => $doc->created_at->diffForHumans(),
                     'aba'     => 'documentos',
                 ];

@@ -712,7 +712,7 @@ let artigoEscolhidoDoc = null
 const leiDoDoc = () => dState.opcoes?.leis.find(l => String(l.id) === document.getElementById('nd-lei').value) || null
 const leiDoArtigoDoc = id => dState.opcoes?.leis.find(l => l.artigos.some(a => a.id === id)) || null
 const artigoDoc = id => leiDoArtigoDoc(id)?.artigos.find(a => a.id === id) || null
-const docTravado = () => fdState.estado !== 'novo' && !fdState.editando
+const docTravado = () => ['gravado', 'lavrado'].includes(fdState.estado) && !fdState.editando
 const semAcentoDoc = t => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 /** "Art. 12 - Obra sem alvará": número e apelido, sem repetir quando são iguais. */
@@ -1309,20 +1309,20 @@ const OPCOES_DOC = {
   },
   lavrar: {
     rotulo: 'Lavrar documento',
-    obs: 'Dá número e data. Depois disso a peça não se edita mais.',
+    obs: 'Colhe as assinaturas. Depois disso a peça não se edita mais.',
     icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
       stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`,
   },
-  anular: {
-    rotulo: 'Anular documento',
-    obs: 'A peça continua no processo, marcada como sem efeito.',
+  cancelar: {
+    rotulo: 'Cancelar documento',
+    obs: 'A peça continua na série, marcada como sem efeito.',
     perigo: true,
     icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
       stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>`,
   },
   excluir: {
     rotulo: 'Excluir rascunho',
-    obs: 'Some de vez. Só vale antes de lavrar.',
+    obs: 'Some de vez. Só vale antes de gravar: com número, cancela-se.',
     perigo: true,
     icone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
       stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>`,
@@ -1330,7 +1330,7 @@ const OPCOES_DOC = {
 }
 
 /** A ordem do menu: primeiro o que produz papel, depois o que muda o estado. */
-const ORDEM_OPCOES_DOC = ['pdf', 'imprimir_termica', 'lavrar', 'anular', 'excluir']
+const ORDEM_OPCOES_DOC = ['pdf', 'imprimir_termica', 'lavrar', 'cancelar', 'excluir']
 
 /**
  * Abre o menu de opções do documento — o MESMO menu do botão "Novo documento".
@@ -1378,7 +1378,7 @@ function acaoDoc(chave) {
     case 'pdf':              return pedirAnexos('pdf')
     case 'imprimir_termica': return pedirAnexos('termica')
     case 'lavrar':           return lavrarDaFicha()
-    case 'anular':           return abrirAnulacaoDoc()
+    case 'cancelar':         return abrirCancelamentoDoc()
     case 'excluir':          return excluirRascunhoDoc()
   }
 }
@@ -1456,40 +1456,66 @@ async function lavrarDaFicha() {
   lavrarDocumento()
 }
 
-function abrirAnulacaoDoc() {
+/**
+ * Cancelar a peça que já tem número. Gravada (ainda não lavrada), basta a
+ * justificativa; LAVRADA, o servidor exige também a senha de quem cancela —
+ * o campo só aparece nesse caso.
+ */
+function abrirCancelamentoDoc() {
+  const lavrado = dFicha.doc?.status?.valor !== 'gravado'
   document.getElementById('da-motivo').value = ''
+  document.getElementById('da-senha').value = ''
+  document.getElementById('da-senha-campo').hidden = !lavrado
+  document.getElementById('da-texto').textContent = lavrado
+    ? 'Documento lavrado: o cancelamento exige a justificativa e a sua senha. '
+      + 'A peça continua na série, impressa com a marca CANCELADO, e o registro fica com o seu nome.'
+    : 'Documento gravado, ainda não lavrado. Ele continua na série, com o número, marcado como '
+      + 'cancelado; a justificativa fica registrada com o seu nome.'
   openModal('m-doc-anular')
 }
 
-async function confirmarAnulacaoDoc() {
+async function confirmarCancelamentoDoc() {
   const motivo = document.getElementById('da-motivo').value.trim()
+  const campoSenha = document.getElementById('da-senha-campo')
+  const senha = document.getElementById('da-senha').value
   if (motivo.length < 10) {
-    toast('Descreva o motivo da anulação com pelo menos 10 caracteres', 'err')
+    toast('Descreva a justificativa do cancelamento com pelo menos 10 caracteres', 'err')
     return
   }
-  try {
-    const r = await fetch(`/api/documentos/${dFicha.doc.id}/anular`, {
-      method: 'POST',
-      headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ motivo }),
-    })
-    const d = await r.json().catch(() => ({}))
-    if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
-    fModalBtn('m-doc-anular')
-    fModalBtn('m-doc-ficha')
-    toast(d.message)
-    carregarDocumentos()
-  } catch (e) {
-    console.error(e)
-    toast(e.message || 'Falha ao anular', 'err')
+  if (!campoSenha.hidden && !senha) {
+    toast('Informe a sua senha para cancelar um documento lavrado', 'err')
+    return
   }
+  await comCarregando('Cancelando o documento…', async () => {
+    try {
+      const r = await fetch(`/api/documentos/${dFicha.doc.id}/cancelar`, {
+        method: 'POST',
+        headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(campoSenha.hidden ? { motivo } : { motivo, senha }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
+      document.getElementById('da-senha').value = ''
+      fModalBtn('m-doc-anular')
+      fModalBtn('m-doc-ficha')
+      // Com o formulário aberto, a peça reabre já cancelada.
+      if (document.getElementById('m-doc')?.classList.contains('open') && fdState.id === dFicha.doc.id) {
+        fModalBtn('m-doc')
+      }
+      toast(d.message)
+      carregarDocumentos()
+    } catch (e) {
+      console.error(e)
+      toast(e.message || 'Falha ao cancelar', 'err')
+    }
+  })
 }
 
 function excluirRascunhoDoc() {
   confirmarAcao({
     titulo: 'Excluir rascunho',
-    mensagem: 'O rascunho será apagado definitivamente. Documento já lavrado nunca é '
-            + 'excluído — para desfazê-lo existe a anulação, que deixa rastro.',
+    mensagem: 'O rascunho será apagado definitivamente. Documento com número nunca é '
+            + 'excluído — para desfazê-lo existe o cancelamento, que deixa rastro.',
     textoBtn: 'Excluir',
     perigo: true,
     onConfirm: async () => {

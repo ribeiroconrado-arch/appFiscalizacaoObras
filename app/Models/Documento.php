@@ -94,18 +94,39 @@ class Documento extends Model
     }
 
     /**
-     * Quem JUNTA anexo. Em rascunho, o autor. Com a peça lavrada a juntada
-     * continua aberta — ao autor e ao administrador —, e o anexo sai marcado
-     * como "juntado depois". Peça anulada não recebe mais nada.
+     * Estados em que a peça NÃO VALE COMO ATO: ainda não foi lavrada, ou
+     * deixou de valer. Uma peça assim não serve de origem a outra, não conta
+     * como auto anterior para reincidência e não gera custa.
+     */
+    public const SEM_VALOR_DE_ATO = ['rascunho', 'gravado', 'anulado', 'cancelado', 'defendido'];
+
+    /** Encerrada sem efeito: cancelada (ou anulada, o nome antigo) ou defendida. */
+    public const ENCERRADOS = ['anulado', 'cancelado', 'defendido'];
+
+    /** Rascunho ou gravada: ainda se edita, ainda não foi assinada. */
+    public function naoLavrado(): bool
+    {
+        return in_array($this->status, ['rascunho', 'gravado'], true);
+    }
+
+    public function encerrado(): bool
+    {
+        return in_array($this->status, self::ENCERRADOS, true);
+    }
+
+    /**
+     * Quem JUNTA anexo. Antes da lavratura, o autor. Com a peça lavrada a
+     * juntada continua aberta — ao autor e ao administrador —, e o anexo sai
+     * marcado como "juntado depois". Peça encerrada não recebe mais nada.
      * (Excluir é outra regra, mais estreita: DocumentoAnexo::podeSerExcluidoPor.)
      */
     public function podeJuntarAnexo(User $u): bool
     {
-        if ($this->status === 'anulado') {
+        if ($this->encerrado()) {
             return false;
         }
 
-        return $this->agente_id === $u->id || ($this->status !== 'rascunho' && $u->isAdmin());
+        return $this->agente_id === $u->id || (! $this->naoLavrado() && $u->isAdmin());
     }
 
     /** A ordem de serviço que determinou a notificação (origem_motivo = ordem_servico). */
@@ -192,19 +213,30 @@ class Documento extends Model
 
         $autor = $this->agente_id === $u->id;
 
+        // RASCUNHO: sem número, só do autor — grava ou exclui.
         if ($this->status === 'rascunho') {
             if ($autor) {
-                $opcoes[] = 'lavrar';
                 $opcoes[] = 'excluir';
             }
             return $opcoes;
         }
 
-        // Anular: ato do autor, ou do administrador quando o autor já não
-        // responde pelo documento (afastamento, desligamento). Documento já
-        // anulado não se anula de novo.
+        // GRAVADO: tem número. Não se exclui mais: o autor lavra ou cancela.
+        if ($this->status === 'gravado') {
+            if ($autor) {
+                $opcoes[] = 'lavrar';
+            }
+            if ($autor || $u->isAdmin()) {
+                $opcoes[] = 'cancelar';
+            }
+            return $opcoes;
+        }
+
+        // LAVRADO: cancelar é ato do autor, ou do administrador quando o autor
+        // já não responde pelo documento (afastamento, desligamento) — com
+        // motivo e a senha de quem cancela. Encerrado não se cancela de novo.
         if (in_array($this->status, ['lavrado', 'atendido'], true) && ($autor || $u->isAdmin())) {
-            $opcoes[] = 'anular';
+            $opcoes[] = 'cancelar';
         }
 
         return $opcoes;
@@ -235,7 +267,7 @@ class Documento extends Model
         'auto_embargo'  => ['notificacao', 'notificacao_embargo'],
     ];
 
-    /** "NOT 2026/0231" — ou "Sem número" enquanto rascunho. */
+    /** "NOT 2026/0231" — ou "Sem número" no rascunho, que ainda não foi gravado. */
     public function numeroFormatado(): string
     {
         if (! $this->numero) {
@@ -249,9 +281,10 @@ class Documento extends Model
         return ! in_array($this->tipo, self::SEM_SANCAO, true);
     }
 
+    /** Rascunho e gravado se editam; lavrado, não. */
     public function podeSerEditado(): bool
     {
-        return $this->status === 'rascunho';
+        return $this->naoLavrado();
     }
 
     /**
@@ -262,7 +295,7 @@ class Documento extends Model
      */
     public function situacaoPrazo(): ?array
     {
-        if (in_array($this->status, ['atendido', 'anulado', 'cancelado'], true)) {
+        if ($this->status === 'atendido' || $this->encerrado()) {
             return null;
         }
         $limite = $this->defesa_ate ?? $this->prazo_ate;
@@ -286,10 +319,12 @@ class Documento extends Model
     {
         return match ($this->status) {
             'rascunho'  => ['Rascunho', 'bd-in'],
+            'gravado'   => ['Gravado', 'bd-in'],
             'lavrado'   => ['Lavrado', 'bd-al'],
             'atendido'  => ['Atendido', 'bd-ok'],
-            'anulado'   => ['Anulado', 'bd-cx'],
+            'anulado'   => ['Cancelado', 'bd-cx'],   // nome antigo do cancelamento
             'cancelado' => ['Cancelado', 'bd-cx'],
+            'defendido' => ['Defendido', 'bd-ok'],
             default     => [$this->status, 'bd-in'],
         };
     }

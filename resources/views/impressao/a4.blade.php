@@ -288,7 +288,8 @@
            caso quem assina é a testemunha, na seção do Termo de Recusa. --}}
       <table class="assina">
         <tr>
-          <td>
+          {{-- data-assina: na lavratura a tela mostra aqui a rubrica do fiscal. --}}
+          <td data-assina="agente">
             @if ($doc->assinatura_agente)
               <img class="assina-img" src="{{ $doc->assinatura_agente }}" alt="">
             @else
@@ -370,7 +371,7 @@
 
            A linha do "sem consulta" é impressa, e não omitida. Omitir
            esconderia justamente o caso em que alguém deveria olhar. --}}
-      @if ($doc->status !== 'rascunho')
+      @if (! $doc->naoLavrado())
         <div class="rodape-inst" style="border-top:none; margin-top:6px; padding-top:0">
           @php
             // A origem em português, montada ANTES da frase.
