@@ -532,6 +532,11 @@ function _htmlConferenciaCadastro(i, c) {
       <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td>
           <td>${l.area_m2 ? fmtNum(l.area_m2) + ' m²' : ''}${l.endereco ? '<div class="imp-sub">' + esc(l.endereco) + '</div>' : ''}</td>
           <td class="imp-abrir"><a href="#" onclick="event.preventDefault(); desenharLoteDaConferencia()">desenhar lote ›</a></td></tr>`)}
+    ${c.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
+    ${c.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${c.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
+    ${grupo('Área do desenho diferente da área do cadastro (tem de ser exata)', 'bd-er', c.area_diferente || [], l => `
+      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td>
+          <td>${typeof _confAreas === 'function' ? _confAreas(l) : ''}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}
     ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => `
       <tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}`,
     rodape: `

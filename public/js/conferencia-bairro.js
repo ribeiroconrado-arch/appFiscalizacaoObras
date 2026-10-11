@@ -40,6 +40,17 @@ const CONF_TIPOS = {
   inativos:        { rotulo: 'Inativo no cadastro',  curto: 'inativo no cadastro',  cor: '#6B7280' },
   sem_lote:        { rotulo: 'No cadastro, sem lote no mapa', curto: 'sem lote no mapa', cor: '#E24B4A' },
   sem_inscricao:   { rotulo: 'Sem quadra ou número (inscrição não se monta)', curto: 'sem inscrição', cor: '#EF9F27' },
+  // A inscrição casou, mas a metragem do desenho não é a do cadastro. Tem de
+  // ser EXATA (ao centésimo de m²): não impede publicar, pede correção.
+  area_diferente:  { rotulo: 'Área do desenho diferente da do cadastro', curto: 'área diferente', cor: '#7C3AED' },
+}
+
+/** "desenho 359,87 m² · cadastro 360,00 m² · −0,13 m²" — as duas áreas de uma divergência de área. */
+function _confAreas(l) {
+  if (l.area_cadastro == null) return ''
+  const m2 = v => v == null ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' m²'
+  const dif = l.diferenca == null ? '' : ' · ' + (l.diferenca > 0 ? '+' : '−') + m2(Math.abs(l.diferenca)).replace(' m²', '') + ' m²'
+  return `desenho <b>${m2(l.area_desenho)}</b> · cadastro <b>${m2(l.area_cadastro)}</b>${dif}`
 }
 const CONF_COR_CASOU = '#1D9E75'
 
@@ -191,6 +202,7 @@ function pintarJanelaConferencia() {
     return `<tr${just ? ' class="conf-justificada"' : ''}>
       <td class="mono">${esc(l.inscricao || '—')}</td>
       <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}${l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''}${l.isencao ? ` <span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>` : ''}
+        ${l.area_cadastro != null ? `<div class="imp-sub">${_confAreas(l)}</div>` : ''}
         ${j ? `<div class="imp-sub">Justificado por ${esc(j.por || '—')} em ${esc(j.em)}: ${esc(j.motivo)}</div>` : ''}</td>
       <td class="imp-abrir">${ver}</td><td class="imp-abrir">${acao}</td></tr>`
   }
@@ -228,10 +240,13 @@ function pintarJanelaConferencia() {
         ${kpi('Não está no cadastro + inativos', conta('nao_encontrados') + conta('inativos'), conta('nao_encontrados') + conta('inativos') ? 'erro' : '')}
         ${kpi('Cadastro sem lote', conta('sem_lote'), conta('sem_lote') ? 'erro' : '')}
         ${kpi('Sem inscrição', conta('sem_inscricao'), conta('sem_inscricao') ? 'aviso' : '')}
+        ${kpi('Área diferente', conta('area_diferente'), conta('area_diferente') ? 'erro' : '')}
       </div>` : ''}
     </div>
     ${r ? `
       ${r.sem_situacao ? '<div class="cad-nota cad-aviso">A planilha não tinha coluna de situação: os inativos não puderam ser conferidos.</div>' : ''}
+      ${r.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
+      ${r.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${r.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
       ${confState.itens.length === 0 ? '<div class="cad-nota imp-nota">Nenhuma pendência aberta neste bairro.</div>' : ''}
       ${Object.keys(CONF_TIPOS).map(grupo).join('')}`
       : '<p class="imp-expl">Este bairro ainda não foi conferido. Escolha a fonte e confira.</p>'}

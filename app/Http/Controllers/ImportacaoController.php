@@ -273,6 +273,7 @@ class ImportacaoController extends Controller
             'inativos'        => 'Desenhado no mapa, inativo no cadastro',
             'sem_lote'        => 'No cadastro, sem lote no arquivo',
             'sem_inscricao'   => 'Sem quadra ou número — inscrição não se monta',
+            'area_diferente'  => 'Área do desenho diferente da área do cadastro',
         ];
 
         return response()->streamDownload(function () use ($c, $grupos) {
@@ -284,7 +285,12 @@ class ImportacaoController extends Controller
                 foreach ($c[$chave] ?? [] as $l) {
                     fputcsv($out, [
                         $rotulo, $l['inscricao'] ?? '', $l['quadra'] ?? '', $l['lote'] ?? '',
-                        $l['isencao'] ?? $l['endereco'] ?? '',
+                        $chave === 'area_diferente'
+                            ? sprintf('desenho %s m² · cadastro %s m² · diferença %s m²',
+                                number_format((float) ($l['area_desenho'] ?? 0), 2, ',', '.'),
+                                number_format((float) ($l['area_cadastro'] ?? 0), 2, ',', '.'),
+                                number_format((float) ($l['diferenca'] ?? 0), 2, ',', '.'))
+                            : ($l['isencao'] ?? $l['endereco'] ?? ''),
                     ], ';');
                 }
             }

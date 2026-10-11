@@ -19,7 +19,18 @@ use RuntimeException;
  *                        ou tem como inativa;
  *   cadastro → arquivo   imóvel ativo do cadastro, naquele bairro, sem lote
  *                        desenhado;
- *   sem inscrição        lote sem quadra ou número — a inscrição não se monta.
+ *   sem inscrição        lote sem quadra ou número — a inscrição não se monta;
+ *   área diferente       a inscrição casou, mas a área do desenho não é a
+ *                        "Área Terreno" do cadastro.
+ *
+ * ── A área tem de ser EXATA ──
+ *
+ * Decisão da fiscalização (10/10/2026): a metragem do desenho tem de bater
+ * com a do cadastro, ao centésimo de m² — não há tolerância. O sistema calcula
+ * multa por área e imprime a área na peça; dois números para o mesmo terreno
+ * são inconsistência. A diferença NÃO impede a importação nem a publicação:
+ * entra na lista de divergências, para ser corrigida (no desenho ou no
+ * cadastro) ou justificada.
  *
  * ── A chave é a INSCRIÇÃO, e não quadra + lote ──
  *
@@ -93,7 +104,7 @@ class ConferenciaComCadastro
     {
         $bairros = new BairrosDoDesenho();
         $nomes = $anterior['nomes_do_desenho'] ?? [$bairro];
-        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id'];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2'];
         $lotes = DB::table('lotes')->where('situacao', 'ativo')->whereIn('bairro', $nomes)->get($campos);
 
         $porId = [];          // lote ativo => [inscrição atual (ou null), linha]
@@ -113,13 +124,26 @@ class ConferenciaComCadastro
         $resolvidas = 0;
         $casaramAgora = 0;
 
+        // ÁREA DIFERENTE: a área do cadastro ficou guardada na divergência, então
+        // dá para rever sem a planilha — o lote saiu, ou o desenho foi corrigido
+        // e agora bate, e a pendência some; senão continua, com a área de agora.
+        $areaDiferente = [];
+        foreach ($anterior['area_diferente'] ?? [] as $item) {
+            $atual = $porId[(int) ($item['lote_id'] ?? 0)] ?? null;
+            if (! $atual) { $resolvidas++; continue; }
+            $d = $this->areaDiferente($atual[1], $atual[0], $item['area_cadastro'] ?? null);
+            if ($d === null) { $resolvidas++; } else { $areaDiferente[] = $d; }
+        }
+
         // Lote da lista: saiu? continua igual? casou com um "sem lote"?
-        $revisaLote = function (array $item, string $tipo) use (&$porId, &$semLote, &$resolvidas, &$casaramAgora): ?array {
+        $revisaLote = function (array $item, string $tipo) use (&$porId, &$semLote, &$resolvidas, &$casaramAgora, &$areaDiferente): ?array {
             $atual = $porId[(int) ($item['lote_id'] ?? 0)] ?? null;
             if (! $atual) { $resolvidas++; return null; }                  // excluído ou inativado
             [$insc, $l] = $atual;
             $antes = InscricaoImobiliaria::normalizar($item['inscricao'] ?? null);
             if ($insc !== null && isset($semLote[$insc])) {                 // achou o par no cadastro
+                // Casou agora: a área do cadastro veio na pendência "sem lote".
+                if ($d = $this->areaDiferente($l, $insc, $semLote[$insc]['area_m2'] ?? null)) { $areaDiferente[] = $d; }
                 unset($semLote[$insc]);
                 $resolvidas++;
                 $casaramAgora++;
@@ -146,7 +170,10 @@ class ConferenciaComCadastro
 
         // "Cadastro sem lote" que ganhou lote por outro caminho (desenhado).
         foreach ($semLote as $insc => $item) {
-            if (isset($comInscricao[$insc])) { unset($semLote[$insc]); $resolvidas++; $casaramAgora++; }
+            if (isset($comInscricao[$insc])) {
+                if ($d = $this->areaDiferente($comInscricao[$insc], $insc, $item['area_m2'] ?? null)) { $areaDiferente[] = $d; }
+                unset($semLote[$insc]); $resolvidas++; $casaramAgora++;
+            }
         }
         $semLote = array_values($semLote);
 
@@ -155,9 +182,10 @@ class ConferenciaComCadastro
             'inativos'          => $inativos,
             'sem_lote'          => $semLote,
             'sem_inscricao'     => $semInscricao,
+            'area_diferente'    => $areaDiferente,
             'casaram'           => (int) ($anterior['casaram'] ?? 0) + $casaramAgora,
             'lotes_conferidos'  => $conferidos,
-            'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao),
+            'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao) + count($areaDiferente),
             'revisao'           => ['resolvidas' => $resolvidas, 'em' => now()->format('d/m/Y H:i'),
                                     'por' => auth()->user()?->name],
         ] + $anterior;
@@ -271,7 +299,7 @@ class ConferenciaComCadastro
                 . 'cadastro, e sem o código dele não há como montar a inscrição dos lotes. ' . $comoLigar);
         }
 
-        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id'];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2'];
 
         // Todos os nomes de desenho amarrados ao MESMO código: o cadastro não
         // sabe que o desenho partiu o bairro em dois nomes.
@@ -307,6 +335,8 @@ class ConferenciaComCadastro
         $naoEncontrados = [];
         $inativos = [];
         $semLote = [];
+        $areaDiferente = [];
+        $semAreaNoCadastro = 0;
         $casaram = 0;
         $noCadastro = 0;
         $vistos = [];
@@ -326,6 +356,12 @@ class ConferenciaComCadastro
                     $inativos[] = $this->lote($doArquivo[$insc], $insc) + ['isencao' => $c['isencao']];
                 } else {
                     $casaram++;
+                    // A inscrição bate: agora a METRAGEM, que tem de ser a mesma.
+                    if ($c['area_terreno_m2'] === null) {
+                        $semAreaNoCadastro++;
+                    } elseif ($d = $this->areaDiferente($doArquivo[$insc], $insc, $c['area_terreno_m2'])) {
+                        $areaDiferente[] = $d;
+                    }
                 }
             } elseif ($ativo !== false && ! isset($doBairro[$insc])) {
                 $semLote[] = [
@@ -368,12 +404,44 @@ class ConferenciaComCadastro
             'inativos'          => $inativos,
             'sem_lote'          => $semLote,
             'sem_inscricao'     => $semInscricao,
-            'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao),
+            'area_diferente'    => $areaDiferente,
+            // Imóveis que casaram mas o cadastro não traz a área do terreno:
+            // não deu para comparar — e zero diferenças, sem este número,
+            // pareceria que todas as áreas batem.
+            'sem_area_no_cadastro' => $semAreaNoCadastro,
+            'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao) + count($areaDiferente),
             // Planilha sem coluna de situação: "inativo no cadastro" não pôde
             // ser conferido — e zero inativos, sem este aviso, pareceria certeza.
             'sem_situacao'      => property_exists($fonte, 'temSituacao') && $fonte->temSituacao === false,
             'conferido_por'     => auth()->user()?->name,
             'conferido_em'      => now()->format('d/m/Y H:i'),
+        ];
+    }
+
+    /**
+     * A divergência de ÁREA de um lote que casou pela inscrição, ou null se
+     * as áreas batem (ou se o cadastro não informa a dele).
+     *
+     * "Bater" é ser IGUAL ao centésimo de m², que é a precisão com que o
+     * cadastro guarda a área — sem tolerância (ver o cabeçalho da classe).
+     *
+     * @return array<string,mixed>|null
+     */
+    private function areaDiferente(object $l, ?string $inscricao, mixed $areaCadastro): ?array
+    {
+        if ($areaCadastro === null || $areaCadastro === '' || ! is_numeric($areaCadastro)) {
+            return null;
+        }
+        $cadastro = round((float) $areaCadastro, 2);
+        $desenho = $l->area_gis_m2 !== null ? round((float) $l->area_gis_m2, 2) : null;
+        if ($desenho === $cadastro) {
+            return null;
+        }
+
+        return $this->lote($l, $inscricao) + [
+            'area_desenho'  => $desenho,
+            'area_cadastro' => $cadastro,
+            'diferenca'     => $desenho !== null ? round($desenho - $cadastro, 2) : null,
         ];
     }
 

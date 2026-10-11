@@ -23,7 +23,7 @@ use RuntimeException;
  */
 class ConferenciaBairroController extends Controller
 {
-    private const TIPOS = ['nao_encontrados', 'inativos', 'sem_lote', 'sem_inscricao'];
+    private const TIPOS = ['nao_encontrados', 'inativos', 'sem_lote', 'sem_inscricao', 'area_diferente'];
 
     private function exigirCurador(Request $r): ?JsonResponse
     {
