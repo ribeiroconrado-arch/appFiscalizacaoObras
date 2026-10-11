@@ -238,7 +238,12 @@ class ImportacaoController extends Controller
         }
 
         $r->validate(['planilha' => ['nullable', 'file', 'max:' . self::TETO_KB],
-                      'fonte'    => ['nullable', 'in:ultima,carregado']]);
+                      'fonte'    => ['nullable', 'in:ultima,carregado'],
+                      'tolerancia_area'    => ['nullable', 'numeric', 'min:0', 'max:100000'],
+                      'tolerancia_unidade' => ['nullable', 'in:m2,pct']]);
+        if ($r->filled('tolerancia_area')) {
+            $conferencia->comTolerancia((float) $r->input('tolerancia_area'), $r->input('tolerancia_unidade', 'm2'));
+        }
 
         try {
             // fonte=ultima, sem arquivo: a planilha NÃO é guardada — revisam-se

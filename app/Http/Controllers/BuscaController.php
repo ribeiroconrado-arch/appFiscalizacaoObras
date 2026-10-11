@@ -84,6 +84,8 @@ class BuscaController extends Controller
         $vist = Vistoria::whereIn('lote_id', $ids)->selectRaw('lote_id, COUNT(*) c')
                     ->groupBy('lote_id')->pluck('c', 'lote_id');
 
+        $areas = new \App\Cadastro\AreaOficial();
+
         return response()->json([
             'imoveis' => $lotes->map(fn (Lote $l) => [
                 'id'         => $l->id,
@@ -92,7 +94,7 @@ class BuscaController extends Controller
                 'quadra'     => $l->quadra,
                 'lote'       => $l->numero_lote,
                 'inscricao'  => $this->inscricaoDe($l),
-                'area'       => $l->area_gis_m2,
+                'area'       => $areas->doLote($l),   // a do cadastro, quando há
                 'documentos' => (int) ($docs[$l->id] ?? 0),
                 'vistorias'  => (int) ($vist[$l->id] ?? 0),
                 // A situação viaja SEMPRE, mesmo sem o filtro: sem ela, a linha
@@ -648,7 +650,9 @@ class BuscaController extends Controller
             'inscricao' => $lote->inscricaoFormatada(),
             'tag_origem' => Lote::tagOrigem($lote->origem),
             'chave'     => $lote->chave,
-            'area'      => $lote->area_gis_m2,
+            // A área do terreno segue o cadastro oficial, quando o lote está nele.
+            'area'      => (new \App\Cadastro\AreaOficial())->doLote($lote),
+            'area_oficial' => (new \App\Cadastro\AreaOficial())->doCadastro($lote) !== null,
             'fonte'     => $lote->fonte,
             'situacao'  => $lote->situacao,
             'inativado_em' => $lote->inativado_em?->format('d/m/Y'),

@@ -4,11 +4,16 @@
  * Três peças:
  *   - a JANELA (#m-conferencia): escolhe o bairro, confere (cadastro carregado
  *     ou planilha), lista as pendências e as justificadas;
- *   - as CORES no mapa: os lotes do bairro pintados pelo resultado (camada
- *     "Conferência com o cadastro", no painel Camadas), e um selo na quadra
- *     para os imóveis do cadastro que não têm lote;
- *   - a BARRA de pendências (#conf-barra, na faixa do alto): anterior/próxima,
- *     levando o mapa de pendência em pendência, com justificar à mão.
+ *   - as CORES no mapa: SÓ os lotes com pendência são pintados (o resto do
+ *     bairro fica como estava — pintar tudo poluía e não dizia o que olhar), e
+ *     um selo na quadra para os imóveis do cadastro que não têm lote;
+ *   - o CARTÃO da pendência (#conf-barra, no alto do mapa): diz qual é o
+ *     problema, oferece como resolver, e o ✕ VOLTA PARA A LISTA, no ponto em
+ *     que ela estava. Vindo de "ver no mapa" de uma linha, mostra só aquele
+ *     lote; vindo de "Ver pendências no mapa", anda por todas (‹ ›).
+ *
+ * Os cartões do alto da janela FILTRAM a lista pelo tipo de divergência (um
+ * clique liga, outro desliga), e o filtro vale também para o mapa.
  *
  * O que não dá para resolver agora se JUSTIFICA: sai da lista com o motivo e
  * quem justificou, sem apagar nada (ConferenciaBairroController::justificar).
@@ -33,11 +38,23 @@ const confState = {
   selos: null,
   /** @type {Array|null} lista de bairros para o seletor */
   bairros: null,
+  /** @type {string|null} tipo de divergência escolhido nos cartões (null = todas) */
+  filtro: null,
+  /** No mapa está UMA pendência só (veio de "ver no mapa" de uma linha)? */
+  soFoco: false,
+  /** @type {number} rolagem da lista, para o ✕ do cartão voltar ao mesmo ponto */
+  rolagem: 0,
 }
 
 const CONF_TIPOS = {
-  nao_encontrados: { rotulo: 'Não está no cadastro', curto: 'não está no cadastro', cor: '#E24B4A' },
-  inativos:        { rotulo: 'Inativo no cadastro',  curto: 'inativo no cadastro',  cor: '#6B7280' },
+  // NÃO É A MESMA COISA: "não está no cadastro" é inscrição que a prefeitura
+  // não tem (em geral quadra ou lote errado no desenho); "inativo" é inscrição
+  // que EXISTE e foi desativada — o imóvel mudou por desmembramento,
+  // unificação ou retificação do BCI, e o desenho ficou para trás.
+  nao_encontrados: { rotulo: 'Não está no cadastro', curto: 'não está no cadastro', cor: '#E24B4A',
+    nota: 'a prefeitura não tem esta inscrição — confira a quadra e o número do lote' },
+  inativos:        { rotulo: 'Inativo no cadastro',  curto: 'inativo no cadastro',  cor: '#6B7280',
+    nota: 'a inscrição existe, mas foi desativada: o imóvel mudou por desmembramento, unificação ou retificação do BCI' },
   sem_lote:        { rotulo: 'No cadastro, sem lote no mapa', curto: 'sem lote no mapa', cor: '#E24B4A' },
   sem_inscricao:   { rotulo: 'Sem quadra ou número (inscrição não se monta)', curto: 'sem inscrição', cor: '#EF9F27' },
   // A inscrição casou, mas a metragem do desenho não é a do cadastro. Tem de
@@ -189,6 +206,13 @@ function pintarJanelaConferencia() {
   const kpi = (rot, n, cls = '') => `<div class="imp-kpi ${cls}"><small>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></div>`
   const conta = t => confState.itens.filter(i => i.tipo === t).length
   const nJust = Object.keys(confState.justificativas).length
+  // CARTÃO QUE FILTRA: um clique mostra só aquele tipo de divergência; outro
+  // clique no mesmo cartão volta a mostrar todas.
+  const cartao = (tipo, rot, cls) => {
+    const n = conta(tipo), ativo = confState.filtro === tipo
+    return `<button type="button" class="imp-kpi conf-kpi ${n ? cls : ''}${ativo ? ' ativo' : ''}" aria-pressed="${ativo}" ${n || ativo ? '' : 'disabled'}
+      title="${ativo ? 'Mostrar todas as divergências' : 'Mostrar só estas'}" onclick="_confFiltrar('${tipo}')"><small>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></button>`
+  }
 
   const linha = (tipo, l) => {
     const just = _confJustificada(tipo, l)
@@ -214,7 +238,8 @@ function pintarJanelaConferencia() {
     const abertas = itens.filter(l => !_confJustificada(tipo, l)).sort(ordem)
     const justificadas = itens.filter(l => _confJustificada(tipo, l)).sort(ordem)
     return `<div class="imp-grupo"><span class="conf-cor" style="background:${CONF_TIPOS[tipo].cor}"></span>
-        ${esc(CONF_TIPOS[tipo].rotulo)} <span class="imp-sub">· ${abertas.length} pendente(s)${justificadas.length ? `, ${justificadas.length} justificada(s)` : ''}</span></div>
+        ${esc(CONF_TIPOS[tipo].rotulo)} <span class="imp-sub">· ${abertas.length} pendente(s)${justificadas.length ? `, ${justificadas.length} justificada(s)` : ''}</span>
+        ${CONF_TIPOS[tipo].nota ? `<div class="imp-sub conf-grupo-nota">${esc(CONF_TIPOS[tipo].nota)}</div>` : ''}</div>
       <table class="imp-tabela"><tbody>${[...abertas, ...justificadas].slice(0, 300).map(l => linha(tipo, l)).join('')}</tbody></table>`
   }
 
@@ -228,6 +253,12 @@ function pintarJanelaConferencia() {
           onchange="document.getElementById('conf-soltar').hidden = true"> Cadastro carregado</label>
         <label class="imp-opcao"><input type="radio" name="conf-fonte" value="planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? 'checked' : ''}
           onchange="document.getElementById('conf-soltar').hidden = false"> Planilha .xlsx</label>
+        <label class="conf-tol" title="Diferença entre a área do desenho e a do cadastro que NÃO conta como divergência. Zero = as áreas têm de ser iguais.">Variação de área aceita
+          <input type="number" id="conf-tol" min="0" step="0.01" inputmode="decimal" value="${Number(r?.tolerancia_area?.valor ?? 0)}">
+          <select id="conf-tol-un" aria-label="Unidade da variação">
+            <option value="m2" ${(r?.tolerancia_area?.unidade ?? 'm2') === 'm2' ? 'selected' : ''}>m²</option>
+            <option value="pct" ${r?.tolerancia_area?.unidade === 'pct' ? 'selected' : ''}>%</option>
+          </select></label>
         <button class="btn primary sm" id="conf-btn" onclick="conferirBairroAgora()">${r ? 'Conferir de novo' : 'Conferir'}</button>
       </div>
       <label class="imp-soltar compacta" id="conf-soltar" for="conf-planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? '' : 'hidden'}>
@@ -235,12 +266,13 @@ function pintarJanelaConferencia() {
           onchange="_mostrarEscolhido('conf-soltar', this.files[0], 'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário')">
         ${ICO_SOLTAR}<b>Solte a planilha .xlsx aqui</b><span>ou clique para escolher · exportação do cadastro imobiliário</span>
       </label>
-      ${r ? `<div class="imp-kpis">
+      ${r ? `<div class="imp-kpis conf-kpis">
         ${kpi('Casaram', r.casaram, 'ok')}
-        ${kpi('Não está no cadastro + inativos', conta('nao_encontrados') + conta('inativos'), conta('nao_encontrados') + conta('inativos') ? 'erro' : '')}
-        ${kpi('Cadastro sem lote', conta('sem_lote'), conta('sem_lote') ? 'erro' : '')}
-        ${kpi('Sem inscrição', conta('sem_inscricao'), conta('sem_inscricao') ? 'aviso' : '')}
-        ${kpi('Área diferente', conta('area_diferente'), conta('area_diferente') ? 'erro' : '')}
+        ${cartao('nao_encontrados', 'Não está no cadastro', 'erro')}
+        ${cartao('inativos', 'Inativo no cadastro', 'erro')}
+        ${cartao('sem_lote', 'Cadastro sem lote', 'erro')}
+        ${cartao('sem_inscricao', 'Sem inscrição', 'aviso')}
+        ${cartao('area_diferente', 'Área diferente', 'erro')}
       </div>` : ''}
     </div>
     ${r ? `
@@ -248,14 +280,16 @@ function pintarJanelaConferencia() {
       ${r.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
       ${r.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${r.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
       ${confState.itens.length === 0 ? '<div class="cad-nota imp-nota">Nenhuma pendência aberta neste bairro.</div>' : ''}
-      ${Object.keys(CONF_TIPOS).map(grupo).join('')}`
+      ${r.tolerancia_area?.valor ? `<div class="cad-nota imp-nota">Diferença de área de até ${Number(r.tolerancia_area.valor).toLocaleString('pt-BR')} ${r.tolerancia_area.unidade === 'pct' ? '%' : 'm²'} não foi contada como divergência.</div>` : ''}
+      ${confState.filtro ? `<div class="conf-filtro-aviso">Mostrando só <b>${esc(CONF_TIPOS[confState.filtro].rotulo)}</b>. <a href="#" onclick="event.preventDefault(); _confFiltrar(null)">Mostrar todas</a></div>` : ''}
+      ${Object.keys(CONF_TIPOS).filter(t => !confState.filtro || t === confState.filtro).map(grupo).join('')}`
       : '<p class="imp-expl">Este bairro ainda não foi conferido. Escolha a fonte e confira.</p>'}
     <div class="imp-fixo-rodape">
       ${r ? `<div class="imp-rodape-conf"><span class="imp-sub">${esc(r.fonte_descricao)} · conferido em ${esc(r.conferido_em)}${r.revisao ? ` · revisado sem planilha em ${esc(r.revisao.em)} (${r.revisao.resolvidas} resolvida(s))` : ''}
         por ${esc(r.conferido_por || '—')} · código do bairro ${esc(r.codigo_bairro)}${nJust ? ` · ${nJust} justificada(s)` : ''}</span></div>` : ''}
       <div class="btn-row imp-acoes">
         <button class="btn" onclick="fModalBtn('m-conferencia')">Fechar</button>
-        ${r ? `<button class="btn primary" onclick="mostrarConferenciaNoMapa()">Ver pendências no mapa</button>` : ''}
+        ${r && _confVisiveis().length ? `<button class="btn primary" onclick="mostrarConferenciaNoMapa()">${confState.filtro ? 'Ver estas no mapa' : 'Ver pendências no mapa'}</button>` : ''}
       </div>
     </div>`)
   _prepararAreaDeSoltar('conf-soltar', 'conf-planilha', /\.xlsx$/i, 'A planilha precisa ser .xlsx.',
@@ -272,6 +306,10 @@ async function conferirBairroAgora() {
     fd.append('planilha', p)
   }
   if (document.querySelector('input[name="conf-fonte"]:checked')?.value === 'ultima') fd.append('fonte', 'ultima')
+  // A variação de área aceita (zero = exata), em m² ou em % da área do cadastro.
+  const tol = Number(String(document.getElementById('conf-tol')?.value ?? '0').replace(',', '.'))
+  fd.append('tolerancia_area', Number.isFinite(tol) && tol > 0 ? String(tol) : '0')
+  fd.append('tolerancia_unidade', document.getElementById('conf-tol-un')?.value || 'm2')
   const btn = document.getElementById('conf-btn')
   btn.disabled = true
   btn.textContent = 'Conferindo…'
@@ -326,41 +364,88 @@ function _depoisDeJustificar(msg) {
   toast(msg)
   _confMontarItens()
   if (document.getElementById('m-conferencia').classList.contains('open')) pintarJanelaConferencia()
+  if (!confState.noMapa) return
+  // Vendo UMA pendência e ela foi justificada: não há mais o que mostrar ali.
+  if (confState.soFoco || !_confVisiveis().length) { voltarAListaDaConferencia(); return }
+  repintarConferencia(); pintarBarraConferencia()
+}
+
+/** As pendências abertas que o filtro dos cartões deixa passar. */
+function _confVisiveis() {
+  return confState.filtro ? confState.itens.filter(i => i.tipo === confState.filtro) : confState.itens
+}
+
+/** Cartão clicado: liga o filtro daquele tipo, ou desliga se já era ele. @param {string|null} tipo */
+function _confFiltrar(tipo) {
+  confState.filtro = tipo && confState.filtro !== tipo ? tipo : null
+  confState.idx = 0
+  if (document.getElementById('m-conferencia')?.classList.contains('open')) pintarJanelaConferencia()
   if (confState.noMapa) { repintarConferencia(); pintarBarraConferencia() }
 }
 
+/** O quadro que rola dentro da janela da conferência. */
+const _confRolavel = () => document.querySelector('#m-conferencia .modal')
+
 // ── NO MAPA ──────────────────────────────────────────────────
 
+/**
+ * "Ver pendências no mapa": leva ao mapa as pendências (as do filtro, se
+ * houver), pintando SÓ elas, e abre o cartão para andar de uma em uma.
+ */
 function mostrarConferenciaNoMapa() {
+  confState.rolagem = _confRolavel()?.scrollTop ?? 0
   fModalBtn('m-conferencia')
   confState.noMapa = true
+  confState.soFoco = false
+  confState.idx = 0
   if (!camadaLigada('conferencia')) ligarCamada('conferencia', true)
   if (typeof irPara === 'function') irPara('mapa')
-  // Enquadra o bairro pelo contorno, se houver.
-  const f = (typeof contornoState !== 'undefined' ? contornoState.dados?.features : [])
-    ?.find(x => x.properties.nome === confState.bairro)
-  if (f) setTimeout(() => mapaState.obj?.fitBounds(L.geoJSON(f).getBounds(), { padding: [30, 30] }), 150)
   repintarConferencia()
   pintarBarraConferencia()
+  // Já começa na primeira pendência: o cartão fala dela, o mapa mostra ela.
+  const primeira = _confVisiveis()[0]
+  if (primeira) _confLevarMapa(primeira)
 }
 
+/** Tira a conferência do mapa, sem voltar à lista (outra ferramenta tomou a vez). */
 function fecharConferenciaNoMapa() {
   confState.noMapa = false
+  confState.soFoco = false
   repintarConferencia()
   pintarBarraConferencia()
 }
 
 /**
+ * O ✕ do cartão: tira a conferência do mapa e VOLTA PARA A LISTA, no ponto em
+ * que ela estava — fechar o cartão é voltar um passo, não encerrar a conferência.
+ */
+function voltarAListaDaConferencia() {
+  fecharConferenciaNoMapa()
+  if (typeof realceDoLote !== 'undefined' && realceDoLote) { realceDoLote.remove(); realceDoLote = null }
+  openModal('m-conferencia')
+  pintarJanelaConferencia()
+  const rolagem = confState.rolagem
+  setTimeout(() => { const q = _confRolavel(); if (q) q.scrollTop = rolagem }, 30)
+}
+
+/**
  * A cor de um lote pela conferência — chamada por estiloColorido (mapa-cores.js).
- * null = a conferência não fala deste lote (fora do bairro, ou desligada).
+ * null = a conferência não fala deste lote, e ele fica como o mapa o pinta.
+ *
+ * SÓ AS PENDÊNCIAS SÃO PINTADAS. Antes o bairro inteiro ganhava cor (verde
+ * para o que casou, tracejado para o justificado), e o que precisava de
+ * atenção se perdia no meio. Vendo UMA pendência, só o lote dela.
  */
 function corDaConferencia(f) {
   if (!confState.noMapa || !confState.resultado || typeof camadaLigada !== 'function' || !camadaLigada('conferencia')) return null
-  if (!(confState.resultado.nomes_do_desenho || [confState.bairro]).includes(f.properties.bairro)) return null
-  const tipo = confState.porLote.get(Number(f.properties.id))
-  if (tipo === 'justificado') return { color: '#9FE1CB', weight: 1.4, opacity: 1, dashArray: '4 3', fillColor: '#9FE1CB', fillOpacity: .15 }
-  const cor = tipo ? CONF_TIPOS[tipo].cor : CONF_COR_CASOU
-  return { color: tipo ? cor : '#FFFFFF', weight: tipo ? 2.2 : 1, opacity: 1, fillColor: cor, fillOpacity: tipo ? .55 : .3 }
+  const id = Number(f.properties.id)
+  const tipo = confState.porLote.get(id)
+  if (!tipo || tipo === 'justificado') return null
+  if (confState.filtro && tipo !== confState.filtro) return null
+  if (confState.soFoco && Number(_confVisiveis()[confState.idx]?.lote_id) !== id) return null
+  const cor = CONF_TIPOS[tipo].cor
+  const atual = Number(_confVisiveis()[confState.idx]?.lote_id) === id
+  return { color: atual ? '#FFFFFF' : cor, weight: atual ? 3.2 : 2, opacity: 1, fillColor: cor, fillOpacity: atual ? .7 : .45 }
 }
 
 function repintarConferencia() {
@@ -369,6 +454,9 @@ function repintarConferencia() {
   confState.selos = null
   const r = confState.resultado
   if (!confState.noMapa || !r || !camadaLigada('conferencia') || !mapaState.obj) return
+  // O selo "N sem lote" é das pendências de cadastro sem lote: some com outro
+  // filtro, e quando se está vendo uma pendência só.
+  if (confState.soFoco || (confState.filtro && confState.filtro !== 'sem_lote')) return
 
   // Selo na quadra: quantos imóveis do cadastro não têm lote desenhado nela.
   const porQuadra = {}
@@ -387,49 +475,109 @@ function repintarConferencia() {
   }).filter(Boolean)).addTo(mapaState.obj)
 }
 
+/** O problema de uma pendência, em uma frase — é o que o cartão do mapa diz. */
+function _confProblema(it) {
+  const insc = it.inscricao ? `a inscrição ${it.inscricao}` : 'a inscrição'
+  switch (it.tipo) {
+    case 'nao_encontrados':
+      return `O cadastro da prefeitura não tem ${insc}. Em geral é quadra ou número de lote errado no desenho.`
+    case 'inativos':
+      return `No cadastro, ${insc} está inativa${it.isencao ? ' (' + it.isencao + ')' : ''}: o imóvel foi alterado por desmembramento, unificação ou retificação do BCI, e o desenho não acompanhou.`
+    case 'sem_lote':
+      return `O cadastro tem o imóvel ${it.inscricao || ''} nesta quadra${it.area_m2 ? ', com ' + fmtNum(it.area_m2) + ' m²' : ''}${it.endereco ? ' (' + it.endereco + ')' : ''}, e o mapa não tem o lote desenhado.`
+    case 'sem_inscricao':
+      return 'Este lote está sem quadra ou sem número, e por isso a inscrição dele não se monta.'
+    case 'area_diferente':
+      return `${_confAreas(it).replace(/<\/?b>/g, '')}. No sistema vale a área do cadastro; corrija o desenho ou justifique.`
+  }
+  return ''
+}
+
+/**
+ * O cartão da pendência, no alto do mapa: qual é, o que há de errado, como
+ * resolver — e o ✕, que volta para a lista.
+ */
 function pintarBarraConferencia() {
   const barra = document.getElementById('conf-barra')
   if (!barra) return
   barra.hidden = !confState.noMapa || !confState.resultado
   if (barra.hidden) return
   curadoriaApareceu()   // a conferência é curadoria: a pesquisa sai (ferramentas-mapa.js)
-  const n = confState.itens.length
-  const it = confState.itens[confState.idx]
+  const itens = _confVisiveis()
+  const n = itens.length
+  const it = itens[confState.idx]
+  if (!it) {
+    barra.innerHTML = `<div class="conf-b-topo"><b>Conferência · ${esc(confState.bairro || confState.oficial || '')}</b>
+        <span class="badge bd-ok">sem pendências</span>
+        <button class="btn sm imp-barra-x" title="Voltar à lista" aria-label="Voltar à lista" onclick="voltarAListaDaConferencia()">&#10005;</button></div>`
+    return
+  }
+  const t = CONF_TIPOS[it.tipo]
+  // COMO RESOLVER, conforme o problema. Justificar vale para todos.
+  const resolver = [
+    it.lote_id ? `<button class="btn sm" onclick="_confAbrirFicha(${Number(it.lote_id)})">Abrir a ficha do lote</button>` : '',
+    it.tipo === 'sem_lote' ? `<button class="btn sm" onclick="modoCadastral('desenho')">Desenhar o lote</button>` : '',
+    `<button class="btn sm" onclick="_confJustificar(${jsArg(it.tipo)}, ${jsArg(_confChave(it.tipo, it))})">Justificar</button>`,
+  ].join('')
   barra.innerHTML = `
-    <b title="${esc(confState.oficial || '')}">Conferência · ${esc(confState.bairro || confState.oficial)}</b>
-    <span class="badge ${n ? 'bd-er' : 'bd-ok'}">${n ? `${n} pendência(s)` : 'sem pendências'}</span>
-    ${n ? `
-      <button class="btn sm" onclick="_confPasso(-1)" title="Pendência anterior">‹</button>
-      <span class="conf-atual"><span class="conf-cor" style="background:${CONF_TIPOS[it.tipo].cor}"></span>
-        ${confState.idx + 1} de ${n}: Q ${esc(it.quadra ?? '—')} · L ${esc(it.lote ?? '—')} — ${esc(CONF_TIPOS[it.tipo].curto)}</span>
-      <button class="btn sm" onclick="_confPasso(1)" title="Próxima pendência">›</button>
-      <button class="btn sm" onclick="_confJustificar(${jsArg(it.tipo)}, ${jsArg(_confChave(it.tipo, it))})">Justificar</button>` : ''}
-    <button class="btn sm" onclick="abrirConferenciaBairro()">Lista</button>
-    <button class="btn sm imp-barra-x" title="Tirar a conferência do mapa" onclick="fecharConferenciaNoMapa()">&#10005;</button>`
+    <div class="conf-b-topo">
+      <span class="conf-cor" style="background:${t.cor}"></span>
+      <b>Q ${esc(it.quadra ?? '—')} · L ${esc(it.lote ?? '—')}</b>
+      <span class="conf-b-tipo">${esc(t.rotulo)}</span>
+      ${!confState.soFoco && n > 1 ? `<span class="conf-b-nav">
+        <button class="btn sm" onclick="_confPasso(-1)" title="Pendência anterior" aria-label="Pendência anterior">‹</button>
+        <span>${confState.idx + 1} de ${n}</span>
+        <button class="btn sm" onclick="_confPasso(1)" title="Próxima pendência" aria-label="Próxima pendência">›</button></span>` : ''}
+      <button class="btn sm imp-barra-x" title="Voltar à lista" aria-label="Voltar à lista" onclick="voltarAListaDaConferencia()">&#10005;</button>
+    </div>
+    <div class="conf-b-txt">${esc(_confProblema(it))}</div>
+    <div class="conf-b-acoes">${resolver}</div>`
+}
+
+/** Abre a ficha do lote da pendência (o lote já está no mapa, destacado). */
+function _confAbrirFicha(loteId) {
+  const f = state.lotes?.get(loteId)
+  if (f) { abrirFicha(f); return }
+  toast('O lote ainda está carregando no mapa. Tente de novo em instantes.', 'aviso')
 }
 
 function _confPasso(d) {
-  const n = confState.itens.length
-  if (!n) return
-  confState.idx = (confState.idx + d + n) % n
+  const itens = _confVisiveis()
+  if (!itens.length) return
+  confState.idx = (confState.idx + d + itens.length) % itens.length
+  repintarConferencia()
   pintarBarraConferencia()
-  _confIrAoItem(confState.itens[confState.idx])
+  _confLevarMapa(itens[confState.idx])
+}
+
+/**
+ * "ver no mapa" de uma linha da lista: fecha a janela (guardando onde ela
+ * estava), mostra SÓ aquele lote e abre o cartão dele. O ✕ volta à lista.
+ */
+function _confIrAoItem(it) {
+  const aberta = document.getElementById('m-conferencia')?.classList.contains('open')
+  if (aberta) {
+    confState.rolagem = _confRolavel()?.scrollTop ?? 0
+    fModalBtn('m-conferencia')
+    confState.soFoco = true
+  }
+  confState.noMapa = true
+  if (!camadaLigada('conferencia')) ligarCamada('conferencia', true)
+  // A pendência escolhida pode estar fora do filtro ligado: o filtro cede.
+  if (confState.filtro && confState.filtro !== it.tipo) confState.filtro = null
+  const i = _confVisiveis().findIndex(x => x.tipo === it.tipo && _confChave(x.tipo, x) === _confChave(it.tipo, it))
+  if (i >= 0) confState.idx = i
+  if (typeof irPara === 'function') irPara('mapa')
+  repintarConferencia()
+  pintarBarraConferencia()
+  _confLevarMapa(it)
 }
 
 /** Leva o mapa até a pendência: o lote (destacado) ou, sem lote, a quadra. */
-function _confIrAoItem(it) {
-  if (document.getElementById('m-conferencia')?.classList.contains('open')) {
-    fModalBtn('m-conferencia')
-    if (!confState.noMapa) mostrarConferenciaNoMapa()
-  }
-  const i = confState.itens.findIndex(x => x.tipo === it.tipo && _confChave(x.tipo, x) === _confChave(it.tipo, it))
-  if (i >= 0) { confState.idx = i; pintarBarraConferencia() }
-
+function _confLevarMapa(it) {
   if (it.lote_id) { irAoLoteNoMapa(Number(it.lote_id)); return }
   const q = String(it.quadra ?? '').replace(/^0+/, '') || '0'
   const c = confState.resultado?.centros_quadras?.[q]
   if (!c) { toast(`A quadra ${it.quadra ?? '—'} não tem lote no mapa para servir de referência.`, 'aviso'); return }
-  if (typeof irPara === 'function') irPara('mapa')
   mapaState.obj?.setView(c, ZOOM_DO_LOTE)
-  toast(`${it.inscricao}: o cadastro tem este imóvel na quadra ${it.quadra}, e o mapa não tem o lote.`)
 }

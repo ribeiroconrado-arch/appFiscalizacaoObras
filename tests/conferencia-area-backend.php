@@ -101,6 +101,37 @@ try {
         'lote ainda diferente continua, com a área de agora');
     confere($rv['total_divergencias'] === $r['total_divergencias'] - 1, 'e o total cai em um');
 
+    echo "Variação de área aceitável\n";
+    // O lote "maior" está 7,00 m² abaixo do cadastro (305,00 contra 312,00).
+    $temMaior = fn (array $res) => collect($res['area_diferente'])->contains('lote_id', $maior->id);
+    $r5 = $svc->comTolerancia(5.0, 'm2')->conferirBairro($bairro, $fonte, 'Cadastro de teste');
+    confere($temMaior($r5) && $r5['tolerancia_area'] === ['valor' => 5.0, 'unidade' => 'm2'],
+        'com 5 m² de variação, 7 m² de diferença ainda é divergência — e a variação fica guardada');
+    confere(! $temMaior($svc->comTolerancia(8.0, 'm2')->conferirBairro($bairro, $fonte, 'Cadastro de teste')), 'com 8 m², deixa de ser');
+    confere($temMaior($svc->comTolerancia(2.0, 'pct')->conferirBairro($bairro, $fonte, 'Cadastro de teste')),
+        'em %: 2% de 312 m² são 6,24 m², e 7 m² passa disso');
+    confere(! $temMaior($svc->comTolerancia(3.0, 'pct')->conferirBairro($bairro, $fonte, 'Cadastro de teste')), 'com 3% (9,36 m²), cabe');
+    $r0 = $svc->comTolerancia(0.0, 'm2')->conferirBairro($bairro, $fonte, 'Cadastro de teste');
+    confere($temMaior($r0) && $r0['tolerancia_area']['valor'] === 0.0, 'variação zero volta a exigir a área exata');
+
+    echo "A área que vale para o lote é a do cadastro\n";
+    $codigo = ltrim((string) $r0['codigo_bairro'], '0');
+    $doLote = fn () => DB::table('cadastro_externo_imoveis')
+        ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [$codigo])
+        ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [ltrim((string) $maior->quadra, '0')])
+        ->whereRaw("TRIM(LEADING '0' FROM lote) = ?", [ltrim((string) $maior->numero_lote, '0')]);
+    $loteMaior = DB::table('lotes')->where('id', $maior->id)->first();
+    $doLote()->delete();
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+    $areas = new App\Cadastro\AreaOficial();
+    confere($areas->doCadastro($loteMaior) === null && $areas->doLote($loteMaior) === 305.0, 'lote sem imóvel no cadastro: vale a área do desenho');
+    DB::table('cadastro_externo_imoveis')->insert(['inscricao' => '99.999.999.9999.999', 'codigo_bairro' => $r0['codigo_bairro'],
+        'quadra' => $maior->quadra, 'lote' => $maior->numero_lote, 'area_terreno_m2' => 312.00, 'created_at' => now(), 'updated_at' => now()]);
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+    $areas = new App\Cadastro\AreaOficial();
+    confere($areas->doCadastro($loteMaior) === 312.0 && $areas->doLote($loteMaior) === 312.0, 'com imóvel no cadastro: vale a área do cadastro, e não a do desenho');
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+
     echo "\n{$ok} verificações passaram.\n";
 } finally {
     DB::rollBack();

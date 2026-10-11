@@ -186,3 +186,34 @@
 /* O topo (onde está o seletor) fica por cima do rodapé: a lista aberta não some atrás dele. */
 #m-conferencia .imp-fixo-topo{z-index:6}
 #m-conferencia .ac-list{max-height:min(48vh,380px)}
+
+/* CONFERÊNCIA: os cartões numa linha só, e clicáveis — filtram a lista pelo
+   tipo de divergência. Em tela estreita quebram em três por linha. */
+.imp-kpis.conf-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media (max-width:760px){ .imp-kpis.conf-kpis{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.conf-kpi{border:1.5px solid transparent;text-align:left;font:inherit;cursor:pointer;min-width:0}
+.conf-kpi small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conf-kpi:disabled{cursor:default;opacity:.7}
+.conf-kpi:not(:disabled):hover{border-color:var(--f-bord-foco,#595959)}
+.conf-kpi.ativo{border-color:var(--tx);box-shadow:0 0 0 2px var(--sur),0 0 0 4px var(--tx2)}
+.conf-kpi:focus-visible{outline:2px solid var(--tx);outline-offset:2px}
+.conf-filtro-aviso{font-size:12.5px;color:var(--tx2);margin:8px 0 2px}
+.conf-grupo-nota{font-weight:400;margin-top:2px}
+.conf-tol{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--tx2)}
+.conf-tol input{width:76px;padding:5px 7px;border:1.5px solid var(--f-bord,#ccc);border-radius:7px;font:inherit;background:var(--sur);color:var(--tx)}
+.conf-tol select{padding:5px 6px;border:1.5px solid var(--f-bord,#ccc);border-radius:7px;font:inherit;background:var(--sur);color:var(--tx)}
+
+/* O CARTÃO DA PENDÊNCIA no mapa: três linhas — qual é, o que há de errado, como
+   resolver. Era uma faixa fina de uma linha, que não dizia o problema. */
+#conf-barra{display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px;
+  width:min(560px,calc(100% - 24px));max-width:none;padding:12px 14px;border-radius:12px;
+  background:var(--sur);color:var(--tx);border:1px solid var(--bord);box-shadow:0 8px 28px rgba(0,0,0,.22)}
+#conf-barra[hidden]{display:none}
+.conf-b-topo{display:flex;align-items:center;gap:8px;min-width:0}
+.conf-b-topo b{font-size:14px;white-space:nowrap}
+.conf-b-tipo{font-size:12.5px;color:var(--tx2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conf-b-nav{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--tx3);margin-left:auto;white-space:nowrap}
+.conf-b-topo .imp-barra-x{margin-left:auto}
+.conf-b-nav + .imp-barra-x{margin-left:4px}
+.conf-b-txt{font-size:13px;line-height:1.45;color:var(--tx2)}
+.conf-b-acoes{display:flex;gap:6px;flex-wrap:wrap}

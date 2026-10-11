@@ -232,6 +232,9 @@ class MapaController extends Controller
         // são milhares de feições por requisição, e uma consulta por lote
         // poria o mapa de joelhos.
         $bairros = new BairrosDoDesenho();
+        // A área do terreno que a tela mostra: a do cadastro oficial, quando o
+        // lote tem imóvel lá (App\Cadastro\AreaOficial). Lida por bairro.
+        $areas = new \App\Cadastro\AreaOficial($bairros);
 
         $feicoes = array_map(fn ($l) => [
             'type'       => 'Feature',
@@ -259,7 +262,12 @@ class MapaController extends Controller
                 // cair no montador do navegador, que escrevia 000 no lugar do
                 // bairro que ele não tinha como conhecer.
                 'inscricao'   => $bairros->inscricaoDe($l),
+                // A área do DESENHO: serve à geometria (desmembrar, unificar).
                 'area_gis_m2' => (float) $l->area_gis_m2,
+                // A área do TERRENO que se mostra: a do cadastro oficial, ou a
+                // do desenho quando o lote não tem imóvel no cadastro.
+                'area_m2'       => $areas->doLote($l),
+                'area_oficial'  => $areas->doCadastro($l) !== null,
                 // Medidas da matrícula, para o balão. Nulas na maioria dos lotes
                 // vindos do DWG — o balão só mostra a linha quando há as duas.
                 'frente_m'    => $l->frente_m !== null ? (float) $l->frente_m : null,

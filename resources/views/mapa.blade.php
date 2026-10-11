@@ -2172,7 +2172,7 @@
            o imóvel está no cadastro. Desenhado por renderBciDoc. --}}
       </div>
       <details id="nd-bci-bloco" class="doc-bci-expansivel" hidden>
-        <summary>Cadastro municipal <span>BCI · Ver detalhes</span></summary>
+        <summary><span class="doc-bci-cabecalho">Cadastro municipal <small>BCI</small><span id="nd-bci-sintese"></span></span><span class="doc-bci-abrir">Ver detalhes <span aria-hidden="true">⌄</span></span></summary>
         <div id="nd-bci"></div>
       </details>
 

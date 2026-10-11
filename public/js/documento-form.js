@@ -321,8 +321,8 @@ async function renderBciDoc({ sugerir = false } = {}) {
     if (c?.retrato) {
       bloco.hidden = false
       alvo.innerHTML = htmlBciDoc(c.retrato.imovel, c.retrato.caracteristicas, c.retrato.unidades, [],
-        `Dados copiados do cadastro municipal na lavratura, em <b>${esc(c.copiado_em || '—')}</b>`
-        + (c.consultado_em ? ` — cadastro integrado em <b>${esc(c.consultado_em)}</b>.` : '.'))
+        `Dados copiados na lavratura em ${esc(c.copiado_em || '—')}.`
+        + (c.consultado_em ? `<br>Cadastro municipal integrado em ${esc(c.consultado_em)}.` : ''))
     }
     return
   }
@@ -398,18 +398,16 @@ function htmlBciDoc(im, caracteristicas = [], unidades = [], donos = [], nota = 
     .filter(([k]) => tem(im[k]))
     .map(([k, rot, un]) => par(rot, typeof im[k] === 'number' ? fmtNum(im[k]) + (un ? ' ' + un : '') : im[k]))
   const carac = (caracteristicas || []).filter(c => tem(c.valor))
+  document.getElementById('nd-bci-sintese').textContent = [im.isencao,
+    tem(im.area_terreno_m2) ? 'Terreno: ' + fmtNum(im.area_terreno_m2) + ' m²' : null].filter(Boolean).join(' · ')
 
   return `
-    ${nota ? `<p class="bci-doc-nota">${nota}</p>` : ''}
-    <div class="bci-doc-lin bci-doc-l3">
+    <div class="bci-doc-lin doc-bci-duas-colunas">
       ${par('Código no cadastro', im.codigo_cadastro)}
-      ${par('Situação / isenção', im.isencao)}
-      ${par('Área do terreno', tem(im.area_terreno_m2) ? fmtNum(im.area_terreno_m2) + ' m²' : null)}
+      ${par('Número no cadastro', numero)}
     </div>
-    <div class="bci-doc-lin bci-doc-rua">
-      ${par('Logradouro', im.logradouro)}
-      ${par('Número', numero)}
-      ${par('Bairro', im.nome_bairro)}
+    <div class="bci-doc-lin">
+      ${par('Endereço cadastral', [im.logradouro, im.nome_bairro].filter(Boolean).join(' · ') || null)}
     </div>
     ${tem(im.complemento) ? `<div class="bci-doc-lin">${par('Complemento', im.complemento)}</div>` : ''}
     ${outros.length ? `<div class="df-grade">${outros.join('')}</div>` : ''}
@@ -418,7 +416,8 @@ function htmlBciDoc(im, caracteristicas = [], unidades = [], donos = [], nota = 
     ${carac.length ? `<div class="bci-sub">Características</div><div class="df-grade">${carac.map(c =>
       par(String(c.chave).replace(/_/g, ' '), c.valor)).join('')}</div>` : ''}
     ${(unidades || []).length ? `<div class="bci-sub">Unidades edificadas</div><div class="df-grade">${unidades.map(u =>
-      par('Unidade ' + (u.numero ?? '—'), [u.area ? fmtNum(u.area) + ' m²' : null, u.ano, u.padrao].filter(Boolean).join(' · ') || '—')).join('')}</div>` : ''}`
+      par('Unidade ' + (u.numero ?? '—'), [u.area ? fmtNum(u.area) + ' m²' : null, u.ano, u.padrao].filter(Boolean).join(' · ') || '—')).join('')}</div>` : ''}
+    ${nota ? `<p class="bci-doc-nota">${nota}</p>` : ''}`
 }
 
 /** Os campos que identificam o imóvel na peça. */
@@ -476,7 +475,8 @@ function limparFormDoc() {
   // Terreno vem do GIS e o fiscal só confere; construída não existe em
   // cadastro nenhum — só a medição em campo é confiável para basear multa.
   const p = fdState.lote
-  document.getElementById('nd-area-terreno').value = p?.area_gis_m2 ? Number(p.area_gis_m2).toFixed(2) : ''
+  const areaTerreno = p?.area_m2 ?? p?.area_gis_m2   // a do cadastro oficial, quando o lote está nele
+  document.getElementById('nd-area-terreno').value = areaTerreno ? Number(areaTerreno).toFixed(2) : ''
   document.getElementById('nd-area-construida').value = ''
   marcarOrigemDaAreaDoc('aferida')
   conferirCpfCnpjCampo(document.getElementById('nd-autuado-doc'))
@@ -701,13 +701,12 @@ function renderFichaConsultaDoc() {
   const cidade = [valor('nd-aut-cidade'), valor('nd-aut-uf')].filter(Boolean).join('/')
   const endereco = [rua, valor('nd-aut-bairro'), cidade].filter(Boolean).join(' — ')
   const area = valor('nd-area-construida')
-  alvo.innerHTML = `<p class="doc-ficha-aviso">Documento lavrado · dados de identificação em consulta</p>
-    <section><h3>Dados do ${destinatario}</h3><dl class="doc-ficha-grade">
-      ${campo('Nome / Razão social', valor('nd-autuado'), 'doc-ficha-largo')}
+  alvo.innerHTML = `<section><h3 class="sec-title">Dados do ${destinatario}</h3><dl class="doc-ficha-grade doc-ficha-pessoa">
+      ${campo('Nome / Razão social', valor('nd-autuado'))}
       ${campo('CPF / CNPJ', valor('nd-autuado-doc'))}
       ${campo('Endereço para correspondência', endereco, 'doc-ficha-largo')}
     </dl></section>
-    <section><h3>Imóvel</h3><dl class="doc-ficha-grade">
+    <section><h3 class="sec-title">Imóvel</h3><dl class="doc-ficha-grade">
       ${campo('Inscrição imobiliária', valor('nd-im-inscricao'), 'doc-ficha-largo')}
       ${campo('Logradouro', valor('nd-im-logradouro'))}${campo('Número', valor('nd-im-numero'))}
       ${campo('Bairro / Loteamento', valor('nd-im-bairro'))}

@@ -199,6 +199,10 @@ async function _sinCarregar() {
     if (!mapa.getPane('sinalizacoes')) mapa.createPane('sinalizacoes').style.zIndex = 630
     sinState.camada = L.layerGroup([], { pane: 'sinalizacoes' }).addTo(mapa)
   }
+  // O mapa existe mas ainda não foi enquadrado (a tela abriu no Painel, por
+  // exemplo): sem centro nem zoom o Leaflet não sabe os limites e lança erro.
+  // As bandeiras são carregadas quando ele for enquadrado (moveend).
+  if (!mapa._loaded) return
   if (mapa.getZoom() < 14) { sinState.camada.clearLayers(); return }
   const b = mapa.getBounds()
   const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(n => n.toFixed(6)).join(',')

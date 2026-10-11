@@ -86,7 +86,13 @@ class ConferenciaBairroController extends Controller
             'bairro'   => ['required', 'string', 'max:160'],
             'planilha' => ['nullable', 'file', 'max:30720'],
             'fonte'    => ['nullable', 'in:ultima,carregado'],
+            // A variação de área aceita (zero = exata), em m² ou em % do cadastro.
+            'tolerancia_area'    => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'tolerancia_unidade' => ['nullable', 'in:m2,pct'],
         ]);
+        if (isset($d['tolerancia_area'])) {
+            $conferencia->comTolerancia((float) $d['tolerancia_area'], $d['tolerancia_unidade'] ?? 'm2');
+        }
         if (! DB::table('lotes')->where('bairro', $d['bairro'])->where('situacao', 'ativo')->exists()) {
             return response()->json(['message' => 'Esse bairro não tem lote no mapa.'], 422);
         }

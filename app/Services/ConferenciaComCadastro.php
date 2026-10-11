@@ -23,14 +23,17 @@ use RuntimeException;
  *   área diferente       a inscrição casou, mas a área do desenho não é a
  *                        "Área Terreno" do cadastro.
  *
- * ── A área tem de ser EXATA ──
+ * ── A área: exata por padrão, com variação aceitável à escolha ──
  *
- * Decisão da fiscalização (10/10/2026): a metragem do desenho tem de bater
- * com a do cadastro, ao centésimo de m² — não há tolerância. O sistema calcula
- * multa por área e imprime a área na peça; dois números para o mesmo terreno
- * são inconsistência. A diferença NÃO impede a importação nem a publicação:
- * entra na lista de divergências, para ser corrigida (no desenho ou no
- * cadastro) ou justificada.
+ * A metragem do desenho é comparada com a do cadastro, ao centésimo de m². O
+ * padrão é NÃO tolerar diferença nenhuma (decisão de 10/10/2026); quem confere
+ * pode informar uma variação aceitável, em m² ou em % da área do cadastro —
+ * inclusive zero (11/10/2026). A variação usada fica guardada no resultado.
+ *
+ * A diferença NÃO impede a importação nem a publicação: entra na lista de
+ * divergências, para ser corrigida ou justificada. E é só AQUI que ela
+ * aparece: no resto do sistema a área do terreno de um lote com imóvel no
+ * cadastro é sempre a do cadastro (App\Cadastro\AreaOficial).
  *
  * ── A chave é a INSCRIÇÃO, e não quadra + lote ──
  *
@@ -50,6 +53,28 @@ use RuntimeException;
 class ConferenciaComCadastro
 {
     public function __construct(private ImportacaoDeBairro $importacao) {}
+
+    /**
+     * A variação de área que esta conferência aceita. Nula = não foi pedida:
+     * a conferência nova usa zero, e a revisão sem planilha, a da última.
+     *
+     * @var array{valor:float, unidade:'m2'|'pct'}|null
+     */
+    private ?array $tolerancia = null;
+
+    /**
+     * Define a variação aceitável de área para a próxima conferência.
+     *
+     * @param  float|null  $valor    quanto; null mantém o padrão
+     * @param  string|null $unidade  'm2' (metros quadrados) ou 'pct' (% da área do cadastro)
+     */
+    public function comTolerancia(?float $valor, ?string $unidade): static
+    {
+        $this->tolerancia = $valor === null ? null
+            : ['valor' => max(0.0, round($valor, 2)), 'unidade' => $unidade === 'pct' ? 'pct' : 'm2'];
+
+        return $this;
+    }
 
     /**
      * A fonte que o pedido escolheu, com a descrição para o carimbo: a
@@ -102,6 +127,8 @@ class ConferenciaComCadastro
      */
     private function revisar(array $anterior, string $bairro, ?int $importacaoId): array
     {
+        // A variação aceitável: a pedida agora, ou a da conferência que está sendo revista.
+        $this->tolerancia ??= $anterior['tolerancia_area'] ?? null;
         $bairros = new BairrosDoDesenho();
         $nomes = $anterior['nomes_do_desenho'] ?? [$bairro];
         $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2'];
@@ -183,6 +210,7 @@ class ConferenciaComCadastro
             'sem_lote'          => $semLote,
             'sem_inscricao'     => $semInscricao,
             'area_diferente'    => $areaDiferente,
+            'tolerancia_area'   => $this->tolerancia ?? ['valor' => 0.0, 'unidade' => 'm2'],
             'casaram'           => (int) ($anterior['casaram'] ?? 0) + $casaramAgora,
             'lotes_conferidos'  => $conferidos,
             'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao) + count($areaDiferente),
@@ -405,6 +433,8 @@ class ConferenciaComCadastro
             'sem_lote'          => $semLote,
             'sem_inscricao'     => $semInscricao,
             'area_diferente'    => $areaDiferente,
+            // A variação de área aceita nesta conferência (zero = exata).
+            'tolerancia_area'   => $this->tolerancia ?? ['valor' => 0.0, 'unidade' => 'm2'],
             // Imóveis que casaram mas o cadastro não traz a área do terreno:
             // não deu para comparar — e zero diferenças, sem este número,
             // pareceria que todas as áreas batem.
@@ -422,8 +452,8 @@ class ConferenciaComCadastro
      * A divergência de ÁREA de um lote que casou pela inscrição, ou null se
      * as áreas batem (ou se o cadastro não informa a dele).
      *
-     * "Bater" é ser IGUAL ao centésimo de m², que é a precisão com que o
-     * cadastro guarda a área — sem tolerância (ver o cabeçalho da classe).
+     * "Bater" é a diferença, ao centésimo de m², caber na variação aceitável
+     * desta conferência — que por padrão é zero (ver o cabeçalho da classe).
      *
      * @return array<string,mixed>|null
      */
@@ -435,6 +465,12 @@ class ConferenciaComCadastro
         $cadastro = round((float) $areaCadastro, 2);
         $desenho = $l->area_gis_m2 !== null ? round((float) $l->area_gis_m2, 2) : null;
         if ($desenho === $cadastro) {
+            return null;
+        }
+        // Dentro da variação aceitável (em m², ou em % da área do cadastro)?
+        $t = $this->tolerancia ?? ['valor' => 0.0, 'unidade' => 'm2'];
+        $aceita = $t['unidade'] === 'pct' ? $cadastro * $t['valor'] / 100 : $t['valor'];
+        if ($desenho !== null && abs($desenho - $cadastro) <= round($aceita, 2) + 0.000001) {
             return null;
         }
 

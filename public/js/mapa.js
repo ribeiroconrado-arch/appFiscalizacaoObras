@@ -916,8 +916,9 @@ function abrirBalao(feicao, camada) {
   const p = feicao.properties
   state.selecionado = feicao
 
-  const area = p.area_gis_m2
-    ? Number(p.area_gis_m2).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' m²'
+  const areaTerreno = p.area_m2 ?? p.area_gis_m2   // a do cadastro oficial, quando há
+  const area = areaTerreno
+    ? Number(areaTerreno).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' m²'
     : 'área não informada'
 
   // O chip só aparece quando existe inscrição imobiliária — o código pelo

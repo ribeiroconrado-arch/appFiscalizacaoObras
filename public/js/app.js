@@ -495,7 +495,9 @@ function abrirFicha(feicao) {
   // Sem leitura, o travessão: inventar "hoje" faria o dado parecer conferido.
   preencherIntegracao(p.id)
 
-  document.getElementById('fi-area').textContent = fmtNum(p.area_gis_m2) + ' m²'
+  // A área do terreno é a do cadastro oficial, quando o lote está nele (area_m2);
+  // a do desenho (area_gis_m2) só aparece na conferência com o cadastro.
+  document.getElementById('fi-area').textContent = fmtNum(p.area_m2 ?? p.area_gis_m2) + ' m²'
 
   // SEM GEOMETRIA A FICHA AINDA ABRE.
   //
@@ -859,7 +861,7 @@ function abrirConfirmacao(candidatos, prec) {
       <div class="radio"></div>
       <div class="txt">
         <div class="t1">Lote ${esc(c.numero_lote)} · Quadra ${esc(c.quadra)}</div>
-        <div class="t2">${esc(c.bairro)} · ${fmtNum(c.area_gis_m2)} m²</div>
+        <div class="t2">${esc(c.bairro)} · ${fmtNum(c.area_m2 ?? c.area_gis_m2)} m²</div>
       </div>
       <div class="dist">${Math.round(c.dist_m)} m</div>
     </div>`).join('')

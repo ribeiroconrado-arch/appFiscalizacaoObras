@@ -456,7 +456,8 @@ class DocumentoController extends Controller
             'imovel_lote'      => $d['imovel_lote'] ?? null,
             'descricao'     => $d['descricao'] ?? null,
             'observacoes'   => $d['observacoes'] ?? null,
-            'area_terreno_m2'    => $d['area_terreno_m2'] ?? $lote?->area_gis_m2 ?? null,
+            // Sem área informada, vale a do cadastro oficial (ou a do desenho, na falta).
+            'area_terreno_m2'    => $d['area_terreno_m2'] ?? ($lote ? (new \App\Cadastro\AreaOficial())->doLote($lote) : null),
             'area_construida_m2' => $d['area_construida_m2'] ?? null,
             'area_obra_origem'   => isset($d['area_construida_m2']) ? ($d['area_obra_origem'] ?? 'aferida') : null,
             'alvara_valor'       => $d['alvara_valor'] ?? null,
