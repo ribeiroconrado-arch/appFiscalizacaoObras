@@ -274,6 +274,10 @@ function sairModoCadastral(silencioso) {
     // entre duas ferramentas vizinhas.
     pintarPainelCadastro()
     pintarMesaCadastral()
+    // EM TELA PEQUENA não há mesa: o lançador é um painel que recolhe quando a
+    // ferramenta começa. Largada a ferramenta, ele volta — senão a pessoa fica
+    // no mapa sem a barra de onde escolheria a próxima.
+    if (!ehMesaCadastral()) { garantirPainelCadastroAberto() }
   }
 }
 

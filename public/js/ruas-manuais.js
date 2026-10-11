@@ -38,9 +38,13 @@ FERRAMENTAS_MAPA.ruas = {
 
 /** Abre a ferramenta (botão "Nomes de rua" da correção cadastral). */
 function abrirNomesDeRua() {
+  // Chamada da barra de correção cadastral, fechar a ferramenta volta para ela
+  // (ferramentas-mapa.js).
+  const daCuradoria = typeof _lancadorCadastralAVista === 'function' && _lancadorCadastralAVista()
   pedirFerramenta('ruas', () => {
     const mapa = mapaState.obj
     ruaState.ativa = true
+    ruaState.daCuradoria = daCuradoria
     if (!mapa.getPane('ruasEdicao')) {
       // Acima dos lotes e dos rótulos, para o clique pegar a linha.
       mapa.createPane('ruasEdicao').style.zIndex = 640
@@ -76,6 +80,8 @@ function fecharNomesDeRua() {
   if (pane) pane.style.display = 'none'
   const barra = document.getElementById('ruas-barra')
   if (barra) barra.hidden = true
+  if (ruaState.daCuradoria && typeof pedirVoltaACuradoria === 'function') pedirVoltaACuradoria()
+  ruaState.daCuradoria = false
 }
 
 function _pintarBarraRuas() {

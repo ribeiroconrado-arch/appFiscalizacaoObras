@@ -133,8 +133,70 @@ function pedirFerramenta(nome, abrir, opts = {}) {
  * @returns {Promise<void>}
  */
 function abrirJanelaDoMapa() {
-  return new Promise(resolve => pedirFerramenta('janela', resolve))
+  // A janela foi aberta de dentro da correção cadastral (o lançador ou a mesa
+  // à vista)? Então fechá-la devolve a pessoa para lá — ver voltarACuradoria.
+  const daCuradoria = _lancadorCadastralAVista()
+  return new Promise(resolve => pedirFerramenta('janela', () => {
+    _voltarACuradoria = daCuradoria
+    resolve()
+  }))
 }
+
+/** A barra de ferramentas da correção cadastral está à vista (mesa, ou o popover em tela pequena)? */
+function _lancadorCadastralAVista() {
+  const mesa = document.getElementById('cad-mesa')
+  return _grupoAberto('grupo-cadastro') || !!(mesa && !mesa.hidden)
+}
+
+/**
+ * FECHOU A JANELA, VOLTA PARA A BARRA DE CORREÇÃO CADASTRAL.
+ *
+ * Importações, Conferência, Histórico, Contornos e Nomes de rua abrem em
+ * janela, e abrir uma janela encerra o que está no mapa — inclusive a barra de
+ * onde ela foi chamada. Ao fechar, a pessoa ficava no mapa "limpo" e tinha de
+ * reabrir a correção cadastral para escolher a ferramenta seguinte.
+ *
+ * Só volta quando nada tomou o lugar: se a janela foi fechada para ir ao mapa
+ * com uma barra própria (as pendências da conferência, os lotes da
+ * importação), ou se outra ferramenta abriu, a curadoria já está "aberta" de
+ * outro jeito e a barra não se impõe por cima.
+ *
+ * @type {boolean} a última janela foi aberta de dentro da correção cadastral
+ */
+let _voltarACuradoria = false
+
+/**
+ * Para a ferramenta que NÃO é janela (Nomes de rua): ao ser fechada, pede a
+ * volta para a barra de correção cadastral. A volta acontece no fim do laço,
+ * e só se nada mais tiver ocupado o mapa — ver voltarACuradoriaSeForOCaso.
+ */
+function pedirVoltaACuradoria() {
+  _voltarACuradoria = true
+  setTimeout(voltarACuradoriaSeForOCaso, 80)
+}
+
+function voltarACuradoriaSeForOCaso() {
+  if (!_voltarACuradoria) return
+  if (document.querySelector('.modal-bg.open')) return          // ainda há janela aberta
+  _voltarACuradoria = false
+  if (!document.getElementById('t-mapa')?.classList.contains('at')) return   // saiu do mapa
+  if (Object.values(FERRAMENTAS_MAPA).some(f => f.aberta())) return          // algo já ocupa o mapa
+  if (typeof garantirPainelCadastroAberto === 'function') garantirPainelCadastroAberto()
+}
+
+// As janelas fecham por vários caminhos (✕, Fechar, Esc, depois de gravar):
+// em vez de avisar em cada um, observa-se a classe `open` dos modais.
+document.addEventListener('DOMContentLoaded', () => {
+  const vigia = new MutationObserver(lista => {
+    if (!_voltarACuradoria) return
+    if (lista.some(m => m.target.classList?.contains('modal-bg') && !m.target.classList.contains('open'))) {
+      // Na volta do laço: quem fecha uma janela para abrir outra (a ficha da
+      // importação, de dentro da lista) ainda vai abrir a seguinte.
+      setTimeout(voltarACuradoriaSeForOCaso, 80)
+    }
+  })
+  vigia.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] })
+})
 
 /**
  * O caminho de volta: a curadoria aparece por muitas portas que não passam por
