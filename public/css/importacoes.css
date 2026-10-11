@@ -172,3 +172,17 @@
    padrão de tabela larga (tabelas.css) a célula não quebra, e essa linha
    empurrava a situação, a área e o botão "Gerar" para fora da janela. */
 .imp-tabela td .imp-diverge{white-space:normal;overflow-wrap:anywhere;line-height:1.6;max-width:460px}
+
+/* CONFERÊNCIA DO BAIRRO (#m-conferencia): a mesma janela das telas de trabalho,
+   de altura fixa. Sem isso ela nascia do tamanho do conteúdo — pequena no
+   bairro ainda não conferido — e a lista do seletor de bairro, ao abrir, não
+   tinha onde caber: era cortada pela borda e ficava por baixo do rodapé. */
+#m-conferencia .modal{display:flex;flex-direction:column;max-width:860px;
+  height:var(--modal-trabalho-alt);max-height:calc(100vh - 28px)}
+#m-conferencia .modal > h3{flex:none}
+#m-conferencia #conf-corpo{flex:1 0 auto;display:flex;flex-direction:column}
+/* Com pouco conteúdo, o rodapé desce para o pé da janela. */
+#m-conferencia .imp-fixo-rodape{margin-top:auto}
+/* O topo (onde está o seletor) fica por cima do rodapé: a lista aberta não some atrás dele. */
+#m-conferencia .imp-fixo-topo{z-index:6}
+#m-conferencia .ac-list{max-height:min(48vh,380px)}
