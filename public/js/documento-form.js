@@ -307,6 +307,7 @@ async function renderBciDoc({ sugerir = false } = {}) {
   const alvo = document.getElementById('nd-bci')
   const loteId = fdState.lote?.id ?? null
   bloco.hidden = true
+  bloco.open = false
   alvo.innerHTML = ''
   // Até o cadastro responder (ou se ele não tiver o imóvel), os campos do
   // imóvel ficam abertos à digitação.
@@ -677,8 +678,43 @@ function aplicarEstadoDoc() {
   renderRodapeDoc()
   // A origem da notificação tem trava própria: continua editável com a peça lavrada.
   if (typeof aplicarOrigemNotifDoc === 'function') aplicarOrigemNotifDoc()
+  renderFichaConsultaDoc()
   // O resumo depende do estado: gravada, a peça passa a mostrar a via A4.
   if (fdState.aba === 'resumo') renderResumoDoc()
+}
+
+/** A peça lavrada apresenta valores; os controles originais continuam para edição. */
+function renderFichaConsultaDoc() {
+  const leitura = fdState.estado === 'lavrado' && !fdState.editando
+  const tipo = document.getElementById('nd-tipo').value
+  const destinatario = ['notificacao', 'notificacao_embargo'].includes(tipo) ? 'notificado' : tipo === 'vistoria' ? 'interessado' : 'autuado'
+  document.getElementById('fd-destinatario-titulo').textContent = 'Dados do ' + destinatario
+  document.querySelector('#fd-tabs [data-aba="autuado"]').textContent = destinatario.charAt(0).toUpperCase() + destinatario.slice(1) + ' / Imóvel'
+  const alvo = document.getElementById('fd-ficha-consulta')
+  alvo.hidden = !leitura
+  document.getElementById('fd-identificacao-campos').hidden = leitura
+  document.getElementById('m-doc').classList.toggle('ficha-lavrada', leitura)
+  if (!leitura) { alvo.innerHTML = ''; return }
+  const valor = id => document.getElementById(id)?.value?.trim() || ''
+  const campo = (rotulo, texto, classe = '') => `<div class="${classe}"><dt>${esc(rotulo)}</dt><dd${texto ? '' : ' class="doc-ficha-vazio"'}>${esc(texto || 'Não informado')}</dd></div>`
+  const rua = [valor('nd-aut-logradouro'), valor('nd-aut-numero')].filter(Boolean).join(', ')
+  const cidade = [valor('nd-aut-cidade'), valor('nd-aut-uf')].filter(Boolean).join('/')
+  const endereco = [rua, valor('nd-aut-bairro'), cidade].filter(Boolean).join(' — ')
+  const area = valor('nd-area-construida')
+  alvo.innerHTML = `<p class="doc-ficha-aviso">Documento lavrado · dados de identificação em consulta</p>
+    <section><h3>Dados do ${destinatario}</h3><dl class="doc-ficha-grade">
+      ${campo('Nome / Razão social', valor('nd-autuado'), 'doc-ficha-largo')}
+      ${campo('CPF / CNPJ', valor('nd-autuado-doc'))}
+      ${campo('Endereço para correspondência', endereco, 'doc-ficha-largo')}
+    </dl></section>
+    <section><h3>Imóvel</h3><dl class="doc-ficha-grade">
+      ${campo('Inscrição imobiliária', valor('nd-im-inscricao'), 'doc-ficha-largo')}
+      ${campo('Logradouro', valor('nd-im-logradouro'))}${campo('Número', valor('nd-im-numero'))}
+      ${campo('Bairro / Loteamento', valor('nd-im-bairro'))}
+      ${campo('Quadra / Lote', [valor('nd-im-quadra') || '—', valor('nd-im-lote') || '—'].join(' / '))}
+      ${campo('Área da obra', area ? fmtNum(Number(area)) + ' m²' : '')}
+      ${campo('Origem da área', document.querySelector('input[name="nd-area-origem"]:checked')?.value === 'projeto' ? 'Do projeto' : 'Aferida')}
+    </dl></section>`
 }
 
 /**
@@ -737,6 +773,10 @@ function renderCabecalhoDoc(d) {
  */
 function renderRodapeDoc() {
   const i = ABAS_DOC.indexOf(fdState.aba)
+  const nomesAbas = { autuado: 'Identificação', infracao: 'Infração', anexos: 'Anexos', resumo: 'Resumo' }
+  document.getElementById('fd-voltar').textContent = fdState.estado === 'lavrado' ? 'Anterior' : '‹'
+  document.getElementById('fd-avancar').textContent = fdState.estado === 'lavrado'
+    ? (i < ABAS_DOC.length - 1 ? 'Próximo: ' + nomesAbas[ABAS_DOC[i + 1]] : 'Próximo') : '›'
   document.getElementById('fd-primeira').disabled = i <= 0
   document.getElementById('fd-voltar').disabled = i <= 0
   document.getElementById('fd-avancar').disabled = i >= ABAS_DOC.length - 1

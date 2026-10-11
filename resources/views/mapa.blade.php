@@ -2055,7 +2055,9 @@
 
     {{-- AUTUADO / IMÓVEL --}}
     <div class="doc-painel ativa" id="fdp-autuado">
-      <div class="sec-title">Dados do autuado</div>
+      <div id="fd-ficha-consulta" hidden></div>
+      <div id="fd-identificacao-campos">
+      <div class="sec-title" id="fd-destinatario-titulo">Dados do autuado</div>
       {{-- LINHA 1: o documento na largura de um CNPJ, e o nome com o resto.
            Saindo do campo com um CNPJ válido, o sistema consulta a empresa e
            preenche o que estiver vazio (buscarCnpjDoc) — como no AppPOSTURAS. --}}
@@ -2168,10 +2170,11 @@
 
       {{-- O RESTO DO CADASTRO MUNICIPAL (BCI) deste imóvel — só aparece quando
            o imóvel está no cadastro. Desenhado por renderBciDoc. --}}
-      <div id="nd-bci-bloco" hidden>
-        <div class="sec-title">Cadastro municipal (BCI)</div>
-        <div id="nd-bci"></div>
       </div>
+      <details id="nd-bci-bloco" class="doc-bci-expansivel" hidden>
+        <summary>Cadastro municipal <span>BCI · Ver detalhes</span></summary>
+        <div id="nd-bci"></div>
+      </details>
 
       {{-- DE ONDE VEIO A NOTIFICAÇÃO: direta (vistoria em campo), ordem de
            serviço ou denúncia da ouvidoria. Só nas notificações. SEM data-lock
