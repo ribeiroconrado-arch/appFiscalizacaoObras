@@ -59,7 +59,7 @@ $rodapeTeste = array_replace($dados, ['orgao' => array_replace($dados['orgao'], 
 ])]);
 $htmlRodape = $render($rodapeTeste);
 $check(str_contains($htmlRodape, 'Endereço configurado &amp; atualizado'), 'Endereço não respeita configuração/escape');
-$check(str_contains($htmlRodape, 'CNPJ: 12.345.678/0001-00'), 'CNPJ configurado ausente do rodapé');
+$check(! str_contains($htmlRodape, 'CNPJ: 12.345.678/0001-00'), 'Rodapé deve conter somente documento e páginas');
 foreach (['1 - Identificação', '2 - Local', '3 - Infração', '4 - Ciência', $doc->descricao,
     $doc->observacoes, '0,3500 UPF/m² × 120,00 m²', 'Multa e embargo.', '20/08/2026', 'Fiscal de Teste'] as $texto) {
     $check(str_contains($html, $texto), 'Conteúdo ausente: '.$texto);
@@ -68,7 +68,7 @@ foreach (['Total da multa', '58,00 UPF', 'R$ 337', 'CEP 78850', '5 - Termo', '6 
     $check(! str_contains($html, $texto), 'Conteúdo indevido: '.$texto);
 }
 $check(strpos($html, '>Cálculo<') < strpos($html, '>Multa · UPF<'), 'Ordem das colunas incorreta');
-$pdf = Pdf::loadHTML($html)->setPaper('a4')->output();
+$pdf = \App\Services\PaginacaoDocumentoA4::aplicar(Pdf::loadHTML($html)->setPaper('a4'))->output();
 $check(str_starts_with($pdf, '%PDF-'), 'PDF não gerado');
 if (isset($argv[1])) {
     if (! is_dir($argv[1])) { mkdir($argv[1], 0777, true); }

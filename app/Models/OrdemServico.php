@@ -51,7 +51,7 @@ class OrdemServico extends Model
         'aberta'       => ['texto' => 'Aberta',       'classe' => 'bd-al'],
         'em_andamento' => ['texto' => 'Em andamento', 'classe' => 'bd-in'],
         'concluida'    => ['texto' => 'Concluída',    'classe' => 'bd-ok'],
-        'cancelada'    => ['texto' => 'Cancelada',    'classe' => 'bd-cx'],
+        'cancelada'    => ['texto' => 'Cancelada',    'classe' => 'bd-fim'],
     ];
 
     public const PRIORIDADES = ['normal' => 'Normal', 'alta' => 'Alta'];

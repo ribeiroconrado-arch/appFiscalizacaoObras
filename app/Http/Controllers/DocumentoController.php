@@ -8,6 +8,7 @@ use App\Models\Legislacao;
 use App\Models\Lote;
 use App\Models\Parametro;
 use App\Models\Vistoria;
+use App\Rules\CpfCnpj;
 use App\Services\DocumentoImpressao;
 use App\Services\LavraturaService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -387,7 +388,7 @@ class DocumentoController extends Controller
             'data_fato'      => ['nullable', 'date_format:Y-m-d\TH:i'],
             'prazo_dias'     => ['nullable', 'integer', 'min:0', 'max:365'],
             'autuado_nome'   => ['nullable', 'string', 'max:160'],
-            'autuado_documento' => ['nullable', 'string', 'max:20'],
+            'autuado_documento' => ['nullable', 'string', 'max:20', new CpfCnpj],
             'autuado_endereco'  => ['nullable', 'string', 'max:300'],
             'endereco'       => ['nullable', 'string', 'max:200'],
             // O endereço EM PARTES (o formulário). O texto único de cada um é
@@ -412,6 +413,8 @@ class DocumentoController extends Controller
             // não calcula multa (ver Artigo::calcularMulta).
             'area_terreno_m2'    => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'area_construida_m2' => ['nullable', 'numeric', 'min:0', 'max:999999'],
+            // De onde veio a área da obra: medida em campo, ou tirada do projeto.
+            'area_obra_origem'   => ['nullable', Rule::in(['aferida', 'projeto'])],
             ...self::REGRAS_DO_ALVARA,
             'artigos'        => ['array'],
             'artigos.*'      => ['integer', 'exists:artigos,id'],
@@ -455,6 +458,7 @@ class DocumentoController extends Controller
             'observacoes'   => $d['observacoes'] ?? null,
             'area_terreno_m2'    => $d['area_terreno_m2'] ?? $lote?->area_gis_m2 ?? null,
             'area_construida_m2' => $d['area_construida_m2'] ?? null,
+            'area_obra_origem'   => isset($d['area_construida_m2']) ? ($d['area_obra_origem'] ?? 'aferida') : null,
             'alvara_valor'       => $d['alvara_valor'] ?? null,
         ]);
 
@@ -852,6 +856,7 @@ class DocumentoController extends Controller
                 'numero'     => $documento->imovel_endereco_partes['numero'] ?? null,
                 'terreno'   => $documento->area_terreno_m2,
                 'construida'=> $documento->area_construida_m2,
+                'obra_origem' => $documento->area_obra_origem,
                 'alvara_valor' => $documento->alvara_valor,
             ],
 
@@ -1039,7 +1044,7 @@ class DocumentoController extends Controller
             'legislacao_id'      => ['nullable', 'exists:legislacoes,id'],
             'origem_id'          => ['nullable', 'exists:documentos,id'],
             'autuado_nome'       => ['nullable', 'string', 'max:160'],
-            'autuado_documento'  => ['nullable', 'string', 'max:20'],
+            'autuado_documento'  => ['nullable', 'string', 'max:20', new CpfCnpj],
             'autuado_endereco'   => ['nullable', 'string', 'max:300'],
             'endereco'           => ['nullable', 'string', 'max:200'],
             // O endereço EM PARTES (o formulário). O texto único de cada um é
@@ -1060,6 +1065,7 @@ class DocumentoController extends Controller
             'prazo_dias'         => ['nullable', 'integer', 'min:0', 'max:365'],
             'area_terreno_m2'    => ['nullable', 'numeric', 'min:0'],
             'area_construida_m2' => ['nullable', 'numeric', 'min:0'],
+            'area_obra_origem'   => ['nullable', Rule::in(['aferida', 'projeto'])],
             ...self::REGRAS_DO_ALVARA,
             'artigos'            => ['nullable', 'array'],
             'artigos.*'          => ['integer', 'exists:artigos,id'],
@@ -1084,6 +1090,9 @@ class DocumentoController extends Controller
         if ($documento->status === 'gravado' && $documento->tipo !== $d['tipo']) {
             return response()->json(['message' => 'Documento gravado já tem número na série do tipo dele e não muda de tipo. Cancele-o e abra outro.'], 422);
         }
+
+        // A origem da área só existe com a área: sem ela, não há o que qualificar.
+        $d['area_obra_origem'] = isset($d['area_construida_m2']) ? ($d['area_obra_origem'] ?? 'aferida') : null;
 
         try {
             $documento->tipo = $d['tipo'];
@@ -1153,6 +1162,7 @@ class DocumentoController extends Controller
         );
 
         $pdf = Pdf::loadView('impressao.a4', $dados + ['navegador' => false])->setPaper('a4');
+        \App\Services\PaginacaoDocumentoA4::aplicar($pdf);
 
         // O nome do arquivo não aceita "/" — e numeroFormatado() tem um
         // ("AI 2026/0002"), por ser o formato natural de citar o documento.

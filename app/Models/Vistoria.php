@@ -373,7 +373,7 @@ class Vistoria extends Model
     {
         return match ($this->situacao) {
             'regular'           => 'bd-ok',
-            'irregular'         => 'bd-in',
+            'irregular'         => 'bd-er',   // pede providência: vermelho de alerta
             'em_acompanhamento' => 'bd-pe',
             default             => 'bd-pe',
         };

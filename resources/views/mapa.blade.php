@@ -2028,11 +2028,13 @@
         <span id="fd-numero" class="proto-badge doc-head-num">—</span>
       </span>
       <span id="fd-status" class="badge bd-in">Novo</span>
+      {{-- O prazo ao lado do status: as duas tags dizem, juntas, em que pé a
+           peça está — e a de prazo, sozinha na linha de baixo, passava batida. --}}
+      <span id="fd-prazo-wrap" hidden><span id="fd-prazo-badge" class="badge bd-al"></span></span>
     </div>
     <div class="doc-head-meta">
       <div><span class="doc-head-lbl">Data registro:</span> <span id="fd-registro">—</span></div>
       <div><span class="doc-head-lbl">Agente</span> <span id="fd-agente">—</span></div>
-      <div id="fd-prazo-wrap" hidden><span class="doc-head-lbl">Prazo</span> <span id="fd-prazo-badge" class="badge bd-al"></span></div>
     </div>
 
     <div class="doc-tabs" id="fd-tabs">
@@ -2062,7 +2064,7 @@
           <label for="nd-autuado-doc">CPF / CNPJ</label>
           <input type="text" id="nd-autuado-doc" class="mono" maxlength="18" data-lock inputmode="numeric"
                  placeholder="000.000.000-00" autocomplete="off"
-                 oninput="mascararCpfCnpjDoc(this)" onblur="buscarCnpjDoc(this)">
+                 oninput="mascararCpfCnpjDoc(this)" onblur="conferirCpfCnpjCampo(this) && buscarCnpjDoc(this)">
         </div>
         <div class="field">
           <label for="nd-autuado">Nome / razão social</label>
@@ -2095,8 +2097,14 @@
         </div>
         <div class="field">
           <label for="nd-aut-uf">UF</label>
-          <input type="text" id="nd-aut-uf" maxlength="2" data-lock autocomplete="off"
-                 style="text-transform:uppercase" oninput="this.value = this.value.replace(/[^a-zA-Z]/g, '').toUpperCase()">
+          {{-- As 27 unidades da federação, em lista: digitado à mão, o campo
+               aceitava "MTT" e "XX". --}}
+          <select data-combo id="nd-aut-uf" data-lock>
+            <option value="">—</option>
+            @foreach (['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] as $uf)
+              <option value="{{ $uf }}">{{ $uf }}</option>
+            @endforeach
+          </select>
         </div>
       </div>
       {{-- CARIMBO DE PROCEDÊNCIA. Só em peça lavrada: no rascunho ainda não há
@@ -2141,6 +2149,20 @@
         <div class="field">
           <label for="nd-im-lote">Lote</label>
           <input type="text" id="nd-im-lote" class="mono" maxlength="20" data-lock>
+        </div>
+      </div>
+      {{-- LINHA 3: a ÁREA DA OBRA e como ela foi obtida. É a área construída
+           que serve de base à multa por m² (aba Infração); informada aqui,
+           junto do imóvel, que é onde o fiscal a tem em mãos. "Aferida" é a
+           medição dele em campo; "Do projeto", a que consta no projeto. --}}
+      <div class="doc-lin doc-lin-obra">
+        <div class="field">
+          <label for="nd-area-construida">Área obra (m²)</label>
+          <input id="nd-area-construida" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
+        </div>
+        <div class="doc-obra-origem" role="radiogroup" aria-label="Como a área da obra foi obtida">
+          <label><input type="radio" name="nd-area-origem" value="aferida" data-lock checked> Aferida</label>
+          <label><input type="radio" name="nd-area-origem" value="projeto" data-lock> Do projeto</label>
         </div>
       </div>
 
@@ -2283,11 +2305,9 @@
               <label for="nd-area-terreno">Área do terreno (m²)</label>
               <input id="nd-area-terreno" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
             </div>
-            <div class="field">
-              <label for="nd-area-construida">Área construída aferida (m²)</label>
-              <input id="nd-area-construida" type="number" min="0" step="0.01" data-lock oninput="recalcularMultaDoc()">
-            </div>
           </div>
+          {{-- A área da obra tem um campo só, na aba Autuado/Imóvel. --}}
+          <p class="anx-nota">A área da obra é a informada em <a href="#" onclick="event.preventDefault(); irAbaDoc('autuado'); document.getElementById('nd-area-construida').focus()">Autuado/Imóvel › Área obra</a>.</p>
         </div>
         {{-- Multa por múltiplo do valor do alvará (LC 001/2023, art. 120,
              parágrafo único): aparece só com artigo desse tipo na peça. --}}
@@ -3229,7 +3249,8 @@
     </div>
     <div class="field">
       <label for="np-documento">CPF/CNPJ</label>
-      <input type="text" id="np-documento" class="mono" maxlength="20">
+      <input type="text" id="np-documento" class="mono" maxlength="18" inputmode="numeric" autocomplete="off"
+             placeholder="000.000.000-00" oninput="mascararCpfCnpj(this)" onblur="conferirCpfCnpjCampo(this)">
     </div>
     <div class="field">
       <label for="np-contato">Telefone ou e-mail</label>

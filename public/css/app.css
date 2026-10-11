@@ -102,10 +102,14 @@ body{
 /* ── TÍTULOS DE SEÇÃO — numeração por contador CSS ────────── */
 .modal{counter-reset:sec}
 .sec-title{
-  display:flex;align-items:center;gap:8px;margin:16px 0 10px;
+  /* 26px acima: os grupos de campos de um formulário precisam de respiro
+     entre si para serem lidos como grupos (eram 16px). O primeiro título do
+     painel não leva esse espaço — ver logo abaixo. */
+  display:flex;align-items:center;gap:8px;margin:26px 0 10px;
   font-size:11.5px;color:var(--tx2);text-transform:uppercase;
   letter-spacing:.05em;
 }
+.doc-painel > .sec-title:first-child,.modal > .sec-title:first-child{margin-top:8px}
 .sec-title::before{
   counter-increment:sec;content:counter(sec);
   width:18px;height:18px;flex-shrink:0;border-radius:5px;

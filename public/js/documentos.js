@@ -600,11 +600,7 @@ function abrirRelogioDoc(botao) {
 /** Máscara conforme o tamanho: até 11 dígitos é CPF, daí em diante CNPJ. */
 function mascararCpfCnpjDoc(inp) {
   _cnpjConsultadoDoc = ''   // mexeu no documento: a próxima saída do campo consulta de novo
-  const n = inp.value.replace(/\D/g, '').slice(0, 14)
-  inp.value = n.length <= 11
-    ? n.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2')
-    : n.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-       .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2')
+  mascararCpfCnpj(inp)      // a máscara e a conferência são as do sistema (ui.js)
 }
 
 /** O último CNPJ consultado — sair e voltar ao campo, sem mexer nele, não repete a consulta. */

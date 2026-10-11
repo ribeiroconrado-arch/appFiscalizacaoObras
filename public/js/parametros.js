@@ -271,7 +271,7 @@ function renderUsuarios() {
             <div class="par-card-meta">
               ${[login, u.matricula].filter(Boolean).map(esc).join(' · ')} ·
               <span class="pil ${u.ativo ? 'pil-ok' : 'pil-off'}">${u.ativo ? 'Ativo' : 'Inativo'}</span>
-              <span class="badge ${admin ? 'bd-cx' : 'bd-in'}">${esc(u.perfil_rotulo)}</span>
+              <span class="badge ${admin ? 'bd-adm' : 'bd-in'}">${esc(u.perfil_rotulo)}</span>
               ${u.tipo_usuario ? `<span class="par-card-cargo">${esc(u.tipo_usuario)}</span>` : ''}
             </div>
           </div>

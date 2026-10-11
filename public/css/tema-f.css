@@ -87,6 +87,30 @@
 .bd-in  {background:linear-gradient(135deg,#F1F5F9,#E3E9EF);--badge-border:#E2E8F0;--badge-color:#6B7280;--badge-icon:var(--ic-dot)}
 .bd-cx  {background:linear-gradient(135deg,#FCEAE9,#F5CDC8);--badge-border:#F0B8B3;--badge-color:#B71C1C;--badge-icon:var(--ic-x)}
 .bd-tipo{background:linear-gradient(135deg,#F6F3F0,#EDE8E3);--badge-border:#E2DCD6;--badge-color:#8A8078;--badge-icon:var(--ic-file)}
+/* ── CADA COR DIZ UMA COISA SÓ (decisão de 11/10/2026) ──
+   verde  deu certo · azul  ato em vigor · petróleo  tem número, falta lavrar
+   âmbar  aguardando · violeta  em defesa · vermelho  alerta (e o imóvel INATIVO,
+   que continua vermelho de propósito: quem abre a ficha precisa ser avisado)
+   vinho cheio  embargo em vigor · cinza-escuro  deixou de valer · cinza  neutro
+   Antes "Lavrado" era âmbar como "Aguardando", "Gravado" e "Em defesa" eram
+   cinza como "Rascunho", e havia dois vermelhos quase iguais. */
+:root{
+  --ic-selo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.4 14.2-4-4 1.5-1.5 2.5 2.5 5.3-5.3 1.5 1.5-6.8 6.8z'/%3E%3C/svg%3E");
+  --ic-numero: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 3h2l-.5 5h4l.5-5h2l-.5 5H20v2h-3.7l-.4 4H19v2h-3.3l-.5 5h-2l.5-5h-4l-.5 5h-2l.5-5H4v-2h3.9l.4-4H5V8h3.5L9 3zm1.3 7-.4 4h4l.4-4h-4z'/%3E%3C/svg%3E");
+  --ic-escudo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3z'/%3E%3C/svg%3E");
+  --ic-proibido: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM4.5 12a7.5 7.5 0 0 1 12-6L6 16.5A7.4 7.4 0 0 1 4.5 12zm7.5 7.5a7.4 7.4 0 0 1-4.5-1.5L18 7.5a7.5 7.5 0 0 1-6 12z'/%3E%3C/svg%3E");
+  --ic-caixa: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 4h18v5H3V4zm1 7h16v9H4v-9zm5 2v2h6v-2H9z'/%3E%3C/svg%3E");
+  --ic-estrela: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 9.2 8.3 2 9.2l5.3 4.9L5.9 21 12 17.5 18.1 21l-1.4-6.9L22 9.2l-7.2-.9L12 2z'/%3E%3C/svg%3E");
+}
+.bd-vig {background:linear-gradient(135deg,#E6F0FD,#D3E4FB);--badge-border:#BCD4F6;--badge-color:#1D5FBF;--badge-icon:var(--ic-selo)}
+.bd-num {background:linear-gradient(135deg,#E2F4F6,#CFECEF);--badge-border:#B5DEE3;--badge-color:#0E7480;--badge-icon:var(--ic-numero)}
+.bd-def {background:linear-gradient(135deg,#F0EAFB,#E3D8F7);--badge-border:#D3C4F0;--badge-color:#6D3FC4;--badge-icon:var(--ic-escudo)}
+.bd-fim {background:linear-gradient(135deg,#ECEDEF,#DFE1E4);--badge-border:#CDD0D5;--badge-color:#4B5563;--badge-icon:var(--ic-x)}
+.bd-fim.bd-i-escudo{--badge-icon:var(--ic-escudo)}   /* Defendido: caiu por defesa */
+.bd-fim.bd-i-caixa{--badge-icon:var(--ic-caixa)}     /* Arquivado: guardado, não deu errado */
+/* A única tag de fundo cheio, de propósito: embargo é medida EM VIGOR sobre o imóvel. */
+.badge.bd-emb{background:#7A1230;color:#fff;--badge-border:#7A1230;--badge-color:#fff;--badge-icon:var(--ic-proibido)}
+.bd-adm {background:linear-gradient(135deg,#EEF0F2,#E0E4E8);--badge-border:#C9CFD6;--badge-color:#37413F;--badge-icon:var(--ic-estrela)}
 
 /* ── ABAS ───────────────────────────────────────────────────── */
 /* Rodapé: FLEX, não grid de N colunas fixas. Com grid o número de colunas
@@ -1386,6 +1410,14 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 /* Modo leitura: campo travado precisa PARECER travado, senão o usuário tenta
    digitar e conclui que o sistema está com defeito. */
 #m-doc.so-leitura .field{background:var(--f-fundo-ro)}
+/* …e o que CONTINUA EDITÁVEL com a peça travada (a origem da notificação,
+   depois de lavrada) tem de parecer editável: campo sem nada desativado
+   dentro volta ao fundo branco. Senão o cinza diz "não mexa" justamente no
+   único campo em que ainda se pode mexer. */
+#m-doc.so-leitura .field:has(input,select,textarea):not(:has(:disabled,[readonly],.so-leitura-campo)){background:var(--f-fundo)}
+/* CPF/CNPJ incorreto: o campo fica marcado até ser corrigido. */
+.field.campo-invalido{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(194,53,43,.12)}
+.campo-erro{color:var(--red);font-size:11.5px;font-weight:600;margin:3px 2px 0}
 #m-doc.so-leitura .chk-item{opacity:.85}
 
 /* ── RESUMO ──
@@ -2260,12 +2292,12 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    vinte, o selo sozinho obriga a ler um por um para achar o rascunho. */
 .doc-card{border-left:3px solid var(--bord);padding-left:11px}
 .doc-card.st-rascunho{border-left-color:var(--gold)}
-.doc-card.st-gravado{border-left-color:var(--tx3)}
-.doc-card.st-em_defesa{border-left-color:var(--blue)}
-.doc-card.st-defendido{border-left-color:var(--tx3)}
-.doc-card.st-lavrado{border-left-color:var(--g)}
+.doc-card.st-gravado{border-left-color:#0E7480}
+.doc-card.st-em_defesa{border-left-color:#6D3FC4}
+.doc-card.st-defendido{border-left-color:#4B5563}
+.doc-card.st-lavrado{border-left-color:#1D5FBF}
 .doc-card.st-atendido{border-left-color:var(--gd)}
-.doc-card.st-anulado,.doc-card.st-cancelado{border-left-color:var(--red)}
+.doc-card.st-anulado,.doc-card.st-cancelado{border-left-color:#4B5563}
 
 .doc-card-topo{display:flex;align-items:flex-start;gap:11px}
 /* O mesmo ícone do menu "Novo documento" (ICO_TIPO_DOC): quem escolheu a peça
@@ -2409,14 +2441,14 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    de cores. */
 .tabela-lista tbody td:first-child{border-left:3px solid transparent}
 .tabela-lista tbody tr.st-rascunho td:first-child{border-left-color:var(--gold)}
-.tabela-lista tbody tr.st-lavrado  td:first-child{border-left-color:var(--g)}
+.tabela-lista tbody tr.st-lavrado  td:first-child{border-left-color:#1D5FBF}
 .tabela-lista tbody tr.st-atendido td:first-child{border-left-color:#2E7D32}
 .tabela-lista tbody tr.st-anulado  td:first-child,
-.tabela-lista tbody tr.st-cancelado td:first-child{border-left-color:var(--red)}
-.tabela-lista tbody tr.st-em_defesa td:first-child{border-left-color:var(--blue)}
+.tabela-lista tbody tr.st-cancelado td:first-child{border-left-color:#4B5563}
+.tabela-lista tbody tr.st-em_defesa td:first-child{border-left-color:#6D3FC4}
 #m-doc-defesa{z-index:2040}
-.tabela-lista tbody tr.st-gravado  td:first-child,
-.tabela-lista tbody tr.st-defendido td:first-child{border-left-color:var(--tx3)}
+.tabela-lista tbody tr.st-gravado  td:first-child{border-left-color:#0E7480}
+.tabela-lista tbody tr.st-defendido td:first-child{border-left-color:#4B5563}
 
 /* A célula de identificação: número em cima, qualificação embaixo. É a única
    que quebra em duas linhas — o número é por onde a peça é citada e procurada,
@@ -3641,9 +3673,15 @@ select.combo-oculto{display:none !important}
 .doc-lin .field{margin-bottom:0;min-width:0}
 .doc-lin-autuado{grid-template-columns:190px minmax(0,1fr)}      /* CNPJ: 18 caracteres */
 .doc-lin-rua{grid-template-columns:minmax(0,9fr) minmax(76px,1fr)} /* logradouro 90% · número 10% */
-.doc-lin-cidade{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 62px}   /* UF: duas letras */
+.doc-lin-cidade{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 92px}   /* UF: a sigla e o × da lista */
 .doc-lin-imovel{grid-template-columns:196px minmax(0,1fr) 78px}  /* inscrição: 19 caracteres · número: 5 dígitos */
 .doc-lin-quadra{grid-template-columns:minmax(0,1fr) 78px 72px}   /* quadra e lote: a largura do rótulo */
+/* Área da obra: campo curto, e ao lado, um em cima do outro, como foi obtida. */
+.doc-lin-obra{grid-template-columns:150px minmax(0,1fr);align-items:center}
+.doc-obra-origem{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--tx2)}
+.doc-obra-origem label{display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:500}
+.doc-obra-origem input{appearance:auto;-webkit-appearance:radio;width:16px;height:16px;margin:0;flex:none;accent-color:var(--g)}
+.doc-obra-origem input:disabled+*,.doc-obra-origem label:has(input:disabled){cursor:default;opacity:.75}
 @media (max-width:560px){
   /* No celular o documento e a inscrição ganham a linha inteira; os curtos
      continuam ao lado do campo que acompanham. */

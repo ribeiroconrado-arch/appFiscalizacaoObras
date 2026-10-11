@@ -322,6 +322,16 @@ class Documento extends Model
         return $opcoes;
     }
 
+    /** "aferida" / "do projeto" — como a área da obra foi obtida; vazio se não informada. */
+    public function origemDaAreaDaObra(): string
+    {
+        return match ($this->area_obra_origem) {
+            'aferida' => 'aferida',
+            'projeto' => 'do projeto',
+            default   => '',
+        };
+    }
+
     public function rotuloTipo(): string { return self::TIPOS[$this->tipo][0] ?? $this->tipo; }
     public function sigla(): string      { return self::TIPOS[$this->tipo][1] ?? '?'; }
 
@@ -403,14 +413,16 @@ class Documento extends Model
     {
         return match ($this->status) {
             'rascunho'  => ['Rascunho', 'bd-in'],
-            'gravado'   => ['Gravado', 'bd-in'],
+            // As cores: ver "CADA COR DIZ UMA COISA SÓ", em tema-f.css.
+            'gravado'   => ['Gravado', 'bd-num'],
             // Defesa indeferida: a peça voltou a lavrada, agora apta à cobrança.
-            'lavrado'   => ($this->defesa['resultado'] ?? null) === 'indeferida' ? ['Lavrado · apto', 'bd-al'] : ['Lavrado', 'bd-al'],
-            'em_defesa' => ['Em defesa', 'bd-in'],
+            'lavrado'   => ($this->defesa['resultado'] ?? null) === 'indeferida' ? ['Lavrado · apto', 'bd-vig'] : ['Lavrado', 'bd-vig'],
+            'em_defesa' => ['Em defesa', 'bd-def'],
             'atendido'  => ['Atendido', 'bd-ok'],
-            'anulado'   => ['Cancelado', 'bd-cx'],   // nome antigo do cancelamento
-            'cancelado' => ['Cancelado', 'bd-cx'],
-            'defendido' => ['Defendido', 'bd-ok'],
+            'anulado'   => ['Cancelado', 'bd-fim'],   // nome antigo do cancelamento
+            'cancelado' => ['Cancelado', 'bd-fim'],
+            // Deixou de valer, como a cancelada — o escudo diz que foi por defesa.
+            'defendido' => ['Defendido', 'bd-fim bd-i-escudo'],
             default     => [$this->status, 'bd-in'],
         };
     }

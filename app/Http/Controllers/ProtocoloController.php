@@ -124,7 +124,7 @@ class ProtocoloController extends Controller
             'tipo'                 => ['required', Rule::in(array_keys(Protocolo::TIPOS))],
             'lote_id'              => ['nullable', 'exists:lotes,id'],
             'requerente_nome'      => ['required', 'string', 'max:160'],
-            'requerente_documento' => ['nullable', 'string', 'max:20'],
+            'requerente_documento' => ['nullable', 'string', 'max:20', new \App\Rules\CpfCnpj],
             'requerente_contato'   => ['nullable', 'string', 'max:120'],
             'protocolado_em'       => ['required', 'date'],
             'prazo_resposta'       => ['nullable', 'date', 'after_or_equal:protocolado_em'],

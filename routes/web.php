@@ -125,6 +125,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::put('/ruas/manuais/{rua}', [\App\Http\Controllers\RuaManualController::class, 'alterar']);
         Route::delete('/ruas/manuais/{rua}', [\App\Http\Controllers\RuaManualController::class, 'excluir']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);
+        Route::get('/mapa/google-sessao-ruas', [MapaController::class, 'googleSessaoRuas']);
         Route::post('/localizacao/identificar', [MapaController::class, 'identificar']);
 
         // Quadra vazia e uma pendencia de importacao, nao um defeito eterno:

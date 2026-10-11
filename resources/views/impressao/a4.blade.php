@@ -25,11 +25,6 @@
       ? str_replace(['AUTUADO', 'Autuado', 'autuado'], ['NOTIFICADO', 'Notificado', 'notificado'], $texto ?? '')
       : ($texto ?? '');
   $numeroA4 = $doc->numero ? sprintf('%d/%04d', $doc->exercicio, $doc->numero) : 'Sem número';
-  $contatoRodape = collect([
-      $orgao['endereco'] ?? null, $orgao['municipio'] ?? null, $orgao['telefone'] ?? null,
-      empty($orgao['cnpj']) ? null : 'CNPJ: ' . $orgao['cnpj'],
-  ])->filter(fn ($valor) => trim((string) $valor) !== '')->implode(' · ');
-
   $navegador = $navegador ?? false;
   $fmt = fn ($v, $c = 2) => $v === null ? '—' : number_format((float) $v, $c, ',', '.');
 @endphp
@@ -39,9 +34,16 @@
 <meta charset="utf-8">
 <title>{{ $titulo }} {{ $doc->numeroFormatado() }}</title>
 <style>
-  @page { size: A4; margin: 8mm 10mm 10mm 10mm; }
+  @page { size: A4; margin: 8mm 10mm 14mm 10mm; }
+  @if ($navegador)
+    @page {
+      @bottom-left { content: "pág.: " counter(page) "/" counter(pages); font-family: Arial; font-size: 7pt; color: #555; border-top: 1px solid #bbb; }
+      @bottom-right { content: "{{ $doc->rotuloTipo() }} {{ $numeroA4 }}"; font-family: Arial; font-size: 7pt; color: #555; border-top: 1px solid #bbb; }
+    }
+    @media print { .rodape-a4 { display: none; } }
+  @endif
 
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; color: #111;
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #111;
          line-height: 1.3; margin: 0; }
 
   /* ── Cabeçalho institucional (repete em toda página) ── */
@@ -58,9 +60,11 @@
   /* Ajustes exclusivos do A4 dos documentos; OS e bobina conservam seus modelos. */
   .cab-brasao { width: 64px; }
   .cab-brasao img { width: 54px; height: auto; }
-  .cab-orgao { font-size: 10px; }
-  .cab-depto, .cab-end { font-size: 9px; margin-top: 1px; }
-  .cab-selo { font-size: 9px; }
+  .cab-titulo, .cab-num-val { font-size: 14pt; }
+  .cab-num-lbl { font-size: 7pt; }
+  .cab-orgao { font-size: 8pt; }
+  .cab-depto, .cab-end { font-size: 7pt; margin-top: 1px; }
+  .cab-selo { font-size: 7pt; }
   @unless ($navegador)
     @page { margin-top: 29mm; }
     .cab-fixo { top: -21mm; height: 20mm; }
@@ -71,13 +75,13 @@
   table.topo { margin-top: 0; background: #f1f1f1; table-layout: fixed; }
   table.topo td { padding: 4px 3px; }
   table.topo td:last-child { padding-right: 6px; }
-  .topo-lbl { font-size: 7px; white-space: normal; }
-  .topo-val { font-size: 9px; }
+  .topo-lbl { font-size: 6pt; white-space: normal; }
+  .topo-val { font-size: 7pt; }
   .topo-regua { border-bottom: 1px solid #50565b; margin-bottom: 8px; }
 
   /* ── Seções ── */
   .sec { margin-bottom: 6px; }
-  .sec-tit { font-size: 10px; font-weight: bold; text-transform: uppercase;
+  .sec-tit { font-size: 8pt; font-weight: bold; text-transform: uppercase;
              border-bottom: 1px solid #d5d5d5; padding: 0 0 5px; margin: 10px 0 5px;
              page-break-after: avoid; }
   /* CPDF insere separadores NUL nos ajustes de espaço de texto Unicode
@@ -86,18 +90,18 @@
 
   table.campos { width: 100%; border-collapse: collapse; }
   table.campos td { border: 0; padding: 2px 12px 4px 0; vertical-align: top; font-weight: normal; }
-  table.campos .lbl { display: block; font-size: 7.5px; color: #666; text-transform: uppercase;
+  table.campos .lbl { display: block; font-size: 6pt; color: #666; text-transform: uppercase;
                       letter-spacing: .04em; font-weight: normal; }
 
   /* ── Memória de cálculo da multa (específico de obras) ── */
   .lei-cab { font-family: 'Times New Roman', Times, serif; padding: 8px 9px 5px;
              page-break-after: avoid; }
-  .lei-cab .lbl { font-size: 7.5px; color: #666; margin-right: 7px; }
+  .lei-cab .lbl { font-size: 6pt; color: #666; margin-right: 7px; }
   table.multa { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 16px;
                 font-family: 'Times New Roman', Times, serif; }
   table.multa th { background: #f5f5f5; border: 1px solid #ddd; padding: 6px 8px;
                    font-size: 8px; text-align: left; }
-  table.multa td { border-bottom: 1px solid #ddd; padding: 8px; font-size: 10.5px; vertical-align: top; line-height: 1.45; }
+  table.multa td { border-bottom: 1px solid #ddd; padding: 8px; font-size: 8pt; vertical-align: top; line-height: 1.45; }
   table.multa td + td { border-left: 1px solid #ddd; }
   table.multa td.dir { text-align: right; white-space: nowrap; font-weight: bold; }
   table.multa .calculo { color: #555; font-size: 8px; }
@@ -116,23 +120,26 @@
      limite pode subir — antes, esticar só esticava o vazio em volta. */
   .assina-img { max-height: 62px; max-width: 100%; width: auto; }
   .assina-vazio { height: 62px; }
-  .assina-linha { border-top: 1px solid #111; padding-top: 3px; margin-top: 3px; font-size: 8.5px; }
+  .assina-linha { border-top: 1px solid #111; padding-top: 3px; margin-top: 3px; font-size: 7pt; }
 
   /* ── Anexos ── */
-  table.anexo { width: 100%; table-layout: fixed; border-collapse: collapse;
-                border: 1px solid #ddd; page-break-inside: avoid; margin-bottom: 10px; }
-  table.anexo td { padding: 10px; vertical-align: middle; }
-  table.anexo td.anexo-foto { width: 150px; padding-right: 2px; text-align: center; }
-  .anexo img { max-width: 150px; max-height: 110px; width: auto; height: auto; }
-  .anexo-tit { font-size: 9.5px; font-weight: bold; overflow-wrap: break-word; }
-  .anexo-obs { font-size: 8.5px; color: #555; overflow-wrap: break-word; white-space: pre-line; }
+  .sec-anexos { page-break-before: always; break-before: page; }
+  table.anexos-grade { width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 12px; page-break-inside: avoid; }
+  .anexos-grade td { width: 50%; border: 1px solid #ddd; padding: 0; vertical-align: top; }
+  .anexo-foto { height: 55mm; text-align: center; padding: 6px; }
+  .anexo-foto img { max-width: 85mm; max-height: 52mm; width: auto; height: auto; }
+  .anexo-dados { background: #f5f5f5; padding: 5px 10px; }
+  .anexo-tit { font-size: 8pt; font-weight: bold; overflow-wrap: break-word; }
+  .anexo-obs { font-size: 7pt; color: #555; overflow-wrap: break-word; white-space: pre-line; }
+  .anexos-grade td.anexo-vazio { border: 0; }
+  .prazo-destaque { background: #f1f1f1; padding: 7px 9px; margin: 12px 0 !important; page-break-inside: avoid; }
 
   /* ── Marca d'água ── */
   .marca { position: fixed; top: 40%; left: 12%; font-size: 96px; font-weight: bold;
            color: #E4E4E4; letter-spacing: 8px; transform: rotate(-28deg); z-index: -1; }
 
   .rodape-inst { border-top: 1px solid #ccc; margin-top: 10px; padding-top: 5px;
-                 font-size: 7.5px; color: #666; text-align: center; line-height: 1.4; }
+                 font-size: 6pt; color: #666; text-align: center; line-height: 1.4; }
   .rodape-a4 { font-size: 7pt; color: #555; line-height: 1.3;
                border-top: 1px solid #bbb; padding-top: 4px; margin-top: 12px; }
   .rodape-a4 table { width: 100%; border-collapse: collapse; }
@@ -140,8 +147,8 @@
   .rodape-a4 .documento { text-align: right; width: 42%; }
   .rodape-a4 .contato { margin-top: 3px; white-space: pre-line; }
   @unless ($navegador || ! empty($previa))
-    @page { margin-bottom: 22mm; }
-    .rodape-a4 { position: fixed; bottom: -15mm; left: 0; right: 0; margin-top: 0; }
+    @page { margin-bottom: 14mm; }
+    .rodape-a4 { position: fixed; bottom: -8mm; left: 0; right: 0; margin-top: 0; }
   @endunless
 
 @if ($navegador)
@@ -178,19 +185,7 @@
 
 @include('impressao._pagina-abre', ['numero' => $numeroA4, 'cabecalhoA4Compacto' => true])
 
-      {{-- Faixa do topo: identifica quem lavrou e quando. Fica no tbody de
-           propósito — só faz sentido na primeira página. --}}
-      <table class="topo">
-        <colgroup><col style="width:11%"><col style="width:17%"><col style="width:30%"><col style="width:21%"><col style="width:21%"></colgroup>
-        <tr>
-          <td style="width:11%"><span class="topo-lbl">Exercício</span><span class="topo-val">{{ $doc->exercicio ?? '—' }}</span></td>
-          <td style="width:17%"><span class="topo-lbl">Matrícula do agente</span><span class="topo-val">{{ $doc->agente?->matricula ?? '—' }}</span></td>
-          <td style="width:30%"><span class="topo-lbl">Origem</span><span class="topo-val">{{ $origemTexto }}</span></td>
-          <td style="width:21%"><span class="topo-lbl">Data/hora do fato</span><span class="topo-val">{{ $doc->data_fato?->format('d/m/y H:i') ?? '—' }}</span></td>
-          <td style="width:21%"><span class="topo-lbl">Data/hora da lavratura</span><span class="topo-val">{{ $doc->data_lavratura?->format('d/m/y H:i') ?? '—' }}</span></td>
-        </tr>
-      </table>
-      <div class="topo-regua"></div>
+      @include('impressao._identificacao-a4')
 
       {{-- 1 — Autuado --}}
       <div class="sec">
@@ -221,7 +216,7 @@
           <tr>
             <td colspan="2"><span class="lbl">Bairro / loteamento</span>{{ $imovel['bairro'] ?: '—' }}</td>
             <td><span class="lbl">Área lote</span>{{ $doc->area_terreno_m2 !== null ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }}</td>
-            <td><span class="lbl">Área construída</span>{{ $doc->area_construida_m2 !== null ? $fmt($doc->area_construida_m2) . ' m²' : '—' }}</td>
+            <td><span class="lbl">Área da obra</span>{{ $doc->area_construida_m2 !== null ? $fmt($doc->area_construida_m2) . ' m²' . ($doc->origemDaAreaDaObra() ? ' (' . $doc->origemDaAreaDaObra() . ')' : '') : '—' }}</td>
           </tr>
         </table>
       </div>
@@ -277,7 +272,7 @@
           <p>{!! $textoDestinatario($ciencia) !!}</p>
         @endif
         @if ($prazo)
-          <p><strong>{{ $prazo['rotulo'] }}: até {{ $prazo['data'] }}.</strong> {{ $prazo['nota'] }}</p>
+          <p class="prazo-destaque"><strong>{{ mb_strtoupper($prazo['rotulo']) }}:</strong> {{ $prazo['nota'] }} <strong>VENCE EM {{ $prazo['data'] }}.</strong></p>
         @endif
         @if ($doc->observacoes)
           <p><span class="lbl" style="font-size:8px;color:#666">OBSERVAÇÕES</span><br>{{ $doc->observacoes }}</p>
@@ -343,60 +338,25 @@
       @endif
 
       @if (count($anexos))
-        <div class="sec">
+        <div class="sec sec-anexos">
+          @include('impressao._identificacao-a4')
           <div class="sec-tit">{{ $sec('Anexos') }}</div>
-          @foreach ($anexos as $a)
-            <table class="anexo">
-              <tr>
-                @if ($a['foto'] && $a['src'])
-                  <td class="anexo-foto" style="width:24%"><img src="{{ $a['src'] }}" alt="{{ $a['titulo'] ?: 'Imagem do anexo' }}"></td>
-                @endif
-                <td class="anexo-dados" style="width:{{ $a['foto'] && $a['src'] ? '76%' : '100%' }}">
-                  <div class="anexo-tit">{{ $a['titulo'] ?: '—' }}</div>
-                  @if ($a['dataHora'])<div class="anexo-obs">{{ $a['dataHora'] }}</div>@endif
-                  @if ($a['descricao'])<div class="anexo-obs">{{ $a['descricao'] }}</div>@endif
+          @foreach (array_chunk($anexos, 2) as $par)
+            <table class="anexos-grade"><tr>
+              @foreach ($par as $a)
+                <td>
+                  @if ($a['foto'] && $a['src'])
+                    <div class="anexo-foto"><img src="{{ $a['src'] }}" alt="{{ $a['titulo'] ?: 'Imagem do anexo' }}"></div>
+                  @endif
+                  <div class="anexo-dados">
+                    <div class="anexo-tit">{{ $a['titulo'] ?: '—' }}</div>
+                    @if ($a['dataHora'])<div class="anexo-obs">{{ $a['dataHora'] }}</div>@endif
+                    @if ($a['descricao'])<div class="anexo-obs">{{ $a['descricao'] }}</div>@endif
+                  </div>
                 </td>
-              </tr>
-            </table>
-          @endforeach
-        </div>
-      @endif
-
-      {{-- CARIMBO DE PROCEDÊNCIA — de quando é o dado cadastral desta peça.
-
-           O documento guarda cópia própria do autuado, então reintegrar o
-           cadastro nunca o altera. Faltava dizer de QUANDO os valores são: sem
-           isso, quem questionar o auto daqui a dois anos não tem como saber se
-           o nome era o vigente na lavratura.
-
-           A linha do "sem consulta" é impressa, e não omitida. Omitir
-           esconderia justamente o caso em que alguém deveria olhar. --}}
-      @if (! $doc->naoLavrado())
-        <div class="rodape-inst" style="border-top:none; margin-top:6px; padding-top:0">
-          @php
-            // A origem em português, montada ANTES da frase.
-            // `@elseif` colado a uma palavra não é reconhecido pelo Blade: a
-            // diretiva sai impressa como texto, no papel, dentro do auto.
-            $origem = match ($doc->cadastro_fonte) {
-                'exportacao' => ', por exportação do cadastro imobiliário',
-                'banco'      => ', por consulta ao cadastro da prefeitura',
-                null         => '',
-                default      => ', fonte: ' . $doc->cadastro_fonte,
-            };
-          @endphp
-          @if ($doc->cadastro_consultado_em)
-            Dados cadastrais do imóvel conforme o cadastro municipal integrado em
-            {{ $doc->cadastro_consultado_em->format('d/m/Y') }}{{ $origem }}.
-          @else
-            Lavrado sem dado do cadastro municipal.
-          @endif
-        </div>
-      @endif
-
-      @if (count($rodape))
-        <div class="rodape-inst">
-          @foreach ($rodape as $linha)
-            <div>{{ $linha }}</div>
+              @endforeach
+              @if (count($par) === 1)<td class="anexo-vazio"></td>@endif
+            </tr></table>
           @endforeach
         </div>
       @endif

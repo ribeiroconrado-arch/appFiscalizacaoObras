@@ -477,6 +477,8 @@ function limparFormDoc() {
   const p = fdState.lote
   document.getElementById('nd-area-terreno').value = p?.area_gis_m2 ? Number(p.area_gis_m2).toFixed(2) : ''
   document.getElementById('nd-area-construida').value = ''
+  marcarOrigemDaAreaDoc('aferida')
+  conferirCpfCnpjCampo(document.getElementById('nd-autuado-doc'))
   document.getElementById('nd-alvara-valor').value = ''
   document.getElementById('nd-bloco-area').style.display = 'none'
   document.getElementById('nd-bloco-alvara').style.display = 'none'
@@ -519,6 +521,7 @@ function preencherFormDoc(d) {
   document.getElementById('nd-descricao').value = d.descricao || ''
   document.getElementById('nd-area-terreno').value = d.imovel.terreno ?? ''
   document.getElementById('nd-area-construida').value = d.imovel.construida ?? ''
+  marcarOrigemDaAreaDoc(d.imovel.obra_origem)
   document.getElementById('nd-alvara-valor').value = d.imovel.alvara_valor ?? ''
 
   const [dia, hora] = (d.data_fato || ' ').split(' ')
@@ -818,7 +821,11 @@ function corpoDoDoc() {
   const areaT = document.getElementById('nd-area-terreno').value
   const areaC = document.getElementById('nd-area-construida').value
   if (areaT !== '') corpo.area_terreno_m2 = Number(areaT)
-  if (areaC !== '') corpo.area_construida_m2 = Number(areaC)
+  if (areaC !== '') {
+    corpo.area_construida_m2 = Number(areaC)
+    // Como a área da obra foi obtida: aferida em campo, ou do projeto.
+    corpo.area_obra_origem = document.querySelector('input[name="nd-area-origem"]:checked')?.value || 'aferida'
+  }
   // Multa por múltiplo do alvará: o valor do alvará e o multiplicador de cada artigo.
   const alvara = document.getElementById('nd-alvara-valor').value
   corpo.alvara_valor = alvara === '' ? null : Number(alvara)
@@ -840,6 +847,12 @@ function corpoDoDoc() {
  * @throws {Error} com a mensagem do servidor
  */
 async function salvarFormularioDoc() {
+  // CPF/CNPJ incorreto não vai ao servidor: o campo é mostrado, com o aviso.
+  if (!conferirCpfCnpjCampo(document.getElementById('nd-autuado-doc'))) {
+    irAbaDoc('autuado')
+    document.getElementById('nd-autuado-doc').focus()
+    throw new Error(MSG_CPF_CNPJ[erroDeCpfCnpj(document.getElementById('nd-autuado-doc').value)])
+  }
   const corpo = corpoDoDoc()
   // Sem imóvel, o documento nasce pela rota que não o exige. A cobrança
   // continua existindo — na lavratura.
@@ -857,6 +870,12 @@ async function salvarFormularioDoc() {
   if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
   if (!fdState.id) fdState.id = d.documento.id
   return d
+}
+
+/** Marca "Aferida" ou "Do projeto" ao lado da área da obra. @param {string|null} origem */
+function marcarOrigemDaAreaDoc(origem) {
+  const valor = origem === 'projeto' ? 'projeto' : 'aferida'
+  document.querySelectorAll('input[name="nd-area-origem"]').forEach(r => { r.checked = r.value === valor })
 }
 
 /** Depois de salvar ou gravar: a tela passa a mostrar o que o servidor tem. */

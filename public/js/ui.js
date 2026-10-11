@@ -981,3 +981,78 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const m of mudancas) for (const no of m.addedNodes) if (no.nodeType === 1) vestirCombos(no)
   }).observe(document.body, { childList: true, subtree: true })
 })
+
+// ── CPF / CNPJ ───────────────────────────────────────────────
+
+/**
+ * CPF ou CNPJ de verdade: tamanho certo e dígitos verificadores certos. A
+ * mesma conta do servidor (App\\Rules\\CpfCnpj), para o aviso sair na hora.
+ * @param {string} valor com ou sem pontuação
+ * @returns {''|'cpf'|'cnpj'|'incompleto'} vazio se está certo (ou em branco)
+ */
+function erroDeCpfCnpj(valor) {
+  const n = String(valor ?? '').replace(/\D/g, '')
+  if (!n) return ''
+  const repetido = /^(\d)\1+$/.test(n)
+  if (n.length === 11) {
+    if (repetido) return 'cpf'
+    for (let t = 9; t < 11; t++) {
+      let soma = 0
+      for (let i = 0; i < t; i++) soma += Number(n[i]) * (t + 1 - i)
+      if (Number(n[t]) !== ((10 * soma) % 11) % 10) return 'cpf'
+    }
+    return ''
+  }
+  if (n.length === 14) {
+    if (repetido) return 'cnpj'
+    for (const [pos, pesos] of [[12, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]], [13, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]]]) {
+      const resto = pesos.reduce((s, p, i) => s + Number(n[i]) * p, 0) % 11
+      if (Number(n[pos]) !== (resto < 2 ? 0 : 11 - resto)) return 'cnpj'
+    }
+    return ''
+  }
+  return 'incompleto'
+}
+
+const MSG_CPF_CNPJ = {
+  cpf: 'CPF incorreto: confira os números digitados.',
+  cnpj: 'CNPJ incorreto: confira os números digitados.',
+  incompleto: 'CPF ou CNPJ incompleto: o CPF tem 11 dígitos e o CNPJ, 14.',
+}
+
+/**
+ * Confere o CPF/CNPJ de um campo e MOSTRA o erro nele: o campo fica marcado e
+ * a mensagem aparece logo abaixo, até ser corrigido. Usado ao sair do campo e
+ * antes de gravar.
+ * @param {HTMLInputElement} inp
+ * @returns {boolean} se o campo está certo (ou em branco)
+ */
+function conferirCpfCnpjCampo(inp) {
+  if (!inp) return true
+  const erro = erroDeCpfCnpj(inp.value)
+  const campo = inp.closest('.field') || inp
+  campo.classList.toggle('campo-invalido', !!erro)
+  inp.setAttribute('aria-invalid', erro ? 'true' : 'false')
+  let aviso = campo.parentElement?.querySelector(':scope > .campo-erro[data-de="' + inp.id + '"]')
+  if (!erro) { aviso?.remove(); return true }
+  if (!aviso) {
+    aviso = document.createElement('div')
+    aviso.className = 'campo-erro'
+    aviso.dataset.de = inp.id
+    aviso.setAttribute('role', 'alert')
+    campo.insertAdjacentElement('afterend', aviso)
+  }
+  aviso.textContent = MSG_CPF_CNPJ[erro]
+  return false
+}
+
+/** Máscara de CPF (até 11 dígitos) ou CNPJ (daí em diante), enquanto se digita. */
+function mascararCpfCnpj(inp) {
+  const n = inp.value.replace(/\D/g, '').slice(0, 14)
+  inp.value = n.length <= 11
+    ? n.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2')
+    : n.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+       .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2')
+  // Corrigindo, o aviso de erro sai assim que o número fica certo.
+  if (inp.getAttribute('aria-invalid') === 'true' && !erroDeCpfCnpj(inp.value)) conferirCpfCnpjCampo(inp)
+}

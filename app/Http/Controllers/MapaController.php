@@ -87,6 +87,66 @@ class MapaController extends Controller
     }
 
     /**
+     * GET /api/mapa/google-sessao-ruas — a sessão do MAPA DE RUAS do Google, sem
+     * comércio nem pontos de interesse. É o fundo da prancheta de edição de
+     * lotes (desenho, desmembramento, unificação).
+     *
+     * A prancheta precisa do traçado — ruas, quadras, o nome das ruas —, e
+     * não de restaurante, loja, ponto de ônibus e ícone: por cima de um
+     * desenho técnico isso é ruído. O estilo abaixo desliga tudo o que é
+     * "ponto de interesse" e transporte, e os ícones das vias; o resto fica.
+     *
+     * Sessão própria, separada da do satélite (googleSessao): o tipo de mapa e
+     * o estilo são definidos na criação da sessão, não em cada pedido de tile.
+     */
+    public function googleSessaoRuas(): JsonResponse
+    {
+        $chave = config('gis.google_key');
+        if (! $chave) {
+            return response()->json(['message' => 'Google Maps não configurado.'], 404);
+        }
+
+        $dados = Cache::remember('mapa:google-sessao-ruas', now()->addDays(10), function () use ($chave) {
+            $fora = fn (string $o, ?string $elemento = null) => array_filter([
+                'featureType' => $o, 'elementType' => $elemento,
+                'stylers'     => [['visibility' => 'off']],
+            ]);
+            $r = Http::timeout(15)
+                ->post('https://tile.googleapis.com/v1/createSession?key=' . $chave, [
+                    'mapType'  => 'roadmap',
+                    'language' => 'pt-BR',
+                    'region'   => 'BR',
+                    // Blocos de 512px: o traço fino das ruas continua nítido
+                    // quando a prancheta amplia o fundo.
+                    'scale'    => 'scaleFactor2x',
+                    'highDpi'  => true,
+                    'styles'   => [
+                        $fora('poi'),                    // comércio, serviços, igrejas, escolas, parques…
+                        $fora('transit'),                // pontos e linhas de ônibus
+                        $fora('road', 'labels.icon'),    // escudos e setas das vias
+                        $fora('administrative.land_parcel'),
+                    ],
+                ]);
+
+            if (! $r->successful()) {
+                return ['erro' => $r->json('error.message') ?? 'falha ao abrir sessão'];
+            }
+
+            return ['session' => $r->json('session'), 'expiry' => $r->json('expiry')];
+        });
+
+        if (isset($dados['erro'])) {
+            Cache::forget('mapa:google-sessao-ruas');
+            return response()->json(['message' => $dados['erro']], 502);
+        }
+
+        return response()->json([
+            'session' => $dados['session'],
+            'key'     => config('gis.google_key_navegador'),
+        ]);
+    }
+
+    /**
      * Crédito da imagem aérea: quem a produziu e de que ano ela é.
      *
      * ── Sobre a DATA ──

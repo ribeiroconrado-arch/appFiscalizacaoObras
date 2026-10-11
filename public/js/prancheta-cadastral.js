@@ -31,7 +31,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
           <label><input id="pc-near" type="checkbox" checked> × Na face <small>qualquer ponto da linha</small></label>
           <label><input id="pc-perp" type="checkbox" checked> ∟ Perpendicular <small>pé da perpendicular</small></label>
           <b>Exibição</b>
-          <label><input id="pc-mapa" type="checkbox" checked onchange="PranchetaCad.mapa(this.checked)"> Mapa claro <small>referência de fundo</small></label>
+          <label><input id="pc-mapa" type="checkbox" checked onchange="PranchetaCad.mapa(this.checked)"> Mapa de ruas <small>referência de fundo</small></label>
           <small class="pc-snap-alt">Segure Alt para desenhar sem encaixe.</small></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}
       <i></i>${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}
       </nav>
@@ -290,16 +290,40 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // Fillet ativo: o raio e o passo no rodapé; trocou de ferramenta, some.
     {const fl=s.ferramenta==='concordancia'&&!s.leitura;$('pc-fillet').hidden=!fl;if(fl){if(document.activeElement!==$('pc-raio'))$('pc-raio').value=String(s.raio).replace('.',',');$('pc-fillet-passo').textContent=s.fillet?.erro||(s.fillet?.primeiro?'clique no 2º lado':'clique no 1º lado · raio 0 = canto vivo')}}
   }
+  /**
+   * O FUNDO É O MAPA DE RUAS DO GOOGLE, sem comércio nem pontos de interesse
+   * (a sessão já vem com esse estilo — MapaController::googleSessaoRuas). É
+   * pedido uma vez; enquanto não chega, ou se o Google não estiver
+   * configurado, vale o OpenStreetMap, que era o fundo de antes.
+   */
+  let fundoGoogle=null,fundoPedido=false
+  function pedirFundoGoogle(){
+    if(fundoPedido)return;fundoPedido=true
+    fetch('/api/mapa/google-sessao-ruas',{headers:{Accept:'application/json'}})
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{if(!d?.session)return;fundoGoogle=d
+        const c=document.querySelector('#pc-modal .pc-credito');if(c)c.textContent='Dados cartográficos © Google · Referência de fundo'
+        if(s)render()})
+      .catch(()=>{fundoPedido=false})
+  }
   function tiles(){
+    pedirFundoGoogle()
     const ps=[[0,0],[s.w,0],[s.w,s.h],[0,s.h]].map(p=>s.plano.de(mundo(p))),b=bounds(ps)
-    const nmax=2**19,tx=lon=>(lon+180)/360*nmax,ty=lat=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*nmax
-    let z=19
+    // O mapa do Google tem bloco nativo até o zoom 22; o OpenStreetMap, até o 19.
+    const zmax=fundoGoogle?21:19
+    const nmax=2**zmax,tx=lon=>(lon+180)/360*nmax,ty=lat=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*nmax
+    const url=fundoGoogle
+      ?(z,x,y)=>`https://tile.googleapis.com/v1/2dtiles/${z}/${x}/${y}?session=${encodeURIComponent(fundoGoogle.session)}&amp;key=${encodeURIComponent(fundoGoogle.key)}`
+      :(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`
+    let z=zmax
     while(z>10){const n=2**z,k=n/nmax;if((Math.ceil(tx(b[2])*k)-Math.floor(tx(b[0])*k)+1)*(Math.ceil(ty(b[1])*k)-Math.floor(ty(b[3])*k)+1)<=36)break;z--}
-    const n=2**z,k=n/nmax;let h='<g opacity=".5">'
+    // O mapa limpo do Google aguenta mais presença que o OpenStreetMap, que
+    // precisava ficar bem apagado para o texto dele não brigar com o desenho.
+    const n=2**z,k=n/nmax;let h=`<g opacity="${fundoGoogle?'.75':'.5'}">`
     const lon=x=>x/n*360-180,lat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI
     for(let x=Math.floor(tx(b[0])*k);x<=Math.floor(tx(b[2])*k);x++)for(let y=Math.floor(ty(b[3])*k);y<=Math.floor(ty(b[1])*k);y++){
       const a=tela(s.plano.para([lon(x),lat(y)])),d=tela(s.plano.para([lon(x+1),lat(y)])),c=tela(s.plano.para([lon(x),lat(y+1)]))
-      h+=`<image href="https://tile.openstreetmap.org/${z}/${x}/${y}.png" width="256" height="256" transform="matrix(${(d[0]-a[0])/256} ${(d[1]-a[1])/256} ${(c[0]-a[0])/256} ${(c[1]-a[1])/256} ${a[0]} ${a[1]})"/>`
+      h+=`<image href="${url(z,x,y)}" width="256" height="256" transform="matrix(${(d[0]-a[0])/256} ${(d[1]-a[1])/256} ${(c[0]-a[0])/256} ${(c[1]-a[1])/256} ${a[0]} ${a[1]})"/>`
     }return h+'</g>'
   }
   function norte(){if(!s)return;s.angulo=0;enquadrar();if(!s.leitura)mudou()}

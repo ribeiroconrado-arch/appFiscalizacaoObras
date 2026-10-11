@@ -418,8 +418,9 @@ class VistoriaController extends Controller
 
         $status = match (true) {
             $lote->situacao === 'inativo' => ['Inativo', 'bd-cx'],
-            $embargo                      => ['Embargado', 'bd-cx'],
-            $ultima?->situacao === 'irregular' => ['Irregular', 'bd-al'],
+            // (O INATIVO, acima, continua vermelho de propósito: é alerta.)
+            $embargo                      => ['Embargado', 'bd-emb'],
+            $ultima?->situacao === 'irregular' => ['Irregular', 'bd-er'],
             $obra !== null                => [$obra->situacaoRotulo(), 'bd-in'],
             $ultima !== null              => ['Regular', 'bd-ok'],
             default                       => ['Sem vistoria', 'bd-in'],

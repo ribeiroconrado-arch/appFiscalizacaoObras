@@ -182,7 +182,7 @@
     <div class="lbl">Áreas</div>
     <div class="val">
       Terreno {{ $doc->area_terreno_m2 ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }} ·
-      Construída {{ $doc->area_construida_m2 ? $fmt($doc->area_construida_m2) . ' m²' : '—' }}
+      Obra {{ $doc->area_construida_m2 ? $fmt($doc->area_construida_m2) . ' m²' . ($doc->origemDaAreaDaObra() ? ' (' . $doc->origemDaAreaDaObra() . ')' : '') : '—' }}
     </div>
   </div>
 @endif

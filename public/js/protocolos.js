@@ -186,6 +186,7 @@ function novoProtocolo() {
   document.getElementById('np-numero').value = ''
   document.getElementById('np-requerente').value = ''
   document.getElementById('np-documento').value = ''
+  conferirCpfCnpjCampo(document.getElementById('np-documento'))
   document.getElementById('np-contato').value = ''
   document.getElementById('np-objeto').value = ''
   document.getElementById('np-data').value = dataHojeLocal()
@@ -208,6 +209,11 @@ async function salvarNovoProtocolo() {
   }
   if (!corpo.numero || !corpo.requerente_nome || !corpo.protocolado_em) {
     toast('Número, requerente e data são obrigatórios', 'err')
+    return
+  }
+  if (!conferirCpfCnpjCampo(document.getElementById('np-documento'))) {
+    toast(MSG_CPF_CNPJ[erroDeCpfCnpj(corpo.requerente_documento)], 'err')
+    document.getElementById('np-documento').focus()
     return
   }
 

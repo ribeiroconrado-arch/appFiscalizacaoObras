@@ -36,7 +36,7 @@ class Protocolo extends Model
         'em_analise'          => ['Em análise', 'bd-in'],
         'deferido'            => ['Deferido', 'bd-ok'],
         'indeferido'          => ['Indeferido', 'bd-er'],
-        'arquivado'           => ['Arquivado', 'bd-cx'],
+        'arquivado'           => ['Arquivado', 'bd-fim bd-i-caixa'],
     ];
 
     public function lote(): BelongsTo        { return $this->belongsTo(Lote::class); }
