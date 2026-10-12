@@ -878,7 +878,12 @@ function editarLoteDaPreCuradoria() {
  */
 function _ferramentasDaPreCuradoria() {
   const mostrar = !!impState.preCuradoria || impState.pendentes > 0
-  document.querySelectorAll('#cad-geral .cad-lanca.so-pre').forEach(b => { b.hidden = !mostrar })
+  // Quem tem a lixeira da curadoria ("Apagar lotes") não vê um segundo botão
+  // de excluir: ela mesma apaga o lote não publicado (abrirExclusaoSelecionados).
+  const temLixeira = !!document.querySelector('#cad-geral .cad-lanca[data-fer="apagar"]')
+  document.querySelectorAll('#cad-geral .cad-lanca.so-pre').forEach(b => {
+    b.hidden = !mostrar || (temLixeira && b.dataset.fer === 'excluir-pre')
+  })
   if (typeof montarReguaCadastral === 'function') montarReguaCadastral()
 }
 

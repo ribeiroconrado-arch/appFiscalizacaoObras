@@ -170,6 +170,8 @@
      bordas. A margem do papel (o @page) não se repete aqui: na tela ela seria
      espaço em branco, e é esse espaço que deixa a letra maior. */
   body { padding: 3mm 3mm 4mm; background: #fff; }
+  /* Na tela não existe a margem de página que acomoda o cabeçalho do PDF. */
+  .cab-fixo { position: static; top: auto; height: auto; }
 @endif
 </style>
 </head>

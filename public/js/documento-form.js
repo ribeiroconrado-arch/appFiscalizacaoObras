@@ -655,6 +655,7 @@ function irAbaDoc(nome) {
   document.getElementById('fd-body').scrollTop = 0
 
   if (nome === 'resumo') renderResumoDoc()
+  if (nome === 'infracao') renderInfracaoConsultaDoc()
   // Sempre do servidor: gravar a peça, lavrar ou trocar a origem muda o que a aba mostra.
   if (nome === 'anexos') renderAnexosDoc()
   // O rodapé já liga e desliga as quatro setas — ver `renderRodapeDoc`.
@@ -685,6 +686,7 @@ function aplicarEstadoDoc() {
 
 /** A peça lavrada apresenta valores; os controles originais continuam para edição. */
 function renderFichaConsultaDoc() {
+  renderInfracaoConsultaDoc()
   const leitura = fdState.estado === 'lavrado' && !fdState.editando
   const tipo = document.getElementById('nd-tipo').value
   const destinatario = ['notificacao', 'notificacao_embargo'].includes(tipo) ? 'notificado' : tipo === 'vistoria' ? 'interessado' : 'autuado'
@@ -714,6 +716,25 @@ function renderFichaConsultaDoc() {
       ${campo('Área da obra', area ? fmtNum(Number(area)) + ' m²' : '')}
       ${campo('Origem da área', document.querySelector('input[name="nd-area-origem"]:checked')?.value === 'projeto' ? 'Do projeto' : 'Aferida')}
     </dl></section>`
+}
+
+/** Exibe valores como texto na infração lavrada, preservando os controles para edição. */
+function renderInfracaoConsultaDoc() {
+  const painel = document.getElementById('fdp-infracao')
+  const leitura = fdState.estado === 'lavrado' && !fdState.editando
+  painel.classList.toggle('infracao-consulta', leitura)
+  painel.querySelectorAll('.doc-valor-consulta').forEach(el => el.remove())
+  painel.querySelectorAll('.field').forEach(field => {
+    const controle = field.querySelector('input:not([type="hidden"]),select,textarea')
+    if (!controle || !leitura || controle.id === 'nd-artigo-busca') return
+    const texto = controle.tagName === 'SELECT'
+      ? controle.selectedOptions[0]?.textContent : controle.value
+    const valor = document.createElement('div')
+    valor.className = 'doc-valor-consulta'
+    valor.textContent = texto?.trim() || 'Não informado'
+    if (!texto?.trim()) valor.classList.add('doc-ficha-vazio')
+    field.appendChild(valor)
+  })
 }
 
 /**

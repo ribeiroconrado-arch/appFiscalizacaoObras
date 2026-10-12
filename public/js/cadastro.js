@@ -719,7 +719,7 @@ function tituloDaFerramenta() {
   if (atoState.tipo === 'desmembramento') { return 'Desmembrar lote' }
   return {
     quadra: 'Corrigir quadra',
-    apagar: 'Apagar lote residual',
+    apagar: 'Apagar lotes',
     desenho: 'Desenhar lote',
     coordenadas: 'Lote por coordenadas',
     historico: 'Histórico do cadastro',
@@ -910,7 +910,7 @@ function pintarBarraCadastral() {
   extra.hidden = true
 
   if (cadModo === 'apagar') {
-    modo.textContent = 'Apagar resíduo'
+    modo.textContent = 'Apagar lotes'
     passo.textContent = n === 0
       ? 'Marque os lotes a apagar. Vários de uma vez, se for o caso.'
       : `${n} lote(s) marcado(s) para apagar.`
@@ -1237,6 +1237,15 @@ function apagarLoteDoPainel() {
 function abrirExclusaoSelecionados() {
   const ids = [...selState.ids]
   if (!ids.length) { toast('Nenhum lote marcado', 'err'); return }
+
+  // UMA LIXEIRA SÓ. Quem decide o caminho é o lote, não o botão: o de
+  // importação não publicada sai direto (pré-curadoria, só confirmação); o
+  // publicado é resíduo, e pede senha e motivo. Os dois juntos não saem.
+  const emRevisao = ids.filter(id => mapaState.porId.get(id)?.feature?.properties?.em_revisao).length
+  if (emRevisao && emRevisao < ids.length) {
+    toast('Há lote publicado e lote de importação não publicada marcados juntos. Apague um grupo de cada vez.', 'err'); return
+  }
+  if (emRevisao && typeof excluirLotesDaPreCuradoria === 'function') { excluirLotesDaPreCuradoria(); return }
 
   const rotulo = ids.length === 1
     ? rotuloDoLote(ids[0])

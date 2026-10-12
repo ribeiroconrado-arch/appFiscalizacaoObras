@@ -438,6 +438,20 @@ body.login-bg{
 .doc-ficha-grade dd{font-size:14px;line-height:1.5;color:var(--tx);margin:0;overflow-wrap:anywhere}
 .doc-ficha-grade dd.doc-ficha-vazio{color:var(--tx3)}
 .doc-ficha-largo{grid-column:1/-1}
+#m-doc #fdp-infracao.infracao-consulta .field{background:none;border:0;box-shadow:none;padding:0;margin-bottom:18px;border-radius:0}
+#m-doc #fdp-infracao.infracao-consulta .field label{position:static;display:block;font-size:11px;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--tx3);margin:0 0 4px}
+#fdp-infracao.infracao-consulta .field input,
+#fdp-infracao.infracao-consulta .field select,
+#fdp-infracao.infracao-consulta .field textarea,
+#fdp-infracao.infracao-consulta .field button,
+#fdp-infracao.infracao-consulta .field .ac-wrap,
+#fdp-infracao.infracao-consulta .field:has(#nd-artigo-busca),
+#fdp-infracao.infracao-consulta #nd-lei-trava,
+#fdp-infracao.infracao-consulta #nd-sugestao{display:none!important}
+.doc-valor-consulta{font-size:14px;line-height:1.5;color:var(--tx);white-space:pre-wrap;overflow-wrap:anywhere}
+.doc-valor-consulta.doc-ficha-vazio{color:var(--tx3)}
+#fdp-infracao.infracao-consulta .artigo-tag{background:none;border:0;border-bottom:1px solid var(--bord);border-radius:0;padding:12px 0}
+#fdp-infracao.infracao-consulta #nd-aviso-prazo{background:var(--blt);border:0;color:var(--tx2)}
 .doc-bci-expansivel{background:var(--blt);border:1px solid var(--bord);border-radius:var(--r);margin:0 0 22px;padding:0}
 .doc-bci-expansivel summary{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;cursor:pointer;font-size:13px;color:var(--tx);min-height:44px;list-style:none}
 .doc-bci-expansivel summary::-webkit-details-marker{display:none}

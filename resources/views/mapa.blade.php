@@ -586,8 +586,8 @@
               <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
               <path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/>
             </svg>
-            <span class="cad-lanca-txt">Apagar lote residual
-              <span class="cad-lanca-obs">Marque um ou vários. Só para sobra da conversão do desenho.</span>
+            <span class="cad-lanca-txt">Apagar lotes
+              <span class="cad-lanca-obs">Marque um ou vários. O de importação não publicada sai direto; o publicado, só se for sobra do desenho, com senha e motivo.</span>
             </span>
           </button>
         {{-- O DESFAZER MORA AQUI, e não numa tela de administração.
