@@ -6,7 +6,11 @@ const PranchetaCad = (() => {
   const icones={desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3'}
   // "Livre": a prancheta desenha O CONTORNO do lote (lote novo, editar lote), em
   // vez de divisas dentro de um lote existente. Ver recalcular() e dados().
-  const livre=()=>!!s&&(s.tipo==='novo'||s.tipo==='edicao')
+  // EDIFICAÇÃO: desenho livre do contorno de uma construção, com o lote por
+  // referência (destacado), a imagem aérea por fundo e a frente do lote virada
+  // para baixo — ver frenteParaBaixo.
+  const edif=()=>!!s&&s.tipo==='edificacao'
+  const livre=()=>!!s&&(s.tipo==='novo'||s.tipo==='edicao'||s.tipo==='edificacao')
   // SÓ O ÍCONE na barra; o nome, o atalho e o que a ferramenta faz aparecem
   // ao passar o mouse (data-dica, ver prancheta-cadastral.css).
   function botao(k,t,atalho,desc='') {return `<button type="button" data-tool="${k}" data-dica="${t}${atalho?' ('+atalho+')':''}${desc?' — '+desc:''}" aria-label="${t}" onclick="PranchetaCad.ferramenta('${k}')"><svg viewBox="0 0 24 24"><path d="${icones[k]}"/></svg></button>`}
@@ -244,7 +248,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   function recalcular(){if(s.leitura)return
     // Desenho livre: o lote é a ÚNICA linha fechada. Linhas abertas ficam como
     // linhas de construção, e não entram no resultado.
-    if(livre()){const fs=s.linhas.filter(l=>G.fechada(l.pontos));s.resultado=fs.length===1?{partes:[fs[0].pontos],erro:null}:{partes:[],erro:fs.length?'Há mais de um contorno fechado. Exclua o que sobra.':'Feche o contorno do lote: clique de novo no primeiro vértice, ou use o Fillet (F) com raio 0.',orientacao:!fs.length};return}
+    if(livre()){const fs=s.linhas.filter(l=>G.fechada(l.pontos));s.resultado=fs.length===1?{partes:[fs[0].pontos],erro:null}:{partes:[],erro:fs.length?'Há mais de um contorno fechado. Exclua o que sobra.':`Feche o contorno ${edif()?'da construção':'do lote'}: clique de novo no primeiro vértice, ou use o Fillet (F) com raio 0.`,orientacao:!fs.length};return}
     if(s.tipo==='desmembramento'){s.resultado=G.dividir(ring(s.originais[0]),s.linhas.map(l=>l.pontos));const ordem=s.ordem||[];s.resultado.partes.sort((a,b)=>{const ia=ordem.indexOf(parteKey(a)),ib=ordem.indexOf(parteKey(b));return (ia<0?Infinity:ia)-(ib<0?Infinity:ib)})}else s.resultado={partes:s.uniao?[ring({geometry:s.uniao})]:[],erro:s.uniao?null:s.erroUniao||(s.loading?'Calculando unificação…':'Não foi possível preparar a unificação.')}}
   function path(ps,close=false){return ps.map((p,i)=>{const q=tela(p);return `${i?'L':'M'}${q[0].toFixed(3)},${q[1].toFixed(3)}`}).join(' ')+(close?'Z':'')}
   function texto(p,t,cls='pc-label'){const q=tela(p);return `<text class="${cls}" x="${q[0]}" y="${q[1]}" text-anchor="middle">${e(t)}</text>`}
@@ -252,17 +256,20 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   function centro(r){const a=r.slice(0,-1);const m=G.mul(a.reduce(G.add,[0,0]),1/a.length);if(G.dentro(m,r))return m;for(let i=1;i<r.length;i++){const mid=G.mul(G.add(r[i-1],r[i]),.5),n=G.normal(r[i-1],r[i]);for(const sign of [1,-1]){const q=G.add(mid,G.mul(n,sign*.1));if(G.dentro(q,r))return q}}return m}
   function render(){if(!s||!svg)return
     let h='<defs><pattern id="pc-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#e8edf1" stroke-width=".6"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafb"/><rect width="100%" height="100%" fill="url(#pc-grid)"/>'
-    if(s.mapa)h+=tiles()
-    for(const f of s.contexto){if(!f.geometry?.coordinates?.[0])continue;const r=ring(f),p=f.properties||{};h+=`<path d="${path(r,true)}" fill="#e7ebec" fill-opacity=".78" stroke="#9ca9af" stroke-width="1"/>`
+    if(s.mapa)h+=edif()?tilesAereos():tiles()
+    // Na edificação os vizinhos ficam quase transparentes: a imagem aérea tem de aparecer.
+    for(const f of s.contexto){if(!f.geometry?.coordinates?.[0])continue;const r=ring(f),p=f.properties||{};h+=`<path d="${path(r,true)}" fill="#e7ebec" fill-opacity="${edif()?'.12':'.78'}" stroke="${edif()?'#ffffff':'#9ca9af'}" stroke-width="1"/>`
       const vis=r.map(tela),b=bounds(vis);if(b[2]<0||b[0]>s.w||b[3]<0||b[1]>s.h)continue
       // Identificação no fragmento visível, mesmo com centro do vizinho fora.
       const q=[Math.max(65,Math.min(s.w-65,(Math.max(0,b[0])+Math.min(s.w,b[2]))/2)),Math.max(28,Math.min(s.h-28,(Math.max(0,b[1])+Math.min(s.h,b[3]))/2))]
       const nome='Q '+(p.quadra||'—')+' · Lote '+(p.numero_lote||'—');h+=texto(posicaoConfronto(mundo(q),nome),nome,'pc-vizinho')
     }
     // No Editar lote o contorno de origem é só referência: tracejado, por baixo.
-    for(const f of contornos())h+=s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
+    // Na edificação o lote é a referência em destaque: contorno amarelo com
+    // filete escuro, e nenhum preenchimento por cima da imagem.
+    for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
-    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtNum(Math.abs(G.area(r)))} m²`)})
+    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtNum(Math.abs(G.area(r)))} m²`)})
     // Cotas das faces de origem, na mesma escala métrica usada nas ferramentas.
     for(const f of s.tipo==="edicao"?[]:contornos()){const r=ring(f);for(let i=1;i<r.length;i++){const m=G.len(G.sub(r[i],r[i-1]));if(m*s.escala<70)continue;h+=cota(r[i-1],r[i],`${fmtNum(m)} m`,G.area(r)>0?-1:1)}}
     for(const l of s.linhas){const sel=l.id===s.sel;h+=`<path data-line="${e(l.id)}" class="pc-hit" d="${path(l.pontos)}"/><path data-line="${e(l.id)}" d="${path(l.pontos)}" fill="none" stroke="${sel?'#ea580c':'#2563eb'}" stroke-width="${sel?3:2}"/>`
@@ -286,7 +293,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // "Feche o contorno" é orientação, não erro: fica fora do rodapé.
     $('pc-resumo').classList.toggle('erro',!!s.resultado?.erro&&!s.resultado?.orientacao)
     $('pc-resumo').textContent=s.resultado?.erro||(livre()?(partes[0]?`Contorno fechado · ${fmtNum(Math.abs(G.area(partes[0])))} m²`:"Carregando…"):`${s.linhas.length} linha(s) · ${partes.length} ${s.tipo==='unificacao'?'resultado(s)':'parte(s)'}`)
-    if(!s.operacao)dica(s.leitura?'Visualização salva do ato.':s.ferramenta==='concordancia'?(s.fillet?.erro||`Concordância · raio ${fmtNum(s.raio)} m · clique no ${s.fillet?.primeiro?'2º':'1º'} lado. Raio 0 estende até o encontro; digite outro raio e Enter.`):s.ferramenta==='linha'&&livre()?'Clique nos cantos do lote · digite a medida · clique no primeiro vértice para fechar':s.ferramenta==='linha'?'Clique para desenhar · digite a medida · Enter encerra · novo clique inicia outra linha':s.ferramenta==='perpendicular'?'Clique na face à qual a nova linha será perpendicular.':s.ferramenta==='alinhar'?'Clique na face que deseja deixar horizontal.':s.ferramenta==='anotar'?'Clique na posição da identificação do confronto.':'Selecione e arraste uma linha ou um vértice · Shift+clique no lado insere vértice · M mover · O offset · F concordância')
+    if(!s.operacao)dica(s.leitura?'Visualização salva do ato.':s.ferramenta==='concordancia'?(s.fillet?.erro||`Concordância · raio ${fmtNum(s.raio)} m · clique no ${s.fillet?.primeiro?'2º':'1º'} lado. Raio 0 estende até o encontro; digite outro raio e Enter.`):s.ferramenta==='linha'&&livre()?`Clique nos cantos ${edif()?'da construção':'do lote'} · digite a medida · clique no primeiro vértice para fechar`:s.ferramenta==='linha'?'Clique para desenhar · digite a medida · Enter encerra · novo clique inicia outra linha':s.ferramenta==='perpendicular'?'Clique na face à qual a nova linha será perpendicular.':s.ferramenta==='alinhar'?'Clique na face que deseja deixar horizontal.':s.ferramenta==='anotar'?'Clique na posição da identificação do confronto.':'Selecione e arraste uma linha ou um vértice · Shift+clique no lado insere vértice · M mover · O offset · F concordância')
     // Fillet ativo: o raio e o passo no rodapé; trocou de ferramenta, some.
     {const fl=s.ferramenta==='concordancia'&&!s.leitura;$('pc-fillet').hidden=!fl;if(fl){if(document.activeElement!==$('pc-raio'))$('pc-raio').value=String(s.raio).replace('.',',');$('pc-fillet-passo').textContent=s.fillet?.erro||(s.fillet?.primeiro?'clique no 2º lado':'clique no 1º lado · raio 0 = canto vivo')}}
   }
@@ -296,6 +303,61 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
    * pedido uma vez; enquanto não chega, ou se o Google não estiver
    * configurado, vale o OpenStreetMap, que era o fundo de antes.
    */
+  // Na EDIFICAÇÃO o fundo é a IMAGEM AÉREA: é sobre o telhado que se contorna
+  // a construção, e o mapa de ruas não o mostra. Vem da mesma sessão de
+  // satélite do mapa principal; sem ela, a imagem gratuita da Esri (até o zoom 17).
+  let fundoSat=null,fundoSatPedido=false
+  function pedirFundoSat(){
+    if(fundoSatPedido)return;fundoSatPedido=true
+    fetch('/api/mapa/google-sessao',{headers:{Accept:'application/json'}})
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{if(!d?.session)return;fundoSat=d;if(edif())render()})
+      .catch(()=>{fundoSatPedido=false})
+  }
+  // O crédito no canto diz de quem é o fundo que está na tela.
+  function creditar(t){const c=document.querySelector('#pc-modal .pc-credito');if(c&&c.textContent!==t)c.textContent=t}
+  function tilesAereos(){
+    pedirFundoSat();creditar(fundoSat?'Imagem aérea © Google':'Imagem aérea © Esri')
+    const ps=[[0,0],[s.w,0],[s.w,s.h],[0,s.h]].map(p=>s.plano.de(mundo(p))),b=bounds(ps)
+    const zmax=fundoSat?20:17
+    const nmax=2**zmax,tx=lon=>(lon+180)/360*nmax,ty=lat=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*nmax
+    const url=fundoSat
+      ?(z,x,y)=>`https://tile.googleapis.com/v1/2dtiles/${z}/${x}/${y}?session=${encodeURIComponent(fundoSat.session)}&amp;key=${encodeURIComponent(fundoSat.key)}`
+      :(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+    let z=zmax
+    while(z>10){const n=2**z,k=n/nmax;if((Math.ceil(tx(b[2])*k)-Math.floor(tx(b[0])*k)+1)*(Math.ceil(ty(b[1])*k)-Math.floor(ty(b[3])*k)+1)<=36)break;z--}
+    const n=2**z,k=n/nmax;let h='<g>'
+    const lon=x=>x/n*360-180,lat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI
+    for(let x=Math.floor(tx(b[0])*k);x<=Math.floor(tx(b[2])*k);x++)for(let y=Math.floor(ty(b[3])*k);y<=Math.floor(ty(b[1])*k);y++){
+      const a=tela(s.plano.para([lon(x),lat(y)])),d=tela(s.plano.para([lon(x+1),lat(y)])),c=tela(s.plano.para([lon(x),lat(y+1)]))
+      h+=`<image href="${url(z,x,y)}" width="256" height="256" transform="matrix(${(d[0]-a[0])/256} ${(d[1]-a[1])/256} ${(c[0]-a[0])/256} ${(c[1]-a[1])/256} ${a[0]} ${a[1]})"/>`
+    }return h+'</g>'
+  }
+  /**
+   * VIRA A FRENTE DO LOTE PARA BAIXO. A frente é a testada que dá para a rua: o
+   * lado do lote que NÃO tem outro lote encostado (um ponto 2 m para fora dele
+   * não cai dentro de nenhum vizinho). Em lote de esquina há mais de um lado
+   * livre, e fica a menor testada com pelo menos 5 m — o chanfro da esquina,
+   * mais curto, não conta. Sem nenhum lado livre (vizinhos por desenhar em
+   * toda a volta), a prancheta fica com o norte para cima.
+   * @returns {number|null} o comprimento da testada escolhida, em metros
+   */
+  function frenteParaBaixo(){
+    const r=ring(s.originais[0]);if(r.length<4)return null
+    const viz=s.contexto.filter(f=>f.geometry?.type==='Polygon').map(f=>f.geometry.coordinates[0].map(s.plano.para))
+    const livres=[]
+    for(let i=1;i<r.length;i++){const a=r[i-1],b=r[i],m=G.len(G.sub(b,a));if(m<1)continue
+      const meio=G.mul(G.add(a,b),.5),n=G.normal(a,b)
+      let fora=G.add(meio,G.mul(n,2));if(G.dentro(fora,r))fora=G.add(meio,G.mul(n,-2))
+      if(!viz.some(v=>G.dentro(fora,v)))livres.push({a,b,m,meio})}
+    if(!livres.length)return null
+    const testadas=livres.filter(l=>l.m>=5).sort((x,y)=>x.m-y.m)
+    const f=testadas[0]||livres.sort((x,y)=>y.m-x.m)[0]
+    const d=G.sub(f.b,f.a);s.angulo=-Math.atan2(d[1],d[0])
+    // A testada ficou horizontal; falta ela ficar EMBAIXO, com o lote acima.
+    if(tela(centro(r))[1]>tela(f.meio)[1])s.angulo+=Math.PI
+    return f.m
+  }
   let fundoGoogle=null,fundoPedido=false
   function pedirFundoGoogle(){
     if(fundoPedido)return;fundoPedido=true
@@ -307,7 +369,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       .catch(()=>{fundoPedido=false})
   }
   function tiles(){
-    pedirFundoGoogle()
+    pedirFundoGoogle();creditar(fundoGoogle?'Dados cartográficos © Google · Referência de fundo':'© OpenStreetMap contributors · Referência cartográfica')
     const ps=[[0,0],[s.w,0],[s.w,s.h],[0,s.h]].map(p=>s.plano.de(mundo(p))),b=bounds(ps)
     // O mapa do Google tem bloco nativo até o zoom 22; o OpenStreetMap, até o 19.
     const zmax=fundoGoogle?21:19
@@ -363,17 +425,19 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(originais.some(f=>f.geometry?.type!=='Polygon'||f.geometry.coordinates.length!==1)){toast('A prancheta atende polígonos sem vazios internos.', 'err');return}
     if($('t-mapa')&&!$('t-mapa').classList.contains('at')&&typeof irPara==='function')irPara('mapa')
     const centroGeo=opts.centro||originais[0].geometry.coordinates[0][0]
-    s={tipo,ids:ids.map(Number),protocoloId,originais,opts,plano:G.plano(centroGeo),linhas:[],traco:[],anotacoes:[],contexto:[],angulo:0,centro:[0,0],escala:1,undo:[],redo:[],dados:{},numero:'',justificativa:atoState.justificativa||'',ferramenta:tipo==='novo'?'linha':'selecionar',sel:null,ref:null,operacao:null,drag:null,mouse:null,mapa:true,valor:'',leitura:!!salva,resultado:{partes:[]},uniao:null,revisado:null,raio:0,fillet:{primeiro:null,erro:null}}
+    s={tipo,ids:ids.map(Number),protocoloId,originais,opts,plano:G.plano(centroGeo),linhas:[],traco:[],anotacoes:[],contexto:[],angulo:0,centro:[0,0],escala:1,undo:[],redo:[],dados:{},numero:'',justificativa:atoState.justificativa||'',ferramenta:tipo==='novo'||tipo==='edificacao'?'linha':'selecionar',sel:null,ref:null,operacao:null,drag:null,mouse:null,mapa:true,valor:'',leitura:!!salva,resultado:{partes:[]},uniao:null,revisado:null,raio:0,fillet:{primeiro:null,erro:null}}
     s.loading=!salva
     // Editar lote: o próprio contorno é a linha que se edita (fechada).
     if(tipo==='edicao'&&!salva){const r=ring(originais[0]);s.linhas=[{id:crypto.randomUUID(),pontos:r}];s.sel=s.linhas[0].id}
     // Lote novo reaberto para correção: o contorno que já estava pronto volta.
     if(tipo==='novo'&&opts.contorno){s.linhas=[{id:crypto.randomUUID(),pontos:opts.contorno.coordinates[0].map(s.plano.para)}];s.ferramenta='selecionar'}
     if(salva){restaurar(salva);s.contexto=salva.contexto||[];s.finalFeatures=salva.resultantes;if(tipo==='unificacao')s.uniao=salva.resultantes[0]?.geometry;s.resultado={partes:salva.resultantes.map(ring)}}
-    const titulos={desmembramento:'Desmembramento',unificacao:'Unificação',novo:'Lote novo',edicao:'Editar lote'}
+    const titulos={desmembramento:'Desmembramento',unificacao:'Unificação',novo:'Lote novo',edicao:'Editar lote',edificacao:'Desenhar edificação'}
+    // O rótulo da opção de fundo acompanha o que ela mostra.
+    {const rot=$('pc-mapa')?.nextSibling;if(rot?.nodeType===3)rot.textContent=tipo==='edificacao'?' Imagem aérea ':' Mapa de ruas '}
     $('pc-titulo').textContent=(salva?'Prancha finalizada · ':'')+(titulos[tipo]||tipo)
     $('pc-origem').textContent=tipo==='novo'?(opts.bairro||'Desenhe o contorno do lote'):originais.map(f=>`Q ${f.properties?.quadra||opts.quadra||'—'} · Lote ${f.properties?.numero_lote||opts.numero_lote||f.properties?.id}`).join(' + ')
-    $('pc-continuar').textContent=tipo==='novo'?'Informar os dados →':tipo==='edicao'?'Número, quadra e salvar →':'Dados e finalizar →'
+    $('pc-continuar').textContent=tipo==='novo'?'Informar os dados →':tipo==='edificacao'?'Gravar edificação →':tipo==='edicao'?'Número, quadra e salvar →':'Dados e finalizar →'
     $('pc-salvo').textContent=salva?'Visualização preservada':'';$('pc-save').hidden=!!salva;$('pc-continuar').hidden=!!salva;$('pc-dados').hidden=true;$('pc-entrada').hidden=true
     // A prancheta ocupa o mapa INTEIRO e fica sozinha: a régua da curadoria não
     // vem mais para dentro dela (trocar de ferramenta é sair da prancheta).
@@ -390,8 +454,12 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       if(token!==geracao)return;
       // Lote novo não recupera cópia local: sem lote de origem, a chave não diz
       // de qual desenho ela era, e traria o rascunho de outro lugar do mapa.
-      if(tipo!=='novo')try{const local=localStorage.getItem(chaveLocal());if(local){restaurar(JSON.parse(local));$('pc-salvo').textContent=livre()?'Cópia local recuperada':'Cópia local recuperada · salve novamente no servidor'}}catch{}
-      if(tipo==='unificacao')s.numero=s.numeroUniao||'';s.loading=false;recalcular();enquadrar()
+      // (Nem a edificação: cada construção é um desenho novo sobre o mesmo lote.)
+      if(tipo!=='novo'&&tipo!=='edificacao')try{const local=localStorage.getItem(chaveLocal());if(local){restaurar(JSON.parse(local));$('pc-salvo').textContent=livre()?'Cópia local recuperada':'Cópia local recuperada · salve novamente no servidor'}}catch{}
+      if(tipo==='unificacao')s.numero=s.numeroUniao||'';s.loading=false
+      // Edificação: com os vizinhos carregados, dá para saber qual lado é a rua.
+      if(tipo==='edificacao'){const t=frenteParaBaixo();$('pc-salvo').textContent=t?`Frente do lote para baixo (testada de ${fmtNum(t)} m) · "Norte" desfaz`:'Não deu para identificar a frente do lote: norte para cima'}
+      recalcular();enquadrar()
     }
   }
   function rota(previa=false){return s.protocoloId?`/api/protocolos/${s.protocoloId}/${s.tipo}${previa?'/previa':''}`:`/api/lotes/${s.tipo==='unificacao'?'unificacao-direta':'desmembramento-direto'}${previa?'/previa':''}`}
@@ -520,7 +588,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function dados(abrir){
     if(!s)return;s.medindo=null;render();if(!abrir){$('pc-dados').hidden=true;enquadrar();return}
-    if(livre()){if(s.traco.length)terminar();if(s.resultado.erro){dica(s.resultado.erro);return}if(s.tipo==='novo'){formLoteNovo();return}formEdicao();return}
+    if(livre()){if(s.traco.length)terminar();if(s.resultado.erro){dica(s.resultado.erro);return}if(s.tipo==='novo'){formLoteNovo();return}if(s.tipo==='edificacao'){entregarLoteNovo();return}formEdicao();return}
     if(s.tipo==='unificacao'&&!s.uniao){dica(s.erroUniao||'Aguarde o cálculo da unificação.');return}if(s.traco.length)terminar();if(s.operacao){dica('Conclua ou cancele o movimento primeiro.');return}
     if(s.tipo==='desmembramento'&&(s.resultado.erro||s.resultado.partes.length<2)){dica(s.resultado.erro||'Trace uma divisão completa antes de preencher as partes.');return}
     prepararIdentidades();$('pc-dados').hidden=false;

@@ -122,6 +122,29 @@ function _desenharEdificacao() {
     return
   }
 
+  // O que acontece com o contorno pronto: pede a descrição e grava.
+  //
+  // O nome é pedido DEPOIS de fechar o contorno, e fechar a caixinha sem
+  // confirmar descarta a construção. `pedirTexto` (ui.js) não avisa quando é
+  // cancelada — então a saída por desistência é dita na própria dica.
+  const aoConcluir = g => pedirTexto({
+    titulo: 'Descrição da construção',
+    rotulo: 'Casa, edícula, barracão… (opcional)',
+    dica: 'Fechar esta caixa sem confirmar descarta o contorno.',
+    minimo: 0,
+    textoBtn: 'Gravar edificação',
+    onOk: nome => gravarEdificacao(p.id, g, nome || null),
+  })
+
+  // NA PRANCHETA: o lote destacado, a imagem aérea por fundo e a frente do
+  // lote virada para baixo — é como a construção é vista da rua, e as
+  // ferramentas de medida, esquadro e encaixe da prancheta valem para ela.
+  if (typeof PranchetaCad !== 'undefined') {
+    PranchetaCad.abrir('edificacao', [p.id], null, null, { quadra: p.quadra, numero_lote: p.numero_lote, aoConcluir })
+      .catch(err => toast(err.message, 'err'))
+    return
+  }
+
   toast('Contorne a construção. Duplo toque fecha.', 'aviso')
 
   iniciarDesenho({
