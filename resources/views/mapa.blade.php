@@ -301,6 +301,7 @@
           title="Gruda o ponto no canto desenhado mais próximo. Segure Alt para soltar num toque.">Ímã</button>
   <button type="button" class="btn sm" id="med-barra-desfazer" hidden onclick="desfazerPontoDaMedida()" title="Ctrl+Z">Desfazer ponto</button>
   <button type="button" class="btn primary sm" id="med-barra-concluir" hidden onclick="concluirMedida()" title="Enter">Concluir</button>
+  <button type="button" class="btn sm" id="med-barra-apagar" hidden onclick="apagarMedidaSelecionada()" title="Delete">Apagar medida</button>
   <button type="button" class="btn sm med-limpar" hidden onclick="limparMedidas()"
           title="Apaga todas as medidas do mapa. Elas são temporárias: nada é gravado.">Limpar tudo</button>
   <button type="button" class="btn sm" onclick="sairDeMedir()" title="Esc">Sair</button>

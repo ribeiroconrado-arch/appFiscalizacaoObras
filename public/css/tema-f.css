@@ -3800,3 +3800,8 @@ select.combo-oculto{display:none !important}
   text-shadow:0 0 3px #0F172A,0 0 3px #0F172A,0 0 3px #0F172A,0 0 6px #0F172A}
 .med-rot.med-tique{width:16px;height:0;padding:0;border:none;border-top:2.5px solid #22D3EE;
   border-radius:0;background:none;box-shadow:0 0 0 1px rgba(15,23,42,.55)}
+/* A medida selecionada: âmbar, para se distinguir das outras antes do Delete. */
+.med-rot.med-sel{border-color:#FBBF24;color:#FDE68A}
+.med-rot.med-tique.med-sel{border-top-color:#FBBF24}
+.med-rot.med-total.med-sel small{color:#FDE68A}
+#map.med-sobre .desenho-captura{cursor:pointer}

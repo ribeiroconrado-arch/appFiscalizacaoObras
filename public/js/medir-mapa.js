@@ -11,6 +11,10 @@
  * para se comparar uma com a outra, e saem com "Limpar tudo". Nenhuma vai ao
  * servidor.
  *
+ * Com a barra aberta e nenhuma medida começada, tocar numa medida pronta (no
+ * traço ou na etiqueta) a SELECIONA; Delete a apaga. Segurar Alt ignora a
+ * seleção, para começar uma medida nova em cima de outra.
+ *
  * ── A régua é a mesma do resto do sistema ──
  *
  * As contas são feitas no plano local de `planoLocal` (desenho.js): elipsoide
@@ -30,6 +34,8 @@
  */
 
 const MED_COR = '#22D3EE'
+const MED_COR_SEL = '#FBBF24'   // a medida selecionada
+const MED_PEGA_PX = 8          // a que distância do traço o toque seleciona
 const MED_IMA_PX = 14          // raio do ímã, em pixels de tela
 const MED_DUPLO_MS = 320
 const MED_DUPLO_PX = 6
@@ -51,6 +57,11 @@ const medState = {
   /** @type {L.LayerGroup|null} a medida em curso */
   viva: null,
   captura: null,
+  /** @type {Array<{id:number, modo:string, pts:Array<[number,number]>, grupo:L.LayerGroup}>} as medidas prontas */
+  medidas: [],
+  /** @type {number|null} id da medida selecionada */
+  selecionada: null,
+  _seq: 0,
   quantas: 0,
   ultimoClique: { t: 0, x: -99, y: -99 },
   _quadro: 0,
@@ -163,6 +174,8 @@ function sairDeMedir() {
   medState.cursor = null
   medState.imaEm = null
   medState.viva?.clearLayers()
+  _medSelecionar(null)
+  document.getElementById('map').classList.remove('med-sobre')
   _medPintarBarra()
 }
 
@@ -171,6 +184,8 @@ function limparMedidas() {
   medState.prontas?.clearLayers()
   medState.viva?.clearLayers()
   medState.pontos = []
+  medState.medidas = []
+  medState.selecionada = null
   medState.quantas = 0
   if (medState.modo) _medPintar()
   else _medPintarBarra()
@@ -232,6 +247,73 @@ function _medIma(ll, ev) {
   return ll
 }
 
+// ── SELECIONAR E APAGAR UMA MEDIDA ───────────────────────────
+
+/** Distância, em pixels, do ponto p ao trecho a–b. */
+function _medDistAoTrecho(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y
+  const t = dx || dy ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy))) : 0
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+}
+
+/**
+ * A medida pronta que está debaixo do toque: no traço ou numa etiqueta dela.
+ * A de cima (a mais nova) ganha.
+ *
+ * @param {L.LatLng} ll @returns {Object|null}
+ */
+function _medSobToque(ll) {
+  const mapa = mapaState.obj
+  const p = mapa.latLngToContainerPoint(ll)
+  const caixa = mapa.getContainer().getBoundingClientRect()
+  const cx = caixa.left + p.x, cy = caixa.top + p.y
+
+  for (let k = medState.medidas.length - 1; k >= 0; k--) {
+    const m = medState.medidas[k]
+    const px = m.pts.map(c => mapa.latLngToContainerPoint(_ll(c)))
+    const ate = m.modo === 'area' ? px.length : px.length - 1
+    for (let i = 0; i < ate; i++) {
+      if (_medDistAoTrecho(p, px[i], px[(i + 1) % px.length]) <= MED_PEGA_PX) return m
+    }
+    let naEtiqueta = false
+    m.grupo.eachLayer(l => {
+      const r = l.getElement?.()?.querySelector('.med-rot:not(.med-tique)')?.getBoundingClientRect()
+      if (r && cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) naEtiqueta = true
+    })
+    if (naEtiqueta) return m
+  }
+  return null
+}
+
+/** Redesenha uma medida pronta — em destaque, se for a selecionada. */
+function _medRedesenhar(m) {
+  m.grupo.clearLayers()
+  _medDesenhar(m.grupo, m.modo, m.pts, null, m.id === medState.selecionada)
+}
+
+/** Seleciona uma medida pronta (ou nenhuma). @param {number|null} id */
+function _medSelecionar(id) {
+  if (medState.selecionada === id) return
+  const antes = medState.medidas.find(m => m.id === medState.selecionada)
+  medState.selecionada = id
+  if (antes) _medRedesenhar(antes)
+  const agora = medState.medidas.find(m => m.id === id)
+  if (agora) _medRedesenhar(agora)
+  _medPintarBarra()
+}
+
+/** Apaga a medida selecionada. Delete e botão da barra. */
+function apagarMedidaSelecionada() {
+  const i = medState.medidas.findIndex(m => m.id === medState.selecionada)
+  if (i < 0) return
+  medState.prontas.removeLayer(medState.medidas[i].grupo)
+  medState.medidas.splice(i, 1)
+  medState.quantas = medState.medidas.length
+  medState.selecionada = null
+  document.getElementById('map').classList.remove('med-sobre')
+  _medPintarBarra()
+}
+
 // ── EVENTOS ──────────────────────────────────────────────────
 
 function _medAoClicar(ev) {
@@ -244,6 +326,13 @@ function _medAoClicar(ev) {
   const agora = Date.now(), ant = medState.ultimoClique
   if (agora - ant.t < MED_DUPLO_MS && Math.abs(p.x - ant.x) < MED_DUPLO_PX && Math.abs(p.y - ant.y) < MED_DUPLO_PX) return
   medState.ultimoClique = { t: agora, x: p.x, y: p.y }
+
+  // Sem medida começada, o toque numa medida pronta a seleciona (Alt ignora).
+  if (!medState.pontos.length && !ev.originalEvent?.altKey) {
+    const m = _medSobToque(ev.latlng)
+    if (m) { _medSelecionar(m.id); return }
+  }
+  _medSelecionar(null)
 
   const ll = _medIma(ev.latlng, ev.originalEvent)
   const pts = medState.pontos
@@ -267,6 +356,9 @@ function _medAoDuploClique(ev) {
 
 function _medAoMover(ev) {
   if (!medState.modo) return
+  // A mãozinha diz que o toque vai selecionar, e não começar uma medida.
+  document.getElementById('map').classList.toggle('med-sobre',
+    !medState.pontos.length && !ev.originalEvent?.altKey && !!_medSobToque(ev.latlng))
   const ll = _medIma(ev.latlng, ev.originalEvent)
   medState.cursor = [ll.lng, ll.lat]
   // Um redesenho por quadro: o mouse dispara mais rápido do que a tela pinta.
@@ -278,9 +370,15 @@ document.addEventListener('keydown', ev => {
   if (!medState.modo) return
   if (ev.target.closest?.('input,textarea,select,[contenteditable="true"]')) return
   if (document.querySelector('.modal-bg.open')) return
+  if (ev.key === 'Delete' || (ev.key === 'Backspace' && !medState.pontos.length)) {
+    if (medState.selecionada !== null) { apagarMedidaSelecionada(); ev.preventDefault() }
+    return
+  }
   if (ev.key === 'Escape') {
-    // Com medida começada, Esc larga a medida; sem nada, sai da ferramenta.
-    if (medState.pontos.length) { medState.pontos = []; _medPintar() } else sairDeMedir()
+    // Esc larga, nesta ordem: a medida começada, a seleção, a ferramenta.
+    if (medState.pontos.length) { medState.pontos = []; _medPintar() }
+    else if (medState.selecionada !== null) _medSelecionar(null)
+    else sairDeMedir()
     ev.preventDefault()
   } else if (ev.key === 'Enter') {
     concluirMedida(); ev.preventDefault()
@@ -301,8 +399,10 @@ function concluirMedida() {
     toast(modo === 'area' ? 'A área precisa de ao menos três pontos.' : 'Marque ao menos dois pontos.', 'err')
     return
   }
-  _medDesenhar(medState.prontas, modo, pts, null)
-  medState.quantas++
+  const m = { id: ++medState._seq, modo, pts: pts.map(c => [...c]), grupo: L.layerGroup().addTo(medState.prontas) }
+  medState.medidas.push(m)
+  _medDesenhar(m.grupo, modo, m.pts, null)
+  medState.quantas = medState.medidas.length
   medState.pontos = []
   medState.cursor = null
   _medPintar()
@@ -337,16 +437,19 @@ const _meio = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
  * @param {'regua'|'area'|'cota'} modo
  * @param {Array<[number,number]>} pts
  * @param {[number,number]|null} cursor o ponto elástico, na medida em curso
+ * @param {boolean} [sel] a medida está selecionada
  */
-function _medDesenhar(grupo, modo, pts, cursor) {
+function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
   const todos = cursor ? [...pts, cursor] : pts
   if (!todos.length) return
   const viva = !!cursor || grupo === medState.viva
-  const traco = { pane: 'medidas', interactive: false, color: MED_COR, weight: 2.5, opacity: 1 }
+  const cor = sel ? MED_COR_SEL : MED_COR
+  const cssSel = sel ? ' med-sel' : ''
+  const traco = { pane: 'medidas', interactive: false, color: cor, weight: sel ? 3.5 : 2.5, opacity: 1 }
   const sombra = { ...traco, color: '#0F172A', weight: 5, opacity: .55 }
 
   todos.forEach(c => L.circleMarker(_ll(c), { pane: 'medidas', interactive: false, radius: 3.5,
-    color: '#0F172A', weight: 1.5, fillColor: MED_COR, fillOpacity: 1 }).addTo(grupo))
+    color: '#0F172A', weight: 1.5, fillColor: cor, fillOpacity: 1 }).addTo(grupo))
   if (todos.length < 2) return
 
   if (modo === 'cota') {
@@ -356,8 +459,8 @@ function _medDesenhar(grupo, modo, pts, cursor) {
     L.polyline([_ll(a), _ll(b)], sombra).addTo(grupo)
     L.polyline([_ll(a), _ll(b)], traco).addTo(grupo)
     // Os dois tiques das pontas, atravessados no trecho, como numa planta.
-    for (const c of [a, b]) _medEtiqueta(grupo, c, '', 'med-tique', `translate(-50%,-50%) rotate(${(ang + 90).toFixed(1)}deg)`)
-    _medEtiqueta(grupo, _meio(a, b), fmtMed(medirPontos([a, b], false).total) + ' m', 'med-cota',
+    for (const c of [a, b]) _medEtiqueta(grupo, c, '', 'med-tique' + cssSel, `translate(-50%,-50%) rotate(${(ang + 90).toFixed(1)}deg)`)
+    _medEtiqueta(grupo, _meio(a, b), fmtMed(medirPontos([a, b], false).total) + ' m', 'med-cota' + cssSel,
       `translate(-50%,-50%) rotate(${de_pe.toFixed(1)}deg) translateY(-13px)`)
     return
   }
@@ -367,7 +470,7 @@ function _medDesenhar(grupo, modo, pts, cursor) {
   const linha = todos.map(_ll)
   if (fechado) {
     L.polygon(linha, { ...sombra, fill: false }).addTo(grupo)
-    L.polygon(linha, { ...traco, fillColor: MED_COR, fillOpacity: .16, dashArray: viva ? '6 5' : null }).addTo(grupo)
+    L.polygon(linha, { ...traco, fillColor: cor, fillOpacity: .16, dashArray: viva ? '6 5' : null }).addTo(grupo)
   } else {
     L.polyline(linha, sombra).addTo(grupo)
     L.polyline(linha, { ...traco, dashArray: viva ? '6 5' : null }).addTo(grupo)
@@ -376,16 +479,16 @@ function _medDesenhar(grupo, modo, pts, cursor) {
   // A medida de cada lado, no meio dele.
   m.lados.forEach((d, i) => {
     if (d < 0.00005) return
-    _medEtiqueta(grupo, _meio(todos[i], todos[(i + 1) % todos.length]), fmtMed(d) + ' m')
+    _medEtiqueta(grupo, _meio(todos[i], todos[(i + 1) % todos.length]), fmtMed(d) + ' m', cssSel)
   })
 
   if (fechado) {
     const cx = todos.reduce((s, c) => s + c[0], 0) / todos.length
     const cy = todos.reduce((s, c) => s + c[1], 0) / todos.length
     _medEtiqueta(grupo, [cx, cy],
-      `<b>${fmtMed(m.area)} m²</b><small>perímetro ${fmtMed(m.total)} m</small>`, 'med-total')
+      `<b>${fmtMed(m.area)} m²</b><small>perímetro ${fmtMed(m.total)} m</small>`, 'med-total' + cssSel)
   } else if (modo === 'regua' && m.lados.length > 1) {
-    _medEtiqueta(grupo, todos[todos.length - 1], `<b>total ${fmtMed(m.total)} m</b>`, 'med-total med-ponta')
+    _medEtiqueta(grupo, todos[todos.length - 1], `<b>total ${fmtMed(m.total)} m</b>`, 'med-total med-ponta' + cssSel)
   }
 }
 
@@ -424,6 +527,9 @@ function _medPintarBarra() {
               : 'Toque no ponto seguinte.'
       document.getElementById('med-barra-concluir').hidden = modo === 'cota' || n < (modo === 'area' ? 3 : 2)
       document.getElementById('med-barra-desfazer').hidden = n === 0
+      const sel = medState.selecionada !== null
+      document.getElementById('med-barra-apagar').hidden = !sel
+      if (sel && n === 0) document.getElementById('med-barra-passo').textContent = 'Medida selecionada · Delete apaga.'
       const ima = document.getElementById('med-barra-ima')
       ima.classList.toggle('at', medState.ima)
       ima.setAttribute('aria-pressed', String(medState.ima))

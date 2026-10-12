@@ -1201,9 +1201,16 @@ function ajustarViaA4NoResumo() {
   quadro.style.height = '1px'
   try {
     const doc = quadro.contentDocument
+    // Fixe a área de composição: aumentar o iframe não deve alargar novamente
+    // as tabelas de 100%, deixando a última coluna fora da medição anterior.
+    doc.body.style.width = LARGURA_A4_PX + 'px'
+    doc.body.style.boxSizing = 'border-box'
+    doc.documentElement.style.overflow = 'hidden'
     // Tabelas e textos sem quebra podem exceder a largura nominal da prévia.
     // Meça o conteúdo antes de escalar, incluindo a área que ficaria cortada.
-    largura = Math.max(largura, doc.documentElement.scrollWidth, doc.body.scrollWidth)
+    const direita = Math.max(...Array.from(doc.body.querySelectorAll('table,td,img'))
+      .map(el => el.getBoundingClientRect().right), doc.body.getBoundingClientRect().right)
+    largura = Math.ceil(Math.max(largura, doc.documentElement.scrollWidth, doc.body.scrollWidth, direita) + 12)
     quadro.style.width = largura + 'px'
     altura = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, 400)
   } catch (_) { /* fica a folha padrão */ }
