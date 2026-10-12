@@ -419,7 +419,7 @@ function alternarPainelMapa(idGrupo) {
   // curadoria em curso (perguntando, se houver lote marcado), e vice-versa.
   // Ver ferramentas-mapa.js.
   const ferramenta = { 'grupo-busca': 'busca',
-    'grupo-cores': 'cores', 'grupo-cadastro': 'curadoria' }[idGrupo]
+    'grupo-medir': 'medir', 'grupo-cadastro': 'curadoria' }[idGrupo]
 
   // Painel que não é ferramenta (Camadas) só abre: não disputa o mapa.
   const pedir = ferramenta ? pedirFerramenta : (_n, abrir) => abrir()

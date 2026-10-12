@@ -285,6 +285,19 @@
           title="Esc">Cancelar</button>
 </div>
 
+{{-- ══════ MEDIR NO MAPA — a barra (medir-mapa.js) ══════
+     O que se está medindo, quanto já deu e o que fazer a seguir. --}}
+<div class="des-barra med-barra" id="med-barra" hidden>
+  <span class="des-barra-modo" id="med-barra-modo">Régua</span>
+  <span class="des-barra-passo" id="med-barra-passo">Toque no ponto de partida.</span>
+  <button type="button" class="btn sm at" id="med-barra-ima" aria-pressed="true" onclick="alternarImaDaMedida()"
+          title="Gruda o ponto no canto desenhado mais próximo. Segure Alt para soltar num toque.">Ímã</button>
+  <button type="button" class="btn sm" id="med-barra-desfazer" hidden onclick="desfazerPontoDaMedida()" title="Ctrl+Z">Desfazer ponto</button>
+  <button type="button" class="btn primary sm" id="med-barra-concluir" hidden onclick="concluirMedida()" title="Enter">Concluir</button>
+  <button type="button" class="btn sm med-limpar" hidden onclick="limparMedidas()">Limpar tudo</button>
+  <button type="button" class="btn sm" onclick="sairDeMedir()" title="Esc">Sair</button>
+</div>
+
 {{-- ══════ CORREÇÃO CADASTRAL — BARRA DE MODO ══════
      Fica sobre o mapa, fina, dizendo o passo em que se está e quantos lotes já
      foram marcados. É o que substitui o painel lateral durante o trabalho: o
@@ -346,37 +359,41 @@
       <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/></svg>
   </button>
 
-  {{-- CORES E LEGENDA --}}
-  <div class="ctrl-grupo" id="grupo-cores">
-    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-cores')"
-            title="Cores e legenda" aria-expanded="false">
-      {{-- Balde de tinta despejando.
-           O leque de amostras que estava aqui tinha lâminas demais: a 40px, que
-           é o tamanho real do botão, elas se fundiam num borrão. Quatro formas
-           grandes e separadas sobrevivem à miniatura; quatro finas e
-           sobrepostas, não. --}}
+  {{-- MEDIR NO MAPA (medir-mapa.js) — régua, área/perímetro e cota.
+       Ocupa o lugar do "Colorir por": o mapa fica sempre no uniforme, e o
+       botão passou a servir para o que se faz todo dia, que é medir. Nada do
+       que se mede é gravado. --}}
+  <div class="ctrl-grupo" id="grupo-medir">
+    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-medir')"
+            title="Medir no mapa" aria-expanded="false">
+      {{-- Uma régua deitada na diagonal, com as marcas. --}}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round">
-        <g transform="rotate(-32 11 11)">
-          <path d="M5.6 7.4h10.8l-1.7 8a1.7 1.7 0 0 1-1.7 1.4H9a1.7 1.7 0 0 1-1.7-1.4z"/>
-          <path d="M8.8 7.4C8.8 3.6 9.9 2 11 2s2.2 1.6 2.2 5.4"/>
-        </g>
-        <path d="M18.4 15.4s-2.1 2.6-2.1 3.9a2.1 2.1 0 0 0 4.2 0c0-1.3-2.1-3.9-2.1-3.9z"/>
+        <path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/>
+        <path d="m7 11 2 2M10 8l2 2M13 5l2 2"/>
       </svg>
     </button>
-    <div class="ctrl-corpo">
-      <b>Colorir por</b>
-      {{-- "Uniforme" é o padrão. Sobre a imagem de satélite, pintar cada
-           bairro de uma cor vira um mosaico que disputa com a própria foto: as
-           manchas passam a ser o que se vê, no lugar das construções. Bairro e
-           quadra continuam à mão para quem precisa da leitura de conjunto. --}}
-      <div class="seg ctrl-cor">
-        <button class="at" data-chave="uniforme" onclick="aplicarCores('uniforme')">Uniforme</button>
-        <button data-chave="bairro" onclick="aplicarCores('bairro')">Bairro</button>
-        <button data-chave="quadra" onclick="aplicarCores('quadra')">Quadra</button>
+    <div class="ctrl-corpo ctrl-medir">
+      <b>Medir no mapa</b>
+      <div class="med-modos">
+        <button type="button" class="btn sm" data-modo="regua" onclick="medirNoMapa('regua')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg>
+          <span>Régua<small>Distância ponto a ponto, com o total.</small></span>
+        </button>
+        <button type="button" class="btn sm" data-modo="area" onclick="medirNoMapa('area')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 5h10l4 6-3 8H6z"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="15" cy="5" r="1.4" fill="currentColor"/></svg>
+          <span>Área e perímetro<small>Contorne; cada lado sai com a sua medida.</small></span>
+        </button>
+        <button type="button" class="btn sm" data-modo="cota" onclick="medirNoMapa('cota')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12h16M4 8v8M20 8v8"/><path d="m7 10-2 2 2 2M17 10l2 2-2 2"/></svg>
+          <span>Cota<small>A medida de um trecho, anotada sobre ele.</small></span>
+        </button>
       </div>
-      <div class="leg" id="leg-zoom">Bairro e logradouro · aproxime para quadra e lote</div>
-      <div id="leg-cores"></div>
+      <div class="leg" id="med-conta">Nada é gravado: as medidas são temporárias.</div>
+      <button type="button" class="btn sm med-limpar-painel" id="med-limpar" hidden onclick="limparMedidas()">Limpar tudo</button>
     </div>
   </div>
 
@@ -3794,7 +3811,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 {{-- O registro das camadas vem cedo: os módulos seguintes registram as suas. --}}
 <script src="@assetv('js/camadas-mapa.js')"></script>
 <script src="@assetv('js/pesquisa-mapa.js')"></script>
-{{-- Uma ferramenta do mapa por vez: busca, cores, curadoria, desenho. --}}
+{{-- Uma ferramenta do mapa por vez: busca, medir, curadoria, desenho. --}}
 <script src="@assetv('js/ferramentas-mapa.js')"></script>
 <script src="@assetv('js/geo.js')"></script>
 {{-- O perímetro urbano vem do servidor porque é configuração de município,
@@ -3814,6 +3831,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
      nao toca no mapa, nao toca na tela, e por isso pode ser exercitado fora do
      navegador. --}}
 <script src="@assetv('js/desenho.js')"></script>
+{{-- Depois de desenho.js: mede com a mesma régua (planoLocal). --}}
+<script src="@assetv('js/medir-mapa.js')"></script>
 <script src="@assetv('js/coordenadas.js')"></script>
 <script src="@assetv('js/corte.js')"></script>
 <script src="@assetv('js/cadastro.js')"></script>

@@ -1196,12 +1196,22 @@ function ajustarViaA4NoResumo() {
   const quadro = caixa?.querySelector('.rs-a4-quadro')
   if (!folha || !quadro || !folha.clientWidth) return
   let altura = 1123   // uma folha A4, se a página ainda não puder ser medida
-  try { altura = Math.max(quadro.contentDocument.documentElement.scrollHeight, 400) } catch (_) { /* fica a folha padrão */ }
+  let largura = LARGURA_A4_PX
+  quadro.style.width = largura + 'px'
+  quadro.style.height = '1px'
+  try {
+    const doc = quadro.contentDocument
+    // Tabelas e textos sem quebra podem exceder a largura nominal da prévia.
+    // Meça o conteúdo antes de escalar, incluindo a área que ficaria cortada.
+    largura = Math.max(largura, doc.documentElement.scrollWidth, doc.body.scrollWidth)
+    quadro.style.width = largura + 'px'
+    altura = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, 400)
+  } catch (_) { /* fica a folha padrão */ }
 
   // Ocupa a largura toda: encolhe em tela estreita e AMPLIA em tela larga (até
   // 1,5×, para a folha não virar um cartaz num monitor grande).
-  const escala = Math.min(1.5, folha.clientWidth / LARGURA_A4_PX)
-  quadro.style.width = LARGURA_A4_PX + 'px'
+  const escala = Math.min(1.5, folha.clientWidth / largura)
+  quadro.style.width = largura + 'px'
   quadro.style.height = altura + 'px'
   quadro.style.transform = `scale(${escala})`
   // O transform não muda o espaço que o elemento ocupa: a altura da moldura

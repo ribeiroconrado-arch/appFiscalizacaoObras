@@ -431,6 +431,7 @@ body.login-bg{
 #fd-ficha-consulta h3{font-size:14px;font-weight:600;margin:0 0 16px;color:var(--tx)}
 #m-doc .doc-painel{counter-reset:sec}
 #m-doc .doc-painel .sec-title{font-size:14px;font-weight:600;color:var(--tx);text-transform:none;letter-spacing:normal}
+#m-doc #fdp-infracao > .sec-title:first-of-type{margin-top:0}
 .doc-ficha-grade{display:grid;grid-template-columns:1fr 1fr;gap:18px 24px;margin:0}
 .doc-ficha-pessoa{grid-template-columns:2fr 1fr}
 .doc-ficha-grade>div{min-width:0}

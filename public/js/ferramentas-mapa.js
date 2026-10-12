@@ -1,7 +1,7 @@
 /**
  * UMA FERRAMENTA DO MAPA POR VEZ.
  *
- * Localizar imóvel, cores, correção cadastral (mesa, modos, atos,
+ * Localizar imóvel, medir, correção cadastral (mesa, modos, atos,
  * pré-curadoria) e o desenho de edificação disputam o mesmo mapa — o clique, o
  * alto da tela, a lateral. Abertas juntas, uma trabalhava por baixo da outra:
  * a busca aberta com a mesa de curadoria marcando lotes ao lado, a barra de
@@ -32,11 +32,13 @@ const FERRAMENTAS_MAPA = {
     emCurso: () => null,
     fechar: () => fecharPesquisaMapa(),
   },
-  cores: {
-    rotulo: 'cores do mapa',
-    aberta: () => _grupoAberto('grupo-cores'),
-    emCurso: () => null,
-    fechar: () => fecharPaineisMapa(),
+  // Medir (medir-mapa.js). As medidas PRONTAS ficam no mapa ao sair; o que se
+  // perde é só a que estiver pela metade.
+  medir: {
+    rotulo: 'a medição',
+    aberta: () => _grupoAberto('grupo-medir') || (typeof medState !== 'undefined' && !!medState.modo),
+    emCurso: () => typeof medState !== 'undefined' && medState.pontos.length > 1 ? 'uma medida começada' : null,
+    fechar: () => { if (typeof sairDeMedir === 'function') sairDeMedir(); fecharPaineisMapa() },
   },
   curadoria: {
     rotulo: 'correção cadastral',

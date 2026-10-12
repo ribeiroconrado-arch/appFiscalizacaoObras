@@ -3766,3 +3766,37 @@ select.combo-oculto{display:none !important}
 /* Campo cujo conteúdo a consulta de CNPJ SUBSTITUIU: marcado em âmbar até o
    fiscal mexer nele (documentos.js, buscarCnpjDoc). */
 .field:has(> input.campo-trocado){border-color:#D9A200;box-shadow:0 0 0 3px #FFF3CD}
+
+/* ══════════════════════════════════════════════
+   MEDIR NO MAPA (medir-mapa.js)
+
+   Ciano sobre contorno escuro: é a única cor do mapa que não quer dizer nada
+   do cadastro (branco é lote, laranja é marcação, pêssego é revisão), e o
+   contorno escuro a mantém legível tanto sobre o satélite quanto sobre o mapa
+   de ruas. */
+.ctrl-medir{min-width:232px}
+.med-modos{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.med-modos .btn{display:flex;align-items:center;gap:9px;justify-content:flex-start;text-align:left;
+  padding:7px 10px;height:auto;white-space:normal}
+.med-modos .btn svg{width:18px;height:18px;flex:none}
+.med-modos .btn span{display:flex;flex-direction:column;font-weight:700;line-height:1.25}
+.med-modos .btn small{font-weight:500;font-size:10.5px;color:var(--tx3)}
+.med-modos .btn.at{border-color:var(--gm);background:var(--gl);color:var(--gd)}
+.med-limpar-painel{margin-top:8px;width:100%}
+.med-barra #med-barra-ima.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
+.med-barra .des-barra-passo{font-family:'JetBrains Mono', ui-monospace, monospace;font-weight:600;color:var(--tx)}
+
+.med-marca{background:none;border:none;overflow:visible;pointer-events:none}
+.med-rot{position:absolute;display:block;white-space:nowrap;transform:translate(-50%,-50%);
+  font-family:'JetBrains Mono', ui-monospace, monospace;font-size:11.5px;font-weight:700;
+  color:#fff;background:rgba(15,23,42,.9);border:1px solid #22D3EE;border-radius:6px;
+  padding:2px 6px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
+.med-rot.med-total{font-size:12.5px;padding:4px 9px;text-align:center;border-width:1.5px}
+.med-rot.med-total b{display:block}
+.med-rot.med-total small{display:block;font-size:10.5px;font-weight:600;color:#A5F3FC}
+.med-rot.med-ponta{transform:translate(12px,-150%)}
+/* A cota escreve SOBRE o trecho, sem caixa, como numa planta. */
+.med-rot.med-cota{background:none;border:none;box-shadow:none;padding:0;font-size:12.5px;
+  text-shadow:0 0 3px #0F172A,0 0 3px #0F172A,0 0 3px #0F172A,0 0 6px #0F172A}
+.med-rot.med-tique{width:16px;height:0;padding:0;border:none;border-top:2.5px solid #22D3EE;
+  border-radius:0;background:none;box-shadow:0 0 0 1px rgba(15,23,42,.55)}
