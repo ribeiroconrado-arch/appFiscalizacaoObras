@@ -1175,8 +1175,11 @@ function mostrarViaA4NoResumo(caixa, { url = null, html = null }) {
     caixa.querySelector('.rs-a4-aviso')?.remove()
     // A identificação já aparece no início da prévia; a repetição é só para o papel.
     const estiloResumo = quadro.contentDocument.createElement('style')
-    estiloResumo.textContent = '.sec-anexos > .topo,.sec-anexos > .topo-regua{display:none}'
+    estiloResumo.textContent = '.cab-fixo,table.pagina > thead,.sec-anexos > .topo,.sec-anexos > .topo-regua{display:none} .topo-lbl{white-space:nowrap}'
     quadro.contentDocument.head.appendChild(estiloResumo)
+    quadro.contentDocument.querySelectorAll('.topo-lbl').forEach(label => {
+      label.textContent = label.textContent.replace(/Matrícula/gi, 'Mat.')
+    })
     // Em plena lavratura, a folha nova recebe o campo de assinatura do autuado.
     if (fdState.lavrando && typeof montarAssinaturaNaVia === 'function') montarAssinaturaNaVia()
     ajustarViaA4NoResumo()
