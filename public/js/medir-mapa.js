@@ -34,11 +34,11 @@ const MED_IMA_PX = 14          // raio do ímã, em pixels de tela
 const MED_DUPLO_MS = 320
 const MED_DUPLO_PX = 6
 
-const MED_ROTULO = { regua: 'Régua', area: 'Área e perímetro', cota: 'Cota' }
-
 const medState = {
-  /** @type {'regua'|'area'|'cota'|null} */
+  /** @type {'regua'|'area'|'cota'|null} a ferramenta em uso; null = barra fechada */
   modo: null,
+  /** @type {'regua'|'area'|'cota'} a que o ícone abre */
+  ultimoModo: 'regua',
   /** @type {Array<[number,number]>} pontos da medida em curso, em [lon, lat] */
   pontos: [],
   /** @type {[number,number]|null} onde o cursor está (já com ímã) */
@@ -95,17 +95,31 @@ function medirPontos(pts, fechado) {
 
 // ── ENTRAR E SAIR ────────────────────────────────────────────
 
-/** Escolhe a ferramenta de medir. Escolher a que já está em uso, sai dela. @param {'regua'|'area'|'cota'} modo */
+/**
+ * O ícone da coluna de controles: abre a barra de medição (ou a fecha).
+ *
+ * Abre já na última ferramenta usada — a régua, da primeira vez. Uma barra
+ * sem ferramenta escolhida seria um passo a mais para o caso de sempre.
+ */
+function alternarMedir() {
+  if (medState.modo) { sairDeMedir(); return }
+  medirNoMapa(medState.ultimoModo)
+}
+
+/** Escolhe a ferramenta de medir, na barra. @param {'regua'|'area'|'cota'} modo */
 function medirNoMapa(modo) {
-  if (medState.modo === modo) { sairDeMedir(); return }
-  pedirFerramenta('medir', () => {
+  if (medState.modo === modo) return
+  const trocar = () => {
     fecharPaineisMapa()
     _medPreparar()
-    medState.modo = modo
+    medState.modo = medState.ultimoModo = modo
     medState.pontos = []
     medState.cursor = null
     _medPintar()
-  })
+  }
+  // Já medindo, trocar de ferramenta não é abrir outra: só muda o gesto.
+  if (medState.modo) trocar()
+  else pedirFerramenta('medir', trocar)
 }
 
 function _medPreparar() {
@@ -403,7 +417,6 @@ function _medPintarBarra() {
       const n = pts.length
       const todos = n && medState.cursor ? [...pts, medState.cursor] : pts
       const m = medirPontos(todos, modo === 'area' && todos.length >= 3)
-      document.getElementById('med-barra-modo').textContent = MED_ROTULO[modo]
       document.getElementById('med-barra-passo').textContent =
         n === 0 ? (modo === 'cota' ? 'Toque nas duas pontas do trecho.' : modo === 'area' ? 'Toque nos cantos do contorno.' : 'Toque no ponto de partida.')
           : modo === 'area' && todos.length >= 3 ? `${fmtMed(m.area)} m² · perímetro ${fmtMed(m.total)} m`
@@ -418,16 +431,13 @@ function _medPintarBarra() {
     barra.querySelectorAll('.med-limpar').forEach(b => { b.hidden = !medState.quantas && !medState.pontos.length })
   }
 
-  // No painel: a ferramenta em uso e o "Limpar tudo", que só existe com medida no mapa.
-  document.querySelectorAll('#grupo-medir .med-modos button').forEach(b => b.classList.toggle('at', b.dataset.modo === modo))
-  const limpar = document.getElementById('med-limpar')
-  if (limpar) limpar.hidden = !medState.quantas
-  const conta = document.getElementById('med-conta')
-  if (conta) {
-    conta.textContent = medState.quantas
-      ? (medState.quantas === 1 ? '1 medida no mapa.' : `${medState.quantas} medidas no mapa.`) + ' Temporárias: saem ao limpar ou ao recarregar a página.'
-      : 'Nada é gravado: as medidas são temporárias.'
-  }
+  // A ferramenta em uso, na barra; e o ícone aceso enquanto ela está aberta.
+  document.querySelectorAll('#med-barra .med-modos button').forEach(b => {
+    b.classList.toggle('at', b.dataset.modo === modo)
+    b.setAttribute('aria-pressed', String(b.dataset.modo === modo))
+  })
+  const icone = document.querySelector('#grupo-medir .ctrl-btn')
+  if (icone) { icone.classList.toggle('med-ativo', !!modo); icone.setAttribute('aria-pressed', String(!!modo)) }
   // O ícone recolhido avisa que há medida no mapa.
   if (typeof marcarIndicadorControle === 'function') marcarIndicadorControle('grupo-medir', medState.quantas || null)
 }

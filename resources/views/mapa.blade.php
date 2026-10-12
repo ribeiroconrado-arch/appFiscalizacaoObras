@@ -288,13 +288,21 @@
 {{-- ══════ MEDIR NO MAPA — a barra (medir-mapa.js) ══════
      O que se está medindo, quanto já deu e o que fazer a seguir. --}}
 <div class="des-barra med-barra" id="med-barra" hidden>
-  <span class="des-barra-modo" id="med-barra-modo">Régua</span>
+  <div class="med-modos" role="group" aria-label="Ferramenta de medir">
+    <button type="button" data-modo="regua" onclick="medirNoMapa('regua')" title="Régua — distância ponto a ponto, com o total">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg><span>Régua</span></button>
+    <button type="button" data-modo="area" onclick="medirNoMapa('area')" title="Área e perímetro — contorne; cada lado sai com a sua medida">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h10l4 6-3 8H6z"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="15" cy="5" r="1.4" fill="currentColor"/></svg><span>Área</span></button>
+    <button type="button" data-modo="cota" onclick="medirNoMapa('cota')" title="Cota — a medida de um trecho, anotada sobre ele">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M4 8v8M20 8v8"/><path d="m7 10-2 2 2 2M17 10l2 2-2 2"/></svg><span>Cota</span></button>
+  </div>
   <span class="des-barra-passo" id="med-barra-passo">Toque no ponto de partida.</span>
   <button type="button" class="btn sm at" id="med-barra-ima" aria-pressed="true" onclick="alternarImaDaMedida()"
           title="Gruda o ponto no canto desenhado mais próximo. Segure Alt para soltar num toque.">Ímã</button>
   <button type="button" class="btn sm" id="med-barra-desfazer" hidden onclick="desfazerPontoDaMedida()" title="Ctrl+Z">Desfazer ponto</button>
   <button type="button" class="btn primary sm" id="med-barra-concluir" hidden onclick="concluirMedida()" title="Enter">Concluir</button>
-  <button type="button" class="btn sm med-limpar" hidden onclick="limparMedidas()">Limpar tudo</button>
+  <button type="button" class="btn sm med-limpar" hidden onclick="limparMedidas()"
+          title="Apaga todas as medidas do mapa. Elas são temporárias: nada é gravado.">Limpar tudo</button>
   <button type="button" class="btn sm" onclick="sairDeMedir()" title="Esc">Sair</button>
 </div>
 
@@ -360,41 +368,15 @@
   </button>
 
   {{-- MEDIR NO MAPA (medir-mapa.js) — régua, área/perímetro e cota.
-       Ocupa o lugar do "Colorir por": o mapa fica sempre no uniforme, e o
-       botão passou a servir para o que se faz todo dia, que é medir. Nada do
-       que se mede é gravado. --}}
+       Ocupa o lugar do "Colorir por". O ícone não abre painel: abre a BARRA
+       de medição no alto do mapa, que já traz as três ferramentas — escolher e
+       medir acontecem no mesmo lugar. Nada do que se mede é gravado. --}}
   <div class="ctrl-grupo" id="grupo-medir">
-    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-medir')"
-            title="Medir no mapa" aria-expanded="false">
+    <button class="ctrl-btn" onclick="alternarMedir()"
+            title="Medir no mapa" aria-pressed="false">
       {{-- Uma régua deitada na diagonal, com as marcas. --}}
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/>
-        <path d="m7 11 2 2M10 8l2 2M13 5l2 2"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg>
     </button>
-    <div class="ctrl-corpo ctrl-medir">
-      <b>Medir no mapa</b>
-      <div class="med-modos">
-        <button type="button" class="btn sm" data-modo="regua" onclick="medirNoMapa('regua')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg>
-          <span>Régua<small>Distância ponto a ponto, com o total.</small></span>
-        </button>
-        <button type="button" class="btn sm" data-modo="area" onclick="medirNoMapa('area')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M5 5h10l4 6-3 8H6z"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="15" cy="5" r="1.4" fill="currentColor"/></svg>
-          <span>Área e perímetro<small>Contorne; cada lado sai com a sua medida.</small></span>
-        </button>
-        <button type="button" class="btn sm" data-modo="cota" onclick="medirNoMapa('cota')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 12h16M4 8v8M20 8v8"/><path d="m7 10-2 2 2 2M17 10l2 2-2 2"/></svg>
-          <span>Cota<small>A medida de um trecho, anotada sobre ele.</small></span>
-        </button>
-      </div>
-      <div class="leg" id="med-conta">Nada é gravado: as medidas são temporárias.</div>
-      <button type="button" class="btn sm med-limpar-painel" id="med-limpar" hidden onclick="limparMedidas()">Limpar tudo</button>
-    </div>
   </div>
 
   {{-- CAMADAS — liga e desliga cada coisa que o mapa desenha. A lista é

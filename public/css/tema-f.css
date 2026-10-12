@@ -3774,15 +3774,15 @@ select.combo-oculto{display:none !important}
    do cadastro (branco é lote, laranja é marcação, pêssego é revisão), e o
    contorno escuro a mantém legível tanto sobre o satélite quanto sobre o mapa
    de ruas. */
-.ctrl-medir{min-width:232px}
-.med-modos{display:flex;flex-direction:column;gap:6px;margin:8px 0}
-.med-modos .btn{display:flex;align-items:center;gap:9px;justify-content:flex-start;text-align:left;
-  padding:7px 10px;height:auto;white-space:normal}
-.med-modos .btn svg{width:18px;height:18px;flex:none}
-.med-modos .btn span{display:flex;flex-direction:column;font-weight:700;line-height:1.25}
-.med-modos .btn small{font-weight:500;font-size:10.5px;color:var(--tx3)}
-.med-modos .btn.at{border-color:var(--gm);background:var(--gl);color:var(--gd)}
-.med-limpar-painel{margin-top:8px;width:100%}
+/* As três ferramentas, lado a lado na barra: um seletor, não três botões. */
+.med-modos{display:inline-flex;gap:2px;padding:2px;border-radius:999px;background:var(--blt)}
+.med-modos button{display:inline-flex;align-items:center;gap:6px;border:none;background:none;cursor:pointer;
+  font:inherit;font-size:12px;font-weight:700;color:var(--tx2);padding:5px 11px;border-radius:999px;white-space:nowrap}
+.med-modos button svg{width:15px;height:15px;flex:none}
+.med-modos button:hover{color:var(--tx)}
+.med-modos button.at{background:var(--sur);color:var(--gd);box-shadow:var(--sh)}
+/* O ícone da coluna fica aceso enquanto a barra está aberta. */
+#ctrl-mapa .ctrl-btn.med-ativo{color:var(--gd);background:var(--gl)}
 .med-barra #med-barra-ima.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
 .med-barra .des-barra-passo{font-family:'JetBrains Mono', ui-monospace, monospace;font-weight:600;color:var(--tx)}
 

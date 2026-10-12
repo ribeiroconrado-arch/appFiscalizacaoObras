@@ -36,7 +36,7 @@ const FERRAMENTAS_MAPA = {
   // perde é só a que estiver pela metade.
   medir: {
     rotulo: 'a medição',
-    aberta: () => _grupoAberto('grupo-medir') || (typeof medState !== 'undefined' && !!medState.modo),
+    aberta: () => typeof medState !== 'undefined' && !!medState.modo,
     emCurso: () => typeof medState !== 'undefined' && medState.pontos.length > 1 ? 'uma medida começada' : null,
     fechar: () => { if (typeof sairDeMedir === 'function') sairDeMedir(); fecharPaineisMapa() },
   },
