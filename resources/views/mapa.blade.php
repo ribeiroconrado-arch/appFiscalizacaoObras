@@ -613,65 +613,86 @@
 
         @endif
 
-        {{-- BASE DE LOTES — bairro novo entra por aqui, em revisão, e só vale
-             para todos depois que o administrador publica. Ver
-             ImportacaoController e public/js/importacoes.js. --}}
-        <div class="cad-sep">Base de lotes</div>
-
-        <button type="button" class="btn sm cad-lanca" data-fer="importacoes" data-min="0"
-                data-exige="nenhuma seleção" onclick="abrirImportacoes()">
-          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/>
-          </svg>
-          <span class="cad-lanca-txt">Importações de bairro
-            <span class="cad-lanca-obs">Carregar GeoJSON, revisar e publicar.
-              <span class="imp-contador" id="imp-contador" hidden></span></span>
-          </span>
-        </button>
-
-        {{-- Contorno de cada bairro, derivado dos lotes — ver bairros-contorno.js. --}}
-        <button type="button" class="btn sm cad-lanca" data-fer="contornos" data-min="0"
-                data-exige="nenhuma seleção" onclick="abrirContornosDosBairros()">
-          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.5" aria-hidden="true">
-            <path d="M4 7l6-3 10 4-2 10-9 2-5-6z"/>
-          </svg>
-          <span class="cad-lanca-txt">Contorno dos bairros
-            <span class="cad-lanca-obs">Gerar e atualizar a linha de cada bairro.</span>
-          </span>
-        </button>
-
-        {{-- O nome dos trechos de rua que o cadastro não resolveu — ver ruas-manuais.js. --}}
-        <button type="button" class="btn sm cad-lanca" data-fer="ruas" data-min="0"
-                data-exige="nenhuma seleção" onclick="abrirNomesDeRua()">
-          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 20L10 4"/><path d="M20 20L14 4"/><path d="M12 6v2"/><path d="M12 11v2"/><path d="M12 16v2"/>
-          </svg>
-          <span class="cad-lanca-txt">Nomes de rua
-            <span class="cad-lanca-obs">Informar o nome dos trechos que o cadastro não resolveu.</span>
-          </span>
-        </button>
-
-        {{-- Conferência do bairro com o cadastro — a que fica depois da
-             importação: pendências no mapa, justificar o que não dá agora. --}}
-        <button type="button" class="btn sm cad-lanca" data-fer="conferencia" data-min="0"
-                data-exige="nenhuma seleção" onclick="abrirConferenciaBairro()">
-          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>
-          </svg>
-          <span class="cad-lanca-txt">Conferência com o cadastro
-            <span class="cad-lanca-obs">Pendências do bairro no mapa; justificar o que não dá agora.</span>
-          </span>
-        </button>
-
         {{-- "Mostrar lotes não publicados" mudou-se para o painel Camadas. --}}
 
         <div class="cad-dica">O trabalho acontece no mapa; o que a ferramenta
           pede aparece aqui nesta coluna.</div>
       </div>{{-- /cad-geral --}}
+    </div>
+  </div>
+
+  {{-- BASE DE LOTES — importar, contornar, nomear ruas e conferir com o
+       cadastro. Morava no fim da correção cadastral, e saiu de lá: aquelas são
+       ferramentas de mexer em LOTE (marcar, desenhar, unificar); estas cuidam
+       da base de um BAIRRO inteiro e abrem janela própria. Juntas, a régua da
+       curadoria misturava os dois assuntos. Não é ferramenta do mapa: o painel
+       só lança; quem disputa a vez é o que ele abre. --}}
+  <div class="ctrl-grupo" id="grupo-base">
+    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-base')"
+            title="Base de lotes — importação e conferência" aria-expanded="false">
+      {{-- Uma pilha de registros recebendo uma seta: dados entrando na base. --}}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <ellipse cx="12" cy="16.5" rx="8" ry="2.6"/>
+        <path d="M4 16.5v3c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6v-3"/>
+        <path d="M12 2v8"/><path d="m8.5 7 3.5 3.5L15.5 7"/>
+      </svg>
+    </button>
+    <div class="ctrl-corpo ctrl-base">
+      <b>Base de lotes</b>
+
+      {{-- BASE DE LOTES — bairro novo entra por aqui, em revisão, e só vale
+           para todos depois que o administrador publica. Ver
+           ImportacaoController e public/js/importacoes.js. --}}
+      <button type="button" class="btn sm cad-lanca" data-fer="importacoes" data-min="0"
+              data-exige="nenhuma seleção" onclick="fecharPaineisMapa(); abrirImportacoes()">
+        <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/>
+        </svg>
+        <span class="cad-lanca-txt">Importações de bairro
+          <span class="cad-lanca-obs">Carregar GeoJSON, revisar e publicar.
+            <span class="imp-contador" id="imp-contador" hidden></span></span>
+        </span>
+      </button>
+
+      {{-- Contorno de cada bairro, derivado dos lotes — ver bairros-contorno.js. --}}
+      <button type="button" class="btn sm cad-lanca" data-fer="contornos" data-min="0"
+              data-exige="nenhuma seleção" onclick="fecharPaineisMapa(); abrirContornosDosBairros()">
+        <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.5" aria-hidden="true">
+          <path d="M4 7l6-3 10 4-2 10-9 2-5-6z"/>
+        </svg>
+        <span class="cad-lanca-txt">Contorno dos bairros
+          <span class="cad-lanca-obs">Gerar e atualizar a linha de cada bairro.</span>
+        </span>
+      </button>
+
+      {{-- O nome dos trechos de rua que o cadastro não resolveu — ver ruas-manuais.js. --}}
+      <button type="button" class="btn sm cad-lanca" data-fer="ruas" data-min="0"
+              data-exige="nenhuma seleção" onclick="fecharPaineisMapa(); abrirNomesDeRua()">
+        <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 20L10 4"/><path d="M20 20L14 4"/><path d="M12 6v2"/><path d="M12 11v2"/><path d="M12 16v2"/>
+        </svg>
+        <span class="cad-lanca-txt">Nomes de rua
+          <span class="cad-lanca-obs">Informar o nome dos trechos que o cadastro não resolveu.</span>
+        </span>
+      </button>
+
+      {{-- Conferência do bairro com o cadastro — a que fica depois da
+           importação: pendências no mapa, justificar o que não dá agora. --}}
+      <button type="button" class="btn sm cad-lanca" data-fer="conferencia" data-min="0"
+              data-exige="nenhuma seleção" onclick="fecharPaineisMapa(); abrirConferenciaBairro()">
+        <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>
+        </svg>
+        <span class="cad-lanca-txt">Conferência com o cadastro
+          <span class="cad-lanca-obs">Pendências do bairro no mapa; justificar o que não dá agora.</span>
+        </span>
+      </button>
+
     </div>
   </div>
   @endif

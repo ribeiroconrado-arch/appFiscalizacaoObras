@@ -3805,3 +3805,6 @@ select.combo-oculto{display:none !important}
 .med-rot.med-tique.med-sel{border-top-color:#FBBF24}
 .med-rot.med-total.med-sel small{color:#FDE68A}
 #map.med-sobre .desenho-captura{cursor:pointer}
+/* O painel "Base de lotes": os mesmos lançadores da correção cadastral. */
+.ctrl-base{min-width:262px}
+.ctrl-base > b{display:block;margin-bottom:8px}
