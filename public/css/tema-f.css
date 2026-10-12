@@ -1417,7 +1417,27 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 #m-doc.so-leitura .field:has(input,select,textarea):not(:has(:disabled,[readonly],.so-leitura-campo)){background:var(--f-fundo)}
 /* CPF/CNPJ incorreto: o campo fica marcado até ser corrigido. */
 .field.campo-invalido{border-color:var(--red)!important;box-shadow:0 0 0 3px rgba(194,53,43,.12)}
-.campo-erro{color:var(--red);font-size:11.5px;font-weight:600;margin:3px 2px 0}
+/* O BALÃO DO ALERTA DE CAMPO (ui.js, marcarCampoInvalido): flutua por cima da
+   tela, preso ao campo — não entra na grade do formulário, então não empurra
+   nem desalinha os campos vizinhos. */
+.campo-balao{position:fixed;z-index:4000;max-width:min(300px,calc(100vw - 16px));padding:6px 10px;border-radius:8px;
+  background:var(--red);color:#fff;font:600 12px/1.35 'Inter',system-ui,sans-serif;
+  box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none}
+.campo-balao::before{content:'';position:absolute;left:14px;top:-5px;width:10px;height:10px;background:var(--red);transform:rotate(45deg)}
+.campo-balao.acima::before{top:auto;bottom:-5px}
+.campo-balao[hidden]{display:none}
+
+/* SESSÃO EXPIRADA: a janela que fica na tela até a pessoa decidir (ui.js). */
+.sessao-fundo{position:fixed;inset:0;z-index:5000;background:rgba(15,20,25,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.sessao-caixa{background:var(--sur);color:var(--tx);border-radius:14px;padding:24px 22px 20px;width:min(400px,100%);
+  text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.sessao-caixa svg{width:40px;height:40px;color:var(--warn)}
+.sessao-caixa h3{font-family:'Manrope',sans-serif;font-size:18px;font-weight:800;margin:10px 0 8px}
+.sessao-caixa p{margin:0 0 8px;font-size:13.5px;line-height:1.5;color:var(--tx2)}
+.sessao-caixa .sessao-obs{font-size:12.5px;color:var(--tx3)}
+.sessao-acoes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+.sessao-faixa{position:fixed;left:0;right:0;top:0;z-index:5000;background:var(--warn);color:#fff;
+  display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;padding:8px 14px;font-size:13px;font-weight:600}
 #m-doc.so-leitura .chk-item{opacity:.85}
 
 /* ── RESUMO ──
@@ -1771,6 +1791,8 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .campo-invalido{border-color:var(--red) !important;
   box-shadow:0 0 0 3px rgba(178,38,30,.14) !important}
 .field:has(.campo-invalido){border-color:var(--red);background:var(--rlt)}
+/* Dentro da caixa do campo quem fica vermelha é a caixa: sem segundo contorno. */
+.field .campo-invalido{border-color:transparent !important;box-shadow:none !important}
 
 /* ── CHIP DE ESTADO DO MAPA ──
    Passou a ficar por baixo do sub-cabeçalho quando ele entrou. Desceu o

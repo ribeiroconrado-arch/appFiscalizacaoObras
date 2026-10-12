@@ -828,7 +828,7 @@ async function identificarNoServidor(lat, lon, prec) {
     })
     // 419 = sessão expirada. Recarregar devolve o usuário ao login, que é o
     // comportamento certo: continuar tentando com token morto só gera erro.
-    if (r.status === 419) { toast('Sessão expirada. Recarregando...', 'err'); setTimeout(() => location.reload(), 1500); return }
+    if (r.status === 419) { return }   // sessão expirada: a janela de ui.js (sessaoExpirou) já avisa
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
 

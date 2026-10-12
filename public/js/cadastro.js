@@ -2074,8 +2074,6 @@ async function requisicaoCadastro(url, method, corpo, avisar = true) {
   })
 
   if (r.status === 419) {
-    toast('Sessão expirada. Recarregando...', 'err')
-    setTimeout(() => location.reload(), 1500)
     return null
   }
 

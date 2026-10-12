@@ -37,7 +37,7 @@ function toast(msg, tipo = 'ok', opts = {}) {
   // `opts.duracao`: aviso longo, que lista o que mudou, precisa de mais tempo de leitura.
   el._t = setTimeout(() => { el.className = 'toast' }, opts.duracao ?? (t === 'err' ? 5000 : 3200))
 
-  if (opts.campo) marcarCampoInvalido(opts.campo)
+  if (opts.campo) marcarCampoInvalido(opts.campo, msg)
 }
 
 /** Ícone de cada tipo de aviso. */
@@ -51,41 +51,116 @@ const TIPOS_AVISO = {
 }
 
 /**
- * Marca o campo que impediu a ação e leva o usuário até ele.
+ * ALERTA DE CAMPO — um jeito só, em qualquer formulário: o campo fica
+ * VERMELHO e um BALÃO, preso a ele, diz o que há de errado ("CPF incorreto",
+ * "Informe o nome do autuado").
+ *
+ * O balão FLUTUA por cima da tela (não entra no formulário), então não empurra
+ * nem desalinha os campos vizinhos — a mensagem escrita ao lado do campo, que
+ * existia antes, ocupava uma casa da grade e jogava o campo seguinte para a
+ * linha de baixo. Ele acompanha o campo na rolagem e some sozinho quando o
+ * campo é corrigido, ou quando sai de vista (troca de aba, janela fechada).
  *
  * Um aviso de "campo obrigatório" que não diz QUAL campo obriga a varrer o
- * formulário inteiro — e num formulário com abas o campo pode nem estar na
- * aba visível. A marca sai sozinha assim que o usuário mexe no campo: exigir
- * que ele a apague seria cobrar duas ações por um erro.
+ * formulário inteiro; por isso o campo também é trazido para a vista e
+ * recebe o foco.
  *
- * @param {string} id
+ * @param {string} id   o campo (o select vestido de combobox também serve)
+ * @param {string} [msg] o que o balão diz; sem mensagem, só o vermelho
+ * @param {{focar?: boolean}} [opts] focar=false marca sem roubar o foco (conferência ao sair do campo)
  */
-function marcarCampoInvalido(id) {
+function marcarCampoInvalido(id, msg = '', opts = {}) {
   // Select vestido de combobox: quem se vê (e recebe o foco) é o campo dele.
   const el = document.getElementById(id + '-busca') || document.getElementById(id)
-  if (!el) return
+  if (!el) return false
 
   el.classList.add('campo-invalido')
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  setTimeout(() => el.focus?.(), 220)
-
-  const limpar = () => {
-    el.classList.remove('campo-invalido')
-    el.removeEventListener('input', limpar)
-    el.removeEventListener('change', limpar)
+  el.setAttribute('aria-invalid', 'true')
+  if (opts.focar !== false) {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    setTimeout(() => el.focus?.(), 220)
   }
-  el.addEventListener('input', limpar)
-  el.addEventListener('change', limpar)
+  if (msg) _balaoDeCampo(el, msg)
+
+  if (!el._limparAlerta) {
+    el._limparAlerta = () => limparCampoInvalido(id)
+    el.addEventListener('input', el._limparAlerta)
+    el.addEventListener('change', el._limparAlerta)
+  }
+  return true
+}
+
+/** Tira o alerta do campo: o vermelho e o balão. @param {string} id */
+function limparCampoInvalido(id) {
+  const el = document.getElementById(id + '-busca') || document.getElementById(id)
+  if (!el) return
+  el.classList.remove('campo-invalido')
+  el.removeAttribute('aria-invalid')
+  if (el._limparAlerta) {
+    el.removeEventListener('input', el._limparAlerta)
+    el.removeEventListener('change', el._limparAlerta)
+    el._limparAlerta = null
+  }
+  _baloesDeCampo.get(el)?.remove()
+  _baloesDeCampo.delete(el)
+}
+
+/** @type {Map<HTMLElement, HTMLElement>} campo => o balão dele */
+const _baloesDeCampo = new Map()
+
+/** Cria (ou atualiza) o balão de um campo e o põe no lugar. */
+function _balaoDeCampo(el, msg) {
+  let balao = _baloesDeCampo.get(el)
+  if (!balao) {
+    balao = document.createElement('div')
+    balao.className = 'campo-balao'
+    balao.setAttribute('role', 'alert')
+    document.body.appendChild(balao)
+    _baloesDeCampo.set(el, balao)
+  }
+  balao.textContent = msg
+  _posicionarBaloesDeCampo()
 }
 
 /**
- * Exigência de preenchimento: avisa e aponta o campo, numa chamada só.
+ * Põe cada balão embaixo do campo dele (ou em cima, se não couber embaixo).
+ * Balão de campo que saiu de vista — outra aba, janela fechada, campo
+ * removido — é desfeito junto com o alerta.
+ */
+function _posicionarBaloesDeCampo() {
+  for (const [el, balao] of _baloesDeCampo) {
+    const caixa = el.closest('.field') || el
+    const r = caixa.getBoundingClientRect()
+    if (!el.isConnected || !caixa.offsetParent || r.width === 0) {
+      balao.remove(); _baloesDeCampo.delete(el)
+      el.classList.remove('campo-invalido')
+      continue
+    }
+    const semEspaco = r.bottom + balao.offsetHeight + 10 > window.innerHeight
+    balao.classList.toggle('acima', semEspaco)
+    balao.style.left = Math.max(8, Math.min(r.left + 6, window.innerWidth - balao.offsetWidth - 8)) + 'px'
+    balao.style.top = (semEspaco ? r.top - balao.offsetHeight - 7 : r.bottom + 7) + 'px'
+    // Rolado para fora da área visível do formulário: o balão não fica solto na tela.
+    balao.hidden = r.bottom < 0 || r.top > window.innerHeight
+  }
+}
+// O balão segue o campo: rolagem de qualquer quadro, janela redimensionada,
+// troca de aba (clique) e janelas que abrem e fecham.
+window.addEventListener('scroll', _posicionarBaloesDeCampo, true)
+window.addEventListener('resize', _posicionarBaloesDeCampo)
+// Na captura: as janelas seguram o clique (stopPropagation) antes de ele subir.
+document.addEventListener('click', () => setTimeout(_posicionarBaloesDeCampo, 60), true)
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') setTimeout(_posicionarBaloesDeCampo, 60) })
+
+/**
+ * Exigência de preenchimento: o campo fica vermelho, com o balão dizendo o que
+ * se espera dele. Se o campo não existir na tela, a mensagem sai como aviso.
  *
  * @param {string} id  campo que falta
  * @param {string} msg o que se espera dele
  */
 function exigirCampo(id, msg) {
-  toast(msg, 'err', { campo: id })
+  if (!marcarCampoInvalido(id, msg)) toast(msg, 'err')
 }
 
 /** Abre o modal e trava o scroll do body. @param {string} id */
@@ -575,18 +650,48 @@ document.addEventListener('keydown', ev => {
 let _sessaoCaiu = false
 
 /**
- * Leva de volta ao login, dizendo por quê.
+ * Avisa que a sessão expirou — numa JANELA que fica na tela, e não num aviso
+ * de dois segundos seguido de um redirecionamento.
  *
- * `/entrar` e não `location.reload()`: recarregar a página do mapa devolve o
- * redirecionamento do servidor e chega ao mesmo lugar, mas passa antes por
- * uma tela que pisca. Ir direto é mais honesto com o que está acontecendo.
+ * Antes a tela ia sozinha para o login 1,6 s depois de um aviso no rodapé: quem
+ * estava olhando para outro lado só via o formulário sumir. Agora a janela
+ * diz o que aconteceu e espera. "Entrar novamente" leva ao login (que repete
+ * o motivo); "Continuar nesta tela" deixa copiar o que estava digitado e ainda
+ * não tinha sido salvo, com uma faixa no alto lembrando que nada mais será
+ * gravado até entrar de novo.
  */
 function sessaoExpirou() {
   if (_sessaoCaiu) { return }
   _sessaoCaiu = true
 
-  toast('Sessão expirada. Entre novamente.', 'err')
-  setTimeout(() => { location.href = '/entrar' }, 1600)
+  const fundo = document.createElement('div')
+  fundo.className = 'sessao-fundo'
+  fundo.id = 'aviso-sessao'
+  fundo.innerHTML = `<div class="sessao-caixa" role="alertdialog" aria-modal="true" aria-labelledby="sessao-tit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <h3 id="sessao-tit">Sua sessão expirou</h3>
+      <p>Por segurança, a sessão termina depois de um tempo sem uso. Entre novamente para continuar.</p>
+      <p class="sessao-obs">O que foi digitado e ainda não tinha sido salvo não foi gravado. Se precisar copiar algo desta tela, use "Continuar nesta tela".</p>
+      <div class="sessao-acoes">
+        <button type="button" class="btn" id="sessao-ficar">Continuar nesta tela</button>
+        <button type="button" class="btn primary" id="sessao-entrar">Entrar novamente</button>
+      </div>
+    </div>`
+  document.body.appendChild(fundo)
+  const entrar = () => { location.href = '/entrar?expirou=1' }
+  fundo.querySelector('#sessao-entrar').addEventListener('click', entrar)
+  fundo.querySelector('#sessao-ficar').addEventListener('click', () => {
+    fundo.remove()
+    const faixa = document.createElement('div')
+    faixa.className = 'sessao-faixa'
+    faixa.setAttribute('role', 'status')
+    faixa.innerHTML = '<span>Sessão expirada: nada mais é gravado até você entrar de novo.</span>'
+      + '<button type="button" class="btn sm">Entrar novamente</button>'
+    faixa.querySelector('button').addEventListener('click', entrar)
+    document.body.appendChild(faixa)
+  })
+  setTimeout(() => fundo.querySelector('#sessao-entrar')?.focus(), 50)
 }
 
 /**
@@ -1015,34 +1120,26 @@ function erroDeCpfCnpj(valor) {
 }
 
 const MSG_CPF_CNPJ = {
-  cpf: 'CPF incorreto: confira os números digitados.',
-  cnpj: 'CNPJ incorreto: confira os números digitados.',
-  incompleto: 'CPF ou CNPJ incompleto: o CPF tem 11 dígitos e o CNPJ, 14.',
+  cpf: 'CPF incorreto',
+  cnpj: 'CNPJ incorreto',
+  incompleto: 'CPF ou CNPJ incompleto',
 }
 
 /**
- * Confere o CPF/CNPJ de um campo e MOSTRA o erro nele: o campo fica marcado e
- * a mensagem aparece logo abaixo, até ser corrigido. Usado ao sair do campo e
- * antes de gravar.
+ * Confere o CPF/CNPJ de um campo e MOSTRA o erro nele, com o alerta de campo
+ * do sistema: vermelho, e o balão "CPF incorreto". Usado ao sair do campo
+ * (sem roubar o foco) e antes de gravar.
  * @param {HTMLInputElement} inp
  * @returns {boolean} se o campo está certo (ou em branco)
  */
 function conferirCpfCnpjCampo(inp) {
   if (!inp) return true
   const erro = erroDeCpfCnpj(inp.value)
-  const campo = inp.closest('.field') || inp
-  campo.classList.toggle('campo-invalido', !!erro)
-  inp.setAttribute('aria-invalid', erro ? 'true' : 'false')
-  let aviso = campo.parentElement?.querySelector(':scope > .campo-erro[data-de="' + inp.id + '"]')
-  if (!erro) { aviso?.remove(); return true }
-  if (!aviso) {
-    aviso = document.createElement('div')
-    aviso.className = 'campo-erro'
-    aviso.dataset.de = inp.id
-    aviso.setAttribute('role', 'alert')
-    campo.insertAdjacentElement('afterend', aviso)
-  }
-  aviso.textContent = MSG_CPF_CNPJ[erro]
+  if (!erro) { limparCampoInvalido(inp.id); return true }
+  marcarCampoInvalido(inp.id, MSG_CPF_CNPJ[erro], { focar: false })
+  // O alerta de campo sai a cada tecla; o de CPF só sai quando o número fica
+  // certo — então a marcação é refeita enquanto ele continuar errado.
+  inp.removeEventListener('input', inp._limparAlerta)
   return false
 }
 
@@ -1053,6 +1150,6 @@ function mascararCpfCnpj(inp) {
     ? n.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2')
     : n.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
        .replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2')
-  // Corrigindo, o aviso de erro sai assim que o número fica certo.
-  if (inp.getAttribute('aria-invalid') === 'true' && !erroDeCpfCnpj(inp.value)) conferirCpfCnpjCampo(inp)
+  // Corrigindo, o alerta sai assim que o número fica certo.
+  if (inp.getAttribute('aria-invalid') === 'true' && !erroDeCpfCnpj(inp.value)) limparCampoInvalido(inp.id)
 }

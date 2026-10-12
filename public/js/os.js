@@ -447,7 +447,7 @@ async function enviarOs({ objeto, inicio, fim }) {
       body: JSON.stringify(corpo),
     })
 
-    if (r.status === 419) { toast('Sessão expirada. Recarregando...', 'err'); setTimeout(() => location.reload(), 1500); return }
+    if (r.status === 419) { return }   // sessão expirada: a janela de ui.js (sessaoExpirou) já avisa
     const d = await r.json().catch(() => ({}))
     if (!r.ok) {
       const primeiro = d.errors ? Object.values(d.errors)[0][0] : d.message

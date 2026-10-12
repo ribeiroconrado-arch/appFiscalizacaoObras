@@ -904,7 +904,7 @@ async function salvarFormularioDoc() {
     headers: { ...cabecalhoDoc(), 'Content-Type': 'application/json' },
     body: JSON.stringify(corpo),
   })
-  if (r.status === 419) { setTimeout(() => location.reload(), 1500); throw new Error('Sessão expirada. Recarregando...') }
+  if (r.status === 419) { throw new Error('Sessão expirada. Entre novamente para gravar.') }
   const d = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(d.errors ? Object.values(d.errors)[0][0] : (d.message || 'HTTP ' + r.status))
   if (!fdState.id) fdState.id = d.documento.id
@@ -1152,6 +1152,10 @@ function mostrarViaA4NoResumo(caixa, { url = null, html = null }) {
   const quadro = caixa.querySelector('iframe')
   quadro.addEventListener('load', () => {
     caixa.querySelector('.rs-a4-aviso')?.remove()
+    // A identificação já aparece no início da prévia; a repetição é só para o papel.
+    const estiloResumo = quadro.contentDocument.createElement('style')
+    estiloResumo.textContent = '.sec-anexos > .topo,.sec-anexos > .topo-regua{display:none}'
+    quadro.contentDocument.head.appendChild(estiloResumo)
     // Em plena lavratura, a folha nova recebe o campo de assinatura do autuado.
     if (fdState.lavrando && typeof montarAssinaturaNaVia === 'function') montarAssinaturaNaVia()
     ajustarViaA4NoResumo()

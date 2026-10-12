@@ -2708,7 +2708,7 @@ async function enviarVistoria() {
       body: fd,   // sem Content-Type: o navegador põe o boundary do multipart
     })
 
-    if (r.status === 419) { toast('Sessão expirada. Recarregando...', 'err'); setTimeout(() => location.reload(), 1500); return }
+    if (r.status === 419) { return }   // sessão expirada: a janela de ui.js (sessaoExpirou) já avisa
     const d = await r.json().catch(() => ({}))
 
     if (!r.ok) {

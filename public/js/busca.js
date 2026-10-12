@@ -462,7 +462,7 @@ async function aplicarQuadraQuarteirao(id) {
       body: JSON.stringify({ quadra }),
     })
     const d = await r.json()
-    if (r.status === 419) { toast('Sessão expirada. Recarregando...', 'err'); setTimeout(() => location.reload(), 1500); return }
+    if (r.status === 419) { return }   // sessão expirada: a janela de ui.js (sessaoExpirou) já avisa
     // A recusa do servidor é sempre sobre o VALOR digitado — quadra que já tem
     // esse número de lote, quarteirão que na verdade são duas quadras. Marcar o
     // campo poupa o usuário de procurar de onde veio o aviso.
