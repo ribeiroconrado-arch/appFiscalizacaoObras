@@ -431,6 +431,42 @@ function _medAngulo(a, b) {
 const _meio = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
 
 /**
+ * O lote que contém um ponto do mapa — "Q 17 · Lote 12" —, ou '' se nenhum.
+ *
+ * A etiqueta da área fica no miolo do contorno, que é onde o mapa escreve o
+ * número do lote: ela o cobria. Em vez de disputar o lugar, a etiqueta passa a
+ * dizer qual é o lote.
+ *
+ * @param {[number,number]} c em [lon, lat] @returns {string}
+ */
+function _medLoteEm(c) {
+  const ponto = L.latLng(c[1], c[0])
+  for (const camada of mapaState.camadas || []) {
+    const g = camada.feature?.geometry
+    if (!g || !camada.getBounds?.().contains(ponto)) continue
+    const poligonos = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []
+    for (const aneis of poligonos) {
+      // Dentro do anel de fora e fora dos buracos.
+      if (!_medNoAnel(c, aneis[0]) || aneis.slice(1).some(b => _medNoAnel(c, b))) continue
+      const p = camada.feature.properties || {}
+      if (p.numero_lote == null || p.numero_lote === '') return ''
+      return (p.quadra != null && p.quadra !== '' ? `Q ${p.quadra} · ` : '') + `Lote ${p.numero_lote}`
+    }
+  }
+  return ''
+}
+
+/** O ponto está dentro do anel? (cruzamentos de um raio horizontal) */
+function _medNoAnel(c, anel) {
+  let dentro = false
+  for (let i = 0, j = anel.length - 1; i < anel.length; j = i++) {
+    const [xi, yi] = anel[i], [xj, yj] = anel[j]
+    if ((yi > c[1]) !== (yj > c[1]) && c[0] < (xj - xi) * (c[1] - yi) / (yj - yi) + xi) dentro = !dentro
+  }
+  return dentro
+}
+
+/**
  * Desenha uma medida num grupo — a pronta e a em curso usam o mesmo traço.
  *
  * @param {L.LayerGroup} grupo
@@ -485,8 +521,11 @@ function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
   if (fechado) {
     const cx = todos.reduce((s, c) => s + c[0], 0) / todos.length
     const cy = todos.reduce((s, c) => s + c[1], 0) / todos.length
+    // O lote em que o miolo do contorno cai, antes da área: a etiqueta fica
+    // em cima do número que o mapa escreve ali.
+    const lote = _medLoteEm([cx, cy])
     _medEtiqueta(grupo, [cx, cy],
-      `<b>${fmtMed(m.area)} m²</b><small>perímetro ${fmtMed(m.total)} m</small>`, 'med-total' + cssSel)
+      `${lote ? `<i>${esc(lote)}</i>` : ''}<b>${fmtMed(m.area)} m²</b><small>perímetro ${fmtMed(m.total)} m</small>`, 'med-total' + cssSel)
   } else if (modo === 'regua' && m.lados.length > 1) {
     _medEtiqueta(grupo, todos[todos.length - 1], `<b>total ${fmtMed(m.total)} m</b>`, 'med-total med-ponta' + cssSel)
   }
