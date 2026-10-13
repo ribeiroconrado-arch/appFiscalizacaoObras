@@ -2845,6 +2845,9 @@
        significaria que uma ferramenta nova precisa ser lembrada em dois
        lugares — e a permissão de curador, que é decidida aqui no Blade com
        @@if, não chegaria ao segundo. --}}
+  {{-- O NOME DA BARRA, em pé, na borda. As duas réguas (esta e a da base de
+       lotes) são iguais e ocupam o mesmo canto: é o título que diz qual é. --}}
+  <div class="mesa-titulo-v" aria-hidden="true">Correção cadastral</div>
   <nav class="cad-regua" id="cad-regua" aria-label="Ferramentas do cadastro"></nav>
 
   <div class="cad-mesa-lado">
@@ -2878,6 +2881,7 @@
      conferir). Montada por importacoes.js a partir de #grupo-base. --}}
 @if (auth()->user()->podeCurarCadastro())
 <aside class="cad-mesa so-regua base-mesa" id="base-mesa" hidden aria-label="Base de lotes">
+  <div class="mesa-titulo-v" aria-hidden="true">Base de lotes</div>
   <nav class="cad-regua" id="base-regua" aria-label="Ferramentas da base de lotes"></nav>
 </aside>
 @endif

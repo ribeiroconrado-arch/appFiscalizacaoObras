@@ -3505,8 +3505,8 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
    quando alguém a abria, isso passava; com a régua permanente, o número de
    lotes vive escondido. Ele se desloca o quanto a mesa estiver ocupando. */
 @media (min-width:1000px){
-  body.com-mesa .chip-estado{left:80px}     /* 12 + 56 da régua + 12 */
-  body.mesa-larga .chip-estado{left:350px}  /* 12 + 326 da mesa + 12 */
+  body.com-mesa .chip-estado{left:102px}    /* 12 + 22 do título + 56 da régua + 12 */
+  body.mesa-larga .chip-estado{left:372px}  /* 12 + 348 da mesa + 12 */
 }
 
 /* Carimbo de procedência na ficha do documento. Menor e mais apagado que o
@@ -3817,8 +3817,27 @@ select.combo-oculto{display:none !important}
 body.com-mesa .base-mesa{display:none}
 /* Fora da aba do mapa ela não existe (é fixa na janela, e não no mapa). */
 body:not(:has(#t-mapa.at)) .base-mesa{display:none}
-@media (min-width:1000px){
-  body.com-base .chip-estado{left:80px}
-  /* Com a régua aberta o ícone não abre painel: o painel seria o mesmo menu. */
-  body.com-base #grupo-base .ctrl-corpo{display:none}
+@media (min-width:600px){
+  body.com-base .chip-estado{left:102px}
+  /* O MESMO COMPORTAMENTO DO ÍCONE DA CURADORIA: com a régua (ou uma
+     ferramenta dela) aberta, o ícone da coluna some — ele abriria o que já
+     está à vista. Fechada a régua, ele volta. */
+  body.com-base #grupo-base{display:none}
 }
+
+/* ── O TÍTULO EM PÉ ──
+   Uma faixa estreita antes da régua, com o nome da barra lido de baixo para
+   cima. A mesa cresce os 22px dela (ver as larguras logo abaixo). */
+.mesa-titulo-v{
+  flex:0 0 22px; display:flex; align-items:center; justify-content:center;
+  writing-mode:vertical-rl; transform:rotate(180deg);
+  background:var(--gd); color:#fff; font-size:10px; font-weight:800;
+  text-transform:uppercase; letter-spacing:.12em; white-space:nowrap; user-select:none;
+}
+@media (min-width:600px){
+  .cad-mesa{width:348px}
+  .cad-mesa.so-regua{width:78px}
+}
+
+/* ── ÍCONES 15% MAIORES nas duas réguas (21px → 24px) ── */
+.cad-fer svg, .cad-fer .cad-ico{width:24px;height:24px}
