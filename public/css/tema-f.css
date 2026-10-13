@@ -3859,3 +3859,13 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 
 /* ── ÍCONES 15% MAIORES nas duas réguas (21px → 24px) ── */
 .cad-fer svg, .cad-fer .cad-ico{width:24px;height:24px}
+
+/* ── TRAÇO DOS ÍCONES DO MAPA ──
+   Um traço só para todos: a coluna de controles, as réguas (alteração
+   cadastral e ferramentas de importação), a barra de medir e os lançadores do
+   painel. Cada ícone trazia o seu (1.9 ou 2), e, depois de crescerem 15%,
+   ficaram pesados. 1.6 é um pouco mais fino, sem perder leitura em 22–24px.
+   A regra alcança os filhos porque alguns desenhos repetem o traço neles. */
+.ctrl-btn svg, .ctrl-btn svg *,
+.cad-fer svg, .cad-fer svg *,
+.cad-lanca .cad-ico, .cad-lanca .cad-ico *{stroke-width:1.6}
