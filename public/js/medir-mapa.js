@@ -33,7 +33,23 @@
  * pesquisa ou a alteração cadastral, e vice-versa.
  */
 
-const MED_COR = '#22D3EE'
+/**
+ * AS CORES SÃO AS DO TEMA (escolha de 13/10/2026: "chumbo e verde do tema").
+ * O ciano e o azul-escuro de antes não existiam em nenhum outro lugar do
+ * sistema. Agora a linha é o tom claro do tema, o contorno o tom mais escuro,
+ * e as etiquetas (tema-f.css) são chumbo — o escuro dos ícones e das dicas das
+ * barras. Trocar o tema troca a medida junto.
+ *
+ * O Leaflet pinta os traços com cor escrita, e não com variável de CSS: por
+ * isso as do tema são lidas da página a cada desenho.
+ *
+ * @returns {{linha:string, casca:string, miolo:string, borda:string}}
+ */
+function _medCores() {
+  const css = getComputedStyle(document.documentElement)
+  const v = (nome, reserva) => css.getPropertyValue(nome).trim() || reserva
+  return { linha: v('--gm', '#A5D6A7'), casca: v('--gxd', '#00451A'), miolo: v('--g', '#009B3A'), borda: v('--gd', '#006B28') }
+}
 const MED_COR_SEL = '#FBBF24'   // a medida selecionada
 const MED_PEGA_PX = 8          // a que distância do traço o toque seleciona
 const MED_IMA_PX = 14          // raio do ímã, em pixels de tela
@@ -479,13 +495,14 @@ function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
   const todos = cursor ? [...pts, cursor] : pts
   if (!todos.length) return
   const viva = !!cursor || grupo === medState.viva
-  const cor = sel ? MED_COR_SEL : MED_COR
+  const tema = _medCores()
+  const cor = sel ? MED_COR_SEL : tema.linha
   const cssSel = sel ? ' med-sel' : ''
   const traco = { pane: 'medidas', interactive: false, color: cor, weight: sel ? 3.5 : 2.5, opacity: 1 }
-  const sombra = { ...traco, color: '#0F172A', weight: 5, opacity: .55 }
+  const sombra = { ...traco, color: tema.casca, weight: 5, opacity: .6 }
 
   todos.forEach(c => L.circleMarker(_ll(c), { pane: 'medidas', interactive: false, radius: 3.5,
-    color: '#0F172A', weight: 1.5, fillColor: cor, fillOpacity: 1 }).addTo(grupo))
+    color: sel ? tema.casca : tema.borda, weight: 1.5, fillColor: sel ? cor : '#FFFFFF', fillOpacity: 1 }).addTo(grupo))
   if (todos.length < 2) return
 
   if (modo === 'cota') {
@@ -506,7 +523,7 @@ function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
   const linha = todos.map(_ll)
   if (fechado) {
     L.polygon(linha, { ...sombra, fill: false }).addTo(grupo)
-    L.polygon(linha, { ...traco, fillColor: cor, fillOpacity: .16, dashArray: viva ? '6 5' : null }).addTo(grupo)
+    L.polygon(linha, { ...traco, fillColor: sel ? cor : tema.miolo, fillOpacity: .16, dashArray: viva ? '6 5' : null }).addTo(grupo)
   } else {
     L.polyline(linha, sombra).addTo(grupo)
     L.polyline(linha, { ...traco, dashArray: viva ? '6 5' : null }).addTo(grupo)
@@ -525,7 +542,7 @@ function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
     // em cima do número que o mapa escreve ali.
     const lote = _medLoteEm([cx, cy])
     _medEtiqueta(grupo, [cx, cy],
-      `${lote ? `<i>${esc(lote)}</i>` : ''}<b>${fmtMed(m.area)} m²</b><small>perímetro ${fmtMed(m.total)} m</small>`, 'med-total' + cssSel)
+      `${lote ? `<i>${esc(lote)}</i>` : ''}<b>${fmtMed(m.area)} m²</b><small>perím. ${fmtMed(m.total)} m</small>`, 'med-total' + cssSel)
   } else if (modo === 'regua' && m.lados.length > 1) {
     _medEtiqueta(grupo, todos[todos.length - 1], `<b>total ${fmtMed(m.total)} m</b>`, 'med-total med-ponta' + cssSel)
   }
@@ -541,7 +558,7 @@ function _medPintar() {
       // Onde o ímã pegou: um anel no canto, antes de tocar.
       if (medState.imaEm) {
         L.circleMarker(medState.imaEm, { pane: 'medidas', interactive: false, radius: 8,
-          color: MED_COR, weight: 2.5, fill: false }).addTo(g)
+          color: _medCores().linha, weight: 2.5, fill: false }).addTo(g)
       }
     }
   }
@@ -561,7 +578,7 @@ function _medPintarBarra() {
       const m = medirPontos(todos, modo === 'area' && todos.length >= 3)
       document.getElementById('med-barra-passo').textContent =
         n === 0 ? (modo === 'cota' ? 'Toque nas duas pontas do trecho.' : modo === 'area' ? 'Toque nos cantos do contorno.' : 'Toque no ponto de partida.')
-          : modo === 'area' && todos.length >= 3 ? `${fmtMed(m.area)} m² · perímetro ${fmtMed(m.total)} m`
+          : modo === 'area' && todos.length >= 3 ? `${fmtMed(m.area)} m² · perím. ${fmtMed(m.total)} m`
             : todos.length >= 2 ? `${fmtMed(m.total)} m` + (modo === 'regua' && n >= 2 ? ' · duplo toque conclui' : '')
               : 'Toque no ponto seguinte.'
       document.getElementById('med-barra-concluir').hidden = modo === 'cota' || n < (modo === 'area' ? 3 : 2)

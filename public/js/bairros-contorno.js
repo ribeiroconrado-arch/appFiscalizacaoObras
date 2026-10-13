@@ -217,6 +217,17 @@ function _abreviarRua(nome) {
 /** De quantos em quantos pixels o nome da MESMA rua se repete ao longo dela. */
 const RUA_REPETE_PX = 1100
 
+/** Dois nomes iguais mais perto do que isto, em pixels, são a mesma rua dita duas vezes. */
+const RUA_MESMA_PX = RUA_REPETE_PX * 0.5
+
+/** Dois nomes (quaisquer) com o centro mais perto do que isto se atropelam. */
+const RUA_COLIDE_PX = 16
+
+/** O nome da rua sem o que varia entre bairros: caixa, acento e tipo abreviado. */
+function _chaveDaRua(nome) {
+  return _abreviarRua(String(nome)).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
+}
+
 /**
  * Nomes de rua que estão na tela, nos níveis das quadras e dos lotes.
  *
@@ -235,6 +246,14 @@ const RUA_REPETE_PX = 1100
  * da página, refeito a cada movimento).
  *
  * O texto gira com a rua e nunca fica de cabeça para baixo (-90° a 90°).
+ *
+ * UMA RUA, UM NOME — MESMO ENTRE DOIS BAIRROS. A rua da divisa é gerada pelos
+ * dois bairros que ela separa, cada um com o seu trecho a 7 m da própria
+ * quadra: saíam dois nomes iguais, lado a lado, e de longe um por cima do
+ * outro. Os candidatos de TODOS os bairros são reunidos antes de virar
+ * elemento, e o nome igual a outro já posto a menos de RUA_MESMA_PX é
+ * descartado — o que fica vai para o meio dos dois, que é o meio da rua. Dois
+ * nomes diferentes com o centro quase no mesmo ponto também não saem juntos.
  */
 function _desenharRotulosDeRua() {
   quadraState.rotulosRua.forEach(m => m.remove())
@@ -244,6 +263,8 @@ function _desenharRotulosDeRua() {
 
   const vista = mapa.getBounds().pad(0.05)
   const zoom = mapa.getZoom()
+  /** Os candidatos de todos os bairros, antes da regra de "uma rua, um nome". */
+  const candidatos = []
 
   for (const b of quadraState.porBairro.values()) {
 
@@ -285,19 +306,42 @@ function _desenharRotulosDeRua() {
         if (!atual || desvio < atual.desvio) porFaixa.set(faixa, { ...x, p1, p2, texto, desvio })
       }
 
-      // 4. Só o que está na tela vira elemento.
+      // 4. Só o que está na tela (com folga) é candidato.
       for (const c of porFaixa.values()) {
         if (!vista.contains(c.meio)) continue
-        let ang = Math.atan2(c.p2.y - c.p1.y, c.p2.x - c.p1.x) * 180 / Math.PI
-        if (ang > 90) ang -= 180
-        else if (ang <= -90) ang += 180
-        quadraState.rotulosRua.push(L.marker(c.meio, {
-          interactive: false, keyboard: false,
-          icon: L.divIcon({ className: 'rot-rua', iconSize: [0, 0],
-            html: `<span style="transform:translate(-50%,-50%) rotate(${ang.toFixed(1)}deg)">${esc(c.texto)}</span>` }),
-        }).addTo(mapa))
+        candidatos.push({ ...c, chave: _chaveDaRua(nome), pt: mapa.latLngToLayerPoint(c.meio) })
       }
     }
+  }
+
+  // 5. Uma rua, um nome. Os trechos mais longos primeiro: são os que melhor
+  //    comportam o texto, e é o deles que fica.
+  candidatos.sort((a, b) => b.p1.distanceTo(b.p2) - a.p1.distanceTo(a.p2))
+  const postos = []
+  for (const c of candidatos) {
+    const igual = postos.find(p => p.chave === c.chave && p.pt.distanceTo(c.pt) < RUA_MESMA_PX)
+    if (igual) {
+      // O gêmeo do outro lado da rua: o nome que ficou vai para o meio dos dois.
+      if (!igual.centrado && igual.pt.distanceTo(c.pt) < 60) {
+        igual.meio = L.latLng((igual.meio.lat + c.meio.lat) / 2, (igual.meio.lng + c.meio.lng) / 2)
+        igual.pt = mapa.latLngToLayerPoint(igual.meio)
+        igual.centrado = true
+      }
+      continue
+    }
+    if (postos.some(p => p.pt.distanceTo(c.pt) < RUA_COLIDE_PX)) continue
+    postos.push(c)
+  }
+
+  for (const c of postos) {
+    let ang = Math.atan2(c.p2.y - c.p1.y, c.p2.x - c.p1.x) * 180 / Math.PI
+    if (ang > 90) ang -= 180
+    else if (ang <= -90) ang += 180
+    quadraState.rotulosRua.push(L.marker(c.meio, {
+      interactive: false, keyboard: false,
+      icon: L.divIcon({ className: 'rot-rua', iconSize: [0, 0],
+        html: `<span style="transform:translate(-50%,-50%) rotate(${ang.toFixed(1)}deg)">${esc(c.texto)}</span>` }),
+    }).addTo(mapa))
   }
 }
 

@@ -3797,23 +3797,29 @@ select.combo-oculto{display:none !important}
 #ctrl-mapa .ctrl-btn.med-ativo{color:var(--gd);background:var(--gl)}
 
 .med-marca{background:none;border:none;overflow:visible;pointer-events:none}
+/* CHUMBO E COR DO TEMA. A etiqueta é o chumbo dos ícones e das dicas das
+   barras; a borda, o cabeçalho do lote e o total vêm do tema — trocar o tema
+   troca a medida junto (as linhas, em medir-mapa.js, leem as mesmas variáveis). */
 .med-rot{position:absolute;display:block;white-space:nowrap;transform:translate(-50%,-50%);
   font-family:'JetBrains Mono', ui-monospace, monospace;font-size:11.5px;font-weight:700;
-  color:#fff;background:rgba(15,23,42,.9);border:1px solid #22D3EE;border-radius:6px;
+  color:#fff;background:color-mix(in srgb, var(--chumbo) 94%, transparent);border:1px solid var(--gm);border-radius:6px;
   padding:2px 6px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
-.med-rot.med-total{font-size:12.5px;padding:4px 9px;text-align:center;border-width:1.5px}
+.med-rot.med-total{font-size:12.5px;padding:4px 9px;text-align:center;border-width:1.5px;overflow:hidden}
 .med-rot.med-total b{display:block}
-.med-rot.med-total i{display:block;font-style:normal;font-size:10.5px;font-weight:700;color:#FDE68A;
-  letter-spacing:.02em;border-bottom:1px solid rgba(255,255,255,.22);padding-bottom:2px;margin-bottom:2px}
-.med-rot.med-total small{display:block;font-size:10.5px;font-weight:600;color:#A5F3FC}
-.med-rot.med-ponta{transform:translate(12px,-150%)}
+/* O lote, num cabeçalho preenchido na cor do tema. */
+.med-rot.med-total i{display:block;font-style:normal;font-size:10.5px;font-weight:700;color:#fff;
+  letter-spacing:.02em;background:var(--gd);margin:-4px -9px 3px;padding:3px 9px 2px}
+.med-rot.med-total small{display:block;font-size:10.5px;font-weight:600;color:var(--gl)}
+/* O total da régua: preenchido, como o botão ativo das barras. */
+.med-rot.med-ponta{transform:translate(12px,-150%);background:var(--g);border-color:var(--gd)}
 /* A cota escreve SOBRE o trecho, sem caixa, como numa planta. */
 .med-rot.med-cota{background:none;border:none;box-shadow:none;padding:0;font-size:12.5px;
-  text-shadow:0 0 3px #0F172A,0 0 3px #0F172A,0 0 3px #0F172A,0 0 6px #0F172A}
-.med-rot.med-tique{width:16px;height:0;padding:0;border:none;border-top:2.5px solid #22D3EE;
-  border-radius:0;background:none;box-shadow:0 0 0 1px rgba(15,23,42,.55)}
+  text-shadow:0 0 3px var(--gxd),0 0 3px var(--gxd),0 0 3px var(--gxd),0 0 6px var(--gxd)}
+.med-rot.med-tique{width:16px;height:0;padding:0;border:none;border-top:2.5px solid var(--gm);
+  border-radius:0;background:none;box-shadow:0 0 0 1px color-mix(in srgb, var(--gxd) 55%, transparent)}
 /* A medida selecionada: âmbar, para se distinguir das outras antes do Delete. */
 .med-rot.med-sel{border-color:#FBBF24;color:#FDE68A}
+.med-rot.med-ponta.med-sel{background:color-mix(in srgb, var(--chumbo) 94%, transparent)}
 .med-rot.med-tique.med-sel{border-top-color:#FBBF24}
 .med-rot.med-total.med-sel small{color:#FDE68A}
 #map.med-sobre .desenho-captura{cursor:pointer}
