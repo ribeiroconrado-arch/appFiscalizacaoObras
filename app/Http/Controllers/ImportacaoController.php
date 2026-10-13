@@ -303,6 +303,18 @@ class ImportacaoController extends Controller
         }, "divergencias-importacao-{$importacao->id}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
+    /** GET /importacoes/{importacao}/divergencias.pdf?tipo=… — a mesma listagem, em PDF. */
+    public function divergenciasPdf(Request $r, ImportacaoLote $importacao, \App\Services\ConferenciaPdf $pdf): \Symfony\Component\HttpFoundation\Response
+    {
+        if ($this->exigirCuradorDe($r, $importacao)) { abort(403, 'Esta importação não é sua.'); }
+        $d = $r->validate(['tipo' => ['nullable', 'in:' . implode(',', array_keys(\App\Services\ConferenciaPdf::TIPOS))]]);
+        $c = $importacao->conferencia_cadastro;
+        abort_unless($c, 404, 'Esta importação ainda não foi conferida com o cadastro.');
+
+        return $pdf->gerar($c, "Importação nº {$importacao->id} · {$importacao->bairro}", $d['tipo'] ?? null, [],
+            "divergencias-importacao-{$importacao->id}.pdf");
+    }
+
     /** POST /api/importacoes/{importacao}/publicar — só administrador. */
     public function publicar(Request $r, ImportacaoLote $importacao): JsonResponse
     {

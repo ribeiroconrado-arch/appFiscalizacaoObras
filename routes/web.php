@@ -385,5 +385,11 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     // devolve HTML para a impressora, e a tela abre com window.open.
     Route::get('/os/{ordem}/impressao', [OrdemServicoController::class, 'impressao'])
         ->name('os.impressao');
+    // A listagem da conferência com o cadastro, em PDF — do bairro e da
+    // importação. Fora do /api: é arquivo, aberto com window.open.
+    Route::get('/conferencias/bairro/pdf', [\App\Http\Controllers\ConferenciaBairroController::class, 'pdf'])
+        ->middleware('throttle:pesado')->name('conferencia.bairro.pdf');
+    Route::get('/importacoes/{importacao}/divergencias.pdf', [ImportacaoController::class, 'divergenciasPdf'])
+        ->middleware('throttle:pesado')->name('importacao.divergencias.pdf');
     });
 });

@@ -669,7 +669,7 @@ class CadastroLoteController extends Controller
     }
 
     /** @return array<string,mixed> */
-    /** POST /api/lotes/{lote}/edicao/previa — Editar lote (pré-curadoria), sem gravar. */
+    /** POST /api/lotes/{lote}/edicao/previa — Editar lote (em revisão ou publicado), sem gravar. */
     public function previaEdicao(Request $request, Lote $lote, \App\Services\EdicaoDeLote $svc): JsonResponse
     {
         if ($erro = $this->recusarSemCuradoria($request)) {

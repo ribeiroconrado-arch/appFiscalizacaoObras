@@ -269,7 +269,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // filete escuro, e nenhum preenchimento por cima da imagem.
     for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
-    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtNum(Math.abs(G.area(r)))} m²`)})
+    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtNum(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
     // Cotas das faces de origem, na mesma escala métrica usada nas ferramentas.
     for(const f of s.tipo==="edicao"?[]:contornos()){const r=ring(f);for(let i=1;i<r.length;i++){const m=G.len(G.sub(r[i],r[i-1]));if(m*s.escala<70)continue;h+=cota(r[i-1],r[i],`${fmtNum(m)} m`,G.area(r)>0?-1:1)}}
     for(const l of s.linhas){const sel=l.id===s.sel;h+=`<path data-line="${e(l.id)}" class="pc-hit" d="${path(l.pontos)}"/><path data-line="${e(l.id)}" d="${path(l.pontos)}" fill="none" stroke="${sel?'#ea580c':'#2563eb'}" stroke-width="${sel?3:2}"/>`
@@ -292,7 +292,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // contorno que não fecha, a parte inválida) — esse a pessoa precisa ver.
     // "Feche o contorno" é orientação, não erro: fica fora do rodapé.
     $('pc-resumo').classList.toggle('erro',!!s.resultado?.erro&&!s.resultado?.orientacao)
-    $('pc-resumo').textContent=s.resultado?.erro||(livre()?(partes[0]?`Contorno fechado · ${fmtNum(Math.abs(G.area(partes[0])))} m²`:"Carregando…"):`${s.linhas.length} linha(s) · ${partes.length} ${s.tipo==='unificacao'?'resultado(s)':'parte(s)'}`)
+    $('pc-resumo').textContent=s.resultado?.erro||(livre()?(partes[0]?`Contorno fechado · ${fmtNum(Math.abs(G.area(partes[0])))} m²${alvoTxt(Math.abs(G.area(partes[0])))}`:"Carregando…"):`${s.linhas.length} linha(s) · ${partes.length} ${s.tipo==='unificacao'?'resultado(s)':'parte(s)'}`)
     if(!s.operacao)dica(s.leitura?'Visualização salva do ato.':s.ferramenta==='concordancia'?(s.fillet?.erro||`Concordância · raio ${fmtNum(s.raio)} m · clique no ${s.fillet?.primeiro?'2º':'1º'} lado. Raio 0 estende até o encontro; digite outro raio e Enter.`):s.ferramenta==='linha'&&livre()?`Clique nos cantos ${edif()?'da construção':'do lote'} · digite a medida · clique no primeiro vértice para fechar`:s.ferramenta==='linha'?'Clique para desenhar · digite a medida · Enter encerra · novo clique inicia outra linha':s.ferramenta==='perpendicular'?'Clique na face à qual a nova linha será perpendicular.':s.ferramenta==='alinhar'?'Clique na face que deseja deixar horizontal.':s.ferramenta==='anotar'?'Clique na posição da identificação do confronto.':'Selecione e arraste uma linha ou um vértice · Shift+clique no lado insere vértice · M mover · O offset · F concordância')
     // Fillet ativo: o raio e o passo no rodapé; trocou de ferramenta, some.
     {const fl=s.ferramenta==='concordancia'&&!s.leitura;$('pc-fillet').hidden=!fl;if(fl){if(document.activeElement!==$('pc-raio'))$('pc-raio').value=String(s.raio).replace('.',',');$('pc-fillet-passo').textContent=s.fillet?.erro||(s.fillet?.primeiro?'clique no 2º lado':'clique no 1º lado · raio 0 = canto vivo')}}
@@ -571,13 +571,20 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     confirmarAcao({titulo:'Criar lote',mensagem:'Vai inserir um imóvel novo no cadastro, com a geometria desenhada. A criação fica registrada com o seu nome, e o lote passa a ser protegido contra sobrescrita por reimportação do DWG.',textoBtn:'Criar',
       onConfirm:async()=>{const d=await postCadastro('/api/lotes',corpoLoteNovo());if(!d)return;toast(d.message);const cb=s?.opts?.aoGravar;if(s)s.entregue=true;await fechar(true);cb?.()}})
   }
+  // A área que o contorno tem de ter (a do cadastro), quando quem abriu a
+  // edição foi a pendência de área da conferência: diz quanto falta ou sobra.
+  function alvoTxt(area){
+    const alvo=Number(s?.opts?.areaAlvo);if(!(alvo>0))return ''
+    const d=Math.round((area-alvo)*100)/100
+    return ` · cadastro ${fmtNum(alvo)} m² · ${d===0?'bate':d>0?'sobram '+fmtNum(d)+' m²':'faltam '+fmtNum(-d)+' m²'}`
+  }
   function corpoEdicao(){return {quadra:s.dados.quadra,numero_lote:s.dados.numero_lote,geometry:geometriaLivre()}}
   async function conferirEdicao(){
     if(!s||s.busy)return;if(!s.dados.quadra||!s.dados.numero_lote){$('pc-conferencia').textContent='Informe a quadra e o número do lote.';return}
     s.busy=true;$('pc-conferencia').textContent='Conferindo…'
     try{const d=await request(`/api/lotes/${s.ids[0]}/edicao/previa`,corpoEdicao())
       if(d.impedimento){exibirErro({message:d.impedimento});return}
-      const r=d.retrato;$('pc-conferencia').innerHTML=`<p>Área: <b>${fmtNum(r.area_anterior_m2)} m²</b> → <b>${fmtNum(r.area_m2)} m²</b>.</p>${(r.vizinhos||[]).filter(v=>v.area_comum>0).map(v=>`<p>Encosta em Q${e(v.quadra)} Lt${e(v.lote)} (${fmtNum(v.area_comum)} m² em comum, dentro da tolerância).</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.salvarEdicao()">Salvar lote</button>`
+      const r=d.retrato;$('pc-conferencia').innerHTML=`<p>Área: <b>${fmtNum(r.area_anterior_m2)} m²</b> → <b>${fmtNum(r.area_m2)} m²</b>${alvoTxt(Number(r.area_m2))}.</p>${(r.vizinhos||[]).filter(v=>v.area_comum>0).map(v=>`<p>Encosta em Q${e(v.quadra)} Lt${e(v.lote)} (${fmtNum(v.area_comum)} m² em comum, dentro da tolerância).</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.salvarEdicao()">Salvar lote</button>`
     }catch(err){exibirErro(err)}finally{s.busy=false}
   }
   async function salvarEdicao(){

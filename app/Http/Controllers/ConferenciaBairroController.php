@@ -20,6 +20,7 @@ use RuntimeException;
  *   GET  /api/conferencias/bairro     a última conferência de um bairro + justificativas
  *   POST /api/conferencias/bairro     confere de novo (cadastro carregado ou planilha)
  *   POST /api/conferencias/justificar justifica (ou desfaz a justificativa de) uma pendência
+ *   GET  /conferencias/bairro/pdf     a listagem em PDF — todas, ou só as de um tipo
  */
 class ConferenciaBairroController extends Controller
 {
@@ -120,6 +121,27 @@ class ConferenciaBairroController extends Controller
         ]);
     }
 
+    /**
+     * GET /conferencias/bairro/pdf?bairro=…&tipo=… — a listagem que a tela
+     * mostra, em PDF: todas as divergências, ou só as do cartão escolhido.
+     */
+    public function pdf(Request $r, \App\Services\ConferenciaPdf $pdf): \Symfony\Component\HttpFoundation\Response
+    {
+        abort_unless($r->user()->podeCurarCadastro(), 403, 'A conferência com o cadastro é do curador.');
+        $d = $r->validate([
+            'bairro' => ['required', 'string', 'max:160'],
+            'tipo'   => ['nullable', 'in:' . implode(',', self::TIPOS)],
+        ]);
+        $guardado = DB::table('conferencias_bairro')->where('bairro', $d['bairro'])->value('resultado');
+        abort_unless($guardado, 404, 'Este bairro ainda não foi conferido com o cadastro.');
+
+        $oficial = (new BairrosDoDesenho())->oficial($d['bairro']) ?: $d['bairro'];
+
+        return $pdf->gerar(json_decode($guardado, true), $oficial, $d['tipo'] ?? null,
+            $this->justificativas($d['bairro']),
+            'conferencia-' . \Illuminate\Support\Str::slug($oficial) . '.pdf');
+    }
+
     public function justificar(Request $r): JsonResponse
     {
         if ($e = $this->exigirCurador($r)) { return $e; }
@@ -139,6 +161,12 @@ class ConferenciaBairroController extends Controller
                 'justificativas' => $this->justificativas($d['bairro'])]);
         }
 
+        // Diferença de área não se justifica: o que é aceitável se diz na
+        // variação da conferência; acima dela, o desenho é corrigido.
+        if ($d['tipo'] === 'area_diferente') {
+            return response()->json(['message' => 'Diferença de área não se justifica: corrija o desenho do lote, '
+                . 'ou confira de novo com a variação de área aceitável.'], 422);
+        }
         if (mb_strlen(trim((string) ($d['motivo'] ?? ''))) < 10) {
             return response()->json(['message' => 'Descreva o motivo em ao menos 10 caracteres.'], 422);
         }

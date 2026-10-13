@@ -221,6 +221,9 @@ function pintarJanelaConferencia() {
       : `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${jsArg({ tipo, ...l })})">na quadra ›</a>`
     const acao = just
       ? `<a href="#" onclick="event.preventDefault(); _confDesjustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">desfazer</a>`
+      // Diferença de área não se justifica: vai direto para a correção do desenho.
+      : tipo === 'area_diferente'
+        ? (l.lote_id ? `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${jsArg({ tipo, ...l })}); _confCorrigirDesenho(${Number(l.lote_id)})">corrigir ›</a>` : '')
       : `<a href="#" onclick="event.preventDefault(); _confJustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">justificar</a>`
     const j = confState.justificativas[tipo + '|' + _confChave(tipo, l)]
     return `<tr${just ? ' class="conf-justificada"' : ''}>
@@ -234,7 +237,11 @@ function pintarJanelaConferencia() {
     const itens = r?.[tipo] || []
     if (!itens.length) return ''
     const num = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0
-    const ordem = (a, b) => num(a.quadra) - num(b.quadra) || num(a.lote) - num(b.lote)
+    const porLote = (a, b) => num(a.quadra) - num(b.quadra) || num(a.lote) - num(b.lote)
+    // Área: a maior diferença primeiro — é por ela que se começa a corrigir.
+    const ordem = tipo === 'area_diferente'
+      ? (a, b) => Math.abs(b.diferenca ?? 0) - Math.abs(a.diferenca ?? 0) || porLote(a, b)
+      : porLote
     const abertas = itens.filter(l => !_confJustificada(tipo, l)).sort(ordem)
     const justificadas = itens.filter(l => _confJustificada(tipo, l)).sort(ordem)
     return `<div class="imp-grupo"><span class="conf-cor" style="background:${CONF_TIPOS[tipo].cor}"></span>
@@ -289,12 +296,24 @@ function pintarJanelaConferencia() {
         por ${esc(r.conferido_por || '—')} · código do bairro ${esc(r.codigo_bairro)}${nJust ? ` · ${nJust} justificada(s)` : ''}</span></div>` : ''}
       <div class="btn-row imp-acoes">
         <button class="btn" onclick="fModalBtn('m-conferencia')">Fechar</button>
+        ${r ? `<button class="btn" onclick="baixarPdfDaConferencia()" title="A listagem que está na tela, em PDF">${confState.filtro ? 'PDF desta listagem' : 'Gerar PDF'}</button>` : ''}
         ${r && _confVisiveis().length ? `<button class="btn primary" onclick="mostrarConferenciaNoMapa()">${confState.filtro ? 'Ver estas no mapa' : 'Ver pendências no mapa'}</button>` : ''}
       </div>
     </div>`)
   _prepararAreaDeSoltar('conf-soltar', 'conf-planilha', /\.xlsx$/i, 'A planilha precisa ser .xlsx.',
     () => _mostrarEscolhido('conf-soltar', document.getElementById('conf-planilha').files[0],
       'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário'))
+}
+
+/**
+ * A listagem da tela em PDF: todas as divergências ou, com um cartão ligado,
+ * só as daquele tipo. Abre em outra aba — é arquivo, não JSON.
+ */
+function baixarPdfDaConferencia() {
+  if (!confState.bairro || !confState.resultado) return
+  const q = new URLSearchParams({ bairro: confState.bairro })
+  if (confState.filtro) q.set('tipo', confState.filtro)
+  window.open('/conferencias/bairro/pdf?' + q, '_blank')
 }
 
 async function conferirBairroAgora() {
@@ -488,7 +507,7 @@ function _confProblema(it) {
     case 'sem_inscricao':
       return 'Este lote está sem quadra ou sem número, e por isso a inscrição dele não se monta.'
     case 'area_diferente':
-      return `${_confAreas(it).replace(/<\/?b>/g, '')}. No sistema vale a área do cadastro; corrija o desenho ou justifique.`
+      return `${_confAreas(it).replace(/<\/?b>/g, '')}. A diferença passa da variação aceitável: o desenho do lote precisa ser corrigido.`
   }
   return ''
 }
@@ -514,10 +533,14 @@ function pintarBarraConferencia() {
   }
   const t = CONF_TIPOS[it.tipo]
   // COMO RESOLVER, conforme o problema. Justificar vale para todos.
+  // ÁREA DIFERENTE não tem "Justificar": o que é aceitável se diz na variação
+  // da conferência; o que passou dela se resolve corrigindo o desenho.
+  const area = it.tipo === 'area_diferente'
   const resolver = [
+    area && it.lote_id ? `<button class="btn sm primary" onclick="_confCorrigirDesenho(${Number(it.lote_id)})">Corrigir o desenho</button>` : '',
     it.lote_id ? `<button class="btn sm" onclick="_confAbrirFicha(${Number(it.lote_id)})">Abrir a ficha do lote</button>` : '',
     it.tipo === 'sem_lote' ? `<button class="btn sm" onclick="modoCadastral('desenho')">Desenhar o lote</button>` : '',
-    `<button class="btn sm" onclick="_confJustificar(${jsArg(it.tipo)}, ${jsArg(_confChave(it.tipo, it))})">Justificar</button>`,
+    area ? '' : `<button class="btn sm" onclick="_confJustificar(${jsArg(it.tipo)}, ${jsArg(_confChave(it.tipo, it))})">Justificar</button>`,
   ].join('')
   barra.innerHTML = `
     <div class="conf-b-topo">
@@ -532,6 +555,30 @@ function pintarBarraConferencia() {
     </div>
     <div class="conf-b-txt">${esc(_confProblema(it))}</div>
     <div class="conf-b-acoes">${resolver}</div>`
+}
+
+/**
+ * "Corrigir o desenho" da pendência de área: o lote abre na prancheta com o
+ * contorno editável e a área do cadastro como ALVO — o rodapé diz quanto falta
+ * ou sobra enquanto se ajustam os cantos. Salvo, a conferência se refaz
+ * sozinha: batendo, a pendência sai.
+ */
+function _confCorrigirDesenho(loteId) {
+  const it = _confVisiveis().find(x => Number(x.lote_id) === Number(loteId))
+  if (!it) return
+  PranchetaCad.abrir('edicao', [Number(loteId)], null, null, {
+    quadra: it.quadra, numero_lote: it.lote, areaAlvo: Number(it.area_cadastro),
+    aoSalvar: async () => {
+      try { await _confCarregar(confState.bairro, { janela: false }) } catch (e) { toast(e.message, 'err'); return }
+      const resolvida = !confState.itens.some(x => x.tipo === 'area_diferente' && Number(x.lote_id) === Number(loteId))
+      if (!resolvida) { toast('O lote foi salvo, mas a área ainda não é a do cadastro.', 'aviso'); return }
+      // Vendo só esta pendência (ou era a última): volta para a lista.
+      if (confState.soFoco || !_confVisiveis().length) { voltarAListaDaConferencia(); return }
+      confState.idx = Math.min(confState.idx, _confVisiveis().length - 1)
+      repintarConferencia(); pintarBarraConferencia()
+      _confLevarMapa(_confVisiveis()[confState.idx])
+    },
+  }).catch(e => toast(e.message, 'err'))
 }
 
 /** Abre a ficha do lote da pendência (o lote já está no mapa, destacado). */

@@ -543,7 +543,8 @@ function _htmlConferenciaCadastro(i, c) {
     <div class="imp-rodape-conf">
       <span class="imp-sub">${esc(c.fonte_descricao)} · conferido em ${esc(c.conferido_em)} por ${esc(c.conferido_por || '—')}${c.revisao ? ` · revisado sem planilha em ${esc(c.revisao.em)} (${c.revisao.resolvidas} resolvida(s))` : ''}
         · código do bairro ${esc(c.codigo_bairro)}</span>
-      ${c.total_divergencias ? `<a class="btn sm" href="/api/importacoes/${i.id}/divergencias.csv">Baixar divergências (.csv)</a>` : ''}
+      ${c.total_divergencias ? `<a class="btn sm" href="/importacoes/${i.id}/divergencias.pdf" target="_blank" rel="noopener">Gerar PDF</a>
+      <a class="btn sm" href="/api/importacoes/${i.id}/divergencias.csv">Baixar divergências (.csv)</a>` : ''}
     </div>`,
   }
 }
@@ -858,8 +859,10 @@ function editarLoteDaPreCuradoria() {
     ? mapaState.porId.get([...selState.ids][0])?.feature?.properties : null
   const p = marcado ?? state.selecionado?.properties
   if (!p?.id) { toast('Marque o lote que vai editar.', 'err'); return }
-  if (!p.em_revisao || (impState.preCuradoria && Number(p.importacao_id) !== impState.preCuradoria.id)) {
-    toast('Editar lote vale só para lote de importação não publicada.', 'err'); return
+  // Em pré-curadoria as ferramentas só alcançam os lotes daquela importação.
+  // Fora dela, edita-se qualquer lote ativo — o publicado inclusive (EdicaoDeLote).
+  if (impState.preCuradoria && Number(p.importacao_id) !== impState.preCuradoria.id) {
+    toast('Só entram lotes da importação em pré-curadoria.', 'err'); return
   }
   PranchetaCad.abrir('edicao', [p.id], null, null, {
     quadra: p.quadra, numero_lote: p.numero_lote,

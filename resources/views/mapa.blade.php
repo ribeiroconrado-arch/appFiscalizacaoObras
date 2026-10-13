@@ -476,7 +476,7 @@
         {{-- EDITAR LOTE — só na pré-curadoria: lote publicado muda por
              unificação, desmembramento ou correção de quadra, com prova e
              histórico. Aparece quando importacoes.js entra no modo. --}}
-        <button type="button" class="btn sm cad-lanca so-pre" id="cad-editar-lote" hidden
+        <button type="button" class="btn sm cad-lanca" id="cad-editar-lote"
                 data-fer="editar" data-tecla="L" data-min="1" data-max="1" data-exige="exatamente 1 lote"
                 onclick="editarLoteDaPreCuradoria()">
           <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -485,7 +485,7 @@
             <circle cx="20" cy="10" r="1.6"/><circle cx="20" cy="20" r="1.6"/><circle cx="4" cy="20" r="1.6"/>
           </svg>
           <span class="cad-lanca-txt">Editar lote
-            <span class="cad-lanca-obs">Vértices, número e quadra — só em lote de importação não publicada.</span>
+            <span class="cad-lanca-obs">Vértices, número e quadra de 1 lote — publicado ou não.</span>
           </span>
         </button>
 

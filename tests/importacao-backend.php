@@ -183,7 +183,15 @@ try {
     $invade = ['quadra' => '02', 'numero_lote' => '1', 'geometry' => $quadrado(-54.9 + 2 * 0.0003 + 0.0001, -15.9)];
     recusa(fn () => throw new RuntimeException((string) $edicao->impedimento(Lote::find($q2l1), $invade)), 'invade', 'edição que invade o vizinho é recusada');
     $publicado = DB::table('lotes')->where('em_revisao', false)->where('situacao', 'ativo')->value('id');
-    recusa(fn () => throw new RuntimeException((string) $edicao->impedimento(Lote::find($publicado), $dEd)), 'pré-curadoria', 'lote publicado não é editável');
+    // Lote PUBLICADO também se edita (13/10/2026): o próprio contorno, regravado,
+    // não tem impedimento, e a trilha vai para o Histórico do cadastro.
+    $pub = Lote::where('em_revisao', false)->where('situacao', 'ativo')->whereNotNull('quadra')->whereNotNull('numero_lote')->first();
+    $dPub = ['quadra' => $pub->quadra, 'numero_lote' => $pub->numero_lote,
+        'geometry' => json_decode(DB::table('lotes')->where('id', $pub->id)->selectRaw('ST_AsGeoJSON(geom) g')->value('g'), true)];
+    confere($edicao->impedimento($pub, $dPub) === null, 'lote publicado pode ser editado');
+    $edicao->aplicar($pub, $dPub);
+    $trilha = DB::table('auditoria')->where('registro_id', $pub->id)->where('tabela', 'lotes')->where('acao', 'editou')->latest('id')->first();
+    confere($trilha !== null && str_contains(json_encode($trilha), 'contorno'), 'a edição do publicado fica no Histórico do cadastro, com o contorno de antes');
     recusa(fn () => throw new RuntimeException((string) ImportacaoDeBairro::misturaRevisao([$q2l1, $publicado])), 'mistura', 'curadoria não mistura lote em revisão com publicado');
     confere(ImportacaoDeBairro::misturaRevisao([$q2l1, $idDe('01', '1')]) === null, 'lotes da mesma importação podem ir juntos');
 
