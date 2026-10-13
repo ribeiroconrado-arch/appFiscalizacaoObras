@@ -120,7 +120,7 @@ function colorirPorAdjacencia(chave) {
   return { cores, conflitos }
 }
 
-/** Lote marcado para correção cadastral. */
+/** Lote marcado para alteração cadastral. */
 const COR_SELECAO = '#EA580C'
 
 /** Lote de importação em revisão (ver importacoes.js). */

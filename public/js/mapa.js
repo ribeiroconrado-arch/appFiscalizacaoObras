@@ -690,7 +690,7 @@ function adicionarAoMapa(geojson, aoClicar) {
       // é caro demais. A ficha completa fica a um toque de distância, dentro
       // do balão.
       //
-      // Em modo de correção cadastral o clique MARCA o lote em vez de abrir o
+      // Em modo de alteração cadastral o clique MARCA o lote em vez de abrir o
       // balão — ver cadastro.js. Fora dele, nada muda.
       camada.on('click', () => {
         // Desenhando um trecho de rua (ruas-manuais.js), o toque é ponto do

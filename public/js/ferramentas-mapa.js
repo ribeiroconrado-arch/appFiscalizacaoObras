@@ -1,7 +1,7 @@
 /**
  * UMA FERRAMENTA DO MAPA POR VEZ.
  *
- * Localizar imóvel, medir, correção cadastral (mesa, modos, atos,
+ * Localizar imóvel, medir, alteração cadastral (mesa, modos, atos,
  * pré-curadoria) e o desenho de edificação disputam o mesmo mapa — o clique, o
  * alto da tela, a lateral. Abertas juntas, uma trabalhava por baixo da outra:
  * a busca aberta com a mesa de curadoria marcando lotes ao lado, a barra de
@@ -41,7 +41,7 @@ const FERRAMENTAS_MAPA = {
     fechar: () => { if (typeof sairDeMedir === 'function') sairDeMedir(); fecharPaineisMapa() },
   },
   curadoria: {
-    rotulo: 'correção cadastral',
+    rotulo: 'alteração cadastral',
     aberta: () => {
       const mesa = document.getElementById('cad-mesa')
       return _grupoAberto('grupo-cadastro') || (mesa && !mesa.hidden)
@@ -144,7 +144,7 @@ function pedirFerramenta(nome, abrir, opts = {}) {
  * @returns {Promise<void>}
  */
 function abrirJanelaDoMapa() {
-  // A janela foi aberta de dentro da correção cadastral (o lançador ou a mesa
+  // A janela foi aberta de dentro da alteração cadastral (o lançador ou a mesa
   // à vista)? Então fechá-la devolve a pessoa para lá — ver voltarACuradoria.
   const daCuradoria = _lancadorCadastralAVista()
   return new Promise(resolve => pedirFerramenta('janela', () => {
@@ -153,32 +153,32 @@ function abrirJanelaDoMapa() {
   }, { convive: ['base'] }))
 }
 
-/** A barra de ferramentas da correção cadastral está à vista (mesa, ou o popover em tela pequena)? */
+/** A barra de ferramentas da alteração cadastral está à vista (mesa, ou o popover em tela pequena)? */
 function _lancadorCadastralAVista() {
   const mesa = document.getElementById('cad-mesa')
   return _grupoAberto('grupo-cadastro') || !!(mesa && !mesa.hidden)
 }
 
 /**
- * FECHOU A JANELA, VOLTA PARA A BARRA DE CORREÇÃO CADASTRAL.
+ * FECHOU A JANELA, VOLTA PARA A BARRA DE ALTERAÇÃO CADASTRAL.
  *
  * Importações, Conferência, Histórico, Contornos e Nomes de rua abrem em
  * janela, e abrir uma janela encerra o que está no mapa — inclusive a barra de
  * onde ela foi chamada. Ao fechar, a pessoa ficava no mapa "limpo" e tinha de
- * reabrir a correção cadastral para escolher a ferramenta seguinte.
+ * reabrir a alteração cadastral para escolher a ferramenta seguinte.
  *
  * Só volta quando nada tomou o lugar: se a janela foi fechada para ir ao mapa
  * com uma barra própria (as pendências da conferência, os lotes da
  * importação), ou se outra ferramenta abriu, a curadoria já está "aberta" de
  * outro jeito e a barra não se impõe por cima.
  *
- * @type {boolean} a última janela foi aberta de dentro da correção cadastral
+ * @type {boolean} a última janela foi aberta de dentro da alteração cadastral
  */
 let _voltarACuradoria = false
 
 /**
  * Para a ferramenta que NÃO é janela (Nomes de rua): ao ser fechada, pede a
- * volta para a barra de correção cadastral. A volta acontece no fim do laço,
+ * volta para a barra de alteração cadastral. A volta acontece no fim do laço,
  * e só se nada mais tiver ocupado o mapa — ver voltarACuradoriaSeForOCaso.
  */
 function pedirVoltaACuradoria() {
@@ -223,7 +223,7 @@ function curadoriaApareceu() {
 }
 
 /**
- * Sai de TUDO o que é correção cadastral, na ordem em que as peças dependem
+ * Sai de TUDO o que é alteração cadastral, na ordem em que as peças dependem
  * umas das outras: o ato e o desmembramento guardam rascunho ao sair, o modo
  * larga a marcação, e só então a mesa fecha.
  */

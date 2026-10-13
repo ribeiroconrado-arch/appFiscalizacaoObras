@@ -1046,7 +1046,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   box-shadow:0 1px 5px rgba(0,0,0,.4);
   display:flex;align-items:center;justify-content:center;padding:0}
 .leaflet-touch .ctrl-btn{box-shadow:none}
-.ctrl-btn svg{width:19px;height:19px;color:var(--chumbo)}
+.ctrl-btn svg{width:22px;height:22px;color:var(--chumbo)}
 
 .ctrl-input{width:100%;border:1.5px solid var(--f-bord);border-radius:var(--r);
   padding:7px 9px;font-size:13px;font-family:inherit;background:var(--f-fundo);
@@ -1216,7 +1216,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    fora, esticar deixava o botão 19px mais alto que a caixa ao lado dele. */
 .bs-mais{height:42px;align-self:flex-end}
 
-/* ── PAINEL DE CORREÇÃO CADASTRAL ──
+/* ── PAINEL DE ALTERAÇÃO CADASTRAL ──
    Notas curtas empilhadas dentro do controle do mapa. Três pesos: neutra
    (o que vai acontecer), aviso (o que o sistema desconfia) e erro (o que ele
    recusa). A cor vem da barra lateral, não do fundo inteiro — mesmo desenho
@@ -1971,7 +1971,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   letter-spacing:0;margin-left:4px}
 
 /* ══════════════════════════════════════════════════════════════
-   CORREÇÃO CADASTRAL — BARRA DE MODO
+   ALTERAÇÃO CADASTRAL — BARRA DE MODO
    ══════════════════════════════════════════════════════════════ */
 
 /* Fina, no alto do mapa, dizendo o passo. É a única coisa que fica na frente
@@ -3775,16 +3775,26 @@ select.combo-oculto{display:none !important}
    contorno escuro a mantém legível tanto sobre o satélite quanto sobre o mapa
    de ruas. */
 /* As três ferramentas, lado a lado na barra: um seletor, não três botões. */
-.med-modos{display:inline-flex;gap:2px;padding:2px;border-radius:999px;background:var(--blt)}
-.med-modos button{display:inline-flex;align-items:center;gap:6px;border:none;background:none;cursor:pointer;
-  font:inherit;font-size:12px;font-weight:700;color:var(--tx2);padding:5px 11px;border-radius:999px;white-space:nowrap}
-.med-modos button svg{width:15px;height:15px;flex:none}
-.med-modos button:hover{color:var(--tx)}
-.med-modos button.at{background:var(--sur);color:var(--gd);box-shadow:var(--sh)}
+/* A BARRA DE MEDIR — a régua das outras duas, deitada: título em pé na borda,
+   um quadrado por ferramenta (`.cad-fer`), e o X no fim. */
+.med-barra{display:flex;align-items:stretch;max-width:100%;overflow:hidden;
+  background:rgba(255,255,255,.97);border:1.5px solid var(--bord);border-radius:var(--rl);
+  box-shadow:0 10px 32px rgba(0,0,0,.14)}
+.med-barra[hidden]{display:none}
+.med-modos,.med-pe{display:flex;align-items:center;gap:3px;padding:6px 7px;flex:none}
+.med-pe{border-left:1px solid var(--blt)}
+.med-meio{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 12px;
+  border-left:1px solid var(--blt);min-width:0}
+.med-meio .btn{white-space:nowrap}
+.med-passo{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap}
+.mapa-barras > .med-barra{position:static}
+@media (max-width:999px){
+  .med-barra{flex-wrap:wrap}
+  .med-meio{order:9;width:100%;border-left:none;border-top:1px solid var(--blt)}
+  .med-passo{white-space:normal}
+}
 /* O ícone da coluna fica aceso enquanto a barra está aberta. */
 #ctrl-mapa .ctrl-btn.med-ativo{color:var(--gd);background:var(--gl)}
-.med-barra #med-barra-ima.at{background:var(--sur);border-color:var(--tx3);color:var(--tx);box-shadow:var(--sh)}
-.med-barra .des-barra-passo{font-family:'JetBrains Mono', ui-monospace, monospace;font-weight:600;color:var(--tx)}
 
 .med-marca{background:none;border:none;overflow:visible;pointer-events:none}
 .med-rot{position:absolute;display:block;white-space:nowrap;transform:translate(-50%,-50%);
@@ -3805,14 +3815,14 @@ select.combo-oculto{display:none !important}
 .med-rot.med-tique.med-sel{border-top-color:#FBBF24}
 .med-rot.med-total.med-sel small{color:#FDE68A}
 #map.med-sobre .desenho-captura{cursor:pointer}
-/* O painel "Base de lotes": os mesmos lançadores da correção cadastral. */
+/* O painel "Base de lotes": os mesmos lançadores da alteração cadastral. */
 .ctrl-base{min-width:262px}
 .ctrl-base > b{display:block;margin-bottom:8px}
 /* ── A RÉGUA DA BASE DE LOTES ──
    É a mesma `.cad-mesa.so-regua` da curadoria; aqui só o que é dela. */
 .base-mesa .cad-regua{border-right:none}
 .base-selo{position:absolute;top:1px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;
-  background:var(--warn,#B45309);color:#fff;font-size:9.5px;font-weight:800;line-height:16px;text-align:center}
+  background:var(--warn,#B45309);color:#fff;font-size:10px;font-weight:500;line-height:16px;text-align:center}
 /* As duas mesas ocupam o mesmo canto: com a da curadoria aberta, esta cede. */
 body.com-mesa .base-mesa{display:none}
 /* Fora da aba do mapa ela não existe (é fixa na janela, e não no mapa). */

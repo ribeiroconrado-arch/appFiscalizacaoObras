@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════
-// CORREÇÃO CADASTRAL PELO MAPA
+// ALTERAÇÃO CADASTRAL PELO MAPA
 //
 // Seleção de vários lotes com o dedo e correção da quadra deles.
 //
@@ -180,7 +180,7 @@ function repintarLote(id) {
 
 // ── MODO DE TRABALHO ─────────────────────────────────────────
 //
-// A correção cadastral tem duas naturezas misturadas: um gesto no MAPA (marcar
+// A alteração cadastral tem duas naturezas misturadas: um gesto no MAPA (marcar
 // lotes, desenhar cantos) e um preenchimento de FORMULÁRIO (qual quadra, qual
 // número, conferir a prévia). Antes as duas moravam na mesma coluna de 262px
 // ao lado do mapa — e aí nenhuma ficava boa: o gesto disputava espaço com o
@@ -202,7 +202,7 @@ let cadModo = null
  * @param {'quadra'|'desenho'|'coordenadas'} modo
  */
 function modoCadastral(modo) {
-  // A correção cadastral pede a vez: busca, pinos ou cores abertos fecham, e
+  // A alteração cadastral pede a vez: busca, pinos ou cores abertos fecham, e
   // um contorno começado em outro desenho pergunta antes (ferramentas-mapa.js).
   pedirFerramenta('curadoria', () => _entrarModoCadastral(modo))
 }

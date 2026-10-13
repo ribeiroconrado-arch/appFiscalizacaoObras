@@ -740,7 +740,7 @@ function _multiPoligonoLonLat(poligonos, plano) {
 
 // ── LISTA DA CURADORIA ───────────────────────────────────────
 
-/** "Contorno dos bairros" no painel de correção cadastral. */
+/** "Contorno dos bairros" no painel de alteração cadastral. */
 async function abrirContornosDosBairros() {
   // O raio digitado sobrevive à lista ser refeita (depois de gerar, ou de uma
   // recusa): voltar a 25 obrigaria a digitá-lo de novo a cada tentativa.

@@ -9,7 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Correção cadastral → Nomes de rua: o curador informa (ou oculta) o nome de
+ * Alteração cadastral → Nomes de rua: o curador informa (ou oculta) o nome de
  * um trecho de rua. Ver public/js/ruas-manuais.js.
  *
  * O nome é ESCOLHIDO da lista de logradouros do cadastro do bairro — digitado

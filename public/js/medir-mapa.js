@@ -30,7 +30,7 @@
  * do dedo.
  *
  * É uma FERRAMENTA do mapa (ferramentas-mapa.js): abrir a medição encerra a
- * pesquisa ou a correção cadastral, e vice-versa.
+ * pesquisa ou a alteração cadastral, e vice-versa.
  */
 
 const MED_COR = '#22D3EE'

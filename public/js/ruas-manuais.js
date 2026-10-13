@@ -1,5 +1,5 @@
 /**
- * Correção cadastral → NOMES DE RUA.
+ * Alteração cadastral → NOMES DE RUA.
  *
  * O nome automático (bairros-contorno.js) sai do voto dos lotes de cada lado
  * de quadra. Onde o voto não decide — lado só com lotes de esquina, lote sem
@@ -36,9 +36,9 @@ FERRAMENTAS_MAPA.ruas = {
   fechar: () => fecharNomesDeRua(),
 }
 
-/** Abre a ferramenta (botão "Nomes de rua" da correção cadastral). */
+/** Abre a ferramenta (botão "Nomes de rua" da alteração cadastral). */
 function abrirNomesDeRua() {
-  // Chamada da barra de correção cadastral, fechar a ferramenta volta para ela
+  // Chamada da barra de alteração cadastral, fechar a ferramenta volta para ela
   // (ferramentas-mapa.js).
   const daCuradoria = typeof _lancadorCadastralAVista === 'function' && _lancadorCadastralAVista()
   pedirFerramenta('ruas', () => {

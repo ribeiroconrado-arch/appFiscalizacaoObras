@@ -800,7 +800,7 @@ async function descartarImportacao() {
 
 // ── PRÉ-CURADORIA ────────────────────────────────────────────
 //
-// As MESMAS ferramentas da correção cadastral, aplicadas ao bairro em revisão
+// As MESMAS ferramentas da alteração cadastral, aplicadas ao bairro em revisão
 // antes de ele ser publicado. O que muda é o alcance (só os lotes desta
 // importação — ver alternarSelecao em cadastro.js) e o registro: o servidor
 // grava na ficha da importação, fora do Histórico do cadastro
@@ -808,7 +808,7 @@ async function descartarImportacao() {
 
 function entrarPreCuradoria() {
   if (!_impEmAndamento(impState.atual)) return
-  // Pré-curadoria É correção cadastral: busca, pinos e cores abertos fecham.
+  // Pré-curadoria É alteração cadastral: busca, pinos e cores abertos fecham.
   pedirFerramenta('curadoria', _entrarPreCuradoria)
 }
 
@@ -829,7 +829,7 @@ function _ligarPreCuradoria(i) {
   _ferramentasDaPreCuradoria()
 }
 
-/** Abre a correção cadastral: a mesa lateral em tela grande, o painel no celular. */
+/** Abre a alteração cadastral: a mesa lateral em tela grande, o painel no celular. */
 function _abrirMesaDaCuradoria() {
   const mesa = document.getElementById('cad-mesa')
   const aberto = typeof ehMesaCadastral === 'function' && ehMesaCadastral()
@@ -879,7 +879,7 @@ function editarLoteDaPreCuradoria() {
  *
  * Aparecem enquanto HOUVER importação não publicada — e não só com a barra da
  * pré-curadoria aberta. O que elas exigem é o LOTE ser de importação não
- * publicada; quem abria a correção cadastral direto no mapa via os lotes do
+ * publicada; quem abria a alteração cadastral direto no mapa via os lotes do
  * rascunho, marcava um e ouvia "só na pré-curadoria".
  */
 function _ferramentasDaPreCuradoria() {
@@ -1092,7 +1092,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ── A BARRA LATERAL DA BASE DE LOTES ─────────────────────────
 //
 // Em tela grande, o ícone "Base de lotes" abre uma régua encostada na borda —
-// a mesma da correção cadastral, com os mesmos quadrados e a mesma dica —, e
+// a mesma da alteração cadastral, com os mesmos quadrados e a mesma dica —, e
 // não um painel flutuante. Ela é MONTADA a partir dos lançadores de
 // #grupo-base, como a da curadoria é montada de #cad-geral: ferramenta nova
 // entra num lugar só. Em tela pequena continua valendo o painel.

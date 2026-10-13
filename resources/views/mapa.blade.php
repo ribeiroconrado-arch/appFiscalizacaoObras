@@ -287,27 +287,40 @@
 
 {{-- ══════ MEDIR NO MAPA — a barra (medir-mapa.js) ══════
      O que se está medindo, quanto já deu e o que fazer a seguir. --}}
-<div class="des-barra med-barra" id="med-barra" hidden>
+{{-- No mesmo formato das réguas da alteração cadastral e da base de lotes —
+     título em pé na borda, um quadrado por ferramenta, o X para fechar —, só
+     que deitada, porque fica no alto do mapa. --}}
+<div class="med-barra" id="med-barra" hidden>
+  <div class="mesa-titulo-v" aria-hidden="true">Medir</div>
   <div class="med-modos" role="group" aria-label="Ferramenta de medir">
-    <button type="button" data-modo="regua" onclick="medirNoMapa('regua')" title="Régua — distância ponto a ponto, com o total">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg><span>Régua</span></button>
-    <button type="button" data-modo="area" onclick="medirNoMapa('area')" title="Área e perímetro — contorne; cada lado sai com a sua medida">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h10l4 6-3 8H6z"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="15" cy="5" r="1.4" fill="currentColor"/></svg><span>Área</span></button>
-    <button type="button" data-modo="cota" onclick="medirNoMapa('cota')" title="Cota — a medida de um trecho, anotada sobre ele">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M4 8v8M20 8v8"/><path d="m7 10-2 2 2 2M17 10l2 2-2 2"/></svg><span>Cota</span></button>
+    <button type="button" class="cad-fer" data-modo="regua" onclick="medirNoMapa('regua')" aria-label="Régua"
+            title="Régua — distância ponto a ponto, com o total">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg></button>
+    <button type="button" class="cad-fer" data-modo="area" onclick="medirNoMapa('area')" aria-label="Área e perímetro"
+            title="Área e perímetro — contorne; cada lado sai com a sua medida">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h10l4 6-3 8H6z"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="15" cy="5" r="1.4" fill="currentColor"/></svg></button>
+    <button type="button" class="cad-fer" data-modo="cota" onclick="medirNoMapa('cota')" aria-label="Cota"
+            title="Cota — a medida de um trecho, anotada sobre ele">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M4 8v8M20 8v8"/><path d="m7 10-2 2 2 2M17 10l2 2-2 2"/></svg></button>
   </div>
-  <span class="des-barra-passo" id="med-barra-passo">Toque no ponto de partida.</span>
-  <button type="button" class="btn sm at" id="med-barra-ima" aria-pressed="true" onclick="alternarImaDaMedida()"
-          title="Gruda o ponto no canto desenhado mais próximo. Segure Alt para soltar num toque.">Ímã</button>
-  <button type="button" class="btn sm" id="med-barra-desfazer" hidden onclick="desfazerPontoDaMedida()" title="Ctrl+Z">Desfazer ponto</button>
-  <button type="button" class="btn primary sm" id="med-barra-concluir" hidden onclick="concluirMedida()" title="Enter">Concluir</button>
-  <button type="button" class="btn sm" id="med-barra-apagar" hidden onclick="apagarMedidaSelecionada()" title="Delete">Apagar medida</button>
-  <button type="button" class="btn sm med-limpar" hidden onclick="limparMedidas()"
-          title="Apaga todas as medidas do mapa. Elas são temporárias: nada é gravado.">Limpar tudo</button>
-  <button type="button" class="btn sm" onclick="sairDeMedir()" title="Esc">Sair</button>
+  <div class="med-meio">
+    <span class="med-passo" id="med-barra-passo">Toque no ponto de partida.</span>
+    <button type="button" class="btn sm" id="med-barra-desfazer" hidden onclick="desfazerPontoDaMedida()" title="Ctrl+Z">Desfazer ponto</button>
+    <button type="button" class="btn primary sm" id="med-barra-concluir" hidden onclick="concluirMedida()" title="Enter">Concluir</button>
+    <button type="button" class="btn sm" id="med-barra-apagar" hidden onclick="apagarMedidaSelecionada()" title="Delete">Apagar medida</button>
+    <button type="button" class="btn sm med-limpar" hidden onclick="limparMedidas()"
+            title="Apaga todas as medidas do mapa. Elas são temporárias: nada é gravado.">Limpar tudo</button>
+  </div>
+  <div class="med-pe">
+    <button type="button" class="cad-fer at" id="med-barra-ima" aria-pressed="true" onclick="alternarImaDaMedida()" aria-label="Ímã"
+            title="Ímã — gruda o ponto no canto desenhado mais próximo. Segure Alt para soltar num toque.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v9a6 6 0 0 0 12 0V3h-4v9a2 2 0 0 1-4 0V3z"/><path d="M6 7h4M14 7h4"/></svg></button>
+    <button type="button" class="cad-fer cad-fechar" onclick="sairDeMedir()" aria-label="Fechar a medição" title="Fechar a medição (Esc)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
 </div>
 
-{{-- ══════ CORREÇÃO CADASTRAL — BARRA DE MODO ══════
+{{-- ══════ ALTERAÇÃO CADASTRAL — BARRA DE MODO ══════
      Fica sobre o mapa, fina, dizendo o passo em que se está e quantos lotes já
      foram marcados. É o que substitui o painel lateral durante o trabalho: o
      gesto acontece no mapa, e o mapa continua inteiro à vista. --}}
@@ -414,14 +427,14 @@
     </button>
   </div>
 
-  {{-- CORREÇÃO CADASTRAL — só quem tem curadoria cadastral.
+  {{-- ALTERAÇÃO CADASTRAL — só quem tem curadoria cadastral.
        Esconder o controle não é a segurança: quem autoriza de verdade é o
        servidor, em CadastroLoteController. Aqui é para não oferecer a quem
        não pode. --}}
   @if (auth()->user()->podeCurarCadastro())
   <div class="ctrl-grupo" id="grupo-cadastro">
     <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-cadastro')"
-            title="Correção cadastral" aria-expanded="false">
+            title="Alteração cadastral" aria-expanded="false">
       {{-- Lápis sobre quadrículas: corrigir o desenho do cadastro, não o mapa. --}}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
            stroke-linecap="round" stroke-linejoin="round">
@@ -432,7 +445,7 @@
       </svg>
     </button>
     <div class="ctrl-corpo">
-      <b>Correção cadastral</b>
+      <b>Alteração cadastral</b>
 
       {{-- Painel do DESMEMBRAMENTO. Toma a vez do resto enquanto o ato está em
            curso: oferecer "corrigir quadra" e "desenhar lote faltante" no meio
@@ -622,7 +635,7 @@
   </div>
 
   {{-- BASE DE LOTES — importar, contornar, nomear ruas e conferir com o
-       cadastro. Morava no fim da correção cadastral, e saiu de lá: aquelas são
+       cadastro. Morava no fim da alteração cadastral, e saiu de lá: aquelas são
        ferramentas de mexer em LOTE (marcar, desenhar, unificar); estas cuidam
        da base de um BAIRRO inteiro e abrem janela própria. Juntas, a régua da
        curadoria misturava os dois assuntos. Não é ferramenta do mapa: o painel
@@ -630,12 +643,12 @@
   <div class="ctrl-grupo" id="grupo-base">
     <button class="ctrl-btn" onclick="alternarBaseDeLotes()"
             title="Base de lotes — importação e conferência" aria-expanded="false">
-      {{-- Uma pilha de registros recebendo uma seta: dados entrando na base. --}}
+      {{-- Um mapa dobrado recebendo uma seta: o loteamento entrando no mapa. --}}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
            stroke-linecap="round" stroke-linejoin="round">
-        <ellipse cx="12" cy="16.5" rx="8" ry="2.6"/>
-        <path d="M4 16.5v3c0 1.4 3.6 2.6 8 2.6s8-1.2 8-2.6v-3"/>
-        <path d="M12 2v8"/><path d="m8.5 7 3.5 3.5L15.5 7"/>
+        <path d="M12 1.5v6.5"/><path d="m9 5.5 3 3 3-3"/>
+        <path d="M3 13.5 9 11.5l6 2 6-2v8.5l-6 2-6-2-6 2z"/>
+        <path d="M9 11.5v8.5M15 13.5V22"/>
       </svg>
     </button>
     <div class="ctrl-corpo ctrl-base">
@@ -2641,7 +2654,7 @@
   </div>
 </div>
 
-{{-- ══════ CORREÇÃO CADASTRAL — JANELA DE DADOS ══════
+{{-- ══════ ALTERAÇÃO CADASTRAL — JANELA DE DADOS ══════
      Só o que é digitação e conferência. A janela pode ser fechada sem perder o
      trabalho: o que foi marcado ou desenhado continua no mapa, e a barra
      oferece reabrir. --}}
@@ -2658,7 +2671,7 @@
           <path d="M21.2 2.8a1.9 1.9 0 0 1 0 2.7l-6 6-3 .8.8-3 6-6a1.9 1.9 0 0 1 2.2-.5z"/>
         </svg>
       </span>
-      <span id="cad-modal-titulo">Correção cadastral</span>
+      <span id="cad-modal-titulo">Alteração cadastral</span>
     </h3>
 
     {{-- O CORPO É MÓVEL.
@@ -2847,7 +2860,7 @@
        @@if, não chegaria ao segundo. --}}
   {{-- O NOME DA BARRA, em pé, na borda. As duas réguas (esta e a da base de
        lotes) são iguais e ocupam o mesmo canto: é o título que diz qual é. --}}
-  <div class="mesa-titulo-v" aria-hidden="true">Correção cadastral</div>
+  <div class="mesa-titulo-v" aria-hidden="true">Alteração cadastral</div>
   <nav class="cad-regua" id="cad-regua" aria-label="Ferramentas do cadastro"></nav>
 
   <div class="cad-mesa-lado">
@@ -2876,7 +2889,7 @@
      contorno externo do lote. Um ato que divide não pode mudar a divisa com o
      vizinho, e o desenho livre permitia exatamente isso. --}}
 
-{{-- A RÉGUA DA BASE DE LOTES — a mesma barra lateral da correção cadastral,
+{{-- A RÉGUA DA BASE DE LOTES — a mesma barra lateral da alteração cadastral,
      só com as ferramentas de bairro (importar, contornar, nomear ruas,
      conferir). Montada por importacoes.js a partir de #grupo-base. --}}
 @if (auth()->user()->podeCurarCadastro())
