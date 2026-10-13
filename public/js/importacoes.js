@@ -62,6 +62,60 @@ function _impCorpo(html, titulo = 'Importações de bairro') {
   document.getElementById('imp-corpo').innerHTML = html
 }
 
+// ── A JANELA DE LISTAGEM ─────────────────────────────────────
+//
+// Importações, Contorno dos bairros e Conferência com o cadastro têm a mesma
+// forma (`.jt`, importacoes.css): em cima, parado, a pesquisa e os comandos;
+// no meio, a tabela, que é a única coisa que rola (com o cabeçalho das colunas
+// preso); embaixo, parado, o resumo e os botões.
+
+/** O que foi digitado em cada pesquisa: a lista é refeita a cada ação, e o filtro fica. */
+const _jtBuscas = {}
+
+/** Sem acento e sem caixa, para "sao" achar "SÃO". */
+const _jtNorm = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/**
+ * O campo de pesquisa livre do cabeçalho.
+ * @param {string} id @param {string} dica o que dá para procurar
+ */
+function jtBusca(id, dica) {
+  return `<label class="jt-busca" for="${id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.500-3.500"/></svg>
+      <input type="search" id="${id}" placeholder="${esc(dica)}" autocomplete="off" value="${esc(_jtBuscas[id] || '')}" oninput="jtFiltrar(this)">
+    </label><span class="jt-conta" data-jt-conta></span>`.split('3.500').join('3.5')
+}
+
+/**
+ * Filtra as linhas da janela pelo que foi digitado: todas as palavras têm de
+ * aparecer na linha, em qualquer coluna. Grupo sem linha à vista some junto.
+ * @param {HTMLInputElement} campo
+ */
+function jtFiltrar(campo) {
+  const jt = campo?.closest('.jt')
+  if (!jt) return
+  _jtBuscas[campo.id] = campo.value
+  const termos = _jtNorm(campo.value).split(/\s+/).filter(Boolean)
+  const linhas = [...jt.querySelectorAll('.jt-rolagem tbody tr:not(.jt-sem-linhas)')]
+  let visiveis = 0
+  for (const tr of linhas) {
+    tr._jtTexto ??= _jtNorm(tr.textContent)
+    tr.hidden = termos.some(t => !tr._jtTexto.includes(t))
+    if (!tr.hidden) visiveis++
+  }
+  jt.querySelectorAll('.jt-grupo').forEach(g => { g.hidden = !g.querySelector('tbody tr:not([hidden])') })
+  const conta = jt.querySelector('[data-jt-conta]')
+  if (conta) conta.textContent = termos.length ? `${visiveis} de ${linhas.length}` : `${linhas.length} linha${linhas.length === 1 ? '' : 's'}`
+  const vazio = jt.querySelector('.jt-nada')
+  if (vazio) vazio.hidden = !(termos.length && visiveis === 0)
+}
+
+/** Depois de montar a janela: reaplica a pesquisa que estava digitada. @param {string} id */
+function jtAplicar(id) {
+  const campo = document.getElementById(id)
+  if (campo) jtFiltrar(campo)
+}
+
 // ── LISTA ────────────────────────────────────────────────────
 
 async function abrirImportacoes() {
@@ -91,28 +145,43 @@ async function carregarListaImportacoes() {
     const linhas = d.importacoes.map(i => `
       <tr onclick="abrirImportacao(${i.id})">
         <td class="mono">${i.status === 'rascunho' ? '—' : i.id}</td>
-        <td>${esc(i.bairro)}<div class="imp-sub">${esc(i.arquivo)}</div></td>
+        <td><b class="jt-forte">${esc(i.bairro)}</b><div class="imp-sub">${esc(i.arquivo)}</div></td>
         <td class="num">${Number(i.lotes).toLocaleString('pt-BR')}</td>
-        <td>${esc(i.enviado_por || '—')}<div class="imp-sub">${esc(i.enviado_em || '')}</div></td>
-        <td><span class="badge ${IMP_BADGE[i.status] || 'bd-in'}">${esc(i.status_rotulo)}</span>
-          ${i.status === 'revisao' && i.divergencias ? `<div class="imp-sub imp-diverge">${i.divergencias} divergência(s)</div>` : ''}</td>
-        <td class="imp-abrir">${i.status === 'rascunho' ? 'continuar ›' : 'ver ›'}</td>
+        <td>${esc(i.enviado_por || '—')}</td>
+        <td>${esc(i.enviado_em || '—')}</td>
+        <td><span class="badge ${IMP_BADGE[i.status] || 'bd-in'}">${esc(i.status_rotulo)}</span></td>
+        <td class="num">${i.status === 'revisao' && i.divergencias ? `<span class="imp-diverge">${Number(i.divergencias).toLocaleString('pt-BR')}</span>` : '—'}</td>
+        <td class="jt-acoes"><button type="button" class="btn sm">${i.status === 'rascunho' ? 'Continuar' : 'Abrir'}</button></td>
       </tr>`).join('')
 
+    const nPend = _impPendentes(d)
     _impCorpo(`
-      <div class="imp-topo-lista">
-        <p class="imp-expl">O arquivo entra como <b>rascunho</b>: só você o vê, e dá para fazer a pré-curadoria
-          e conferir com o cadastro antes de decidir. Ao <b>salvar</b>, a importação passa a valer e fica
-          <b>salva, não publicada</b>, na lista dos curadores. Ao <b>publicar</b> (administrador), o bairro passa a valer para todos.</p>
-        <button class="btn primary sm" onclick="novaImportacao()">+ Nova importação</button>
-      </div>
-      ${d.importacoes.length ? `
-        <div class="imp-tabela-rolagem"><table class="imp-tabela">
-          <thead><tr><th>Nº</th><th>Bairro</th><th class="num">Lotes</th><th>Enviado por</th><th>Situação</th><th></th></tr></thead>
-          <tbody>${linhas}</tbody>
-        </table></div>`
-        : '<div class="lista-vazia">Nenhuma importação feita pela tela ainda.</div>'}
-      <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button></div>`)
+      <div class="jt">
+        <div class="jt-topo">
+          <div class="jt-linha">
+            ${jtBusca('imp-busca', 'Pesquisar por bairro, arquivo, situação ou quem enviou')}
+            <button class="btn primary sm" onclick="novaImportacao()">+ Nova importação</button>
+          </div>
+          <p class="imp-expl">O arquivo entra como <b>rascunho</b>: só você o vê, e dá para fazer a pré-curadoria
+            e conferir com o cadastro antes de decidir. Ao <b>salvar</b>, fica <b>salva, não publicada</b>, na lista
+            dos curadores. Ao <b>publicar</b> (administrador), o bairro passa a valer para todos.</p>
+        </div>
+        <div class="jt-rolagem">
+          ${d.importacoes.length ? `
+            <table class="imp-tabela jt-tabela">
+              <thead><tr><th>Nº</th><th>Bairro</th><th class="num">Lotes</th><th>Enviado por</th><th>Em</th>
+                <th>Situação</th><th class="num">Divergências</th><th></th></tr></thead>
+              <tbody>${linhas}</tbody>
+            </table>
+            <div class="jt-nada" hidden>Nenhuma importação com o que foi pesquisado.</div>`
+            : '<div class="lista-vazia">Nenhuma importação feita pela tela ainda.</div>'}
+        </div>
+        <div class="jt-rodape">
+          <span class="imp-sub">${d.importacoes.length} importação(ões)${nPend ? ` · ${nPend} não publicada(s)` : ''}</span>
+          <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button></div>
+        </div>
+      </div>`)
+    jtAplicar('imp-busca')
   } catch (e) {
     _impCorpo(`<div class="cad-nota cad-erro">${esc(e.message)}</div>`)
   }

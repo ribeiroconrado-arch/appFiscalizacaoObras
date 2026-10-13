@@ -802,29 +802,46 @@ async function abrirContornosDosBairros() {
   const situacao = p => !p ? '<span class="badge bd-in">sem contorno</span>'
     : p.desatualizado ? '<span class="badge bd-pe">desatualizado</span>' : '<span class="badge bd-ok">em dia</span>'
 
+  const nDesat = linhas.filter(l => !l.p || l.p.desatualizado).length
   _impCorpo(`
-    <p class="imp-expl">O contorno é a união dos lotes do bairro com as ruas entre as quadras preenchidas
-      (fechamento de <b>raio</b> metros). Ele fica tracejado no mapa e mostra o nome do bairro com o mapa afastado.
-      Junto, sai o contorno de cada <b>quadra</b>, que o mapa mostra na escala do bairro no lugar das linhas de lote.
-      Fica <b>desatualizado</b> quando a curadoria mexe nos lotes depois de gerado.</p>
-    <div class="field" style="max-width:220px"><label for="ctn-raio">Raio do fechamento (m)</label>
-      <input type="number" id="ctn-raio" min="5" max="200" step="1" value="${raioEscolhido}"></div>
-    <table class="imp-tabela"><thead><tr><th>Bairro</th><th>Situação</th><th class="num">Área</th><th></th></tr></thead><tbody>
-    ${linhas.map(l => `<tr>
-      <td>${esc(l.oficial)}${l.oficial !== l.nome ? `<div class="imp-sub">${esc(l.nome)}</div>` : ''}
-        ${l.p?.isolados?.length ? `<div class="imp-sub imp-diverge">${l.p.isolados.length} lote(s) isolado(s) fora do contorno:
-          ${l.p.isolados.map(id => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(id)})">nº ${Number(id)}</a>`).join(', ')}</div>` : ''}
-        ${contornoState.fora[l.nome]?.length ? `<div class="imp-sub imp-diverge">Última tentativa recusada — ${contornoState.fora[l.nome].length} lote(s) fora do contorno (clique para ver no mapa):
-          ${contornoState.fora[l.nome].map(x => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(x.id)})">Q ${esc(x.quadra ?? '—')} · L ${esc(x.lote ?? '—')}</a>`).join(', ')}</div>` : ''}</td>
-      <td>${situacao(l.p)}${l.p?.contorno_em ? `<div class="imp-sub">${esc(l.p.contorno_em)} · raio ${l.p.raio_m} m
-        · ${l.p.quadras ? l.p.quadras + ' quadra(s)' : 'sem quadras — gere de novo'}</div>` : ''}</td>
-      <td class="num">${l.p ? l.p.area_ha.toLocaleString('pt-BR') + ' ha' : '—'}</td>
-      <td class="imp-abrir"><button class="btn sm" onclick="gerarDaLista(this, ${jsArg(l.nome)})">${l.p ? 'Gerar de novo' : 'Gerar'}</button></td>
-    </tr>`).join('') || '<tr><td colspan="4">Nenhum bairro com lotes.</td></tr>'}
-    </tbody></table>
-    <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button>
-      ${linhas.length > 1 ? `<button class="btn primary" onclick="gerarTodosOsContornos(this)">Gerar todos (${linhas.length})</button>` : ''}</div>`,
+    <div class="jt">
+      <div class="jt-topo">
+        <div class="jt-linha">
+          ${jtBusca('ctn-busca', 'Pesquisar por bairro ou situação')}
+          <label class="jt-campo" for="ctn-raio" title="Distância, em metros, usada para fechar as ruas entre as quadras ao gerar o contorno.">Raio do fechamento
+            <input type="number" id="ctn-raio" min="5" max="200" step="1" value="${raioEscolhido}"> m</label>
+        </div>
+        <p class="imp-expl">O contorno é a união dos lotes do bairro com as ruas entre as quadras preenchidas
+          (fechamento de <b>raio</b> metros). Fica tracejado no mapa e mostra o nome do bairro com o mapa afastado; junto sai
+          o contorno de cada <b>quadra</b>. Fica <b>desatualizado</b> quando a curadoria mexe nos lotes depois de gerado.</p>
+      </div>
+      <div class="jt-rolagem">
+        <table class="imp-tabela jt-tabela"><thead><tr><th>Bairro</th><th>Situação</th><th>Gerado em</th>
+          <th class="num">Raio</th><th class="num">Quadras</th><th class="num">Área</th><th></th></tr></thead><tbody>
+        ${linhas.map(l => `<tr>
+          <td class="jt-quebra"><b class="jt-forte">${esc(l.oficial)}</b>${l.oficial !== l.nome ? `<div class="imp-sub">${esc(l.nome)}</div>` : ''}
+            ${l.p?.isolados?.length ? `<div class="imp-sub imp-diverge">${l.p.isolados.length} lote(s) isolado(s) fora do contorno:
+              ${l.p.isolados.map(id => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(id)})">nº ${Number(id)}</a>`).join(', ')}</div>` : ''}
+            ${contornoState.fora[l.nome]?.length ? `<div class="imp-sub imp-diverge">Última tentativa recusada — ${contornoState.fora[l.nome].length} lote(s) fora do contorno (clique para ver no mapa):
+              ${contornoState.fora[l.nome].map(x => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(x.id)})">Q ${esc(x.quadra ?? '—')} · L ${esc(x.lote ?? '—')}</a>`).join(', ')}</div>` : ''}</td>
+          <td>${situacao(l.p)}</td>
+          <td>${l.p?.contorno_em ? esc(l.p.contorno_em) : '—'}</td>
+          <td class="num">${l.p?.contorno_em ? l.p.raio_m + ' m' : '—'}</td>
+          <td class="num">${l.p?.contorno_em ? (l.p.quadras ? l.p.quadras : '<span class="imp-diverge" title="Gere de novo para criar as quadras">sem quadras</span>') : '—'}</td>
+          <td class="num">${l.p ? l.p.area_ha.toLocaleString('pt-BR') + ' ha' : '—'}</td>
+          <td class="jt-acoes"><button class="btn sm" onclick="gerarDaLista(this, ${jsArg(l.nome)})">${l.p ? 'Gerar de novo' : 'Gerar'}</button></td>
+        </tr>`).join('') || '<tr class="jt-sem-linhas"><td colspan="7">Nenhum bairro com lotes.</td></tr>'}
+        </tbody></table>
+        <div class="jt-nada" hidden>Nenhum bairro com o que foi pesquisado.</div>
+      </div>
+      <div class="jt-rodape">
+        <span class="imp-sub">${linhas.length} bairro(s)${nDesat ? ` · ${nDesat} sem contorno ou desatualizado(s)` : ' · todos em dia'}</span>
+        <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button>
+          ${linhas.length > 1 ? `<button class="btn primary" onclick="gerarTodosOsContornos(this)">Gerar todos (${linhas.length})</button>` : ''}</div>
+      </div>
+    </div>`,
     'Contorno dos bairros')
+  jtAplicar('ctn-busca')
 }
 
 async function gerarDaLista(btn, bairro) {

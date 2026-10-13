@@ -216,22 +216,27 @@ function pintarJanelaConferencia() {
 
   const linha = (tipo, l) => {
     const just = _confJustificada(tipo, l)
-    const ver = l.lote_id
-      ? `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${jsArg({ tipo, ...l })})">ver no mapa ›</a>`
-      : `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${jsArg({ tipo, ...l })})">na quadra ›</a>`
+    const ver = `<button type="button" class="btn sm" onclick="_confIrAoItem(${jsArg({ tipo, ...l })})">${l.lote_id ? 'Ver no mapa' : 'Ver a quadra'}</button>`
     const acao = just
-      ? `<a href="#" onclick="event.preventDefault(); _confDesjustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">desfazer</a>`
+      ? `<button type="button" class="btn sm" onclick="_confDesjustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">Desfazer</button>`
       // Diferença de área não se justifica: vai direto para a correção do desenho.
       : tipo === 'area_diferente'
-        ? (l.lote_id ? `<a href="#" onclick="event.preventDefault(); _confIrAoItem(${jsArg({ tipo, ...l })}); _confCorrigirDesenho(${Number(l.lote_id)})">corrigir ›</a>` : '')
-      : `<a href="#" onclick="event.preventDefault(); _confJustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">justificar</a>`
+        ? (l.lote_id ? `<button type="button" class="btn sm primary" onclick="_confIrAoItem(${jsArg({ tipo, ...l })}); _confCorrigirDesenho(${Number(l.lote_id)})">Corrigir</button>` : '')
+      : `<button type="button" class="btn sm" onclick="_confJustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">Justificar</button>`
     const j = confState.justificativas[tipo + '|' + _confChave(tipo, l)]
+    const detalhe = [
+      l.area_cadastro != null ? _confAreas(l) : '',
+      tipo === 'sem_lote' ? [l.area_m2 ? fmtNum(l.area_m2) + ' m²' : '', esc(l.endereco || '')].filter(Boolean).join(' · ') : '',
+      l.isencao ? `<span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>` : '',
+      l.alterado ? '<span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : '',
+      j ? `<div class="imp-sub">Justificado por ${esc(j.por || '—')} em ${esc(j.em)}: ${esc(j.motivo)}</div>` : '',
+    ].filter(Boolean).join(' ')
     return `<tr${just ? ' class="conf-justificada"' : ''}>
       <td class="mono">${esc(l.inscricao || '—')}</td>
-      <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}${l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''}${l.isencao ? ` <span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>` : ''}
-        ${l.area_cadastro != null ? `<div class="imp-sub">${_confAreas(l)}</div>` : ''}
-        ${j ? `<div class="imp-sub">Justificado por ${esc(j.por || '—')} em ${esc(j.em)}: ${esc(j.motivo)}</div>` : ''}</td>
-      <td class="imp-abrir">${ver}</td><td class="imp-abrir">${acao}</td></tr>`
+      <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td>
+      <td class="jt-quebra">${detalhe || '<span class="imp-sub">—</span>'}</td>
+      <td>${just ? '<span class="badge bd-in">Justificada</span>' : '<span class="badge bd-pe">Pendente</span>'}</td>
+      <td class="jt-acoes">${ver}${acao}</td></tr>`
   }
   const grupo = tipo => {
     const itens = r?.[tipo] || []
@@ -244,15 +249,25 @@ function pintarJanelaConferencia() {
       : porLote
     const abertas = itens.filter(l => !_confJustificada(tipo, l)).sort(ordem)
     const justificadas = itens.filter(l => _confJustificada(tipo, l)).sort(ordem)
-    return `<div class="imp-grupo"><span class="conf-cor" style="background:${CONF_TIPOS[tipo].cor}"></span>
-        ${esc(CONF_TIPOS[tipo].rotulo)} <span class="imp-sub">· ${abertas.length} pendente(s)${justificadas.length ? `, ${justificadas.length} justificada(s)` : ''}</span>
-        ${CONF_TIPOS[tipo].nota ? `<div class="imp-sub conf-grupo-nota">${esc(CONF_TIPOS[tipo].nota)}</div>` : ''}</div>
-      <table class="imp-tabela"><tbody>${[...abertas, ...justificadas].slice(0, 300).map(l => linha(tipo, l)).join('')}</tbody></table>`
+    return `<section class="jt-grupo">
+        <div class="jt-grupo-tit"><span class="conf-cor" style="background:${CONF_TIPOS[tipo].cor}"></span>
+          <b>${esc(CONF_TIPOS[tipo].rotulo)}</b>
+          <span class="imp-sub">${abertas.length} pendente(s)${justificadas.length ? `, ${justificadas.length} justificada(s)` : ''}</span>
+          ${CONF_TIPOS[tipo].nota ? `<span class="imp-sub conf-grupo-nota">${esc(CONF_TIPOS[tipo].nota)}</span>` : ''}</div>
+        <table class="imp-tabela jt-tabela">
+          <thead><tr><th>Inscrição</th><th>Quadra · Lote</th><th>Detalhe</th><th>Situação</th><th></th></tr></thead>
+          <tbody>${[...abertas, ...justificadas].slice(0, 300).map(l => linha(tipo, l)).join('')}</tbody></table>
+        ${itens.length > 300 ? `<div class="imp-sub">+ ${itens.length - 300} — veja todas no PDF.</div>` : ''}
+      </section>`
   }
 
   _confCorpo(`
-    <div class="imp-fixo-topo">
-      <div class="conf-topo">${sel}</div>
+   <div class="jt">
+    <div class="jt-topo">
+      <div class="jt-linha conf-linha-topo">
+        <div class="conf-topo">${sel}</div>
+        ${r ? jtBusca('conf-busca', 'Pesquisar por inscrição, quadra, lote ou detalhe') : ''}
+      </div>
       <div class="imp-fonte">
         ${r && (r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? `<label class="imp-opcao" title="${esc(r.fonte_descricao)}"><input type="radio" name="conf-fonte" value="ultima" checked
           onchange="document.getElementById('conf-soltar').hidden = true"> ${r.fonte === 'planilha' ? 'Revisar as divergências (sem planilha)' : 'Mesma fonte da última (cadastro carregado)'}</label>` : ''}
@@ -282,6 +297,7 @@ function pintarJanelaConferencia() {
         ${cartao('area_diferente', 'Área diferente', 'erro')}
       </div>` : ''}
     </div>
+    <div class="jt-rolagem">
     ${r ? `
       ${r.sem_situacao ? '<div class="cad-nota cad-aviso">A planilha não tinha coluna de situação: os inativos não puderam ser conferidos.</div>' : ''}
       ${r.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
@@ -291,7 +307,9 @@ function pintarJanelaConferencia() {
       ${confState.filtro ? `<div class="conf-filtro-aviso">Mostrando só <b>${esc(CONF_TIPOS[confState.filtro].rotulo)}</b>. <a href="#" onclick="event.preventDefault(); _confFiltrar(null)">Mostrar todas</a></div>` : ''}
       ${Object.keys(CONF_TIPOS).filter(t => !confState.filtro || t === confState.filtro).map(grupo).join('')}`
       : '<p class="imp-expl">Este bairro ainda não foi conferido. Escolha a fonte e confira.</p>'}
-    <div class="imp-fixo-rodape">
+      <div class="jt-nada" hidden>Nenhuma pendência com o que foi pesquisado.</div>
+    </div>
+    <div class="jt-rodape">
       ${r ? `<div class="imp-rodape-conf"><span class="imp-sub">${esc(r.fonte_descricao)} · conferido em ${esc(r.conferido_em)}${r.revisao ? ` · revisado sem planilha em ${esc(r.revisao.em)} (${r.revisao.resolvidas} resolvida(s))` : ''}
         por ${esc(r.conferido_por || '—')} · código do bairro ${esc(r.codigo_bairro)}${nJust ? ` · ${nJust} justificada(s)` : ''}</span></div>` : ''}
       <div class="btn-row imp-acoes">
@@ -299,7 +317,9 @@ function pintarJanelaConferencia() {
         ${r ? `<button class="btn" onclick="baixarPdfDaConferencia()" title="A listagem que está na tela, em PDF">${confState.filtro ? 'PDF desta listagem' : 'Gerar PDF'}</button>` : ''}
         ${r && _confVisiveis().length ? `<button class="btn primary" onclick="mostrarConferenciaNoMapa()">${confState.filtro ? 'Ver estas no mapa' : 'Ver pendências no mapa'}</button>` : ''}
       </div>
-    </div>`)
+    </div>
+   </div>`)
+  jtAplicar('conf-busca')
   _prepararAreaDeSoltar('conf-soltar', 'conf-planilha', /\.xlsx$/i, 'A planilha precisa ser .xlsx.',
     () => _mostrarEscolhido('conf-soltar', document.getElementById('conf-planilha').files[0],
       'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário'))
@@ -403,7 +423,7 @@ function _confFiltrar(tipo) {
 }
 
 /** O quadro que rola dentro da janela da conferência. */
-const _confRolavel = () => document.querySelector('#m-conferencia .modal')
+const _confRolavel = () => document.querySelector('#m-conferencia .jt-rolagem')
 
 // ── NO MAPA ──────────────────────────────────────────────────
 

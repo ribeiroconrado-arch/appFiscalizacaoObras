@@ -75,7 +75,7 @@ const FERRAMENTAS_MAPA = {
   // Ocupa o canto da mesa da curadoria, e por isso uma fecha a outra; as
   // janelas que ela abre convivem com ela (abrirJanelaDoMapa).
   base: {
-    rotulo: 'a base de lotes',
+    rotulo: 'as ferramentas de importação',
     aberta: () => typeof baseDeLotesAberta === 'function' && baseDeLotesAberta(),
     emCurso: () => null,
     fechar: () => fecharBaseDeLotes(),

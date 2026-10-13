@@ -642,7 +642,7 @@
        só lança; quem disputa a vez é o que ele abre. --}}
   <div class="ctrl-grupo" id="grupo-base">
     <button class="ctrl-btn" onclick="alternarBaseDeLotes()"
-            title="Base de lotes — importação e conferência" aria-expanded="false">
+            title="Ferramentas de importação" aria-expanded="false">
       {{-- Um mapa dobrado recebendo uma seta: o loteamento entrando no mapa. --}}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
            stroke-linecap="round" stroke-linejoin="round">
@@ -652,7 +652,7 @@
       </svg>
     </button>
     <div class="ctrl-corpo ctrl-base">
-      <b>Base de lotes</b>
+      <b>Ferramentas de importação</b>
 
       {{-- BASE DE LOTES — bairro novo entra por aqui, em revisão, e só vale
            para todos depois que o administrador publica. Ver
@@ -2893,9 +2893,9 @@
      só com as ferramentas de bairro (importar, contornar, nomear ruas,
      conferir). Montada por importacoes.js a partir de #grupo-base. --}}
 @if (auth()->user()->podeCurarCadastro())
-<aside class="cad-mesa so-regua base-mesa" id="base-mesa" hidden aria-label="Base de lotes">
-  <div class="mesa-titulo-v" aria-hidden="true">Base de lotes</div>
-  <nav class="cad-regua" id="base-regua" aria-label="Ferramentas da base de lotes"></nav>
+<aside class="cad-mesa so-regua base-mesa" id="base-mesa" hidden aria-label="Ferramentas de importação">
+  <div class="mesa-titulo-v" aria-hidden="true">Ferramentas de importação</div>
+  <nav class="cad-regua" id="base-regua" aria-label="Ferramentas de importação"></nav>
 </aside>
 @endif
 
