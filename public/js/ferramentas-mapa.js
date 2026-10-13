@@ -71,6 +71,15 @@ const FERRAMENTAS_MAPA = {
     },
     fechar: () => sairDaCuradoria(),
   },
+  // A régua da BASE DE LOTES (importacoes.js): só lança janelas e ferramentas.
+  // Ocupa o canto da mesa da curadoria, e por isso uma fecha a outra; as
+  // janelas que ela abre convivem com ela (abrirJanelaDoMapa).
+  base: {
+    rotulo: 'a base de lotes',
+    aberta: () => typeof baseDeLotesAberta === 'function' && baseDeLotesAberta(),
+    emCurso: () => null,
+    fechar: () => fecharBaseDeLotes(),
+  },
   // Uma JANELA da curadoria (Importações, ficha da importação, Conferência,
   // Contorno dos bairros). Não fica "aberta" no mapa — é modal —, mas abrir uma
   // encerra o que estiver em uso: a janela cobre a mesa e as barras, e voltar
@@ -141,7 +150,7 @@ function abrirJanelaDoMapa() {
   return new Promise(resolve => pedirFerramenta('janela', () => {
     _voltarACuradoria = daCuradoria
     resolve()
-  }))
+  }, { convive: ['base'] }))
 }
 
 /** A barra de ferramentas da correção cadastral está à vista (mesa, ou o popover em tela pequena)? */

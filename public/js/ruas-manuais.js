@@ -59,7 +59,7 @@ function abrirNomesDeRua() {
     }
     carregarQuadrasVisiveis()
     aoMudarRuas()
-  })
+  }, { convive: ['base'] })   // a régua da base de lotes, de onde ela é lançada, fica
 }
 
 function fecharNomesDeRua() {

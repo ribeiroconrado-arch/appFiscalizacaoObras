@@ -3808,3 +3808,17 @@ select.combo-oculto{display:none !important}
 /* O painel "Base de lotes": os mesmos lançadores da correção cadastral. */
 .ctrl-base{min-width:262px}
 .ctrl-base > b{display:block;margin-bottom:8px}
+/* ── A RÉGUA DA BASE DE LOTES ──
+   É a mesma `.cad-mesa.so-regua` da curadoria; aqui só o que é dela. */
+.base-mesa .cad-regua{border-right:none}
+.base-selo{position:absolute;top:1px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;
+  background:var(--warn,#B45309);color:#fff;font-size:9.5px;font-weight:800;line-height:16px;text-align:center}
+/* As duas mesas ocupam o mesmo canto: com a da curadoria aberta, esta cede. */
+body.com-mesa .base-mesa{display:none}
+/* Fora da aba do mapa ela não existe (é fixa na janela, e não no mapa). */
+body:not(:has(#t-mapa.at)) .base-mesa{display:none}
+@media (min-width:1000px){
+  body.com-base .chip-estado{left:80px}
+  /* Com a régua aberta o ícone não abre painel: o painel seria o mesmo menu. */
+  body.com-base #grupo-base .ctrl-corpo{display:none}
+}

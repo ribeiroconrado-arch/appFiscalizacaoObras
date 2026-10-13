@@ -36,7 +36,7 @@
 
   /* print-color-adjust é o que faz as faixas cinza saírem impressas: por
      padrão o navegador descarta fundos na impressão e elas vinham em branco. */
-  body { margin: 0; width: 72mm; color: #000; font-size: 9px; line-height: 1.35;
+  body { margin: 0; width: 72mm; color: #000; font-size: 8.5pt; line-height: 1.35;
          font-family: 'Courier New', Courier, monospace;
          -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
@@ -44,35 +44,35 @@
   .cab { display: flex; align-items: center; gap: 5px; text-align: center; padding: 4px 3px 2px; }
   .cab img { width: 38px; height: auto; flex-shrink: 0; }
   .cab .instituicao { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .cab .org { font-size: 8px; font-weight: bold; line-height: 1.25; }
-  .cab .end { font-size: 7px; }
-  .tit { background: #C8C8C8; font-size: 10px; font-weight: bold; text-align: center; padding: 3px; }
+  .cab .org { font-size: 7pt; font-weight: bold; line-height: 1.25; }
+  .cab .end { font-size: 6pt; }
+  .tit { background: #C8C8C8; font-size: 9pt; font-weight: bold; text-align: center; padding: 3px; }
   .grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grade.meta { grid-template-columns: 18% 27% 55%; margin-top: 3px; border-top: 1px dotted #333; padding-top: 2px; }
   .grade .campo { min-width: 0; }
 
-  .faixa { background: #C8C8C8; font-size: 8px; font-weight: bold; letter-spacing: .06em;
+  .faixa { background: #C8C8C8; font-size: 9pt; font-weight: bold; letter-spacing: .06em;
            padding: 2px 4px; margin: 5px 0 3px; text-transform: uppercase; }
 
   .campo { padding: 0 4px 3px; }
-  .campo .lbl { font-size: 7px; text-transform: uppercase; letter-spacing: .04em; }
-  .campo .val { font-size: 9px; overflow-wrap: anywhere; }
+  .campo .lbl { font-size: 6pt; text-transform: uppercase; letter-spacing: .04em; }
+  .campo .val { font-size: 8.5pt; font-weight: bold; overflow-wrap: anywhere; }
   .meta .val, .datas .val { font-weight: bold; }
   .meta .campo { padding: 0 2px 3px; }
-  .meta .lbl { font-size: 6px; letter-spacing: 0; white-space: nowrap; line-height: 1.2; }
-  .meta .val { font-size: 9px; line-height: 1.2; }
+  .meta .lbl { font-size: 5.5pt; letter-spacing: 0; white-space: normal; line-height: 1.2; }
+  .meta .val { font-size: 8.5pt; line-height: 1.2; }
   .meta .origem-numero { display: block; }
 
   .par { padding: 0 4px 3px; text-align: left; overflow-wrap: anywhere; }
   .par b { font-weight: bold; }
 
-  .calc { width: 100%; border-collapse: collapse; font-size: 8px; }
+  .calc { width: 100%; border-collapse: collapse; font-size: 7pt; }
   .calc td { padding: 1px 4px; vertical-align: top; }
   .calc td.dir { text-align: right; white-space: nowrap; }
-  .calc tr.total td { border-top: 1px solid #000; font-weight: bold; font-size: 9px; padding-top: 2px; }
+  .calc tr.total td { border-top: 1px solid #000; font-weight: bold; font-size: 8.5pt; padding-top: 2px; }
   .infracao { margin: 0 4px; padding: 3px 0; border-bottom: 1px solid #ccc; overflow-wrap: anywhere; }
   .infracao .par { padding: 0; }
-  .calculo { display: flex; justify-content: space-between; gap: 5px; font-size: 7.5px; margin-top: 2px; }
+  .calculo { display: flex; justify-content: space-between; gap: 5px; font-size: 6.5pt; margin-top: 2px; }
   .calculo strong { white-space: nowrap; }
   .assinaturas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 4px; }
   .assinaturas .ass { padding-left: 0; padding-right: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -80,14 +80,14 @@
   .ass { padding: 12px 4px 0; text-align: center; }
   .ass img { max-height: 34px; max-width: 90%; display: block; margin: 0 auto; }
   .ass .vazio { height: 26px; }
-  .ass .linha { border-top: 1px solid #000; font-size: 7.5px; padding-top: 2px; margin-top: 2px; }
+  .ass .linha { border-top: 1px solid #000; font-size: 6.5pt; padding-top: 2px; margin-top: 2px; }
 
   .anexo { padding: 3px 4px; }
   .anexo img { width: 100%; height: auto; }
-  .anexo .t { font-size: 8px; font-weight: bold; }
-  .anexo .o { font-size: 7px; }
+  .anexo .t { font-size: 7pt; font-weight: bold; }
+  .anexo .o { font-size: 6pt; }
 
-  .rodape { text-align: center; font-size: 7px; padding: 5px 4px 4px; line-height: 1.3; overflow-wrap: anywhere; border-top: 1px dotted #777; margin-top: 5px; }
+  .rodape { text-align: center; font-size: 6pt; padding: 5px 4px 4px; line-height: 1.3; overflow-wrap: anywhere; border-top: 1px dotted #777; margin-top: 5px; }
 
   .marca { position: fixed; top: 40%; left: 50%; transform: translate(-50%,-50%) rotate(-30deg);
            font-size: 28px; font-weight: bold; color: rgba(0,0,0,.18); letter-spacing: 3px;

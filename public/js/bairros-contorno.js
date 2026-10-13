@@ -99,6 +99,24 @@ async function carregarContornosDosBairros() {
   carregarQuadrasVisiveis()
 }
 
+/**
+ * Refaz no mapa tudo o que vem dos BAIRROS — contorno, nome, quadras e nomes
+ * de rua — depois que os lotes de um bairro saíram (importação excluída ou
+ * descartada). Recarregar só os lotes deixava a linha do loteamento, o nome
+ * dele e o número das quadras desenhados em volta do vazio.
+ */
+async function recarregarContornosDoMapa() {
+  await carregarContornosDosBairros()
+  // As quadras guardadas de bairro que deixou de vir: fora.
+  const vivos = new Set((contornoState.dados?.features || []).map(f => f.properties?.nome))
+  for (const nome of [...quadraState.porBairro.keys()]) {
+    if (!vivos.has(nome)) _esquecerQuadras(nome)
+  }
+  _desenharRotulosDeQuadra()
+  _desenharRotulosDeRua()
+  if (typeof desenharRotulosDeGrupo === 'function') desenharRotulosDeGrupo()
+}
+
 // ── QUADRAS NO MAPA ──────────────────────────────────────────
 
 const quadraState = {

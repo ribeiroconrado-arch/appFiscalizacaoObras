@@ -62,6 +62,12 @@ class BairroContornoController extends Controller
         foreach ($this->lotes->contornosDosBairros() as $b) {
             $s = $situacao[$b->nome] ?? null;
             $comContorno[$b->nome] = true;
+            // Contorno de bairro que ficou SEM LOTE NENHUM (a importação dele
+            // foi excluída ou descartada) não vai ao mapa de ninguém: a linha
+            // e o nome ficariam desenhados em volta do vazio.
+            if (! $s) {
+                continue;
+            }
             // Bairro só com lotes em revisão ainda não existe para quem não revisa.
             if (! $curador && (! $s || (int) $s->publicados === 0)) {
                 continue;

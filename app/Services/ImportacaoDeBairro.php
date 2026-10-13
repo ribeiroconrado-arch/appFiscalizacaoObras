@@ -435,7 +435,9 @@ class ImportacaoDeBairro
                 DB::table('lotes')->where('importacao_id', $imp->id)->select('id'))->distinct()->pluck('ato_id');
             DB::table('lote_atos')->whereIn('id', $internos)->delete();
 
+            $bairros = DB::table('lotes')->where('importacao_id', $imp->id)->distinct()->pluck('bairro')->all();
             $n = DB::table('lotes')->where('importacao_id', $imp->id)->delete();
+            $this->largarDerivadosDeBairroVazio($bairros);
             DB::table('auditoria')->where('importacao_id', $imp->id)->delete();
             DB::table('auditoria')->where('tabela', 'importacoes_lotes')->where('registro_id', $imp->id)->delete();
             $imp->delete();
@@ -587,7 +589,9 @@ class ImportacaoDeBairro
                 ->distinct()->pluck('ato_id');
             DB::table('lote_atos')->whereIn('id', $internos)->delete();
 
+            $bairros = DB::table('lotes')->where('importacao_id', $imp->id)->distinct()->pluck('bairro')->all();
             $apagados = DB::table('lotes')->where('importacao_id', $imp->id)->delete();
+            $this->largarDerivadosDeBairroVazio($bairros);
 
             $anterior = $imp->status;
             $imp->update([
@@ -601,6 +605,30 @@ class ImportacaoDeBairro
 
             return $apagados;
         });
+    }
+
+    /**
+     * Bairro que ficou sem lote ativo nenhum perde o que foi DERIVADO dos
+     * lotes: o contorno das quadras e os trechos de rua gerados. Sem isto o
+     * mapa seguia desenhando as quadras e os nomes de um loteamento que já
+     * não tem lote. O contorno do bairro em si fica guardado, mas não é
+     * servido enquanto o bairro estiver vazio (BairroContornoController).
+     * Os nomes de rua informados à mão (`ruas_manuais`) não são tocados.
+     *
+     * @param  iterable<string|null>  $bairros
+     */
+    private function largarDerivadosDeBairroVazio(iterable $bairros): void
+    {
+        foreach ($bairros as $b) {
+            if ($b === null || DB::table('lotes')->where('bairro', $b)->where('situacao', 'ativo')->exists()) {
+                continue;
+            }
+            foreach (['quadras', 'ruas_trechos'] as $tabela) {
+                if (Schema::hasTable($tabela)) {
+                    DB::table($tabela)->where('bairro', $b)->delete();
+                }
+            }
+        }
     }
 
     /**

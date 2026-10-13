@@ -711,6 +711,8 @@ async function excluirImportacao() {
     toast(d.message)
     if (impState.preCuradoria?.id === i.id) sairPreCuradoria()
     recarregarLotesDoMapa()
+    // O loteamento saiu: a linha dele, o nome e as quadras saem do mapa junto.
+    if (typeof recarregarContornosDoMapa === 'function') recarregarContornosDoMapa()
     await abrirImportacao(i.id)
   } catch (e) {
     toast(e.message, 'err')
@@ -788,6 +790,7 @@ async function descartarImportacao() {
     impState.atual = null
     pintarBarraImportacao()
     recarregarLotesDoMapa()
+    if (typeof recarregarContornosDoMapa === 'function') recarregarContornosDoMapa()
     if (!document.getElementById('m-importacoes').classList.contains('open')) openModal('m-importacoes')
     await carregarListaImportacoes()
   } catch (e) {
@@ -1085,3 +1088,70 @@ document.addEventListener('DOMContentLoaded', async () => {
     atualizarContadorImportacoes(d.em_revisao, _impPendentes(d))
   } catch { /* sem contador — o botão continua funcionando */ }
 })
+
+// ── A BARRA LATERAL DA BASE DE LOTES ─────────────────────────
+//
+// Em tela grande, o ícone "Base de lotes" abre uma régua encostada na borda —
+// a mesma da correção cadastral, com os mesmos quadrados e a mesma dica —, e
+// não um painel flutuante. Ela é MONTADA a partir dos lançadores de
+// #grupo-base, como a da curadoria é montada de #cad-geral: ferramenta nova
+// entra num lugar só. Em tela pequena continua valendo o painel.
+
+/** A régua da base está à vista? */
+const baseDeLotesAberta = () => document.getElementById('base-mesa')?.hidden === false
+
+/** O ícone da coluna de controles. */
+function alternarBaseDeLotes() {
+  const mesa = document.getElementById('base-mesa')
+  if (!mesa || typeof ehMesaCadastral !== 'function' || !ehMesaCadastral()) { alternarPainelMapa('grupo-base'); return }
+  if (!mesa.hidden) { fecharBaseDeLotes(); return }
+  fecharPaineisMapa()
+  // Ocupa o mesmo canto da mesa da curadoria: abrir uma fecha a outra.
+  pedirFerramenta('base', () => {
+    _montarReguaDaBase()
+    mesa.hidden = false
+    document.body.classList.add('com-base')
+    _pintarIconeDaBase()
+  })
+}
+
+function fecharBaseDeLotes() {
+  const mesa = document.getElementById('base-mesa')
+  if (!mesa || mesa.hidden) return
+  mesa.hidden = true
+  document.body.classList.remove('com-base')
+  _pintarIconeDaBase()
+}
+
+function _pintarIconeDaBase() {
+  const b = document.querySelector('#grupo-base .ctrl-btn')
+  if (!b) return
+  b.classList.toggle('med-ativo', baseDeLotesAberta())
+  b.setAttribute('aria-expanded', String(baseDeLotesAberta()))
+}
+
+function _montarReguaDaBase() {
+  const regua = document.getElementById('base-regua')
+  if (!regua) return
+  let h = '<div class="cad-regua-rolo"><div class="cad-regua-gp">'
+  for (const b of document.querySelectorAll('#grupo-base .cad-lanca')) {
+    const nome = b.querySelector('.cad-lanca-txt')?.childNodes[0]?.textContent.trim() ?? ''
+    const obs = b.querySelector('.cad-lanca-obs')?.childNodes[0]?.textContent.trim() ?? ''
+    // As importações não publicadas, em número, no canto do quadrado.
+    const conta = b.dataset.fer === 'importacoes' ? document.getElementById('imp-contador') : null
+    const n = conta && !conta.hidden ? (conta.textContent.match(/\d+/) || [''])[0] : ''
+    h += `<button type="button" class="cad-fer" data-base="${b.dataset.fer}" aria-label="${esc(nome)}" title="${esc(nome)}">
+        ${b.querySelector('.cad-ico')?.outerHTML ?? ''}${n ? `<span class="base-selo">${esc(n)}</span>` : ''}
+        <span class="cad-dica-fer"><b>${esc(nome)}</b><span>${esc(obs)}</span>${n ? `<span class="exige">${esc(conta.textContent.trim())}</span>` : ''}</span>
+      </button>`
+  }
+  h += '</div></div><div class="cad-regua-pe">'
+    + '<button type="button" class="cad-fer cad-fechar" onclick="fecharBaseDeLotes()" aria-label="Fechar a barra" title="Fechar a barra">'
+    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+    + '<span class="cad-dica-fer"><b>Fechar a barra</b><span>As ferramentas da base de lotes continuam no ícone da direita.</span></span>'
+    + '</button></div>'
+  regua.innerHTML = h
+  regua.querySelectorAll('.cad-fer[data-base]').forEach(f => {
+    f.onclick = () => document.querySelector(`#grupo-base .cad-lanca[data-fer="${f.dataset.base}"]`)?.click()
+  })
+}

@@ -628,7 +628,7 @@
        curadoria misturava os dois assuntos. Não é ferramenta do mapa: o painel
        só lança; quem disputa a vez é o que ele abre. --}}
   <div class="ctrl-grupo" id="grupo-base">
-    <button class="ctrl-btn" onclick="alternarPainelMapa('grupo-base')"
+    <button class="ctrl-btn" onclick="alternarBaseDeLotes()"
             title="Base de lotes — importação e conferência" aria-expanded="false">
       {{-- Uma pilha de registros recebendo uma seta: dados entrando na base. --}}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -2872,6 +2872,15 @@
      Não há "desenhar as partes à mão": só o corte por linha, que preserva o
      contorno externo do lote. Um ato que divide não pode mudar a divisa com o
      vizinho, e o desenho livre permitia exatamente isso. --}}
+
+{{-- A RÉGUA DA BASE DE LOTES — a mesma barra lateral da correção cadastral,
+     só com as ferramentas de bairro (importar, contornar, nomear ruas,
+     conferir). Montada por importacoes.js a partir de #grupo-base. --}}
+@if (auth()->user()->podeCurarCadastro())
+<aside class="cad-mesa so-regua base-mesa" id="base-mesa" hidden aria-label="Base de lotes">
+  <nav class="cad-regua" id="base-regua" aria-label="Ferramentas da base de lotes"></nav>
+</aside>
+@endif
 
 <aside class="desm-mesa" id="desm-mesa" hidden aria-label="Desmembramento">
   <div class="cad-mesa-topo">
