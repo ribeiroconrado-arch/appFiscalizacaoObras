@@ -496,6 +496,8 @@ function renderFichaImportacao(i) {
     `<button class="btn" onclick="carregarListaImportacoes()">Voltar à lista</button>`,
     // Um botão só para ir ao mapa: importação não publicada vai em
     // pré-curadoria (com todas as ferramentas); a publicada, só para ver.
+    andamento && ((cc?.total_divergencias || 0) + (i.pendencias_desenho?.invalidos?.length || 0) + (i.pendencias_desenho?.repetidos?.length || 0))
+      ? `<button class="btn primary" onclick="abrirCorrecao('importacao')">Corrigir no mapa</button>` : '',
     andamento
       ? (i.extensao ? `<button class="btn" onclick="fecharImportacoes(); entrarPreCuradoria()">Pré-curadoria no mapa</button>` : '')
       : (i.extensao && i.status !== 'excluida' ? `<button class="btn" onclick="verImportacaoNoMapa()">Ver no mapa</button>` : ''),
@@ -550,7 +552,9 @@ function renderFichaImportacao(i) {
 function _htmlPendenciasDoDesenho(i) {
   const p = i.pendencias_desenho
   if (!p || (!p.invalidos.length && !p.repetidos.length)) return ''
-  const ver = l => `<button type="button" class="btn sm" onclick="irAoLoteDaImportacao(${Number(l.lote_id)})">Ver no mapa</button>`
+  const ver = (l, tipo) => _impEmAndamento(i)
+    ? `<button type="button" class="btn sm primary" onclick="abrirCorrecao('importacao', ${jsArg(_corrChave(tipo, l))})">Corrigir</button>`
+    : `<button type="button" class="btn sm" onclick="irAoLoteDaImportacao(${Number(l.lote_id)})">Ver no mapa</button>`
   const grupo = (titulo, dica, itens, linha) => itens.length ? `
     <section class="jt-grupo">
       <div class="jt-grupo-tit"><span class="badge bd-pe">${itens.length}</span> <b>${titulo}</b></div>
@@ -563,10 +567,10 @@ function _htmlPendenciasDoDesenho(i) {
     ${grupo('Contorno inválido (linha que se cruza)',
       `Corrija os vértices com <b>Editar lote (L)</b>, ou exclua <b>(X)</b> e desenhe de novo <b>(D)</b>.${
         i.status === 'rascunho' ? ' O rascunho só pode ser salvo depois disso.' : ''}`,
-      p.invalidos, l => `<tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td>Contorno inválido</td><td class="jt-acoes">${ver(l)}</td></tr>`)}
+      p.invalidos, l => `<tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td>Contorno inválido</td><td class="jt-acoes">${ver(l, 'invalido')}</td></tr>`)}
     ${grupo('Número repetido no arquivo — entraram sem número',
       'Veja cada um no mapa: informe o número do que está certo <b>(N)</b> e renumere ou exclua <b>(X)</b> o outro.',
-      p.repetidos, l => `<tr><td>Q ${esc(l.quadra)}</td><td>No arquivo era o lote <b>${esc(l.lote)}</b></td><td class="jt-acoes">${ver(l)}</td></tr>`)}`
+      p.repetidos, l => `<tr><td>Q ${esc(l.quadra)}</td><td>No arquivo era o lote <b>${esc(l.lote)}</b></td><td class="jt-acoes">${ver(l, 'repetido')}</td></tr>`)}`
 }
 
 /** O registro próprio da pré-curadoria — fora do Histórico do cadastro. */
@@ -596,8 +600,13 @@ function _htmlConferenciaCadastro(i, c) {
   const emDia = i.conferencia_em_dia === false
     ? `<div class="cad-nota cad-aviso">Houve alteração nos lotes depois desta conferência. Confira de novo antes de publicar.</div>` : ''
 
+  // Importação em andamento: "Corrigir" abre o painel de correção naquela
+  // pendência (correcao-mapa.js). Publicada ou excluída, só se vê no mapa.
+  const andamento = _impEmAndamento(i)
+  const corrigir = (tipo, l) => `<button type="button" class="btn sm primary" onclick="abrirCorrecao('importacao', ${jsArg(_corrChave(tipo, l))})">Corrigir</button>`
   const verLote = l => l.lote_id
     ? `<button type="button" class="btn sm" onclick="irAoLoteDaImportacao(${Number(l.lote_id)})">Ver no mapa</button>` : ''
+  const acaoDe = tipo => l => andamento ? corrigir(tipo, l) : verLote(l)
   const alterado = l => l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''
   // Todas as listas com as MESMAS quatro colunas: a pesquisa e o olho leem igual em qualquer grupo.
   const linha = (l, detalhe, acao) => `<tr>
@@ -620,18 +629,18 @@ function _htmlConferenciaCadastro(i, c) {
     ${c.sem_situacao ? `<div class="cad-nota cad-aviso">A planilha não tem coluna de situação ("Situação" ou "Isenção ou Imunidade"):
         não deu para saber quais inscrições estão <b>inativas</b> no cadastro.</div>` : ''}
     ${c.total_divergencias === 0 ? '<div class="cad-nota imp-nota">Nenhuma divergência: todo lote do arquivo está ativo no cadastro, e todo imóvel ativo do cadastro tem lote.</div>' : ''}
-    ${grupo('No arquivo, não encontrados no cadastro', 'bd-er', c.nao_encontrados, l => linha(l, '', verLote(l)))}
+    ${grupo('No arquivo, não encontrados no cadastro', 'bd-er', c.nao_encontrados, l => linha(l, '', acaoDe('nao_encontrados')(l)))}
     ${grupo('Desenhados no mapa, inativos no cadastro', 'bd-er', c.inativos,
-      l => linha(l, `<span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>`, verLote(l)))}
+      l => linha(l, `<span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>`, acaoDe('inativos')(l)))}
     ${grupo('No cadastro (ativos), sem lote no arquivo', 'bd-er', c.sem_lote,
       l => linha(l, [l.area_m2 ? fmtNum(l.area_m2) + ' m²' : '', esc(l.endereco || '')].filter(Boolean).join(' · '),
-        '<button type="button" class="btn sm" onclick="desenharLoteDaConferencia()">Desenhar lote</button>'))}
+        andamento ? corrigir('sem_lote', l) : ''))}
     ${c.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
     ${c.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${c.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
     ${grupo('Área do desenho diferente da área do cadastro', 'bd-er',
       [...(c.area_diferente || [])].sort((a, b) => Math.abs(b.diferenca ?? 0) - Math.abs(a.diferenca ?? 0)),
-      l => linha(l, typeof _confAreas === 'function' ? _confAreas(l) : '', verLote(l)))}
-    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => linha(l, '', verLote(l)))}`,
+      l => linha(l, typeof _confAreas === 'function' ? _confAreas(l) : '', acaoDe('area_diferente')(l)))}
+    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => linha(l, '', acaoDe('sem_inscricao')(l)))}`,
     rodape: `
     <div class="imp-rodape-conf">
       <span class="imp-sub">${esc(c.fonte_descricao)} · conferido em ${esc(c.conferido_em)} por ${esc(c.conferido_por || '—')}${c.revisao ? ` · revisado sem planilha em ${esc(c.revisao.em)} (${c.revisao.resolvidas} resolvida(s))` : ''}
@@ -1143,7 +1152,8 @@ function pintarBarraImportacao() {
   // por vez — e volta quando a ferramenta é largada.
   const ferramentaDeFora = !impState.preCuradoria
     && ((typeof cadModo !== 'undefined' && !!cadModo) || (typeof atoState !== 'undefined' && !!atoState.tipo))
-  barra.hidden = !impState.noMapa || !_impEmAndamento(i) || !mostrando || ferramentaDeFora
+  const comPainel = typeof correcaoAberta === 'function' && correcaoAberta()
+  barra.hidden = !impState.noMapa || !_impEmAndamento(i) || !mostrando || ferramentaDeFora || comPainel
   if (barra.hidden) return
   curadoriaApareceu()   // a barra da importação é curadoria: a pesquisa sai (ferramentas-mapa.js)
 

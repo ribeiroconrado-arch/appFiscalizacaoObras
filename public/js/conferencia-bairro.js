@@ -151,6 +151,7 @@ async function _confCarregar(bairro, { janela = true } = {}) {
   _confMontarItens()
   if (janela && document.getElementById('m-conferencia')?.classList.contains('open')) pintarJanelaConferencia()
   if (confState.noMapa) { repintarConferencia(); pintarBarraConferencia() }
+  document.dispatchEvent(new CustomEvent('conferencia-atualizada'))   // o painel de correção (correcao-mapa.js)
 }
 
 /** Quantas pendências abertas (não justificadas) um resultado tem. */
@@ -216,12 +217,13 @@ function pintarJanelaConferencia() {
 
   const linha = (tipo, l) => {
     const just = _confJustificada(tipo, l)
-    const ver = `<button type="button" class="btn sm" onclick="_confIrAoItem(${jsArg({ tipo, ...l })})">${l.lote_id ? 'Ver no mapa' : 'Ver a quadra'}</button>`
+    const ver = just ? `<button type="button" class="btn sm" onclick="_confIrAoItem(${jsArg({ tipo, ...l })})">${l.lote_id ? 'Ver no mapa' : 'Ver a quadra'}</button>`
+      : `<button type="button" class="btn sm primary" onclick="_confIrAoItem(${jsArg({ tipo, ...l })})">Corrigir</button>`
     const acao = just
       ? `<button type="button" class="btn sm" onclick="_confDesjustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">Desfazer</button>`
       // Diferença de área não se justifica: vai direto para a correção do desenho.
       : tipo === 'area_diferente'
-        ? (l.lote_id ? `<button type="button" class="btn sm primary" onclick="_confIrAoItem(${jsArg({ tipo, ...l })}); _confCorrigirDesenho(${Number(l.lote_id)})">Corrigir</button>` : '')
+        ? ''
       : `<button type="button" class="btn sm" onclick="_confJustificar(${jsArg(tipo)}, ${jsArg(_confChave(tipo, l))})">Justificar</button>`
     const j = confState.justificativas[tipo + '|' + _confChave(tipo, l)]
     const detalhe = [
@@ -315,7 +317,7 @@ function pintarJanelaConferencia() {
       <div class="btn-row imp-acoes">
         <button class="btn" onclick="fModalBtn('m-conferencia')">Fechar</button>
         ${r ? `<button class="btn" onclick="baixarPdfDaConferencia()" title="A listagem que está na tela, em PDF">${confState.filtro ? 'PDF desta listagem' : 'Gerar PDF'}</button>` : ''}
-        ${r && _confVisiveis().length ? `<button class="btn primary" onclick="mostrarConferenciaNoMapa()">${confState.filtro ? 'Ver estas no mapa' : 'Ver pendências no mapa'}</button>` : ''}
+        ${r && _confVisiveis().length ? `<button class="btn primary" onclick="mostrarConferenciaNoMapa()">Corrigir no mapa</button>` : ''}
       </div>
     </div>
    </div>`)
@@ -402,6 +404,8 @@ async function _confDesjustificar(tipo, chave) {
 function _depoisDeJustificar(msg) {
   toast(msg)
   _confMontarItens()
+  document.dispatchEvent(new CustomEvent('conferencia-atualizada'))
+  if (typeof correcaoAberta === 'function' && correcaoAberta()) return
   if (document.getElementById('m-conferencia').classList.contains('open')) pintarJanelaConferencia()
   if (!confState.noMapa) return
   // Vendo UMA pendência e ela foi justificada: não há mais o que mostrar ali.
@@ -432,6 +436,9 @@ const _confRolavel = () => document.querySelector('#m-conferencia .jt-rolagem')
  * houver), pintando SÓ elas, e abre o cartão para andar de uma em uma.
  */
 function mostrarConferenciaNoMapa() {
+  // As pendências vão para o PAINEL DE CORREÇÃO (correcao-mapa.js): a lista
+  // fica à vista enquanto se corrige, e a ferramenta devolve a vez a ele.
+  if (typeof abrirCorrecao === 'function') { abrirCorrecao('bairro'); return }
   confState.rolagem = _confRolavel()?.scrollTop ?? 0
   fModalBtn('m-conferencia')
   confState.noMapa = true
@@ -539,6 +546,8 @@ function _confProblema(it) {
 function pintarBarraConferencia() {
   const barra = document.getElementById('conf-barra')
   if (!barra) return
+  // Com o painel de correção aberto, é ele que mostra a pendência.
+  if (typeof correcaoAberta === 'function' && correcaoAberta()) { barra.hidden = true; return }
   barra.hidden = !confState.noMapa || !confState.resultado
   if (barra.hidden) return
   curadoriaApareceu()   // a conferência é curadoria: a pesquisa sai (ferramentas-mapa.js)
@@ -622,6 +631,7 @@ function _confPasso(d) {
  * estava), mostra SÓ aquele lote e abre o cartão dele. O ✕ volta à lista.
  */
 function _confIrAoItem(it) {
+  if (typeof abrirCorrecao === 'function') { abrirCorrecao('bairro', _corrChave(it.tipo, it)); return }
   const aberta = document.getElementById('m-conferencia')?.classList.contains('open')
   if (aberta) {
     confState.rolagem = _confRolavel()?.scrollTop ?? 0

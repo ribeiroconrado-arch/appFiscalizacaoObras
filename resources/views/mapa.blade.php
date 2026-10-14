@@ -3895,6 +3895,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
   <script src="@assetv('js/importacoes.js')"></script>
   {{-- Depois de importacoes.js: usa a área de soltar a planilha de lá. --}}
   <script src="@assetv('js/conferencia-bairro.js')"></script>
+  {{-- Depois dos dois: o painel de correção serve à importação e ao bairro. --}}
+  <script src="@assetv('js/correcao-mapa.js')"></script>
 @endif
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>

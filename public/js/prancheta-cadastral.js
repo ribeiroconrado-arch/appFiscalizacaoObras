@@ -669,6 +669,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(reguaOrigem){reguaOrigem.parent.insertBefore($('cad-regua'),reguaOrigem.next);reguaOrigem=null}
     document.body.classList.remove('prancheta-aberta')
     if(typeof abrirMesaCadastral==='function')abrirMesaCadastral()
+    document.dispatchEvent(new CustomEvent('ferramenta-encerrada'))
     if(typeof pintarPainelCadastro==='function')pintarPainelCadastro()
     aoDesistir?.()
     return true

@@ -139,6 +139,7 @@ function sairMesaDesmembramento() {
   if (typeof ehMesaCadastral === 'function' && ehMesaCadastral()) {
     abrirMesaCadastral()
   }
+  document.dispatchEvent(new CustomEvent('ferramenta-encerrada'))   // o painel de correção volta (correcao-mapa.js)
 }
 
 /**

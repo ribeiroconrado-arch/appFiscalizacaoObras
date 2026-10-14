@@ -258,6 +258,8 @@ function sairModoCadastral(silencioso) {
   if (res) { res.innerHTML = '' }
 
   cadModo = null
+  // Quem lançou a ferramenta (o painel de correção) volta a ter a vez.
+  document.dispatchEvent(new CustomEvent('ferramenta-encerrada'))
 
   // Largou a ferramenta e a mesa continua aberta: volta para a marcação livre,
   // senão o clique no mapa passaria a abrir o balão e a régua nunca mais
@@ -1278,6 +1280,7 @@ function cancelarAtoCadastral() {
   // gravar o ato — ou seja, sempre.
   selecaoLivreNaMesa()
   pintarPainelCadastro()
+  document.dispatchEvent(new CustomEvent('ferramenta-encerrada'))   // o painel de correção volta (correcao-mapa.js)
 }
 
 /** Prévia e execução da unificação. */
