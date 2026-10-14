@@ -208,22 +208,31 @@ function atualizarContadorImportacoes(n, pendentes = n) {
 function novaImportacao() {
   impState.arquivo = null
   _impCorpo(`
-    <div class="imp-passos" id="imp-passo-arquivo"><b>1 Arquivo</b> › 2 Leitura › 3 Pré-curadoria e conferência › 4 Salvar</div>
-    <label class="imp-soltar" id="imp-soltar" for="imp-arquivo">
-      <input type="file" id="imp-arquivo" accept=".geojson,.json" onchange="conferirArquivoImportacao()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>
-        <path d="M12 17v-6"/><path d="M9.5 13.5 12 11l2.5 2.5"/></svg>
-      <b id="imp-soltar-tit">Solte o arquivo .geojson aqui</b>
-      <span id="imp-soltar-sub">ou clique para escolher no computador · EPSG:4326, um bairro por arquivo</span>
-    </label>
-    <p class="imp-expl">O DWG da topografia é convertido antes, com <span class="mono">gis/tools/dxf_para_geojson.py</span>.
-      Nada é gravado nesta etapa: o sistema só lê o arquivo e mostra o que ele traz.</p>
-    <div id="imp-conferencia"></div>
-    <div class="btn-row">
-      <button class="btn" onclick="carregarListaImportacoes()">Voltar</button>
-      <button class="btn primary" id="imp-gravar" disabled onclick="gravarImportacao()">Carregar como rascunho</button>
+    <div class="jt">
+      <div class="jt-topo">
+        <div class="imp-passos" id="imp-passo-arquivo"><b>1 Arquivo</b> › 2 Leitura › 3 Pré-curadoria e conferência › 4 Salvar</div>
+        <p class="imp-expl">O DWG da topografia é convertido antes, com <span class="mono">gis/tools/dxf_para_geojson.py</span>.
+          Nada é gravado nesta etapa: o sistema só lê o arquivo e mostra o que ele traz.</p>
+      </div>
+      <div class="jt-rolagem jt-folga">
+        <label class="imp-soltar" id="imp-soltar" for="imp-arquivo">
+          <input type="file" id="imp-arquivo" accept=".geojson,.json" onchange="conferirArquivoImportacao()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>
+            <path d="M12 17v-6"/><path d="M9.5 13.5 12 11l2.5 2.5"/></svg>
+          <b id="imp-soltar-tit">Solte o arquivo .geojson aqui</b>
+          <span id="imp-soltar-sub">ou clique para escolher no computador · EPSG:4326, um bairro por arquivo</span>
+        </label>
+        <div id="imp-conferencia"></div>
+      </div>
+      <div class="jt-rodape">
+        <span class="imp-sub">Um bairro por arquivo.</span>
+        <div class="btn-row">
+          <button class="btn" onclick="carregarListaImportacoes()">Voltar à lista</button>
+          <button class="btn primary" id="imp-gravar" disabled onclick="gravarImportacao()">Carregar como rascunho</button>
+        </div>
+      </div>
     </div>`, 'Nova importação')
   _prepararAreaDeSoltar()
 }
@@ -469,7 +478,7 @@ function renderFichaImportacao(i) {
       <div class="sec-title">Conferência com o cadastro da prefeitura</div>
       ${resumo}
       <button class="btn primary sm sec-title-acao" id="imp-btn-conferir" onclick="conferirComCadastro()">${cc ? 'Conferir de novo' : 'Conferir'}</button>
-    </div>`
+    </div>${cc && cc.total_divergencias ? `<div class="jt-linha">${jtBusca('ficha-busca', 'Pesquisar por inscrição, quadra, lote ou detalhe')}</div>` : ''}`
     : (cc ? `<div class="sec-title-row imp-conf-linha"><div class="sec-title">Última conferência com o cadastro</div>${resumo}</div>` : '')
   const naoConferida = andamento && !cc ? `<p class="imp-expl">Ainda não conferida. ${rascunho
     ? 'Conferir antes de salvar é o recomendado; a publicação exige a conferência.'
@@ -504,8 +513,8 @@ function renderFichaImportacao(i) {
   // vendo o vínculo do bairro e o botão de conferir (em cima) e as ações da
   // importação (embaixo). O cabeçalho vai até a linha da conferência.
   _impCorpo(`
-    <div class="imp-ficha">
-      <div class="imp-ficha-topo">
+    <div class="jt imp-ficha">
+      <div class="jt-topo imp-ficha-topo">
         <div class="imp-cabeca">
           <span class="badge ${IMP_BADGE[i.status] || 'bd-in'}">${esc(i.status_rotulo)}</span>
           <b>${esc(i.bairro)}</b> · ${Number(i.lotes).toLocaleString('pt-BR')} lotes
@@ -514,20 +523,22 @@ function renderFichaImportacao(i) {
         ${i.vinculo ? _htmlVinculoBairro(i.bairro, i.vinculo, andamento ? 'ficha' : 'fixo') : ''}
         ${controles}
       </div>
-      <div class="imp-ficha-rolagem">
+      <div class="jt-rolagem">
         ${publicada}${excluida}
         ${vinc.length ? `<div class="cad-nota cad-aviso"><b>Lotes com vínculo</b> — a importação não pode ser excluída:
             ${vinc.map(([k, n]) => `${rotVinc[k] || k}: ${n}`).join(' · ')}</div>` : ''}
         ${_htmlPendenciasDoDesenho(i)}
         <div id="imp-resultado">${conf ? conf.corpo : naoConferida}</div>
         ${_htmlPreCuradoria(i.pre_curadoria)}
+        <div class="jt-nada" hidden>Nenhuma linha com o que foi pesquisado.</div>
       </div>
-      <div class="imp-ficha-rodape">
+      <div class="jt-rodape jt-rodape-col">
         ${conf ? conf.rodape : ''}
         <div id="imp-acao"></div>
         <div class="btn-row imp-acoes">${acoes}</div>
       </div>
     </div>`, rascunho ? `Rascunho de importação · ${i.bairro}` : `Importação nº ${i.id}`)
+  jtAplicar('ficha-busca')
 }
 
 /**
@@ -539,20 +550,23 @@ function renderFichaImportacao(i) {
 function _htmlPendenciasDoDesenho(i) {
   const p = i.pendencias_desenho
   if (!p || (!p.invalidos.length && !p.repetidos.length)) return ''
-  const ver = l => `<a href="#" onclick="event.preventDefault(); irAoLoteDaImportacao(${Number(l.lote_id)})">ver no mapa ›</a>`
+  const ver = l => `<button type="button" class="btn sm" onclick="irAoLoteDaImportacao(${Number(l.lote_id)})">Ver no mapa</button>`
   const grupo = (titulo, dica, itens, linha) => itens.length ? `
-    <div class="imp-grupo"><span class="badge bd-pe">${itens.length}</span> ${titulo}</div>
-    <p class="imp-expl">${dica}</p>
-    <table class="imp-tabela"><tbody>${itens.map(linha).join('')}</tbody></table>` : ''
+    <section class="jt-grupo">
+      <div class="jt-grupo-tit"><span class="badge bd-pe">${itens.length}</span> <b>${titulo}</b></div>
+      <p class="imp-expl">${dica}</p>
+      <table class="imp-tabela jt-tabela"><thead><tr><th>Quadra · Lote</th><th>O que há</th><th></th></tr></thead>
+        <tbody>${itens.map(linha).join('')}</tbody></table>
+    </section>` : ''
 
   return `<div class="sec-title">Pendências do desenho</div>
     ${grupo('Contorno inválido (linha que se cruza)',
       `Corrija os vértices com <b>Editar lote (L)</b>, ou exclua <b>(X)</b> e desenhe de novo <b>(D)</b>.${
         i.status === 'rascunho' ? ' O rascunho só pode ser salvo depois disso.' : ''}`,
-      p.invalidos, l => `<tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td class="imp-abrir">${ver(l)}</td></tr>`)}
+      p.invalidos, l => `<tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td>Contorno inválido</td><td class="jt-acoes">${ver(l)}</td></tr>`)}
     ${grupo('Número repetido no arquivo — entraram sem número',
       'Veja cada um no mapa: informe o número do que está certo <b>(N)</b> e renumere ou exclua <b>(X)</b> o outro.',
-      p.repetidos, l => `<tr><td>Q ${esc(l.quadra)} · no arquivo era o lote <b>${esc(l.lote)}</b></td><td class="imp-abrir">${ver(l)}</td></tr>`)}`
+      p.repetidos, l => `<tr><td>Q ${esc(l.quadra)}</td><td>No arquivo era o lote <b>${esc(l.lote)}</b></td><td class="jt-acoes">${ver(l)}</td></tr>`)}`
 }
 
 /** O registro próprio da pré-curadoria — fora do Histórico do cadastro. */
@@ -560,12 +574,15 @@ function _htmlPreCuradoria(pc) {
   if (!pc || !pc.total) return ''
   const rot = { editou: 'Editou', 'corrigiu quadra': 'Corrigiu quadra', renumerou: 'Renumerou', desenhou: 'Desenhou',
     excluiu: 'Apagou', unificou: 'Unificou', desmembrou: 'Desmembrou', inativou: 'Inativou' }
-  return `<div class="sec-title">Ajustes da pré-curadoria (${pc.total})</div>
-    <table class="imp-tabela"><tbody>${pc.ultimos.map(a => `
-      <tr><td>${esc(rot[a.acao] || a.acao)}</td><td>${esc(a.lote || '')}</td>
-          <td class="imp-sub">${esc(a.usuario || '—')} · ${esc(a.quando)}</td></tr>`).join('')}</tbody></table>
-    ${pc.total > pc.ultimos.length ? `<div class="imp-sub">Mostrando os ${pc.ultimos.length} mais recentes.</div>` : ''}
-    <p class="imp-expl">Estes ajustes ficam com a importação e não entram no Histórico do cadastro.</p>`
+  return `<section class="jt-grupo">
+      <div class="jt-grupo-tit"><span class="badge bd-in">${pc.total}</span> <b>Ajustes da pré-curadoria</b>
+        <span class="imp-sub">ficam com a importação e não entram no Histórico do cadastro</span></div>
+      <table class="imp-tabela jt-tabela"><thead><tr><th>Ajuste</th><th>Lote</th><th>Quem</th><th>Quando</th></tr></thead>
+        <tbody>${pc.ultimos.map(a => `
+        <tr><td>${esc(rot[a.acao] || a.acao)}</td><td>${esc(a.lote || '—')}</td>
+            <td>${esc(a.usuario || '—')}</td><td>${esc(a.quando)}</td></tr>`).join('')}</tbody></table>
+      ${pc.total > pc.ultimos.length ? `<div class="imp-sub">Mostrando os ${pc.ultimos.length} mais recentes.</div>` : ''}
+    </section>`
 }
 
 /**
@@ -580,11 +597,22 @@ function _htmlConferenciaCadastro(i, c) {
     ? `<div class="cad-nota cad-aviso">Houve alteração nos lotes depois desta conferência. Confira de novo antes de publicar.</div>` : ''
 
   const verLote = l => l.lote_id
-    ? `<a href="#" onclick="event.preventDefault(); irAoLoteDaImportacao(${Number(l.lote_id)})">ver no mapa ›</a>` : ''
-  const grupo = (titulo, cls, itens, linha) => itens.length ? `
-    <div class="imp-grupo"><span class="badge ${cls}">${itens.length}</span> ${titulo}</div>
-    <table class="imp-tabela"><tbody>${itens.slice(0, 200).map(linha).join('')}</tbody></table>
-    ${itens.length > 200 ? `<div class="imp-sub">+ ${itens.length - 200} — veja todas no CSV.</div>` : ''}` : ''
+    ? `<button type="button" class="btn sm" onclick="irAoLoteDaImportacao(${Number(l.lote_id)})">Ver no mapa</button>` : ''
+  const alterado = l => l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''
+  // Todas as listas com as MESMAS quatro colunas: a pesquisa e o olho leem igual em qualquer grupo.
+  const linha = (l, detalhe, acao) => `<tr>
+      <td class="mono">${esc(l.inscricao || '—')}</td>
+      <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}${alterado(l)}</td>
+      <td class="jt-quebra">${detalhe || '<span class="imp-sub">—</span>'}</td>
+      <td class="jt-acoes">${acao}</td></tr>`
+  const grupo = (titulo, cls, itens, fazLinha) => itens.length ? `
+    <section class="jt-grupo">
+      <div class="jt-grupo-tit"><span class="badge ${cls}">${itens.length}</span> <b>${titulo}</b></div>
+      <table class="imp-tabela jt-tabela">
+        <thead><tr><th>Inscrição</th><th>Quadra · Lote</th><th>Detalhe</th><th></th></tr></thead>
+        <tbody>${itens.slice(0, 200).map(fazLinha).join('')}</tbody></table>
+      ${itens.length > 200 ? `<div class="imp-sub">+ ${itens.length - 200} — veja todas no PDF ou no CSV.</div>` : ''}
+    </section>` : ''
 
   return {
     corpo: `
@@ -592,28 +620,24 @@ function _htmlConferenciaCadastro(i, c) {
     ${c.sem_situacao ? `<div class="cad-nota cad-aviso">A planilha não tem coluna de situação ("Situação" ou "Isenção ou Imunidade"):
         não deu para saber quais inscrições estão <b>inativas</b> no cadastro.</div>` : ''}
     ${c.total_divergencias === 0 ? '<div class="cad-nota imp-nota">Nenhuma divergência: todo lote do arquivo está ativo no cadastro, e todo imóvel ativo do cadastro tem lote.</div>' : ''}
-    ${grupo('No arquivo, não encontrados no cadastro', 'bd-er', c.nao_encontrados, l => `
-      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra)} · L ${esc(l.lote)}${l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}
-    ${grupo('Desenhados no mapa, inativos no cadastro', 'bd-er', c.inativos, l => `
-      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra)} · L ${esc(l.lote)}${l.alterado ? ' <span class="badge bd-pe" title="O lote mudou depois da conferência com a planilha: confirme com ela">alterado</span>' : ''}</td>
-          <td><span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span></td><td class="imp-abrir">${verLote(l)}</td></tr>`)}
-    ${grupo('No cadastro (ativos), sem lote no arquivo', 'bd-er', c.sem_lote, l => `
-      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td>
-          <td>${l.area_m2 ? fmtNum(l.area_m2) + ' m²' : ''}${l.endereco ? '<div class="imp-sub">' + esc(l.endereco) + '</div>' : ''}</td>
-          <td class="imp-abrir"><a href="#" onclick="event.preventDefault(); desenharLoteDaConferencia()">desenhar lote ›</a></td></tr>`)}
+    ${grupo('No arquivo, não encontrados no cadastro', 'bd-er', c.nao_encontrados, l => linha(l, '', verLote(l)))}
+    ${grupo('Desenhados no mapa, inativos no cadastro', 'bd-er', c.inativos,
+      l => linha(l, `<span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>`, verLote(l)))}
+    ${grupo('No cadastro (ativos), sem lote no arquivo', 'bd-er', c.sem_lote,
+      l => linha(l, [l.area_m2 ? fmtNum(l.area_m2) + ' m²' : '', esc(l.endereco || '')].filter(Boolean).join(' · '),
+        '<button type="button" class="btn sm" onclick="desenharLoteDaConferencia()">Desenhar lote</button>'))}
     ${c.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
     ${c.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${c.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
-    ${grupo('Área do desenho diferente da área do cadastro (tem de ser exata)', 'bd-er', c.area_diferente || [], l => `
-      <tr><td class="mono">${esc(l.inscricao)}</td><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td>
-          <td>${typeof _confAreas === 'function' ? _confAreas(l) : ''}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}
-    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => `
-      <tr><td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td><td class="imp-abrir">${verLote(l)}</td></tr>`)}`,
+    ${grupo('Área do desenho diferente da área do cadastro', 'bd-er',
+      [...(c.area_diferente || [])].sort((a, b) => Math.abs(b.diferenca ?? 0) - Math.abs(a.diferenca ?? 0)),
+      l => linha(l, typeof _confAreas === 'function' ? _confAreas(l) : '', verLote(l)))}
+    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => linha(l, '', verLote(l)))}`,
     rodape: `
     <div class="imp-rodape-conf">
       <span class="imp-sub">${esc(c.fonte_descricao)} · conferido em ${esc(c.conferido_em)} por ${esc(c.conferido_por || '—')}${c.revisao ? ` · revisado sem planilha em ${esc(c.revisao.em)} (${c.revisao.resolvidas} resolvida(s))` : ''}
         · código do bairro ${esc(c.codigo_bairro)}</span>
-      ${c.total_divergencias ? `<a class="btn sm" href="/importacoes/${i.id}/divergencias.pdf" target="_blank" rel="noopener">Gerar PDF</a>
-      <a class="btn sm" href="/api/importacoes/${i.id}/divergencias.csv">Baixar divergências (.csv)</a>` : ''}
+      ${c.total_divergencias ? `<span class="jt-rodape-links"><a class="btn sm" href="/importacoes/${i.id}/divergencias.pdf" target="_blank" rel="noopener">Gerar PDF</a>
+      <a class="btn sm" href="/api/importacoes/${i.id}/divergencias.csv">Baixar CSV</a></span>` : ''}
     </div>`,
   }
 }

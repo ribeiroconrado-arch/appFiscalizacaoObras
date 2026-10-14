@@ -255,7 +255,7 @@ function pintarJanelaConferencia() {
           <span class="imp-sub">${abertas.length} pendente(s)${justificadas.length ? `, ${justificadas.length} justificada(s)` : ''}</span>
           ${CONF_TIPOS[tipo].nota ? `<span class="imp-sub conf-grupo-nota">${esc(CONF_TIPOS[tipo].nota)}</span>` : ''}</div>
         <table class="imp-tabela jt-tabela">
-          <thead><tr><th>Inscrição</th><th>Quadra · Lote</th><th>Detalhe</th><th>Situação</th><th></th></tr></thead>
+          <thead><tr><th>Inscrição</th><th>Quadra · Lote</th><th>Detalhe</th><th class="jt-c-sit">Situação</th><th></th></tr></thead>
           <tbody>${[...abertas, ...justificadas].slice(0, 300).map(l => linha(tipo, l)).join('')}</tbody></table>
         ${itens.length > 300 ? `<div class="imp-sub">+ ${itens.length - 300} — veja todas no PDF.</div>` : ''}
       </section>`

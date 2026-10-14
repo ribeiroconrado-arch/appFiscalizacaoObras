@@ -217,11 +217,16 @@
    e só a do meio rola. Em cima a pesquisa e os comandos; no meio a tabela, com
    o cabeçalho das colunas preso; embaixo o resumo e os botões. A janela ocupa
    a tela grande em vez de ficar numa coluna estreita no meio dela. */
-.modal.imp-modal:has(> div > .jt){display:flex;flex-direction:column;overflow:hidden;
+/* O TAMANHO É DA JANELA, e não da vista que está dentro dela: lista, nova
+   importação, ficha e contornos abrem no mesmo retângulo. Antes cada uma
+   tinha a sua largura, e passar da lista para a ficha fazia a janela encolher
+   e mudar de lugar. */
+#m-importacoes .modal.imp-modal, #m-conferencia .modal.imp-modal{display:flex;flex-direction:column;overflow:hidden;
   width:min(1280px, calc(100vw - 28px));max-width:none;
   height:var(--modal-trabalho-alt);max-height:calc(100vh - 28px)}
-.modal.imp-modal:has(> div > .jt) > h3{flex:none}
-.modal.imp-modal:has(> div > .jt) > div{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#m-importacoes .modal.imp-modal > h3, #m-conferencia .modal.imp-modal > h3{flex:none}
+/* O que não é listagem (carregando, erro) rola aqui; a listagem rola por dentro. */
+#imp-corpo, #conf-corpo{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
 .jt{flex:1;min-height:0;display:flex;flex-direction:column}
 
 .jt-topo{flex:none;padding-bottom:10px;border-bottom:1px solid var(--bord)}
@@ -243,7 +248,7 @@
 .conf-linha-topo .conf-topo{flex:1 1 320px;min-width:0}
 .conf-linha-topo .conf-topo select{margin:0}
 
-.jt-rolagem{flex:1;min-height:120px;overflow:auto;margin:0 -20px;padding:0 20px;scrollbar-gutter:stable}
+.jt-rolagem{flex:1;min-height:120px;overflow:auto;scrollbar-gutter:stable;padding-right:6px}
 .jt-tabela{margin:0}
 /* O cabeçalho das colunas fica preso no alto do que rola. */
 .jt-tabela thead th{position:sticky;top:0;z-index:2;background:var(--sur);
@@ -268,10 +273,35 @@
 .jt-grupo-tit .conf-cor{align-self:center}
 .jt-grupo-tit b{font-weight:700;color:var(--tx)}
 .jt-grupo .jt-tabela thead th{top:var(--jt-grupo-alt, 38px)}
+/* As MESMAS larguras em todos os grupos: a inscrição de um grupo fica embaixo
+   da inscrição do grupo de cima, e o olho desce numa coluna só. */
+.jt-grupo .jt-tabela{table-layout:fixed}
+.jt-grupo .jt-tabela th:nth-child(1){width:210px}
+.jt-grupo .jt-tabela th:nth-child(2){width:190px}
+.jt-grupo .jt-tabela th:last-child{width:236px}
+.jt-grupo .jt-tabela th.jt-c-sit{width:130px}
+@media (max-width:760px){
+  .jt-grupo .jt-tabela{table-layout:auto}
+  .jt-grupo .jt-tabela th{width:auto !important}
+}
 
 .jt-rodape{flex:none;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;
   padding-top:12px;border-top:1px solid var(--bord)}
 .jt-rodape .btn-row{margin:0 0 0 auto}
+/* A ficha tem mais de uma linha no rodapé (fonte, confirmação, ações). */
+.jt-rodape.jt-rodape-col{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px}
+.jt-rodape.jt-rodape-col .imp-rodape-conf{flex:none;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.jt-rodape.jt-rodape-col .btn-row{margin:0;justify-content:flex-end}
+.jt-rodape-links{display:inline-flex;gap:6px;flex:none}
+.jt-rodape #imp-acao:empty{display:none}
+/* Conteúdo que não é tabela (a área de soltar o arquivo) ganha respiro. */
+.jt-rolagem.jt-folga{padding-top:14px;padding-bottom:14px}
+.jt-rolagem .sec-title{margin-top:14px}
+.jt-grupo > .imp-expl{margin:0 0 6px}
+.jt-topo .imp-cabeca{margin-bottom:8px}
+.jt-topo .jt-linha + .imp-expl{margin-top:8px}
+.imp-ficha-topo .jt-linha{margin-top:8px}
+.jt-grupo-tit .badge{align-self:center}
 .jt-rodape .imp-rodape-conf{margin:0;flex:1 1 320px;min-width:0}
 
 /* Janela baixa (notebook pequeno): o alto deixa de ficar preso e rola junto,
@@ -281,4 +311,4 @@
   .jt-rolagem{overflow:visible;flex:none}
   .jt-tabela thead th,.jt-grupo-tit{position:static}
 }
-@media (max-width:420px){ .jt-rolagem{margin:0 -16px;padding:0 16px} }
+
