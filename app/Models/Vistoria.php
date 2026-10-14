@@ -171,7 +171,7 @@ class Vistoria extends Model
     }
 
     /**
-     * "VIS 2026/0001" — como a vistoria é citada em processo.
+     * "VIS 0001/2026" — como a vistoria é citada em processo.
      *
      * As gravadas antes de a série existir foram numeradas na migração; o
      * travessão fica para o caso de alguma escapar, e não para o dia a dia.
@@ -182,7 +182,7 @@ class Vistoria extends Model
             return 'Sem número';
         }
 
-        return sprintf('VIS %d/%04d', $this->exercicio, $this->numero);
+        return sprintf('VIS %04d/%d', $this->numero, $this->exercicio);   // número/ano, como os documentos
     }
     public function obra(): BelongsTo          { return $this->belongsTo(Obra::class); }
     public function fiscal(): BelongsTo        { return $this->belongsTo(User::class, 'fiscal_id'); }

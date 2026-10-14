@@ -855,6 +855,14 @@ async function salvarImportacao() {
   try {
     const d = await _impPedir(`/api/importacoes/${i.id}/salvar`, { method: 'POST' })
     toast(d.message)
+    // SALVOU, JÁ TEM CONTORNO — mesmo sem publicar. É o que isola o bairro no
+    // painel de correção e mostra o nome dele no mapa afastado. Se falhar, a
+    // importação continua salva; "Contorno dos bairros" gera depois.
+    if (typeof gerarContornoDoBairro === 'function') {
+      const c = await gerarContornoDoBairro(i.bairro, CONTORNO_RAIO_PADRAO, { silencioso: true })
+      if (c) toast(`Contorno de ${i.bairro} gerado: ${c.area_ha.toLocaleString('pt-BR')} ha.`)
+      else toast(`O contorno de ${i.bairro} não pôde ser gerado agora. Gere em "Contorno dos bairros".`, 'aviso')
+    }
     await abrirImportacao(i.id)
     { const d = await _impPedir("/api/importacoes"); atualizarContadorImportacoes(d.em_revisao, _impPendentes(d)) }
   } catch (e) {

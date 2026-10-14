@@ -102,6 +102,19 @@ class OrdemServico extends Model
      * coordenadores pegariam a mesma sequência — e número repetido numa peça
      * que se cita em ofício é defeito que só aparece depois, na hora errada.
      */
+    /**
+     * "OS 0012/2026" — sigla, número e ano, como os outros documentos.
+     *
+     * A coluna `numero` guarda "2026/0012" (é a chave única de sempre, e as
+     * já emitidas continuam com ela); quem MOSTRA o número usa isto.
+     */
+    public function numeroFormatado(): string
+    {
+        return $this->sequencia && $this->ano
+            ? sprintf('OS %04d/%d', $this->sequencia, $this->ano)
+            : 'OS ' . $this->numero;
+    }
+
     public static function proximoNumero(?int $ano = null): array
     {
         $ano ??= (int) date('Y');

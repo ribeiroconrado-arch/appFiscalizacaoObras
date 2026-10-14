@@ -60,7 +60,7 @@ class OrdemServicoController extends Controller
 
         $itens = $q->limit(300)->get()->map(fn (OrdemServico $os) => [
             'id'        => $os->id,
-            'numero'    => $os->numero,
+            'numero'    => $os->numeroFormatado(),
             'objeto'    => $os->objeto,
             'natureza'  => OrdemServico::NATUREZAS[$os->natureza] ?? $os->natureza,
             'regime'    => $os->regime,
@@ -102,7 +102,7 @@ class OrdemServicoController extends Controller
 
         return response()->json([
             'id'        => $ordem->id,
-            'numero'    => $ordem->numero,
+            'numero'    => $ordem->numeroFormatado(),
             'objeto'    => $ordem->objeto,
             'descricao' => $ordem->descricao,
             'natureza'  => $ordem->natureza,
@@ -207,8 +207,8 @@ class OrdemServicoController extends Controller
         });
 
         return response()->json([
-            'message' => "Ordem de serviço {$os->numero} emitida.",
-            'ordem'   => ['id' => $os->id, 'numero' => $os->numero,
+            'message' => 'Ordem de serviço ' . $os->numeroFormatado() . ' emitida.',
+            'ordem'   => ['id' => $os->id, 'numero' => $os->numeroFormatado(),
                           'quando' => $os->quandoRotulo(),
                           'fiscais' => $os->fiscais()->count()],
         ], 201);

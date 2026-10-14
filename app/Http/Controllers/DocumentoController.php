@@ -574,7 +574,7 @@ class DocumentoController extends Controller
     {
         return response()->json(['ordens' => \App\Models\OrdemServico::orderByDesc('ano')->orderByDesc('sequencia')
             ->limit(200)->get(['id', 'numero', 'objeto'])
-            ->map(fn ($o) => ['id' => $o->id, 'rotulo' => 'OS ' . $o->numero . ($o->objeto ? ' — ' . \Illuminate\Support\Str::limit($o->objeto, 60) : '')])]);
+            ->map(fn ($o) => ['id' => $o->id, 'rotulo' => $o->numeroFormatado() . ($o->objeto ? ' — ' . \Illuminate\Support\Str::limit($o->objeto, 60) : '')])]);
     }
 
     /**

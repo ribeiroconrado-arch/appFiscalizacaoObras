@@ -407,3 +407,5 @@ body.prancheta-aberta .corr-painel{visibility:hidden;pointer-events:none}
 .corr-painel{width:360px}
 body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .pc-dica-num{display:block;font-size:11px;font-weight:400;color:var(--tx3);margin-top:4px;line-height:1.4}
+.corr-cores{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:12px;color:var(--tx2);cursor:pointer;user-select:none}
+.corr-cores input{margin:0;accent-color:var(--g)}

@@ -138,7 +138,7 @@ class PainelController extends Controller
 
         foreach ($semCiencia as $os) {
             $itens[] = [
-                'titulo'  => 'OS ' . $os->numero,
+                'titulo'  => $os->numeroFormatado(),
                 'detalhe' => $os->objeto,
                 'tag'     => ['texto' => 'Assinar ciência', 'classe' => 'bd-al'],
                 'aba'     => 'protocolos',
@@ -159,7 +159,7 @@ class PainelController extends Controller
 
         foreach ($vencidas as $os) {
             $itens[] = [
-                'titulo'  => 'OS ' . $os->numero,
+                'titulo'  => $os->numeroFormatado(),
                 'detalhe' => $os->objeto . ' · ' . $os->quandoRotulo(),
                 'tag'     => $os->situacaoTag(),
                 'aba'     => 'protocolos',

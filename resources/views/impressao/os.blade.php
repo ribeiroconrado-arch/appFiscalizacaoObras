@@ -20,7 +20,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Ordem de Serviço {{ $os->numero }}</title>
+<title>Ordem de Serviço {{ $os->numeroFormatado() }}</title>
 <style>
   @page { size: A4; margin: 8mm 10mm 10mm 10mm; }
 
@@ -101,7 +101,7 @@
 </head>
 <body>
 
-@include('impressao._pagina-abre', ['titulo' => 'ORDEM DE SERVIÇO', 'numero' => $os->numero])
+@include('impressao._pagina-abre', ['titulo' => 'ORDEM DE SERVIÇO', 'numero' => $os->numeroFormatado()])
 
       <table class="topo">
         <tr>

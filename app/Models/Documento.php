@@ -363,7 +363,9 @@ class Documento extends Model
         if (! $this->numero) {
             return 'Sem número';
         }
-        return sprintf('%s %d/%04d', $this->sigla(), $this->exercicio, $this->numero);
+        // NÚMERO/ANO, como a prefeitura cita em processo ("Auto de Infração nº
+        // 0012/2026"). Até 15/10/2026 era ano/número (AI 2026/0012).
+        return sprintf('%s %04d/%d', $this->sigla(), $this->numero, $this->exercicio);
     }
 
     public function exigeFundamentacao(): bool

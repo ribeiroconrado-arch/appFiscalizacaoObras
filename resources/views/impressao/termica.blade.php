@@ -21,7 +21,7 @@
   $destinatario = $notificacao ? 'Notificado' : ($doc->exigeFundamentacao() ? 'Autuado' : 'Interessado');
   $textoDestinatario = fn ($texto) => $notificacao
       ? str_replace(['AUTUADO', 'Autuado', 'autuado'], ['NOTIFICADO', 'Notificado', 'notificado'], $texto ?? '') : ($texto ?? '');
-  $numero = $doc->numero ? sprintf('%d/%04d', $doc->exercicio, $doc->numero) : 'Sem número';
+  $numero = $doc->numero ? sprintf('%04d/%d', $doc->numero, $doc->exercicio) : 'Sem número';
   $origemCabecalho = str_ireplace(
       ['NOTIFICAÇÃO DE EMBARGO', 'AUTO DE INFRAÇÃO', 'AUTO DE EMBARGO', 'ORDEM DE SERVIÇO', 'NOTIFICAÇÃO'],
       ['NE', 'AI', 'AE', 'OS', 'NOT.'],
@@ -40,7 +40,7 @@
 
   /* print-color-adjust é o que faz as faixas cinza saírem impressas: por
      padrão o navegador descarta fundos na impressão e elas vinham em branco. */
-  body { margin: 0; width: 72mm; color: #000; font-size: 8.5pt; line-height: 1.35;
+  body { margin: 0; width: 72mm; color: #000; font-size: 8.5pt; line-height: 1.2;
          font-family: 'Courier New', Courier, monospace;
          -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
@@ -51,32 +51,32 @@
   .cab .instituicao { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .cab .org { font-size: 7pt; font-weight: bold; line-height: 1.25; }
   .cab .end { font-size: 6pt; }
-  .tit { background: #C8C8C8; font-size: 9pt; font-weight: bold; text-align: center; padding: 3px; }
+  .tit { background: #C8C8C8; font-size: 8.5pt; font-weight: bold; text-align: center; padding: 2px 3px; }
   .grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grade.meta { grid-template-columns: 18% 27% 55%; margin-top: 3px; border-top: 1px dotted #333; padding-top: 2px; }
   .grade .campo { min-width: 0; }
 
-  .faixa { background: #C8C8C8; font-size: 9pt; font-weight: bold; letter-spacing: .06em;
-           padding: 2px 4px; margin: 5px 0 3px; text-transform: uppercase; }
+  .faixa { background: #C8C8C8; font-size: 8pt; font-weight: bold; letter-spacing: .02em;
+           padding: 1px 4px; margin: 3px 0 2px; text-transform: uppercase; }
 
-  .campo { padding: 0 4px 3px; }
+  .campo { padding: 0 4px 1px; }
   .campo .lbl { font-size: 6pt; text-transform: uppercase; letter-spacing: .04em; }
   .campo .val { font-size: 8.5pt; font-weight: bold; overflow-wrap: anywhere; }
   .meta .val, .datas .val { font-weight: bold; }
-  .meta .campo { padding: 0 2px 3px; }
+  .meta .campo { padding: 0 2px 1px; }
   .meta .lbl { font-size: 5.5pt; letter-spacing: 0; white-space: normal; line-height: 1.2; }
   .meta .val { font-size: 8.5pt; line-height: 1.2; }
   .meta .origem { white-space: nowrap; }
-  .prazo-cumprimento { background: #C8C8C8; padding: 4px; margin: 4px 0; font-weight: bold; }
+  .prazo-cumprimento { background: #C8C8C8; padding: 2px 4px; margin: 3px 0; font-weight: bold; }
 
-  .par { padding: 0 4px 3px; text-align: left; overflow-wrap: anywhere; }
+  .par { padding: 0 4px 1px; text-align: justify; text-align-last: left; overflow-wrap: anywhere; }
   .par b { font-weight: bold; }
 
   .calc { width: 100%; border-collapse: collapse; font-size: 7pt; }
   .calc td { padding: 1px 4px; vertical-align: top; }
   .calc td.dir { text-align: right; white-space: nowrap; }
   .calc tr.total td { border-top: 1px solid #000; font-weight: bold; font-size: 8.5pt; padding-top: 2px; }
-  .infracao { margin: 0 4px; padding: 3px 0; border-bottom: 1px solid #ccc; overflow-wrap: anywhere; }
+  .infracao { margin: 0 4px; padding: 2px 0; border-bottom: 1px solid #ccc; overflow-wrap: anywhere; }
   .infracao .par { padding: 0; }
   .calculo { display: flex; justify-content: space-between; gap: 5px; font-size: 6.5pt; margin-top: 2px; }
   .calculo strong { white-space: nowrap; }

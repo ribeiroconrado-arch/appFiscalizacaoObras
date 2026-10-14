@@ -186,7 +186,7 @@ class DemandaController extends Controller
                 'tipo'        => 'os',
                 'tipo_rotulo' => 'Ordem de serviço',
                 'id'          => $os->id,
-                'numero'      => $os->numero,
+                'numero'      => $os->numeroFormatado(),
                 'assunto'     => $os->objeto,
                 'quem'        => $os->fiscais->pluck('name')->implode(', ') ?: null,
                 'quem_rotulo' => 'Designados',

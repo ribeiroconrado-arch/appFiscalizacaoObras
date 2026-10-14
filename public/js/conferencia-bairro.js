@@ -483,6 +483,8 @@ function voltarAListaDaConferencia() {
  * atenção se perdia no meio. Vendo UMA pendência, só o lote dela.
  */
 function corDaConferencia(f) {
+  // Com o painel de correção aberto, quem decide a cor é ele (correcao-mapa.js).
+  if (typeof correcaoAberta === 'function' && correcaoAberta()) return corDaCorrecao(f)
   if (!confState.noMapa || !confState.resultado || typeof camadaLigada !== 'function' || !camadaLigada('conferencia')) return null
   const id = Number(f.properties.id)
   const tipo = confState.porLote.get(id)
@@ -500,6 +502,8 @@ function repintarConferencia() {
   confState.selos = null
   const r = confState.resultado
   if (!confState.noMapa || !r || !camadaLigada('conferencia') || !mapaState.obj) return
+  // Painel de correção com as cores desligadas: sem selos também.
+  if (typeof correcaoAberta === 'function' && correcaoAberta() && !correcaoState.cores) return
   // O selo "N sem lote" é das pendências de cadastro sem lote: some com outro
   // filtro, e quando se está vendo uma pendência só.
   if (confState.soFoco || (confState.filtro && confState.filtro !== 'sem_lote')) return

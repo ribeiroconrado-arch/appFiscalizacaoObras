@@ -50,6 +50,12 @@ const correcaoState = {
   esperaUnificar: false,
   /** @type {Map<number, {lat:number, lon:number}>} */
   posicoes: new Map(),
+  /** Pintar todas as pendências no mapa, cada tipo na sua cor. Começa DESLIGADO. */
+  cores: false,
+  /** @type {L.Polygon|null} o véu fora do bairro */
+  mascara: null,
+  /** @type {L.Polygon|null} a linha do bairro isolado */
+  contornoIsolado: null,
 }
 
 const correcaoAberta = () => correcaoState.aberto
@@ -188,6 +194,8 @@ async function abrirCorrecao(origem, chave) {
   }
   if (typeof irPara === 'function') irPara('mapa')
   document.body.classList.add('com-correcao')
+  _corrIsolar()
+  _corrRepintar()
   if (origem === 'importacao') pintarBarraImportacao()
   else pintarBarraConferencia()
   _corrPintar()
@@ -203,6 +211,8 @@ function fecharCorrecao(semBarra = false) {
   document.body.classList.remove('com-correcao')
   const p = document.getElementById('corr-painel')
   if (p) p.hidden = true
+  _corrSoltar()
+  _corrRepintar()
   if (correcaoState.origem === 'bairro') {
     confState.noMapa = false
     repintarConferencia()
@@ -244,6 +254,7 @@ async function _corrIr(it) {
   correcaoState.atual = it.chave
   correcaoState.esperaUnificar = false
   _corrPintar()
+  _corrRepintar()
   const imp = correcaoState.origem === 'importacao'
   // A alteração cadastral aberta: é dela que saem as ferramentas.
   if (imp) {
@@ -311,6 +322,7 @@ function _corrIrPara(chave) {
 
 function _corrFiltrar(tipo) {
   correcaoState.filtro = tipo && correcaoState.filtro !== tipo ? tipo : null
+  _corrRepintar()
   const vis = _corrVisiveis()
   if (vis.length && !vis.some(it => it.chave === correcaoState.atual)) _corrIr(vis[0])
   else _corrPintar()
@@ -456,6 +468,7 @@ function _corrAtualizar() {
   }
   correcaoState.gravou = false
   _corrPintar()
+  _corrRepintar()
 }
 
 // ── O PAINEL ─────────────────────────────────────────────────
@@ -525,6 +538,8 @@ function _corrPintar() {
     <div class="corr-progresso">
       <span>${correcaoState.conferindo ? 'Conferindo de novo…' : `<b>${feitas}</b> de ${total} resolvida${total === 1 ? '' : 's'}`}</span>
       <div class="corr-barra"><i style="width:${total ? Math.round(feitas * 100 / total) : 0}%"></i></div>
+      <label class="corr-cores" title="Pinta no mapa todas as pendências do bairro, cada tipo na cor do seu cartão">
+        <input type="checkbox" id="corr-cores" ${correcaoState.cores ? 'checked' : ''} onchange="_corrAlternarCores(this.checked)"> Cores das pendências no mapa</label>
     </div>
     <div class="imp-kpis corr-kpis">${cartoes}</div>
     ${correcaoState.filtro ? `<div class="corr-filtro">Só <b>${esc(_corrTipo(correcaoState.filtro).rotulo)}</b> · <a href="#" onclick="event.preventDefault(); _corrFiltrar(null)">mostrar todas</a></div>` : ''}
@@ -569,4 +584,80 @@ function _corrPintarLista() {
   lista.innerHTML = (vis.length ? vis.map(linha).join('')
     : `<div class="corr-vazio">${correcaoState.itens.length ? 'Nenhuma pendência com este filtro ou pesquisa.' : 'Nenhuma pendência em aberto.'}</div>`) + feitas
   document.getElementById('corr-atual')?.scrollIntoView({ block: 'nearest' })
+}
+
+// ── O BAIRRO ISOLADO E AS CORES ──────────────────────────────
+
+/**
+ * ISOLA O BAIRRO: o que fica fora do contorno dele é coberto por um véu escuro
+ * que também segura o clique — dá para ver os vizinhos, mas não marcar um lote
+ * de outro loteamento por engano. Sem contorno gerado (importação ainda não
+ * salva), vale a área ocupada pelos lotes.
+ */
+function _corrIsolar() {
+  _corrSoltar()
+  const mapa = mapaState.obj
+  if (!mapa) return
+  const imp = correcaoState.origem === 'importacao'
+  const nome = imp ? correcaoState.imp?.bairro : correcaoState.bairro
+  const f = typeof contornoState !== 'undefined' ? contornoState.dados?.features?.find(x => x.properties?.nome === nome) : null
+  let aneis = null
+  if (f) {
+    const paraLatLng = anel => anel.map(([lon, lat]) => [lat, lon])
+    aneis = (f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates.flat() : f.geometry.coordinates).map(paraLatLng)
+  } else {
+    const e = imp ? correcaoState.imp?.extensao : null
+    let b = e ? L.latLngBounds([[e.sul, e.oeste], [e.norte, e.leste]]) : null
+    if (!b && !imp) {
+      const centros = Object.values(confState.resultado?.centros_quadras || {})
+      if (centros.length) b = L.latLngBounds(centros)
+    }
+    if (!b) return
+    b = b.pad(0.08)
+    aneis = [[b.getSouthWest(), b.getNorthWest(), b.getNorthEast(), b.getSouthEast()].map(p => [p.lat, p.lng])]
+  }
+  if (!mapa.getPane('isolar')) {
+    // Acima dos lotes (400) e das quadras (440), abaixo da linha dos bairros (450).
+    mapa.createPane('isolar').style.zIndex = 445
+  }
+  const mundo = [[-90, -360], [-90, 360], [90, 360], [90, -360]]
+  correcaoState.mascara = L.polygon([mundo, ...aneis], {
+    pane: 'isolar', stroke: false, fillColor: '#0F172A', fillOpacity: .42, interactive: true, bubblingMouseEvents: false,
+  }).addTo(mapa)
+  correcaoState.mascara.on('click', e => L.DomEvent.stop(e))
+  correcaoState.contornoIsolado = L.polygon(aneis, {
+    pane: 'isolar', color: '#FACC15', weight: 2.5, opacity: .95, fill: false, interactive: false,
+  }).addTo(mapa)
+}
+
+function _corrSoltar() {
+  correcaoState.mascara?.remove()
+  correcaoState.contornoIsolado?.remove()
+  correcaoState.mascara = correcaoState.contornoIsolado = null
+}
+
+function _corrAlternarCores(ligar) {
+  correcaoState.cores = !!ligar
+  _corrRepintar()
+}
+
+/** Repinta os lotes (e, no bairro, os selos "N sem lote"). */
+function _corrRepintar() {
+  if (correcaoState.origem === 'bairro' && typeof repintarConferencia === 'function') { repintarConferencia(); return }
+  mapaState.camadas?.forEach(c => c.setStyle(estiloColorido(c.feature)))
+}
+
+/**
+ * A cor de um lote com o painel aberto — chamada por corDaConferencia.
+ * Cores desligadas: nada é pintado (o lote em que se está já vem marcado).
+ * Ligadas: cada pendência na cor do tipo; a de agora, com a borda branca.
+ */
+function corDaCorrecao(f) {
+  if (!correcaoState.cores) return null
+  const id = Number(f.properties.id)
+  const it = _corrVisiveis().find(x => Number(x.lote_id) === id)
+  if (!it) return null
+  const cor = _corrTipo(it.tipo).cor
+  const atual = it.chave === correcaoState.atual
+  return { color: atual ? '#FFFFFF' : cor, weight: atual ? 3.2 : 2, opacity: 1, fillColor: cor, fillOpacity: atual ? .7 : .45 }
 }
