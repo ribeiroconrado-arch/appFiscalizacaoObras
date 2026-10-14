@@ -22,7 +22,11 @@
   $textoDestinatario = fn ($texto) => $notificacao
       ? str_replace(['AUTUADO', 'Autuado', 'autuado'], ['NOTIFICADO', 'Notificado', 'notificado'], $texto ?? '') : ($texto ?? '');
   $numero = $doc->numero ? sprintf('%d/%04d', $doc->exercicio, $doc->numero) : 'Sem número';
-  $origemCabecalho = preg_split('/(?<=Nº)\s+/u', $origemTexto, 2);
+  $origemCabecalho = str_ireplace(
+      ['NOTIFICAÇÃO DE EMBARGO', 'AUTO DE INFRAÇÃO', 'AUTO DE EMBARGO', 'ORDEM DE SERVIÇO', 'NOTIFICAÇÃO'],
+      ['NE', 'AI', 'AE', 'OS', 'NOT.'],
+      $origemTexto
+  );
   $contato = collect([$orgao['endereco'] ?? null, $orgao['municipio'] ?? null, $orgao['telefone'] ?? null,
       empty($orgao['cnpj']) ? null : 'CNPJ: '.$orgao['cnpj']])->filter()->implode(' · ');
 @endphp
@@ -42,7 +46,8 @@
 
   * { box-sizing: border-box; }
   .cab { display: flex; align-items: center; gap: 5px; text-align: center; padding: 4px 3px 2px; }
-  .cab img { width: 38px; height: auto; flex-shrink: 0; }
+  .cab img { width: 44px; height: auto; flex-shrink: 0; }
+  .cab .prefeitura { font-family: Arial, sans-serif; font-size: 7pt; font-weight: bold; white-space: nowrap; }
   .cab .instituicao { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .cab .org { font-size: 7pt; font-weight: bold; line-height: 1.25; }
   .cab .end { font-size: 6pt; }
@@ -61,7 +66,8 @@
   .meta .campo { padding: 0 2px 3px; }
   .meta .lbl { font-size: 5.5pt; letter-spacing: 0; white-space: normal; line-height: 1.2; }
   .meta .val { font-size: 8.5pt; line-height: 1.2; }
-  .meta .origem-numero { display: block; }
+  .meta .origem { white-space: nowrap; }
+  .prazo-cumprimento { background: #C8C8C8; padding: 4px; margin: 4px 0; font-weight: bold; }
 
   .par { padding: 0 4px 3px; text-align: left; overflow-wrap: anywhere; }
   .par b { font-weight: bold; }
@@ -118,8 +124,12 @@
     <img src="{{ $brasao }}" alt="">
   @endif
   <div class="instituicao">
-  <div class="org">{{ $orgao['secretaria'] }}</div>
-  <div class="org">{{ $orgao['nome'] }}</div>
+  <div class="prefeitura">Pref. Mun. de Primavera do Leste</div>
+  @foreach (array_unique([$orgao['secretaria'], $orgao['nome']]) as $linhaOrgao)
+    @if ($linhaOrgao && !str_contains(mb_strtolower($linhaOrgao), 'prefeitura') && !str_contains(mb_strtolower($linhaOrgao), 'pref.'))
+      <div class="org">{{ $linhaOrgao }}</div>
+    @endif
+  @endforeach
   @if (!empty($orgao['departamento']))<div class="end">{{ $orgao['departamento'] }}</div>@endif
   @if ($orgao['divisao'])
     <div class="end">{{ $orgao['divisao'] }}</div>
@@ -132,10 +142,10 @@
 <div class="grade meta">
 <div class="campo"><div class="lbl">Exercício</div><div class="val">{{ $doc->exercicio ?: '—' }}</div></div>
 <div class="campo">
-  <div class="lbl">Matrícula AGEFIS</div>
+  <div class="lbl" style="text-transform:none">Mat. AgeFis</div>
   <div class="val">{{ $doc->agente?->matricula ?: '—' }}</div>
 </div>
-<div class="campo"><div class="lbl">Origem</div><div class="val">{{ $origemCabecalho[0] }}@if (isset($origemCabecalho[1]))<span class="origem-numero">{{ $origemCabecalho[1] }}</span>@endif</div></div>
+<div class="campo"><div class="lbl">Origem</div><div class="val origem">{{ $origemCabecalho }}</div></div>
 </div>
 <div class="grade datas">
 <div class="campo">
@@ -162,14 +172,10 @@
   <div class="val">{{ \App\Services\DocumentoImpressao::enderecoDestinatario($doc) }}</div>
 </div>
 
-<div class="faixa">{{ $sec('Local da infração e identificação do imóvel') }}</div>
+<div class="faixa">{{ $sec('Local da infração') }}</div>
 <div class="campo">
   <div class="lbl">Inscrição imobiliária</div>
   <div class="val">{{ $imovel['inscricao'] ?: '—' }}</div>
-</div>
-<div class="campo">
-  <div class="lbl">Bairro / Quadra / Lote</div>
-  <div class="val">{{ $imovel['bairro'] ?: '—' }} · Q {{ $imovel['quadra'] ?? '—' }} · Lt {{ $imovel['lote'] ?? '—' }}</div>
 </div>
 @if ($imovel['endereco'])
   <div class="campo">
@@ -177,12 +183,16 @@
     <div class="val">{{ $imovel['endereco'] }}</div>
   </div>
 @endif
+<div class="campo">
+  <div class="lbl">Bairro / Quadra / Lote</div>
+  <div class="val">{{ $imovel['bairro'] ?: '—' }} · Q {{ $imovel['quadra'] ?? '—' }} · Lt {{ $imovel['lote'] ?? '—' }}</div>
+</div>
 @if ($doc->area_terreno_m2 || $doc->area_construida_m2)
   <div class="campo">
     <div class="lbl">Áreas</div>
     <div class="val">
-      Terreno {{ $doc->area_terreno_m2 ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }} ·
-      Obra {{ $doc->area_construida_m2 ? $fmt($doc->area_construida_m2) . ' m²' . ($doc->origemDaAreaDaObra() ? ' (' . $doc->origemDaAreaDaObra() . ')' : '') : '—' }}
+      Obra {{ $doc->area_construida_m2 ? $fmt($doc->area_construida_m2) . ' m²' . ($doc->origemDaAreaDaObra() ? ' (' . $doc->origemDaAreaDaObra() . ')' : '') : '—' }} ·
+      Terreno {{ $doc->area_terreno_m2 ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }}
     </div>
   </div>
 @endif
@@ -192,7 +202,7 @@
 @endif
 
 @if ($doc->exigeFundamentacao())
-  <div class="faixa">{{ $sec($memoria['total'] !== null ? 'Infração / legislação infringida / multa e penalidade' : 'Infração / legislação infringida') }}</div>
+  <div class="faixa">{{ $sec('Legislação infringida') }}</div>
   <div class="par"><b>Lei infringida:</b> {{ $doc->legislacao?->rotulo() ?: '—' }}</div>
   @forelse ($memoria['linhas'] as $l)
     <div class="infracao">
@@ -215,7 +225,11 @@
   <div class="par">{!! $textoDestinatario($ciencia) !!}</div>
 @endif
 @if ($prazo)
+  @if ($prazo['rotulo'] === 'Prazo para cumprimento')
+  <div class="prazo-cumprimento">PRAZO PARA CUMPRIMENTO: {{ mb_strtoupper($prazo['nota']) }} (ATÉ {{ $prazo['data'] }}).</div>
+  @else
   <div class="par"><b>{{ $prazo['rotulo'] }}: {{ $prazo['data'] }}.</b> {{ $prazo['nota'] }}</div>
+  @endif
 @endif
 @if ($doc->observacoes)
   <div class="par"><b>Observações:</b> {{ $doc->observacoes }}</div>
