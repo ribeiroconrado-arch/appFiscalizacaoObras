@@ -170,6 +170,9 @@ async function abrirCorrecao(origem, chave) {
   correcaoState.conferindo = false
   correcaoState.esperaUnificar = false
 
+  const rolavel = document.querySelector(origem === 'importacao' ? '#m-importacoes .jt-rolagem' : '#m-conferencia .jt-rolagem')
+  if (rolavel) correcaoState.rolagemFicha = rolavel.scrollTop
+
   if (origem === 'importacao') {
     fecharImportacoes()
     // Os lotes da importação só existem no mapa com a camada de revisão ligada.
@@ -193,7 +196,7 @@ async function abrirCorrecao(origem, chave) {
 }
 
 /** Fecha o painel. A pendência em que se estava fica guardada para a volta. */
-function fecharCorrecao() {
+function fecharCorrecao(semBarra = false) {
   if (!correcaoState.aberto) return
   correcaoState.aberto = false
   correcaoState.emFerramenta = false
@@ -206,19 +209,34 @@ function fecharCorrecao() {
     pintarBarraConferencia()
   } else {
     if (!impState.atual && correcaoState.imp) impState.atual = correcaoState.imp
-    if (!_impEmAndamento(impState.atual)) return
+    if (semBarra || !_impEmAndamento(impState.atual)) return
     // De volta, a barra da importação (com o "‹ Ficha") reaparece.
     impState.noMapa = true
     pintarBarraImportacao()
   }
 }
 
-/** "Ficha completa": a janela de onde se veio, no mesmo filtro e pesquisa. */
+/**
+ * FECHAR O PAINEL É VOLTAR À JANELA de onde se veio — a ficha da importação
+ * ou a conferência do bairro —, no mesmo ponto da lista, com o mesmo filtro e
+ * a mesma pesquisa, e sem barra nenhuma sobrando no mapa.
+ */
 async function voltarAFichaDaCorrecao() {
   const origem = correcaoState.origem
-  fecharCorrecao()
-  if (origem === 'importacao' && correcaoState.impId) await abrirImportacao(correcaoState.impId)
-  else if (origem === 'bairro') await abrirConferenciaBairro(correcaoState.bairro)
+  fecharCorrecao(true)
+  if (origem === 'importacao') {
+    if (impState.preCuradoria) sairPreCuradoria()
+    impState.noMapa = false
+    pintarBarraImportacao()
+    if (correcaoState.impId) await abrirImportacao(correcaoState.impId)
+  } else if (origem === 'bairro') {
+    await abrirConferenciaBairro(correcaoState.bairro)
+  }
+  const rolagem = correcaoState.rolagemFicha || 0
+  setTimeout(() => {
+    const q = document.querySelector(origem === 'importacao' ? '#m-importacoes .jt-rolagem' : '#m-conferencia .jt-rolagem')
+    if (q) q.scrollTop = rolagem
+  }, 60)
 }
 
 /** Leva o mapa até a pendência e deixa o lote marcado, pronto para a ferramenta. */
@@ -479,7 +497,7 @@ function _corrPintar() {
   const cabeca = `
     <div class="corr-cab">
       <div class="corr-tit"><b>Correção · ${esc(nome)}</b>
-        <button type="button" class="corr-x" onclick="fecharCorrecao()" title="Fechar o painel" aria-label="Fechar o painel">&#10005;</button></div>
+        <button type="button" class="corr-x" onclick="voltarAFichaDaCorrecao()" title="Fechar e voltar à lista" aria-label="Fechar e voltar à lista">&#10005;</button></div>
       <ol class="corr-passos">${passos}</ol>
     </div>`
 
@@ -493,16 +511,23 @@ function _corrPintar() {
 
   const contaTipo = {}
   for (const x of correcaoState.itens) contaTipo[x.tipo] = (contaTipo[x.tipo] || 0) + 1
-  const chips = `<button type="button" class="corr-chip${correcaoState.filtro ? '' : ' at'}" onclick="_corrFiltrar(null)">Todas <b>${correcaoState.itens.length}</b></button>`
-    + Object.entries(contaTipo).map(([t, n]) => `<button type="button" class="corr-chip${correcaoState.filtro === t ? ' at' : ''}" onclick="_corrFiltrar(${jsArg(t)})">
-        <i style="background:${_corrTipo(t).cor}"></i>${esc(_corrTipo(t).curto)} <b>${n}</b></button>`).join('')
+  // OS CARTÕES DA CONFERÊNCIA, aqui também: um por tipo, e clicar filtra a
+  // lista (outro clique no mesmo cartão volta a mostrar todas).
+  const cartao = (t, n) => {
+    const at = correcaoState.filtro === t
+    return `<button type="button" class="imp-kpi conf-kpi${at ? ' ativo' : ''}" style="--kpi-cor:${_corrTipo(t).cor}" aria-pressed="${at}"
+      title="${at ? 'Mostrar todas' : 'Mostrar só estas'}" onclick="_corrFiltrar(${jsArg(t)})"><small><i></i>${esc(_corrTipo(t).curto)}</small><b>${n}</b></button>`
+  }
+  const cartoes = `<div class="imp-kpi kpi-ok" style="--kpi-cor:#1D9E75"><small><i></i>resolvidas</small><b>${feitas}</b></div>`
+    + Object.entries(contaTipo).map(([t, n]) => cartao(t, n)).join('')
 
   p.innerHTML = `${cabeca}
     <div class="corr-progresso">
       <span>${correcaoState.conferindo ? 'Conferindo de novo…' : `<b>${feitas}</b> de ${total} resolvida${total === 1 ? '' : 's'}`}</span>
       <div class="corr-barra"><i style="width:${total ? Math.round(feitas * 100 / total) : 0}%"></i></div>
     </div>
-    <div class="corr-filtros">${chips}</div>
+    <div class="imp-kpis corr-kpis">${cartoes}</div>
+    ${correcaoState.filtro ? `<div class="corr-filtro">Só <b>${esc(_corrTipo(correcaoState.filtro).rotulo)}</b> · <a href="#" onclick="event.preventDefault(); _corrFiltrar(null)">mostrar todas</a></div>` : ''}
     <label class="jt-busca corr-busca" for="corr-busca">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input type="search" id="corr-busca" placeholder="Pesquisar quadra, lote ou inscrição" autocomplete="off" value="${esc(correcaoState.busca)}" oninput="_corrBuscar(this)">
@@ -513,7 +538,7 @@ function _corrPintar() {
         <button type="button" class="btn sm" onclick="_corrPasso(-1)" title="Pendência anterior">&#8249; Anterior</button>
         <button type="button" class="btn sm" onclick="_corrPasso(1)" title="Próxima pendência">Próxima &#8250;</button>
       </span>
-      <button type="button" class="btn sm" onclick="voltarAFichaDaCorrecao()">Ficha completa</button>
+      <button type="button" class="btn sm" onclick="voltarAFichaDaCorrecao()">Voltar à lista</button>
     </div>`
   _corrPintarLista()
 }

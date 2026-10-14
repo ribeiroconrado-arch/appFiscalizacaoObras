@@ -22,16 +22,35 @@ use Illuminate\Support\Facades\DB;
  */
 class UnificacaoDeLotes
 {
-    private function identidade(array $ids): array
+    /**
+     * O número e a inscrição do lote resultante.
+     *
+     * SUGESTÃO: o menor e o maior número, com DOIS algarismos cada — os lotes
+     * 0001 e 0002 dão 0102, e não 12 (que costuma ser outro lote da mesma
+     * quadra). Antes os números eram juntados sem os zeros ("1" + "2"), e o
+     * campo não deixava trocar.
+     *
+     * ESCOLHA: quem unifica pode informar outro número (o da matrícula, por
+     * exemplo), de 1 a 4 algarismos — o que cabe na inscrição. Ele só precisa
+     * estar livre na quadra (ver impedimento).
+     *
+     * @param  list<int>    $ids
+     * @param  string|null  $escolhido o número digitado; null = a sugestão
+     */
+    private function identidade(array $ids, ?string $escolhido = null): array
     {
         $inscricoes = Lote::whereIn('id', $ids)->get()->map(fn ($l) => $l->inscricao())->all();
         if (count($inscricoes) < 2 || in_array(null, $inscricoes, true)) return ['erro'=>'Todos os lotes precisam de inscrição válida para unificar.'];
         $prefixos = array_unique(array_map(fn ($n) => substr($n,0,8), $inscricoes));
         if (count($prefixos) !== 1) return ['erro'=>'As inscrições devem pertencer ao mesmo setor, bairro e quadra.'];
         $numeros = array_map(fn ($n) => (int) substr($n,8,4), $inscricoes);
-        $numero = (string) min($numeros) . (string) max($numeros);
-        if (strlen($numero) > 4) return ['erro'=>'A combinação do menor e maior lote excede os quatro dígitos da inscrição. Revise a numeração antes de unificar.'];
-        return ['numero'=>$numero, 'inscricao'=>$prefixos[0].str_pad($numero,4,'0',STR_PAD_LEFT).'000'];
+        $sugestao = max($numeros) <= 99
+            ? str_pad((string) min($numeros), 2, '0', STR_PAD_LEFT) . str_pad((string) max($numeros), 2, '0', STR_PAD_LEFT)
+            : null;
+        $numero = $escolhido !== null && trim($escolhido) !== '' ? trim($escolhido) : $sugestao;
+        if ($numero === null) return ['erro'=>'Os números dos lotes passam de 99: informe o número do lote resultante.', 'sugestao'=>null];
+        if (! preg_match('/^\d{1,4}$/', $numero)) return ['erro'=>'O número do lote resultante tem de ter de 1 a 4 algarismos, que é o que cabe na inscrição.', 'sugestao'=>$sugestao];
+        return ['numero'=>$numero, 'sugestao'=>$sugestao, 'inscricao'=>$prefixos[0].str_pad($numero,4,'0',STR_PAD_LEFT).'000'];
     }
     /**
      * Folga para dois lotes serem considerados vizinhos, em metros.
@@ -78,7 +97,7 @@ class UnificacaoDeLotes
             'bairro'       => $lotes->first()->bairro ?? null,
             'quadra'       => $lotes->first()->quadra ?? null,
             'vinculos'     => $vinculos,
-            'sugestao_lote' => $identidade['numero'] ?? null,
+            'sugestao_lote' => $identidade['sugestao'] ?? null,
             'inscricao' => InscricaoImobiliaria::formatar($identidade['inscricao'] ?? null),
             'erro_identidade' => $identidade['erro'] ?? null,
         ];
@@ -121,9 +140,9 @@ class UnificacaoDeLotes
                 . 'corrija-a antes pela seleção em massa.';
         }
 
-        $identidade = $this->identidade($ids);
+        $identidade = $this->identidade($ids, $numeroLote);
         if (isset($identidade['erro'])) return $identidade['erro'];
-        if ($numeroLote !== $identidade['numero']) return 'O lote resultante deve ser '.$identidade['numero'].' (menor número + maior número).';
+        $numeroLote = $identidade['numero'];
 
         // ── a prova física ──
         if ($solto = $this->desencostado($ids)) {
@@ -164,9 +183,11 @@ class UnificacaoDeLotes
         // Descontando os que serão inativados: unificar 05 e 06 e chamar o
         // resultado de "05" é a prática, e só funciona porque a baixa e a
         // criação acontecem na MESMA transação e o índice único ignora inativo.
+        // Pelo VALOR: "0102" e "102" são o mesmo lote na quadra.
         $choque = DB::table('lotes')->where('bairro', $lotes->first()->bairro)
             ->where('quadra', $lotes->first()->quadra)
-            ->where('numero_lote', $numeroLote)
+            ->where(fn ($q) => $q->where('numero_lote', $numeroLote)
+                ->orWhereRaw("numero_lote REGEXP '^[0-9]+$' AND CAST(numero_lote AS UNSIGNED) = ?", [(int) $numeroLote]))
             ->where('situacao', 'ativo')->whereNotIn('id', $ids)->exists();
 
         if ($choque) {
@@ -218,7 +239,8 @@ class UnificacaoDeLotes
             }
             $primeiro = $this->lotes($ids)->first();
             $u = $this->lotes->uniao($ids);
-            $identidade = $this->identidade($ids);
+            $identidade = $this->identidade($ids, $numeroLote);
+            $numeroLote = $identidade['numero'];
             // A baixa vem ANTES da criação: o índice único só ignora quem já
             // está inativo, e o número do lote novo costuma ser o de um dos
             // antigos. Fora de uma transação isto seria uma janela de

@@ -498,9 +498,8 @@ function renderFichaImportacao(i) {
     // pré-curadoria (com todas as ferramentas); a publicada, só para ver.
     andamento && ((cc?.total_divergencias || 0) + (i.pendencias_desenho?.invalidos?.length || 0) + (i.pendencias_desenho?.repetidos?.length || 0))
       ? `<button class="btn primary" onclick="abrirCorrecao('importacao')">Corrigir no mapa</button>` : '',
-    andamento
-      ? (i.extensao ? `<button class="btn" onclick="fecharImportacoes(); entrarPreCuradoria()">Pré-curadoria no mapa</button>` : '')
-      : (i.extensao && i.status !== 'excluida' ? `<button class="btn" onclick="verImportacaoNoMapa()">Ver no mapa</button>` : ''),
+    // "Pré-curadoria no mapa" saiu: corrigir é pelo painel (Corrigir no mapa).
+    !andamento && i.extensao && i.status !== 'excluida' ? `<button class="btn" onclick="verImportacaoNoMapa()">Ver no mapa</button>` : '',
     i.status === 'publicada' ? `<button class="btn" onclick="gerarContornoDoBairro(${jsArg(i.bairro)})">Gerar contorno do bairro</button>` : '',
     podeExcluir ? `<button class="btn danger" onclick="pedirExclusaoImportacao()">Excluir importação</button>` : '',
     rascunho ? `<button class="btn danger" onclick="pedirDescarteImportacao()">Descartar rascunho</button>` : '',

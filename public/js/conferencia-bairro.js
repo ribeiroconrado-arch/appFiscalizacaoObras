@@ -204,15 +204,15 @@ function pintarJanelaConferencia() {
         ${esc(b.oficial || b.bairro)}${b.divergencias !== null ? ` · ${b.divergencias} pendência(s)` : ' · não conferido'}${b.ligado ? '' : ' · sem vínculo'}</option>`).join('')}
     </select>`
 
-  const kpi = (rot, n, cls = '') => `<div class="imp-kpi ${cls}"><small>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></div>`
+  const kpi = (rot, n, cls = '') => `<div class="imp-kpi kpi-${cls}" style="--kpi-cor:#1D9E75"><small><i></i>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></div>`
   const conta = t => confState.itens.filter(i => i.tipo === t).length
   const nJust = Object.keys(confState.justificativas).length
   // CARTÃO QUE FILTRA: um clique mostra só aquele tipo de divergência; outro
   // clique no mesmo cartão volta a mostrar todas.
   const cartao = (tipo, rot, cls) => {
     const n = conta(tipo), ativo = confState.filtro === tipo
-    return `<button type="button" class="imp-kpi conf-kpi ${n ? cls : ''}${ativo ? ' ativo' : ''}" aria-pressed="${ativo}" ${n || ativo ? '' : 'disabled'}
-      title="${ativo ? 'Mostrar todas as divergências' : 'Mostrar só estas'}" onclick="_confFiltrar('${tipo}')"><small>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></button>`
+    return `<button type="button" class="imp-kpi conf-kpi${n ? '' : ' zero'}${ativo ? ' ativo' : ''}" style="--kpi-cor:${CONF_TIPOS[tipo].cor}" aria-pressed="${ativo}" ${n || ativo ? '' : 'disabled'}
+      title="${ativo ? 'Mostrar todas as divergências' : 'Mostrar só estas'}" onclick="_confFiltrar('${tipo}')"><small><i></i>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></button>`
   }
 
   const linha = (tipo, l) => {
