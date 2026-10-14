@@ -409,3 +409,13 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .pc-dica-num{display:block;font-size:11px;font-weight:400;color:var(--tx3);margin-top:4px;line-height:1.4}
 .corr-cores{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:12px;color:var(--tx2);cursor:pointer;user-select:none}
 .corr-cores input{margin:0;accent-color:var(--g)}
+
+/* As opções da conferência do bairro, abertas pelo "Conferir de novo". */
+.conf-opcoes{margin-top:8px;padding:10px 12px;border:1px solid var(--bord);border-radius:10px;background:var(--blt)}
+.conf-opcoes[hidden]{display:none}
+.conf-opcoes .imp-fonte{margin:0}
+.conf-opcoes .imp-soltar{margin:10px 0 0}
+.imp-ficha-topo .conf-topo select{margin:2px 0 4px}
+.imp-ficha-topo .conf-kpis{margin-top:10px}
+/* O filtro dos cartões na ficha da importação. */
+.jt-grupo.fora-filtro{display:none !important}

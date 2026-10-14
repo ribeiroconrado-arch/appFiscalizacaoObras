@@ -263,41 +263,53 @@ function pintarJanelaConferencia() {
       </section>`
   }
 
+  // NO FORMATO DA FICHA DA IMPORTAÇÃO: cabeçalho, "1 Bairro", "2 Conferência"
+  // numa linha só com o botão, os cartões, a pesquisa e os grupos. As opções
+  // da conferência (fonte e variação de área) abrem pelo "Conferir de novo":
+  // são escolha rara, e ocupavam o alto da janela o tempo todo.
+  const abertas = confState.itens.length
+  const resumo = r ? `<span class="imp-sub imp-conf-resumo">${Number(r.casaram).toLocaleString('pt-BR')} casaram ·
+      ${abertas ? `${abertas.toLocaleString('pt-BR')} pendência(s)` : 'sem pendências'}${nJust ? ` · ${nJust} justificada(s)` : ''}</span>` : ''
+  const opcoesAbertas = !r || !!confState.opcoesAbertas
   _confCorpo(`
-   <div class="jt">
-    <div class="jt-topo">
-      <div class="jt-linha conf-linha-topo">
-        <div class="conf-topo">${sel}</div>
-        ${r ? jtBusca('conf-busca', 'Pesquisar por inscrição, quadra, lote ou detalhe') : ''}
+   <div class="jt imp-ficha">
+    <div class="jt-topo imp-ficha-topo">
+      <div class="imp-cabeca">
+        <span class="badge ${r ? 'bd-ok' : 'bd-pe'}">${r ? 'Conferido' : 'Não conferido'}</span>
+        <b>${esc(confState.oficial || confState.bairro || '')}</b>
+        ${r ? `<span class="imp-sub">· conferido em ${esc(r.conferido_em)} por ${esc(r.conferido_por || '—')}</span>` : ''}
       </div>
-      <div class="imp-fonte">
-        ${r && (r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? `<label class="imp-opcao" title="${esc(r.fonte_descricao)}"><input type="radio" name="conf-fonte" value="ultima" checked
-          onchange="document.getElementById('conf-soltar').hidden = true"> ${r.fonte === 'planilha' ? 'Revisar as divergências (sem planilha)' : 'Mesma fonte da última (cadastro carregado)'}</label>` : ''}
-        <label class="imp-opcao"><input type="radio" name="conf-fonte" value="carregado" ${r ? '' : 'checked'}
-          onchange="document.getElementById('conf-soltar').hidden = true"> Cadastro carregado</label>
-        <label class="imp-opcao"><input type="radio" name="conf-fonte" value="planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? 'checked' : ''}
-          onchange="document.getElementById('conf-soltar').hidden = false"> Planilha .xlsx</label>
-        <label class="conf-tol" title="Diferença entre a área do desenho e a do cadastro que NÃO conta como divergência. Zero = as áreas têm de ser iguais.">Variação de área aceita
-          <input type="number" id="conf-tol" min="0" step="0.01" inputmode="decimal" value="${Number(r?.tolerancia_area?.valor ?? 0)}">
-          <select id="conf-tol-un" aria-label="Unidade da variação">
-            <option value="m2" ${(r?.tolerancia_area?.unidade ?? 'm2') === 'm2' ? 'selected' : ''}>m²</option>
-            <option value="pct" ${r?.tolerancia_area?.unidade === 'pct' ? 'selected' : ''}>%</option>
-          </select></label>
-        <button class="btn primary sm" id="conf-btn" onclick="conferirBairroAgora()">${r ? 'Conferir de novo' : 'Conferir'}</button>
+      <div class="sec-title">Bairro</div>
+      <div class="conf-topo">${sel}</div>
+      <div class="sec-title-row imp-conf-linha">
+        <div class="sec-title">Conferência com o cadastro da prefeitura</div>
+        ${resumo}
+        <button class="btn primary sm sec-title-acao" id="conf-abrir-opcoes" aria-expanded="${opcoesAbertas}" onclick="_confAlternarOpcoes()">${r ? 'Conferir de novo' : 'Conferir'}</button>
       </div>
-      <label class="imp-soltar compacta" id="conf-soltar" for="conf-planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? '' : 'hidden'}>
-        <input type="file" id="conf-planilha" accept=".xlsx"
-          onchange="_mostrarEscolhido('conf-soltar', this.files[0], 'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário')">
-        ${ICO_SOLTAR}<b>Solte a planilha .xlsx aqui</b><span>ou clique para escolher · exportação do cadastro imobiliário</span>
-      </label>
-      ${r ? `<div class="imp-kpis conf-kpis">
-        ${kpi('Casaram', r.casaram, 'ok')}
-        ${cartao('nao_encontrados', 'Não está no cadastro', 'erro')}
-        ${cartao('inativos', 'Inativo no cadastro', 'erro')}
-        ${cartao('sem_lote', 'Cadastro sem lote', 'erro')}
-        ${cartao('sem_inscricao', 'Sem inscrição', 'aviso')}
-        ${cartao('area_diferente', 'Área diferente', 'erro')}
-      </div>` : ''}
+      <div class="conf-opcoes" id="conf-opcoes" ${opcoesAbertas ? '' : 'hidden'}>
+        <div class="imp-fonte">
+          ${r && (r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? `<label class="imp-opcao" title="${esc(r.fonte_descricao)}"><input type="radio" name="conf-fonte" value="ultima" checked
+            onchange="document.getElementById('conf-soltar').hidden = true"> ${r.fonte === 'planilha' ? 'Revisar as divergências (sem planilha)' : 'Mesma fonte da última (cadastro carregado)'}</label>` : ''}
+          <label class="imp-opcao"><input type="radio" name="conf-fonte" value="carregado" ${r ? '' : 'checked'}
+            onchange="document.getElementById('conf-soltar').hidden = true"> Cadastro carregado</label>
+          <label class="imp-opcao"><input type="radio" name="conf-fonte" value="planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? 'checked' : ''}
+            onchange="document.getElementById('conf-soltar').hidden = false"> Planilha .xlsx</label>
+          <label class="conf-tol" title="Diferença entre a área do desenho e a do cadastro que NÃO conta como divergência. Zero = as áreas têm de ser iguais.">Variação de área aceita
+            <input type="number" id="conf-tol" min="0" step="0.01" inputmode="decimal" value="${Number(r?.tolerancia_area?.valor ?? 0)}">
+            <select id="conf-tol-un" aria-label="Unidade da variação">
+              <option value="m2" ${(r?.tolerancia_area?.unidade ?? 'm2') === 'm2' ? 'selected' : ''}>m²</option>
+              <option value="pct" ${r?.tolerancia_area?.unidade === 'pct' ? 'selected' : ''}>%</option>
+            </select></label>
+          <button class="btn primary sm" id="conf-btn" onclick="conferirBairroAgora()">Conferir agora</button>
+        </div>
+        <label class="imp-soltar compacta" id="conf-soltar" for="conf-planilha" ${r && !(r.fonte === 'planilha' || r.imoveis_no_cadastro > 0) ? '' : 'hidden'}>
+          <input type="file" id="conf-planilha" accept=".xlsx"
+            onchange="_mostrarEscolhido('conf-soltar', this.files[0], 'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário')">
+          ${ICO_SOLTAR}<b>Solte a planilha .xlsx aqui</b><span>ou clique para escolher · exportação do cadastro imobiliário</span>
+        </label>
+      </div>
+      ${r ? htmlCartoesConferencia(r.casaram, conta, confState.filtro, '_confFiltrar') : ''}
+      ${r ? `<div class="jt-linha">${jtBusca('conf-busca', 'Pesquisar por inscrição, quadra, lote ou detalhe')}</div>` : ''}
     </div>
     <div class="jt-rolagem">
     ${r ? `
@@ -311,12 +323,12 @@ function pintarJanelaConferencia() {
       : '<p class="imp-expl">Este bairro ainda não foi conferido. Escolha a fonte e confira.</p>'}
       <div class="jt-nada" hidden>Nenhuma pendência com o que foi pesquisado.</div>
     </div>
-    <div class="jt-rodape">
+    <div class="jt-rodape jt-rodape-col">
       ${r ? `<div class="imp-rodape-conf"><span class="imp-sub">${esc(r.fonte_descricao)} · conferido em ${esc(r.conferido_em)}${r.revisao ? ` · revisado sem planilha em ${esc(r.revisao.em)} (${r.revisao.resolvidas} resolvida(s))` : ''}
-        por ${esc(r.conferido_por || '—')} · código do bairro ${esc(r.codigo_bairro)}${nJust ? ` · ${nJust} justificada(s)` : ''}</span></div>` : ''}
+        por ${esc(r.conferido_por || '—')} · código do bairro ${esc(r.codigo_bairro)}</span>
+        <span class="jt-rodape-links"><button class="btn sm" onclick="baixarPdfDaConferencia()" title="A listagem que está na tela, em PDF">${confState.filtro ? 'PDF desta listagem' : 'Gerar PDF'}</button></span></div>` : ''}
       <div class="btn-row imp-acoes">
         <button class="btn" onclick="fModalBtn('m-conferencia')">Fechar</button>
-        ${r ? `<button class="btn" onclick="baixarPdfDaConferencia()" title="A listagem que está na tela, em PDF">${confState.filtro ? 'PDF desta listagem' : 'Gerar PDF'}</button>` : ''}
         ${r && _confVisiveis().length ? `<button class="btn primary" onclick="mostrarConferenciaNoMapa()">Corrigir no mapa</button>` : ''}
       </div>
     </div>
@@ -336,6 +348,14 @@ function baixarPdfDaConferencia() {
   const q = new URLSearchParams({ bairro: confState.bairro })
   if (confState.filtro) q.set('tipo', confState.filtro)
   window.open('/conferencias/bairro/pdf?' + q, '_blank')
+}
+
+/** "Conferir de novo": abre (ou fecha) as opções da conferência. */
+function _confAlternarOpcoes() {
+  confState.opcoesAbertas = !confState.opcoesAbertas
+  const caixa = document.getElementById('conf-opcoes')
+  if (caixa) caixa.hidden = !confState.opcoesAbertas
+  document.getElementById('conf-abrir-opcoes')?.setAttribute('aria-expanded', String(confState.opcoesAbertas))
 }
 
 async function conferirBairroAgora() {

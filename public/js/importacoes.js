@@ -110,6 +110,30 @@ function jtFiltrar(campo) {
   if (vazio) vazio.hidden = !(termos.length && visiveis === 0)
 }
 
+/**
+ * OS CARTÕES DA CONFERÊNCIA — a mesma montagem na ficha da importação e na
+ * conferência do bairro. "Casaram" é só número; cada tipo de divergência é um
+ * botão que filtra a lista (outro clique no mesmo volta a mostrar todas).
+ *
+ * @param {number} casaram
+ * @param {(tipo:string) => number} conta pendências abertas de cada tipo
+ * @param {string|null} filtro o tipo ligado
+ * @param {string} acao a função que filtra (recebe o tipo)
+ */
+function htmlCartoesConferencia(casaram, conta, filtro, acao) {
+  const tipos = [['nao_encontrados', 'Não está no cadastro'], ['inativos', 'Inativo no cadastro'],
+    ['sem_lote', 'Cadastro sem lote'], ['sem_inscricao', 'Sem inscrição'], ['area_diferente', 'Área diferente']]
+  const cor = t => (typeof CONF_TIPOS !== 'undefined' && CONF_TIPOS[t]?.cor) || '#888'
+  return `<div class="imp-kpis conf-kpis">
+    <div class="imp-kpi kpi-ok" style="--kpi-cor:#1D9E75"><small><i></i>Casaram</small><b>${Number(casaram || 0).toLocaleString('pt-BR')}</b></div>
+    ${tipos.map(([t, rot]) => {
+      const n = conta(t), at = filtro === t
+      return `<button type="button" class="imp-kpi conf-kpi${n ? '' : ' zero'}${at ? ' ativo' : ''}" style="--kpi-cor:${cor(t)}" aria-pressed="${at}" ${n || at ? '' : 'disabled'}
+        title="${at ? 'Mostrar todas as divergências' : 'Mostrar só estas'}" onclick="${acao}('${t}')"><small><i></i>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></button>`
+    }).join('')}
+  </div>`
+}
+
 /** Depois de montar a janela: reaplica a pesquisa que estava digitada. @param {string} id */
 function jtAplicar(id) {
   const campo = document.getElementById(id)
@@ -458,7 +482,25 @@ async function abrirImportacao(id) {
   }
 }
 
+/** Cartão da ficha clicado: só aquele tipo de divergência na lista. @param {string} tipo */
+function _impFiltrarConf(tipo) {
+  impState.filtroConf = tipo && impState.filtroConf !== tipo ? tipo : null
+  _impAplicarFiltroConf()
+  document.querySelectorAll('#m-importacoes .conf-kpi').forEach(b => {
+    const at = b.getAttribute('onclick')?.includes(`'${impState.filtroConf}'`) && !!impState.filtroConf
+    b.classList.toggle('ativo', at)
+    b.setAttribute('aria-pressed', String(at))
+  })
+}
+
+function _impAplicarFiltroConf() {
+  const t = impState.filtroConf
+  document.querySelectorAll('#m-importacoes .jt-grupo').forEach(g => g.classList.toggle('fora-filtro', !!t && g.dataset.tipo !== t))
+}
+
 function renderFichaImportacao(i) {
+  // O filtro dos cartões é da importação aberta: outra importação começa sem ele.
+  if (impState.filtroConfId !== i.id) { impState.filtroConf = null; impState.filtroConfId = i.id }
   const emRevisao = i.status === 'revisao'
   const rascunho = i.status === 'rascunho'
   const andamento = _impEmAndamento(i)
@@ -478,7 +520,7 @@ function renderFichaImportacao(i) {
       <div class="sec-title">Conferência com o cadastro da prefeitura</div>
       ${resumo}
       <button class="btn primary sm sec-title-acao" id="imp-btn-conferir" onclick="conferirComCadastro()">${cc ? 'Conferir de novo' : 'Conferir'}</button>
-    </div>${cc && cc.total_divergencias ? `<div class="jt-linha">${jtBusca('ficha-busca', 'Pesquisar por inscrição, quadra, lote ou detalhe')}</div>` : ''}`
+    </div>${cc ? htmlCartoesConferencia(cc.casaram, t => (cc[t] || []).length, impState.filtroConf, '_impFiltrarConf') : ''}${cc && cc.total_divergencias ? `<div class="jt-linha">${jtBusca('ficha-busca', 'Pesquisar por inscrição, quadra, lote ou detalhe')}</div>` : ''}`
     : (cc ? `<div class="sec-title-row imp-conf-linha"><div class="sec-title">Última conferência com o cadastro</div>${resumo}</div>` : '')
   const naoConferida = andamento && !cc ? `<p class="imp-expl">Ainda não conferida. ${rascunho
     ? 'Conferir antes de salvar é o recomendado; a publicação exige a conferência.'
@@ -540,6 +582,7 @@ function renderFichaImportacao(i) {
       </div>
     </div>`, rascunho ? `Rascunho de importação · ${i.bairro}` : `Importação nº ${i.id}`)
   jtAplicar('ficha-busca')
+  _impAplicarFiltroConf()
 }
 
 /**
@@ -613,8 +656,8 @@ function _htmlConferenciaCadastro(i, c) {
       <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}${alterado(l)}</td>
       <td class="jt-quebra">${detalhe || '<span class="imp-sub">—</span>'}</td>
       <td class="jt-acoes">${acao}</td></tr>`
-  const grupo = (titulo, cls, itens, fazLinha) => itens.length ? `
-    <section class="jt-grupo">
+  const grupo = (titulo, cls, itens, fazLinha, tipo) => itens.length ? `
+    <section class="jt-grupo" data-tipo="${tipo}">
       <div class="jt-grupo-tit"><span class="badge ${cls}">${itens.length}</span> <b>${titulo}</b></div>
       <table class="imp-tabela jt-tabela">
         <thead><tr><th>Inscrição</th><th>Quadra · Lote</th><th>Detalhe</th><th></th></tr></thead>
@@ -628,18 +671,18 @@ function _htmlConferenciaCadastro(i, c) {
     ${c.sem_situacao ? `<div class="cad-nota cad-aviso">A planilha não tem coluna de situação ("Situação" ou "Isenção ou Imunidade"):
         não deu para saber quais inscrições estão <b>inativas</b> no cadastro.</div>` : ''}
     ${c.total_divergencias === 0 ? '<div class="cad-nota imp-nota">Nenhuma divergência: todo lote do arquivo está ativo no cadastro, e todo imóvel ativo do cadastro tem lote.</div>' : ''}
-    ${grupo('No arquivo, não encontrados no cadastro', 'bd-er', c.nao_encontrados, l => linha(l, '', acaoDe('nao_encontrados')(l)))}
+    ${grupo('No arquivo, não encontrados no cadastro', 'bd-er', c.nao_encontrados, l => linha(l, '', acaoDe('nao_encontrados')(l)), 'nao_encontrados')}
     ${grupo('Desenhados no mapa, inativos no cadastro', 'bd-er', c.inativos,
-      l => linha(l, `<span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>`, acaoDe('inativos')(l)))}
+      l => linha(l, `<span class="badge bd-in">Cadastro: ${esc(l.isencao)}</span>`, acaoDe('inativos')(l)), 'inativos')}
     ${grupo('No cadastro (ativos), sem lote no arquivo', 'bd-er', c.sem_lote,
       l => linha(l, [l.area_m2 ? fmtNum(l.area_m2) + ' m²' : '', esc(l.endereco || '')].filter(Boolean).join(' · '),
-        andamento ? corrigir('sem_lote', l) : ''))}
+        andamento ? corrigir('sem_lote', l) : ''), 'sem_lote')}
     ${c.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
     ${c.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${c.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
     ${grupo('Área do desenho diferente da área do cadastro', 'bd-er',
       [...(c.area_diferente || [])].sort((a, b) => Math.abs(b.diferenca ?? 0) - Math.abs(a.diferenca ?? 0)),
-      l => linha(l, typeof _confAreas === 'function' ? _confAreas(l) : '', acaoDe('area_diferente')(l)))}
-    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => linha(l, '', acaoDe('sem_inscricao')(l)))}`,
+      l => linha(l, typeof _confAreas === 'function' ? _confAreas(l) : '', acaoDe('area_diferente')(l)), 'area_diferente')}
+    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => linha(l, '', acaoDe('sem_inscricao')(l)), 'sem_inscricao')}`,
     rodape: `
     <div class="imp-rodape-conf">
       <span class="imp-sub">${esc(c.fonte_descricao)} · conferido em ${esc(c.conferido_em)} por ${esc(c.conferido_por || '—')}${c.revisao ? ` · revisado sem planilha em ${esc(c.revisao.em)} (${c.revisao.resolvidas} resolvida(s))` : ''}
