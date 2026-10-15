@@ -37,7 +37,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
           <b>Exibição</b>
           <label><input id="pc-mapa" type="checkbox" checked onchange="PranchetaCad.mapa(this.checked)"> Mapa cadastral <small>referência de fundo</small></label>
           <small class="pc-snap-alt">Segure Alt para desenhar sem encaixe.</small></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}
-      <i></i>${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}
+      <i></i>${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal, embaixo do lote')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}
       </nav>
       <button type="button" class="pc-x" style="margin-left:auto" onclick="PranchetaCad.fechar()" aria-label="Fechar prancheta" data-dica="Fechar a prancheta (o rascunho fica guardado)">✕</button></header>
       <main class="pc-canvas"><span id="pc-ref" class="pc-ref"></span><svg id="pc-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Desenho dos imóveis e suas divisas"></svg>
@@ -117,6 +117,22 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   // render): a caixa flutuante cobria o desenho bem onde se escolhe o lado.
   function entradaRaio(){$('pc-entrada').hidden=true;$('pc-fillet').hidden=false;$('pc-raio').value=String(s.raio).replace('.',',')}
   function raioDigitado(){const n=Number(String($('pc-raio').value).replace(',','.').trim());if(!Number.isFinite(n)||n<0){$('pc-fillet-passo').textContent='Raio inválido.';return}s.raio=n;s.fillet.erro=null;render();svg.focus()}
+  /**
+   * ALINHAR FACE: a face clicada fica na horizontal e EMBAIXO, com o lote
+   * acima dela — como a testada na frente do lote (frenteParaBaixo). O lado
+   * do lote é o que cai dentro de algum contorno (o de origem, o resultado ou
+   * uma linha fechada); sem nenhum, vale o lado do centro do desenho.
+   */
+  function alinharFaceEmbaixo(f){
+    const d=G.sub(f[1],f[0]);s.angulo=-Math.atan2(d[1],d[0])
+    const meio=G.mul(G.add(f[0],f[1]),.5),n=G.normal(f[0],f[1])
+    const aneis=[...contornos().map(ring),...(s.resultado?.partes||[]),...s.linhas.map(l=>l.pontos).filter(r=>r.length>=4&&G.len(G.sub(r[0],r.at(-1)))<1e-6)]
+    let dentro=null
+    for(const sinal of [1,-1]){const q=G.add(meio,G.mul(n,sinal*.3));if(aneis.some(r=>G.dentro(q,r))){dentro=q;break}}
+    if(!dentro){const pts=aneis.flat();if(pts.length)dentro=G.mul(pts.reduce(G.add,[0,0]),1/pts.length)}
+    // Lote abaixo da face na tela: meia-volta, para a face descer.
+    if(dentro&&tela(dentro)[1]>tela(meio)[1])s.angulo+=Math.PI
+  }
   function facePerto(p){let d=16/s.escala,melhor=null;for(const f of faces()){const x=G.len(G.sub(G.pe(p,...f),p));if(x<d){d=x;melhor=f}}return melhor}
   function destino(p,ev){
     const a=s.traco.at(-1);if(!a)return snap(p,ev)
@@ -168,7 +184,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     }
     if(s.ferramenta==='alinhar'||s.ferramenta==='perpendicular'){
       const f=facePerto(p);if(!f){dica('Clique sobre a face que será a referência.');return}
-      if(s.ferramenta==='alinhar'){if(!s.leitura)antes();const d=G.sub(f[1],f[0]);s.angulo=-Math.atan2(d[1],d[0]);s.ferramenta='selecionar';enquadrar();if(!s.leitura)mudou()}
+      if(s.ferramenta==='alinhar'){if(!s.leitura)antes();alinharFaceEmbaixo(f);s.ferramenta='selecionar';enquadrar();if(!s.leitura)mudou()}
       else{s.ref=copy(f);s.ferramenta='linha';s.traco=[];dica('Face realçada. Clique no início e trace a perpendicular; digite a medida se desejar.');render()}return
     }
     if(s.operacao){const o=s.operacao;if(o.basePendente){o.inicio=snap(p,ev);o.basePendente=false;s.mouse=o.inicio;entrada(s.mouse,'Mover');dica('Origem fixada. Capture o destino com snap ou aponte a direção e digite a distância.');render()}else{s.mouse=snap(p,ev,o.inicio,s.sel);if(o.tipo==='mover'&&ortoAtivo(ev))s.mouse=orto(o.inicio,s.mouse);aplicarOperacao()}return}
@@ -276,6 +292,12 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       if(sel){l.pontos.forEach((p,i)=>{const q=tela(p);h+=`<circle data-line="${e(l.id)}" data-vertex="${i}" cx="${q[0]}" cy="${q[1]}" r="5" fill="white" stroke="#ea580c" stroke-width="2"/>`});for(let i=1;i<l.pontos.length;i++)h+=cota(l.pontos[i-1],l.pontos[i],`${fmtNum(G.len(G.sub(l.pontos[i],l.pontos[i-1])))} m`)}
     }
     if(s.ref)h+=`<path d="${path(s.ref)}" stroke="#a855f7" stroke-width="5" opacity=".8"/>`
+    // A FACE QUE SERÁ ESCOLHIDA, realçada sob o cursor antes do clique: halo
+    // largo, traço forte, as duas pontas e um aviso do que vai acontecer.
+    if((s.ferramenta==='alinhar'||s.ferramenta==='perpendicular')&&s.mouse&&!s.drag){const fc=facePerto(s.mouse);if(fc){
+      const a=tela(fc[0]),b=tela(fc[1]),m=[(a[0]+b[0])/2,(a[1]+b[1])/2]
+      const txt=s.ferramenta==='alinhar'?'Esta face vai para baixo · '+fmtNum(G.len(G.sub(fc[1],fc[0])))+' m':'Face de referência · '+fmtNum(G.len(G.sub(fc[1],fc[0])))+' m'
+      h+=`<g class="pc-face-alvo" pointer-events="none"><path d="M${a[0]},${a[1]}L${b[0]},${b[1]}" stroke="#a855f7" stroke-width="14" stroke-opacity=".22" stroke-linecap="round"/><path d="M${a[0]},${a[1]}L${b[0]},${b[1]}" stroke="#7e22ce" stroke-width="3.5" stroke-linecap="round"/><circle cx="${a[0]}" cy="${a[1]}" r="5" fill="#fff" stroke="#7e22ce" stroke-width="2"/><circle cx="${b[0]}" cy="${b[1]}" r="5" fill="#fff" stroke="#7e22ce" stroke-width="2"/><text class="pc-face-rot" x="${m[0]}" y="${m[1]-14}" text-anchor="middle">${txt}</text></g>`}}
     // O primeiro lado escolhido na Concordância, à espera do segundo.
     const f1=s.fillet?.primeiro;if(f1){const l=f1.id!=null&&s.linhas.find(x=>x.id===f1.id),ab=f1.id==null?[f1.a,f1.b]:l?[l.pontos[f1.i],l.pontos[f1.i+1]]:null;if(ab?.[0]&&ab[1])h+=`<path d="${path(ab)}" stroke="#a855f7" stroke-width="6" opacity=".85"/>`}
     if(s.traco.length){let q=s.mouse||s.traco.at(-1);const n=numeroDigitado();if(n!==null&&n>0)q=G.add(s.traco.at(-1),G.mul(G.unit(G.sub(q,s.traco.at(-1))),n));h+=`<path d="${path([...s.traco,q])}" fill="none" stroke="#ea580c" stroke-width="2.5" stroke-dasharray="7 3"/>`;h+=cota(s.traco.at(-1),q,`${fmtNum(G.len(G.sub(q,s.traco.at(-1))))} m`);s.traco.forEach(p=>{const t=tela(p);h+=`<circle cx="${t[0]}" cy="${t[1]}" r="4" fill="#ea580c"/>`})}

@@ -92,3 +92,6 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 /* Nome de rua no fundo cadastral (fundoCadastral, prancheta-cadastral.js). */
 .pc-rua{font:600 10.5px Inter,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;fill:#6B726D;
   paint-order:stroke;stroke:#FFFFFF;stroke-width:3px;stroke-linejoin:round;pointer-events:none}
+
+/* Face sob o cursor no Alinhar face e na Perpendicular (render, prancheta-cadastral.js). */
+.pc-face-rot{font:700 12px Inter,Arial,sans-serif;fill:#6b21a8;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
