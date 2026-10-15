@@ -56,6 +56,9 @@ class EdicaoDeLote
     {
         $r = $this->desenho->retrato($this->dados($lote, $d), $lote->id);
         $r['area_anterior_m2'] = (float) $lote->area_gis_m2;
+        // A coluna guarda 2 casas: a de antes, com 4, sai da geometria gravada.
+        $gj = \Illuminate\Support\Facades\DB::scalar('SELECT ST_AsGeoJSON(geom) FROM lotes WHERE id = ?', [$lote->id]);
+        $r['area_anterior_exata'] = $gj ? round(app(\App\Repositories\LoteRepository::class)->areaDoGeoJson($gj), 4) : null;
 
         return $r;
     }

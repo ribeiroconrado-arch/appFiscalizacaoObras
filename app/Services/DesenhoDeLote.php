@@ -45,6 +45,9 @@ class DesenhoDeLote
 
         return [
             'area_m2'   => round($area, 2),
+            // Com 4 casas, para a prancheta: diferenças de 0,01 m² contra o
+            // cadastro só se acham assim. Grava-se a de 2 casas.
+            'area_m2_exata' => round($area, 4),
             'vertices'  => max(0, count($d['geometry']['coordinates'][0] ?? []) - 1),
             'bairro'    => $d['bairro'],
             'quadra'    => $d['quadra'],

@@ -543,6 +543,8 @@ function abrirFicha(feicao) {
   subFicha('dados')
   // Terreno em condomínio ou unidade de fração ideal: a aba Unidades aparece.
   if (typeof prepararAbaUnidades === 'function') prepararAbaUnidades(p)
+  // Lote desatualizado no cadastro: a tag no cabeçalho (alertas-mapa.js).
+  if (typeof pintarAlertaNaFicha === 'function') pintarAlertaNaFicha(p)
 
   const linhaDist = document.getElementById('fi-linha-dist')
   if (state.pos && c) {

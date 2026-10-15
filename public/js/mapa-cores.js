@@ -151,7 +151,9 @@ const COR_REVISAO = '#FDBA8C'
  * dentro do terreno, e o lote continua sendo o terreno inteiro.
  */
 function estiloColorido(f) {
-  const e = _estiloColoridoBase(f)
+  let e = _estiloColoridoBase(f)
+  // Lote desatualizado no cadastro: borda na cor do alerta (alertas-mapa.js).
+  if (typeof estiloDoAlerta === 'function') e = estiloDoAlerta(f, e)
   return f?.properties?.terreno_id ? { ...e, dashArray: '4 3' } : e
 }
 

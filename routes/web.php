@@ -155,6 +155,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Fração ideal: o terreno fica, as unidades nascem dentro dele.
         Route::post('/lotes/fracao-ideal-direta/previa', [CadastroLoteController::class, 'previaFracaoDireta']);
         Route::post('/lotes/fracao-ideal-direta', [CadastroLoteController::class, 'fracionarDireto']);
+        Route::post('/lotes/{lote}/desfazer-fracoes', [CadastroLoteController::class, 'desfazerFracoes']);
         Route::get('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'mostrarRascunhoDesmembramento']);
         Route::put('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'salvarRascunhoDesmembramento']);
         Route::delete('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'excluirRascunhoDesmembramento']);

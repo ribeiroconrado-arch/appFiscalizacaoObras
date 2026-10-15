@@ -245,6 +245,13 @@ class MapaController extends Controller
                 ->groupBy('terreno_id')->selectRaw('terreno_id, COUNT(*) n')->pluck('n', 'terreno_id')->all()
             : [];
 
+        // ALERTAS DO CADASTRO: a última conferência de cada bairro presente na
+        // resposta, lida uma vez (ConferenciaComCadastro::alertasDoBairro).
+        $alertas = [];
+        foreach (array_unique(array_map(fn ($l) => $l->bairro, $linhas)) as $nome) {
+            $alertas += \App\Services\ConferenciaComCadastro::alertasDoBairro((string) $nome);
+        }
+
         $feicoes = array_map(fn ($l) => [
             'type'       => 'Feature',
             'geometry'   => json_decode($l->geojson),
@@ -291,6 +298,8 @@ class MapaController extends Controller
                 'fundos_m'    => $l->fundos_m !== null ? (float) $l->fundos_m : null,
                 'em_revisao'    => (bool) $l->em_revisao,
                 'importacao_id' => $l->importacao_id,
+                // Só no lote publicado: o em revisão tem a conferência própria.
+                'alerta'        => ! $l->em_revisao ? ($alertas[$l->id] ?? null) : null,
             ],
         ], $linhas);
 

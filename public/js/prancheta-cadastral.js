@@ -15,6 +15,11 @@ const PranchetaCad = (() => {
   // a área exclusiva de uma unidade. Apartamento entra sem desenho, nos dados.
   const frac=()=>!!s&&s.tipo==='fracao_ideal'
   const pad3=v=>Number.isInteger(v)?String(v).padStart(3,'0'):''
+  // MEDIDAS DA PRANCHETA: 4 casas no Editar lote (diferenças de 0,01 m² contra
+  // o cadastro só se acham com elas), 2 nas demais ferramentas. O fmtNum da
+  // tela (ui.js) continua com 2.
+  const casas=()=>s?.tipo==='edicao'?4:2
+  const fmtMed=n=>Number(n).toLocaleString('pt-BR',{minimumFractionDigits:casas(),maximumFractionDigits:casas()})
   // SÓ O ÍCONE na barra; o nome, o atalho e o que a ferramenta faz aparecem
   // ao passar o mouse (data-dica, ver prancheta-cadastral.css).
   function botao(k,t,atalho,desc='') {return `<button type="button" data-tool="${k}" data-dica="${t}${atalho?' ('+atalho+')':''}${desc?' — '+desc:''}" aria-label="${t}" onclick="PranchetaCad.ferramenta('${k}')"><svg viewBox="0 0 24 24"><path d="${icones[k]}"/></svg></button>`}
@@ -273,7 +278,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(s.tipo==='desmembramento'){s.resultado=G.dividir(ring(s.originais[0]),s.linhas.map(l=>l.pontos));const ordem=s.ordem||[];s.resultado.partes.sort((a,b)=>{const ia=ordem.indexOf(parteKey(a)),ib=ordem.indexOf(parteKey(b));return (ia<0?Infinity:ia)-(ib<0?Infinity:ib)})}else s.resultado={partes:s.uniao?[ring({geometry:s.uniao})]:[],erro:s.uniao?null:s.erroUniao||(s.loading?'Calculando unificação…':'Não foi possível preparar a unificação.')}}
   function path(ps,close=false){return ps.map((p,i)=>{const q=tela(p);return `${i?'L':'M'}${q[0].toFixed(3)},${q[1].toFixed(3)}`}).join(' ')+(close?'Z':'')}
   function texto(p,t,cls='pc-label'){const q=tela(p);return `<text class="${cls}" x="${q[0]}" y="${q[1]}" text-anchor="middle">${e(t)}</text>`}
-  function cota(a,b,t,lado=1){const mid=G.mul(G.add(a,b),.5),q=tela(G.add(mid,G.mul(G.normal(a,b),lado*30/s.escala)));return `<text class="pc-cota" x="${q[0]}" y="${q[1]}" text-anchor="middle" dominant-baseline="middle">${e(t)}</text>`}
+  function cota(a,b,t,lado=1,cls='pc-cota'){const mid=G.mul(G.add(a,b),.5),q=tela(G.add(mid,G.mul(G.normal(a,b),lado*30/s.escala)));return `<text class="${cls}" x="${q[0]}" y="${q[1]}" text-anchor="middle" dominant-baseline="middle">${e(t)}</text>`}
   function centro(r){const a=r.slice(0,-1);const m=G.mul(a.reduce(G.add,[0,0]),1/a.length);if(G.dentro(m,r))return m;for(let i=1;i<r.length;i++){const mid=G.mul(G.add(r[i-1],r[i]),.5),n=G.normal(r[i-1],r[i]);for(const sign of [1,-1]){const q=G.add(mid,G.mul(n,sign*.1));if(G.dentro(q,r))return q}}return m}
   function render(){if(!s||!svg)return
     let h='<defs><pattern id="pc-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#e8edf1" stroke-width=".6"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafb"/><rect width="100%" height="100%" fill="url(#pc-grid)"/>'
@@ -290,11 +295,23 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // filete escuro, e nenhum preenchimento por cima da imagem.
     for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
-    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtNum(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
+    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtMed(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
     // Cotas das faces de origem, na mesma escala métrica usada nas ferramentas.
-    for(const f of s.tipo==="edicao"?[]:contornos()){const r=ring(f);for(let i=1;i<r.length;i++){const m=G.len(G.sub(r[i],r[i-1]));if(m*s.escala<70)continue;h+=cota(r[i-1],r[i],`${fmtNum(m)} m`,G.area(r)>0?-1:1)}}
+    // Na EDIÇÃO, o contorno de origem mostra a medida (em cinza) só dos lados
+    // que mudaram: é ali que está a diferença contra o cadastro. Lado igual
+    // ao do editado (as duas pontas a menos de 0,1 mm) não repete a cota.
+    const editado=s.tipo==='edicao'?(partes[0]||[]):null
+    const igualAoEditado=(a,b)=>editado.some((p,j)=>j>0&&((G.len(G.sub(p,a))<1e-4&&G.len(G.sub(editado[j-1],b))<1e-4)||(G.len(G.sub(p,b))<1e-4&&G.len(G.sub(editado[j-1],a))<1e-4)))
+    for(const f of contornos()){const r=ring(f);for(let i=1;i<r.length;i++){const m=G.len(G.sub(r[i],r[i-1]));if(m*s.escala<70)continue
+      if(editado){if(!igualAoEditado(r[i-1],r[i]))h+=cota(r[i-1],r[i],`antes ${fmtMed(m)} m`,G.area(r)>0?-1:1,'pc-cota pc-cota-antes');continue}
+      h+=cota(r[i-1],r[i],`${fmtMed(m)} m`,G.area(r)>0?-1:1)}}
     for(const l of s.linhas){const sel=l.id===s.sel;h+=`<path data-line="${e(l.id)}" class="pc-hit" d="${path(l.pontos)}"/><path data-line="${e(l.id)}" d="${path(l.pontos)}" fill="none" stroke="${sel?'#ea580c':'#2563eb'}" stroke-width="${sel?3:2}"/>`
-      if(sel){l.pontos.forEach((p,i)=>{const q=tela(p);h+=`<circle data-line="${e(l.id)}" data-vertex="${i}" cx="${q[0]}" cy="${q[1]}" r="5" fill="white" stroke="#ea580c" stroke-width="2"/>`});for(let i=1;i<l.pontos.length;i++)h+=cota(l.pontos[i-1],l.pontos[i],`${fmtNum(G.len(G.sub(l.pontos[i],l.pontos[i-1])))} m`)}
+      if(sel)l.pontos.forEach((p,i)=>{const q=tela(p);h+=`<circle data-line="${e(l.id)}" data-vertex="${i}" cx="${q[0]}" cy="${q[1]}" r="5" fill="white" stroke="#ea580c" stroke-width="2"/>`})
+      // A medida de TODOS os lados do que está sendo desenhado (a selecionada
+      // mostra mesmo os curtos). No contorno fechado, do lado oposto ao das
+      // cotas do contorno de origem, para não encavalar.
+      const fech=G.fechada(l.pontos),lado=fech&&G.area(l.pontos)>0?1:fech?-1:1
+      for(let i=1;i<l.pontos.length;i++){const m=G.len(G.sub(l.pontos[i],l.pontos[i-1]));if(!sel&&m*s.escala<70)continue;h+=cota(l.pontos[i-1],l.pontos[i],`${fmtMed(m)} m`,lado)}
     }
     if(s.ref)h+=`<path d="${path(s.ref)}" stroke="#a855f7" stroke-width="5" opacity=".8"/>`
     // A FACE QUE SERÁ ESCOLHIDA, realçada sob o cursor antes do clique: halo
@@ -437,7 +454,11 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
    */
   async function abrir(tipo,ids,protocoloId=null,salva=null,opts={}){
     montar();if(s&&!s.leitura)await salvar();const token=++geracao
-    const originais=salva?.originais||(tipo==='novo'?[]:await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);if(f)return f;const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Não foi possível ler o contorno do imóvel.');const d=await r.json();return d.type==='Feature'?d:{type:'Feature',geometry:d.geometry||d,properties:{id}}})))
+    // O contorno de origem vem SEMPRE do servidor, com a precisão gravada: o do
+    // mapa vem com 8 casas (~1 mm), e só esse arredondamento já muda a área em
+    // ~0,01 m² — a diferença contra o cadastro que não se achava. As
+    // propriedades (quadra, número) continuam as do mapa, quando ele tem o lote.
+    const originais=salva?.originais||(tipo==='novo'?[]:await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok){if(f)return f;throw new Error('Não foi possível ler o contorno do imóvel.')}const d=await r.json();const g=d.type==='Feature'?d.geometry:(d.geometry||d);return {type:'Feature',geometry:g,properties:f?.properties||{id}}})))
     if(token!==geracao)return
     if(originais.some(f=>f.geometry?.type!=='Polygon'||f.geometry.coordinates.length!==1)){toast('A prancheta atende polígonos sem vazios internos.', 'err');return}
     if($('t-mapa')&&!$('t-mapa').classList.contains('at')&&typeof irPara==='function')irPara('mapa')
@@ -512,7 +533,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     antes();s.resultado.partes.forEach((r,i)=>{const d=s.dados[parteKey(r)]||={};d.desmembramento=valores[i];d.numero_lote=apelido(valores[i])});mudou();dados(true)
   }
   // O contorno fechado, em GeoJSON, com o fechamento exato que o servidor confere.
-  function geometriaLivre(){const r=s.resultado.partes[0].map(p=>s.plano.de(p).map(n=>Number(n.toFixed(8))));r[r.length-1]=[...r[0]];return {type:'Polygon',coordinates:[r]}}
+  function geometriaLivre(){const r=s.resultado.partes[0].map(p=>s.plano.de(p).map(n=>Number(n.toFixed(11))));r[r.length-1]=[...r[0]];return {type:'Polygon',coordinates:[r]}}
   // LOTE NOVO: a prancheta só desenha. Bairro, quadra, número e medidas são do
   // formulário que o Desenhar lote já tinha — ele recebe o contorno pronto.
   async function entregarLoteNovo(){const g=geometriaLivre(),cb=s.opts?.aoConcluir;s.entregue=true;await fechar(true);cb?.(g)}
@@ -593,8 +614,8 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   // edição foi a pendência de área da conferência: diz quanto falta ou sobra.
   function alvoTxt(area){
     const alvo=Number(s?.opts?.areaAlvo);if(!(alvo>0))return ''
-    const d=Math.round((area-alvo)*100)/100
-    return ` · cadastro ${fmtNum(alvo)} m² · ${d===0?'bate':d>0?'sobram '+fmtNum(d)+' m²':'faltam '+fmtNum(-d)+' m²'}`
+    const d=Math.round((area-alvo)*10000)/10000
+    return ` · cadastro ${fmtNum(alvo)} m² · ${d===0?'bate':d>0?'sobram '+fmtMed(d)+' m²':'faltam '+fmtMed(-d)+' m²'}`
   }
   function corpoEdicao(){return {quadra:s.dados.quadra,numero_lote:s.dados.numero_lote,geometry:geometriaLivre()}}
   async function conferirEdicao(){
@@ -602,7 +623,10 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     s.busy=true;$('pc-conferencia').textContent='Conferindo…'
     try{const d=await request(`/api/lotes/${s.ids[0]}/edicao/previa`,corpoEdicao())
       if(d.impedimento){exibirErro({message:d.impedimento});return}
-      const r=d.retrato;$('pc-conferencia').innerHTML=`<p>Área: <b>${fmtNum(r.area_anterior_m2)} m²</b> → <b>${fmtNum(r.area_m2)} m²</b>${alvoTxt(Number(r.area_m2))}.</p>${(r.vizinhos||[]).filter(v=>v.area_comum>0).map(v=>`<p>Encosta em Q${e(v.quadra)} Lt${e(v.lote)} (${fmtNum(v.area_comum)} m² em comum, dentro da tolerância).</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.salvarEdicao()">Salvar lote</button>`
+      const r=d.retrato,antes=r.area_anterior_exata??r.area_anterior_m2,agora=r.area_m2_exata??r.area_m2,dif=Math.round((agora-antes)*10000)/10000
+      $('pc-conferencia').innerHTML=`<p>Área: <b>${fmtMed(antes)} m²</b> → <b>${fmtMed(agora)} m²</b>${alvoTxt(Number(agora))}.</p>
+        ${dif!==0&&Math.abs(dif)<0.05?`<p class="pc-nota-pequena">Diferença de ${fmtMed(Math.abs(dif))} m²: é de centímetros no desenho. Os lados que mudaram aparecem com a medida de antes, em cinza.</p>`:''}
+        <p class="pc-nota-pequena">Grava-se com 2 casas (${fmtNum(agora)} m²), como o cadastro.</p>${(r.vizinhos||[]).filter(v=>v.area_comum>0).map(v=>`<p>Encosta em Q${e(v.quadra)} Lt${e(v.lote)} (${fmtNum(v.area_comum)} m² em comum, dentro da tolerância).</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.salvarEdicao()">Salvar lote</button>`
     }catch(err){exibirErro(err)}finally{s.busy=false}
   }
   async function salvarEdicao(){

@@ -619,11 +619,12 @@ function _htmlPendenciasDoDesenho(i) {
 function _htmlPreCuradoria(pc) {
   if (!pc || !pc.total) return ''
   const rot = { editou: 'Editou', 'corrigiu quadra': 'Corrigiu quadra', renumerou: 'Renumerou', desenhou: 'Desenhou',
-    excluiu: 'Apagou', unificou: 'Unificou', desmembrou: 'Desmembrou', inativou: 'Inativou' }
+    excluiu: 'Apagou', unificou: 'Unificou', desmembrou: 'Desmembrou', inativou: 'Inativou',
+    criou: 'Criou', alterou: 'Alterou', 'instituiu frações': 'Instituiu frações', reativou: 'Reativou' }
   return `<section class="jt-grupo">
       <div class="jt-grupo-tit"><span class="badge bd-in">${pc.total}</span> <b>Ajustes da pré-curadoria</b>
         <span class="imp-sub">ficam com a importação e não entram no Histórico do cadastro</span></div>
-      <table class="imp-tabela jt-tabela"><thead><tr><th>Ajuste</th><th>Lote</th><th>Quem</th><th>Quando</th></tr></thead>
+      <table class="imp-tabela jt-tabela jt-registro"><thead><tr><th>Ajuste</th><th>Lote</th><th>Usuário</th><th>Quando</th></tr></thead>
         <tbody>${pc.ultimos.map(a => `
         <tr><td>${esc(rot[a.acao] || a.acao)}</td><td>${esc(a.lote || '—')}</td>
             <td>${esc(a.usuario || '—')}</td><td>${esc(a.quando)}</td></tr>`).join('')}</tbody></table>

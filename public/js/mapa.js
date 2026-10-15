@@ -748,6 +748,7 @@ const ZOOM_ROTULO_LOTE = 18
 function sincronizarRotulos() {
   if (!mapaState.obj) { return }
   desenharNumerosDosLotes()
+  if (typeof desenharSelosDosLotes === 'function') desenharSelosDosLotes()
   sincronizarMedidas()
 }
 
@@ -955,6 +956,7 @@ function abrirBalao(feicao, camada) {
   const html = `
     <div class="balao4">
       <div class="balao4-cab"><b>Q ${esc(p.quadra ?? '—')} · Lote ${esc(p.numero_lote ?? '—')}</b></div>
+      ${typeof htmlAlertaNoBalao === 'function' ? htmlAlertaNoBalao(p) : ''}
       <div class="balao4-corpo">
         ${p.em_revisao ? `<div class="balao-revisao">Em revisão · importação nº ${esc(p.importacao_id)}
            <a href="#" onclick="event.preventDefault(); abrirImportacao(${Number(p.importacao_id)})">abrir</a></div>` : ''}

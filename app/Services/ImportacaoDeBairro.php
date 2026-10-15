@@ -516,6 +516,19 @@ class ImportacaoDeBairro
 
         DB::transaction(function () use ($imp, $admin, $justificativa, $divergencias) {
             DB::table('lotes')->where('importacao_id', $imp->id)->update(['em_revisao' => false]);
+            // A conferência da importação passa a ser a do bairro (quando é mais
+            // nova): é dela que saem os alertas de lote desatualizado no mapa.
+            $atual = DB::table('conferencias_bairro')->where('bairro', $imp->bairro)->value('conferido_em');
+            if ($imp->conferencia_cadastro && (! $atual || strtotime($atual) < strtotime((string) $imp->conferido_em))) {
+                DB::table('conferencias_bairro')->updateOrInsert(['bairro' => $imp->bairro], [
+                    'codigo_bairro' => $imp->conferencia_cadastro['codigo_bairro'] ?? null,
+                    'resultado'     => json_encode($imp->conferencia_cadastro, JSON_UNESCAPED_UNICODE),
+                    'user_id'       => $admin->id,
+                    'conferido_em'  => $imp->conferido_em,
+                    'updated_at'    => now(),
+                    'created_at'    => now(),
+                ]);
+            }
             $imp->update([
                 'status'        => 'publicada',
                 'publicado_por' => $admin->id,

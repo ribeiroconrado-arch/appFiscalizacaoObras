@@ -419,3 +419,12 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .imp-ficha-topo .conf-kpis{margin-top:10px}
 /* O filtro dos cartões na ficha da importação. */
 .jt-grupo.fora-filtro{display:none !important}
+
+/* REGISTRO DE CURADORIA (ajustes da pré-curadoria): o LOTE é a coluna larga —
+   a chave "BAIRRO|quadra|lote-unidade" não pode sair cortada; usuário e data
+   são curtos. Vence as larguras comuns dos grupos (.jt-grupo .jt-tabela). */
+.jt-grupo .jt-tabela.jt-registro th:nth-child(1){width:170px}
+.jt-grupo .jt-tabela.jt-registro th:nth-child(2){width:auto}
+.jt-grupo .jt-tabela.jt-registro th:nth-child(3){width:180px}
+.jt-grupo .jt-tabela.jt-registro th:last-child{width:140px}
+.jt-tabela.jt-registro td:nth-child(2){white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.5}

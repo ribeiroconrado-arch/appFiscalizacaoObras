@@ -520,6 +520,22 @@ class CadastroLoteController extends Controller
         ], 201);
     }
 
+    /** POST /api/lotes/{lote}/desfazer-fracoes — o terreno volta a ser lote comum. */
+    public function desfazerFracoes(Request $request, Lote $lote, \App\Services\DesfazerAlteracao $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+        if ($lote->terreno_id) {
+            $lote = Lote::findOrFail($lote->terreno_id);
+        }
+        try {
+            return response()->json(['message' => $svc->desfazerFracoesDoTerreno($lote)]);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
     /** @return array<string,mixed> */
     private function validarFracao(Request $request): array
     {

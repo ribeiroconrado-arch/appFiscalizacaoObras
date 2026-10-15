@@ -279,6 +279,17 @@ class DesfazerAlteracao
             throw new RuntimeException('O terreno das frações não existe mais.');
         }
 
+        return $this->desfazerFracoesDoTerreno($terreno);
+    }
+
+    /**
+     * O mesmo desfazer, chamado pelo TERRENO — o botão da aba Unidades da
+     * ficha. Serve também ao lote de importação em revisão, cujo ato fica no
+     * registro da importação e não aparece no Histórico do cadastro.
+     */
+    public function desfazerFracoesDoTerreno(Lote $terreno): string
+    {
+
         $ato = DB::table('lote_atos as at')
             ->join('lote_ato_lotes as al', 'al.ato_id', '=', 'at.id')
             ->where('al.lote_id', $terreno->id)->where('al.papel', 'terreno')

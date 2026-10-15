@@ -62,10 +62,11 @@ const _m2 = n => n === null || n === undefined ? '—' : Number(n).toLocaleStrin
 /** O pedaço do balão que é da fração ideal (vazio para o lote comum). */
 function htmlFracaoNoBalao(p) {
   if (!ehFracaoIdeal(p)) return ''
+  // No terreno, SÓ a quantidade: o balão é de tela pequena, e um prédio de 50
+  // unidades não cabe nele. A lista com os donos fica na aba Unidades da ficha.
   if (p.condominio) {
     fracaoState.terrenos.set(Number(p.id), p)
-    return `<div class="fr-balao"><span class="fr-tag">Condomínio · ${Number(p.unidades || 0)} unidade(s)</span>
-      <div class="fr-balao-lista" id="fr-balao-lista">Carregando unidades…</div></div>`
+    return `<div class="fr-balao"><span class="fr-tag">Condomínio · ${Number(p.unidades || 0)} unidade(s)</span></div>`
   }
   return `<div class="fr-balao"><span class="fr-tag fr-tag-un">Unidade ${esc(p.unidade || '')}</span>
     <table class="balao4-tab"><tr><td>Fração ideal</td><td><b>${_m2(p.fracao_ideal_m2)}</b></td></tr>
@@ -75,21 +76,13 @@ function htmlFracaoNoBalao(p) {
 
 /** Preenche o balão depois que as unidades chegam. */
 async function preencherFracaoNoBalao(p) {
-  if (!ehFracaoIdeal(p)) return
+  // Só a unidade busca algo (o dono dela); o terreno mostra apenas a tag.
+  if (!p?.terreno_id) return
   const d = await carregarUnidades(p)
   if (!d) return
-  if (p.condominio) {
-    const alvo = document.getElementById('fr-balao-lista')
-    if (!alvo) return
-    alvo.innerHTML = d.unidades.length ? d.unidades.map(u => `
-      <button type="button" class="fr-item" onclick="abrirUnidade(${u.id}, ${Number(p.id)})">
-        <b>Unidade ${esc(u.unidade)}</b><small>${esc(donosEmTexto(u.proprietarios))}</small>
-        <span>${_m2(u.fracao_ideal_m2)}</span></button>`).join('') : '<small>Nenhuma unidade ativa.</small>'
-  } else {
-    const u = d.unidades.find(x => x.id === Number(p.id))
-    const el = document.getElementById('fr-balao-dono')
-    if (el && u) el.textContent = donosEmTexto(u.proprietarios)
-  }
+  const u = d.unidades.find(x => x.id === Number(p.id))
+  const el = document.getElementById('fr-balao-dono')
+  if (el && u) el.textContent = donosEmTexto(u.proprietarios)
 }
 
 // ── navegação ───────────────────────────────────────────────────
@@ -157,7 +150,9 @@ async function carregarAbaUnidades(p) {
   alvo.innerHTML = `${cab}${resumo}
     <div class="fr-tabela"><table><thead><tr><th>Unid.</th><th>Inscrição</th><th>Proprietário</th><th class="n">Fração</th><th class="n">Exclusiva</th><th class="n">Processos</th><th></th></tr></thead>
     <tbody>${linhas}</tbody></table></div>
-    ${ehUnidade ? '' : '<p class="fr-nota">O terreno não tem proprietário próprio: cada unidade tem o seu, lido do cadastro pela inscrição dela.</p>'}`
+    ${ehUnidade ? '' : '<p class="fr-nota">O terreno não tem proprietário próprio: cada unidade tem o seu, lido do cadastro pela inscrição dela.</p>'}
+    ${window.USUARIO_CURADOR ? `<div class="fr-acoes"><button type="button" class="btn sm out-vermelho" onclick="desfazerFracoes(${t.id})">Desfazer frações</button>
+      <small>As unidades saem e o terreno volta a ser um lote comum. Não dá se alguma unidade já tiver vistoria, documento ou protocolo, nem se o ato veio de protocolo.</small></div>` : ''}`
 }
 
 // ── documento: qual área vale para a multa ─────────────────────
@@ -189,6 +184,24 @@ async function notaDaAreaNoDocumento(p) {
   nota.textContent = txt
   nota.hidden = false
   if (typeof fdState !== 'undefined') fdState.fracaoBase = txt
+}
+
+/** O botão da aba Unidades: desfaz o ato (em revisão ou publicado). */
+function desfazerFracoes(terrenoId) {
+  confirmarAcao({
+    titulo: 'Desfazer frações',
+    mensagem: 'As unidades deste terreno saem do cadastro e ele volta a ser um lote comum. A operação fica registrada com o seu nome.',
+    textoBtn: 'Desfazer',
+    onConfirm: async () => {
+      const d = await postCadastro(`/api/lotes/${Number(terrenoId)}/desfazer-fracoes`, {})
+      if (!d) return
+      toast(d.message)
+      fracaoState.cache.clear()
+      fModalBtn('m-ficha')
+      limparLotesDoMapa()
+      carregarLotesVisiveis()
+    },
+  })
 }
 
 // As frações mudaram (ato executado ou desfeito): as respostas guardadas caducam.

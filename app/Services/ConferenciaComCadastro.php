@@ -292,6 +292,51 @@ class ConferenciaComCadastro
      *
      * @return array<string,mixed> o resultado, gravado em conferencias_bairro
      */
+    /**
+     * ALERTAS DO MAPA — o lote publicado que a última conferência do bairro
+     * apontou como desatualizado: inativo no cadastro, fora do cadastro, com
+     * área diferente ou sem inscrição. Lido de `conferencias_bairro` (gravada
+     * a cada conferência e na publicação), com as justificativas aceitas.
+     *
+     * @return array<int, array{tipo:string, justificado:bool, motivo:?string, detalhe:?string, conferido_em:?string}>
+     */
+    public static function alertasDoBairro(string $bairro): array
+    {
+        $linha = DB::table('conferencias_bairro')->where('bairro', $bairro)->first(['resultado', 'conferido_em']);
+        $r = $linha ? json_decode($linha->resultado, true) : null;
+        if (! $r) {
+            return [];
+        }
+        $just = DB::table('conferencia_justificativas')->where('bairro', $bairro)->get(['tipo', 'chave', 'motivo'])
+            ->mapWithKeys(fn ($j) => [$j->tipo . '|' . $j->chave => $j->motivo])->all();
+        $em = $linha->conferido_em ? date('d/m/Y', strtotime($linha->conferido_em)) : null;
+        $fmt = fn ($n) => number_format((float) $n, 2, ',', '.');
+
+        $alertas = [];
+        // Mais grave primeiro: um lote em duas listas fica com o alerta mais forte.
+        foreach (['inativos', 'nao_encontrados', 'area_diferente', 'sem_inscricao'] as $tipo) {
+            foreach ($r[$tipo] ?? [] as $l) {
+                $id = (int) ($l['lote_id'] ?? 0);
+                if (! $id || isset($alertas[$id])) {
+                    continue;
+                }
+                $chave = $tipo === 'sem_inscricao' ? 'lote:' . $id : (string) ($l['inscricao'] ?? '');
+                $motivo = $just[$tipo . '|' . $chave] ?? null;
+                $alertas[$id] = [
+                    'tipo'         => $tipo,
+                    'justificado'  => $motivo !== null,
+                    'motivo'       => $motivo,
+                    'detalhe'      => $tipo === 'area_diferente' && isset($l['area_cadastro'])
+                        ? 'Desenho ' . $fmt($l['area_desenho'] ?? 0) . ' m² · cadastro ' . $fmt($l['area_cadastro']) . ' m²'
+                        : null,
+                    'conferido_em' => $em,
+                ];
+            }
+        }
+
+        return $alertas;
+    }
+
     public function conferirBairro(string $bairro, FonteDoCadastro $fonte, string $descricaoFonte): array
     {
         $resultado = $this->calcular($bairro, $fonte, $descricaoFonte, null,

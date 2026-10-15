@@ -1285,6 +1285,8 @@
          valendo enquanto se navega pelo histórico ou pelo BCI. Aqui, ela não
          some quando a aba muda. --}}
     <div class="fi-fixo">
+      {{-- Alerta do cadastro (alertas-mapa.js): só quando a última conferência apontou o lote. --}}
+      <div class="fi-alerta" id="fi-alerta" hidden></div>
       <div class="fi-endereco" id="fi-endereco">—</div>
       <div class="fi-fixo-dados">
         <span><span class="fi-rot">Insc. Imob.</span><span class="mono" id="fi-inscricao">—</span></span>
@@ -3922,6 +3924,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
   <script src="@assetv('js/correcao-mapa.js')"></script>
   {{-- Fração ideal: terreno em condomínio e unidades no mapa, no balão e na ficha. --}}
   <script src="@assetv('js/fracao-ideal.js')"></script>
+  {{-- Lote desatualizado no cadastro: borda, selo, faixa no balão e tag na ficha. --}}
+  <script src="@assetv('js/alertas-mapa.js')"></script>
 @endif
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
