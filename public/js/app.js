@@ -48,15 +48,39 @@ const ZOOM_MINIMO = 13
 //      lotes      as linhas e os números dos lotes (e, mais perto, as medidas)
 //    Lote só é pedido no último nível. É a área, e não o zoom, que decide:
 //    o mesmo zoom 16 cobre 0,8 km² no celular e 18 km² num monitor largo.
-// 2. BLOCOS FIXOS de BLOCO_GRAUS (~1,1 km). A tela vira uma lista de blocos;
+// 2. BLOCOS FIXOS de BLOCO_FINO_GRAUS (~280 m) na navegação, e de BLOCO_GRAUS
+//    (~1,1 km) com ferramenta de curadoria no mapa. A tela vira uma lista de blocos;
 //    só se pede o que falta, em paralelo, e um bloco já carregado nunca é
 //    pedido de novo. Arrastar o mapa enquanto carrega não perde mais o pedido
 //    (antes, uma carga em andamento descartava a nova área).
 // 3. MEMÓRIA COM TETO. Passando de LIMITE_MEMORIA lotes, os blocos mais
 //    distantes da tela saem — menos os lotes em uso (ver lotesProtegidos).
 
-/** Lado do bloco, em graus (~1,1 km). Um bloco denso tem ~2.700 lotes. */
+/** Lado do bloco GRANDE, em graus (~1,1 km): o da curadoria, que enquadra o bairro inteiro. */
 const BLOCO_GRAUS = 0.01
+
+/**
+ * Lado do bloco da NAVEGAÇÃO, em graus (~280 m).
+ *
+ * No nível dos lotes a tela cobre ~300 m. Com o bloco de 1,1 km, entrar nesse
+ * nível pedia 1 a 4 blocos inteiros — num bairro denso, 1.100 lotes cada, até
+ * ~4.000 lotes para os ~150 que cabem na tela (medido em produção em
+ * 15/10/2026). Um bloco 4× menor de lado tem 1/16 da área: a tela pede de 2 a
+ * 6 blocos pequenos, de algumas dezenas a ~200 lotes cada, e o primeiro que
+ * chega já é o do meio da tela.
+ */
+const BLOCO_FINO_GRAUS = 0.0025
+
+/** O lado do bloco a usar agora: grande na curadoria, fino na navegação. */
+function tamanhoDoBloco() {
+  return curadoriaNoMapa() ? BLOCO_GRAUS : BLOCO_FINO_GRAUS
+}
+
+/** Centro de um bloco, em graus [lon, lat] — a chave é "lado:x:y". @param {string} chave */
+function centroDoBloco(chave) {
+  const [t, x, y] = chave.split(':').map(Number)
+  return [(x + 0.5) * t, (y + 0.5) * t]
+}
 
 /**
  * Maior área visível (graus²) em que os lotes são pedidos — ~0,09 km²: DOIS zooms
@@ -124,23 +148,28 @@ function lotesNaEscala(mapa) {
 /**
  * Chaves dos blocos que cobrem um retângulo.
  * @param {{oeste:number, sul:number, leste:number, norte:number}} r
- * @returns {string[]} "x:y", em ordem do centro para fora
+ * O LADO entra na chave ("lado:x:y"): blocos finos e grandes convivem na
+ * memória sem um ser confundido com o outro — o lote repetido nos dois é
+ * desenhado uma vez só (`desenhados`).
+ *
+ * @param {number} [t] lado do bloco, em graus
+ * @returns {string[]} "lado:x:y", em ordem do centro para fora
  */
-function blocosDoRetangulo(r) {
-  const x0 = Math.floor(r.oeste / BLOCO_GRAUS), x1 = Math.floor(r.leste / BLOCO_GRAUS)
-  const y0 = Math.floor(r.sul / BLOCO_GRAUS), y1 = Math.floor(r.norte / BLOCO_GRAUS)
+function blocosDoRetangulo(r, t = BLOCO_GRAUS) {
+  const x0 = Math.floor(r.oeste / t), x1 = Math.floor(r.leste / t)
+  const y0 = Math.floor(r.sul / t), y1 = Math.floor(r.norte / t)
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
   const chaves = []
   for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) chaves.push([x, y])
   // O bloco do meio da tela chega primeiro: é para onde o fiscal está olhando.
   chaves.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy))
-  return chaves.map(([x, y]) => x + ':' + y)
+  return chaves.map(([x, y]) => t + ':' + x + ':' + y)
 }
 
 /** bbox "oeste,sul,leste,norte" de um bloco. @param {string} chave */
 function bboxDoBloco(chave) {
-  const [x, y] = chave.split(':').map(Number)
-  return [x * BLOCO_GRAUS, y * BLOCO_GRAUS, (x + 1) * BLOCO_GRAUS, (y + 1) * BLOCO_GRAUS]
+  const [t, x, y] = chave.split(':').map(Number)
+  return [x * t, y * t, (x + 1) * t, (y + 1) * t]
     .map(n => n.toFixed(6)).join(',')
 }
 
@@ -164,7 +193,7 @@ async function carregarLotesVisiveis() {
   }
 
   const b = mapa.getBounds().pad(0.1)
-  const chaves = blocosDoRetangulo({ oeste: b.getWest(), sul: b.getSouth(), leste: b.getEast(), norte: b.getNorth() })
+  const chaves = blocosDoRetangulo({ oeste: b.getWest(), sul: b.getSouth(), leste: b.getEast(), norte: b.getNorth() }, tamanhoDoBloco())
   const versao = state.versaoLotes
 
   const faltam = chaves.filter(k => !state.blocos.has(k) && !state.pendentes.has(k))
@@ -255,11 +284,11 @@ function descartarLotesDistantes(naTela) {
 
   const visiveis = new Set(naTela)
   const [cx, cy] = naTela.length
-    ? naTela.map(k => k.split(':').map(Number)).reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]).map(v => v / naTela.length)
+    ? naTela.map(centroDoBloco).reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]).map(v => v / naTela.length)
     : [0, 0]
   const distantes = [...state.blocos.keys()].filter(k => !visiveis.has(k))
     .sort((a, b) => {
-      const [ax, ay] = a.split(':').map(Number), [bx, by] = b.split(':').map(Number)
+      const [ax, ay] = centroDoBloco(a), [bx, by] = centroDoBloco(b)
       return Math.hypot(bx - cx, by - cy) - Math.hypot(ax - cx, ay - cy)
     })
 

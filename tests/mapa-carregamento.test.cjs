@@ -40,7 +40,19 @@ test('a tela vira blocos de 0,01°, do centro para fora',()=>{
   const {ctx}=contexto();
   const k=ctx.blocosDoRetangulo({oeste:-54.305,sul:-15.565,leste:-54.285,norte:-15.555});
   assert.equal(k.length,6);
-  assert.equal(ctx.bboxDoBloco('-5430:-1556'),'-54.300000,-15.560000,-54.290000,-15.550000');
+  assert.equal(ctx.bboxDoBloco('0.01:-5430:-1556'),'-54.300000,-15.560000,-54.290000,-15.550000');
+});
+
+test('na navegação o bloco é fino (0,0025°); na curadoria, grande',async()=>{
+  const {ctx,pedidos}=contexto();
+  ctx.carregarLotesVisiveis();await tick();
+  assert.ok(pedidos.length>0);
+  for(const p of pedidos){const [o,s,l,n]=p.url.match(/bbox=([^&]+)/)[1].split(',').map(Number);
+    assert.ok(Math.abs(l-o-0.0025)<1e-9&&Math.abs(n-s-0.0025)<1e-9,'bloco de 0,0025° na navegação')}
+  const {ctx:c2,pedidos:p2}=contexto({selState:{ativa:true}});
+  c2.carregarLotesVisiveis();await tick();
+  const [o,s,l]=p2[0].url.match(/bbox=([^&]+)/)[1].split(',').map(Number);
+  assert.ok(Math.abs(l-o-0.01)<1e-9,'bloco de 0,01° com a curadoria aberta');
 });
 
 test('bloco em trânsito é aguardado sem repetir o pedido',async()=>{
@@ -83,14 +95,14 @@ test('acima do teto de memória saem os blocos distantes, nunca o lote em uso',(
   const {ctx}=contexto();
   vm.runInContext('LIMITE_MEMORIA_TESTE=10',ctx);
   // 3 blocos de 6 lotes; o distante tem o lote 99, que está aberto na ficha.
-  const lotes=[['0:0',[1,2,3,4,5,6]],['1:0',[7,8,9,10,11,12]],['9:9',[13,14,15,16,17,99]]];
+  const lotes=[['0.01:0:0',[1,2,3,4,5,6]],['0.01:1:0',[7,8,9,10,11,12]],['0.01:9:9',[13,14,15,16,17,99]]];
   for(const [k,ids] of lotes){ctx.state.blocos.set(k,new Set(ids));ids.forEach(id=>{ctx.state.lotes.set(id,{});ctx.mapaState.porId.set(id,{});ctx.mapaState.camadas.push({feature:{properties:{id}}})})}
   ctx.state.selecionado={properties:{id:99}};
   // O teto real é 15 mil; aqui a regra é a mesma com números pequenos.
   const fonteDescarte=fonte.slice(fonte.indexOf('function descartarLotesDistantes('),fonte.indexOf('\n}',fonte.indexOf('function descartarLotesDistantes('))+2).replace(/LIMITE_MEMORIA/g,'LIMITE_MEMORIA_TESTE');
   vm.runInContext(fonteDescarte,ctx);
-  ctx.descartarLotesDistantes(['0:0','1:0']);
-  assert.equal(ctx.state.blocos.has('9:9'),false,'o bloco distante saiu');
+  ctx.descartarLotesDistantes(['0.01:0:0','0.01:1:0']);
+  assert.equal(ctx.state.blocos.has('0.01:9:9'),false,'o bloco distante saiu');
   assert.equal(ctx.state.lotes.has(13),false);
   assert.equal(ctx.state.lotes.has(99),true,'o lote aberto na ficha ficou');
   assert.equal(ctx.state.lotes.has(1),true,'os blocos da tela ficaram');
