@@ -29,7 +29,14 @@ class LoteRepository
      * todos os lotes, então a falta não aparecia; apareceria na primeira parte
      * de desmembramento desenhada, com a variação saindo 000 em vez de 001.
      */
-    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria, inscricao_montada, origem, importacao_id, em_revisao, frente_m, fundos_m';
+    private const CAMPOS = 'id, bairro, quadra, numero_lote, desmembramento, chave, area_gis_m2, inscricao_imobiliaria, inscricao_montada, origem, importacao_id, em_revisao, frente_m, fundos_m, terreno_id, fracao_ideal_m2, unidade_desenhada, condominio';
+
+    /**
+     * FRAÇÃO IDEAL: a unidade SEM área desenhada (apartamento) guarda na
+     * geometria o próprio terreno, porque a coluna é NOT NULL. Ela não é um
+     * lugar no chão, e fica fora de toda consulta espacial do mapa e do GPS.
+     */
+    private const SEM_UNIDADE_SEM_DESENHO = '(terreno_id IS NULL OR unidade_desenhada = 1)';
 
     /**
      * Recorte padrão de TODA consulta de mapa, GPS e busca.
@@ -115,8 +122,10 @@ class LoteRepository
     {
         $sql = 'SELECT ' . self::CAMPOS . '
                   FROM lotes
-                 WHERE ' . self::SO_PUBLICADOS . '
+                 WHERE ' . self::SO_PUBLICADOS . ' AND ' . self::SEM_UNIDADE_SEM_DESENHO . '
                    AND ST_Contains(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
+                 -- Dentro da área de uma unidade, é a unidade que se achou.
+                 ORDER BY terreno_id IS NULL
                  LIMIT 1';
 
         return DB::selectOne($sql, [$this->ponto($lat, $lon)]);
@@ -160,7 +169,7 @@ class LoteRepository
                        ST_Distance(geom,
                            ST_GeomFromText(?, 4326, \'axis-order=long-lat\')) AS dist_m
                   FROM lotes
-                 WHERE ' . self::SO_PUBLICADOS . '
+                 WHERE ' . self::SO_PUBLICADOS . ' AND ' . self::SEM_UNIDADE_SEM_DESENHO . '
                    AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))
                 HAVING dist_m <= ?
               ORDER BY dist_m
@@ -199,8 +208,11 @@ class LoteRepository
         // escreve até 15 casas por coordenada, que só pesam na resposta.
         $sql = 'SELECT ' . self::CAMPOS . ', ST_AsGeoJSON(geom, 8) AS geojson
                   FROM lotes
-                 WHERE ' . ($incluirRevisao ? self::SO_ATIVOS : self::SO_PUBLICADOS) . '
+                 WHERE ' . ($incluirRevisao ? self::SO_ATIVOS : self::SO_PUBLICADOS) . ' AND ' . self::SEM_UNIDADE_SEM_DESENHO . '
                    AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))' . $alheios . '
+                 -- As unidades DEPOIS dos terrenos: desenhadas por cima, são
+                 -- elas que o clique acha dentro da área exclusiva.
+                 ORDER BY terreno_id IS NOT NULL
                  LIMIT ' . (int) $limite;
 
         return DB::select($sql, $params);
@@ -383,7 +395,7 @@ class LoteRepository
             'SELECT id, quadra, numero_lote, ST_AsGeoJSON(geom) AS geojson
                FROM lotes
               WHERE ' . self::SO_ATIVOS . '
-                AND bairro = ?
+                AND terreno_id IS NULL AND bairro = ?
                 AND MBRIntersects(geom, ST_GeomFromGeoJSON(?, 1, 4326))'
             . ($ignorar ? ' AND id NOT IN (' . implode(',', array_map('intval', $ignorar)) . ')' : ''),
             [$bairro, $geojson]
@@ -614,7 +626,7 @@ class LoteRepository
         }
         $f = 0.003;   // ~300 m
         $sql = 'SELECT ST_AsGeoJSON(geom) AS geojson FROM lotes
-                 WHERE ' . self::SO_ATIVOS . ' AND bairro <> ?
+                 WHERE ' . self::SO_ATIVOS . ' AND terreno_id IS NULL AND bairro <> ?
                    AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))';
 
         return DB::select($sql, [$bairro, $this->retangulo($e['oeste'] - $f, $e['sul'] - $f, $e['leste'] + $f, $e['norte'] + $f)]);

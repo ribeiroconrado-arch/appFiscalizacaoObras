@@ -106,7 +106,7 @@ function renderHistoricoCadastral(truncou) {
         </div>
         <div class="hc-l2">${alvoTxt}${delta}</div>
         <div class="hc-l3"><span class="hc-quem">${esc(l.quem)}</span>${acao}
-          ${['desmembrou','unificou'].includes(l.acao)&&l.registro?`<button class="btn sm" onclick="PranchetaCad.verSalvas(${Number(l.registro)})">Ver prancha</button>`:''}</div>
+          ${['desmembrou','unificou','instituiu frações'].includes(l.acao)&&l.registro?`<button class="btn sm" onclick="PranchetaCad.verSalvas(${Number(l.registro)})">Ver prancha</button>`:''}</div>
       </div>`
   }).join('')
 }

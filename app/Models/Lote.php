@@ -35,6 +35,7 @@ class Lote extends Model
         return match ($origem) {
             'desmembramento' => 'DESMEMBRADO',
             'unificacao' => 'UNIFICADO',
+            'fracao_ideal' => 'UNIDADE',
             default => 'ORIGINAL',
         };
     }
@@ -62,6 +63,8 @@ class Lote extends Model
         'id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'chave',
         'inscricao_imobiliaria', 'inscricao_montada', 'inscricao_montada_em', 'area_gis_m2', 'fonte', 'origem',
         'situacao', 'inativado_em', 'importacao_id', 'em_revisao', 'tem_progressividade',
+        // Fração ideal (2026_10_15_000100).
+        'terreno_id', 'fracao_ideal_m2', 'unidade_desenhada', 'condominio',
         'created_at', 'updated_at',
     ];
 

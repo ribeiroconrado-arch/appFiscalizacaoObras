@@ -54,7 +54,7 @@ class VistoriaController extends Controller
     public function protocolosCadastrais(Lote $lote): JsonResponse
     {
         $protocolos = Protocolo::where('lote_id', $lote->id)
-            ->whereIn('tipo', ['desmembramento', 'unificacao'])
+            ->whereIn('tipo', ['desmembramento', 'unificacao', 'fracao_ideal'])
             ->where('situacao', 'deferido')
             ->whereNull('vistoria_id')
             ->orderByDesc('protocolado_em')
@@ -779,7 +779,7 @@ class VistoriaController extends Controller
             // vistoria que fundamentou um ato.
             if (! empty($d['protocolo_id'])) {
                 Protocolo::where('id', $d['protocolo_id'])
-                    ->whereIn('tipo', ['desmembramento', 'unificacao'])
+                    ->whereIn('tipo', ['desmembramento', 'unificacao', 'fracao_ideal'])
                     ->whereNull('vistoria_id')
                     ->update(['vistoria_id' => $v->id]);
             }

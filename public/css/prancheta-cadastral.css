@@ -95,3 +95,20 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 
 /* Face sob o cursor no Alinhar face e na Perpendicular (render, prancheta-cadastral.js). */
 .pc-face-rot{font:700 12px Inter,Arial,sans-serif;fill:#6b21a8;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+
+/* Fração ideal (formFracao, prancheta-cadastral.js). */
+.pc-fr-ajuda{font-size:12.5px;color:#586875;margin:0 0 8px}
+.pc-fr-cond{display:grid;gap:6px;margin-bottom:10px}
+.pc-fr-cond label{display:flex;gap:8px;align-items:flex-start;border:1px solid #dbe3e8;border-radius:8px;padding:8px 10px;cursor:pointer}
+.pc-fr-cond label:has(input:checked){border-color:var(--g,#009B3A);background:var(--gl,#E8F3EB)}
+.pc-fr-cond span{display:grid;gap:2px}.pc-fr-cond small{font-size:11.5px;color:#586875}
+.pc-fr-acoes{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.pc-fr-mais{width:100%;margin:4px 0 10px}
+.pc-fr-soma{display:grid;gap:5px;margin-bottom:10px;font-size:12.5px}
+.pc-fr-soma-lin{display:flex;justify-content:space-between;gap:8px}
+.pc-fr-soma .ok{color:var(--gd,#006B28)}.pc-fr-soma .aviso{color:#b45309}
+.pc-fr-barra{display:flex;height:9px;border-radius:5px;overflow:hidden;border:1px solid #dbe3e8;background:#f4f6f7}
+.pc-fr-soma small{color:#7a857f;font-size:11px}
+/* `#pc-dados label` (bloco, 11px) e `#pc-dados input` (100%) vencem por especificidade. */
+#pc-dados .pc-fr-cond label{display:flex;gap:8px;align-items:flex-start;margin:0;font-size:12.5px}
+#pc-dados .pc-fr-cond input{width:auto;flex:none;margin-top:3px}

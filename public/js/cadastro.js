@@ -372,7 +372,7 @@ function pintarMesaCadastral() {
   // desmembramento. Quem começava o ato ficava com uma caixa branca inútil por
   // cima da mesa onde o trabalho de fato acontece, sem passo seguinte à vista:
   // a ferramenta parecia travada, e estava.
-  if (atoState.tipo === 'desmembramento') {
+  if (atoState.tipo === 'desmembramento' || atoState.tipo === 'fracao_ideal') {
     mesa.hidden = true
     document.body.classList.remove('com-mesa')
     return
@@ -643,6 +643,7 @@ function cabeNaMarcacao(lanca) {
 function ferramentaAtiva() {
   if (atoState.tipo === 'unificacao') { return 'unificacao' }
   if (atoState.tipo === 'desmembramento') { return 'desmembramento' }
+  if (atoState.tipo === 'fracao_ideal') { return 'fracao_ideal' }
   return cadModo
 }
 
@@ -719,6 +720,7 @@ document.addEventListener('keydown', ev => {
 function tituloDaFerramenta() {
   if (atoState.tipo === 'unificacao') { return 'Unificar lotes' }
   if (atoState.tipo === 'desmembramento') { return 'Desmembrar lote' }
+  if (atoState.tipo === 'fracao_ideal') { return 'Instituir frações' }
   return {
     quadra: 'Corrigir quadra',
     apagar: 'Apagar lotes',
@@ -980,7 +982,7 @@ function pintarPainelCadastro() {
   // Em ato cadastral o assunto é outro: não é corrigir quadra, é executar a
   // unificação daquele protocolo. Trocar o texto e o botão evita que a pessoa
   // preencha a quadra achando que é isso que vai acontecer.
-  const emDesm = atoState.tipo === 'desmembramento'
+  const emDesm = atoState.tipo === 'desmembramento' || atoState.tipo === 'fracao_ideal'
   const grupo = document.getElementById('cad-geral')
   if (grupo) { grupo.hidden = emDesm }
 
@@ -1193,12 +1195,21 @@ function iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
 
 function _iniciarAtoCadastral(protocoloId, tipo, loteId = null) {
   clearTimeout(timerRascunhoDesm)
-  const ids = tipo === 'desmembramento'
+  // Desmembramento e FRAÇÃO IDEAL partem de UM lote: o que se divide, ou o
+  // terreno onde as unidades vão nascer.
+  const deUmLote = tipo === 'desmembramento' || tipo === 'fracao_ideal'
+  const ids = deUmLote
     ? [loteId || (selState.ids.size === 1 ? [...selState.ids][0] : state.selecionado?.properties?.id)].filter(Boolean)
     : [...selState.ids]
   if (!ids.length || (tipo === 'unificacao' && ids.length < 2)) {
-    toast(tipo === 'unificacao' ? 'Marque pelo menos dois lotes vizinhos antes de abrir a unificação.' : 'Selecione o lote a desmembrar.', 'aviso')
+    toast(tipo === 'unificacao' ? 'Marque pelo menos dois lotes vizinhos antes de abrir a unificação.'
+      : tipo === 'fracao_ideal' ? 'Selecione o terreno onde as unidades vão nascer.' : 'Selecione o lote a desmembrar.', 'aviso')
     return
+  }
+  if (tipo === 'fracao_ideal') {
+    const p = mapaState.porId.get(ids[0])?.feature?.properties
+    if (p?.terreno_id) { toast('Este lote já é uma unidade de fração ideal. Selecione o terreno.', 'aviso'); return }
+    if (p?.condominio) { toast('Este terreno já tem frações instituídas.', 'aviso'); return }
   }
   cancelarDesenho()
   atoState.protocoloId = protocoloId

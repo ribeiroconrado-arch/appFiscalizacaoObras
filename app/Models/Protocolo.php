@@ -28,6 +28,8 @@ class Protocolo extends Model
         // perguntar ao operador qual dos dois fazer — que e exatamente a
         // ambiguidade que produz o ato errado.
         'unificacao'       => 'Unificação / remembramento (juntar lotes)',
+        // Também separado: o terreno FICA, e as unidades nascem dentro dele.
+        'fracao_ideal'     => 'Fração ideal (unidades no terreno)',
         'outro'            => 'Outro',
     ];
 

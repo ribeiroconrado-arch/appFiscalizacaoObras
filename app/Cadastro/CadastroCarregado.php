@@ -130,10 +130,24 @@ class CadastroCarregado implements FonteDoCadastro
         // mesmo com o bairro amarrado e o cadastro carregado, e vazia com a
         // MESMA mensagem de quem não tem cadastro nenhum, o que escondia o
         // defeito atrás de uma explicação plausível.
+        // FRAÇÃO IDEAL: no cadastro, as unidades são as linhas do MESMO lote
+        // com variação 001, 002… Cada unidade lê só a sua (e o seu dono); o
+        // terreno em condomínio, só a 000. Sem isto o terreno mostrava os donos
+        // de todas as unidades juntos, como se fossem coproprietários.
+        $numero = $lote->numero_lote;
+        $variacao = null;
+        if ($lote->terreno_id) {
+            $numero = DB::table('lotes')->where('id', $lote->terreno_id)->value('numero_lote');
+            $variacao = str_pad((string) (int) $lote->desmembramento, 3, '0', STR_PAD_LEFT);
+        } elseif ($lote->condominio) {
+            $variacao = '000';
+        }
+
         return DB::table('cadastro_externo_imoveis')
             ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim((string) $codigo, '0')])
             ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [ltrim((string) $lote->quadra, '0')])
-            ->whereRaw("TRIM(LEADING '0' FROM lote) = ?", [ltrim((string) $lote->numero_lote, '0')])
+            ->whereRaw("TRIM(LEADING '0' FROM lote) = ?", [ltrim((string) $numero, '0')])
+            ->when($variacao !== null, fn ($q) => $q->whereRaw("RIGHT(REPLACE(inscricao, '.', ''), 3) = ?", [$variacao]))
             ->orderBy('inscricao')
             ->get()
             ->all();

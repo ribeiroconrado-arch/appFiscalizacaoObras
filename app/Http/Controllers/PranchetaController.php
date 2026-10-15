@@ -10,7 +10,7 @@ class PranchetaController extends Controller
 {
     private function contexto(Request $r): array {
         $d = $r->validate([
-            'tipo' => 'required|in:desmembramento,unificacao',
+            'tipo' => 'required|in:desmembramento,unificacao,fracao_ideal',
             'ids' => 'required|array|min:1|max:200',
             'ids.*' => 'required|integer|distinct|exists:lotes,id',
             'protocolo_id' => 'nullable|integer|exists:protocolos,id',
@@ -29,8 +29,11 @@ class PranchetaController extends Controller
         $d = $this->contexto($r);
         $registro = DB::table('pranchetas_cadastrais')->where('chave', $this->chave($r, $d))->first();
         return response()->json(['estado' => $registro ? json_decode($registro->estado, true) : null,
-            'identidade' => $d['tipo'] === 'desmembramento'
-                ? app(\App\Services\DesmembramentoDeLote::class)->identidade(Lote::findOrFail($d['ids'][0])) : null]);
+            'identidade' => match ($d['tipo']) {
+                'desmembramento' => app(\App\Services\DesmembramentoDeLote::class)->identidade(Lote::findOrFail($d['ids'][0])),
+                'fracao_ideal'   => app(\App\Services\FracaoIdealDeLote::class)->identidade(Lote::findOrFail($d['ids'][0])),
+                default          => null,
+            }]);
     }
     public function salvar(Request $r) {
         $d = $this->contexto($r);

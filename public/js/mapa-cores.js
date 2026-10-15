@@ -146,7 +146,16 @@ const COR_REVISAO = '#FDBA8C'
  * A guarda `typeof` existe porque cadastro.js carrega depois deste arquivo, e
  * a coloração inicial do mapa pode rodar antes de `selState` existir.
  */
+/**
+ * A UNIDADE de fração ideal (fracao-ideal.js) tem a divisa TRACEJADA: ela fica
+ * dentro do terreno, e o lote continua sendo o terreno inteiro.
+ */
 function estiloColorido(f) {
+  const e = _estiloColoridoBase(f)
+  return f?.properties?.terreno_id ? { ...e, dashArray: '4 3' } : e
+}
+
+function _estiloColoridoBase(f) {
   if (typeof selState !== 'undefined' && selState.ids.has(f.properties.id)) {
     return { color: COR_SELECAO, weight: 3, opacity: 1, fillColor: COR_SELECAO, fillOpacity: .5 }
   }

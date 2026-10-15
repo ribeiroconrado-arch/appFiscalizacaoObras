@@ -61,7 +61,7 @@ class ProtocoloController extends Controller
             // Este protocolo está esperando a vistoria que vai fundamentar
             // o ato cadastral? É o que faz aparecer o botão "Registrar
             // vistoria" — o caminho de quem parte da tela de protocolos.
-            'espera_vistoria' => in_array($p->tipo, ['desmembramento', 'unificacao'], true)
+            'espera_vistoria' => in_array($p->tipo, ['desmembramento', 'unificacao', 'fracao_ideal'], true)
                 && $p->situacao === 'deferido'
                 && $p->vistoria_id === null
                 && $p->lote_id !== null,

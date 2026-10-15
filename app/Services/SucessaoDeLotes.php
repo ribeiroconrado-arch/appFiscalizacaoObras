@@ -40,8 +40,11 @@ class SucessaoDeLotes
         ?string $modo = null,
         ?string $observacao = null,
         ?array $visualizacao = null,
+        array $referencias = [],
     ): int {
-        return DB::transaction(function () use ($tipo, $anteriores, $posteriores, $protocolo, $modo, $observacao, $visualizacao) {
+        // REFERÊNCIAS: lotes que participam do ato sem serem baixados — o
+        // terreno da fração ideal, que continua ativo com as unidades dentro.
+        return DB::transaction(function () use ($tipo, $anteriores, $posteriores, $protocolo, $modo, $observacao, $visualizacao, $referencias) {
             if ($visualizacao !== null) {
                 $feicoes = function (array $ids) {
                     return DB::table('lotes')->whereIn('id', $ids)
@@ -49,7 +52,7 @@ class SucessaoDeLotes
                         ->map(fn ($l) => ['type' => 'Feature', 'geometry' => json_decode($l->geojson, true),
                             'properties' => ['id' => $l->id, 'quadra' => $l->quadra, 'numero_lote' => $l->numero_lote]])->all();
                 };
-                $visualizacao['originais'] = $feicoes($anteriores);
+                $visualizacao['originais'] = $feicoes(array_merge($anteriores, $referencias));
                 $visualizacao['resultantes'] = $feicoes($posteriores);
             }
             $ato = DB::table('lote_atos')->insertGetId([
@@ -78,6 +81,7 @@ class SucessaoDeLotes
             };
 
             $vincular($anteriores, 'anterior');
+            $vincular($referencias, 'terreno');
             $vincular($posteriores, 'posterior');
 
             // Pelo Eloquent, para cada baixa deixar a linha "baixou" na
@@ -102,7 +106,7 @@ class SucessaoDeLotes
         $id = $vistoria instanceof Vistoria ? $vistoria->id : $vistoria;
 
         return Protocolo::where('vistoria_id', $id)
-            ->whereIn('tipo', ['desmembramento', 'unificacao'])
+            ->whereIn('tipo', ['desmembramento', 'unificacao', 'fracao_ideal'])
             ->first();
     }
 
@@ -187,10 +191,10 @@ class SucessaoDeLotes
         }
 
         if (! $protocolo) {
-            return 'Desmembramento e unificação só acontecem a partir de um protocolo.';
+            return 'Desmembramento, unificação e fração ideal só acontecem a partir de um protocolo.';
         }
 
-        $esperado = $tipoAto === 'unificacao' ? 'unificacao' : 'desmembramento';
+        $esperado = in_array($tipoAto, ['unificacao', 'fracao_ideal'], true) ? $tipoAto : 'desmembramento';
         if ($protocolo->tipo !== $esperado) {
             return sprintf('O protocolo %s é do tipo "%s". Para este ato ele precisa ser "%s".',
                 $protocolo->numero, $protocolo->rotuloTipo(), Protocolo::TIPOS[$esperado]);

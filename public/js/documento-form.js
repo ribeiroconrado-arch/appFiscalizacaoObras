@@ -479,6 +479,8 @@ function limparFormDoc() {
   document.getElementById('nd-area-terreno').value = areaTerreno ? Number(areaTerreno).toFixed(2) : ''
   document.getElementById('nd-area-construida').value = ''
   marcarOrigemDaAreaDoc('aferida')
+  // Unidade de fração ideal: diz qual área vale para a multa (fracao-ideal.js).
+  if (typeof notaDaAreaNoDocumento === 'function') notaDaAreaNoDocumento(p)
   conferirCpfCnpjCampo(document.getElementById('nd-autuado-doc'))
   document.getElementById('nd-alvara-valor').value = ''
   document.getElementById('nd-bloco-area').style.display = 'none'

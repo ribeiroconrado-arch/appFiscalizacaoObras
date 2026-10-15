@@ -512,6 +512,8 @@ function abrirFicha(feicao) {
     c ? `${c.lat.toFixed(6)}, ${c.lon.toFixed(6)}` : '—'
 
   subFicha('dados')
+  // Terreno em condomínio ou unidade de fração ideal: a aba Unidades aparece.
+  if (typeof prepararAbaUnidades === 'function') prepararAbaUnidades(p)
 
   const linhaDist = document.getElementById('fi-linha-dist')
   if (state.pos && c) {
@@ -542,6 +544,7 @@ function subFicha(nome) {
   // mapa carrega até 3.000 lotes de uma vez. As edificações seguem a mesma
   // regra e pelo mesmo motivo — são geometria, e geometria é cara.
   if (nome === 'cadastro') { carregarBci(state.selecionado?.properties?.id) }
+  if (nome === 'unidades' && typeof carregarAbaUnidades === 'function') { carregarAbaUnidades(state.selecionado?.properties) }
   if (nome === 'croquis') {
     carregarEdificacoes(state.selecionado?.properties?.id).then(renderCroquis)
   }

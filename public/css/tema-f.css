@@ -3871,3 +3871,31 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 .ctrl-btn svg, .ctrl-btn svg *,
 .cad-fer svg, .cad-fer svg *,
 .cad-lanca .cad-ico, .cad-lanca .cad-ico *{stroke-width:1.6}
+
+/* ── FRAÇÃO IDEAL (fracao-ideal.js): balão e aba Unidades da ficha ── */
+.fr-balao{display:grid;gap:6px;margin:6px 0 8px}
+.fr-tag{display:inline-block;justify-self:start;font:600 11px Inter,sans-serif;padding:2px 8px;border-radius:999px;
+  color:#8a6a04;background:#fdf3d4;border:1px solid #e0b53a}
+.fr-tag-un{color:#1d4ed8;background:#e3ecfd;border-color:#93b4f5}
+.fr-balao-lista{display:grid;gap:4px;font-size:12px}
+.fr-item{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;
+  border:1px solid var(--bd,#dde3de);border-radius:7px;padding:5px 8px}
+.fr-item:hover,.fr-item:focus-visible{border-color:var(--g);outline:none}
+.fr-item small{grid-column:1/-1;color:var(--tx3,#7a857f);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-item span{justify-self:end;font-variant-numeric:tabular-nums}
+.fr-btn-terreno{justify-self:start}
+.fr-migalha{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--tx3,#7a857f);margin-bottom:10px}
+.fr-migalha a{color:var(--gd);font-weight:600;text-decoration:none}
+.fr-resumo{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.fr-resumo div{display:grid;gap:1px;font-size:11px;color:var(--tx3,#7a857f);text-transform:uppercase;letter-spacing:.04em}
+.fr-resumo b{font:600 13.5px Inter,sans-serif;color:var(--tx,#1e2622);text-transform:none;letter-spacing:0;font-variant-numeric:tabular-nums}
+.fr-tabela{overflow-x:auto}
+.fr-tabela table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.fr-tabela th{font:600 11px Inter,sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--tx3,#7a857f);text-align:left;
+  padding:6px 8px;border-bottom:1px solid var(--bd,#dde3de);white-space:nowrap}
+.fr-tabela td{padding:7px 8px;border-bottom:1px solid var(--bd,#dde3de)}
+.fr-tabela .n{text-align:right;white-space:nowrap}
+.fr-tabela tr.fr-atual td{background:var(--gl)}
+.fr-nota{font-size:12px;color:var(--tx3,#7a857f);margin-top:10px}
+@media (max-width:560px){.fr-resumo{grid-template-columns:1fr 1fr}}
+.doc-fracao-nota{font-size:12px;color:#8a6a04;background:#fdf3d4;border:1px solid #e0b53a;border-radius:8px;padding:7px 10px;margin:6px 0 0}

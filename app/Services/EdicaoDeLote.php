@@ -36,6 +36,17 @@ class EdicaoDeLote
         if ($lote->situacao !== 'ativo') {
             return 'Este lote já foi inativado e não pode mais ser editado.';
         }
+        // FRAÇÃO IDEAL: a unidade não se edita por aqui (o desenho dela é a área
+        // exclusiva, dentro do terreno); o terreno pode mudar de contorno, mas
+        // não de quadra nem de número — as unidades carregam os dois.
+        if ($lote->terreno_id) {
+            return FracaoIdealDeLote::impedimentoDeCurar([$lote->id], 'editar a unidade');
+        }
+        $mudaIdentidade = (array_key_exists('quadra', $d) && (string) $d['quadra'] !== (string) $lote->quadra)
+            || (array_key_exists('numero_lote', $d) && (string) $d['numero_lote'] !== (string) $lote->numero_lote);
+        if ($mudaIdentidade && ($fracao = FracaoIdealDeLote::impedimentoDeCurar([$lote->id], 'trocar a quadra ou o número'))) {
+            return $fracao;
+        }
 
         return $this->desenho->impedimento($this->dados($lote, $d), $lote->id);
     }

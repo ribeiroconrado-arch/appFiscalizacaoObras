@@ -724,8 +724,10 @@ function adicionarAoMapa(geojson, aoClicar) {
       //
       // Agora o rótulo nasce só quando vai ser visto, e só para os lotes que
       // estão na tela. Ver sincronizarRotulos().
-      camada._numeroLote = feicao.properties.numero_lote
-        ? String(feicao.properties.numero_lote) : null
+      // Fração ideal: "20 · 2 un." no terreno, "un. 001" na unidade (fracao-ideal.js).
+      camada._numeroLote = typeof rotuloDoLoteNoMapa === 'function'
+        ? rotuloDoLoteNoMapa(feicao.properties)
+        : feicao.properties.numero_lote ? String(feicao.properties.numero_lote) : null
       mapaState.camadaLotes.addLayer(camada)
     },
   })
@@ -963,6 +965,7 @@ function abrirBalao(feicao, camada) {
           ${medidas ? `<tr><td>Frente × fundos</td><td>${medidas}</td></tr>` : ''}
           <tr><td>Origem</td><td><span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span></td></tr>
         </table>
+        ${typeof htmlFracaoNoBalao === 'function' ? htmlFracaoNoBalao(p) : ''}
         <div class="balao4-acoes" style="grid-template-columns:repeat(${atalhos.length},1fr)">${atalhos.join('')}</div>
         <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Abrir ficha</button>
       </div>
@@ -971,6 +974,7 @@ function abrirBalao(feicao, camada) {
   camada.bindPopup(html, {
     className: 'popup-lote', closeButton: true, maxWidth: 300, minWidth: 270, autoPan: true,
   }).openPopup()
+  if (typeof preencherFracaoNoBalao === 'function') preencherFracaoNoBalao(p)
 }
 
 /** Atalhos do balão: o lote já está em `state.selecionado`. */

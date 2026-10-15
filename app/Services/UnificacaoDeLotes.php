@@ -114,6 +114,9 @@ class UnificacaoDeLotes
         if ($mistura = ImportacaoDeBairro::misturaRevisao($ids)) {
             return $mistura;
         }
+        if ($fracao = FracaoIdealDeLote::impedimentoDeCurar($ids, 'unificar')) {
+            return $fracao;
+        }
 
         $ids = array_values(array_unique($ids));
         if (count($ids) < 2) {

@@ -593,6 +593,18 @@
             </span>
           </button>
 
+          <button type="button" class="btn sm cad-lanca" data-fer="fracao_ideal" data-tecla="F" data-min="1" data-max="1" data-exige="1 lote" onclick="atoDiretoCadastral('fracao_ideal')">
+            <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="1.4"/>
+              <rect x="6" y="6" width="5" height="9" rx=".6" stroke-dasharray="2.4 1.8"/>
+              <rect x="13" y="6" width="5" height="9" rx=".6" stroke-dasharray="2.4 1.8"/>
+            </svg>
+            <span class="cad-lanca-txt">Instituir frações direto
+              <span class="cad-lanca-obs">Selecione o terreno; ele fica, e as unidades nascem dentro dele.</span>
+            </span>
+          </button>
+
           <button type="button" class="btn sm cad-lanca cad-lanca-perigo" data-fer="apagar" data-tecla="Del" data-min="1" data-exige="1 lote ou mais, sem nada preso" onclick="apagarLoteDoPainel()">
             <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1285,6 +1297,8 @@
       <button class="at" data-fi="dados" onclick="subFicha('dados')">Dados</button>
       <button data-fi="historico" onclick="subFicha('historico')">Histórico</button>
       <button data-fi="cadastro" onclick="subFicha('cadastro')">BCI</button>
+      {{-- Só no terreno em condomínio e na unidade de fração ideal (fracao-ideal.js). --}}
+      <button data-fi="unidades" onclick="subFicha('unidades')" hidden>Unidades</button>
       {{-- Croquis, anexos e fotos saem das vistorias: são conteúdo da
            fiscalização, e o externo não os vê. --}}
       @unless ($externo)
@@ -1346,6 +1360,11 @@
          O conteúdo é montado em cadastro-imobiliario.js quando a aba é aberta,
          e não junto da ficha: o mapa carrega até 3.000 lotes de uma vez, e
          enriquecer todos seria pagar por um dado que quase ninguém vai olhar. --}}
+    {{-- UNIDADES — fração ideal: o terreno e as unidades, cada uma com seu dono. --}}
+    <div class="fi-painel" id="fi-unidades">
+      <div id="fi-unidades-corpo"><div class="vazio-msg">Carregando unidades…</div></div>
+    </div>
+
     <div class="fi-painel" id="fi-cadastro">
       <div id="fi-bci"><div class="vazio-msg">Carregando cadastro…</div></div>
     </div>
@@ -2201,6 +2220,8 @@
           <label><input type="radio" name="nd-area-origem" value="projeto" data-lock> Do projeto</label>
         </div>
       </div>
+      {{-- Fração ideal: qual área vale para a multa (fracao-ideal.js). --}}
+      <p class="doc-fracao-nota" id="nd-area-fracao" hidden></p>
 
       {{-- O RESTO DO CADASTRO MUNICIPAL (BCI) deste imóvel — só aparece quando
            o imóvel está no cadastro. Desenhado por renderBciDoc. --}}
@@ -3899,6 +3920,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
   <script src="@assetv('js/conferencia-bairro.js')"></script>
   {{-- Depois dos dois: o painel de correção serve à importação e ao bairro. --}}
   <script src="@assetv('js/correcao-mapa.js')"></script>
+  {{-- Fração ideal: terreno em condomínio e unidades no mapa, no balão e na ficha. --}}
+  <script src="@assetv('js/fracao-ideal.js')"></script>
 @endif
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>

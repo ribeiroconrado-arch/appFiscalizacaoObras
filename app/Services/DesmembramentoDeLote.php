@@ -143,6 +143,9 @@ class DesmembramentoDeLote
         if ($pai->situacao !== 'ativo') {
             return 'Este lote já foi inativado. Desmembre o sucessor dele.';
         }
+        if ($fracao = FracaoIdealDeLote::impedimentoDeCurar([$pai->id], 'desmembrar')) {
+            return $fracao;
+        }
 
         $identidade = $this->identidade($pai);
         if (!$identidade['prefixo']) return 'O lote de origem precisa de uma inscrição válida antes do desmembramento.';

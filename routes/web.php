@@ -104,6 +104,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // O contorno de um imóvel, sob demanda — ver BuscaController::geometria.
         Route::get('/imoveis/{lote}/geometria', [BuscaController::class, 'geometria']);
         Route::get('/imoveis/{lote}/bci', [CadastroImobiliarioController::class, 'mostrar']);
+        // As unidades de fração ideal do terreno (ou o terreno e as irmãs, vista da unidade).
+        Route::get('/imoveis/{lote}/unidades', [\App\Http\Controllers\UnidadesDoTerrenoController::class, 'mostrar']);
         // Edificações desenhadas dentro do lote — o croqui e a área construída.
         Route::get('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'listar']);
         Route::post('/imoveis/{lote}/edificacoes', [EdificacaoController::class, 'criar']);
@@ -150,6 +152,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/lotes/unificacao-direta', [CadastroLoteController::class, 'unificarDireto']);
         Route::post('/lotes/desmembramento-direto/previa', [CadastroLoteController::class, 'previaDesmembramentoDireto']);
         Route::post('/lotes/desmembramento-direto', [CadastroLoteController::class, 'desmembrarDireto']);
+        // Fração ideal: o terreno fica, as unidades nascem dentro dele.
+        Route::post('/lotes/fracao-ideal-direta/previa', [CadastroLoteController::class, 'previaFracaoDireta']);
+        Route::post('/lotes/fracao-ideal-direta', [CadastroLoteController::class, 'fracionarDireto']);
         Route::get('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'mostrarRascunhoDesmembramento']);
         Route::put('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'salvarRascunhoDesmembramento']);
         Route::delete('/lotes/{lote}/desmembramento-rascunho', [CadastroLoteController::class, 'excluirRascunhoDesmembramento']);
@@ -239,6 +244,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/protocolos/{protocolo}/unificacao', [CadastroLoteController::class, 'unificar']);
         Route::post('/protocolos/{protocolo}/desmembramento/previa', [CadastroLoteController::class, 'previaDesmembramento']);
         Route::post('/protocolos/{protocolo}/desmembramento', [CadastroLoteController::class, 'desmembrar']);
+        Route::post('/protocolos/{protocolo}/fracao_ideal/previa', [CadastroLoteController::class, 'previaFracao']);
+        Route::post('/protocolos/{protocolo}/fracao_ideal', [CadastroLoteController::class, 'fracionar']);
         Route::get('/lotes/{lote}/protocolos/{protocolo}/desmembramento-rascunho', [CadastroLoteController::class, 'mostrarRascunhoDesmembramento']);
         Route::put('/lotes/{lote}/protocolos/{protocolo}/desmembramento-rascunho', [CadastroLoteController::class, 'salvarRascunhoDesmembramento']);
         Route::delete('/lotes/{lote}/protocolos/{protocolo}/desmembramento-rascunho', [CadastroLoteController::class, 'excluirRascunhoDesmembramento']);

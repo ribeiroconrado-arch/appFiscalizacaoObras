@@ -8,6 +8,7 @@ use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -236,6 +237,14 @@ class MapaController extends Controller
         // lote tem imóvel lá (App\Cadastro\AreaOficial). Lida por bairro.
         $areas = new \App\Cadastro\AreaOficial($bairros);
 
+        // FRAÇÃO IDEAL: quantas unidades cada terreno em condomínio tem — o
+        // rótulo do mapa diz "20 · 2 un." e o balão lista as unidades.
+        $condominios = array_map(fn ($l) => (int) $l->id, array_filter($linhas, fn ($l) => $l->condominio !== null));
+        $unidadesPorTerreno = $condominios
+            ? DB::table('lotes')->whereIn('terreno_id', $condominios)->where('situacao', 'ativo')
+                ->groupBy('terreno_id')->selectRaw('terreno_id, COUNT(*) n')->pluck('n', 'terreno_id')->all()
+            : [];
+
         $feicoes = array_map(fn ($l) => [
             'type'       => 'Feature',
             'geometry'   => json_decode($l->geojson),
@@ -266,8 +275,16 @@ class MapaController extends Controller
                 'area_gis_m2' => (float) $l->area_gis_m2,
                 // A área do TERRENO que se mostra: a do cadastro oficial, ou a
                 // do desenho quando o lote não tem imóvel no cadastro.
-                'area_m2'       => $areas->doLote($l),
-                'area_oficial'  => $areas->doCadastro($l) !== null,
+                // Na UNIDADE de fração ideal a área "do terreno" é a fração dela.
+                'area_m2'       => $l->terreno_id ? (float) $l->fracao_ideal_m2 : $areas->doLote($l),
+                'area_oficial'  => $l->terreno_id ? false : $areas->doCadastro($l) !== null,
+                // Fração ideal: a unidade aponta o terreno; o terreno diz que é
+                // condomínio e de quantas unidades.
+                'terreno_id'      => $l->terreno_id,
+                'unidade'         => $l->terreno_id ? str_pad((string) $l->desmembramento, 3, '0', STR_PAD_LEFT) : null,
+                'fracao_ideal_m2' => $l->fracao_ideal_m2 !== null ? (float) $l->fracao_ideal_m2 : null,
+                'condominio'      => $l->condominio,
+                'unidades'        => $l->condominio ? (int) ($unidadesPorTerreno[$l->id] ?? 0) : null,
                 // Medidas da matrícula, para o balão. Nulas na maioria dos lotes
                 // vindos do DWG — o balão só mostra a linha quando há as duas.
                 'frente_m'    => $l->frente_m !== null ? (float) $l->frente_m : null,

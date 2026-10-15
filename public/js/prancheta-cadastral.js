@@ -11,6 +11,10 @@ const PranchetaCad = (() => {
   // para baixo — ver frenteParaBaixo.
   const edif=()=>!!s&&s.tipo==='edificacao'
   const livre=()=>!!s&&(s.tipo==='novo'||s.tipo==='edicao'||s.tipo==='edificacao')
+  // FRAÇÃO IDEAL: o terreno fica; cada contorno FECHADO desenhado dentro dele é
+  // a área exclusiva de uma unidade. Apartamento entra sem desenho, nos dados.
+  const frac=()=>!!s&&s.tipo==='fracao_ideal'
+  const pad3=v=>Number.isInteger(v)?String(v).padStart(3,'0'):''
   // SÓ O ÍCONE na barra; o nome, o atalho e o que a ferramenta faz aparecem
   // ao passar o mouse (data-dica, ver prancheta-cadastral.css).
   function botao(k,t,atalho,desc='') {return `<button type="button" data-tool="${k}" data-dica="${t}${atalho?' ('+atalho+')':''}${desc?' — '+desc:''}" aria-label="${t}" onclick="PranchetaCad.ferramenta('${k}')"><svg viewBox="0 0 24 24"><path d="${icones[k]}"/></svg></button>`}
@@ -262,6 +266,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     $('pc-svg').parentElement.appendChild(n);n.querySelector('input').focus();n.querySelector('[type=button]').onclick=()=>{n.remove();svg.focus()};n.addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Escape'){ev.preventDefault();n.remove();svg.focus()}});n.onsubmit=ev=>{ev.preventDefault();const texto=n.querySelector('input').value.trim();if(!texto)return;antes();s.anotacoes.push({p,texto});n.remove();mudou();svg.focus()}
   }
   function recalcular(){if(s.leitura)return
+    if(frac()){s.resultado={partes:s.linhas.filter(l=>G.fechada(l.pontos)).map(l=>l.pontos),erro:null};return}
     // Desenho livre: o lote é a ÚNICA linha fechada. Linhas abertas ficam como
     // linhas de construção, e não entram no resultado.
     if(livre()){const fs=s.linhas.filter(l=>G.fechada(l.pontos));s.resultado=fs.length===1?{partes:[fs[0].pontos],erro:null}:{partes:[],erro:fs.length?'Há mais de um contorno fechado. Exclua o que sobra.':`Feche o contorno ${edif()?'da construção':'do lote'}: clique de novo no primeiro vértice, ou use o Fillet (F) com raio 0.`,orientacao:!fs.length};return}
@@ -285,7 +290,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // filete escuro, e nenhum preenchimento por cima da imagem.
     for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
-    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtNum(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
+    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtNum(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
     // Cotas das faces de origem, na mesma escala métrica usada nas ferramentas.
     for(const f of s.tipo==="edicao"?[]:contornos()){const r=ring(f);for(let i=1;i<r.length;i++){const m=G.len(G.sub(r[i],r[i-1]));if(m*s.escala<70)continue;h+=cota(r[i-1],r[i],`${fmtNum(m)} m`,G.area(r)>0?-1:1)}}
     for(const l of s.linhas){const sel=l.id===s.sel;h+=`<path data-line="${e(l.id)}" class="pc-hit" d="${path(l.pontos)}"/><path data-line="${e(l.id)}" d="${path(l.pontos)}" fill="none" stroke="${sel?'#ea580c':'#2563eb'}" stroke-width="${sel?3:2}"/>`
@@ -437,19 +442,19 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(originais.some(f=>f.geometry?.type!=='Polygon'||f.geometry.coordinates.length!==1)){toast('A prancheta atende polígonos sem vazios internos.', 'err');return}
     if($('t-mapa')&&!$('t-mapa').classList.contains('at')&&typeof irPara==='function')irPara('mapa')
     const centroGeo=opts.centro||originais[0].geometry.coordinates[0][0]
-    s={tipo,ids:ids.map(Number),protocoloId,originais,opts,plano:G.plano(centroGeo),linhas:[],traco:[],anotacoes:[],contexto:[],angulo:0,centro:[0,0],escala:1,undo:[],redo:[],dados:{},numero:'',justificativa:atoState.justificativa||'',ferramenta:tipo==='novo'||tipo==='edificacao'?'linha':'selecionar',sel:null,ref:null,operacao:null,drag:null,mouse:null,mapa:true,valor:'',leitura:!!salva,resultado:{partes:[]},uniao:null,revisado:null,raio:0,fillet:{primeiro:null,erro:null}}
+    s={tipo,ids:ids.map(Number),protocoloId,originais,opts,plano:G.plano(centroGeo),linhas:[],traco:[],anotacoes:[],contexto:[],angulo:0,centro:[0,0],escala:1,undo:[],redo:[],dados:{},numero:'',justificativa:atoState.justificativa||'',ferramenta:tipo==='novo'||tipo==='edificacao'||tipo==='fracao_ideal'?'linha':'selecionar',sel:null,ref:null,operacao:null,drag:null,mouse:null,mapa:true,valor:'',leitura:!!salva,resultado:{partes:[]},uniao:null,revisado:null,raio:0,fillet:{primeiro:null,erro:null}}
     s.loading=!salva
     // Editar lote: o próprio contorno é a linha que se edita (fechada).
     if(tipo==='edicao'&&!salva){const r=ring(originais[0]);s.linhas=[{id:crypto.randomUUID(),pontos:r}];s.sel=s.linhas[0].id}
     // Lote novo reaberto para correção: o contorno que já estava pronto volta.
     if(tipo==='novo'&&opts.contorno){s.linhas=[{id:crypto.randomUUID(),pontos:opts.contorno.coordinates[0].map(s.plano.para)}];s.ferramenta='selecionar'}
     if(salva){restaurar(salva);s.contexto=salva.contexto||[];s.finalFeatures=salva.resultantes;if(tipo==='unificacao')s.uniao=salva.resultantes[0]?.geometry;s.resultado={partes:salva.resultantes.map(ring)}}
-    const titulos={desmembramento:'Desmembramento',unificacao:'Unificação',novo:'Lote novo',edicao:'Editar lote',edificacao:'Desenhar edificação'}
+    const titulos={fracao_ideal:'Fração ideal',desmembramento:'Desmembramento',unificacao:'Unificação',novo:'Lote novo',edicao:'Editar lote',edificacao:'Desenhar edificação'}
     // O rótulo da opção de fundo acompanha o que ela mostra.
     {const rot=$('pc-mapa')?.nextSibling;if(rot?.nodeType===3)rot.textContent=tipo==='edificacao'?' Imagem aérea ':' Mapa cadastral '}
     $('pc-titulo').textContent=(salva?'Prancha finalizada · ':'')+(titulos[tipo]||tipo)
     $('pc-origem').textContent=tipo==='novo'?(opts.bairro||'Desenhe o contorno do lote'):originais.map(f=>`Q ${f.properties?.quadra||opts.quadra||'—'} · Lote ${f.properties?.numero_lote||opts.numero_lote||f.properties?.id}`).join(' + ')
-    $('pc-continuar').textContent=tipo==='novo'?'Informar os dados →':tipo==='edificacao'?'Gravar edificação →':tipo==='edicao'?'Número, quadra e salvar →':'Dados e finalizar →'
+    $('pc-continuar').textContent=tipo==='fracao_ideal'?'Unidades e finalizar →':tipo==='novo'?'Informar os dados →':tipo==='edificacao'?'Gravar edificação →':tipo==='edicao'?'Número, quadra e salvar →':'Dados e finalizar →'
     $('pc-salvo').textContent=salva?'Visualização preservada':'';$('pc-save').hidden=!!salva;$('pc-continuar').hidden=!!salva;$('pc-dados').hidden=true;$('pc-entrada').hidden=true
     // A prancheta ocupa o mapa INTEIRO e fica sozinha: a régua da curadoria não
     // vem mais para dentro dela (trocar de ferramenta é sair da prancheta).
@@ -474,7 +479,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       recalcular();enquadrar()
     }
   }
-  function rota(previa=false){return s.protocoloId?`/api/protocolos/${s.protocoloId}/${s.tipo}${previa?'/previa':''}`:`/api/lotes/${s.tipo==='unificacao'?'unificacao-direta':'desmembramento-direto'}${previa?'/previa':''}`}
+  function rota(previa=false){if(frac()&&!s.protocoloId)return '/api/lotes/fracao-ideal-direta'+(previa?'/previa':'');return s.protocoloId?`/api/protocolos/${s.protocoloId}/${s.tipo}${previa?'/previa':''}`:`/api/lotes/${s.tipo==='unificacao'?'unificacao-direta':'desmembramento-direto'}${previa?'/previa':''}`}
   function apelido(v){if(!s.identidade?.base||!Number.isInteger(v)||v<0||v>999)return '';const zero=s.resultado.partes.some(r=>s.dados[parteKey(r)]?.desmembramento===0);let letras='';for(let i=v+(zero?1:0);i>0;i=Math.floor(i/26)){i--;letras=String.fromCharCode(65+i%26)+letras}return s.identidade.base+letras}
   function identidadeTexto(d){const p=s.identidade;if(!p?.prefixo)return 'Inscrição de origem indisponível. Corrija o cadastro antes de finalizar.';const sufixo=Number.isInteger(d.desmembramento)&&d.desmembramento>=0&&d.desmembramento<=999?String(d.desmembramento).padStart(3,'0'):'???';return `<span class="lote-tag-origem">DESMEMBRADO</span><br>Inscrição: <b>${e(p.inscricao.slice(0,-3)+sufixo)}</b><br>Apelido automático: <b>${e(apelido(d.desmembramento)||'—')}</b>${d.desmembramento===0?'<br>O original será preservado como inativo. Apenas um lote ativo poderá usar esta inscrição.':''}`}
   function prepararIdentidades(){if(s.tipo!=='desmembramento')return;const usados=new Set(s.identidade?.usados||[]);for(const r of s.resultado.partes){const v=s.dados[parteKey(r)]?.desmembramento;if(v!=null)usados.add(v)}
@@ -492,7 +497,8 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       antes();s.dados[parteKey(r)]={...d,...Object.fromEntries(Object.entries(medidas).map(([k,v])=>[k,classes.includes(k)?Number(v.toFixed(2)):null])),_faces:classes};s.medindo=null;mudou();dados(true)
     };render()
   }
-  function corpo(){const v=visualizacao();if(s.tipo==='unificacao')return {ids:s.ids,numero_lote:s.numero,justificativa:s.justificativa,visualizacao:v};return {lote_id:s.ids[0],modo:'prancheta',derivar_ultima:false,justificativa:s.justificativa,visualizacao:v,partes:s.resultado.partes.map((r,i)=>({numero_lote:'',...s.dados[parteKey(r)],geometry:{type:'Polygon',coordinates:[r.map(s.plano.de)]}}))}}
+  function corpo(){const v=visualizacao();if(frac())return {lote_id:s.ids[0],condominio:s.dados.condominio||null,justificativa:s.justificativa,visualizacao:v,
+      unidades:unidadesFrac().map(u=>({variacao:u.d.variacao,fracao_ideal_m2:u.d.fracao_ideal_m2,geometry:u.r?{type:'Polygon',coordinates:[u.r.map(s.plano.de)]}:null}))};if(s.tipo==='unificacao')return {ids:s.ids,numero_lote:s.numero,justificativa:s.justificativa,visualizacao:v};return {lote_id:s.ids[0],modo:'prancheta',derivar_ultima:false,justificativa:s.justificativa,visualizacao:v,partes:s.resultado.partes.map((r,i)=>({numero_lote:'',...s.dados[parteKey(r)],geometry:{type:'Polygon',coordinates:[r.map(s.plano.de)]}}))}}
   function ordenarParte(i,delta){
     if(!s||s.busy||s.leitura)return;const partes=s.resultado.partes,j=i+delta;if(j<0||j>=partes.length)return;
     antes();const ordem=partes.map(parteKey);[ordem[i],ordem[j]]=[ordem[j],ordem[i]];s.ordem=ordem;mudou();dados(true)
@@ -605,8 +611,64 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       const cb=s.opts?.aoSalvar;s.busy=false;await fechar(true);toast(d.message);limparLotesDoMapa();carregarLotesVisiveis();cb?.()
     }catch(err){exibirErro(err)}finally{if(s)s.busy=false}
   }
+  // ── FRAÇÃO IDEAL: as unidades, a fração de cada uma e a soma ──
+  function unidadesFrac(){const d=s.dados;d.semDesenho||=[];return [...s.resultado.partes.map(r=>({r,d:(d[parteKey(r)]||={})})),...d.semDesenho.map(u=>({r:null,d:u}))]}
+  function areaTerrenoFrac(){return Math.abs(G.area(ring(s.originais[0])))}
+  function prepararFrac(){
+    const us=unidadesFrac(),usadas=new Set(s.identidade?.usados||[0])
+    for(const u of us)if(Number.isInteger(u.d.variacao))usadas.add(u.d.variacao)
+    for(const u of us)if(!Number.isInteger(u.d.variacao)){let v=1;while(usadas.has(v)&&v<=999)v++;u.d.variacao=v;usadas.add(v)}
+    s.dados.condominio??=(s.resultado.partes.length?'casas':'predio')
+    if(us.length&&us.every(u=>u.d.fracao_ideal_m2==null))distribuir(false,true)
+  }
+  // A fração sugerida: proporcional à área exclusiva (ou igual, quando há
+  // unidade sem desenho). A última fecha a conta, para a soma bater no centavo.
+  function distribuir(igual,quieto){
+    if(!s)return;const us=unidadesFrac(),ref=areaTerrenoFrac();if(!us.length)return
+    const ex=us.map(u=>u.r?Math.abs(G.area(u.r)):0),soma=ex.reduce((a,b)=>a+b,0);let acum=0
+    us.forEach((u,i)=>{let v=igual||soma<=0||ex.some(x=>!x)?ref/us.length:ref*ex[i]/soma;v=Math.round(v*100)/100;if(i===us.length-1)v=Math.round((ref-acum)*100)/100;acum+=v;u.d.fracao_ideal_m2=v})
+    if(!quieto){s.revisado=null;formFracao();agendar()}
+  }
+  function maisSemDesenho(){if(!s)return;s.dados.semDesenho||=[];s.dados.semDesenho.push({});prepararFrac();s.revisado=null;formFracao();agendar()}
+  function tirarSemDesenho(j){if(!s)return;s.dados.semDesenho.splice(j,1);s.revisado=null;formFracao();agendar()}
+  function somaFrac(){
+    const el=$('pc-fr-soma');if(!el)return;const us=unidadesFrac(),ref=areaTerrenoFrac(),soma=us.reduce((a,u)=>a+(Number(u.d.fracao_ideal_m2)||0),0),dif=Math.round((ref-soma)*100)/100,tol=Math.max(.5,.1*Math.sqrt(ref))
+    el.innerHTML=`<div class="pc-fr-soma-lin"><span>Soma das frações</span><b class="${Math.abs(dif)<=tol?'ok':'aviso'}">${fmtNum(soma)} de ${fmtNum(ref)} m²${Math.abs(dif)<0.005?' ✓':dif>0?' · faltam '+fmtNum(dif):' · sobram '+fmtNum(-dif)}</b></div>
+      <div class="pc-fr-barra">${us.map((u,i)=>`<span style="width:${Math.max(0,(Number(u.d.fracao_ideal_m2)||0)/Math.max(ref,soma)*100)}%;background:${u.r?cores[i%cores.length]:'#6b7280'}"></span>`).join('')}</div>
+      <small>Área do terreno pelo desenho; na conferência vale a da matrícula, quando houver.</small>`
+  }
+  function formFracao(){
+    prepararFrac();$('pc-dados').hidden=false
+    const us=unidadesFrac(),prefixo=s.identidade?.inscricao?.slice(0,-3)||'Inscrição indisponível',cond=s.dados.condominio,n=s.resultado.partes.length
+    let h=`<p class="pc-fr-ajuda">O terreno continua ativo. Cada contorno fechado desenhado dentro dele é a área de uso exclusivo de uma unidade; o resto é área comum.</p>
+      <div class="pc-fr-cond" role="radiogroup" aria-label="Tipo de condomínio">
+        <label><input type="radio" name="pc-fr-cond" value="casas" ${cond==='casas'?'checked':''}><span><b>Unidades individuais (casas)</b><small>A multa por área usa a área individual: cada casa precisa da área desenhada.</small></span></label>
+        <label><input type="radio" name="pc-fr-cond" value="predio" ${cond==='predio'?'checked':''}><span><b>Prédio (apartamentos)</b><small>A multa por área usa a obra toda. O desenho é opcional.</small></span></label></div>`
+    if(us.length)h+=`<div class="pc-fr-acoes"><button type="button" class="btn sm out-verde" onclick="PranchetaCad.distribuir(false)">Fração pela área exclusiva</button><button type="button" class="btn sm out-cinza" onclick="PranchetaCad.distribuir(true)">Dividir igual</button></div>`
+    else h+='<p class="pc-fr-ajuda">Nenhuma unidade ainda: desenhe a área de cada casa, ou acrescente os apartamentos abaixo.</p>'
+    h+=us.map((u,i)=>{const cor=u.r?cores[i%cores.length]:'#6b7280',ex=u.r?fmtNum(Math.abs(G.area(u.r)))+' m² exclusiva':'sem desenho'
+      return `<fieldset class="pc-parte-card" style="--parte-cor:${cor}"><legend>Unidade ${i+1}</legend>
+        <header class="pc-parte-topo"><div><b data-titulo="${i}">Unidade ${pad3(u.d.variacao)}</b><small>${ex}</small></div>${u.r?'':`<button type="button" class="btn sm out-cinza" aria-label="Tirar a unidade ${i+1}" onclick="PranchetaCad.tirarSemDesenho(${i-n})">Tirar</button>`}</header>
+        <div class="pc-campos"><label class="pc-inscricao-label">Inscrição<div class="pc-inscricao-editor"><span>${e(prefixo)}</span><input data-parte="${i}" data-campo="variacao" type="text" inputmode="numeric" maxlength="3" pattern="[0-9]{1,3}" value="${pad3(u.d.variacao)}" aria-label="Variação da unidade ${i+1}"></div></label>
+        <label>Fração ideal (m²)<input data-parte="${i}" data-campo="fracao_ideal_m2" type="number" min="0" step="0.01" value="${u.d.fracao_ideal_m2??''}"></label></div></fieldset>`}).join('')
+    h+='<button type="button" class="btn sm out-cinza pc-fr-mais" onclick="PranchetaCad.maisSemDesenho()">+ Unidade sem desenho (apartamento)</button><div class="pc-fr-soma" id="pc-fr-soma"></div>'
+    if(!s.protocoloId)h+=`<label>Justificativa do ato direto<textarea id="pc-motivo" minlength="10" maxlength="500" placeholder="Descreva o motivo da alteração cadastral">${e(s.justificativa)}</textarea></label>`
+    h+='<div class="pc-form-acoes"><button type="button" class="btn out-cinza" onclick="PranchetaCad.salvar().catch(()=>{})">Salvar rascunho</button><button type="button" class="btn primary" onclick="PranchetaCad.conferir()">Conferir e continuar</button></div>'
+    $('pc-form').innerHTML=h;$('pc-conferencia').replaceChildren();somaFrac()
+    const mudou2=()=>{s.revisado=null;limparErros();$('pc-conferencia').replaceChildren();agendar()}
+    for(const r of $('pc-form').querySelectorAll('[name=pc-fr-cond]'))r.addEventListener('change',()=>{s.dados.condominio=r.value;mudou2()})
+    for(const input of $('pc-form').querySelectorAll('[data-campo]'))input.addEventListener('input',()=>{
+      const u=unidadesFrac()[Number(input.dataset.parte)];if(!u)return
+      if(input.dataset.campo==='variacao'){u.d.variacao=/^[0-9]{1,3}$/.test(input.value)?Number(input.value):null;const t=$('pc-form').querySelector(`[data-titulo="${input.dataset.parte}"]`);if(t)t.textContent='Unidade '+(pad3(u.d.variacao)||'???');render()}
+      else u.d.fracao_ideal_m2=input.value.trim()===''?null:Number(input.value)
+      somaFrac();mudou2()})
+    for(const input of $('pc-form').querySelectorAll('[data-campo="variacao"]'))input.addEventListener('blur',()=>{if(/^[0-9]{1,3}$/.test(input.value))input.value=input.value.padStart(3,'0')})
+    $('pc-motivo')?.addEventListener('input',ev=>{s.justificativa=ev.target.value;mudou2()})
+    render();enquadrar()
+  }
   function dados(abrir){
     if(!s)return;s.medindo=null;render();if(!abrir){$('pc-dados').hidden=true;enquadrar();return}
+    if(frac()){if(s.traco.length)terminar();if(s.operacao){dica('Conclua ou cancele o movimento primeiro.');return}formFracao();return}
     if(livre()){if(s.traco.length)terminar();if(s.resultado.erro){dica(s.resultado.erro);return}if(s.tipo==='novo'){formLoteNovo();return}if(s.tipo==='edificacao'){entregarLoteNovo();return}formEdicao();return}
     if(s.tipo==='unificacao'&&!s.uniao){dica(s.erroUniao||'Aguarde o cálculo da unificação.');return}if(s.traco.length)terminar();if(s.operacao){dica('Conclua ou cancele o movimento primeiro.');return}
     if(s.tipo==='desmembramento'&&(s.resultado.erro||s.resultado.partes.length<2)){dica(s.resultado.erro||'Trace uma divisão completa antes de preencher as partes.');return}
@@ -648,6 +710,15 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function validarDados(){
     const campos={};if(!s.protocoloId){const m=s.justificativa.trim();if(m.length<10||m.length>500)campos.justificativa='Informe a justificativa com 10 a 500 caracteres.'}
+    if(frac()){const us=unidadesFrac(),usados=new Set(s.identidade?.usados||[0]),vistos=new Set()
+      if(us.length<2)campos._='Fração ideal pede ao menos duas unidades.'
+      if(!s.dados.condominio)campos._c='Escolha se é de casas ou um prédio.'
+      us.forEach((u,i)=>{const v=u.d.variacao,k='partes.'+i+'.variacao'
+        if(!s.identidade?.prefixo)campos[k]='A inscrição do terreno está indisponível. Corrija o cadastro antes.'
+        else if(!Number.isInteger(v)||v<1||v>999)campos[k]='Unidade '+(i+1)+': variação de 001 a 999 (a 000 é o terreno).'
+        else if(usados.has(v)||vistos.has(v))campos[k]='Unidade '+(i+1)+': esta variação já está em uso.'
+        vistos.add(v);if(!(Number(u.d.fracao_ideal_m2)>0))campos['partes.'+i+'.fracao_ideal_m2']='Unidade '+(i+1)+': informe a fração ideal em m².'})
+      if(Object.keys(campos).length){exibirErro({campos});return false}limparErros();return true}
     if(s.tipo==='unificacao'){if(!s.numero.trim()||s.numero.length>20)campos.numero_lote='Informe o número do imóvel resultante (até 20 caracteres).'}
     else{
       const usados=new Set(s.identidade?.usados||[]);
@@ -661,8 +732,8 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     }
     if(Object.keys(campos).length){exibirErro({campos});return false}limparErros();return true
   }
-  async function conferir(){if(s.busy||!validarDados())return;const c=corpo();s.busy=true;$('pc-conferencia').textContent='Conferindo…';try{const d=await request(rota(true),c);if(JSON.stringify(c)!==JSON.stringify(corpo()))return;if(d.impedimento){exibirErro({message:d.impedimento});return}s.revisado=JSON.stringify(c);$('pc-conferencia').innerHTML=`<p>Geometria conferida. O ato preservará os imóveis de origem como inativos e criará os sucessores.</p>${(d.avisos||[]).map(a=>`<p>${e(a)}</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.finalizar()">Confirmar e finalizar ${s.tipo==='unificacao'?'unificação':'desmembramento'}</button>`}catch(err){exibirErro(err)}finally{s.busy=false}}
-  async function finalizar(){if(!s||s.busy||!validarDados())return;const c=corpo();if(s.revisado!==JSON.stringify(c)){dica('Confira os dados novamente.');return}if(!s.protocoloId&&s.justificativa.trim().length<10){$('pc-conferencia').textContent='Informe a justificativa do ato direto (mínimo de 10 caracteres).';return}s.busy=true;clearTimeout(saveTimer);try{await fila.catch(()=>{});const d=await request(rota(),c);try{localStorage.removeItem(chaveLocal())}catch{}s.leitura=true;s.finalFeatures=(d.lotes||[{id:d.id,numero_lote:s.numero}]).map((p,i)=>({properties:p}));$('pc-dados').hidden=true;$('pc-save').hidden=true;$('pc-continuar').hidden=true;$('pc-titulo').textContent='Prancha finalizada · '+s.tipo;$('pc-salvo').textContent='Desenho e orientação salvos com o ato';toast(d.message);atoState.tipo=null;limparLotesDoMapa();carregarLotesVisiveis();render()}catch(err){exibirErro(err)}finally{s.busy=false}}
+  async function conferir(){if(s.busy||!validarDados())return;const c=corpo();s.busy=true;$('pc-conferencia').textContent='Conferindo…';try{const d=await request(rota(true),c);if(JSON.stringify(c)!==JSON.stringify(corpo()))return;if(d.impedimento){exibirErro({message:d.impedimento});return}s.revisado=JSON.stringify(c);const rf=d.retrato;$('pc-conferencia').innerHTML=(frac()?`<p>Conferido: ${rf.unidades.length} unidade(s); as frações somam <b>${fmtNum(rf.soma_fracoes)}</b> de ${fmtNum(rf.referencia)} m²${rf.area_comum?' · área comum '+fmtNum(rf.area_comum)+' m²':''}. O terreno continua ativo e as unidades nascem dentro dele.</p>`:`<p>Geometria conferida. O ato preservará os imóveis de origem como inativos e criará os sucessores.</p>`)+`${(d.avisos||[]).map(a=>`<p>${e(a)}</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.finalizar()">${frac()?'Confirmar e instituir as frações':'Confirmar e finalizar '+(s.tipo==='unificacao'?'unificação':'desmembramento')}</button>`}catch(err){exibirErro(err)}finally{s.busy=false}}
+  async function finalizar(){if(!s||s.busy||!validarDados())return;const c=corpo();if(s.revisado!==JSON.stringify(c)){dica('Confira os dados novamente.');return}if(!s.protocoloId&&s.justificativa.trim().length<10){$('pc-conferencia').textContent='Informe a justificativa do ato direto (mínimo de 10 caracteres).';return}s.busy=true;clearTimeout(saveTimer);try{await fila.catch(()=>{});const d=await request(rota(),c);try{localStorage.removeItem(chaveLocal())}catch{}s.leitura=true;s.finalFeatures=(d.lotes||[{id:d.id,numero_lote:s.numero}]).map((p,i)=>({properties:p}));$('pc-dados').hidden=true;$('pc-save').hidden=true;$('pc-continuar').hidden=true;$('pc-titulo').textContent='Prancha finalizada · '+({fracao_ideal:'Fração ideal',desmembramento:'Desmembramento',unificacao:'Unificação'}[s.tipo]||s.tipo);$('pc-salvo').textContent='Desenho e orientação salvos com o ato';toast(d.message);atoState.tipo=null;limparLotesDoMapa();carregarLotesVisiveis();render()}catch(err){exibirErro(err)}finally{s.busy=false}}
   function fechar(forcar=false){
     if(!fechamento)fechamento=fecharSessao(forcar).finally(()=>{fechamento=null})
     return fechamento
@@ -688,5 +759,5 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function exportar(){if(!s)return;const clone=svg.cloneNode(true);clone.querySelectorAll('image,[data-snap],.pc-snap').forEach(n=>n.remove());clone.removeAttribute('id');clone.setAttribute('width',s.w);clone.setAttribute('height',s.h);const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent='.pc-label,.pc-cota,.pc-confronto,.pc-vizinho{font:12px sans-serif;fill:#243b4b;paint-order:stroke;stroke:white;stroke-width:4px}.pc-hit{fill:none;stroke:transparent;stroke-width:14}.pc-confronto{font-weight:bold}.pc-snap{font:12px sans-serif;fill:#16803c}';clone.prepend(style);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=url;a.download=`${s.tipo}-${s.ids.join('-')}.svg`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   async function verSalvas(id){try{const r=await fetch(`/api/lotes/${id}/pranchas`,{headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.message);if(!d.pranchas.length){toast('Este imóvel ainda não possui prancha finalizada.', 'aviso');return}const p=d.pranchas[0];await abrir(p.tipo,p.visualizacao.originais.map(f=>f.properties.id),null,p.visualizacao)}catch(err){toast(err.message,'err')}}
-  return {ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()

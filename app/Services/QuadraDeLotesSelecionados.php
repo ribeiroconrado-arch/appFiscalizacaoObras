@@ -102,6 +102,9 @@ class QuadraDeLotesSelecionados
         if ($mistura = ImportacaoDeBairro::misturaRevisao($ids)) {
             return $mistura;
         }
+        if ($fracao = FracaoIdealDeLote::impedimentoDeCurar($ids, 'trocar a quadra')) {
+            return $fracao;
+        }
 
         if (count($ids) > self::MAXIMO) {
             return sprintf('Seleção de %d lotes: o máximo por operação é %d. '

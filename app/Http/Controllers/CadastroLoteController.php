@@ -8,6 +8,7 @@ use App\Models\Protocolo;
 use App\Models\Vistoria;
 use App\Services\DesenhoDeLote;
 use App\Services\DesmembramentoDeLote;
+use App\Services\FracaoIdealDeLote;
 use App\Services\LotesApagados;
 use App\Services\QuadraDeLotesSelecionados;
 use App\Services\UnificacaoDeLotes;
@@ -432,6 +433,108 @@ class CadastroLoteController extends Controller
             'message' => sprintf('Lote %s desmembrado em %s. Ato direto, sem protocolo.',
                 $pai->numero_lote, implode(', ', array_map(fn ($l) => $l->numero_lote, $novos))),
         ], 201);
+    }
+
+    // ── FRAÇÃO IDEAL — o terreno fica, as unidades nascem dentro dele ──
+    //
+    // Os mesmos dois caminhos do desmembramento: pelo protocolo deferido com
+    // vistoria regular, ou direto pelo curador, com justificativa.
+
+    /** POST /api/protocolos/{protocolo}/fracao_ideal/previa */
+    public function previaFracao(Request $request, Protocolo $protocolo, FracaoIdealDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemEdicao($request)) {
+            return $erro;
+        }
+
+        return $this->previaDaFracao($request, $protocolo, $svc, false);
+    }
+
+    /** POST /api/protocolos/{protocolo}/fracao_ideal — executa. */
+    public function fracionar(Request $request, Protocolo $protocolo, FracaoIdealDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemEdicao($request)) {
+            return $erro;
+        }
+        if ($erro = $this->recusarSemVistoria($protocolo)) {
+            return $erro;
+        }
+
+        return $this->executarFracao($request, $protocolo, $svc, null);
+    }
+
+    /** POST /api/lotes/fracao-ideal-direta/previa */
+    public function previaFracaoDireta(Request $request, FracaoIdealDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+
+        return $this->previaDaFracao($request, null, $svc, true);
+    }
+
+    /** POST /api/lotes/fracao-ideal-direta — executa sem protocolo. */
+    public function fracionarDireto(Request $request, FracaoIdealDeLote $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+        $justificativa = $request->validate([
+            'justificativa' => ['required', 'string', 'min:10', 'max:500'],
+        ])['justificativa'];
+
+        return $this->executarFracao($request, null, $svc, $justificativa);
+    }
+
+    private function previaDaFracao(Request $request, ?Protocolo $protocolo, FracaoIdealDeLote $svc, bool $direto): JsonResponse
+    {
+        $d = $this->validarFracao($request);
+        $terreno = Lote::findOrFail($d['lote_id']);
+
+        return response()->json([
+            'impedimento' => $svc->impedimento($protocolo, $terreno, $d['unidades'], $d['condominio'], $direto),
+            'avisos'      => $svc->avisos($terreno, $d['unidades'], $d['condominio']),
+            'retrato'     => $svc->retrato($terreno, $d['unidades'], $d['condominio']),
+        ]);
+    }
+
+    private function executarFracao(Request $request, ?Protocolo $protocolo, FracaoIdealDeLote $svc, ?string $justificativa): JsonResponse
+    {
+        $d = $this->validarFracao($request);
+        $terreno = Lote::findOrFail($d['lote_id']);
+
+        if ($impedimento = $svc->impedimento($protocolo, $terreno, $d['unidades'], $d['condominio'], $protocolo === null)) {
+            return response()->json(['message' => $impedimento], 422);
+        }
+
+        $novas = $svc->aplicar($protocolo, $terreno, $d['unidades'], $d['condominio'], $justificativa, $this->visualizacao($request));
+
+        return response()->json([
+            'lotes'   => array_map(fn ($l) => [
+                'id' => $l->id, 'numero_lote' => $l->numero_lote, 'area' => $l->area_gis_m2,
+            ], $novas),
+            'message' => sprintf('Frações instituídas no lote %s: %d unidade(s), %s.%s',
+                $terreno->numero_lote, count($novas),
+                implode(', ', array_map(fn ($l) => $l->numero_lote, $novas)),
+                $protocolo ? '' : ' Ato direto, sem protocolo.'),
+        ], 201);
+    }
+
+    /** @return array<string,mixed> */
+    private function validarFracao(Request $request): array
+    {
+        $d = $request->validate([
+            'lote_id'                     => ['required', 'integer', 'exists:lotes,id'],
+            'condominio'                  => ['nullable', 'string', Rule::in(array_keys(FracaoIdealDeLote::TIPOS))],
+            'unidades'                    => ['required', 'array', 'min:1', 'max:300'],
+            // A geometria se confere no serviço, com mensagem que ensina.
+            'unidades.*.geometry'         => ['nullable', 'array'],
+            'unidades.*.variacao'         => ['nullable', 'integer', 'min:0', 'max:999'],
+            'unidades.*.fracao_ideal_m2'  => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+        ]);
+        $d['condominio'] ??= null;
+
+        return $d;
     }
 
     private function visualizacao(Request $request): ?array

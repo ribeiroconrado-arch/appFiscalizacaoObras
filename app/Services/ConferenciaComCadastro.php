@@ -131,7 +131,7 @@ class ConferenciaComCadastro
         $this->tolerancia ??= $anterior['tolerancia_area'] ?? null;
         $bairros = new BairrosDoDesenho();
         $nomes = $anterior['nomes_do_desenho'] ?? [$bairro];
-        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2'];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2', 'terreno_id', 'fracao_ideal_m2'];
         $lotes = DB::table('lotes')->where('situacao', 'ativo')->whereIn('bairro', $nomes)->get($campos);
 
         $porId = [];          // lote ativo => [inscrição atual (ou null), linha]
@@ -327,7 +327,7 @@ class ConferenciaComCadastro
                 . 'cadastro, e sem o código dele não há como montar a inscrição dos lotes. ' . $comoLigar);
         }
 
-        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2'];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2', 'terreno_id', 'fracao_ideal_m2'];
 
         // Todos os nomes de desenho amarrados ao MESMO código: o cadastro não
         // sabe que o desenho partiu o bairro em dois nomes.
@@ -463,7 +463,12 @@ class ConferenciaComCadastro
             return null;
         }
         $cadastro = round((float) $areaCadastro, 2);
-        $desenho = $l->area_gis_m2 !== null ? round((float) $l->area_gis_m2, 2) : null;
+        // A UNIDADE de fração ideal: o cadastro grava a fração do terreno na
+        // "área do terreno" da inscrição — é ela que se compara, e não a área
+        // exclusiva desenhada (que nem existe no apartamento).
+        $desenho = ! empty($l->terreno_id)
+            ? ($l->fracao_ideal_m2 !== null ? round((float) $l->fracao_ideal_m2, 2) : null)
+            : ($l->area_gis_m2 !== null ? round((float) $l->area_gis_m2, 2) : null);
         if ($desenho === $cadastro) {
             return null;
         }

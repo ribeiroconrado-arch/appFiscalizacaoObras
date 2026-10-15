@@ -45,6 +45,7 @@ class DesfazerAlteracao
             'excluiu'         => $this->desfazerExclusao($a),
             'unificou'        => $this->desfazerUnificacao($a),
             'desmembrou'      => $this->desfazerDesmembramento($a),
+            'instituiu frações' => $this->desfazerFracoes($a),
             'corrigiu quadra',
             'renumerou'       => $this->desfazerCampo($a),
             default           => throw new RuntimeException(
@@ -265,6 +266,74 @@ class DesfazerAlteracao
         });
     }
 
+
+    /**
+     * Desfaz a fração ideal: as unidades saem, e o terreno volta a ser um
+     * lote comum. Mesmas regras do desmembramento — tudo ou nada, e não pelo
+     * histórico quando veio de protocolo.
+     */
+    private function desfazerFracoes(object $a): string
+    {
+        $terreno = Lote::find($a->registro_id);
+        if (! $terreno) {
+            throw new RuntimeException('O terreno das frações não existe mais.');
+        }
+
+        $ato = DB::table('lote_atos as at')
+            ->join('lote_ato_lotes as al', 'al.ato_id', '=', 'at.id')
+            ->where('al.lote_id', $terreno->id)->where('al.papel', 'terreno')
+            ->where('at.tipo', 'fracao_ideal')
+            ->orderByDesc('at.id')
+            ->first(['at.id', 'at.protocolo_id']);
+
+        if (! $ato) {
+            throw new RuntimeException('Não encontrei o ato de fração ideal deste terreno.');
+        }
+        if ($ato->protocolo_id) {
+            throw new RuntimeException(
+                'Estas frações vieram de um protocolo deferido. Desfazê-las por aqui '
+                . 'deixaria o protocolo dizendo que foi executado. O caminho é pelo protocolo.'
+            );
+        }
+
+        $ids = DB::table('lote_ato_lotes')->where('ato_id', $ato->id)
+            ->where('papel', 'posterior')->pluck('lote_id');
+
+        $presos = [];
+        foreach ($ids as $id) {
+            $u = Lote::find($id);
+            if ($u && ($preso = $this->oQuePrende($u))) {
+                $presos[] = 'unidade ' . $u->numero_lote . ' (' . rtrim($preso, '.') . ')';
+            }
+        }
+        if ($presos) {
+            throw new RuntimeException(
+                'Não dá para desfazer: ' . implode('; ', $presos)
+                . '. Desfazer apagaria essa(s) unidade(s), e o processo ficaria sem imóvel.'
+            );
+        }
+
+        return DB::transaction(function () use ($terreno, $ato, $ids) {
+            DB::table('lote_ato_lotes')->where('ato_id', $ato->id)->delete();
+            DB::table('lote_atos')->where('id', $ato->id)->delete();
+
+            $n = 0;
+            foreach ($ids as $id) {
+                $u = Lote::find($id);
+                if (! $u) {
+                    continue;
+                }
+                $this->apagados->guardar($u, 'Fração ideal desfeita pelo histórico');
+                $u->delete();
+                $n++;
+            }
+
+            $terreno->update(['condominio' => null]);
+
+            return sprintf('Frações desfeitas: %d unidade(s) saíram, e %s voltou a ser um lote comum.',
+                $n, $terreno->rotulo());
+        });
+    }
 
     /** O mesmo teste da exclusão de lote, com o mesmo texto. */
     private function oQuePrende(Lote $lote): ?string

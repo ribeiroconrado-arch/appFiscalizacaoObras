@@ -1151,6 +1151,7 @@ function mostrarMultaDoc() {
   caixa.innerHTML = `
     <div style="font-size:12px;color:var(--tx2);background:var(--blt);border-radius:var(--r);padding:10px 12px;margin-top:4px">
       ${linhas.join('<br>')}
+      ${fdState.fracaoBase ? `<div style="margin-top:4px">${esc(fdState.fracaoBase)}</div>` : ''}
       ${m.fator_reincidencia > 1 ? `<div style="margin-top:4px">Reincidência: os artigos que dobram saem multiplicados por ${m.fator_reincidencia}.</div>` : ''}
       <div style="margin-top:6px;font-weight:700;color:var(--chumbo)">Total${m.gravada ? '' : ' estimado'}: ${fmtNum(m.total_upf || 0)} UPF${
         m.total_reais ? ' · R$ ' + fmtNum(m.total_reais) : ''}</div>
