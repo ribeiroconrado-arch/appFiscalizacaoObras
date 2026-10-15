@@ -73,7 +73,14 @@ function pintarPainelCamadas() {
     if (!g) { g = { nome: c.grupo, itens: [] }; grupos.push(g) }
     g.itens.push(c)
   }
-  alvo.innerHTML = grupos.map(g => `
+  // O FUNDO É UMA ESCOLHA ENTRE DOIS, e não um liga-desliga: sem satélite o
+  // mapa não fica vazio, fica cadastral (fundo-cadastral.js).
+  const fundo = () => `
+    <label class="cam-item"><input type="radio" name="cam-fundo" ${camadaLigada('satelite') ? 'checked' : ''}
+           onchange="ligarCamada('satelite', true)"> Imagem de satélite</label>
+    <label class="cam-item"><input type="radio" name="cam-fundo" ${camadaLigada('satelite') ? '' : 'checked'}
+           onchange="ligarCamada('satelite', false)"> Mapa cadastral <small class="cam-obs">sem imagem: leve e sem custo</small></label>`
+  alvo.innerHTML = grupos.map(g => g.nome === 'Fundo' ? `<div class="cam-grupo">Fundo do mapa</div>${fundo()}` : `
     <div class="cam-grupo">${esc(g.nome)}</div>
     ${g.itens.map(c => `
       <label class="cam-item">
@@ -112,4 +119,7 @@ registrarCamada({
     if (typeof pintarBarraImportacao === 'function') pintarBarraImportacao()
   },
 })
-registrarCamada({ id: 'satelite', grupo: 'Fundo', rotulo: 'Imagem de satélite' })
+registrarCamada({
+  id: 'satelite', grupo: 'Fundo', rotulo: 'Imagem de satélite',
+  aoMudar: () => { if (typeof aplicarFundoDoMapa === 'function') aplicarFundoDoMapa() },
+})

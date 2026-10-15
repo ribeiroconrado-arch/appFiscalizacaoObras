@@ -56,7 +56,9 @@ const CONTORNO_ISOLADO_M = 200
 function _estiloContorno() {
   const z = mapaState.obj?.getZoom() ?? 12
   const longe = z < 16
-  return { color: '#facc15', weight: longe ? 3 : 1.6, opacity: longe ? 1 : .85,
+  // No fundo cadastral (claro) o amarelo puro some: um tom mais fechado.
+  const cad = typeof fundoCadastral === 'function' && fundoCadastral()
+  return { color: cad ? '#C99A06' : '#facc15', weight: longe ? 3 : 1.6, opacity: longe ? 1 : .85,
            dashArray: longe ? '10 6' : '6 6', fill: false, interactive: false, pane: 'contornos' }
 }
 
@@ -93,6 +95,8 @@ async function carregarContornosDosBairros() {
         { permanent: true, direction: 'center', className: 'rot rot-bairro', interactive: false })
     },
   }).addTo(mapa)
+  // No mapa cadastral, os bairros são o chão branco: refeito com os contornos novos.
+  if (typeof desenharBairrosDoFundo === 'function') desenharBairrosDoFundo()
   // Os rótulos de bairro tirados dos lotes cedem lugar aos do contorno.
   if (typeof desenharRotulosDeGrupo === 'function') desenharRotulosDeGrupo()
   if (typeof aplicarNivelDoMapa === 'function') aplicarNivelDoMapa()
@@ -162,7 +166,8 @@ async function _carregarQuadrasDoBairro(nome) {
     const gj = await r.json()
     const camada = L.geoJSON(gj, {
       pane: 'quadras', interactive: false,
-      style: { color: '#ffffff', weight: 1.4, opacity: .9, fill: false },
+      // Contorno sobre a foto; cheia no mapa cadastral (fundo-cadastral.js).
+      style: typeof estiloQuadraDoMapa === 'function' ? estiloQuadraDoMapa() : { color: '#ffffff', weight: 1.4, opacity: .9, fill: false },
     }).addTo(mapaState.obj)
     quadraState.porBairro.set(nome, { feicoes: gj.features, camada, ruas: gj.ruas || [] })
   } catch (e) {

@@ -88,3 +88,7 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
   .pc-tools button{width:36px;height:36px}.pc-tools i{display:none}
   .pc-rodape{flex-wrap:wrap;padding:6px;gap:5px}.pc-janela{overflow-y:auto}.pc-canvas{flex:1 0 240px}
   #pc-modal [data-dica]:hover::after{display:none}}
+
+/* Nome de rua no fundo cadastral (fundoCadastral, prancheta-cadastral.js). */
+.pc-rua{font:600 10.5px Inter,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;fill:#6B726D;
+  paint-order:stroke;stroke:#FFFFFF;stroke-width:3px;stroke-linejoin:round;pointer-events:none}

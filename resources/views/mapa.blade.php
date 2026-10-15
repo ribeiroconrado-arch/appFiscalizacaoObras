@@ -3873,6 +3873,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/prancheta-geo.js')"></script>
 {{-- Depois de prancheta-geo.js: o cálculo do contorno usa a mesma régua (PranchetaGeo.plano). --}}
 <script src="@assetv('js/bairros-contorno.js')"></script>
+{{-- O mapa cadastral: fundo desenhado com os contornos e as quadras de bairros-contorno.js. --}}
+<script src="@assetv('js/fundo-cadastral.js')"></script>
 <script src="@assetv('js/ruas-manuais.js')"></script>
 <script src="@assetv('js/prancheta-cadastral.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>

@@ -174,7 +174,8 @@ function estiloColorido(f) {
       ? { color: COR_DESTAQUE, weight: 2, opacity: 1, fillColor: COR_DESTAQUE, fillOpacity: .45 }
       // O que ficou de fora não some: continua legível, só recua. Escondê-lo
       // tiraria a referência de vizinhança que faz o resultado significar algo.
-      : { color: COR_UNIFORME, weight: .6, opacity: .35, fillColor: COR_UNIFORME, fillOpacity: .06 }
+      : (typeof fundoCadastral === 'function' && fundoCadastral() ? estiloLoteCadastral(true)
+        : { color: COR_UNIFORME, weight: .6, opacity: .35, fillColor: COR_UNIFORME, fillOpacity: .06 })
   }
 
   if (corState.chave) {
@@ -182,6 +183,10 @@ function estiloColorido(f) {
     const cor = PALETA_MAPA[corState.cores[k] ?? 0]
     return { color: cor, weight: 1, opacity: .9, fillColor: cor, fillOpacity: .3 }
   }
+
+  // No MAPA CADASTRAL (fundo-cadastral.js) o lote é a própria quadra cinza,
+  // com a divisa fina: não há telhado a mostrar por baixo.
+  if (typeof fundoCadastral === 'function' && fundoCadastral()) return estiloLoteCadastral()
 
   // Contorno branco fino com preenchimento quase transparente: marca o limite
   // do lote sem cobrir o telhado, que é o que o fiscal precisa enxergar.

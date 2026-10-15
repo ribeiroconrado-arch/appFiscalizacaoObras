@@ -35,7 +35,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
           <label><input id="pc-near" type="checkbox" checked> × Na face <small>qualquer ponto da linha</small></label>
           <label><input id="pc-perp" type="checkbox" checked> ∟ Perpendicular <small>pé da perpendicular</small></label>
           <b>Exibição</b>
-          <label><input id="pc-mapa" type="checkbox" checked onchange="PranchetaCad.mapa(this.checked)"> Mapa de ruas <small>referência de fundo</small></label>
+          <label><input id="pc-mapa" type="checkbox" checked onchange="PranchetaCad.mapa(this.checked)"> Mapa cadastral <small>referência de fundo</small></label>
           <small class="pc-snap-alt">Segure Alt para desenhar sem encaixe.</small></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}
       <i></i>${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}
       </nav>
@@ -256,7 +256,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   function centro(r){const a=r.slice(0,-1);const m=G.mul(a.reduce(G.add,[0,0]),1/a.length);if(G.dentro(m,r))return m;for(let i=1;i<r.length;i++){const mid=G.mul(G.add(r[i-1],r[i]),.5),n=G.normal(r[i-1],r[i]);for(const sign of [1,-1]){const q=G.add(mid,G.mul(n,sign*.1));if(G.dentro(q,r))return q}}return m}
   function render(){if(!s||!svg)return
     let h='<defs><pattern id="pc-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#e8edf1" stroke-width=".6"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafb"/><rect width="100%" height="100%" fill="url(#pc-grid)"/>'
-    if(s.mapa)h+=edif()?tilesAereos():tiles()
+    if(s.mapa)h+=edif()?tilesAereos():fundoCadastral()
     // Na edificação os vizinhos ficam quase transparentes: a imagem aérea tem de aparecer.
     for(const f of s.contexto){if(!f.geometry?.coordinates?.[0])continue;const r=ring(f),p=f.properties||{};h+=`<path d="${path(r,true)}" fill="#e7ebec" fill-opacity="${edif()?'.12':'.78'}" stroke="${edif()?'#ffffff':'#9ca9af'}" stroke-width="1"/>`
       const vis=r.map(tela),b=bounds(vis);if(b[2]<0||b[0]>s.w||b[3]<0||b[1]>s.h)continue
@@ -297,14 +297,8 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // Fillet ativo: o raio e o passo no rodapé; trocou de ferramenta, some.
     {const fl=s.ferramenta==='concordancia'&&!s.leitura;$('pc-fillet').hidden=!fl;if(fl){if(document.activeElement!==$('pc-raio'))$('pc-raio').value=String(s.raio).replace('.',',');$('pc-fillet-passo').textContent=s.fillet?.erro||(s.fillet?.primeiro?'clique no 2º lado':'clique no 1º lado · raio 0 = canto vivo')}}
   }
-  /**
-   * O FUNDO É O MAPA DE RUAS DO GOOGLE, sem comércio nem pontos de interesse
-   * (a sessão já vem com esse estilo — MapaController::googleSessaoRuas). É
-   * pedido uma vez; enquanto não chega, ou se o Google não estiver
-   * configurado, vale o OpenStreetMap, que era o fundo de antes.
-   */
   // Na EDIFICAÇÃO o fundo é a IMAGEM AÉREA: é sobre o telhado que se contorna
-  // a construção, e o mapa de ruas não o mostra. Vem da mesma sessão de
+  // a construção, e o mapa cadastral não o mostra. Vem da mesma sessão de
   // satélite do mapa principal; sem ela, a imagem gratuita da Esri (até o zoom 17).
   let fundoSat=null,fundoSatPedido=false
   function pedirFundoSat(){
@@ -358,35 +352,31 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(tela(centro(r))[1]>tela(f.meio)[1])s.angulo+=Math.PI
     return f.m
   }
-  let fundoGoogle=null,fundoPedido=false
-  function pedirFundoGoogle(){
-    if(fundoPedido)return;fundoPedido=true
-    fetch('/api/mapa/google-sessao-ruas',{headers:{Accept:'application/json'}})
-      .then(r=>r.ok?r.json():null)
-      .then(d=>{if(!d?.session)return;fundoGoogle=d
-        const c=document.querySelector('#pc-modal .pc-credito');if(c)c.textContent='Dados cartográficos © Google · Referência de fundo'
-        if(s)render()})
-      .catch(()=>{fundoPedido=false})
-  }
-  function tiles(){
-    pedirFundoGoogle();creditar(fundoGoogle?'Dados cartográficos © Google · Referência de fundo':'© OpenStreetMap contributors · Referência cartográfica')
+  // FUNDO CADASTRAL: o mesmo do mapa, desenhado com os dados do sistema — o
+  // contorno do bairro em branco (a rua), as quadras em cinza e o nome das
+  // ruas. Substitui o mapa de ruas do Google: encaixa no lote ao centímetro e
+  // não gera pedido nem custo fora. Só a edificação continua com foto aérea.
+  function fundoCadastral(){
+    creditar('Mapa cadastral · desenhado com os dados do sistema')
     const ps=[[0,0],[s.w,0],[s.w,s.h],[0,s.h]].map(p=>s.plano.de(mundo(p))),b=bounds(ps)
-    // O mapa do Google tem bloco nativo até o zoom 22; o OpenStreetMap, até o 19.
-    const zmax=fundoGoogle?21:19
-    const nmax=2**zmax,tx=lon=>(lon+180)/360*nmax,ty=lat=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*nmax
-    const url=fundoGoogle
-      ?(z,x,y)=>`https://tile.googleapis.com/v1/2dtiles/${z}/${x}/${y}?session=${encodeURIComponent(fundoGoogle.session)}&amp;key=${encodeURIComponent(fundoGoogle.key)}`
-      :(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`
-    let z=zmax
-    while(z>10){const n=2**z,k=n/nmax;if((Math.ceil(tx(b[2])*k)-Math.floor(tx(b[0])*k)+1)*(Math.ceil(ty(b[1])*k)-Math.floor(ty(b[3])*k)+1)<=36)break;z--}
-    // O mapa limpo do Google aguenta mais presença que o OpenStreetMap, que
-    // precisava ficar bem apagado para o texto dele não brigar com o desenho.
-    const n=2**z,k=n/nmax;let h=`<g opacity="${fundoGoogle?'.75':'.5'}">`
-    const lon=x=>x/n*360-180,lat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI
-    for(let x=Math.floor(tx(b[0])*k);x<=Math.floor(tx(b[2])*k);x++)for(let y=Math.floor(ty(b[3])*k);y<=Math.floor(ty(b[1])*k);y++){
-      const a=tela(s.plano.para([lon(x),lat(y)])),d=tela(s.plano.para([lon(x+1),lat(y)])),c=tela(s.plano.para([lon(x),lat(y+1)]))
-      h+=`<image href="${url(z,x,y)}" width="256" height="256" transform="matrix(${(d[0]-a[0])/256} ${(d[1]-a[1])/256} ${(c[0]-a[0])/256} ${(c[1]-a[1])/256} ${a[0]} ${a[1]})"/>`
-    }return h+'</g>'
+    const cabe=anel=>{let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const [x,y] of anel){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}return !(x1<b[0]||x0>b[2]||y1<b[1]||y0>b[3])}
+    const poligonos=g=>!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[]
+    const caminho=pol=>pol.map(a=>path(a.map(c=>s.plano.para(c)),true)).join(' ')
+    let h='<rect width="100%" height="100%" fill="#EDEEE8"/>'
+    for(const f of (typeof contornoState!=='undefined'&&contornoState.dados?.features)||[])for(const pol of poligonos(f.geometry))if(cabe(pol[0]))h+=`<path d="${caminho(pol)}" fill="#FFFFFF" fill-rule="evenodd" stroke="#C9CDC5" stroke-width="1"/>`
+    const nomes=[]
+    if(typeof quadraState!=='undefined')for(const q of quadraState.porBairro.values()){if(q==='carregando')continue
+      for(const f of q.feicoes||[])for(const pol of poligonos(f.geometry))if(cabe(pol[0]))h+=`<path d="${caminho(pol)}" fill="#E6E8E3" fill-rule="evenodd" stroke="#CDD1CA" stroke-width="1"/>`
+      // O nome da rua ao longo do trecho, um por rua no que se vê.
+      for(const t of q.ruas||[]){if(!t.nome||t.origem==='oculto'||t.origem==='sem_nome')continue
+        const a=tela(s.plano.para([t.de[1],t.de[0]])),c=tela(s.plano.para([t.ate[1],t.ate[0]]))
+        if(Math.hypot(c[0]-a[0],c[1]-a[1])<t.nome.length*7+24)continue
+        const mx=(a[0]+c[0])/2,my=(a[1]+c[1])/2;if(mx<0||my<0||mx>s.w||my>s.h)continue
+        if(nomes.some(n=>n.nome===t.nome&&Math.hypot(n.x-mx,n.y-my)<300))continue;nomes.push({nome:t.nome,x:mx,y:my})
+        let ang=Math.atan2(c[1]-a[1],c[0]-a[0])*180/Math.PI;if(ang>90)ang-=180;else if(ang<=-90)ang+=180
+        h+=`<text class="pc-rua" x="${mx.toFixed(1)}" y="${my.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${ang.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)})">${e(t.nome)}</text>`}
+    }
+    return h
   }
   function norte(){if(!s)return;s.angulo=0;enquadrar();if(!s.leitura)mudou()}
   function mapa(v){s.mapa=v;render();if(!s.leitura)agendar()}
@@ -434,7 +424,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(salva){restaurar(salva);s.contexto=salva.contexto||[];s.finalFeatures=salva.resultantes;if(tipo==='unificacao')s.uniao=salva.resultantes[0]?.geometry;s.resultado={partes:salva.resultantes.map(ring)}}
     const titulos={desmembramento:'Desmembramento',unificacao:'Unificação',novo:'Lote novo',edicao:'Editar lote',edificacao:'Desenhar edificação'}
     // O rótulo da opção de fundo acompanha o que ela mostra.
-    {const rot=$('pc-mapa')?.nextSibling;if(rot?.nodeType===3)rot.textContent=tipo==='edificacao'?' Imagem aérea ':' Mapa de ruas '}
+    {const rot=$('pc-mapa')?.nextSibling;if(rot?.nodeType===3)rot.textContent=tipo==='edificacao'?' Imagem aérea ':' Mapa cadastral '}
     $('pc-titulo').textContent=(salva?'Prancha finalizada · ':'')+(titulos[tipo]||tipo)
     $('pc-origem').textContent=tipo==='novo'?(opts.bairro||'Desenhe o contorno do lote'):originais.map(f=>`Q ${f.properties?.quadra||opts.quadra||'—'} · Lote ${f.properties?.numero_lote||opts.numero_lote||f.properties?.id}`).join(' + ')
     $('pc-continuar').textContent=tipo==='novo'?'Informar os dados →':tipo==='edificacao'?'Gravar edificação →':tipo==='edicao'?'Número, quadra e salvar →':'Dados e finalizar →'

@@ -105,6 +105,9 @@ function iniciarMapa() {
       updateWhenZooming: false,
     })
 
+  // Guardada para o fundo cadastral tirá-la do mapa e devolvê-la (fundo-cadastral.js).
+  mapaState.satelite = satelite
+
   mapaState.obj = L.map('map', {
     zoomControl: false, layers: [satelite],
     /*
@@ -218,6 +221,8 @@ function iniciarMapa() {
   if (zoomDuploLigado) zoomDuplo.enable()
 
   recortarMunicipio()
+  // O fundo escolhido no painel Camadas: satélite ou mapa cadastral.
+  if (typeof aplicarFundoDoMapa === 'function') aplicarFundoDoMapa()
 }
 
 /**
@@ -270,6 +275,9 @@ function ajustarNitidezSatelite() {
  * @param {L.TileLayer} satelite camada da Esri, usada como referência de ordem
  */
 async function montarGoogle(satelite) {
+  // No fundo cadastral nem a sessão é pedida: o Google cobra pela sessão e
+  // pelos tiles. Fica marcado para pedir se alguém voltar ao satélite.
+  if (typeof fundoCadastral === 'function' && fundoCadastral()) { mapaState.googlePendente = true; return }
   try {
     const r = await fetch('/api/mapa/google-sessao', { headers: { Accept: 'application/json' } })
     if (!r.ok) {

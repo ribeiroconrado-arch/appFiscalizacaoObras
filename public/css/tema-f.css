@@ -3211,8 +3211,10 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 #map.cam-sem-ruas .leaflet-rotulos-pane,
 #map.cam-sem-edificacoes .leaflet-edificacoes-pane{display:none}
 #map.cam-sem-satelite .tile-satelite{visibility:hidden}
-/* Escuro, e não claro: o contorno dos lotes é branco, pensado para a foto. */
-#map.cam-sem-satelite{background:#3a463e}
+/* MAPA CADASTRAL (fundo-cadastral.js): o chão fora dos bairros. Dentro deles
+   o branco é a rua e o cinza, as quadras e os lotes. */
+#map.cam-sem-satelite{background:#EDEEE8}
+.cam-obs{display:block;font-size:11px;color:var(--tx3);font-weight:400;margin-left:22px}
 
 /* ══════════════════════════════════════════════
    PESQUISA DO MAPA (pesquisa-mapa.js) — barra horizontal, primeira da faixa. */
