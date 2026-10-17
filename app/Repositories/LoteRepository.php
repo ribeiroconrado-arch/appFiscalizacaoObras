@@ -639,7 +639,7 @@ class LoteRepository
      */
     public function contornosDosBairros(): array
     {
-        return DB::select('SELECT nome, codigo, raio_m, lotes_contados, contorno_em, isolados,
+        return DB::select('SELECT nome, codigo, raio_m, lotes_contados, contorno_em, isolados, editado_manual, editado_em,
                                   ST_Area(geom) AS area_m2, ST_AsGeoJSON(geom) AS geojson
                              FROM bairros');
     }

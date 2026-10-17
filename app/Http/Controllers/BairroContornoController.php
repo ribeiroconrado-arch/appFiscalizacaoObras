@@ -90,6 +90,9 @@ class BairroContornoController extends Controller
                     'isolados'      => json_decode($b->isolados ?? '[]', true) ?: [],
                     // O mapa só pede /api/mapa/quadras de bairro que as tem.
                     'quadras'       => $quadras[$b->nome] ?? 0,
+                    // Editado à mão (EdicaoDeContorno): gerar de novo pede confirmação.
+                    'editado_manual' => (bool) ($b->editado_manual ?? false),
+                    'editado_em'    => ! empty($b->editado_em) ? date('d/m/Y H:i', strtotime($b->editado_em)) : null,
                 ],
             ];
         }
@@ -105,6 +108,68 @@ class BairroContornoController extends Controller
     }
 
     /** GET /api/bairros/lotes?bairro= — os lotes do bairro, para o cálculo no navegador. */
+    // ── EDIÇÃO À MÃO (vértices) ─────────────────────────────────
+
+    /** POST /api/bairros/contorno/conferir-edicao — as três regras, sem gravar. */
+    public function conferirEdicao(Request $r, \App\Services\EdicaoDeContorno $svc): JsonResponse
+    {
+        if (! $this->podeGerar($r)) {
+            return response()->json(['message' => 'Editar o contorno do bairro é do curador do cadastro.'], 403);
+        }
+        $d = $this->validarEdicao($r);
+        try {
+            $c = $svc->conferir($d['bairro'], $d['geometry']);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'O banco não aceitou o contorno: coordenada fora de faixa ou documento inválido.'], 422);
+        }
+
+        return response()->json($c + ['motivo' => $c['pode'] ? null : $svc->motivo($c)]);
+    }
+
+    /** PUT /api/bairros/contorno/edicao — grava, se as três regras fecham. */
+    public function gravarEdicao(Request $r, \App\Services\EdicaoDeContorno $svc): JsonResponse
+    {
+        if (! $this->podeGerar($r)) {
+            return response()->json(['message' => 'Editar o contorno do bairro é do curador do cadastro.'], 403);
+        }
+        $d = $this->validarEdicao($r);
+        try {
+            $c = $svc->gravar($d['bairro'], $d['geometry'], $r->user()->id);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['message' => sprintf('Contorno de %s gravado: %s ha. O anterior fica guardado para desfazer.',
+            $d['bairro'], number_format($c['area_m2'] / 10000, 2, ',', '.'))]);
+    }
+
+    /** POST /api/bairros/contorno/desfazer-edicao — volta o contorno de antes. */
+    public function desfazerEdicao(Request $r, \App\Services\EdicaoDeContorno $svc): JsonResponse
+    {
+        if (! $this->podeGerar($r)) {
+            return response()->json(['message' => 'Editar o contorno do bairro é do curador do cadastro.'], 403);
+        }
+        $d = $r->validate(['bairro' => ['required', 'string', 'max:120']]);
+        try {
+            $svc->desfazer($d['bairro']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['message' => "Contorno de {$d['bairro']} voltou ao anterior."]);
+    }
+
+    /** @return array{bairro:string, geometry:array<string,mixed>} */
+    private function validarEdicao(Request $r): array
+    {
+        return $r->validate([
+            'bairro'               => ['required', 'string', 'max:120', 'exists:bairros,nome'],
+            'geometry'             => ['required', 'array'],
+            'geometry.type'        => ['required', 'in:Polygon,MultiPolygon'],
+            'geometry.coordinates' => ['required', 'array'],
+        ]);
+    }
+
     public function lotes(Request $r): JsonResponse
     {
         if (! $this->podeGerar($r)) {
@@ -162,6 +227,15 @@ class BairroContornoController extends Controller
             'ruas.*.ate.*'  => ['numeric', 'between:-180,180'],
         ]);
 
+        // CONTORNO EDITADO À MÃO: gerar pelo raio apagaria a edição. Só com
+        // a confirmação de quem gera — e o editado vai para o histórico,
+        // de onde o "Desfazer" o devolve.
+        $editado = (bool) DB::table('bairros')->where('nome', $d['bairro'])->value('editado_manual');
+        if ($editado && ! $r->boolean('sobrescrever_edicao')) {
+            return response()->json(['codigo' => 'editado_manual',
+                'message' => "O contorno de {$d['bairro']} foi editado à mão. Gerar de novo pelo raio substitui a edição."], 409);
+        }
+
         $geojson = json_encode($d['geometry']);
         try {
             $c = $this->lotes->conferirContorno($d['bairro'], $geojson);
@@ -191,8 +265,12 @@ class BairroContornoController extends Controller
                 ], $d['ruas'] ?? []));
             }
 
+            if ($editado) {
+                app(\App\Services\EdicaoDeContorno::class)->guardarAntesDeGerar($d['bairro'], $r->user()->id);
+            }
             $this->lotes->gravarContorno($d['bairro'], $codigo, $geojson, (float) $d['raio_m'],
                 (int) $d['lotes_contados'], $d['isolados'] ?? [], $r->user()->id);
+            DB::table('bairros')->where('nome', $d['bairro'])->update(['editado_manual' => false]);
 
             // Sem `quadras` no envio (cliente antigo em cache), as gravadas ficam.
             return array_key_exists('quadras', $d)

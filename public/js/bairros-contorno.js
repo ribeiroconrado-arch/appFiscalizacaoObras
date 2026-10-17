@@ -453,9 +453,21 @@ async function gerarContornoDoBairro(bairro, raio = CONTORNO_RAIO_PADRAO, opts =
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf },
       body: JSON.stringify({ bairro, geometry: calc.geometry, raio_m: raio, lotes_contados: dl.lotes.length,
-        isolados: calc.isolados, quadras, ruas }),
+        isolados: calc.isolados, quadras, ruas, sobrescrever_edicao: !!opts.sobrescrever }),
     })
     const dg = await rg.json()
+    // EDITADO À MÃO (contorno-editor.js): gerar pelo raio substituiria a
+    // edição. Em lote (silencioso) fica o editado; na linha, pergunta.
+    if (rg.status === 409 && dg.codigo === 'editado_manual') {
+      if (opts.silencioso) return { mantido: true, message: `Contorno de ${bairro} editado à mão: mantido.` }
+      confirmarAcao({ titulo: 'Substituir o contorno editado?', textoBtn: 'Gerar de novo', perigo: true,
+        mensagem: dg.message + ' O editado fica guardado: "Desfazer edição", na lista, o devolve.',
+        onConfirm: async () => {
+          const r = await gerarContornoDoBairro(bairro, raio, { ...opts, sobrescrever: true })
+          if (r && typeof abrirContornosDosBairros === 'function' && document.getElementById('ctn-raio')) abrirContornosDosBairros()
+        } })
+      return null
+    }
     if (!rg.ok) {
       // Recusado por deixar lotes de fora: guarda QUAIS, para a lista mostrar.
       if (Array.isArray(dg.fora)) contornoState.fora[bairro] = dg.fora
@@ -805,7 +817,8 @@ async function abrirContornosDosBairros() {
   ].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 
   const situacao = p => !p ? '<span class="badge bd-in">sem contorno</span>'
-    : p.desatualizado ? '<span class="badge bd-pe">desatualizado</span>' : '<span class="badge bd-ok">em dia</span>'
+    : (p.desatualizado ? '<span class="badge bd-pe">desatualizado</span>' : '<span class="badge bd-ok">em dia</span>')
+      + (p.editado_manual ? ` <span class="badge bd-num" title="Editado à mão em ${esc(p.editado_em || '')}">editado à mão</span>` : '')
 
   const nDesat = linhas.filter(l => !l.p || l.p.desatualizado).length
   _impCorpo(`
@@ -834,7 +847,9 @@ async function abrirContornosDosBairros() {
           <td class="num">${l.p?.contorno_em ? l.p.raio_m + ' m' : '—'}</td>
           <td class="num">${l.p?.contorno_em ? (l.p.quadras ? l.p.quadras : '<span class="imp-diverge" title="Gere de novo para criar as quadras">sem quadras</span>') : '—'}</td>
           <td class="num">${l.p ? l.p.area_ha.toLocaleString('pt-BR') + ' ha' : '—'}</td>
-          <td class="jt-acoes"><button class="btn sm" onclick="gerarDaLista(this, ${jsArg(l.nome)})">${l.p ? 'Gerar de novo' : 'Gerar'}</button></td>
+          <td class="jt-acoes">${l.p ? `<button class="btn sm" onclick="editarContornoDoBairro(${jsArg(l.nome)})" title="Puxar vértices, encostar no vizinho">Editar</button>` : ''}
+            ${l.p?.editado_manual ? `<button class="btn sm" onclick="desfazerEdicaoDoContorno(${jsArg(l.nome)})">Desfazer edição</button>` : ''}
+            <button class="btn sm" onclick="gerarDaLista(this, ${jsArg(l.nome)})">${l.p ? 'Gerar de novo' : 'Gerar'}</button></td>
         </tr>`).join('') || '<tr class="jt-sem-linhas"><td colspan="7">Nenhum bairro com lotes.</td></tr>'}
         </tbody></table>
         <div class="jt-nada" hidden>Nenhum bairro com o que foi pesquisado.</div>
@@ -882,14 +897,17 @@ function gerarTodosOsContornos(btn) {
 async function _gerarEmSequencia(btn, nomes) {
   const raio = Number(document.getElementById('ctn-raio')?.value) || CONTORNO_RAIO_PADRAO
   btn.disabled = true
-  const falhas = []
+  const falhas = [], mantidos = []
   for (const [i, nome] of nomes.entries()) {
     btn.textContent = `Gerando ${i + 1} de ${nomes.length}…`
-    if (!await gerarContornoDoBairro(nome, raio, { silencioso: true })) falhas.push(nome)
+    const r = await gerarContornoDoBairro(nome, raio, { silencioso: true })
+    if (!r) falhas.push(nome)
+    else if (r.mantido) mantidos.push(nome)
   }
   toast(falhas.length
     ? `${nomes.length - falhas.length} bairro(s) gerado(s). ${falhas.length} falharam — use "Gerar" na linha para ver o motivo: ${falhas.join(', ')}.`
-    : `${nomes.length} bairros gerados, com as quadras.`, falhas.length ? 'aviso' : 'ok')
+    : `${nomes.length - mantidos.length} bairros gerados, com as quadras.`
+      + (mantidos.length ? ` ${mantidos.length} editado(s) à mão ficaram como estavam: ${mantidos.join(', ')}.` : ''), falhas.length ? 'aviso' : 'ok')
   // Só refaz a lista se ela ainda estiver aberta.
   if (document.getElementById('m-importacoes')?.classList.contains('open') && document.getElementById('ctn-raio')) {
     await abrirContornosDosBairros()

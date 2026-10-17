@@ -904,7 +904,8 @@ async function salvarImportacao() {
     // importação continua salva; "Contorno dos bairros" gera depois.
     if (typeof gerarContornoDoBairro === 'function') {
       const c = await gerarContornoDoBairro(i.bairro, CONTORNO_RAIO_PADRAO, { silencioso: true })
-      if (c) toast(`Contorno de ${i.bairro} gerado: ${c.area_ha.toLocaleString('pt-BR')} ha.`)
+      if (c?.mantido) toast(c.message, 'aviso')
+      else if (c) toast(`Contorno de ${i.bairro} gerado: ${c.area_ha.toLocaleString('pt-BR')} ha.`)
       else toast(`O contorno de ${i.bairro} não pôde ser gerado agora. Gere em "Contorno dos bairros".`, 'aviso')
     }
     await abrirImportacao(i.id)

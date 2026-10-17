@@ -242,6 +242,8 @@
   <div class="imp-barra conf-barra" id="conf-barra" hidden></div>
   {{-- A ferramenta Nomes de rua (ruas-manuais.js). --}}
   <div class="imp-barra ruas-barra" id="ruas-barra" hidden></div>
+  {{-- Editar o contorno do bairro, vértice a vértice (contorno-editor.js). --}}
+  <div class="imp-barra ce-barra" id="ce-barra" hidden></div>
 @endif
 
 {{-- ══════ BARRA DE DESENHO ══════
@@ -3926,6 +3928,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
   <script src="@assetv('js/fracao-ideal.js')"></script>
   {{-- Lote desatualizado no cadastro: borda, selo, faixa no balão e tag na ficha. --}}
   <script src="@assetv('js/alertas-mapa.js')"></script>
+  {{-- Editar o contorno do bairro à mão (vértices, ímã, encostar no vizinho). --}}
+  <script src="@assetv('js/contorno-editor.js')"></script>
 @endif
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>

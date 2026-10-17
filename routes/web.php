@@ -121,6 +121,10 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/mapa/quadras', [BairroContornoController::class, 'quadras'])->middleware('comprimir');
         Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
+        // Edição do contorno à mão, vértice a vértice (EdicaoDeContorno).
+        Route::post('/bairros/contorno/conferir-edicao', [BairroContornoController::class, 'conferirEdicao']);
+        Route::put('/bairros/contorno/edicao', [BairroContornoController::class, 'gravarEdicao']);
+        Route::post('/bairros/contorno/desfazer-edicao', [BairroContornoController::class, 'desfazerEdicao']);
         // Nomes de rua informados pelo curador (Correção cadastral → Nomes de rua).
         Route::get('/ruas/logradouros', [\App\Http\Controllers\RuaManualController::class, 'logradouros']);
         Route::post('/ruas/manuais', [\App\Http\Controllers\RuaManualController::class, 'criar']);

@@ -428,3 +428,13 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .jt-grupo .jt-tabela.jt-registro th:nth-child(3){width:180px}
 .jt-grupo .jt-tabela.jt-registro th:last-child{width:140px}
 .jt-tabela.jt-registro td:nth-child(2){white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.5}
+
+/* ── Editar o contorno do bairro (contorno-editor.js) ── */
+.ce-barra{background:var(--sur);color:var(--tx);border-color:#2563EB}
+.ce-barra .ce-dica{font-size:11.5px;color:var(--tx3)}
+.ce-barra .btn.ce-ativo{background:#DBEAFE;border-color:#2563EB;color:#1D4ED8}
+.ce-alca{box-sizing:border-box}
+.ce-alca.ce-v{background:#2563EB;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);cursor:move}
+.ce-alca.ce-v.ce-sel{background:#F97316}
+.ce-alca.ce-v.ce-escolhido{background:#16A34A}
+.ce-alca.ce-m{background:#fff;border:1.5px solid #2563EB;border-radius:50%;cursor:copy;opacity:.9}
