@@ -41,6 +41,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
         <div class="pc-snap-pop" id="pc-snap-pop" hidden><b>Encaixe do cursor (OSNAP)</b>
           <label><input id="pc-end" type="checkbox" checked> □ Endpoint <small>ponta das linhas</small></label>
           <label><input id="pc-mid" type="checkbox" checked> △ Midpoint <small>meio das linhas</small></label>
+          <label><input id="pc-int" type="checkbox" checked> ⊠ Interseção <small>onde duas linhas se cruzam</small></label>
           <label><input id="pc-near" type="checkbox" checked> × Na face <small>qualquer ponto da linha</small></label>
           <label><input id="pc-perp" type="checkbox" checked> ∟ Perpendicular <small>pé da perpendicular</small></label>
           <b>Exibição</b>
@@ -103,6 +104,11 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(ev?.altKey)return p
     let dist=12/s.escala,melhor=null
     const testar=(q,t)=>{const d=G.len(G.sub(q,p));const empate=melhor&&Math.abs(d-dist)<=1e-6;if((d<dist&&!empate)||(empate&&(t==='Endpoint'||(t==='Perpendicular'&&s.captura.t!=='Endpoint')))){dist=d;melhor=q;s.captura={p:q,t}}}
+    // INTERSEÇÃO (como o OSNAP do AutoCAD): onde duas linhas se cruzam — a de
+    // referência com o contorno em edição, por exemplo. Só as faces perto do
+    // cursor entram no par a par.
+    if($('pc-int')?.checked){const perto=faces(ignorar).filter(([a,b])=>G.len(G.sub(G.pe(p,a,b),p))<dist*2)
+      for(let i=0;i<perto.length;i++)for(let j=i+1;j<perto.length;j++){const x=G.inter(...perto[i],...perto[j]);if(x)testar(x.p,'Interseção')}}
     for(const [a,b] of faces(ignorar)) {
       if($('pc-end').checked){testar(a,'Endpoint');testar(b,'Endpoint')}
       if($('pc-mid').checked)testar(G.mul(G.add(a,b),.5),'Midpoint')
@@ -305,7 +311,10 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     for(const f of contornos()){const r=ring(f);for(let i=1;i<r.length;i++){const m=G.len(G.sub(r[i],r[i-1]));if(m*s.escala<70)continue
       if(editado){if(!igualAoEditado(r[i-1],r[i]))h+=cota(r[i-1],r[i],`antes ${fmtMed(m)} m`,G.area(r)>0?-1:1,'pc-cota pc-cota-antes');continue}
       h+=cota(r[i-1],r[i],`${fmtMed(m)} m`,G.area(r)>0?-1:1)}}
-    for(const l of s.linhas){const sel=l.id===s.sel;h+=`<path data-line="${e(l.id)}" class="pc-hit" d="${path(l.pontos)}"/><path data-line="${e(l.id)}" d="${path(l.pontos)}" fill="none" stroke="${sel?'#ea580c':'#2563eb'}" stroke-width="${sel?3:2}"/>`
+    // A linha SELECIONADA vai por último: as alças dos vértices dela ficam por
+    // cima de toda outra linha. Desenhada na ordem, uma linha de referência
+    // criada depois cobria o vértice do contorno em edição e roubava o clique.
+    for(const l of [...s.linhas.filter(x=>x.id!==s.sel),...s.linhas.filter(x=>x.id===s.sel)]){const sel=l.id===s.sel;h+=`<path data-line="${e(l.id)}" class="pc-hit" d="${path(l.pontos)}"/><path data-line="${e(l.id)}" d="${path(l.pontos)}" fill="none" stroke="${sel?'#ea580c':'#2563eb'}" stroke-width="${sel?3:2}"/>`
       if(sel)l.pontos.forEach((p,i)=>{const q=tela(p);h+=`<circle data-line="${e(l.id)}" data-vertex="${i}" cx="${q[0]}" cy="${q[1]}" r="5" fill="white" stroke="#ea580c" stroke-width="2"/>`})
       // A medida de TODOS os lados do que está sendo desenhado (a selecionada
       // mostra mesmo os curtos). No contorno fechado, do lado oposto ao das
@@ -324,7 +333,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     const f1=s.fillet?.primeiro;if(f1){const l=f1.id!=null&&s.linhas.find(x=>x.id===f1.id),ab=f1.id==null?[f1.a,f1.b]:l?[l.pontos[f1.i],l.pontos[f1.i+1]]:null;if(ab?.[0]&&ab[1])h+=`<path d="${path(ab)}" stroke="#a855f7" stroke-width="6" opacity=".85"/>`}
     if(s.traco.length){let q=s.mouse||s.traco.at(-1);const n=numeroDigitado();if(n!==null&&n>0)q=G.add(s.traco.at(-1),G.mul(G.unit(G.sub(q,s.traco.at(-1))),n));h+=`<path d="${path([...s.traco,q])}" fill="none" stroke="#ea580c" stroke-width="2.5" stroke-dasharray="7 3"/>`;h+=cota(s.traco.at(-1),q,`${fmtNum(G.len(G.sub(q,s.traco.at(-1))))} m`);s.traco.forEach(p=>{const t=tela(p);h+=`<circle cx="${t[0]}" cy="${t[1]}" r="4" fill="#ea580c"/>`})}
     if(s.operacao&&!s.operacao.basePendente){try{h+=`<path d="${path(pontosOperacao())}" fill="none" stroke="#ea580c" stroke-width="3" stroke-dasharray="8 4"/>`;h+=texto(s.mouse,`${s.operacao.tipo==='offset'?'Offset':'Mover'} ${fmtNum(G.len(deltaOperacao()))} m`,'pc-cota')}catch{}}
-    if(s.captura){const q=tela(s.captura.p),t=s.captura.t,k=t==='Endpoint'?'endpoint':t==='Midpoint'?'midpoint':t==='Na face'?'face':'perpendicular';const shapes={endpoint:'<rect x="-6" y="-6" width="12" height="12"/>',midpoint:'<path d="M0 -8L8 6H-8Z"/>',face:'<path d="M-6 -6L6 6M-6 6L6 -6"/>',perpendicular:'<path d="M-7 -8V7H8M-7 1H-1V7"/>'};h+=`<g data-snap="${k}" transform="translate(${q[0]} ${q[1]})" fill="none" stroke="#16a34a" stroke-width="2" pointer-events="none">${shapes[k]}</g><text class="pc-snap" x="${q[0]+14}" y="${q[1]+23}">${e(t)}</text>`}
+    if(s.captura){const q=tela(s.captura.p),t=s.captura.t,k=t==='Endpoint'?'endpoint':t==='Midpoint'?'midpoint':t==='Na face'?'face':t==='Interseção'?'intersecao':'perpendicular';const shapes={intersecao:'<rect x="-6" y="-6" width="12" height="12"/><path d="M-6 -6L6 6M-6 6L6 -6"/>',endpoint:'<rect x="-6" y="-6" width="12" height="12"/>',midpoint:'<path d="M0 -8L8 6H-8Z"/>',face:'<path d="M-6 -6L6 6M-6 6L6 -6"/>',perpendicular:'<path d="M-7 -8V7H8M-7 1H-1V7"/>'};h+=`<g data-snap="${k}" transform="translate(${q[0]} ${q[1]})" fill="none" stroke="#16a34a" stroke-width="2" pointer-events="none">${shapes[k]}</g><text class="pc-snap" x="${q[0]+14}" y="${q[1]+23}">${e(t)}</text>`}
     if(s.medindo!=null){const r=partes[s.medindo];if(r)for(let j=1;j<r.length;j++){const q=tela(G.mul(G.add(r[j-1],r[j]),.5));h+=`<g pointer-events="none"><circle cx="${q[0]}" cy="${q[1]}" r="12" fill="#006c16"/><text x="${q[0]}" y="${q[1]+4}" text-anchor="middle" fill="white" font-size="12">${j}</text></g>`}}
     for(const a of s.anotacoes)h+=texto(posicaoConfronto(a.p,a.texto),a.texto,'pc-confronto')
     const north=G.rot([0,1],s.angulo);h+=`<g transform="translate(${s.w-38} 42)"><path d="M0 0L${north[0]*22} ${-north[1]*22}" stroke="#243b4b" stroke-width="2"/><text x="${north[0]*32}" y="${-north[1]*32}" text-anchor="middle" font-size="12">N</text></g>`

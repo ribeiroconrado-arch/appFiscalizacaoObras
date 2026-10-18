@@ -555,8 +555,15 @@ function calcularContorno(lotes, raio, vizinhos = []) {
   fechado = J.simplify.TopologyPreservingSimplifier.simplify(fechado, 0.5)
 
   // Pedaços: o maior é o bairro; pedaço pequeno e longe é lote isolado.
+  // Pedaço SEM ÁREA fica de fora: a simplificação de 0,5 m achata lasca
+  // estreita numa linha (2 pontos, 0 m²), e um anel assim torna o contorno
+  // inteiro inválido — o servidor recusava "linhas se cruzando" (JD. Florença,
+  // 18/10/2026). Lasca dessas não contém lote nenhum.
   const pedacos = []
-  for (let i = 0; i < fechado.getNumGeometries(); i++) pedacos.push(fechado.getGeometryN(i))
+  for (let i = 0; i < fechado.getNumGeometries(); i++) {
+    const p = fechado.getGeometryN(i)
+    if (p.getArea() >= 1 && p.isValid()) pedacos.push(p)
+  }
   pedacos.sort((a, b) => b.getArea() - a.getArea())
   const corpo = pedacos[0], ficam = [corpo], isolados = []
   for (const p of pedacos.slice(1)) {
