@@ -256,7 +256,7 @@ class BairroContornoController extends Controller
         }
 
         $codigo = $this->codigoNoCadastro($d['bairro']);
-        $q = DB::transaction(function () use ($d, $codigo, $geojson, $r) {
+        $q = DB::transaction(function () use ($d, $codigo, $geojson, $r, $editado) {
             if (array_key_exists('ruas', $d)) {
                 $this->lotes->gravarRuas($d['bairro'], array_map(fn ($t) => [
                     'nome' => isset($t['nome']) && trim($t['nome']) !== '' ? trim($t['nome']) : null,

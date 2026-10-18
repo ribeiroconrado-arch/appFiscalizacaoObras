@@ -5,7 +5,9 @@
  * curador as fecha direto no mapa:
  *
  *   vértice (quadrado)   arrastar move; clicar seleciona; Delete apaga
- *   meio do lado (●)     arrastar cria um vértice novo
+ *   meio do lado (▬)     arrastar leva o LADO INTEIRO na perpendicular, paralelo
+ *                        a ele mesmo (o "stretch" do AutoCAD): os lados vizinhos
+ *                        esticam. Shift + arrastar cria um vértice novo ali
  *   ímã                  o vértice gruda no vértice ou na linha do bairro
  *                        vizinho (Alt segurado desliga) — a divisa fica comum
  *   Encostar no vizinho  escolha dois vértices: o trecho entre eles passa a
@@ -29,7 +31,12 @@ const ceState = {
   camada: null, alcas: null, ima: null, invasoes: null,
   vizinhos: [], conf: null, timer: null, pedido: 0, gravando: false, alterado: false,
   lotesFora: new Set(),
+  /** Shift e Alt seguros agora: o arrasto do Leaflet não traz o teclado. */
+  teclas: { shift: false, alt: false },
 }
+
+for (const t of ['keydown', 'keyup']) document.addEventListener(t, ev => { ceState.teclas.shift = ev.shiftKey; ceState.teclas.alt = ev.altKey }, true)
+window.addEventListener('blur', () => { ceState.teclas.shift = ceState.teclas.alt = false })
 
 /** Abaixo deste zoom os vértices não aparecem; acima, aparecem se couberem (CE_MAX_ALCAS). */
 const CE_ZOOM_ALCAS = 13
@@ -181,7 +188,10 @@ function _ceDesenharAlcas() {
   if (comMeios) for (const [pi, ri, i, meio] of ms) _ceAlcaMeio(pi, ri, i, meio)
 }
 
-function _ceIcone(cls) { return L.divIcon({ className: 'ce-alca ' + cls, iconSize: cls.includes('ce-v') ? [11, 11] : [10, 10] }) }
+function _ceIcone(cls, angulo = 0) {
+  if (cls.includes('ce-m')) return L.divIcon({ className: 'ce-alca ' + cls, iconSize: [18, 18], html: `<span style="transform:rotate(${angulo.toFixed(1)}deg)"></span>` })
+  return L.divIcon({ className: 'ce-alca ' + cls, iconSize: [11, 11] })
+}
 
 function _ceAlcaVertice(pi, ri, i) {
   const c = ceState.polis[pi][ri][i]
@@ -197,11 +207,41 @@ function _ceAlcaVertice(pi, ri, i) {
   mk.addTo(ceState.alcas)
 }
 
+/**
+ * A alça do MEIO DO LADO (retângulo deitado no lado), como no AutoCAD:
+ * arrastar leva o lado inteiro na perpendicular, paralelo a ele mesmo — só a
+ * componente do arrasto na direção normal ao lado conta. Os dois vértices do
+ * lado andam juntos e os lados vizinhos esticam. Com Shift, cria um vértice.
+ */
 function _ceAlcaMeio(pi, ri, i, meio) {
-  const mk = L.marker([meio[1], meio[0]], { pane: 'ceAlcas', draggable: ceState.modo !== 'encostar', keyboard: false, icon: _ceIcone('ce-m') })
-  let antes = null
-  mk.on('dragstart', () => { antes = _ceCopia(ceState.polis); ceState.polis[pi][ri].splice(i + 1, 0, meio); ceState.sel = [pi, ri, i + 1] })
-  mk.on('drag', ev => { const p = _ceImantar(ev.latlng, ev.originalEvent); ceState.polis[pi][ri][i + 1] = p; mk.setLatLng([p[1], p[0]]); ceState.camada.setLatLngs(ceState.polis.map(pp => pp.map(r => r.map(cc => [cc[1], cc[0]])))) })
+  const anel = ceState.polis[pi][ri], j = (i + 1) % anel.length, m = mapaState.obj
+  const pa = m.latLngToContainerPoint([anel[i][1], anel[i][0]]), pb = m.latLngToContainerPoint([anel[j][1], anel[j][0]])
+  const angulo = Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI
+  const mk = L.marker([meio[1], meio[0]], { pane: 'ceAlcas', draggable: ceState.modo !== 'encostar', keyboard: false,
+    icon: _ceIcone('ce-m', angulo) })
+  let antes = null, criar = false, base = null
+  const redesenhar = () => ceState.camada.setLatLngs(ceState.polis.map(pp => pp.map(r => r.map(cc => [cc[1], cc[0]]))))
+  mk.on('dragstart', () => {
+    antes = _ceCopia(ceState.polis)
+    criar = ceState.teclas.shift
+    if (criar) { anel.splice(i + 1, 0, meio); ceState.sel = [pi, ri, i + 1]; return }
+    // O lado de partida, num plano em metros: a normal dele é a direção do arrasto.
+    const M = _ceM(meio), a = M.para(anel[i]), b = M.para(anel[j])
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1
+    base = { M, a, b, n: [-dy / l, dx / l] }
+    ceState.sel = null
+  })
+  mk.on('drag', ev => {
+    if (criar) { const p = _ceImantar(ev.latlng, ev.originalEvent); anel[i + 1] = p; mk.setLatLng([p[1], p[0]]); redesenhar(); return }
+    // O ímã vale aqui também: a linha do lado encosta na divisa do vizinho.
+    const q = base.M.para(_ceImantar(ev.latlng, ev.originalEvent))
+    const d = q[0] * base.n[0] + q[1] * base.n[1]
+    anel[i] = base.M.de([base.a[0] + base.n[0] * d, base.a[1] + base.n[1] * d])
+    anel[j] = base.M.de([base.b[0] + base.n[0] * d, base.b[1] + base.n[1] * d])
+    const c = base.M.de([base.n[0] * d, base.n[1] * d])
+    mk.setLatLng([c[1], c[0]])
+    redesenhar()
+  })
   mk.on('dragend', () => { _ceMarcaIma(null); _ceEmpilhar(antes) })
   mk.addTo(ceState.alcas)
 }
@@ -209,7 +249,7 @@ function _ceAlcaMeio(pi, ri, i, meio) {
 /** O ímã: vértice do vizinho a até 12 px, senão a linha dele a até 9 px. Alt desliga. */
 function _ceImantar(ll, ev) {
   const p = [ll.lng, ll.lat]
-  if (ev?.altKey) { _ceMarcaIma(null); return p }
+  if (ev?.altKey || ceState.teclas.alt) { _ceMarcaIma(null); return p }
   const m = mapaState.obj, cp = m.latLngToContainerPoint(ll)
   const grau = Math.abs(m.containerPointToLatLng([cp.x + CE_IMA_VERTICE_PX, cp.y]).lng - ll.lng)
   let melhor = null
@@ -458,7 +498,7 @@ function _cePintarBarra() {
   const dica = ceState.modo === 'encostar'
     ? `<span class="ce-dica">${ceState.encostarA ? 'Agora o vértice do fim do trecho.' : 'Clique no vértice do começo do trecho que vai encostar no vizinho.'} Esc cancela.</span>`
     : longe ? '<span class="ce-dica">Aproxime o mapa para ver os vértices.</span>'
-      : '<span class="ce-dica">Arraste vértices (■) ou o meio do lado (●). Delete apaga o selecionado; Alt desliga o ímã.</span>'
+      : '<span class="ce-dica">Vértice (■): arraste. Meio do lado (▬): arraste o lado inteiro na perpendicular; Shift + arrastar cria vértice. Delete apaga o selecionado; Alt desliga o ímã.</span>'
   barra.className = 'imp-barra ce-barra'
   barra.hidden = false
   barra.innerHTML = `<b>Contorno · ${esc(ceState.bairro)}</b><span>${n} vértices</span>${estado}${fora}${dica}

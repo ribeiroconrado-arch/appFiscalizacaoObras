@@ -68,6 +68,18 @@ try {
     $resp = app(App\Http\Controllers\BairroContornoController::class)->gravar($req);
     confere($resp->status() === 409, 'gerar por cima de uma edição pede confirmação (409)');
 
+    // E a GRAVAÇÃO de fato — com a confirmação, e sem edição nenhuma. Era o
+    // caminho sem teste, e quebrou em produção (variável fora da closure).
+    $req2 = Illuminate\Http\Request::create('/api/bairros/contorno', 'POST', ['bairro' => $b, 'geometry' => $g, 'raio_m' => 25,
+        'lotes_contados' => 1, 'sobrescrever_edicao' => true]);
+    $req2->setUserResolver(fn () => $usuario);
+    $resp2 = app(App\Http\Controllers\BairroContornoController::class)->gravar($req2);
+    confere($resp2->status() === 200, 'gerar com a confirmação grava (' . $resp2->status() . ')');
+    confere(! DB::table('bairros')->where('nome', $b)->value('editado_manual'), 'depois de gerar, deixa de ser editado à mão');
+    confere(DB::table('bairro_contornos_anteriores')->where('bairro', $b)->where('motivo', 'geracao')->exists(), 'o editado foi guardado antes de gerar');
+    $resp3 = app(App\Http\Controllers\BairroContornoController::class)->gravar($req2);
+    confere($resp3->status() === 200, 'gerar num bairro sem edição grava (' . $resp3->status() . ')');
+
     echo "\n{$ok} verificações passaram.\n";
 } finally {
     DB::rollBack();

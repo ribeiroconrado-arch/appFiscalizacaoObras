@@ -437,4 +437,6 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .ce-alca.ce-v{background:#2563EB;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);cursor:move}
 .ce-alca.ce-v.ce-sel{background:#F97316}
 .ce-alca.ce-v.ce-escolhido{background:#16A34A}
-.ce-alca.ce-m{background:#fff;border:1.5px solid #2563EB;border-radius:50%;cursor:copy;opacity:.9}
+/* Meio do lado: retângulo DEITADO no lado (girado pelo ângulo dele na tela), como no AutoCAD. */
+.ce-alca.ce-m{display:flex;align-items:center;justify-content:center;background:none;border:0;cursor:move}
+.ce-alca.ce-m span{display:block;width:15px;height:6px;background:#2563EB;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);border-radius:1px}
