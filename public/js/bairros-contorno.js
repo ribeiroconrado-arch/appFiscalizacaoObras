@@ -871,6 +871,37 @@ async function abrirContornosDosBairros() {
   jtAplicar('ctn-busca')
 }
 
+/**
+ * Gera de novo o contorno dos bairros que ENCOSTAM neste (ou ficam a até
+ * ~30 m dele). Um contorno gerado antes de o vizinho existir não conhecia a
+ * divisa: o passo de fusão (CONTORNO_RAIO_FUSAO) só respeita os lotes de
+ * outros bairros que já estavam lá. Em silêncio; o editado à mão é mantido.
+ *
+ * @param {string} bairro
+ * @returns {Promise<string[]>} os vizinhos gerados de novo
+ */
+async function gerarContornosVizinhos(bairro) {
+  const fs = contornoState.dados?.features || []
+  const caixa = f => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    const g = f.geometry, ps = g.type === 'Polygon' ? [g.coordinates] : g.coordinates
+    for (const p of ps) for (const c of p[0]) { x0 = Math.min(x0, c[0]); x1 = Math.max(x1, c[0]); y0 = Math.min(y0, c[1]); y1 = Math.max(y1, c[1]) }
+    return [x0, y0, x1, y1] }
+  const este = fs.find(f => f.properties?.nome === bairro)
+  if (!este) return []
+  const [a0, b0, a1, b1] = caixa(este), folga = 0.0003   // ~30 m
+  const vizinhos = fs.filter(f => f !== este && !f.properties?.editado_manual).filter(f => {
+    const [c0, d0, c1, d1] = caixa(f)
+    return !(c1 < a0 - folga || c0 > a1 + folga || d1 < b0 - folga || d0 > b1 + folga)
+  }).map(f => f.properties.nome)
+  const feitos = []
+  for (const nome of vizinhos) {
+    const r = await gerarContornoDoBairro(nome, Number(fs.find(f => f.properties?.nome === nome)?.properties?.raio_m) || CONTORNO_RAIO_PADRAO, { silencioso: true })
+    if (r && !r.mantido) feitos.push(nome)
+  }
+  if (feitos.length) toast(`Contorno dos vizinhos ajustado à divisa: ${feitos.join(', ')}.`)
+  return feitos
+}
+
 async function gerarDaLista(btn, bairro) {
   const raio = Number(document.getElementById('ctn-raio')?.value) || CONTORNO_RAIO_PADRAO
   btn.disabled = true; btn.textContent = 'Calculando…'

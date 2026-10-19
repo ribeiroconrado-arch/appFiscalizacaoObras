@@ -907,6 +907,10 @@ async function salvarImportacao() {
       if (c?.mantido) toast(c.message, 'aviso')
       else if (c) toast(`Contorno de ${i.bairro} gerado: ${c.area_ha.toLocaleString('pt-BR')} ha.`)
       else toast(`O contorno de ${i.bairro} não pôde ser gerado agora. Gere em "Contorno dos bairros".`, 'aviso')
+      // Os VIZINHOS também: o contorno de um bairro gerado antes deste existir
+      // não conhecia a divisa, e ficava com fresta (Atlântico Sul × Parque das
+      // Águas, 19/10/2026). Editado à mão fica como está.
+      if (c && !c.mantido && typeof gerarContornosVizinhos === 'function') await gerarContornosVizinhos(i.bairro)
     }
     await abrirImportacao(i.id)
     { const d = await _impPedir("/api/importacoes"); atualizarContadorImportacoes(d.em_revisao, _impPendentes(d)) }

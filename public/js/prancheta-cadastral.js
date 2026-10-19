@@ -14,6 +14,9 @@ const PranchetaCad = (() => {
   // FRAÇÃO IDEAL: o terreno fica; cada contorno FECHADO desenhado dentro dele é
   // a área exclusiva de uma unidade. Apartamento entra sem desenho, nos dados.
   const frac=()=>!!s&&s.tipo==='fracao_ideal'
+  // ZOOM MÁXIMO da prancheta, em px por metro: 1 mm = 50 px. Era 500 (1 mm =
+  // 0,5 px), pouco para encaixar diferenças de centímetro no desenho.
+  const ESCALA_MAX=50000
   const pad3=v=>Number.isInteger(v)?String(v).padStart(3,'0'):''
   // MEDIDAS DA PRANCHETA: 4 casas no Editar lote (diferenças de 0,01 m² contra
   // o cadastro só se acham com elas), 2 nas demais ferramentas. O fmtNum da
@@ -241,7 +244,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     render()
   }
   function up(ev){if(!s?.drag)return;const d=s.drag;s.drag=null;if(svg.hasPointerCapture(ev.pointerId))svg.releasePointerCapture(ev.pointerId);if(!d.pan&&d.mudou){s.undo.push(d.antes);s.redo=[];mudou()}else render()}
-  function wheel(ev){if(!s)return;ev.preventDefault();const b=svg.getBoundingClientRect(),p=[ev.clientX-b.left,ev.clientY-b.top],w=mundo(p);s.escala=Math.max(.01,Math.min(500,s.escala*Math.exp(-ev.deltaY*.001)));const q=G.rot(w,s.angulo);s.centro=[q[0]-(p[0]-larguraDesenho()/2)/s.escala,q[1]+(p[1]-s.h/2)/s.escala];render()}
+  function wheel(ev){if(!s)return;ev.preventDefault();const b=svg.getBoundingClientRect(),p=[ev.clientX-b.left,ev.clientY-b.top],w=mundo(p);s.escala=Math.max(.01,Math.min(ESCALA_MAX,s.escala*Math.exp(-ev.deltaY*.001)));const q=G.rot(w,s.angulo);s.centro=[q[0]-(p[0]-larguraDesenho()/2)/s.escala,q[1]+(p[1]-s.h/2)/s.escala];render()}
   function terminar(){if(!s||s.leitura)return;if(s.traco.length>=2){antes();s.linhas.push({id:crypto.randomUUID(),pontos:copy(s.traco)});s.sel=s.linhas.at(-1).id;s.traco=[];mudou()}else s.traco=[];s.valor='';$('pc-entrada').hidden=true;render();dica('Linha encerrada. Clique em outro ponto para começar uma nova; V para selecionar.')}
   function excluir(){if(!s||s.leitura||!s.sel)return;antes();s.linhas=s.linhas.filter(l=>l.id!==s.sel);s.sel=null;s.operacao=null;mudou()}
   function entrada(p,label,mover=false){const el=$('pc-entrada'),q=tela(p);el.hidden=false;el.style.left=`${Math.max(8,Math.min(s.w-220,q[0]+20))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]-45))}px`;$('pc-entrada-label').textContent=label;if(!mover)$('pc-valor').value=''}
@@ -337,7 +340,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(s.medindo!=null){const r=partes[s.medindo];if(r)for(let j=1;j<r.length;j++){const q=tela(G.mul(G.add(r[j-1],r[j]),.5));h+=`<g pointer-events="none"><circle cx="${q[0]}" cy="${q[1]}" r="12" fill="#006c16"/><text x="${q[0]}" y="${q[1]+4}" text-anchor="middle" fill="white" font-size="12">${j}</text></g>`}}
     for(const a of s.anotacoes)h+=texto(posicaoConfronto(a.p,a.texto),a.texto,'pc-confronto')
     const north=G.rot([0,1],s.angulo);h+=`<g transform="translate(${s.w-38} 42)"><path d="M0 0L${north[0]*22} ${-north[1]*22}" stroke="#243b4b" stroke-width="2"/><text x="${north[0]*32}" y="${-north[1]*32}" text-anchor="middle" font-size="12">N</text></g>`
-    const passo=10**Math.floor(Math.log10(120/s.escala)), px=passo*s.escala;h+=`<path d="M25 ${s.h-35}v7h${px}v-7" fill="none" stroke="#243b4b"/><text x="25" y="${s.h-40}" font-size="11">${fmtNum(passo)} m</text>`
+    const passo=10**Math.floor(Math.log10(120/s.escala)), px=passo*s.escala;h+=`<path d="M25 ${s.h-35}v7h${px}v-7" fill="none" stroke="#243b4b"/><text x="25" y="${s.h-40}" font-size="11">${passo>=1?fmtNum(passo)+' m':passo>=.01?Math.round(passo*100)+' cm':Math.round(passo*1000)+' mm'}</text>`
     svg.innerHTML=h
     for(const b of modal.querySelectorAll('[data-tool]')){b.classList.toggle('ativo',b.dataset.tool===s.ferramenta);b.setAttribute('aria-pressed',String(b.dataset.tool===s.ferramenta));b.disabled=(s.leitura&&!['selecionar','alinhar'].includes(b.dataset.tool))||(s.tipo==='unificacao'&&['linha','perpendicular','mover','offset','concordancia'].includes(b.dataset.tool))}
     $('pc-ref').textContent=s.ref?'⊥ Face de referência fixada · 90°':''
