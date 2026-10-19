@@ -618,15 +618,26 @@ function _corrIsolar() {
   }
   if (!mapa.getPane('isolar')) {
     // Acima dos lotes (400) e das quadras (440), abaixo da linha dos bairros (450).
-    mapa.createPane('isolar').style.zIndex = 445
+    // SURDO: o painel não recebe clique; só a área PINTADA da máscara recebe
+    // (abaixo). Ele tinha, pelo mapa em canvas, uma tela do tamanho do mapa
+    // que ficava ali depois de fechada a correção, vazia e por cima dos lotes:
+    // nenhum lote respondia ao clique até recarregar a página (19/10/2026).
+    const pane = mapa.createPane('isolar')
+    pane.style.zIndex = 445
+    pane.style.pointerEvents = 'none'
   }
+  // A máscara em SVG, e não no canvas do mapa: no SVG só a parte pintada
+  // recebe o clique — fora do bairro ele é barrado; no buraco (o bairro) passa
+  // direto para o lote. No canvas, a tela inteira barrava, buraco inclusive.
+  correcaoState.svgIsolar ||= L.svg({ pane: 'isolar', padding: 0.5 })
   const mundo = [[-90, -360], [-90, 360], [90, 360], [90, -360]]
   correcaoState.mascara = L.polygon([mundo, ...aneis], {
-    pane: 'isolar', stroke: false, fillColor: '#0F172A', fillOpacity: .42, interactive: true, bubblingMouseEvents: false,
+    pane: 'isolar', renderer: correcaoState.svgIsolar, stroke: false, fillColor: '#0F172A', fillOpacity: .42,
+    interactive: true, bubblingMouseEvents: false,
   }).addTo(mapa)
   correcaoState.mascara.on('click', e => L.DomEvent.stop(e))
   correcaoState.contornoIsolado = L.polygon(aneis, {
-    pane: 'isolar', color: '#FACC15', weight: 2.5, opacity: .95, fill: false, interactive: false,
+    pane: 'isolar', renderer: correcaoState.svgIsolar, color: '#FACC15', weight: 2.5, opacity: .95, fill: false, interactive: false,
   }).addTo(mapa)
 }
 

@@ -50,7 +50,8 @@ FERRAMENTAS_MAPA.contorno = {
   rotulo: 'a edição do contorno',
   aberta: () => ceState.ativo,
   emCurso: () => ceState.alterado ? 'um contorno alterado e não gravado' : null,
-  fechar: () => sairDaEdicaoDoContorno(true),
+  // Outra ferramenta pediu a vez: sai sem voltar à lista.
+  fechar: () => sairDaEdicaoDoContorno(true, false),
 }
 
 // ── geometria ───────────────────────────────────────────────────
@@ -106,7 +107,7 @@ function _ceGeometria() {
 function editarContornoDoBairro(nome) {
   const f = contornoState.dados?.features?.find(x => x.properties?.nome === nome)
   if (!f) { toast('Este bairro ainda não tem contorno: gere-o antes de editar.', 'aviso'); return }
-  pedirFerramenta('contorno', () => _ceAbrir(nome, f))
+  pedirFerramenta('contorno', () => { _ceAbrir(nome, f); ceState.daLista = true })
 }
 
 function _ceAbrir(nome, f) {
@@ -144,23 +145,35 @@ function _ceAbrir(nome, f) {
 }
 
 /** Sai da edição. `semPerguntar` vem de quem já confirmou (outra ferramenta pediu a vez). */
-function sairDaEdicaoDoContorno(semPerguntar = false) {
+/**
+ * Sai da edição. `semPerguntar` vem de quem já confirmou; `voltar` reabre a
+ * lista "Contorno dos bairros" na linha do bairro, como as outras ferramentas
+ * que se abrem de uma janela (a não ser quando outra ferramenta pediu a vez).
+ */
+function sairDaEdicaoDoContorno(semPerguntar = false, voltar = true) {
   if (!ceState.ativo) return
   if (ceState.alterado && !semPerguntar) {
     confirmarAcao({ titulo: 'Sair sem gravar?', mensagem: 'As alterações do contorno se perdem.', textoBtn: 'Sair sem gravar', perigo: true,
-      onConfirm: () => sairDaEdicaoDoContorno(true) })
+      onConfirm: () => sairDaEdicaoDoContorno(true, voltar) })
     return
   }
-  const m = mapaState.obj
+  const m = mapaState.obj, bairro = ceState.bairro, daLista = ceState.daLista
   clearTimeout(ceState.timer)
+  _ceLimparPrevia()
   ceState.camada?.remove(); ceState.alcas?.remove(); ceState.invasoes?.remove(); ceState.ima?.remove()
   ceState.camada = ceState.alcas = ceState.invasoes = ceState.ima = null
   m.off('moveend', _ceDesenharAlcas)
   document.removeEventListener('keydown', _ceTeclas, true)
   _ceMarcarLotesFora([])
-  ceState.ativo = false
+  ceState.ativo = false; ceState.daLista = false; ceState.modo = null; ceState.encostarA = null
   const barra = document.getElementById('ce-barra'); if (barra) { barra.hidden = true; barra.innerHTML = '' }
   document.dispatchEvent(new CustomEvent('ferramenta-encerrada'))
+  if (voltar && daLista && typeof abrirContornosDosBairros === 'function') {
+    abrirContornosDosBairros().then(() => {
+      const tr = document.querySelector(`#m-importacoes tr[data-bairro="${CSS.escape(bairro)}"]`)
+      if (tr) { tr.scrollIntoView({ block: 'center' }); tr.classList.add('jt-realce'); setTimeout(() => tr.classList.remove('jt-realce'), 2200) }
+    })
+  }
 }
 
 // ── desenho ─────────────────────────────────────────────────────
@@ -197,7 +210,7 @@ function _ceAlcaVertice(pi, ri, i) {
   const c = ceState.polis[pi][ri][i]
   const s = ceState.sel, selecionado = s && s[0] === pi && s[1] === ri && s[2] === i
   const ea = ceState.encostarA, escolhido = ea && ea[0] === pi && ea[1] === ri && ea[2] === i
-  const mk = L.marker([c[1], c[0]], { pane: 'ceAlcas', draggable: ceState.modo !== 'encostar', keyboard: false,
+  const mk = L.marker([c[1], c[0]], { pane: 'ceAlcas', draggable: !ceState.modo, keyboard: false,
     icon: _ceIcone('ce-v' + (selecionado ? ' ce-sel' : '') + (escolhido ? ' ce-escolhido' : '')) })
   let antes = null
   mk.on('click', () => _ceClicouVertice(pi, ri, i))
@@ -217,7 +230,7 @@ function _ceAlcaMeio(pi, ri, i, meio) {
   const anel = ceState.polis[pi][ri], j = (i + 1) % anel.length, m = mapaState.obj
   const pa = m.latLngToContainerPoint([anel[i][1], anel[i][0]]), pb = m.latLngToContainerPoint([anel[j][1], anel[j][0]])
   const angulo = Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI
-  const mk = L.marker([meio[1], meio[0]], { pane: 'ceAlcas', draggable: ceState.modo !== 'encostar', keyboard: false,
+  const mk = L.marker([meio[1], meio[0]], { pane: 'ceAlcas', draggable: !ceState.modo, keyboard: false,
     icon: _ceIcone('ce-m', angulo) })
   let antes = null, criar = false, base = null
   const redesenhar = () => ceState.camada.setLatLngs(ceState.polis.map(pp => pp.map(r => r.map(cc => [cc[1], cc[0]]))))
@@ -304,10 +317,11 @@ function _ceTeclas(ev) {
   if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); ev.stopPropagation(); desfazerPassoContorno(); return }
   if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); ev.stopPropagation(); refazerPassoContorno(); return }
   if (k === 'delete' || k === 'backspace') { ev.preventDefault(); ev.stopPropagation(); apagarVerticeDoContorno(); return }
+  if (ceState.modo === 'previa' && k === 'enter') { ev.preventDefault(); ev.stopPropagation(); aplicarEncostar(); return }
+  if (ceState.modo === 'previa' && k === 'tab') { ev.preventDefault(); ev.stopPropagation(); outroLadoEncostar(); return }
   if (k === 'escape') {
     ev.preventDefault(); ev.stopPropagation()
-    if (ceState.modo) { ceState.modo = null; ceState.encostarA = null } else ceState.sel = null
-    _ceDesenharAlcas()
+    if (ceState.modo) cancelarEncostar(); else { ceState.sel = null; _ceDesenharAlcas() }
   }
 }
 
@@ -348,67 +362,110 @@ function simplificarContorno() {
 }
 
 /** "Encostar no vizinho": escolha dois vértices; o trecho entre eles segue a divisa do vizinho. */
+/**
+ * "Encostar no vizinho": escolha o vértice do começo e o do fim do trecho. O
+ * trecho passa a seguir a divisa do bairro vizinho mais perto — primeiro como
+ * PRÉVIA (verde tracejado): Enter aplica, Tab mostra o outro lado, Esc cancela.
+ */
 function encostarNoVizinho() {
   if (!ceState.vizinhos.length) { toast('Não há outro bairro com contorno para encostar.', 'aviso'); return }
-  if (ceState.modo === 'encostar') { ceState.modo = null; ceState.encostarA = null } else { ceState.modo = 'encostar'; ceState.encostarA = null; ceState.sel = null }
+  if (ceState.modo) { _ceLimparPrevia(); ceState.modo = null; ceState.encostarA = null }
+  else { ceState.modo = 'encostar'; ceState.encostarA = null; ceState.sel = null }
   if (mapaState.obj.getZoom() < CE_ZOOM_ALCAS) toast('Aproxime o mapa até ver os vértices do contorno.', 'aviso')
   _ceDesenharAlcas()
 }
 
 function _ceEscolherParaEncostar(pi, ri, i) {
+  if (ceState.modo === 'previa') return
   const a = ceState.encostarA
   if (!a) { ceState.encostarA = [pi, ri, i]; _ceDesenharAlcas(); return }
   if (a[0] !== pi || a[1] !== ri) { toast('Os dois vértices têm de ser do mesmo contorno.', 'aviso'); return }
   if (a[2] === i) { ceState.encostarA = null; _ceDesenharAlcas(); return }
-  const antes = _ceCopia(ceState.polis)
-  const ok = _ceEncostar(pi, ri, a[2], i)
-  ceState.modo = null; ceState.encostarA = null
-  if (ok) _ceEmpilhar(antes); else { ceState.polis = antes; _ceDesenhar() }
+  const r = _ceCandidatosEncostar(pi, ri, a[2], i)
+  if (!r) return
+  ceState.previa = { pi, ri, nome: r.nome, cands: r.cands, idx: 0 }
+  ceState.modo = 'previa'
+  _ceDesenharPrevia()
+  _ceDesenharAlcas()
 }
+
+function _ceDesenharPrevia() {
+  const pv = ceState.previa
+  ceState.previaCamada?.remove()
+  if (!pv) return
+  const anel = pv.cands[pv.idx]
+  ceState.previaCamada = L.polygon(anel.map(c => [c[1], c[0]]), { pane: 'ceContorno', interactive: false,
+    color: '#16A34A', weight: 3, dashArray: '8 5', fillColor: '#16A34A', fillOpacity: .12 }).addTo(mapaState.obj)
+}
+
+function _ceLimparPrevia() { ceState.previaCamada?.remove(); ceState.previaCamada = null; ceState.previa = null }
+
+function aplicarEncostar() {
+  const pv = ceState.previa
+  if (!pv) return
+  const antes = _ceCopia(ceState.polis)
+  ceState.polis[pv.pi][pv.ri] = pv.cands[pv.idx]
+  _ceLimparPrevia(); ceState.modo = null; ceState.encostarA = null
+  toast(`Trecho encostado na divisa de ${pv.nome}.`)
+  _ceEmpilhar(antes)
+}
+
+function outroLadoEncostar() {
+  const pv = ceState.previa
+  if (!pv) return
+  pv.idx = (pv.idx + 1) % pv.cands.length
+  _ceDesenharPrevia(); _cePintarBarra()
+}
+
+function cancelarEncostar() { _ceLimparPrevia(); ceState.modo = null; ceState.encostarA = null; _ceDesenharAlcas() }
 
 /**
  * Troca o trecho entre os vértices i e j pela divisa do vizinho mais perto.
  * Dos dois trechos do anel entre i e j, troca o que está do lado do vizinho
  * (o mais perto dele); dos dois caminhos pela divisa do vizinho, segue o mais curto.
  */
-function _ceEncostar(pi, ri, i, j) {
+/**
+ * As formas possíveis de encostar o trecho entre os vértices i e j na divisa
+ * do vizinho mais perto, da mais provável para a menos: dos dois trechos do
+ * nosso anel entre i e j, o mais curto (é o lado que encara o vizinho) com o
+ * caminho mais curto pela divisa dele; depois as outras combinações — o "Outro
+ * lado" da prévia. Conferido com os contornos reais de produção (19/10/2026).
+ *
+ * @returns {{nome:string, cands:Array<Array<[number,number]>>}|null}
+ */
+function _ceCandidatosEncostar(pi, ri, i, j) {
   const anel = ceState.polis[pi][ri], A = anel[i], B = anel[j]
   const M = _ceM(A), a = M.para(A), b = M.para(B)
-  // O vizinho mais perto dos dois vértices.
   let viz = null
   for (const v of ceState.vizinhos) {
     const pts = v.anel.map(M.para)
     const ra = _cePertoNoAnel(a, pts), rb = _cePertoNoAnel(b, pts), d = Math.max(ra.d, rb.d)
     if (!viz || d < viz.d) viz = { d, pts, ra, rb, nome: v.nome }
   }
-  if (!viz || viz.d > 150) { toast('Nenhum bairro vizinho a menos de 150 m desses dois vértices.', 'aviso'); return false }
+  if (!viz || viz.d > 150) { toast('Nenhum bairro vizinho a menos de 150 m desses dois vértices.', 'aviso'); return null }
   const n = viz.pts.length
-  // Caminho pela divisa do vizinho, de PA a PB, nos dois sentidos.
   const frente = [viz.ra.q]
   for (let k = (viz.ra.k + 1) % n, g = 0; g < n; k = (k + 1) % n, g++) { if (k === (viz.rb.k + 1) % n) break; frente.push(viz.pts[k]) }
   frente.push(viz.rb.q)
   const tras = [viz.ra.q]
   for (let k = viz.ra.k, g = 0; g < n; k = (k - 1 + n) % n, g++) { if (k === viz.rb.k) break; tras.push(viz.pts[k]) }
   tras.push(viz.rb.q)
-  const caminho = _ceComprimento(frente) <= _ceComprimento(tras) ? frente : tras
-  // Os dois trechos do nosso anel entre i e j: i→j e j→i.
-  const trecho = (s, e) => { const r = []; for (let k = s; ; k = (k + 1) % anel.length) { r.push(k); if (k === e) break } return r }
+  const caminhos = _ceComprimento(frente) <= _ceComprimento(tras) ? [frente, tras] : [tras, frente]
+  const trecho = (s0, e) => { const r = []; for (let k = s0; ; k = (k + 1) % anel.length) { r.push(k); if (k === e) break } return r }
   const t1 = trecho(i, j), t2 = trecho(j, i)
-  const perto = idx => { const meio = idx.length > 2 ? idx.slice(1, -1) : idx; return meio.reduce((s, k) => s + _cePertoNoAnel(M.para(anel[k]), viz.pts).d, 0) / meio.length }
-  const trocaI_J = perto(t1) <= perto(t2)
-  const nova = caminho.map(M.de)
-  let resultado
-  if (trocaI_J) {
-    // i→j vira o caminho (PA…PB); fica o trecho j→i sem as pontas.
-    resultado = [...nova, ...t2.slice(1, -1).map(k => anel[k])]
-  } else {
-    // j→i vira o caminho ao contrário (PB…PA); fica o trecho i→j sem as pontas.
-    resultado = [...nova.slice().reverse(), ...t1.slice(1, -1).map(k => anel[k])]
+  const comp = t => _ceComprimento(t.map(k => M.para(anel[k])))
+  // trocar i→j (fica j→i) ou trocar j→i (fica i→j); o trecho mais curto primeiro.
+  const opcoes = comp(t1) <= comp(t2) ? ['ij', 'ji'] : ['ji', 'ij']
+  const cands = []
+  for (const cam of caminhos) for (const o of opcoes) {
+    const nova = cam.map(M.de)
+    const r = o === 'ij' ? [...nova, ...t2.slice(1, -1).map(k => anel[k])] : [...nova.slice().reverse(), ...t1.slice(1, -1).map(k => anel[k])]
+    if (r.length >= 3) cands.push(r)
   }
-  if (resultado.length < 3) { toast('O trecho escolhido não deixa contorno suficiente.', 'aviso'); return false }
-  ceState.polis[pi][ri] = resultado
-  toast(`Trecho encostado na divisa de ${viz.nome}.`)
-  return true
+  // A ordem: menor trecho + menor caminho, menor trecho + caminho longo vem por último.
+  const ordem = cands.length === 4 ? [cands[0], cands[1], cands[2], cands[3]] : cands
+  if (!ordem.length) { toast('O trecho escolhido não deixa contorno suficiente.', 'aviso'); return null }
+  return { nome: viz.nome, cands: ordem }
 }
 
 // ── conferência e gravação ──────────────────────────────────────
@@ -460,9 +517,8 @@ async function gravarContornoEditado() {
     if (!r.ok) throw new Error(d.message || 'O servidor recusou o contorno.')
     toast(d.message)
     ceState.alterado = false
-    sairDaEdicaoDoContorno(true)
     if (typeof recarregarContornosDoMapa === 'function') await recarregarContornosDoMapa()
-    else await carregarContornosDosBairros()
+    sairDaEdicaoDoContorno(true)
   } catch (e) {
     toast(e.message, 'err')
   } finally { ceState.gravando = false; _cePintarBarra() }
@@ -484,30 +540,53 @@ function desfazerEdicaoDoContorno(nome) {
 
 // ── a barra ─────────────────────────────────────────────────────
 
+const _CE_ICO = {
+  simplificar: '<path d="M3 16l4-5 3 3 4-6 3 4 4-3"/><path d="M3 20h18" opacity=".45"/>',
+  encostar: '<rect x="3" y="5" width="7" height="14" rx="1"/><rect x="15" y="5" width="6" height="14" rx="1"/><path d="M10 12h4M12.5 10.5 14 12l-1.5 1.5"/>',
+  desfazer: '<path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>',
+  refazer: '<path d="M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3"/>',
+  ajuda: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17.2v.1"/>',
+  fechar: '<path d="M6 6l12 12M18 6L6 18"/>',
+}
+const _ceIco = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_CE_ICO[k]}</svg>`
+
+/** A barra: compacta, uma linha. As dicas ficam no "?" e nos títulos dos botões. */
 function _cePintarBarra() {
   const barra = document.getElementById('ce-barra')
   if (!barra) return
   if (!ceState.ativo) { barra.hidden = true; return }
   const c = ceState.conf, n = ceState.polis.flat(2).length
-  const longe = mapaState.obj.getZoom() < CE_ZOOM_ALCAS
-  let estado
-  if (!c) estado = '<span class="badge bd-in">conferindo…</span>'
-  else if (c.pode) estado = '<span class="badge bd-ok">pode gravar</span>'
-  else estado = `<span class="badge bd-er" title="${esc(c.motivo || '')}">${esc(c.motivo || 'não fecha')}</span>`
-  const fora = c?.lotes_fora?.length ? ` <a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(c.lotes_fora[0].id)})">ver lote de fora</a>` : ''
-  const dica = ceState.modo === 'encostar'
-    ? `<span class="ce-dica">${ceState.encostarA ? 'Agora o vértice do fim do trecho.' : 'Clique no vértice do começo do trecho que vai encostar no vizinho.'} Esc cancela.</span>`
-    : longe ? '<span class="ce-dica">Aproxime o mapa para ver os vértices.</span>'
-      : '<span class="ce-dica">Vértice (■): arraste. Meio do lado (▬): arraste o lado inteiro na perpendicular; Shift + arrastar cria vértice. Delete apaga o selecionado; Alt desliga o ímã.</span>'
+  const curto = !c ? null : !c.valido ? 'lados se cruzam'
+    : c.lotes_fora?.length ? `${c.lotes_fora.length} lote(s) de fora`
+      : c.quadras_fora?.length ? `${c.quadras_fora.length} quadra(s) de fora`
+        : c.invasoes?.length ? `invade ${c.invasoes[0].bairro}` : null
+  const estado = !c ? '<span class="ce-chip">conferindo…</span>'
+    : c.pode ? '<span class="ce-chip ce-ok">ok</span>'
+      : `<span class="ce-chip ce-er" title="${esc(c.motivo || '')}">${esc(curto || 'não fecha')}</span>`
+      + (c.lotes_fora?.length ? ` <a href="#" class="ce-ver" onclick="event.preventDefault(); irAoLoteIsolado(${Number(c.lotes_fora[0].id)})">ver</a>` : '')
+  const ajuda = 'Vértice (quadrado): arraste; clique e Delete apaga. Meio do lado (retângulo): arraste o lado inteiro na perpendicular; Shift + arrastar cria vértice. Ímã no vizinho; Alt desliga. Ctrl+Z / Ctrl+Y desfazem e refazem.'
+  const b = (ico, rot, acao, extra = '') => `<button class="ce-ib" type="button" title="${rot}" aria-label="${rot}" onclick="${acao}" ${extra}>${_ceIco(ico)}</button>`
   barra.className = 'imp-barra ce-barra'
   barra.hidden = false
-  barra.innerHTML = `<b>Contorno · ${esc(ceState.bairro)}</b><span>${n} vértices</span>${estado}${fora}${dica}
-    <span class="imp-barra-acoes">
-      <button class="btn sm" onclick="simplificarContorno()" title="Tira vértices que não mudam a forma (0,5 m)">Simplificar</button>
-      <button class="btn sm ${ceState.modo === 'encostar' ? 'ce-ativo' : ''}" onclick="encostarNoVizinho()" title="Escolha dois vértices: o trecho entre eles segue a divisa do bairro vizinho">Encostar no vizinho</button>
-      <button class="btn sm" onclick="desfazerPassoContorno()" ${ceState.undo.length ? '' : 'disabled'} title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
-      <button class="btn sm" onclick="refazerPassoContorno()" ${ceState.redo.length ? '' : 'disabled'} title="Refazer (Ctrl+Y)" aria-label="Refazer">↷</button>
-      <button class="btn sm" onclick="sairDaEdicaoDoContorno()">Cancelar</button>
-      <button class="btn sm primary" onclick="gravarContornoEditado()" ${c?.pode && ceState.alterado && !ceState.gravando ? '' : 'disabled'}>${ceState.gravando ? 'Gravando…' : 'Gravar'}</button>
-    </span>`
+  if (ceState.modo === 'encostar' || ceState.modo === 'previa') {
+    const pv = ceState.previa
+    barra.innerHTML = pv
+      ? `<b class="ce-tit">Encostar em ${esc(pv.nome)}</b><span class="ce-sub">prévia ${pv.idx + 1}/${pv.cands.length}</span>
+         <button class="btn sm" type="button" onclick="outroLadoEncostar()" title="Tab">Outro lado</button>
+         <button class="btn sm" type="button" onclick="cancelarEncostar()" title="Esc">Cancelar</button>
+         <button class="btn sm primary" type="button" onclick="aplicarEncostar()" title="Enter">Aplicar</button>`
+      : `<b class="ce-tit">Encostar no vizinho</b><span class="ce-sub">${ceState.encostarA ? 'agora o vértice do fim do trecho' : 'clique no vértice do começo do trecho'}</span>
+         <button class="btn sm" type="button" onclick="cancelarEncostar()" title="Esc">Cancelar</button>`
+    return
+  }
+  barra.innerHTML = `<b class="ce-tit" title="${esc(ceState.bairro)}">${esc(ceState.bairro)}</b><span class="ce-sub">${n} vért.</span>${estado}
+    <span class="ce-sep"></span>
+    ${b('simplificar', 'Simplificar: tira vértices que não mudam a forma (0,5 m)', 'simplificarContorno()')}
+    ${b('encostar', 'Encostar no vizinho: o trecho entre dois vértices segue a divisa do bairro ao lado', 'encostarNoVizinho()')}
+    ${b('desfazer', 'Desfazer (Ctrl+Z)', 'desfazerPassoContorno()', ceState.undo.length ? '' : 'disabled')}
+    ${b('refazer', 'Refazer (Ctrl+Y)', 'refazerPassoContorno()', ceState.redo.length ? '' : 'disabled')}
+    <span class="ce-ib ce-ajuda" title="${ajuda}" tabindex="0" aria-label="${ajuda}">${_ceIco('ajuda')}</span>
+    <span class="ce-sep"></span>
+    ${b('fechar', 'Cancelar e voltar à lista', 'sairDaEdicaoDoContorno()')}
+    <button class="btn sm primary ce-gravar" type="button" onclick="gravarContornoEditado()" ${c?.pode && ceState.alterado && !ceState.gravando ? '' : 'disabled'}>${ceState.gravando ? 'Gravando…' : 'Gravar'}</button>`
 }

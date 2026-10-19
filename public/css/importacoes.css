@@ -440,3 +440,24 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 /* Meio do lado: retângulo DEITADO no lado (girado pelo ângulo dele na tela), como no AutoCAD. */
 .ce-alca.ce-m{display:flex;align-items:center;justify-content:center;background:none;border:0;cursor:move}
 .ce-alca.ce-m span{display:block;width:15px;height:6px;background:#2563EB;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);border-radius:1px}
+
+/* Barra do editor de contorno, COMPACTA (pedido de 19/10/2026): uma linha,
+   botões de ícone; as dicas ficam no "?" e nos títulos. */
+.imp-barra.ce-barra{gap:4px 6px;padding:4px 6px 4px 10px;flex-wrap:nowrap;max-width:min(560px,calc(100% - 120px))}
+.ce-barra .ce-tit{flex:0 1 auto;min-width:70px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+.ce-barra > *:not(.ce-tit){flex-shrink:0}
+.ce-barra .ce-sub{font-size:11px;color:var(--tx3);white-space:nowrap}
+.ce-barra .ce-sep{width:1px;align-self:stretch;background:var(--bord,#dde3de);margin:2px 2px}
+.ce-chip{font:600 11px Inter,sans-serif;padding:1px 7px;border-radius:999px;white-space:nowrap;background:#eef2ee;color:#4b5751}
+.ce-chip.ce-ok{background:#E8F3EB;color:#006B28}
+.ce-chip.ce-er{background:#FCEBEB;color:#A32D2D;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.ce-ver{font-size:11px}
+.ce-ib{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:6px;border:1px solid transparent;background:none;color:var(--tx2);cursor:pointer;flex:none}
+.ce-ib:hover:not([disabled]){background:var(--gl);border-color:var(--gm);color:var(--gd)}
+.ce-ib[disabled]{opacity:.35;cursor:default}
+.ce-ib svg{width:18px;height:18px}
+.ce-ajuda{cursor:help}
+.ce-barra .ce-gravar{padding:4px 12px}
+@media (max-width:720px){.imp-barra.ce-barra{flex-wrap:wrap;max-width:none}}
+/* A linha do bairro, realçada ao voltar da edição. */
+.jt-tabela tr.jt-realce td{background:#FEF3C7;transition:background .4s}

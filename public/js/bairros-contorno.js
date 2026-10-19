@@ -843,7 +843,7 @@ async function abrirContornosDosBairros() {
       <div class="jt-rolagem">
         <table class="imp-tabela jt-tabela"><thead><tr><th>Bairro</th><th>Situação</th><th>Gerado em</th>
           <th class="num">Raio</th><th class="num">Quadras</th><th class="num">Área</th><th></th></tr></thead><tbody>
-        ${linhas.map(l => `<tr>
+        ${linhas.map(l => `<tr data-bairro="${esc(l.nome)}">
           <td class="jt-quebra"><b class="jt-forte">${esc(l.oficial)}</b>${l.oficial !== l.nome ? `<div class="imp-sub">${esc(l.nome)}</div>` : ''}
             ${l.p?.isolados?.length ? `<div class="imp-sub imp-diverge">${l.p.isolados.length} lote(s) isolado(s) fora do contorno:
               ${l.p.isolados.map(id => `<a href="#" onclick="event.preventDefault(); irAoLoteIsolado(${Number(id)})">nº ${Number(id)}</a>`).join(', ')}</div>` : ''}
