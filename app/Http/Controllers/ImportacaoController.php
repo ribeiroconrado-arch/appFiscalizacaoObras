@@ -100,6 +100,23 @@ class ImportacaoController extends Controller
         ]);
     }
 
+    /**
+     * A recusa que a tela mostra. Erro de BANCO (QueryException também é
+     * RuntimeException) não vai para a tela: a mensagem dele traz a consulta
+     * SQL inteira, com todas as coordenadas do arquivo. Vai para o log, e a
+     * tela recebe uma frase.
+     */
+    private function recusa(RuntimeException $ex): JsonResponse
+    {
+        if ($ex instanceof \Illuminate\Database\QueryException) {
+            \Illuminate\Support\Facades\Log::error('Importação recusada pelo banco: ' . $ex->getMessage());
+            return response()->json(['message' => 'O banco recusou um dos lotes do arquivo (' . ($ex->errorInfo[2] ?? 'erro de banco')
+                . '). Nada foi gravado. Confira o arquivo no conversor; se persistir, avise o suporte.'], 422);
+        }
+
+        return response()->json(['message' => $ex->getMessage()], 422);
+    }
+
     /** POST /api/importacoes/conferir — lê o arquivo e diz o que ele traz. Nada é gravado. */
     public function conferirArquivo(Request $r): JsonResponse
     {
@@ -109,7 +126,7 @@ class ImportacaoController extends Controller
         try {
             $conf = $this->importacao->conferirArquivo($arquivo->getRealPath(), $arquivo->getClientOriginalName());
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         unset($conf['hash']);
@@ -127,7 +144,7 @@ class ImportacaoController extends Controller
             $imp = $this->importacao->gravar($arquivo->getRealPath(), $arquivo->getClientOriginalName(), $r->user(),
                 $r->integer('cadastro_bairro_id') ?: null);
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         $p = $this->importacao->pendenciasDoDesenho($imp);
@@ -158,7 +175,7 @@ class ImportacaoController extends Controller
         try {
             $b = $vinculo->vincular($importacao->bairro, (int) $d['cadastro_bairro_id'], $importacao->id);
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json(['message' => "{$importacao->bairro} vinculado a {$b->codigo} · {$b->rotulo()}."
@@ -175,7 +192,7 @@ class ImportacaoController extends Controller
         try {
             $l = $svc->numerar($importacao, $lote, $d['numero_lote']);
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json(['message' => 'Quadra ' . ($l->quadra ?? '—') . ": lote agora é o nº {$l->numero_lote}."]);
@@ -190,7 +207,7 @@ class ImportacaoController extends Controller
         try {
             $n = $svc->excluir($importacao, array_map('intval', $d['ids']));
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json(['message' => $n === 1 ? '1 lote excluído da importação.' : "{$n} lotes excluídos da importação."]);
@@ -204,7 +221,7 @@ class ImportacaoController extends Controller
         try {
             $this->importacao->salvar($importacao, $r->user());
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json(['message' => "Importação nº {$importacao->id} salva com {$importacao->total_lotes} lotes. Ela fica na lista, ainda não publicada."]);
@@ -218,7 +235,7 @@ class ImportacaoController extends Controller
         try {
             $n = $this->importacao->descartar($importacao);
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json(['message' => "Rascunho de {$importacao->bairro} descartado: {$n} lotes removidos, sem registro."]);
@@ -257,7 +274,7 @@ class ImportacaoController extends Controller
                 $resultado = $conferencia->conferir($importacao, $fonte, $descricao);
             }
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json($resultado);
@@ -326,7 +343,7 @@ class ImportacaoController extends Controller
         try {
             $this->importacao->publicar($importacao, $r->user(), $d['justificativa'] ?? null);
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json(['message' => "Importação nº {$importacao->id} publicada: os lotes já aparecem para todos."]);
@@ -345,7 +362,7 @@ class ImportacaoController extends Controller
         try {
             $n = $this->importacao->excluir($importacao, $r->user(), $d['motivo']);
         } catch (RuntimeException $ex) {
-            return response()->json(['message' => $ex->getMessage()], 422);
+            return $this->recusa($ex);
         }
 
         return response()->json(['message' => "Importação nº {$importacao->id} excluída: {$n} lotes apagados."]);

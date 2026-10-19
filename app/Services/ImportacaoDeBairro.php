@@ -90,16 +90,32 @@ class ImportacaoDeBairro
 
             // Texto, sempre: o GeoJSON pode trazer 5 onde a base guarda "5", e
             // a comparação com a chave de identidade é de texto.
-            $texto = fn ($v) => ($v === null || $v === '') ? null : (string) $v;
+            $texto = fn ($v) => ($v === null || trim((string) $v) === '') ? null : trim((string) $v);
+
+            // O QUE NÃO É QUADRA NEM NÚMERO entra como "sem": o conversor marca
+            // quadra desconhecida com "?", e às vezes põe no número o NOME da
+            // área ("CONJ. ESPORTIVO PAULO COSENTINO", 31 letras numa coluna de
+            // 20). Antes o banco recusava o arquivo inteiro e a tela mostrava o
+            // SQL (COND CIDADE JARDIM, 19/10/2026). Assim o lote entra, cai em
+            // "sem quadra ou sem número" e é corrigido no mapa; o nome fica na fonte.
+            $quadra = $texto($p['quadra'] ?? null);
+            $numero = $texto($p['numero_lote'] ?? null);
+            $nomeDaArea = null;
+            if ($quadra !== null && (preg_match('/^\?+$/', $quadra) || mb_strlen($quadra) > 20)) $quadra = null;
+            if ($numero !== null && (preg_match('/^\?+$/', $numero) || mb_strlen($numero) > 20)) {
+                if (! preg_match('/^\?+$/', $numero)) $nomeDaArea = $numero;
+                $numero = null;
+            }
+            $fonte = $p['fonte'] ?? ($nome ?? basename($caminho));
 
             $bairros[$bairro] = true;
             $linhas[] = [
                 'bairro'      => $bairro,
-                'quadra'      => $texto($p['quadra'] ?? null),
-                'numero_lote' => $texto($p['numero_lote'] ?? null),
-                'chave'       => $p['chave'] ?? ($bairro . '|?|?'),
+                'quadra'      => $quadra,
+                'numero_lote' => $numero,
+                'chave'       => mb_substr($p['chave'] ?? ($bairro . '|?|?'), 0, 180),
                 'area_gis_m2' => $p['area_gis_m2'] ?? null,
-                'fonte'       => $p['fonte'] ?? ($nome ?? basename($caminho)),
+                'fonte'       => mb_substr($nomeDaArea ? "{$fonte} · {$nomeDaArea}" : (string) $fonte, 0, 180),
                 'geojson'     => json_encode($geom),
                 'ts'          => $agora,
             ];
