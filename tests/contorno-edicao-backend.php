@@ -48,6 +48,16 @@ try {
     $c3 = $svc->conferir($b, ['type' => 'MultiPolygon', 'coordinates' => array_merge($g['coordinates'], $go['coordinates'])]);
     confere(! $c3['pode'] && ($c3['invasoes'][0]['bairro'] ?? null) === $outro, "colado em {$outro}, acusa a invasão");
 
+    // Encostado certinho num lado (o "encostar no vizinho"): a interseção é
+    // uma linha, e o ST_Area dela derrubava a conferência (19/10/2026).
+    [$p0, $p1] = [$anel[0], $anel[1]];
+    $mx = ($p0[0] + $p1[0]) / 2; $my = ($p0[1] + $p1[1]) / 2;
+    $dx = $mx - $cx; $dy = $my - $cy; $n = hypot($dx, $dy);
+    $tri = ['type' => 'MultiPolygon', 'coordinates' => [[[$p1, $p0, [$mx + $dx / $n * .0001, $my + $dy / $n * .0001], $p1]]]];
+    DB::update('UPDATE bairros SET geom = ST_GeomFromGeoJSON(?, 1, 4326) WHERE nome = ?', [json_encode($tri), $outro]);
+    $c4 = $svc->conferir($b, $g);
+    confere($c4['pode'] && ! $c4['invasoes'], "encostado num lado de {$outro}, sem área em comum, pode");
+
     $u = (int) DB::table('users')->value('id');
     $svc->gravar($b, $g, $u);
     confere((bool) DB::table('bairros')->where('nome', $b)->value('editado_manual'), 'gravar marca o bairro como editado à mão');

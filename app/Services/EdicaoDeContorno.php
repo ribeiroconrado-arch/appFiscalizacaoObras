@@ -60,12 +60,20 @@ class EdicaoDeContorno
 
         // Graus² → m², na latitude do bairro.
         $fator = 111320.0 ** 2 * cos(deg2rad((float) $g->lat));
-        foreach (DB::select("SELECT nome, ST_Area(i) AS a, ST_AsGeoJSON(ST_SRID(i, 4326), 8) AS gj FROM (
+        // Encostado certinho na divisa, a interseção é uma LINHA (ou ponto, ou
+        // coleção de área + linha), e o ST_Area do MySQL 8 dá erro com o que não
+        // é polígono: a conferência caía e o "encostar no vizinho" nunca gravava
+        // (19/10/2026). Mede só as partes que são área.
+        foreach (DB::select("SELECT nome, ST_AsGeoJSON(ST_SRID(i, 4326), 10) AS gj FROM (
                                 SELECT nome, ST_Intersection(ST_SRID(geom, 0), {$plano}) AS i FROM bairros
                                  WHERE nome <> ? AND ST_Intersects(ST_SRID(geom, 0), {$plano})) t", [$gj, $bairro, $gj]) as $v) {
-            $m2 = (float) $v->a * $fator;
+            $area = $this->soAsAreas(json_decode($v->gj, true));
+            if (! $area) {
+                continue;
+            }
+            $m2 = (float) DB::scalar('SELECT ST_Area(ST_SRID(ST_GeomFromGeoJSON(?, 1, 4326), 0))', [json_encode($area)]) * $fator;
             if ($m2 > self::INVASAO_TOLERADA_M2) {
-                $res['invasoes'][] = ['bairro' => $v->nome, 'area_m2' => round($m2, 1), 'geometry' => json_decode($v->gj)];
+                $res['invasoes'][] = ['bairro' => $v->nome, 'area_m2' => round($m2, 1), 'geometry' => $area];
             }
         }
 
@@ -129,6 +137,29 @@ class EdicaoDeContorno
     public function temAnterior(string $bairro): bool
     {
         return DB::table('bairro_contornos_anteriores')->where('bairro', $bairro)->exists();
+    }
+
+    /**
+     * Os polígonos de uma geometria GeoJSON (Polygon, MultiPolygon ou coleção),
+     * num MultiPolygon; linhas e pontos ficam de fora. Null se não sobra área.
+     *
+     * @param  array<string,mixed>|null  $g
+     * @return array<string,mixed>|null
+     */
+    private function soAsAreas(?array $g): ?array
+    {
+        $polis = [];
+        $juntar = function (?array $g) use (&$juntar, &$polis): void {
+            match ($g['type'] ?? null) {
+                'Polygon' => $polis[] = $g['coordinates'],
+                'MultiPolygon' => array_push($polis, ...$g['coordinates']),
+                'GeometryCollection' => array_map($juntar, $g['geometries'] ?? []),
+                default => null,
+            };
+        };
+        $juntar($g);
+
+        return $polis ? ['type' => 'MultiPolygon', 'coordinates' => $polis] : null;
     }
 
     /** A recusa em uma frase, com o que segura a gravação. */
