@@ -443,7 +443,9 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 
 /* Barra do editor de contorno, COMPACTA (pedido de 19/10/2026): uma linha,
    botões de ícone; as dicas ficam no "?" e nos títulos. */
-.imp-barra.ce-barra{gap:4px 6px;padding:4px 6px 4px 10px;flex-wrap:nowrap;max-width:min(560px,calc(100% - 120px))}
+/* Largura pelo conteúdo (sem teto de 560 px: o ✕ e o Gravar transbordavam para
+   fora da barra e ficavam soltos sobre o mapa). Fundo branco e borda verde. */
+.imp-barra.ce-barra{gap:4px 6px;padding:5px 6px 5px 12px;flex-wrap:nowrap;width:max-content;max-width:100%;background:#fff;border:1.5px solid var(--g,#009B3A);box-shadow:0 6px 18px rgba(0,0,0,.22)}
 .ce-barra .ce-tit{flex:0 1 auto;min-width:70px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
 .ce-barra > *:not(.ce-tit){flex-shrink:0}
 .ce-barra .ce-sub{font-size:11px;color:var(--tx3);white-space:nowrap}
@@ -452,12 +454,18 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .ce-chip.ce-ok{background:#E8F3EB;color:#006B28}
 .ce-chip.ce-er{background:#FCEBEB;color:#A32D2D;max-width:150px;overflow:hidden;text-overflow:ellipsis}
 .ce-ver{font-size:11px}
-.ce-ib{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:6px;border:1px solid transparent;background:none;color:var(--tx2);cursor:pointer;flex:none}
+/* Ícones escuros, com moldura: sobre o branco da barra, legíveis em qualquer fundo do mapa. */
+.ce-ib{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:7px;border:1px solid #d3dad5;background:#fff;color:var(--chumbo,#37413F);cursor:pointer;flex:none}
 .ce-ib:hover:not([disabled]){background:var(--gl);border-color:var(--gm);color:var(--gd)}
-.ce-ib[disabled]{opacity:.35;cursor:default}
-.ce-ib svg{width:18px;height:18px}
+.ce-ib[disabled]{opacity:.4;cursor:default;background:#f4f6f4}
+.ce-ib svg{width:19px;height:19px;stroke-width:1.9}
 .ce-ajuda{cursor:help}
-.ce-barra .ce-gravar{padding:4px 12px}
+.ce-barra .ce-gravar{padding:6px 14px;flex-shrink:0}
+.ce-barra .ce-gravar[disabled]{opacity:.55}
+.ce-barra .ce-tit{color:var(--chumbo,#37413F)}
+/* O contêiner das barras fica preso à metade direita do mapa (left:50%) e
+   cortava a barra do editor: com ela aberta, ele toma a largura do conteúdo. */
+.mapa-barras:has(> .ce-barra:not([hidden])){width:max-content}
 @media (max-width:720px){.imp-barra.ce-barra{flex-wrap:wrap;max-width:none}}
 /* A linha do bairro, realçada ao voltar da edição. */
 .jt-tabela tr.jt-realce td{background:#FEF3C7;transition:background .4s}

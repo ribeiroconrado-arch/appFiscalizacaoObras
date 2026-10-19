@@ -130,7 +130,12 @@ function _ceAbrir(nome, f) {
   if (!m.getPane('ceContorno')) {
     m.createPane('ceContorno').style.zIndex = 455
     m.getPane('ceContorno').style.pointerEvents = 'none'
+    // SURDO, como o de cima: as alças (marcadores) recebem o clique direto, pela
+    // classe leaflet-interactive. Aceitando clique, o painel guardava uma tela
+    // do mapa vazia por cima dos lotes depois de sair do editor, e nenhum lote
+    // respondia até recarregar a página (19/10/2026).
     m.createPane('ceAlcas').style.zIndex = 660
+    m.getPane('ceAlcas').style.pointerEvents = 'none'
   }
   ceState.camada = L.polygon([], { pane: 'ceContorno', interactive: false, color: '#2563EB', weight: 2.4, opacity: 1,
     fillColor: '#2563EB', fillOpacity: .05 }).addTo(m)
@@ -292,7 +297,7 @@ function _ceImantar(ll, ev) {
 
 function _ceMarcaIma(c) {
   ceState.ima?.remove(); ceState.ima = null
-  if (c) ceState.ima = L.circleMarker([c[1], c[0]], { pane: 'ceAlcas', radius: 9, color: '#16A34A', weight: 2, fill: false, interactive: false }).addTo(mapaState.obj)
+  if (c) ceState.ima = L.circleMarker([c[1], c[0]], { pane: 'ceContorno', radius: 9, color: '#16A34A', weight: 2, fill: false, interactive: false }).addTo(mapaState.obj)
 }
 
 // ── ações ───────────────────────────────────────────────────────
