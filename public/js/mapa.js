@@ -70,6 +70,8 @@ function aplicarNivelDoMapa() {
   mostrar('overlayPane', nivel === 'lotes')
   mostrar('contornos', nivel !== 'municipio')
   mostrar('quadras', nivel === 'quadras')
+  // De longe, a silhueta de todas as quadras (bairros-contorno.js); de perto, a de cada bairro.
+  mostrar('silhuetas', ['bairros', 'municipio'].includes(nivel) && (typeof camadaLigada !== 'function' || camadaLigada('quadras-silhueta')))
 }
 
 /** Cria o mapa. Idempotente. */

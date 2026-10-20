@@ -340,4 +340,38 @@ class BairroContornoController extends Controller
             'ruas' => $this->lotes->ruasDoBairro($d['bairro']),
         ]);
     }
+
+    /**
+     * GET /api/mapa/quadras-silhueta — o desenho de TODAS as quadras da cidade,
+     * um MultiPolygon por bairro, sem número nem rua: a silhueta do mapa
+     * afastado, onde a rua é o branco entre as quadras. Um pedido só, ~100 KB
+     * comprimido para ~1.500 quadras; 6 casas (10 cm) bastam de longe.
+     */
+    public function silhuetaDasQuadras(Request $r): JsonResponse
+    {
+        $curador = $this->podeGerar($r);
+        $situacao = $this->lotes->situacaoDosBairros();
+        $porBairro = [];
+        foreach ($this->lotes->silhuetaDasQuadras() as $q) {
+            // As mesmas regras do contorno (index): bairro sem lote não vai ao
+            // mapa; só com lotes em revisão, só para quem revisa.
+            $s = $situacao[$q->bairro] ?? null;
+            if (! $s || (! $curador && (int) $s->publicados === 0)) {
+                continue;
+            }
+            $g = json_decode($q->geojson, true);
+            $polis = ($g['type'] ?? null) === 'Polygon' ? [$g['coordinates']] : ($g['coordinates'] ?? []);
+            $porBairro[$q->bairro] ??= [];
+            array_push($porBairro[$q->bairro], ...$polis);
+        }
+
+        return response()->json([
+            'type'     => 'FeatureCollection',
+            'features' => array_map(fn ($nome, $polis) => [
+                'type'       => 'Feature',
+                'geometry'   => ['type' => 'MultiPolygon', 'coordinates' => $polis],
+                'properties' => ['bairro' => $nome],
+            ], array_keys($porBairro), $porBairro),
+        ]);
+    }
 }

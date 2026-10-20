@@ -130,6 +130,8 @@ const quadraState = {
   rotulos: [],
   /** @type {L.Marker[]} os nomes de rua que estão na tela */
   rotulosRua: [],
+  /** @type {L.GeoJSON|'carregando'|null} todas as quadras da cidade, só o desenho (mapa afastado) */
+  silhueta: null,
 }
 
 /**
@@ -142,7 +144,10 @@ async function carregarQuadrasVisiveis() {
   if (!mapa || !contornoState.camada || typeof nivelDoMapa !== 'function') return
   // Os dados do bairro (quadras e ruas) servem a dois níveis: as quadras só
   // aparecem no delas, os nomes de rua também no dos lotes.
-  if (!['quadras', 'lotes'].includes(nivelDoMapa(mapa))) { _desenharRotulosDeQuadra(); _desenharRotulosDeRua(); return }
+  if (!['quadras', 'lotes'].includes(nivelDoMapa(mapa))) {
+    _carregarSilhuetaDasQuadras()
+    _desenharRotulosDeQuadra(); _desenharRotulosDeRua(); return
+  }
 
   const vista = mapa.getBounds().pad(0.2)
   const pedidos = []
@@ -409,6 +414,39 @@ function _esquecerQuadras(nome) {
   const b = quadraState.porBairro.get(nome)
   if (b && b !== 'carregando') b.camada.remove()
   quadraState.porBairro.delete(nome)
+  // A silhueta da cidade também muda: pedida de novo no próximo mapa afastado.
+  if (quadraState.silhueta && quadraState.silhueta !== 'carregando') quadraState.silhueta.remove()
+  quadraState.silhueta = null
+}
+
+/**
+ * A SILHUETA DAS QUADRAS no mapa afastado (níveis dos bairros e do
+ * município): todas as quadras da cidade num pedido só, só o desenho, sem
+ * número. A quadra cheia e a rua é o branco que sobra entre elas. Pedida uma
+ * vez, na primeira vez que o mapa afasta; no nível das quadras quem desenha
+ * é a camada de cada bairro (aplicarNivelDoMapa troca uma pela outra).
+ */
+async function _carregarSilhuetaDasQuadras() {
+  const mapa = mapaState.obj
+  if (!mapa || quadraState.silhueta) return
+  quadraState.silhueta = 'carregando'
+  if (!mapa.getPane('silhuetas')) {
+    // Sobre o chão branco dos bairros (210) e abaixo do contorno deles (450). Sem clique.
+    mapa.createPane('silhuetas').style.zIndex = 435
+    mapa.getPane('silhuetas').style.pointerEvents = 'none'
+  }
+  try {
+    const r = await fetch('/api/mapa/quadras-silhueta', { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    const gj = await r.json()
+    if (quadraState.silhueta !== 'carregando') return   // largada enquanto chegava
+    quadraState.silhueta = L.geoJSON(gj, { pane: 'silhuetas', interactive: false, style: estiloSilhuetaDaQuadra() }).addTo(mapa)
+    if (typeof aplicarNivelDoMapa === 'function') aplicarNivelDoMapa()
+  } catch (e) {
+    // Sem a silhueta o mapa afastado continua como era: só o contorno dos bairros.
+    quadraState.silhueta = null
+    console.warn('Silhueta das quadras:', e)
+  }
 }
 
 // ── CÁLCULO (curador) ────────────────────────────────────────

@@ -55,6 +55,7 @@ function aplicarFundoDoMapa() {
   mapaState.camadas?.forEach(c => c.setStyle(estiloColorido(c.feature)))
   if (typeof quadraState !== 'undefined') {
     for (const b of quadraState.porBairro.values()) if (b !== 'carregando') b.camada?.setStyle(estiloQuadraDoMapa())
+    if (quadraState.silhueta && quadraState.silhueta !== 'carregando') quadraState.silhueta.setStyle(estiloSilhuetaDaQuadra())
   }
   if (typeof contornoState !== 'undefined') contornoState.camada?.setStyle(_estiloContorno())
 }
@@ -81,6 +82,17 @@ function estiloQuadraDoMapa() {
   return fundoCadastral()
     ? { color: FUNDO_COR.quadraBorda, weight: 1, opacity: 1, fill: true, fillColor: FUNDO_COR.quadra, fillOpacity: 1 }
     : { color: '#ffffff', weight: 1.4, opacity: .9, fill: false }
+}
+
+/**
+ * A silhueta das quadras no mapa afastado: a mesma cor da quadra, SEM a borda
+ * — de longe a borda fecha a rua, e é o branco entre as quadras que a mostra.
+ * Sobre a foto, o contorno branco das quadras, mais fino.
+ */
+function estiloSilhuetaDaQuadra() {
+  return fundoCadastral()
+    ? { stroke: false, fill: true, fillColor: FUNDO_COR.quadra, fillOpacity: 1 }
+    : { color: '#ffffff', weight: .8, opacity: .8, fill: false }
 }
 
 /** O lote comum no fundo cadastral: cinza da quadra, com a divisa fina. */

@@ -119,6 +119,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Contorno de cada bairro: o mapa de todos lê; o curador gera e grava.
         Route::get('/mapa/bairros', [BairroContornoController::class, 'index'])->middleware('comprimir');
         Route::get('/mapa/quadras', [BairroContornoController::class, 'quadras'])->middleware('comprimir');
+        Route::get('/mapa/quadras-silhueta', [BairroContornoController::class, 'silhuetaDasQuadras'])->middleware('comprimir');
         Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
         // Edição do contorno à mão, vértice a vértice (EdicaoDeContorno).

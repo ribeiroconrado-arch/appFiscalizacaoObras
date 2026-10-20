@@ -786,6 +786,16 @@ class LoteRepository
     }
 
     /**
+     * O desenho de todas as quadras, 6 casas (10 cm): a silhueta do mapa afastado.
+     *
+     * @return array<int,object> bairro, geojson
+     */
+    public function silhuetaDasQuadras(): array
+    {
+        return DB::select('SELECT bairro, ST_AsGeoJSON(geom, 6) AS geojson FROM quadras ORDER BY bairro');
+    }
+
+    /**
      * Substitui os trechos de rua GERADOS de um bairro. Os manuais
      * (`ruas_manuais`) não são tocados: valem por cima, na leitura.
      *

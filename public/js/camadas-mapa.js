@@ -98,6 +98,9 @@ registrarCamada({ id: 'lotes', grupo: 'Lotes', rotulo: 'Contorno dos lotes' })
 registrarCamada({ id: 'rot-lote', grupo: 'Lotes', rotulo: 'Número do lote' })
 registrarCamada({ id: 'medidas', grupo: 'Lotes', rotulo: 'Medidas dos lados' })
 registrarCamada({ id: 'rot-quadra', grupo: 'Quadras', rotulo: 'Número da quadra' })
+// O desenho das quadras com o mapa afastado (bairros-contorno.js): as ruas aparecem de longe.
+registrarCamada({ id: 'quadras-silhueta', grupo: 'Quadras', rotulo: 'Silhueta das quadras (mapa afastado)',
+  aoMudar: () => { if (typeof aplicarNivelDoMapa === 'function') aplicarNivelDoMapa() } })
 registrarCamada({ id: 'bairro-contorno', grupo: 'Bairros', rotulo: 'Contorno do bairro' })
 registrarCamada({ id: 'rot-bairro', grupo: 'Bairros', rotulo: 'Nome do bairro' })
 // Nomes de rua tirados do cadastro municipal (bairros-contorno.js): o nome
