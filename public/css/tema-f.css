@@ -3854,6 +3854,25 @@ select.combo-oculto{display:none !important}
   .med-passo{white-space:normal}
 }
 /* O ícone da coluna fica aceso enquanto a barra está aberta. */
+/* Barra técnica: apenas controles. Os estilos .med-rot e dos traços permanecem intactos. */
+#med-barra{display:grid;grid-template-columns:auto auto auto;align-items:stretch;gap:0;background:var(--sur);border-radius:5px;box-shadow:0 3px 12px rgba(0,0,0,.12)}
+#med-barra[hidden]{display:none}
+#med-barra .med-titulo{grid-column:1/-1;background:var(--gd);color:#fff;padding:7px 12px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+#med-barra .med-modos,#med-barra .med-meio,#med-barra .med-pe{padding:5px;gap:3px;flex-wrap:wrap;order:initial;width:auto}
+#med-barra .med-meio{border:0;border-left:1px solid var(--bord)}
+#med-barra .med-pe{border-color:var(--bord)}
+#med-barra button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;width:auto;height:44px;min-height:44px;padding:6px 9px;border:1px solid transparent;border-radius:3px;background:transparent;color:var(--tx2);font-family:inherit;font-size:12px;font-weight:500;box-shadow:none}
+#med-barra button[hidden]{display:none}
+#med-barra button svg{width:20px;height:20px;flex:none;stroke-width:1.8}
+#med-barra button.at{background:var(--blt);border-color:var(--bord);color:var(--tx)}
+#med-barra button:hover:not(:disabled){background:var(--blt)}
+#med-barra button:disabled{opacity:.4;cursor:default}
+#med-barra #med-barra-concluir{border-color:var(--bord);font-weight:600}
+#med-barra .med-info{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;padding:9px 12px;border-top:1px solid var(--bord);min-width:0}
+#med-barra .med-passo{font-family:inherit;font-size:11px;font-weight:400;white-space:normal;color:var(--tx2)}
+#med-barra output{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:600;color:var(--tx);overflow-wrap:anywhere}
+@media(max-width:999px){#med-barra{grid-template-columns:1fr auto}#med-barra .med-meio{grid-row:3;grid-column:1/-1;border-left:0;border-top:1px solid var(--bord)}#med-barra .med-info{grid-row:4}#med-barra .med-modos{min-width:0}#med-barra button{padding:6px}}
+@media(max-width:620px){.mapa-barras > #med-barra{position:fixed;z-index:920;box-sizing:border-box;max-width:none;border-radius:5px 5px 0 0}}
 #ctrl-mapa .ctrl-btn.med-ativo{color:var(--gd);background:var(--gl)}
 
 .med-marca{background:none;border:none;overflow:visible;pointer-events:none}

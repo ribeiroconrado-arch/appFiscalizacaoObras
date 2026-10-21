@@ -570,7 +570,9 @@ function _medPintarBarra() {
   const modo = medState.modo
   const barra = document.getElementById('med-barra')
   if (barra) {
+    const estavaOculta = barra.hidden
     barra.hidden = !modo
+    if (modo && estavaOculta) posicionarBarraMedicao()
     if (modo) {
       const pts = medState.pontos
       const n = pts.length
@@ -578,19 +580,29 @@ function _medPintarBarra() {
       const m = medirPontos(todos, modo === 'area' && todos.length >= 3)
       document.getElementById('med-barra-passo').textContent =
         n === 0 ? (modo === 'cota' ? 'Toque nas duas pontas do trecho.' : modo === 'area' ? 'Toque nos cantos do contorno.' : 'Toque no ponto de partida.')
-          : modo === 'area' && todos.length >= 3 ? `${fmtMed(m.area)} m² · perím. ${fmtMed(m.total)} m`
-            : todos.length >= 2 ? `${fmtMed(m.total)} m` + (modo === 'regua' && n >= 2 ? ' · duplo toque conclui' : '')
-              : 'Toque no ponto seguinte.'
-      document.getElementById('med-barra-concluir').hidden = modo === 'cota' || n < (modo === 'area' ? 3 : 2)
-      document.getElementById('med-barra-desfazer').hidden = n === 0
+          : `${n} ${n === 1 ? 'ponto' : 'pontos'} · ${n >= (modo === 'area' ? 3 : 2) ? 'Concluir para finalizar' : 'Marque o próximo ponto'}`
+      const resultado = document.getElementById('med-barra-resultado')
+      resultado.textContent = modo === 'area' && todos.length >= 3 ? `${fmtMed(m.area)} m² · perím. ${fmtMed(m.total)} m`
+        : `${fmtMed(m.total)} m`
+      const concluir = document.getElementById('med-barra-concluir')
+      concluir.hidden = modo === 'cota'
+      concluir.disabled = n < (modo === 'area' ? 3 : 2)
+      document.getElementById('med-barra-desfazer').disabled = n === 0
       const sel = medState.selecionada !== null
       document.getElementById('med-barra-apagar').hidden = !sel
-      if (sel && n === 0) document.getElementById('med-barra-passo').textContent = 'Medida selecionada · Delete apaga.'
+      if (sel && n === 0) {
+        document.getElementById('med-barra-passo').textContent = 'Medida selecionada'
+        const selecionada = medState.medidas.find(item => item.id === medState.selecionada)
+        if (selecionada) {
+          const medida = medirPontos(selecionada.pts, selecionada.modo === 'area')
+          resultado.textContent = selecionada.modo === 'area' ? `${fmtMed(medida.area)} m² · perím. ${fmtMed(medida.total)} m` : `${fmtMed(medida.total)} m`
+        }
+      }
       const ima = document.getElementById('med-barra-ima')
       ima.classList.toggle('at', medState.ima)
       ima.setAttribute('aria-pressed', String(medState.ima))
     }
-    barra.querySelectorAll('.med-limpar').forEach(b => { b.hidden = !medState.quantas && !medState.pontos.length })
+    barra.querySelectorAll('.med-limpar').forEach(b => { b.disabled = !medState.quantas && !medState.pontos.length })
   }
 
   // A ferramenta em uso, na barra; e o ícone aceso enquanto ela está aberta.
@@ -603,3 +615,20 @@ function _medPintarBarra() {
   // O ícone recolhido avisa que há medida no mapa.
   if (typeof marcarIndicadorControle === 'function') marcarIndicadorControle('grupo-medir', medState.quantas || null)
 }
+
+/** No celular, encaixa a barra na borda inferior do mapa, acima da navegação. */
+function posicionarBarraMedicao() {
+  const barra = document.getElementById('med-barra')
+  const mapa = document.getElementById('map')
+  if (!barra || !mapa) return
+  const mobile = window.innerWidth <= 620
+  const r = mapa.getBoundingClientRect()
+  barra.style.left = mobile ? r.left + 'px' : ''
+  barra.style.width = mobile ? r.width + 'px' : ''
+  barra.style.bottom = mobile ? Math.max(0, window.innerHeight - r.bottom) + 'px' : ''
+}
+window.addEventListener('resize', posicionarBarraMedicao)
+document.addEventListener('DOMContentLoaded', () => {
+  const mapa = document.getElementById('map')
+  if (mapa) new ResizeObserver(posicionarBarraMedicao).observe(mapa)
+})

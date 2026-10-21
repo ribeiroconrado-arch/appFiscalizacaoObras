@@ -321,29 +321,27 @@
 
 {{-- ══════ MEDIR NO MAPA — a barra (medir-mapa.js) ══════
      O que se está medindo, quanto já deu e o que fazer a seguir. --}}
-{{-- No mesmo formato das réguas da alteração cadastral e da base de lotes —
-     título em pé na borda, um quadrado por ferramenta, o X para fechar —, só
-     que deitada, porque fica no alto do mapa. --}}
+{{-- Barra técnica com título horizontal, ferramentas e resultado separados.
+     No celular, encaixa na borda inferior do mapa. --}}
 <div class="med-barra" id="med-barra" hidden>
-  <div class="mesa-titulo-v" aria-hidden="true">Medir</div>
+  <div class="med-titulo">Medição</div>
   <div class="med-modos" role="group" aria-label="Ferramenta de medir">
     <button type="button" class="cad-fer" data-modo="regua" onclick="medirNoMapa('regua')" aria-label="Régua"
             title="Régua — distância ponto a ponto, com o total">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg></button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 2.5 21.5 8.5 8.5 21.5 2.5 15.5z"/><path d="m7 11 2 2M10 8l2 2M13 5l2 2"/></svg><span>Distância</span></button>
     <button type="button" class="cad-fer" data-modo="area" onclick="medirNoMapa('area')" aria-label="Área e perímetro"
             title="Área e perímetro — contorne; cada lado sai com a sua medida">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h10l4 6-3 8H6z"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="15" cy="5" r="1.4" fill="currentColor"/></svg></button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h10l4 6-3 8H6z"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="15" cy="5" r="1.4" fill="currentColor"/></svg><span>Área</span></button>
     <button type="button" class="cad-fer" data-modo="cota" onclick="medirNoMapa('cota')" aria-label="Cota"
             title="Cota — a medida de um trecho, anotada sobre ele">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M4 8v8M20 8v8"/><path d="m7 10-2 2 2 2M17 10l2 2-2 2"/></svg></button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M4 8v8M20 8v8"/><path d="m7 10-2 2 2 2M17 10l2 2-2 2"/></svg><span>Cota</span></button>
   </div>
   <div class="med-meio">
-    <span class="med-passo" id="med-barra-passo">Toque no ponto de partida.</span>
-    <button type="button" class="btn sm" id="med-barra-desfazer" hidden onclick="desfazerPontoDaMedida()" title="Ctrl+Z">Desfazer ponto</button>
-    <button type="button" class="btn primary sm" id="med-barra-concluir" hidden onclick="concluirMedida()" title="Enter">Concluir</button>
+    <button type="button" class="btn sm" id="med-barra-desfazer" disabled onclick="desfazerPontoDaMedida()" title="Desfazer último ponto (Ctrl+Z)" aria-label="Desfazer último ponto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5-5 5 5 5M4 10h10a6 6 0 0 1 0 12"/></svg></button>
+    <button type="button" class="btn sm" id="med-barra-concluir" disabled onclick="concluirMedida()" title="Concluir (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Concluir</button>
     <button type="button" class="btn sm" id="med-barra-apagar" hidden onclick="apagarMedidaSelecionada()" title="Delete">Apagar medida</button>
-    <button type="button" class="btn sm med-limpar" hidden onclick="limparMedidas()"
-            title="Apaga todas as medidas do mapa. Elas são temporárias: nada é gravado.">Limpar tudo</button>
+    <button type="button" class="btn sm med-limpar" disabled onclick="limparMedidas()" aria-label="Limpar todas as medidas"
+            title="Limpar todas as medidas temporárias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
   </div>
   <div class="med-pe">
     <button type="button" class="cad-fer at" id="med-barra-ima" aria-pressed="true" onclick="alternarImaDaMedida()" aria-label="Ímã"
@@ -352,6 +350,7 @@
     <button type="button" class="cad-fer cad-fechar" onclick="sairDeMedir()" aria-label="Fechar a medição" title="Fechar a medição (Esc)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
+  <div class="med-info"><span class="med-passo" id="med-barra-passo">Toque no ponto de partida.</span><output id="med-barra-resultado" aria-label="Resultado da medição"></output></div>
 </div>
 
 {{-- ══════ ALTERAÇÃO CADASTRAL — BARRA DE MODO ══════
