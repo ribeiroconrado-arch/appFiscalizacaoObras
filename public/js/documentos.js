@@ -933,7 +933,9 @@ function recalcularMultaDoc() {
     }).join('')
   }
 
-  if (!artigos.some(a => a.base_multa !== 'sem_multa')) {
+  // O Auto de Apreensão (Posturas) não tem multa: formaliza a apreensão do
+  // que o auto de infração já sancionou — e não mede ruído de novo.
+  if (!artigos.some(a => a.base_multa !== 'sem_multa') || document.getElementById('nd-tipo').value === 'auto_apreensao') {
     fdState.multa = null
     mostrarMultaDoc()
     return
