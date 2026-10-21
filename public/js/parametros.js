@@ -1344,7 +1344,7 @@ function formDecibelimetro(d) {
       ${parRot('Validade (meses)', parInp('validade_calibracao_meses', d.validade_calibracao_meses ?? 12, 'type="number" min="1" max="120"'), 'max-width:150px')}
       ${parChk('ativo', d.ativo ?? true, 'Em uso')}
     </div>${d.certificado_pdf_url ? `
-    <p class="cad-dica">O PDF do certificado continua no AppPOSTURAS:
+    <p class="cad-dica">Certificado de calibração em PDF:
       <a href="${esc(d.certificado_pdf_url)}" target="_blank" rel="noopener">abrir</a>.</p>` : ''}`, 'salvarDecibelimetro()')
 }
 

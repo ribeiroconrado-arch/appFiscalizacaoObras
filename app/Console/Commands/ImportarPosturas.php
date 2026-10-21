@@ -7,6 +7,7 @@ use App\Posturas\Importacao\ImportadorPosturas;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -52,7 +53,7 @@ class ImportarPosturas extends Command
         }
 
         $simular = (bool) $this->option('simular');
-        $imp = new ImportadorPosturas($sb, (bool) $this->option('criar-usuarios'));
+        $imp = new ImportadorPosturas($sb, (bool) $this->option('criar-usuarios'), $simular);
 
         $this->info($simular ? 'SIMULAÇÃO — tudo será desfeito no fim.' : 'Importando…');
         DB::beginTransaction();
@@ -61,7 +62,8 @@ class ImportarPosturas extends Command
             $simular ? DB::rollBack() : DB::commit();
         } catch (Throwable $e) {
             DB::rollBack();
-            $this->error('Parou com erro, e nada foi gravado: ' . $e->getMessage());
+            // Só o começo: o erro de SQL repete os valores da linha, e um deles pode ser um PDF inteiro.
+            $this->error('Parou com erro, e nada foi gravado: ' . Str::limit($e->getMessage(), 600));
 
             return self::FAILURE;
         }

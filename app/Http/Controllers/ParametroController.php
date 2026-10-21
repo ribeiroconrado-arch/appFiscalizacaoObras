@@ -91,7 +91,10 @@ class ParametroController extends Controller
                 'validade_calibracao_meses' => $d->validade_calibracao_meses,
                 'calibrado_ate' => $d->calibradoAte()?->format('d/m/Y'),
                 'vencido' => $d->calibracaoVencida(),
-                'certificado_pdf_url' => $d->certificado_pdf_url,
+                // Arquivo guardado aqui → a rota que o entrega; endereço externo → como está.
+                'certificado_pdf_url' => ! $d->certificado_pdf_url ? null
+                    : (str_starts_with($d->certificado_pdf_url, 'http') ? $d->certificado_pdf_url
+                        : '/api/parametros/decibelimetros/' . $d->id . '/certificado'),
                 'ativo' => $d->ativo, 'rotulo' => $d->rotulo(),
             ]),
             'ruas' => Logradouro::with(['vinculos' => fn ($q) => $q->orderBy('bairro')])->orderBy('nome')->get()
@@ -125,6 +128,16 @@ class ParametroController extends Controller
             collect($d)->except('id')->all() + ['tipo' => $d['tipo'] ?? 'Decibelímetro Digital', 'ativo' => $d['ativo'] ?? true]);
 
         return response()->json(['message' => 'Decibelímetro gravado.', 'id' => $dec->id]);
+    }
+
+    /** GET /api/parametros/decibelimetros/{decibelimetro}/certificado — o PDF trazido do AppPOSTURAS. */
+    public function certificadoDecibelimetro(Decibelimetro $decibelimetro)
+    {
+        $caminho = $decibelimetro->certificado_pdf_url;
+        abort_if(! $caminho || str_starts_with($caminho, 'http') || ! Storage::disk('local')->exists($caminho), 404);
+
+        return Storage::disk('local')->response($caminho, $decibelimetro->certificado_pdf_nome ?: 'certificado.pdf',
+            ['Content-Type' => 'application/pdf']);
     }
 
     /** DELETE /api/parametros/decibelimetros/{decibelimetro} */

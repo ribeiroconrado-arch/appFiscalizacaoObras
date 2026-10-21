@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -46,7 +47,11 @@ class ImportadorPosturas
     /** @var array<string, ?int> nome do agente no Posturas → id do usuário aqui */
     private array $agentes = [];
 
-    public function __construct(private ClienteSupabase $sb, private bool $criarUsuarios = false) {}
+    /**
+     * @param  bool  $simular  na simulação nenhum arquivo é escrito: o banco o comando
+     *                         desfaz, mas um PDF salvo ficaria para trás
+     */
+    public function __construct(private ClienteSupabase $sb, private bool $criarUsuarios = false, private bool $simular = false) {}
 
     // ── ORDEM ────────────────────────────────────────────────────
 
@@ -236,16 +241,41 @@ class ImportadorPosturas
                 'empresa_calibradora' => $d['empresa_calibradora'] ?? null,
                 'data_calibracao' => $d['data_calibracao'] ?? null,
                 'validade_calibracao_meses' => $d['validade_calibracao_meses'] ?? null,
-                'certificado_pdf_url' => $d['certificado_pdf_url'] ?? null,
+                'certificado_pdf_url' => $this->certificado($d),
                 'certificado_pdf_nome' => $d['certificado_pdf_nome'] ?? null,
                 'created_at' => $this->utc($d['criado_em'] ?? null) ?? now(), 'updated_at' => now(),
             ], $r);
-            if (! empty($d['certificado_pdf_url'])) {
-                $this->avisos[] = 'Decibelímetro ' . trim(($d['modelo'] ?? '') . ' ' . ($d['serie'] ?? '')) . ': o PDF do certificado continua no Storage do Supabase (o endereço foi guardado).';
-            }
         }
 
         $this->fecharEtapa('decibelimetros', $r);
+    }
+
+    /**
+     * O Posturas guarda o PDF do certificado DENTRO da linha, como `data:` em
+     * base64 (centenas de KB). Aqui ele vira arquivo em
+     * storage/app/private/decibelimetros e a coluna guarda só o caminho. Um
+     * endereço http (Storage do Supabase) fica como veio.
+     */
+    private function certificado(array $d): ?string
+    {
+        $url = $d['certificado_pdf_url'] ?? null;
+        if (! $url || ! str_starts_with($url, 'data:')) {
+            return $url ?: null;
+        }
+
+        $pdf = base64_decode(substr($url, (int) strpos($url, ',') + 1), true);
+        if (! $pdf) {
+            $this->avisos[] = 'Decibelímetro ' . trim(($d['modelo'] ?? '') . ' ' . ($d['serie'] ?? '')) . ': o PDF do certificado veio corrompido e ficou de fora.';
+
+            return null;
+        }
+
+        $caminho = 'decibelimetros/certificado-' . $d['id'] . '.pdf';
+        if (! $this->simular) {
+            Storage::disk('local')->put($caminho, $pdf);
+        }
+
+        return $caminho;
     }
 
     // ── LEIS E ARTIGOS ───────────────────────────────────────────
