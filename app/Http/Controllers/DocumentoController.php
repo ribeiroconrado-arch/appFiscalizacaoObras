@@ -271,6 +271,14 @@ class DocumentoController extends Controller
 
         return response()->json([
             'modulo' => $modulo,
+            // Posturas: os aparelhos da medição de ruído (Parâmetros ›
+            // Decibelímetros), os em uso; o vencido vai marcado.
+            'decibelimetros' => $modulo === 'posturas'
+                ? \App\Models\Decibelimetro::where('ativo', true)->orderBy('modelo')->get()->map(fn ($x) => [
+                    'id' => $x->id, 'rotulo' => $x->rotulo(), 'vencido' => $x->calibracaoVencida(),
+                ])->values()
+                : [],
+            'fontes_ruido' => Documento::FONTES_RUIDO,
             'tipos' => collect(Documento::tiposDoModulo($modulo))->map(fn ($v, $k) => [
                 'valor'          => $k,
                 'rotulo'         => $v[0],
@@ -289,6 +297,10 @@ class DocumentoController extends Controller
                     // Posturas: a Lei 723 (ruído) é a que a notificação de
                     // denúncia já traz escolhida (denuncias.js).
                     'formulario_tipo'    => $l->formulario_tipo,
+                    // As zonas da Lei 723 (o "Local" da medição, com os
+                    // limites diurno e noturno) — o formulário mostra o dB
+                    // permitido; a multa é conta do servidor.
+                    'areas_db'           => $l->areas_db,
                     'prazo_defesa_dias'  => $l->prazo_defesa_dias,
                     'prazo_cumpr_dias'   => $l->prazo_cumprimento_dias,
                     'artigos'            => $l->artigos->sortBy(fn ($a) => $a->ordem())->values()->map(fn ($a) => [
@@ -476,6 +488,7 @@ class DocumentoController extends Controller
             'area_construida_m2' => $d['area_construida_m2'] ?? null,
             'area_obra_origem'   => isset($d['area_construida_m2']) ? ($d['area_obra_origem'] ?? 'aferida') : null,
             'alvara_valor'       => $d['alvara_valor'] ?? null,
+            ...$this->dadosDePosturas($modulo, $d),
         ]);
 
         try {
@@ -486,6 +499,7 @@ class DocumentoController extends Controller
 
             return response()->json(['message' => $e->getMessage()], 422);
         }
+        $this->gravarItens($doc, $d);
 
         if (! empty($d['artigos'])) {
             $this->lavratura->fixarArtigos($doc, $d['artigos'], $d['multiplicadores'] ?? []);
@@ -515,7 +529,110 @@ class DocumentoController extends Controller
         // A peça de que esta nasceu (notificação ou embargo anterior).
         'origem_id'          => ['nullable', 'integer', 'exists:documentos,id'],
         ...self::REGRAS_DO_MOTIVO,
+        ...self::REGRAS_DE_POSTURAS,
     ];
+
+    /**
+     * O que só a peça de Posturas tem: a medição da Lei 723 (que entra na
+     * prévia da multa, por isso vem junto das regras do alvará), o veículo e
+     * os bens apreendidos. Em Obras, o que vier é ignorado (dadosDePosturas).
+     */
+    private const REGRAS_DE_POSTURAS = [
+        'ruido'                  => ['nullable', 'array'],
+        'ruido.decibelimetro_id' => ['nullable', 'integer', 'exists:decibelimetros,id'],
+        'ruido.fonte_causadora'  => ['nullable', 'in:Veículo,Residência,Comércio/Serviço,Construção civil,Logradouro público'],
+        'ruido.area'             => ['nullable', 'string', 'max:120'],
+        'ruido.db_aferido'       => ['nullable', 'numeric', 'min:0', 'max:200'],
+        'veiculo'                => ['nullable', 'array'],
+        'veiculo.placa'          => ['nullable', 'string', 'max:12'],
+        'veiculo.marca'          => ['nullable', 'string', 'max:60'],
+        'veiculo.modelo'         => ['nullable', 'string', 'max:60'],
+        'veiculo.cor'            => ['nullable', 'string', 'max:40'],
+        'veiculo.ano'            => ['nullable', 'string', 'max:9'],
+        'veiculo.proprietario'   => ['nullable', 'string', 'max:160'],
+        'veiculo.condutor'       => ['nullable', 'string', 'max:160'],
+        'apreensao_subtipo'      => ['nullable', 'in:apreensao,retencao'],
+        'itens'                  => ['nullable', 'array', 'max:100'],
+        'itens.*.descricao'      => ['required', 'string', 'max:300'],
+        'itens.*.quantidade'     => ['nullable', 'numeric', 'min:0.01', 'max:99999999'],
+        'itens.*.unidade'        => ['nullable', 'string', 'max:20'],
+    ];
+
+    /**
+     * A medição, o veículo e o subtipo como vão para o banco. Só em Posturas;
+     * em Obras saem nulos.
+     *
+     * O aparelho vai COPIADO (rótulo e certificado), e o dB permitido é
+     * calculado aqui, da zona e da hora do fato: a peça imprime o que valia no
+     * dia, mesmo que o decibelímetro ou a lei mudem depois.
+     *
+     * @return array{ruido:?array, veiculo:?array, apreensao_subtipo:?string}
+     */
+    private function dadosDePosturas(string $modulo, array $d): array
+    {
+        $nada = ['ruido' => null, 'veiculo' => null, 'apreensao_subtipo' => null];
+        if ($modulo !== 'posturas') {
+            return $nada;
+        }
+
+        $r = array_filter($d['ruido'] ?? [], fn ($v) => $v !== null && $v !== '');
+        $ruido = null;
+        if ($r) {
+            $dec = isset($r['decibelimetro_id']) ? \App\Models\Decibelimetro::find($r['decibelimetro_id']) : null;
+            $ruido = [
+                'decibelimetro_id' => $dec?->id,
+                'equipamento'      => $dec?->rotulo(),
+                'certificado'      => $dec?->certificado_calibracao,
+                'calibrado_ate'    => $dec?->calibradoAte()?->format('d/m/Y'),
+                'fonte_causadora'  => $r['fonte_causadora'] ?? null,
+                'area'             => $r['area'] ?? null,
+                'db_aferido'       => isset($r['db_aferido']) ? round((float) $r['db_aferido'], 1) : null,
+                'db_permitido'     => null,
+                'periodo'          => null,
+            ];
+            $lei = isset($d['legislacao_id']) ? Legislacao::find($d['legislacao_id']) : null;
+            if ($ruido['area'] && ! empty($lei?->areas_db) && ! empty($d['data_fato'])) {
+                $hora = (int) substr($d['data_fato'], 11, 2);
+                try {
+                    $ruido['db_permitido'] = (new \App\Posturas\MultaPorRuido($lei->areas_db, $lei->faixa_db ?? []))->limite($ruido['area'], $hora);
+                    $ruido['periodo'] = \App\Posturas\MultaPorRuido::noturno($hora) ? 'noturno' : 'diurno';
+                } catch (\InvalidArgumentException) {
+                    // Zona fora da lei: fica sem limite, e a multa aponta a pendência.
+                }
+            }
+        }
+
+        $v = array_filter($d['veiculo'] ?? [], fn ($x) => $x !== null && trim((string) $x) !== '');
+        if (isset($v['placa'])) {
+            $v['placa'] = strtoupper(str_replace(['-', ' '], '', $v['placa']));
+        }
+
+        return [
+            'ruido'   => $ruido,
+            'veiculo' => $v ?: null,
+            'apreensao_subtipo' => $d['tipo'] === 'auto_apreensao' ? ($d['apreensao_subtipo'] ?? null) : null,
+        ];
+    }
+
+    /**
+     * Os bens apreendidos, regravados por inteiro (como os artigos): só no
+     * Auto de Apreensão de bens; em qualquer outro caso a lista fica vazia.
+     */
+    private function gravarItens(Documento $doc, array $d): void
+    {
+        $doc->itens()->delete();
+        if ($doc->tipo !== 'auto_apreensao' || $doc->apreensao_subtipo !== 'apreensao') {
+            return;
+        }
+        foreach (array_values($d['itens'] ?? []) as $i => $item) {
+            $doc->itens()->create([
+                'ordem'      => $i,
+                'descricao'  => mb_strtoupper(trim($item['descricao'])),
+                'quantidade' => $item['quantidade'] ?? 1,
+                'unidade'    => isset($item['unidade']) ? mb_strtoupper(trim($item['unidade'])) : null,
+            ]);
+        }
+    }
 
     /**
      * O que levou à notificação: direta, ordem de serviço (qual), denúncia
@@ -605,20 +722,27 @@ class DocumentoController extends Controller
      * GET /api/documentos/origens — as peças lavradas do imóvel de que um
      * auto pode NASCER (Documento::ORIGENS): a notificação ou o embargo que
      * veio antes. É o que o marcador {origem} cita no texto de ciência.
+     *
+     * Sem imóvel — a peça de Posturas, que é do local e não do lote —, as do
+     * mesmo autuado (CPF/CNPJ), como em autosAnteriores.
      */
     public function origens(Request $request): JsonResponse
     {
         $d = $request->validate([
-            'tipo'    => ['required', Rule::in(array_keys(Documento::TIPOS))],
-            'lote_id' => ['nullable', 'integer'],
-            'exceto'  => ['nullable', 'integer'],
+            'tipo'      => ['required', Rule::in(array_keys(Documento::TIPOS))],
+            'lote_id'   => ['nullable', 'integer'],
+            'documento' => ['nullable', 'string', 'max:20'],
+            'exceto'    => ['nullable', 'integer'],
         ]);
         $tipos = Documento::ORIGENS[$d['tipo']] ?? [];
-        if (! $tipos || empty($d['lote_id'])) {
+        if (! $tipos || (empty($d['lote_id']) && empty($d['documento']))) {
             return response()->json(['origens' => []]);
         }
 
-        $pecas = Documento::doModulo()->where('lote_id', $d['lote_id'])->whereIn('tipo', $tipos)
+        $pecas = Documento::doModulo()
+            ->when($d['lote_id'] ?? null, fn ($q, $id) => $q->where('lote_id', $id),
+                fn ($q) => $q->where('autuado_documento', $d['documento']))
+            ->whereIn('tipo', $tipos)
             ->whereNotIn('status', Documento::SEM_VALOR_DE_ATO)
             ->when($d['exceto'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
             ->orderByDesc('data_lavratura')->limit(40)->get();
@@ -706,6 +830,11 @@ class DocumentoController extends Controller
         $num = fn ($v) => $v === null || $v === '' ? null : (float) $v;
         $upf = \App\Models\Upf::vigente(isset($d['data_fato']) ? \Illuminate\Support\Carbon::parse($d['data_fato']) : now())?->valor;
         $porId = \App\Models\Artigo::whereIn('id', $d['artigos'])->get()->keyBy('id');
+        // A medição de ruído que está na tela (Lei 723): zona, hora do fato e dB.
+        $medicao = ! empty($d['ruido']['area']) && isset($d['ruido']['db_aferido']) && $d['ruido']['db_aferido'] !== '' && ! empty($d['data_fato'])
+            ? ['area' => $d['ruido']['area'], 'hora' => (int) \Illuminate\Support\Carbon::parse($d['data_fato'])->format('G'),
+                'aferido' => (float) $d['ruido']['db_aferido']]
+            : null;
 
         $total = 0.0;
         $linhas = [];
@@ -713,7 +842,7 @@ class DocumentoController extends Controller
         foreach ($d['artigos'] as $id) {
             if (! ($a = $porId[$id] ?? null)) { continue; }
             $c = $a->calcularMulta($num($d['area_terreno_m2'] ?? null), $num($d['area_construida_m2'] ?? null),
-                $num($d['alvara_valor'] ?? null), $num($d['multiplicadores'][$id] ?? null), $upf ? (float) $upf : null, $fator);
+                $num($d['alvara_valor'] ?? null), $num($d['multiplicadores'][$id] ?? null), $upf ? (float) $upf : null, $fator, $medicao);
             $total += $c['valor'];
             $linhas[] = ['artigo_id' => $a->id, 'numero' => $a->numero, 'base' => $a->base_multa] + $c;
         }
@@ -861,6 +990,11 @@ class DocumentoController extends Controller
             'origem_referencia'  => $documento->origem_referencia,
             'denuncia_id'        => $documento->denuncia_id,
             'denuncia_protocolo' => $documento->denuncia?->protocolo,
+            // Posturas: a medição da Lei 723, o veículo e o que foi apreendido.
+            'ruido'              => $documento->ruido,
+            'veiculo'            => $documento->veiculo,
+            'apreensao_subtipo'  => $documento->apreensao_subtipo,
+            'itens'              => $documento->itens()->get(['descricao', 'quantidade', 'unidade']),
             'origem_texto'       => $documento->origemTexto(),
             'pode_editar_origem' => $documento->podeEditarOrigem($request->user()),
             'origem_rotulo'  => $documento->origem ? $documento->origem->rotuloTipo() . ' nº ' . $documento->origem->numeroFormatado() : null,
@@ -1135,7 +1269,10 @@ class DocumentoController extends Controller
         }
 
         $documento->update(array_merge(
-            collect($d)->except(['artigos', 'multiplicadores', 'reincidencia_de_id', ...self::PARTES_DE_ENDERECO])->all(), $this->enderecosDaPeca($d), $motivo));
+            collect($d)->except(['artigos', 'multiplicadores', 'reincidencia_de_id', 'itens', 'ruido', 'veiculo',
+                'apreensao_subtipo', 'denuncia_id', ...self::PARTES_DE_ENDERECO])->all(),
+            $this->enderecosDaPeca($d), $motivo, $this->dadosDePosturas($documento->modulo ?? 'obras', $d)));
+        $this->gravarItens($documento, $d);
 
         // Os artigos são refixados por inteiro: manter os antigos e somar os
         // novos deixaria no documento um enquadramento que o fiscal removeu

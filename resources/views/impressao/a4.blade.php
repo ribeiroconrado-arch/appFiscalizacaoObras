@@ -203,6 +203,81 @@
         </table>
       </div>
 
+      {{-- 2 — Em POSTURAS o objeto do ato é o LOCAL (o som vem de uma casa,
+           de um bar, de um carro na rua): o "Local da Infração" do
+           AppPOSTURAS. A inscrição só sai quando a peça tem imóvel. --}}
+      @if (($doc->modulo ?? 'obras') === 'posturas')
+      <div class="sec">
+        <div class="sec-tit">{{ $sec('Local da infração') }}</div>
+        <table class="campos">
+          <tr>
+            <td style="width:62%"><span class="lbl">Logradouro</span>{{ $imovel['endereco'] ?: '—' }}</td>
+            <td><span class="lbl">Bairro</span>{{ $imovel['bairro'] ?: '—' }}</td>
+          </tr>
+          @if ($imovel['inscricao'])
+            <tr><td colspan="2"><span class="lbl">Inscrição imobiliária</span>{{ $imovel['inscricao'] }}</td></tr>
+          @endif
+        </table>
+      </div>
+
+      {{-- A MEDIÇÃO (Lei 723/2002): o aparelho e o certificado do dia, a zona,
+           o limite do período e o aferido — é com isto que o autuado confere a
+           multa da tabela abaixo. --}}
+      @if ($doc->ruido)
+        @php $rd = $doc->ruido; @endphp
+        <div class="sec">
+          <div class="sec-tit">{{ $sec('Medição de ruído') }}</div>
+          <table class="campos">
+            <tr>
+              <td colspan="2"><span class="lbl">Equipamento</span>{{ $rd['equipamento'] ?? '—' }}@if (! empty($rd['certificado'])) · certificado {{ $rd['certificado'] }}@endif @if (! empty($rd['calibrado_ate'])) · calibrado até {{ $rd['calibrado_ate'] }}@endif</td>
+              <td><span class="lbl">Fonte causadora</span>{{ $rd['fonte_causadora'] ?? '—' }}</td>
+            </tr>
+            <tr>
+              <td style="width:40%"><span class="lbl">Local (zona)</span>{{ $rd['area'] ?? '—' }}</td>
+              <td style="width:30%"><span class="lbl">Limite permitido</span>{{ isset($rd['db_permitido']) ? $fmt($rd['db_permitido'], 0) . ' dB (' . ($rd['periodo'] ?? '') . ')' : '—' }}</td>
+              <td><span class="lbl">Nível aferido</span>{{ isset($rd['db_aferido']) ? $fmt($rd['db_aferido'], 1) . ' dB' : '—' }}</td>
+            </tr>
+          </table>
+        </div>
+      @endif
+
+      @if ($doc->veiculo)
+        @php $vc = $doc->veiculo; @endphp
+        <div class="sec">
+          <div class="sec-tit">{{ $sec($doc->apreensao_subtipo === 'retencao' ? 'Veículo retido' : 'Identificação do veículo') }}</div>
+          <table class="campos">
+            <tr>
+              <td style="width:22%"><span class="lbl">Placa</span><strong>{{ $vc['placa'] ?? '—' }}</strong></td>
+              <td><span class="lbl">Marca / modelo</span>{{ trim(($vc['marca'] ?? '') . ' ' . ($vc['modelo'] ?? '')) ?: '—' }}</td>
+              <td style="width:22%"><span class="lbl">Cor</span>{{ $vc['cor'] ?? '—' }}</td>
+              @if (! empty($vc['ano']))<td style="width:16%"><span class="lbl">Ano</span>{{ $vc['ano'] }}</td>@endif
+            </tr>
+            @if (! empty($vc['proprietario']) || ! empty($vc['condutor']))
+              <tr>
+                <td colspan="2"><span class="lbl">Proprietário (CRLV)</span>{{ $vc['proprietario'] ?? '—' }}</td>
+                <td colspan="2"><span class="lbl">Condutor</span>{{ $vc['condutor'] ?? '—' }}</td>
+              </tr>
+            @endif
+          </table>
+        </div>
+      @endif
+
+      @if ($doc->tipo === 'auto_apreensao' && $doc->apreensao_subtipo === 'apreensao')
+        <div class="sec">
+          <div class="sec-tit">{{ $sec('Bens apreendidos') }}</div>
+          <table class="multa">
+            <thead><tr><th style="width:6%">#</th><th>Descrição</th><th style="width:18%;text-align:right">Quantidade</th></tr></thead>
+            <tbody>
+              @forelse ($doc->itens as $i => $item)
+                <tr><td>{{ $i + 1 }}</td><td>{{ $item->descricao }}</td><td class="dir">{{ $item->quantidadeTexto() }}</td></tr>
+              @empty
+                <tr><td colspan="3">—</td></tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+      @endif
+      @else
       {{-- 2 — Imóvel. Em obras o objeto do ato é o LOTE, identificado pela
            inscrição imobiliária: é por ela que o processo é indexado e é ela
            que amarra o documento ao cadastro do município. --}}
@@ -222,6 +297,7 @@
           </tr>
         </table>
       </div>
+      @endif
 
       {{-- A constatação continua íntegra, sem criar outra seção numerada. --}}
       @if ($doc->descricao)

@@ -445,7 +445,10 @@ function alternarPainelMapa(idGrupo) {
     // O painel abre no lugar do ícone e cresce para baixo: em tela de
     // notebook o de Camadas passava do rodapé. Cabe no que sobra, e rola.
     const corpo = grupo.querySelector('.ctrl-corpo')
-    if (corpo) {
+    if (idGrupo === 'grupo-camadas') {
+      posicionarPainelCamadas()
+      corpo?.querySelector('.cam-x')?.focus({ preventScroll: true })
+    } else if (corpo) {
       corpo.style.maxHeight = Math.max(160, window.innerHeight - corpo.getBoundingClientRect().top - 14) + 'px'
       corpo.style.overflowY = 'auto'
     }

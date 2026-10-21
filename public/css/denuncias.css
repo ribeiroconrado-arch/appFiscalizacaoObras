@@ -92,6 +92,13 @@
 .den-logs{display:flex;flex-direction:column;gap:6px}
 .den-log{font-size:12px;background:var(--bg);border:1px solid var(--blt);border-radius:var(--r);padding:7px 10px}
 
+/* ── PEÇAS DE POSTURAS (documento-posturas.js) ── */
+.nd-itens-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0 6px}
+.nd-item{display:grid;grid-template-columns:1fr 80px 70px auto;gap:6px;align-items:center;margin-bottom:6px}
+.nd-item input{min-width:0;height:38px;padding:6px 10px;border:1.5px solid var(--bord);border-radius:var(--r);
+  font:inherit;font-size:13px;background:var(--sur)}
+@media (max-width:520px){ .nd-item{grid-template-columns:1fr 64px 56px auto} }
+
 /* ── BALÃO DO MAPA ── */
 .den-balao-cab{background:var(--den-cor);color:#fff;display:flex;justify-content:space-between;gap:8px;align-items:center}
 .den-balao-cab span{font-size:11px;opacity:.95}

@@ -173,6 +173,36 @@
 </div>
 
 <div class="faixa">{{ $sec('Local da infração') }}</div>
+@if (($doc->modulo ?? 'obras') === 'posturas')
+  {{-- Posturas: o local, sem lote obrigatório; depois a medição, o veículo
+       e os bens (os mesmos blocos da via A4). --}}
+  <div class="campo"><div class="lbl">Endereço</div><div class="val">{{ $imovel['endereco'] ?: '—' }}</div></div>
+  <div class="campo"><div class="lbl">Bairro</div><div class="val">{{ $imovel['bairro'] ?: '—' }}</div></div>
+  @if ($imovel['inscricao'])
+    <div class="campo"><div class="lbl">Inscrição imobiliária</div><div class="val">{{ $imovel['inscricao'] }}</div></div>
+  @endif
+  @if ($doc->ruido)
+    @php $rd = $doc->ruido; @endphp
+    <div class="faixa">{{ $sec('Medição de ruído') }}</div>
+    <div class="campo"><div class="lbl">Equipamento</div><div class="val">{{ $rd['equipamento'] ?? '—' }}@if (! empty($rd['certificado'])) · cert. {{ $rd['certificado'] }}@endif</div></div>
+    <div class="campo"><div class="lbl">Fonte causadora · zona</div><div class="val">{{ $rd['fonte_causadora'] ?? '—' }} · {{ $rd['area'] ?? '—' }}</div></div>
+    <div class="campo"><div class="lbl">Permitido · aferido</div><div class="val">{{ isset($rd['db_permitido']) ? $fmt($rd['db_permitido'], 0) . ' dB (' . ($rd['periodo'] ?? '') . ')' : '—' }} · <b>{{ isset($rd['db_aferido']) ? $fmt($rd['db_aferido'], 1) . ' dB' : '—' }}</b></div></div>
+  @endif
+  @if ($doc->veiculo)
+    @php $vc = $doc->veiculo; @endphp
+    <div class="faixa">{{ $sec($doc->apreensao_subtipo === 'retencao' ? 'Veículo retido' : 'Veículo') }}</div>
+    <div class="campo"><div class="lbl">Placa</div><div class="val"><b>{{ $vc['placa'] ?? '—' }}</b> · {{ trim(($vc['marca'] ?? '') . ' ' . ($vc['modelo'] ?? '') . ' ' . ($vc['cor'] ?? '')) }}</div></div>
+    @if (! empty($vc['proprietario']) || ! empty($vc['condutor']))
+      <div class="campo"><div class="lbl">Proprietário · condutor</div><div class="val">{{ $vc['proprietario'] ?? '—' }} · {{ $vc['condutor'] ?? '—' }}</div></div>
+    @endif
+  @endif
+  @if ($doc->tipo === 'auto_apreensao' && $doc->apreensao_subtipo === 'apreensao')
+    <div class="faixa">{{ $sec('Bens apreendidos') }}</div>
+    @foreach ($doc->itens as $i => $item)
+      <div class="par">{{ $i + 1 }}. {{ $item->descricao }} — {{ $item->quantidadeTexto() }}</div>
+    @endforeach
+  @endif
+@else
 <div class="campo">
   <div class="lbl">Inscrição imobiliária</div>
   <div class="val">{{ $imovel['inscricao'] ?: '—' }}</div>
@@ -195,6 +225,7 @@
       Terreno {{ $doc->area_terreno_m2 ? $fmt($doc->area_terreno_m2) . ' m²' : '—' }}
     </div>
   </div>
+@endif
 @endif
 
 @if ($doc->descricao)

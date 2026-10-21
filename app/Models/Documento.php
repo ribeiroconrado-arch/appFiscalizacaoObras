@@ -56,6 +56,8 @@ class Documento extends Model
             'area_construida_m2' => 'float',
             'alvara_valor'       => 'float',
             'upf_valor'          => 'float',
+            'ruido'              => 'array',
+            'veiculo'            => 'array',
         ];
     }
 
@@ -321,6 +323,91 @@ class Documento extends Model
     }
     public function artigos(): HasMany      { return $this->hasMany(DocumentoArtigo::class); }
     public function anuladoPor(): BelongsTo { return $this->belongsTo(User::class, 'anulado_por'); }
+
+    // ── POSTURAS: MEDIÇÃO, VEÍCULO E APREENSÃO ───────────────────
+
+    /** Os bens apreendidos, na ordem em que o fiscal os listou. */
+    public function itens(): HasMany { return $this->hasMany(DocumentoItem::class)->orderBy('ordem')->orderBy('id'); }
+
+    /** As fontes causadoras da Lei 723 — as opções do AppPOSTURAS. */
+    public const FONTES_RUIDO = ['Veículo', 'Residência', 'Comércio/Serviço', 'Construção civil', 'Logradouro público'];
+
+    /** A lei da peça é a do ruído (a medição faz parte da peça)? */
+    public function ehLeiDoRuido(): bool
+    {
+        return $this->legislacao?->formulario_tipo === 'lei_723_2002';
+    }
+
+    /**
+     * A peça pede a medição: notificação ou auto de infração pela Lei 723. O
+     * Auto de Apreensão não mede de novo — formaliza o que a peça de origem
+     * já constatou, como no AppPOSTURAS (_renderCamposLei723).
+     */
+    public function pedeMedicao(): bool
+    {
+        return $this->ehLeiDoRuido() && in_array($this->tipo, ['notificacao', 'auto_infracao'], true);
+    }
+
+    /**
+     * O que a multa pela diferença de decibéis precisa da peça: a zona, a
+     * hora do fato (que decide diurno ou noturno) e o dB aferido. Nulo
+     * enquanto faltar qualquer um — e a multa fica pendente.
+     *
+     * @return array{area:string,hora:int,aferido:float}|null
+     */
+    public function medicaoParaMulta(): ?array
+    {
+        $r = $this->ruido ?? [];
+        if (empty($r['area']) || ! isset($r['db_aferido']) || $r['db_aferido'] === '' || ! $this->data_fato) {
+            return null;
+        }
+
+        return ['area' => (string) $r['area'], 'hora' => (int) $this->data_fato->format('G'), 'aferido' => (float) $r['db_aferido']];
+    }
+
+    /**
+     * O que falta para LAVRAR uma peça de Posturas — a medição da Lei 723 e,
+     * no Auto de Apreensão, os bens ou o veículo. A lista vazia libera.
+     *
+     * @return list<string>
+     */
+    public function pendenciasDePosturas(): array
+    {
+        $faltam = [];
+        if ($this->pedeMedicao()) {
+            $r = $this->ruido ?? [];
+            foreach (['equipamento' => 'o equipamento da medição', 'fonte_causadora' => 'a fonte causadora',
+                'area' => 'a zona (local) da medição', 'db_aferido' => 'o dB aferido'] as $campo => $rotulo) {
+                if (! isset($r[$campo]) || $r[$campo] === '' || $r[$campo] === null) {
+                    $faltam[] = $rotulo;
+                }
+            }
+            if (($r['fonte_causadora'] ?? null) === 'Veículo' && empty($this->veiculo['placa'])) {
+                $faltam[] = 'a placa do veículo';
+            }
+        }
+        if ($this->tipo === 'auto_apreensao') {
+            if (! in_array($this->apreensao_subtipo, ['apreensao', 'retencao'], true)) {
+                $faltam[] = 'se é apreensão de bens ou retenção de veículo';
+            } elseif ($this->apreensao_subtipo === 'apreensao' && ! $this->itens()->exists()) {
+                $faltam[] = 'ao menos um bem apreendido';
+            } elseif ($this->apreensao_subtipo === 'retencao' && empty($this->veiculo['placa'])) {
+                $faltam[] = 'a placa do veículo retido';
+            }
+        }
+
+        return $faltam;
+    }
+
+    /** "AUTO DE APREENSÃO" ou "AUTO DE RETENÇÃO" — o título da peça impressa. */
+    public function tituloImpresso(): string
+    {
+        if ($this->tipo === 'auto_apreensao' && $this->apreensao_subtipo === 'retencao') {
+            return 'AUTO DE RETENÇÃO';
+        }
+
+        return mb_strtoupper($this->rotuloTipo());
+    }
 
     /**
      * O que este documento aceita que ESTE usuário faça — o menu "Opções" do

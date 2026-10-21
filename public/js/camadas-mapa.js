@@ -66,29 +66,65 @@ function aplicarCamada(c) {
 function pintarPainelCamadas() {
   const alvo = document.getElementById('camadas-lista')
   if (!alvo) return
+  const abertos = new Set([...alvo.querySelectorAll('details[open]')].map(d => d.dataset.grupo))
+  const inicial = !alvo.children.length
+  const foco = alvo.contains(document.activeElement) ? document.activeElement.id : null
+  const rolagem = alvo.scrollTop
   const grupos = []
   for (const c of camadasMapa) {
     if (c.disponivel && !c.disponivel()) continue
-    let g = grupos.find(x => x.nome === c.grupo)
-    if (!g) { g = { nome: c.grupo, itens: [] }; grupos.push(g) }
+    const nome = ['Quadras', 'Bairros'].includes(c.grupo) ? 'Quadras e bairros'
+      : ['sinalizacoes', 'nao-publicados', 'conferencia'].includes(c.id) ? 'Fiscalização e curadoria'
+      : c.grupo === 'Outras' ? 'Ruas e edificações' : c.grupo
+    let g = grupos.find(x => x.nome === nome)
+    if (!g) { g = { nome, itens: [] }; grupos.push(g) }
     g.itens.push(c)
   }
   // O FUNDO É UMA ESCOLHA ENTRE DOIS, e não um liga-desliga: sem satélite o
   // mapa não fica vazio, fica cadastral (fundo-cadastral.js).
   const fundo = () => `
-    <label class="cam-item"><input type="radio" name="cam-fundo" ${camadaLigada('satelite') ? 'checked' : ''}
-           onchange="ligarCamada('satelite', true)"> Imagem de satélite</label>
-    <label class="cam-item"><input type="radio" name="cam-fundo" ${camadaLigada('satelite') ? '' : 'checked'}
-           onchange="ligarCamada('satelite', false)"> Mapa cadastral <small class="cam-obs">sem imagem: leve e sem custo</small></label>`
-  alvo.innerHTML = grupos.map(g => g.nome === 'Fundo' ? `<div class="cam-grupo">Fundo do mapa</div>${fundo()}` : `
-    <div class="cam-grupo">${esc(g.nome)}</div>
+    <label class="cam-item"><input id="cam-fundo-cadastral" type="radio" name="cam-fundo" ${camadaLigada('satelite') ? '' : 'checked'}
+           onchange="ligarCamada('satelite', false)"><span>Cadastral<small class="cam-obs">Leve, sem imagem</small></span></label>
+    <label class="cam-item"><input id="cam-fundo-satelite" type="radio" name="cam-fundo" ${camadaLigada('satelite') ? 'checked' : ''}
+           onchange="ligarCamada('satelite', true)"><span>Satélite<small class="cam-obs">Imagem aérea</small></span></label>`
+  alvo.innerHTML = `<div class="cam-secao">Fundo do mapa</div><div class="cam-fundos">${fundo()}</div><div class="cam-secao">Camadas do mapa</div>` + grupos.filter(g => g.nome !== 'Fundo').map(g => `
+    <details class="cam-grupo" data-grupo="${esc(g.nome)}" ${abertos.has(g.nome) || (inicial && g.nome === 'Lotes') ? 'open' : ''}>
+    <summary>${esc(g.nome)}<span>${g.itens.filter(c => camadaLigada(c.id)).length}/${g.itens.length}</span></summary>
     ${g.itens.map(c => `
       <label class="cam-item">
-        <input type="checkbox" ${camadaLigada(c.id) ? 'checked' : ''}
+        <input id="cam-${c.id}" role="switch" type="checkbox" ${camadaLigada(c.id) ? 'checked' : ''}
                onchange="ligarCamada('${c.id}', this.checked)">
         ${esc(c.rotulo)}
-      </label>`).join('')}`).join('')
+      </label>`).join('')}</details>`).join('')
+  alvo.scrollTop = rolagem
+  if (foco) document.getElementById(foco)?.focus({ preventScroll: true })
 }
+
+function posicionarPainelCamadas() {
+  const painel = document.querySelector('#grupo-camadas.aberto .ctrl-camadas')
+  const mapa = document.getElementById('map')
+  if (!painel || !mapa) return
+  const r = mapa.getBoundingClientRect()
+  const mobile = window.innerWidth <= 620
+  const altura = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0))
+  const largura = Math.max(0, mobile ? r.width : Math.min(360, r.width - 76))
+  painel.style.width = largura + 'px'
+  painel.style.left = (mobile ? r.left : r.right - largura - 62) + 'px'
+  painel.style.top = (mobile ? Math.max(r.top, 0) + altura - Math.min(altura, window.innerHeight * .78) : Math.max(r.top, 0) + 10) + 'px'
+  painel.style.maxHeight = (mobile ? Math.min(altura, window.innerHeight * .78) : Math.max(0, altura - 20)) + 'px'
+  painel.style.height = mobile ? painel.style.maxHeight : 'auto'
+}
+window.addEventListener('resize', posicionarPainelCamadas)
+document.addEventListener('DOMContentLoaded', () => {
+  const mapa = document.getElementById('map')
+  if (mapa) new ResizeObserver(posicionarPainelCamadas).observe(mapa)
+})
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && document.querySelector('#grupo-camadas.aberto')) {
+    alternarPainelMapa('grupo-camadas')
+    document.querySelector('#grupo-camadas .ctrl-btn')?.focus()
+  }
+})
 
 // ── AS CAMADAS QUE O MAPA JÁ TEM ─────────────────────────────
 // Cada módulo novo registra a sua no próprio arquivo; estas são as que

@@ -423,6 +423,8 @@ function syncDataDoc() {
   document.getElementById('nd-datahora').value = d ? `${d}T${h}` : ''
   document.getElementById('nd-data-txt').value = d ? d.split('-').reverse().join('/') : ''
   document.getElementById('nd-hora-txt').value = document.getElementById('nd-hora').value || ''
+  // A hora decide diurno ou noturno na medição de ruído (Posturas).
+  if (typeof _pintarPermitidoDoc === 'function') _pintarPermitidoDoc()
 }
 
 /** Põe as barras enquanto se digita: 03102026 → 03/10/2026. */
@@ -691,6 +693,9 @@ function trocarTipoDoc() {
   const sel = document.getElementById('nd-tipo')
   const rot = document.getElementById('fd-tipo-rotulo')
   if (rot) rot.textContent = sel.options[sel.selectedIndex]?.textContent || 'Documento'
+
+  // Posturas: medição, apreensão e veículo dependem do tipo (documento-posturas.js).
+  if (typeof aplicarPosturasDoc === 'function') aplicarPosturasDoc()
 }
 
 // ── LEI E ARTIGOS (padrão do AppPOSTURAS) ────────────────────
@@ -1067,8 +1072,12 @@ async function carregarOrigensDoc() {
 
   const atual = sel.value || String(fdState.origemId || '')
   let origens = []
-  if (fdState.lote?.id) {
-    const p = new URLSearchParams({ tipo, lote_id: fdState.lote.id })
+  // Sem imóvel (a peça de Posturas é do local), as peças do mesmo CPF/CNPJ.
+  const cpf = document.getElementById('nd-autuado-doc').value.trim()
+  if (fdState.lote?.id || cpf) {
+    const p = new URLSearchParams({ tipo })
+    if (fdState.lote?.id) p.set('lote_id', fdState.lote.id)
+    else p.set('documento', cpf)
     if (fdState.id) p.set('exceto', fdState.id)
     try {
       const r = await fetch('/api/documentos/origens?' + p, { headers: { Accept: 'application/json' } })
@@ -1136,6 +1145,8 @@ async function simularMultaDoc() {
         multiplicadores: multiplicadoresDoDoc(),
         reincidencia_de_id: reincidenciaDoDoc(),
         data_fato: document.getElementById('nd-datahora').value || null,
+        // Posturas: a medição de ruído entra na conta da Lei 723.
+        ruido: typeof medicaoDoDoc === 'function' ? medicaoDoDoc() : null,
       }),
     })
     if (pedido !== simularMultaDoc.ultimo) return

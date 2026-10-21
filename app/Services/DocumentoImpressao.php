@@ -47,13 +47,14 @@ class DocumentoImpressao
      */
     public function montar(Documento $doc, bool $paraPdf = false, bool $comAnexos = true): array
     {
-        $doc->loadMissing(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'origemOs', 'vistoria.evidencias']);
+        $doc->loadMissing(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'origemOs', 'vistoria.evidencias', 'itens']);
 
         $prazoDias = in_array($doc->tipo, Documento::COM_CUMPRIMENTO, true) ? $doc->prazo_dias : null;
 
         return [
             'doc'    => $doc,
-            'titulo' => mb_strtoupper($doc->rotuloTipo()),
+            // "AUTO DE RETENÇÃO" quando o Auto de Apreensão retém veículo.
+            'titulo' => $doc->tituloImpresso(),
             'orgao'  => $this->orgao($doc->modulo ?? 'obras'),
             'rodape' => app(CabecalhoOficial::class)->rodape(),
             'brasao'      => $this->brasao($paraPdf),

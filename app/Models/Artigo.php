@@ -131,8 +131,9 @@ class Artigo extends Model
         ?float $multiplicador = null,
         ?float $upfValor = null,
         int $fatorReincidencia = 1,
+        ?array $ruido = null,
     ): array {
-        $r = $this->multaSemReincidencia($areaTerreno, $areaConstruida, $alvaraValor, $multiplicador, $upfValor);
+        $r = $this->multaSemReincidencia($areaTerreno, $areaConstruida, $alvaraValor, $multiplicador, $upfValor, $ruido);
         $r['fator'] = 1;
 
         // REINCIDÊNCIA: a multa dobra a cada auto anterior da cadeia (art.
@@ -160,6 +161,7 @@ class Artigo extends Model
         ?float $alvaraValor,
         ?float $multiplicador,
         ?float $upfValor,
+        ?array $ruido = null,
     ): array {
         $r = ['valor' => 0.0, 'valor_reais' => null, 'area_usada' => null, 'area_m2' => null,
             'multiplicador' => null, 'memoria' => '', 'pendencia' => null];
@@ -175,12 +177,29 @@ class Artigo extends Model
             return ['valor' => $valor, 'memoria' => $n($valor) . ' UPF (valor fixo do artigo)'] + $r;
         }
 
-        // PELA DIFERENÇA DE DECIBÉIS: a conta precisa da medição (zona, hora e
-        // dB aferido), que é da peça — o bloco de ruído do formulário (Fase 4)
-        // a faz com MultaPorRuido. Sem ela, a multa fica pendente.
+        // PELA DIFERENÇA DE DECIBÉIS (Lei 723/2002): a conta precisa da
+        // medição da peça — zona, hora do fato e dB aferido
+        // (Documento::medicaoParaMulta) — e das zonas e faixas da lei. Sem a
+        // medição, a multa fica pendente. Medição dentro do limite dá zero, e
+        // não é pendência: é o que a lei diz.
         if ($this->base_multa === 'diferenca_db') {
-            return ['memoria' => 'Multa pela diferença de decibéis — depende da medição de ruído.',
-                'pendencia' => 'a medição de ruído do ' . $this->numero] + $r;
+            $lei = $this->legislacao;
+            if (! $ruido) {
+                return ['memoria' => 'Multa pela diferença de decibéis — depende da medição de ruído.',
+                    'pendencia' => 'a medição de ruído (zona e dB aferido)'] + $r;
+            }
+            if (empty($lei?->areas_db) || empty($lei?->faixa_db)) {
+                return ['memoria' => 'A lei não tem zonas e faixas de decibéis cadastradas.',
+                    'pendencia' => 'as zonas e faixas de dB da lei (Parâmetros › Legislação)'] + $r;
+            }
+            try {
+                $c = (new \App\Posturas\MultaPorRuido($lei->areas_db, $lei->faixa_db))
+                    ->calcular($ruido['area'], $ruido['hora'], $ruido['aferido']);
+            } catch (\InvalidArgumentException $e) {
+                return ['memoria' => $e->getMessage() . '.', 'pendencia' => 'uma zona da medição que exista na lei'] + $r;
+            }
+
+            return ['valor' => round($c['upf'], 2), 'memoria' => $c['memoria']] + $r;
         }
 
         // A CRITÉRIO DO FISCAL, dentro do intervalo do artigo (art. 35, §5º:

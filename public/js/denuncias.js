@@ -483,6 +483,20 @@ async function gerarNotificacaoDaDenuncia() {
   const leis = dState.opcoes?.leis || []
   const lei = leis.find(l => l.formulario_tipo === 'lei_723_2002') || leis.find(l => /723/.test(l.rotulo || ''))
   if (lei) selLeiDoc(lei.id)
+
+  // A fonte da denúncia vira a fonte causadora da medição — os combos têm
+  // opções diferentes, daí o mapa (o mesmo do AppPOSTURAS) — e o veículo
+  // anotado vem junto, para não redigitar a placa.
+  const fonte = { 'Residência': 'Residência', 'Empresa': 'Comércio/Serviço', 'Veículo': 'Veículo' }[d.fonte]
+  const campoFonte = document.getElementById('nd-ruido-fonte')
+  if (campoFonte && fonte) campoFonte.value = fonte
+  if (d.fonte === 'Veículo') {
+    poe('nd-veic-placa', d.placa)
+    poe('nd-veic-marca', d.veic_marca)
+    poe('nd-veic-modelo', d.veic_modelo)
+    poe('nd-veic-cor', d.veic_cor)
+  }
+  if (typeof aplicarPosturasDoc === 'function') aplicarPosturasDoc()
 }
 
 // ── FORMULÁRIO ───────────────────────────────────────────────

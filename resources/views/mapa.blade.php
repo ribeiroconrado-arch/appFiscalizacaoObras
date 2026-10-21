@@ -437,13 +437,14 @@
            stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/><path d="m2 18 10 5 10-5" opacity=".55"/></svg>
     </button>
-    <div class="ctrl-corpo ctrl-camadas">
+    <div class="ctrl-corpo ctrl-camadas" role="region" aria-label="Mapa e camadas">
       <div class="cam-topo">
-        <b>Camadas</b>
+        <div><h2>Mapa e camadas</h2><p>Personalize a visualização do mapa</p></div>
         <button type="button" class="cam-x" onclick="alternarPainelMapa('grupo-camadas')"
                 title="Fechar" aria-label="Fechar as camadas">&#10005;</button>
       </div>
       <div id="camadas-lista"></div>
+      <div class="cam-rodape"><small>Alterações aplicadas ao tocar</small><button type="button" onclick="alternarPainelMapa('grupo-camadas')">Ver mapa</button></div>
     </div>
   </div>
 
@@ -2510,6 +2511,91 @@
         </div>
         <div id="nd-artigos"></div>
 
+        @if ($modulo === 'posturas')
+        {{-- ══ POSTURAS (documentos-posturas, em documentos.js) ══
+             A MEDIÇÃO da Lei 723/2002: só com a lei do ruído, na notificação e
+             no auto de infração. A zona dá o dB permitido (diurno ou noturno
+             pela hora do fato); a multa pela diferença é conta do servidor. --}}
+        <div id="nd-bloco-ruido" style="display:none">
+          <div class="sec-title">Medição (Lei 723/2002)</div>
+          <div class="g3">
+            <div class="field">
+              <label for="nd-ruido-area">Local (zona) *</label>
+              <select id="nd-ruido-area" data-lock onchange="mudouMedicaoDoc()"></select>
+            </div>
+            <div class="field">
+              <label for="nd-ruido-permitido">dB permitido</label>
+              <input id="nd-ruido-permitido" type="text" readonly tabindex="-1">
+            </div>
+            <div class="field">
+              <label for="nd-ruido-aferido">dB aferido *</label>
+              <input id="nd-ruido-aferido" type="number" min="0" max="200" step="0.1" inputmode="decimal" placeholder="Ex.: 78,5"
+                     data-lock oninput="mudouMedicaoDoc()">
+            </div>
+          </div>
+          <div class="g2">
+            <div class="field">
+              <label for="nd-ruido-equip">Equipamento utilizado *</label>
+              <select id="nd-ruido-equip" data-lock></select>
+            </div>
+            <div class="field">
+              <label for="nd-ruido-fonte">Fonte causadora *</label>
+              <select id="nd-ruido-fonte" data-lock onchange="aplicarPosturasDoc()">
+                <option value="">Selecione…</option>
+                @foreach (\App\Models\Documento::FONTES_RUIDO as $f)
+                  <option value="{{ $f }}">{{ $f }}</option>
+                @endforeach
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {{-- AUTO DE APREENSÃO: apreende bens (a lista) ou retém o veículo. --}}
+        <div id="nd-bloco-apreensao" style="display:none">
+          <div class="sec-title">Apreensão ou retenção</div>
+          <div class="field">
+            <label for="nd-apreensao-subtipo">O que o auto formaliza *</label>
+            <select id="nd-apreensao-subtipo" data-lock onchange="aplicarPosturasDoc()">
+              <option value="">Selecione…</option>
+              <option value="apreensao">Apreensão de bens</option>
+              <option value="retencao">Retenção de veículo</option>
+            </select>
+          </div>
+          <div id="nd-bloco-itens" style="display:none">
+            <div class="nd-itens-cab">
+              <span class="sec-title" style="margin:0">Bens apreendidos</span>
+              <button type="button" class="btn out-verde sm" data-lock onclick="adicionarItemDoc()">+ Item</button>
+            </div>
+            <div id="nd-itens"></div>
+          </div>
+        </div>
+
+        {{-- O VEÍCULO: a fonte do ruído, ou o retido. Fora da medição de
+             propósito — tem dois donos (Lei 723 com fonte "Veículo", e a
+             retenção, sob qualquer lei), como no AppPOSTURAS. --}}
+        <div id="nd-bloco-veiculo" style="display:none">
+          <div class="sec-title" id="nd-veiculo-titulo">Identificação do veículo</div>
+          <div class="g2">
+            <div class="field"><label for="nd-veic-placa">Placa *</label>
+              <input id="nd-veic-placa" type="text" maxlength="8" class="mono" placeholder="ABC1D23" data-lock></div>
+            <div class="field"><label for="nd-veic-marca">Marca</label>
+              <input id="nd-veic-marca" type="text" maxlength="60" placeholder="Ex.: HONDA" data-lock></div>
+            <div class="field"><label for="nd-veic-modelo">Modelo</label>
+              <input id="nd-veic-modelo" type="text" maxlength="60" placeholder="Ex.: CIVIC" data-lock></div>
+            <div class="field"><label for="nd-veic-cor">Cor predominante</label>
+              <input id="nd-veic-cor" type="text" maxlength="40" placeholder="Ex.: PRATA" data-lock></div>
+          </div>
+          <div class="g3" id="nd-retencao-extra" style="display:none">
+            <div class="field"><label for="nd-veic-ano">Ano fab./mod.</label>
+              <input id="nd-veic-ano" type="text" maxlength="9" placeholder="2018/2019" data-lock></div>
+            <div class="field"><label for="nd-veic-proprietario">Proprietário (CRLV)</label>
+              <input id="nd-veic-proprietario" type="text" maxlength="160" data-lock></div>
+            <div class="field"><label for="nd-veic-condutor">Condutor</label>
+              <input id="nd-veic-condutor" type="text" maxlength="160" data-lock></div>
+          </div>
+        </div>
+        @endif
+
         {{-- Áreas: a base da multa em obras. Aparece só quando algum artigo
              escolhido cobra por metro quadrado. --}}
         <div id="nd-bloco-area" style="display:none">
@@ -4257,6 +4343,10 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/documento-lavratura.js')"></script>
 <script src="@assetv('js/documento-anexos.js')"></script>
 <script src="@assetv('js/documento-defesa.js')"></script>
+{{-- Medição de ruído, veículo e bens apreendidos — só nas peças de Posturas. --}}
+@if ($modulo === 'posturas')
+  <script src="@assetv('js/documento-posturas.js')"></script>
+@endif
 <script src="@assetv('js/protocolos.js')"></script>
 <script src="@assetv('js/os.js')"></script>
 {{-- Depois dos dois: a fila lê as duas fontes e abre a ficha de cada uma. --}}

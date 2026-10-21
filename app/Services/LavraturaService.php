@@ -124,11 +124,25 @@ class LavraturaService
         // tem em mãos — mas não aqui. Na lavratura o documento vira ato, e ato
         // de fiscalização de obras sem imóvel identificado não tem contra o
         // que valer: não há o que notificar, embargar ou cobrar.
+        //
+        // Em POSTURAS o objeto do ato é o LOCAL, não o lote: o som vem de uma
+        // casa, de um bar, de um carro na rua — como no AppPOSTURAS, basta o
+        // endereço (rua e bairro). O lote, quando houver, continua bem-vindo.
         if (! $doc->lote_id) {
-            throw new RuntimeException(
-                'Documento sem imóvel identificado não pode ser lavrado. '
-                . 'Informe o imóvel na aba Imóvel/Origem.'
-            );
+            if (($doc->modulo ?? 'obras') !== 'posturas') {
+                throw new RuntimeException(
+                    'Documento sem imóvel identificado não pode ser lavrado. '
+                    . 'Informe o imóvel na aba Imóvel/Origem.'
+                );
+            }
+            if (! trim((string) $doc->endereco) || ! trim((string) $doc->imovel_bairro)) {
+                throw new RuntimeException('Informe o local da infração (logradouro e bairro) para lavrar.');
+            }
+        }
+
+        // A medição da Lei 723 e, no Auto de Apreensão, os bens ou o veículo.
+        if ($faltam = $doc->pendenciasDePosturas()) {
+            throw new RuntimeException('Falta informar ' . implode('; ', $faltam) . '.');
         }
 
         if ($doc->exigeFundamentacao() && $doc->artigos()->count() === 0) {
@@ -314,7 +328,7 @@ class LavraturaService
             $mult = $multiplicadores[$a->id] ?? null;
             $calc = $a->calcularMulta($doc->area_terreno_m2, $doc->area_construida_m2,
                 $doc->alvara_valor, $mult !== null ? (float) $mult : null, $upf ? (float) $upf : null,
-                $doc->fatorReincidencia());
+                $doc->fatorReincidencia(), $doc->medicaoParaMulta());
 
             DocumentoArtigo::create([
                 'documento_id' => $doc->id,
@@ -363,7 +377,8 @@ class LavraturaService
 
         return Artigo::whereIn('id', $copias->keys()->filter())->get()
             ->map(fn (Artigo $a) => $a->calcularMulta($doc->area_terreno_m2, $doc->area_construida_m2,
-                $doc->alvara_valor, $copias[$a->id]->multiplicador, $upf ? (float) $upf : null)['pendencia'])
+                $doc->alvara_valor, $copias[$a->id]->multiplicador, $upf ? (float) $upf : null,
+                1, $doc->medicaoParaMulta())['pendencia'])
             ->filter()->unique()->values()->all();
     }
 

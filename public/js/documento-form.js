@@ -498,6 +498,8 @@ function limparFormDoc() {
   document.getElementById('nd-multiplicadores').dataset.chave = '?'
   document.getElementById('nd-memoria-calculo').innerHTML = ''
   fdState.multa = null
+  // Posturas: medição, veículo e bens da peça anterior não passam para esta.
+  if (typeof limparPosturasDoc === 'function') limparPosturasDoc()
 
   renderImovelDoc()
   trocarLeiDoc()
@@ -548,6 +550,8 @@ function preencherFormDoc(d) {
   renderImovelDoc()
   trocarLeiDoc()
   renderAnexosDoc()
+  // Posturas: a medição, o veículo e os bens que a peça guardou.
+  if (typeof preencherPosturasDoc === 'function') preencherPosturasDoc(d)
 }
 
 /**
@@ -569,7 +573,9 @@ function renderImovelDoc() {
     alvo.innerHTML = `
       <div class="doc-sem-imovel">
         <b>Imóvel ainda não identificado.</b>
-        O documento pode ser gravado assim, mas a lavratura exige o imóvel.
+        ${window.MODULO === 'posturas'
+          ? 'Em Posturas o ato é do local: basta o logradouro e o bairro abaixo. Vincule o imóvel se houver.'
+          : 'O documento pode ser gravado assim, mas a lavratura exige o imóvel.'}
       </div>
       <div class="par-busca" style="margin:10px 0">
         <input type="text" id="nd-imovel-termo" placeholder="Inscrição imobiliária ou “quadra lote”"
@@ -905,6 +911,8 @@ function corpoDoDoc() {
   corpo.reincidencia_de_id = reincidenciaDoDoc()
   corpo.origem_id = origemDoDoc()
   Object.assign(corpo, motivoDeOrigemDoDoc())
+  // Posturas: medição de ruído, veículo e bens apreendidos (documento-posturas.js).
+  if (typeof corpoPosturasDoc === 'function') Object.assign(corpo, corpoPosturasDoc())
 
   // Num rascunho já gravado, o imóvel vinculado depois viaja no PATCH.
   if (fdState.id && fdState.lote?.id) corpo.lote_id = fdState.lote.id
