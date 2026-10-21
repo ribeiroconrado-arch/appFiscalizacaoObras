@@ -8,6 +8,7 @@
  *   meio do lado (▬)     arrastar leva o LADO INTEIRO na perpendicular, paralelo
  *                        a ele mesmo (o "stretch" do AutoCAD): os lados vizinhos
  *                        esticam. Shift + arrastar cria um vértice novo ali
+ *   clique na linha      cria um vértice no ponto clicado
  *   ímã                  o vértice gruda no vértice ou na linha do bairro
  *                        vizinho (Alt segurado desliga) — a divisa fica comum
  *   Encostar no vizinho  escolha dois vértices: o trecho entre eles passa a
@@ -139,6 +140,13 @@ function _ceAbrir(nome, f) {
   }
   ceState.camada = L.polygon([], { pane: 'ceContorno', interactive: false, color: '#2563EB', weight: 2.4, opacity: 1,
     fillColor: '#2563EB', fillOpacity: .05 }).addTo(m)
+  // CLICAR NA LINHA cria um vértice ali. Uma faixa invisível de 14 px sobre o
+  // contorno, em SVG: só o traço recebe o clique (o painel continua surdo), e
+  // ao sair do editor não sobra tela nenhuma por cima dos lotes.
+  ceState.svgLinha ||= L.svg({ pane: 'ceAlcas' })
+  ceState.linha = L.polygon([], { pane: 'ceAlcas', renderer: ceState.svgLinha, interactive: true, fill: false,
+    weight: 14, opacity: 0, className: 'ce-linha' }).addTo(m)
+  ceState.linha.on('click', _ceCliqueNaLinha)
   ceState.alcas = L.layerGroup().addTo(m)
   ceState.invasoes = L.layerGroup().addTo(m)
   _ceDesenhar()
@@ -165,8 +173,8 @@ function sairDaEdicaoDoContorno(semPerguntar = false, voltar = true) {
   const m = mapaState.obj, bairro = ceState.bairro, daLista = ceState.daLista
   clearTimeout(ceState.timer)
   _ceLimparPrevia()
-  ceState.camada?.remove(); ceState.alcas?.remove(); ceState.invasoes?.remove(); ceState.ima?.remove()
-  ceState.camada = ceState.alcas = ceState.invasoes = ceState.ima = null
+  ceState.camada?.remove(); ceState.alcas?.remove(); ceState.invasoes?.remove(); ceState.ima?.remove(); ceState.linha?.remove()
+  ceState.camada = ceState.alcas = ceState.invasoes = ceState.ima = ceState.linha = null
   m.off('moveend', _ceDesenharAlcas)
   document.removeEventListener('keydown', _ceTeclas, true)
   _ceMarcarLotesFora([])
@@ -184,8 +192,37 @@ function sairDaEdicaoDoContorno(semPerguntar = false, voltar = true) {
 // ── desenho ─────────────────────────────────────────────────────
 
 function _ceDesenhar() {
-  ceState.camada?.setLatLngs(ceState.polis.map(p => p.map(r => r.map(c => [c[1], c[0]]))))
+  const lls = ceState.polis.map(p => p.map(r => r.map(c => [c[1], c[0]])))
+  ceState.camada?.setLatLngs(lls)
+  ceState.linha?.setLatLngs(lls)
   _ceDesenharAlcas()
+}
+
+/**
+ * Clique na linha do contorno: cria um vértice no ponto clicado, sobre o lado
+ * mais perto (até 10 px). Em cima de um vértice que já existe, só o seleciona.
+ */
+function _ceCliqueNaLinha(ev) {
+  L.DomEvent.stopPropagation(ev)   // o clique não chega ao lote embaixo
+  const m = mapaState.obj
+  if (!ceState.ativo || ceState.modo || m.getZoom() < CE_ZOOM_ALCAS) return
+  const p = m.latLngToLayerPoint(ev.latlng)
+  let melhor = null
+  ceState.polis.forEach((pol, pi) => pol.forEach((r, ri) => r.forEach((c, i) => {
+    const d = r[(i + 1) % r.length]
+    const a = m.latLngToLayerPoint([c[1], c[0]]), b = m.latLngToLayerPoint([d[1], d[0]])
+    const q = L.LineUtil.closestPointOnSegment(p, a, b), dist = p.distanceTo(q)
+    if (!melhor || dist < melhor.dist) melhor = { pi, ri, i, q, dist, a, b, n: r.length }
+  })))
+  if (!melhor || melhor.dist > 10) return
+  const { pi, ri, i, q, a, b, n } = melhor
+  if (q.distanceTo(a) < 8) { _ceClicouVertice(pi, ri, i); return }
+  if (q.distanceTo(b) < 8) { _ceClicouVertice(pi, ri, (i + 1) % n); return }
+  const ll = m.layerPointToLatLng(q)
+  const antes = _ceCopia(ceState.polis)
+  ceState.polis[pi][ri].splice(i + 1, 0, [ll.lng, ll.lat])
+  ceState.sel = [pi, ri, i + 1]
+  _ceEmpilhar(antes)
 }
 
 function _ceDesenharAlcas() {
@@ -569,7 +606,7 @@ function _cePintarBarra() {
     : c.pode ? '<span class="ce-chip ce-ok">ok</span>'
       : `<span class="ce-chip ce-er" title="${esc(c.motivo || '')}">${esc(curto || 'não fecha')}</span>`
       + (c.lotes_fora?.length ? ` <a href="#" class="ce-ver" onclick="event.preventDefault(); irAoLoteIsolado(${Number(c.lotes_fora[0].id)})">ver</a>` : '')
-  const ajuda = 'Vértice (quadrado): arraste; clique e Delete apaga. Meio do lado (retângulo): arraste o lado inteiro na perpendicular; Shift + arrastar cria vértice. Ímã no vizinho; Alt desliga. Ctrl+Z / Ctrl+Y desfazem e refazem.'
+  const ajuda = 'Clique na linha: cria vértice. Vértice (quadrado): arraste; clique e Delete apaga. Meio do lado (retângulo): arraste o lado inteiro na perpendicular; Shift + arrastar cria vértice. Ímã no vizinho; Alt desliga. Ctrl+Z / Ctrl+Y desfazem e refazem.'
   const b = (ico, rot, acao, extra = '') => `<button class="ce-ib" type="button" title="${rot}" aria-label="${rot}" onclick="${acao}" ${extra}>${_ceIco(ico)}</button>`
   barra.className = 'imp-barra ce-barra'
   barra.hidden = false

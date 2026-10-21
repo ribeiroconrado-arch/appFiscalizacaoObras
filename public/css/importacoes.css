@@ -455,6 +455,10 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .ce-chip.ce-er{background:#FCEBEB;color:#A32D2D;max-width:150px;overflow:hidden;text-overflow:ellipsis}
 .ce-ver{font-size:11px}
 /* Ícones escuros, com moldura: sobre o branco da barra, legíveis em qualquer fundo do mapa. */
+/* "Todos os lotes do cadastro estão no mapa?" — à parte das divergências, separado por um traço. */
+.cob-grupo{margin-top:18px;padding-top:14px;border-top:2px solid var(--gm,#cfe3d6)}
+/* A faixa invisível sobre a linha do contorno: clicar cria vértice (contorno-editor.js). */
+path.ce-linha{cursor:copy}
 .ce-ib{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:7px;border:1px solid #d3dad5;background:#fff;color:var(--chumbo,#37413F);cursor:pointer;flex:none}
 .ce-ib:hover:not([disabled]){background:var(--gl);border-color:var(--gm);color:var(--gd)}
 .ce-ib[disabled]{opacity:.4;cursor:default;background:#f4f6f4}

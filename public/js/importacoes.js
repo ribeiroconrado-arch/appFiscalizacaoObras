@@ -633,6 +633,46 @@ function _htmlPreCuradoria(pc) {
 }
 
 /**
+ * "TODOS OS LOTES DO CADASTRO ESTÃO NO MAPA?" — a cobertura, à parte das
+ * divergências (ConferenciaComCadastro): cada inscrição do bairro, ativa ou
+ * inativa, sem desmembramento nem unificação, tem de ter lote no mapa. Serve à
+ * ficha da importação e à conferência do bairro.
+ *
+ * @param {Object|undefined} cob  resultado.cobertura
+ * @param {(l:Object) => string} [acao]  botão da linha (ex.: ir à quadra)
+ */
+function htmlCoberturaDoCadastro(cob, acao = () => '') {
+  if (!cob) {
+    return `<section class="jt-grupo cob-grupo"><div class="jt-grupo-tit"><b>Todos os lotes do cadastro estão no mapa?</b></div>
+      <div class="cad-nota cad-aviso">Esta conferência é de antes desta verificação. Confira de novo para ver se cada inscrição do bairro tem lote no mapa.</div></section>`
+  }
+  const n = v => Number(v || 0).toLocaleString('pt-BR')
+  const faltam = [...(cob.faltam || [])]
+  const num = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0
+  faltam.sort((a, b) => num(a.quadra) - num(b.quadra) || num(a.lote) - num(b.lote))
+  const ign = cob.ignoradas || {}
+  const ignorados = [ign.desmembramentos ? `${n(ign.desmembramentos)} de desmembramento` : '', ign.unificacoes ? `${n(ign.unificacoes)} de unificação` : '']
+    .filter(Boolean).join(' e ')
+  return `<section class="jt-grupo cob-grupo" data-tipo="cobertura">
+      <div class="jt-grupo-tit">
+        <span class="badge ${faltam.length ? 'bd-er' : 'bd-ok'}">${faltam.length ? n(faltam.length) + ' sem lote' : 'Completo'}</span>
+        <b>Todos os lotes do cadastro estão no mapa?</b>
+        <span class="imp-sub">${n(cob.no_mapa)} de ${n(cob.esperadas)} inscrições do bairro têm lote no mapa${ignorados ? ` · fora da conta: ${ignorados}` : ''}</span>
+        <span class="imp-sub conf-grupo-nota">Ativas e inativas no cadastro. Inscrição de desmembramento (variação diferente de 000) e de unificação (lote 0708 = 07 + 08) não entram.</span>
+      </div>
+      ${faltam.length ? `<table class="imp-tabela jt-tabela">
+        <thead><tr><th>Inscrição</th><th>Quadra · Lote</th><th>Detalhe</th><th></th></tr></thead>
+        <tbody>${faltam.slice(0, 300).map(l => `<tr>
+          <td class="mono">${esc(l.inscricao || '—')}</td>
+          <td>Q ${esc(l.quadra ?? '—')} · L ${esc(l.lote ?? '—')}</td>
+          <td class="jt-quebra">${[l.ativo === false ? '<span class="badge bd-cx">Inativo no cadastro</span>' : '',
+            l.area_m2 ? fmtNum(l.area_m2) + ' m²' : '', esc(l.endereco || '')].filter(Boolean).join(' · ') || '<span class="imp-sub">—</span>'}</td>
+          <td class="jt-acoes">${acao(l)}</td></tr>`).join('')}</tbody></table>
+        ${faltam.length > 300 ? `<div class="imp-sub">+ ${n(faltam.length - 300)} — confira de novo depois de importar os que faltam.</div>` : ''}` : ''}
+    </section>`
+}
+
+/**
  * A conferência em DOIS pedaços, porque cada um mora num lugar da ficha: as
  * listas no meio (rolam) e a fonte com o CSV no rodapé fixo. Os números de
  * cada grupo vão no título do próprio grupo.
@@ -683,7 +723,8 @@ function _htmlConferenciaCadastro(i, c) {
     ${grupo('Área do desenho diferente da área do cadastro', 'bd-er',
       [...(c.area_diferente || [])].sort((a, b) => Math.abs(b.diferenca ?? 0) - Math.abs(a.diferenca ?? 0)),
       l => linha(l, typeof _confAreas === 'function' ? _confAreas(l) : '', acaoDe('area_diferente')(l)), 'area_diferente')}
-    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => linha(l, '', acaoDe('sem_inscricao')(l)), 'sem_inscricao')}`,
+    ${grupo('Sem quadra ou número: a inscrição não se monta', 'bd-pe', c.sem_inscricao, l => linha(l, '', acaoDe('sem_inscricao')(l)), 'sem_inscricao')}
+    ${htmlCoberturaDoCadastro(c.cobertura)}`,
     rodape: `
     <div class="imp-rodape-conf">
       <span class="imp-sub">${esc(c.fonte_descricao)} · conferido em ${esc(c.conferido_em)} por ${esc(c.conferido_por || '—')}${c.revisao ? ` · revisado sem planilha em ${esc(c.revisao.em)} (${c.revisao.resolvidas} resolvida(s))` : ''}

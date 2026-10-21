@@ -319,7 +319,9 @@ function pintarJanelaConferencia() {
       ${confState.itens.length === 0 ? '<div class="cad-nota imp-nota">Nenhuma pendência aberta neste bairro.</div>' : ''}
       ${r.tolerancia_area?.valor ? `<div class="cad-nota imp-nota">Diferença de área de até ${Number(r.tolerancia_area.valor).toLocaleString('pt-BR')} ${r.tolerancia_area.unidade === 'pct' ? '%' : 'm²'} não foi contada como divergência.</div>` : ''}
       ${confState.filtro ? `<div class="conf-filtro-aviso">Mostrando só <b>${esc(CONF_TIPOS[confState.filtro].rotulo)}</b>. <a href="#" onclick="event.preventDefault(); _confFiltrar(null)">Mostrar todas</a></div>` : ''}
-      ${Object.keys(CONF_TIPOS).filter(t => !confState.filtro || t === confState.filtro).map(grupo).join('')}`
+      ${Object.keys(CONF_TIPOS).filter(t => !confState.filtro || t === confState.filtro).map(grupo).join('')}
+      ${!confState.filtro && typeof htmlCoberturaDoCadastro === 'function'
+        ? htmlCoberturaDoCadastro(r.cobertura, l => `<button type="button" class="btn sm" onclick="_confIrAoItem(${jsArg({ tipo: 'sem_lote', ...l })})">Ver a quadra</button>`) : ''}`
       : '<p class="imp-expl">Este bairro ainda não foi conferido. Escolha a fonte e confira.</p>'}
       <div class="jt-nada" hidden>Nenhuma pendência com o que foi pesquisado.</div>
     </div>

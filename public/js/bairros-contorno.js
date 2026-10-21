@@ -46,6 +46,29 @@ const QUADRA_RAIO = 1
 const CONTORNO_ISOLADO_LOTES = 2
 const CONTORNO_ISOLADO_M = 200
 
+/**
+ * ENDIREITAR as barrigas rasas da borda (_endireitarReentrancias): onde a
+ * borda entra até isto (m) e até esta fração da reta que a cobre, vira reta.
+ * A travessia de rua entre duas quadras de quina arredondada fica com uma
+ * barriga em arco (o fechamento encosta nas duas quinas); uma esquina de
+ * verdade do bairro, em L, entra muito mais que 20% da reta e fica.
+ */
+const CONTORNO_RETA_FUNDO_M = 8
+const CONTORNO_RETA_FRACAO = 0.2
+const CONTORNO_RETA_MAX_M = 80
+
+/**
+ * ESQUADREJAR a quina arredondada da quadra que o contorno acompanha: o arco
+ * (lados de até CONTORNO_QUINA_LADO_CURTO_M) entre dois lados de pelo menos
+ * CONTORNO_QUINA_LADO_LONGO_M vira o canto onde as duas retas se encontram —
+ * a até CONTORNO_QUINA_MAX_M do arco e acrescentando no máximo
+ * CONTORNO_QUINA_AREA_MAX_M2.
+ */
+const CONTORNO_QUINA_LADO_CURTO_M = 6
+const CONTORNO_QUINA_LADO_LONGO_M = 6
+const CONTORNO_QUINA_MAX_M = 20
+const CONTORNO_QUINA_AREA_MAX_M2 = 150
+
 // ── DESENHO NO MAPA ──────────────────────────────────────────
 
 /**
@@ -529,6 +552,134 @@ async function gerarContornoDoBairro(bairro, raio = CONTORNO_RAIO_PADRAO, opts =
 }
 
 /**
+ * DEIXA A BORDA RETILÍNEA (em metros), em dois passos sobre cada polígono:
+ *   1. quina arredondada de quadra → canto vivo, por fora (CONTORNO_QUINA_*);
+ *   2. trecho torto → reta: o trecho entre os vértices i e j vira a reta i–j
+ *      quando se afasta dela no máximo CONTORNO_RETA_FUNDO_M e
+ *      CONTORNO_RETA_FRACAO do comprimento (dobra de rua, não esquina do
+ *      bairro), o que a reta CORTA não tem lote do bairro e o que ela
+ *      ACRESCENTA não tem lote de outro bairro (`livre`).
+ * Guloso: de cada vértice, a reta mais longa que serve. Furos ficam como estão.
+ * Qualquer resultado inválido devolve o polígono como estava.
+ */
+function _endireitarReentrancias(geom, livre, fabrica, lotesEmMetros) {
+  const J = window.jsts
+  // Índice dos lotes do bairro: o que a reta corta é conferido só contra os de perto.
+  const lotes = new J.index.strtree.STRtree()
+  for (const l of lotesEmMetros) lotes.insert(l.getEnvelopeInternal(), l)
+  const partes = []
+  for (let k = 0; k < geom.getNumGeometries(); k++) {
+    const p = geom.getGeometryN(k)
+    partes.push(p.getGeometryType() === 'Polygon' ? _endireitarPoligono(p, livre, fabrica, lotes) : p)
+  }
+  return J.operation.union.UnaryUnionOp.union(fabrica.createGeometryCollection(partes))
+}
+
+function _endireitarPoligono(p, livre, fabrica, lotes) {
+  const J = window.jsts
+  const livreOuVazio = g => g.getArea() < 0.05 || livre(g)
+  let pts = p.getExteriorRing().getCoordinates().slice(0, -1).map(c => [c.x, c.y])
+  const n = pts.length
+  if (n < 4) return p
+  // Sentido do anel: anti-horário tem o bairro à esquerda de cada lado.
+  let s = 0
+  for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; s += a[0] * b[1] - b[0] * a[1] }
+  const dentro = s > 0 ? 1 : -1
+  // Começa no vértice mais longe do centro: ele está no casco, fora de qualquer barriga.
+  let cx = 0, cy = 0
+  for (const q of pts) { cx += q[0]; cy += q[1] }
+  cx /= n; cy /= n
+  let k0 = 0, dm = -1
+  pts.forEach((q, i) => { const d = (q[0] - cx) ** 2 + (q[1] - cy) ** 2; if (d > dm) { dm = d; k0 = i } })
+  pts = [...pts.slice(k0), ...pts.slice(0, k0)]
+
+  const anel = cs => fabrica.createLinearRing(cs.map(c => new J.geom.Coordinate(c[0], c[1])))
+  const poligono = cs => {
+    try { const g = fabrica.createPolygon(anel([...cs, cs[0]]), []); return g.isValid() ? g : g.buffer(0) } catch { return null }
+  }
+
+  // 1º QUINA ARREDONDADA → CANTO VIVO. Uma sequência de lados curtos (o arco
+  // da quina da quadra) entre dois lados longos é trocada pelo encontro das
+  // duas retas longas, por FORA do arco: cobre a quina, não corta lote.
+  let mudou = false
+  for (let i = 1; i < pts.length - 2; i++) {
+    const lado = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (lado(pts[i - 1], pts[i]) < CONTORNO_QUINA_LADO_LONGO_M) continue
+    let melhor = null
+    for (let j = i + 2; j < pts.length - 1 && j - i <= 12; j++) {
+      if (lado(pts[j - 1], pts[j]) > CONTORNO_QUINA_LADO_CURTO_M) break   // o arco acabou
+      if (lado(pts[j], pts[j + 1]) < CONTORNO_QUINA_LADO_LONGO_M) continue
+      const x = _encontroDasRetas(pts[i - 1], pts[i], pts[j], pts[j + 1])
+      if (!x || lado(x, pts[i]) > CONTORNO_QUINA_MAX_M || lado(x, pts[j]) > CONTORNO_QUINA_MAX_M) continue
+      const g = poligono([...pts.slice(i, j + 1), x])
+      if (!g || g.getArea() < 0.05 || g.getArea() > CONTORNO_QUINA_AREA_MAX_M2) continue
+      if (g.intersection(p).getArea() > 0.05 || !livre(g)) continue   // só por fora, e sem vizinho
+      melhor = { j, x }
+    }
+    if (melhor) { pts.splice(i, melhor.j - i + 1, melhor.x); mudou = true }
+  }
+  // 2º TRECHO TORTO → RETA. De cada vértice, a reta mais longa até um vértice
+  // adiante cujo trecho entre os dois se afasta dela no máximo
+  // CONTORNO_RETA_FUNDO_M e CONTORNO_RETA_FRACAO do comprimento — para
+  // qualquer lado. O que a reta CORTA não pode ter lote do bairro; o que ela
+  // ACRESCENTA não pode ter lote de outro bairro.
+  const lado = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1])
+  const furos = []
+  for (let h = 0; h < p.getNumInteriorRing(); h++) furos.push(fabrica.createLinearRing(p.getInteriorRingN(h).getCoordinates()))
+  const comFuros = cs => { try { return fabrica.createPolygon(anel([...cs, cs[0]]), furos) } catch { return null } }
+  const semLote = g => g.getArea() < 0.05 || !lotes.query(g.getEnvelopeInternal()).toArray()
+    .some(l => l.intersects(g) && l.intersection(g).getArea() >= 0.05)
+  const saida = []
+  let i = 0
+  while (i < pts.length) {
+    saida.push(pts[i])
+    const atual = comFuros([...saida, ...pts.slice(i + 1)])
+    const candidatos = []
+    let caminho = 0
+    for (let j = i + 2; j <= pts.length; j++) {
+      const b = pts[j % pts.length]
+      caminho += lado(pts[j - 1], pts[j - 2])
+      if (caminho > CONTORNO_RETA_MAX_M * 1.5) break
+      const a = pts[i], corda = lado(a, b)
+      if (corda < 1 || corda > CONTORNO_RETA_MAX_M) continue
+      let fundo = 0
+      for (let t = i + 1; t < j; t++) {
+        fundo = Math.max(fundo, Math.abs((b[0] - a[0]) * (pts[t][1] - a[1]) - (b[1] - a[1]) * (pts[t][0] - a[0])) / corda)
+      }
+      if (fundo <= Math.min(CONTORNO_RETA_FUNDO_M, CONTORNO_RETA_FRACAO * corda)) candidatos.push(j)
+    }
+    let alvo = -1
+    for (let c = candidatos.length - 1; c >= 0 && alvo < 0 && atual; c--) {
+      const j = candidatos[c]
+      const novo = comFuros([...saida, ...pts.slice(j)])
+      if (!novo || !novo.isValid()) continue
+      if (semLote(atual.difference(novo)) && livreOuVazio(novo.difference(atual))) alvo = j
+    }
+    if (alvo > i + 1) { mudou = true; i = alvo } else i++
+  }
+  if (!mudou) return p
+  const novo = comFuros(saida)
+  // Conferência final: válido, e nenhum lote do bairro de fora.
+  return novo && novo.isValid() && semLote(p.difference(novo)) ? novo : p
+}
+
+/**
+ * Onde a reta a→b, seguindo adiante de b, encontra a reta c→d vindo de trás
+ * de c — o canto vivo de uma quina arredondada entre b e c. Null se as retas
+ * são paralelas ou se o encontro fica do lado errado (atrás de b ou além de c).
+ */
+function _encontroDasRetas(a, b, c, d) {
+  const r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]]
+  const den = r[0] * s[1] - r[1] * s[0]
+  if (Math.abs(den) < 1e-9 * Math.hypot(...r) * Math.hypot(...s)) return null
+  const w = [c[0] - b[0], c[1] - b[1]]
+  const t = (w[0] * s[1] - w[1] * s[0]) / den   // adiante de b, em unidades de r
+  const u = (w[0] * r[1] - w[1] * r[0]) / den   // em unidades de s, a partir de c
+  if (t < -0.01 || u > 0.01) return null
+  return [b[0] + t * r[0], b[1] + t * r[1]]
+}
+
+/**
  * A geometria em si. Função pura: lotes [{id, geometry(Polygon, lon/lat)}] e
  * os lotes de outros bairros em volta (Polygons) →
  * {geometry: MultiPolygon lon/lat, isolados: [ids], pedacos}.
@@ -591,6 +742,9 @@ function calcularContorno(lotes, raio, vizinhos = []) {
   // Simplificação que preserva a topologia: Douglas-Peucker puro pode cruzar
   // anéis e entregar um polígono inválido.
   fechado = J.simplify.TopologyPreservingSimplifier.simplify(fechado, 0.5)
+  // 4: borda retilínea — quina arredondada vira canto vivo e dobra de rua
+  // vira reta, sem deixar lote de fora nem encostar em lote de outro bairro.
+  fechado = _endireitarReentrancias(fechado, livre, fabrica, emMetros.map(x => x.g))
 
   // Pedaços: o maior é o bairro; pedaço pequeno e longe é lote isolado.
   // Pedaço SEM ÁREA fica de fora: a simplificação de 0,5 m achata lasca

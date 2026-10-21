@@ -204,7 +204,16 @@ class ConferenciaComCadastro
         }
         $semLote = array_values($semLote);
 
+        // COBERTURA: some da lista a inscrição que ganhou lote no mapa.
+        $cobertura = $anterior['cobertura'] ?? null;
+        if ($cobertura) {
+            $cobertura['faltam'] = array_values(array_filter($cobertura['faltam'] ?? [],
+                fn ($f) => ! isset($comInscricao[InscricaoImobiliaria::normalizar($f['inscricao'] ?? null) ?? ''])));
+            $cobertura['no_mapa'] = (int) $cobertura['esperadas'] - count($cobertura['faltam']);
+        }
+
         return [
+            'cobertura'         => $cobertura,
             'nao_encontrados'   => $naoEncontrados,
             'inativos'          => $inativos,
             'sem_lote'          => $semLote,
@@ -413,6 +422,8 @@ class ConferenciaComCadastro
         $casaram = 0;
         $noCadastro = 0;
         $vistos = [];
+        $cobertura = ['esperadas' => 0, 'no_mapa' => 0, 'faltam' => [],
+                      'ignoradas' => ['desmembramentos' => 0, 'unificacoes' => 0]];
 
         foreach ($fonte->imoveisDoBairro((string) $codigo) as $c) {
             $insc = $c['inscricao'];
@@ -423,6 +434,27 @@ class ConferenciaComCadastro
             $noCadastro++;
 
             $ativo = \App\Cadastro\RetratoBci::isencaoAtiva($c['isencao']);
+
+            // COBERTURA: toda inscrição do bairro tem lote no mapa? Ativa ou
+            // inativa; desmembramento e unificação ficam de fora (ver tipoDaInscricao).
+            $tipo = self::tipoDaInscricao($insc);
+            if ($tipo) {
+                $cobertura['ignoradas'][$tipo === 'desmembramento' ? 'desmembramentos' : 'unificacoes']++;
+            } else {
+                $cobertura['esperadas']++;
+                if (isset($doBairro[$insc])) {
+                    $cobertura['no_mapa']++;
+                } else {
+                    $cobertura['faltam'][] = [
+                        'inscricao' => InscricaoImobiliaria::formatar($insc),
+                        'quadra'    => $c['quadra'],
+                        'lote'      => $c['lote'],
+                        'area_m2'   => $c['area_terreno_m2'],
+                        'endereco'  => $c['endereco'],
+                        'ativo'     => $ativo !== false,
+                    ];
+                }
+            }
 
             if (isset($doArquivo[$insc])) {
                 if ($ativo === false) {
@@ -478,6 +510,10 @@ class ConferenciaComCadastro
             'sem_lote'          => $semLote,
             'sem_inscricao'     => $semInscricao,
             'area_diferente'    => $areaDiferente,
+            // À PARTE das divergências: as inscrições do bairro (ativas ou não,
+            // sem desmembramento e unificação) que não têm lote no mapa — para
+            // saber se TODOS os lotes do loteamento foram importados.
+            'cobertura'         => $cobertura,
             // A variação de área aceita nesta conferência (zero = exata).
             'tolerancia_area'   => $this->tolerancia ?? ['valor' => 0.0, 'unidade' => 'm2'],
             // Imóveis que casaram mas o cadastro não traz a área do terreno:
@@ -529,6 +565,30 @@ class ConferenciaComCadastro
             'area_cadastro' => $cadastro,
             'diferenca'     => $desenho !== null ? round($desenho - $cadastro, 2) : null,
         ];
+    }
+
+    /**
+     * A inscrição é de DESMEMBRAMENTO ou de UNIFICAÇÃO? Essas não entram na
+     * cobertura: o lote do loteamento é a inscrição de origem.
+     *
+     *   desmembramento  variação diferente de 000 (01.001.002.0003.002);
+     *   unificação      número de lote de 100 para cima: os números dos lotes
+     *                   juntados, lado a lado (01.001.001.0708.000 = 07 + 08).
+     *                   Nenhum loteamento do mapa numera lote acima de 91
+     *                   (conferido em 21/10/2026); o único acima de 99 é uma
+     *                   unificação (Buritis II, Q05 L0102).
+     */
+    public static function tipoDaInscricao(?string $inscricao): ?string
+    {
+        $p = InscricaoImobiliaria::partes($inscricao);
+        if (! $p) {
+            return null;
+        }
+        if ($p['variacao'] !== 0) {
+            return 'desmembramento';
+        }
+
+        return $p['lote'] >= 100 ? 'unificacao' : null;
     }
 
     /** @return array<string,mixed> */
