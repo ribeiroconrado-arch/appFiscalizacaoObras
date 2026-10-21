@@ -3351,17 +3351,20 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 #grupo-camadas .ctrl-camadas{position:fixed;z-index:1100;box-sizing:border-box;max-width:none;
   flex-direction:column;padding:0;background:var(--sur,#fff);border-radius:16px;overflow:hidden;
   box-shadow:0 10px 36px #0003;color:var(--tx)}
-.ctrl-camadas .cam-topo{flex:none;padding:16px 16px 12px;margin:0;border-bottom:1px solid var(--bord)}
-.ctrl-camadas h2{font-size:19px;line-height:1.3;margin:0;font-weight:650}
-.ctrl-camadas .cam-topo p{font-size:12px;color:var(--tx3);margin:4px 0 0}
-.ctrl-camadas .cam-x{width:44px;height:44px;font-size:18px;color:var(--tx2)}
+.ctrl-camadas .cam-topo{flex:none;padding:0 6px 0 16px;margin:0;background:var(--gd);color:#fff}
+.ctrl-camadas h2{font-size:10px;line-height:1.4;margin:0;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:inherit}
+.ctrl-camadas .cam-x{width:44px;height:44px;font-size:18px;color:inherit}
+.ctrl-camadas .cam-x:hover{background:rgba(255,255,255,.15);color:#fff}
+.ctrl-camadas .cam-x:focus-visible{outline-color:#fff;outline-offset:-4px}
 #camadas-lista{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:0 16px 12px;scrollbar-width:thin}
 .ctrl-camadas .cam-secao{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--tx3);font-weight:700;margin:16px 0 10px}
 .ctrl-camadas .cam-fundos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.ctrl-camadas .cam-fundos .cam-item{display:flex;flex-wrap:wrap;justify-content:flex-start;padding:10px;border:1px solid var(--bord);border-radius:10px;min-height:70px;box-sizing:border-box;font-size:13px}
-.ctrl-camadas .cam-fundos .cam-item:has(:checked){border-color:#626a72;background:#f0f1f2;color:#30363b}
+.ctrl-camadas .cam-fundos .cam-item{position:relative;display:flex;flex-wrap:nowrap;justify-content:flex-start;padding:10px 12px;border:1px solid var(--bord);border-radius:10px;min-height:70px;min-width:0;box-sizing:border-box;font-size:13px}
+.ctrl-camadas .cam-fundos .cam-item > span{display:block;min-width:0;white-space:nowrap}
+.ctrl-camadas .cam-fundos .cam-item:has(:focus-visible){outline:2px solid var(--tx2);outline-offset:3px}
+.ctrl-camadas .cam-fundos .cam-item:has(:checked){border-color:var(--tx2);background:var(--blt);color:var(--tx)}
 .ctrl-camadas .cam-obs{display:block;font-size:11px;font-weight:400;line-height:1.3}
-.ctrl-camadas .cam-fundos input{accent-color:#626a72}
+.ctrl-camadas .cam-fundos input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 .ctrl-camadas .cam-grupo{margin:0;border-top:1px solid var(--bord);padding:0;text-transform:none;letter-spacing:normal;color:var(--tx)}
 .ctrl-camadas summary{display:flex;align-items:center;gap:8px;min-height:52px;cursor:pointer;font-size:13px;font-weight:600;list-style:none}
 .ctrl-camadas summary::-webkit-details-marker{display:none}
@@ -3369,15 +3372,15 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 .ctrl-camadas summary::after{content:'›';font-size:22px;transform:rotate(90deg)}
 .ctrl-camadas details[open] summary::after{transform:rotate(-90deg)}
 .ctrl-camadas .cam-grupo .cam-item{min-height:46px;padding:5px 0;box-sizing:border-box;line-height:1.4;font-weight:400;justify-content:space-between}
-.ctrl-camadas .cam-grupo input{order:2;appearance:none;position:relative;width:36px;height:22px;border:1px solid #bfc4c8;border-radius:20px;background:#e4e6e8;cursor:pointer}
+.ctrl-camadas .cam-grupo input{order:2;appearance:none;position:relative;width:36px;height:22px;border:1px solid var(--bord);border-radius:20px;background:var(--blt);cursor:pointer}
 .ctrl-camadas .cam-grupo input::after{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 2px #0003}
-.ctrl-camadas .cam-grupo input:checked{background:#626a72;border-color:#626a72}
+.ctrl-camadas .cam-grupo input:checked{background:var(--tx2);border-color:var(--tx2)}
 .ctrl-camadas .cam-grupo input:checked::after{left:16px}
-.ctrl-camadas :focus-visible{outline:2px solid #626a72;outline-offset:3px}
+.ctrl-camadas :focus-visible{outline:2px solid var(--tx2);outline-offset:3px}
 .ctrl-camadas .cam-rodape{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-top:1px solid var(--bord)}
 .ctrl-camadas .cam-rodape small{font-size:11px;color:var(--tx3)}
-.ctrl-camadas .cam-rodape button{min-height:44px;padding:0 16px;border:0;border-radius:9px;background:#505960;color:white;font:inherit;font-size:13px;cursor:pointer}
-@media(max-width:620px){#grupo-camadas .ctrl-camadas{border-radius:18px 18px 0 0}.ctrl-camadas .cam-topo{padding-top:12px}}
+.ctrl-camadas .cam-rodape button{min-height:44px;padding:0 16px;border:0;border-radius:9px;background:var(--gd);color:white;font:inherit;font-size:13px;cursor:pointer}
+@media(max-width:620px){#grupo-camadas .ctrl-camadas{border-radius:18px 18px 0 0}}
 .cad-mesa-x:hover{color:var(--red)}
 .cad-mesa-rolo{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px}
 /* Duas colunas de campo (frente/fundos, lados) cabendo na mesa: sem

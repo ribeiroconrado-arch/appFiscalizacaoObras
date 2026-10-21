@@ -439,7 +439,7 @@
     </button>
     <div class="ctrl-corpo ctrl-camadas" role="region" aria-label="Mapa e camadas">
       <div class="cam-topo">
-        <div><h2>Mapa e camadas</h2><p>Personalize a visualização do mapa</p></div>
+        <h2>Mapa e camadas</h2>
         <button type="button" class="cam-x" onclick="alternarPainelMapa('grupo-camadas')"
                 title="Fechar" aria-label="Fechar as camadas">&#10005;</button>
       </div>
