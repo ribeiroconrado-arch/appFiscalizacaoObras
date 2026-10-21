@@ -15,9 +15,16 @@
 // Este módulo só LÊ. Abrir, criar e editar continuam em protocolos.js e os.js.
 // ══════════════════════════════════════════════
 
+/**
+ * O tipo de partida: fora de Obras a fila é só de ordens de serviço (o
+ * servidor já recorta assim — DemandaController); aqui é para o seletor de
+ * situação oferecer só as da OS.
+ */
+const DM_TIPO_PADRAO = (window.MODULO || 'obras') === 'obras' ? '' : 'os'
+
 const dmState = {
   /** @type {Object} filtros da fila */
-  filtros: { tipo: '', agente: 'todos', situacao: '', busca: '' },
+  filtros: { tipo: DM_TIPO_PADRAO, agente: 'todos', situacao: '', busca: '' },
   /** @type {Array<Object>} a lista como veio do servidor */ lista: [],
   /** @type {boolean} as situações do seletor já foram montadas */ situacoesProntas: false,
 }
@@ -37,10 +44,10 @@ function limparFiltrosDemandas() {
   // "Todos os responsáveis" é o PADRÃO da fila, e não a ausência de filtro:
   // protocolo chega sem dono, e limpar para "meus" esconderia justamente o que
   // ninguém assumiu.
-  dmState.filtros = { tipo: '', agente: 'todos', situacao: '', busca: '' }
+  dmState.filtros = { tipo: DM_TIPO_PADRAO, agente: 'todos', situacao: '', busca: '' }
 
   const põe = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v } }
-  põe('dm-tipo', ''); põe('dm-agente', 'todos'); põe('dm-situacao', ''); põe('dm-busca', '')
+  põe('dm-tipo', DM_TIPO_PADRAO); põe('dm-agente', 'todos'); põe('dm-situacao', ''); põe('dm-busca', '')
 
   carregarDemandas()
 }

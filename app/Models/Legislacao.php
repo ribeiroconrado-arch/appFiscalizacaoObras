@@ -17,7 +17,12 @@ class Legislacao extends Model
 
     protected function casts(): array
     {
-        return ['ativa' => 'boolean', 'data_publicacao' => 'date'];
+        return [
+            'ativa' => 'boolean', 'data_publicacao' => 'date',
+            // Posturas (ver a migration 2026_10_26_000100).
+            'faixa_db' => 'array', 'areas_db' => 'array', 'lavratura_imediata_itens' => 'array',
+            'aplica_apreensao' => 'boolean', 'aplica_retencao' => 'boolean', 'aplica_reincidencia' => 'boolean',
+        ];
     }
 
     public function artigos(): HasMany
@@ -28,6 +33,15 @@ class Legislacao extends Model
     public function scopeAtivas(Builder $q): Builder
     {
         return $q->where('ativa', true)->orderBy('nome');
+    }
+
+    /**
+     * Só as leis do módulo em que o usuário está trabalhando: o Código de
+     * Obras não fundamenta auto de Posturas, nem a Lei do Sossego um embargo.
+     */
+    public function scopeDoModulo(Builder $q, ?string $modulo = null): Builder
+    {
+        return $q->where($this->qualifyColumn('modulo'), $modulo ?? \App\Support\Modulo::ativo());
     }
 
     /** "Lei Complementar 1/2023 — Código de Obras" */

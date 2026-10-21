@@ -50,6 +50,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // contribuinte. Ver App\Http\Middleware\SoInterno e routes/web.php.
         $middleware->alias([
             'interno'   => \App\Http\Middleware\SoInterno::class,
+            // Rota de um módulo só (Obras ou Posturas) — ver SoModulo.
+            'modulo'    => \App\Http\Middleware\SoModulo::class,
             // Respostas grandes do mapa vão compactadas — ver ComprimirResposta.
             'comprimir' => \App\Http\Middleware\ComprimirResposta::class,
         ]);

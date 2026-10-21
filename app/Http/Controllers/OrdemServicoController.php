@@ -39,7 +39,8 @@ class OrdemServicoController extends Controller
             'busca'     => ['nullable', 'string', 'max:80'],
         ]);
 
-        $q = OrdemServico::query()
+        // As ordens do módulo em que o usuário está (seletor do cabeçalho).
+        $q = OrdemServico::query()->doModulo()
             ->with(['fiscais:id,name', 'emitente:id,name', 'lote:id,bairro,quadra,numero_lote'])
             ->withCount('jornadas')
             ->orderByDesc('ano')->orderByDesc('sequencia');
@@ -165,6 +166,8 @@ class OrdemServicoController extends Controller
             $n = OrdemServico::proximoNumero();
 
             $os = OrdemServico::create([
+                // A OS nasce no módulo em que a coordenação está trabalhando.
+                'modulo'     => \App\Support\Modulo::ativo($request->user()),
                 'numero'     => $n['numero'],
                 'ano'        => $n['ano'],
                 'sequencia'  => $n['sequencia'],
@@ -337,7 +340,7 @@ class OrdemServicoController extends Controller
 
         return response()->view('impressao.os', [
             'os'        => $ordem,
-            'orgao'     => $cabecalho->orgao(),
+            'orgao'     => $cabecalho->orgao($ordem->modulo ?? 'obras'),
             'brasao'    => $cabecalho->brasao(false),
             'rodape'    => $cabecalho->rodape(),
             'navegador' => true,

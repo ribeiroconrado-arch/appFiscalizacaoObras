@@ -14,6 +14,30 @@ class Documento extends Model
 
     protected $guarded = [];
 
+    /**
+     * Cada um só alcança peça dos módulos que tem (User::modulos).
+     *
+     * No modelo, e não em cada controller: a peça é aberta por uma dúzia de
+     * rotas (ficha, PDF, anexos, defesa…), e esquecer a conferência em uma
+     * delas abriria um auto de Posturas a quem só é de Obras. Com o escopo
+     * global a rota nem encontra o registro. Sem usuário (console, fila) não
+     * há o que restringir.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('modulos_do_usuario', function ($q) {
+            if ($u = auth()->user()) {
+                $q->whereIn($q->getModel()->qualifyColumn('modulo'), $u->modulos());
+            }
+        });
+    }
+
+    /** Só as do módulo em que o usuário está trabalhando (App\Support\Modulo). */
+    public function scopeDoModulo(\Illuminate\Database\Eloquent\Builder $q, ?string $modulo = null): \Illuminate\Database\Eloquent\Builder
+    {
+        return $q->where($this->qualifyColumn('modulo'), $modulo ?? \App\Support\Modulo::ativo());
+    }
+
     protected function casts(): array
     {
         return [
@@ -35,7 +59,13 @@ class Documento extends Model
         ];
     }
 
-    /** Rótulo e sigla de cada tipo. A sigla compõe o número (NOT 2026/0231). */
+    /**
+     * Rótulo e sigla de cada tipo. A sigla compõe o número (NOT 0231/2026).
+     *
+     * É o CATÁLOGO de todas as peças, dos dois módulos. Quais cada módulo
+     * emite, e em que ordem aparecem no menu, está em config/modulos.php —
+     * leia por tiposDoModulo().
+     */
     public const TIPOS = [
         'vistoria'            => ['Vistoria',                'VIS'],
         'notificacao'         => ['Notificação',             'NOT'],
@@ -45,7 +75,27 @@ class Documento extends Model
         // trabalho, não a do alfabeto.
         'auto_embargo'        => ['Auto de Embargo',         'AE'],
         'auto_infracao'       => ['Auto de Infração',        'AI'],
+        // Posturas: a apreensão de bens (ou a retenção do veículo) que segue a
+        // notificação ou o auto descumprido — como no AppPOSTURAS.
+        'auto_apreensao'      => ['Auto de Apreensão',       'AA'],
     ];
+
+    /**
+     * As peças que um módulo emite, no formato de TIPOS e na ordem do menu.
+     *
+     * @return array<string, array{0:string,1:string}>
+     */
+    public static function tiposDoModulo(string $modulo): array
+    {
+        $saida = [];
+        foreach (\App\Support\Modulo::tipos($modulo) as $tipo) {
+            if (isset(self::TIPOS[$tipo])) {
+                $saida[$tipo] = self::TIPOS[$tipo];
+            }
+        }
+
+        return $saida;
+    }
 
     /*
      * O Termo de Advertência saiu da lista: em obras a fiscalização trabalha
@@ -65,7 +115,7 @@ class Documento extends Model
     public const SEM_SANCAO = ['vistoria'];
 
     /** Tipos cujo prazo é de DEFESA (dias úteis, vindo da lei). */
-    public const COM_DEFESA = ['auto_infracao', 'auto_embargo'];
+    public const COM_DEFESA = ['auto_infracao', 'auto_embargo', 'auto_apreensao'];
 
     /**
      * Tipos cujo prazo é de CUMPRIMENTO (dias corridos, por documento).
@@ -353,8 +403,10 @@ class Documento extends Model
      * notificação. Notificação é o começo: não tem origem.
      */
     public const ORIGENS = [
-        'auto_infracao' => ['notificacao', 'notificacao_embargo', 'auto_embargo'],
-        'auto_embargo'  => ['notificacao', 'notificacao_embargo'],
+        'auto_infracao'  => ['notificacao', 'notificacao_embargo', 'auto_embargo'],
+        'auto_embargo'   => ['notificacao', 'notificacao_embargo'],
+        // Posturas: apreende-se a partir da notificação ou do auto de infração.
+        'auto_apreensao' => ['notificacao', 'auto_infracao'],
     ];
 
     /** "NOT 2026/0231" — ou "Sem número" no rascunho, que ainda não foi gravado. */

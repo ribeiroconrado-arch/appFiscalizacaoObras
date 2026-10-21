@@ -54,7 +54,7 @@ class DocumentoImpressao
         return [
             'doc'    => $doc,
             'titulo' => mb_strtoupper($doc->rotuloTipo()),
-            'orgao'  => $this->orgao(),
+            'orgao'  => $this->orgao($doc->modulo ?? 'obras'),
             'rodape' => app(CabecalhoOficial::class)->rodape(),
             'brasao'      => $this->brasao($paraPdf),
             'imovel'      => $this->imovel($doc),
@@ -74,9 +74,9 @@ class DocumentoImpressao
      * serviço imprime o mesmo. Duas cópias envelheceriam separadas: mudar o
      * nome da secretaria em Parâmetros corrigiria um papel e não o outro.
      */
-    private function orgao(): array
+    private function orgao(string $modulo): array
     {
-        return app(CabecalhoOficial::class)->orgao();
+        return app(CabecalhoOficial::class)->orgao($modulo);
     }
 
     private function brasao(bool $paraPdf): ?string

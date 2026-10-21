@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'matricula', 'password', 'perfil', 'tipo_usuario', 'ativo', 'assinatura', 'curador_cadastral'])]
+#[Fillable(['name', 'email', 'matricula', 'password', 'perfil', 'tipo_usuario', 'modulos', 'ativo', 'assinatura', 'curador_cadastral'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -43,7 +43,37 @@ class User extends Authenticatable
             'ultimo_acesso_em'  => 'datetime',
             'password'          => 'hashed',
             'ativo'             => 'boolean',
+            'modulos'           => 'array',
         ];
+    }
+
+    // ── Módulos (config/modulos.php) ─────────────────────────────
+
+    /**
+     * As fiscalizações a que o usuário tem acesso, na ordem do seletor.
+     *
+     * O administrador tem todas: é ele quem cadastra usuário, legislação e
+     * parâmetros dos dois lados, e não teria como fazê-lo de um módulo que não
+     * enxerga. Sem nada gravado vale Obras — o sistema era só Obras até
+     * 25/10/2026, e quem já existia continua vendo o que via.
+     *
+     * @return list<string>
+     */
+    public function modulos(): array
+    {
+        $todos = \App\Support\Modulo::todos();
+        if ($this->isAdmin()) {
+            return $todos;
+        }
+
+        $meus = array_values(array_intersect($todos, (array) ($this->getAttribute('modulos') ?? [])));
+
+        return $meus ?: ['obras'];
+    }
+
+    public function temModulo(string $modulo): bool
+    {
+        return in_array($modulo, $this->modulos(), true);
     }
 
     // ── Autorização ──────────────────────────────────────────────

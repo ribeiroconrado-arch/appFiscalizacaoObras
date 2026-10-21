@@ -48,6 +48,28 @@
 .topo > div{min-width:0}
 .topo h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* ── SELETOR DE MÓDULO (Obras | Posturas) ──
+   Pílula translúcida sobre o degradê do cabeçalho; o módulo ativo é a pastilha
+   branca. Não muda a cor do sistema: a cor é do tema de cada um. */
+.modulo-seg{display:flex;flex-shrink:0;margin-left:10px;padding:3px;border-radius:999px;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28)}
+.modulo-seg button{display:flex;align-items:center;gap:6px;border:0;background:none;cursor:pointer;
+  color:#fff;opacity:.9;padding:7px 12px;border-radius:999px;
+  font-family:'Inter',sans-serif;font-size:12px;font-weight:600;line-height:1;white-space:nowrap}
+.modulo-seg button svg{width:15px;height:15px;flex-shrink:0}
+.modulo-seg button:hover{background:rgba(255,255,255,.14);opacity:1}
+.modulo-seg button.at{background:#fff;color:var(--gd);opacity:1;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+/* No celular o seletor toma o lugar do título: ele próprio já diz o módulo,
+   e o sub-cabeçalho repete ("Posturas · Painel"). */
+@media(max-width:640px){
+  .topo:has(.modulo-seg) .topo-tit{display:none}
+  .modulo-seg{margin-left:2px}
+  .modulo-seg button{padding:7px 10px}
+}
+@media(max-width:340px){
+  .modulo-seg button span{display:none}
+}
+
 /* O cabeçalho em tela estreita é tratado junto do .perfil-btn, mais abaixo:
    a media query precisa vir DEPOIS da regra base para vencer na cascata. */
 

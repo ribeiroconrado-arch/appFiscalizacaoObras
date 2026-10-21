@@ -25,6 +25,22 @@ class OrdemServico extends Model
 
     protected $guarded = [];
 
+    /** Cada um só alcança OS dos módulos que tem — ver Documento::booted. */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('modulos_do_usuario', function ($q) {
+            if ($u = auth()->user()) {
+                $q->whereIn($q->getModel()->qualifyColumn('modulo'), $u->modulos());
+            }
+        });
+    }
+
+    /** Só as do módulo em que o usuário está trabalhando (App\Support\Modulo). */
+    public function scopeDoModulo(\Illuminate\Database\Eloquent\Builder $q, ?string $modulo = null): \Illuminate\Database\Eloquent\Builder
+    {
+        return $q->where($this->qualifyColumn('modulo'), $modulo ?? \App\Support\Modulo::ativo());
+    }
+
     /**
      * Contínua x específica não é rótulo: muda o que significa "concluída".
      * A específica termina quando a tarefa é cumprida; a contínua termina
@@ -119,7 +135,10 @@ class OrdemServico extends Model
     {
         $ano ??= (int) date('Y');
 
-        $ultima = static::where('ano', $ano)->lockForUpdate()->max('sequencia') ?? 0;
+        // Sem o escopo de módulos: o número é único na tabela inteira (os dois
+        // módulos dividem a série), e o máximo tem de enxergar todas as OS.
+        $ultima = static::withoutGlobalScope('modulos_do_usuario')
+            ->where('ano', $ano)->lockForUpdate()->max('sequencia') ?? 0;
         $seq = $ultima + 1;
 
         return ['ano' => $ano, 'sequencia' => $seq,

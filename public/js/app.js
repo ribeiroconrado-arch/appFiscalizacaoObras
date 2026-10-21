@@ -1047,8 +1047,41 @@ function marcarModuloNoSubcabecalho(destino) {
 
   const nome = document.getElementById('subcab-nome')
   const ico = document.getElementById('subcab-ico')
-  if (nome) nome.textContent = botao.textContent.trim()
+  // Quem tem os dois módulos lê aqui em qual está: "Posturas · Painel".
+  const modulo = document.querySelector('.modulo-seg button.at span')?.textContent.trim()
+  if (nome) nome.textContent = (modulo ? modulo + ' · ' : '') + botao.textContent.trim()
   if (ico) ico.innerHTML = botao.querySelector('svg')?.outerHTML || ''
+}
+
+/**
+ * O seletor Obras | Posturas do cabeçalho. Grava o módulo na sessão e
+ * recarrega: as listas, o painel e as abas vêm do servidor já recortados pelo
+ * módulo novo — ver ModuloController para o porquê de recarregar.
+ *
+ * @param {string} modulo
+ */
+async function trocarModulo(modulo) {
+  if (modulo === window.MODULO) return
+  if (typeof PranchetaCad !== 'undefined' && PranchetaCad.ativa()) {
+    const fechou = await PranchetaCad.fechar()
+    if (!fechou) return
+  }
+  try {
+    const r = await fetch('/api/modulo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', Accept: 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+      },
+      body: JSON.stringify({ modulo }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { toast(d.message || 'Não foi possível trocar de módulo.', 'err'); return }
+    if (typeof mostrarCarregandoTela === 'function') { mostrarCarregandoTela(d.titulo || 'Trocando de módulo…') }
+    location.reload()
+  } catch {
+    toast('Sem conexão com o servidor.', 'err')
+  }
 }
 
 /**

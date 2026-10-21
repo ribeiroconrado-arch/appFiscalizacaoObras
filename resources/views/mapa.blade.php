@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#004D1C">
 {{-- O POST de identificação passa pelo grupo `web`, então precisa do token. --}}
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<title>Fiscalização de Obras — Mapa</title>
+<title>{{ \App\Support\Modulo::titulo(\App\Support\Modulo::ativo()) }} — Mapa</title>
 {{-- Dois conjuntos de ícone, um por tema. Os dois endereços vêm daqui, e não
      montados no JavaScript, para não perder o ?v= do @assetv — sem ele, uma
      regeração de ícones sairia do cache do navegador. --}}
@@ -53,16 +53,45 @@
   // Topógrafo, arquiteto ou contribuinte: mapa, consulta e ficha, sem o que é
   // da fiscalização. Ver User::EXTERNOS.
   $externo = auth()->user()->isExterno();
+
+  // O MÓDULO em que o usuário está (Obras ou Posturas): decide o título, as
+  // abas e o que cada lista traz. Ver App\Support\Modulo e config/modulos.php.
+  $modulo      = \App\Support\Modulo::ativo();
+  $abasModulo  = \App\Support\Modulo::abas($modulo);
+  $meusModulos = auth()->user()->modulos();
+  $temAba      = fn (string $aba) => in_array($aba, $abasModulo, true);
 @endphp
+{{-- O módulo vai para o JavaScript só como informação da tela. Quem decide o
+     que cada lista traz é o servidor, pela sessão. --}}
+<script>window.MODULO = @json($modulo)</script>
 <header class="topo">
   {{-- Ícone oficial, sem o fundo de fora do squircle. Troca junto com o tema
        (ver js/tema.js): verde no institucional, âmbar no Tema F. --}}
   <img class="topo-marca" src="@assetv('img/logo-64.png')" alt=""
        data-src-institucional="@assetv('img/logo-64.png')" data-src-f="@assetv('img/logo-64-ambar.png')" data-src-cinza="@assetv('img/logo-64-cinza.png')">
-  <div>
-    <h1>Fiscalização de Obras</h1>
+  <div class="topo-tit">
+    <h1>{{ \App\Support\Modulo::titulo($modulo) }}</h1>
     <div class="sub">{{ number_format($total, 0, ',', '.') }} lotes na base</div>
   </div>
+
+  {{-- SELETOR DE MÓDULO — só para quem tem mais de um (User::modulos). A cor
+       não muda com o módulo: ela é do tema que cada um escolheu, e o módulo
+       já se lê aqui, no título e no sub-cabeçalho. --}}
+  @if (! $externo && count($meusModulos) > 1)
+    <div class="modulo-seg" role="group" aria-label="Módulo">
+      @foreach ($meusModulos as $m)
+        <button type="button" class="{{ $m === $modulo ? 'at' : '' }}" aria-pressed="{{ $m === $modulo ? 'true' : 'false' }}"
+                onclick="trocarModulo('{{ $m }}')" title="{{ \App\Support\Modulo::titulo($m) }}">
+          @if ($m === 'obras')
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>
+          @else
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
+          @endif
+          <span>{{ \App\Support\Modulo::rotulo($m) }}</span>
+        </button>
+      @endforeach
+    </div>
+  @endif
 
   {{-- A navegação vive só no rodapé, em qualquer largura: repeti-la aqui no
        desktop deixava dois menus para a mesma coisa, e ainda era o que
@@ -132,7 +161,9 @@
   </div>
   <div class="subcab-modulo">
     <span class="subcab-ico" id="subcab-ico"></span>
-    <span id="subcab-nome">Painel</span>
+    {{-- Com mais de um módulo, o nome dele vem na frente: "Posturas · Painel"
+         (o mesmo que marcarModuloNoSubcabecalho escreve a cada troca de aba). --}}
+    <span id="subcab-nome">{{ count($meusModulos) > 1 && ! $externo ? \App\Support\Modulo::rotulo($modulo) . ' · ' : '' }}Painel</span>
   </div>
 </div>
 
@@ -943,9 +974,11 @@
        tabelas do banco, que só têm quatro colunas em comum (ver
        DemandaController). --}}
   <div class="topo-lista">
-    <div class="sec-simples">Protocolos e ordens de serviço
+    <div class="sec-simples">{{ $modulo === 'obras' ? 'Protocolos e ordens de serviço' : 'Ordens de serviço' }}
       <span class="cont" id="cont-demandas">0</span></div>
-    @if (auth()->user()->canEdit())
+    {{-- Protocolo é requerimento de imóvel: só em Obras. --}}
+    @if ($modulo !== 'obras')
+    @elseif (auth()->user()->canEdit())
       <button class="btn primary sm" onclick="novoProtocolo()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Novo protocolo
@@ -969,9 +1002,13 @@
   <div class="busca-form lista-form">
     <div class="filtros-lista">
       <div class="linha-filtro">
-        <div class="lista-campo"><label for="dm-tipo">Tipo</label><select data-combo id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
-          <option value="">Protocolos e ordens</option>
-          <option value="protocolo">Só protocolos</option>
+        {{-- Fora de Obras a fila é só de OS: o seletor fica, escondido, para o
+             JavaScript da lista continuar achando o campo. --}}
+        <div class="lista-campo" @if ($modulo !== 'obras') hidden @endif><label for="dm-tipo">Tipo</label><select data-combo id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
+          @if ($modulo === 'obras')
+            <option value="">Protocolos e ordens</option>
+            <option value="protocolo">Só protocolos</option>
+          @endif
           <option value="os">Só ordens de serviço</option>
         </select></div>
         {{-- "Todos" e não "meus": protocolo chega SEM DONO, e abrir a fila
@@ -1022,8 +1059,15 @@
     <button data-sub="legislacao" onclick="subParametros('legislacao')">Legislação</button>
     <button data-sub="upf" onclick="subParametros('upf')">UPF</button>
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
-    <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
-    <button data-sub="cadastro" onclick="subParametros('cadastro')">Cadastro municipal</button>
+    {{-- Bairros do desenho e cadastro municipal são de Obras (lotes); o
+         aparelho de medição e a relação rua↔bairro, de Posturas. --}}
+    @if ($modulo === 'obras')
+      <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
+      <button data-sub="cadastro" onclick="subParametros('cadastro')">Cadastro municipal</button>
+    @else
+      <button data-sub="decibelimetros" onclick="subParametros('decibelimetros')">Decibelímetros</button>
+      <button data-sub="ruas" onclick="subParametros('ruas')">Ruas e bairros</button>
+    @endif
     <button data-sub="geral" onclick="subParametros('geral')">Formulário</button>
   </div>
 
@@ -1122,6 +1166,32 @@
     <div class="par-fixo-lista" id="lista-bairros"></div>
   </div>
 
+  {{-- DECIBELÍMETROS (Posturas) — o aparelho citado no auto da Lei 723. --}}
+  <div class="par-painel par-fixo" id="par-decibelimetros">
+    <div class="par-fixo-topo">
+      <div class="sec-simples">Decibelímetros <span class="cont" id="cont-decibelimetros">0</span></div>
+      <div class="par-busca">
+        <input type="search" id="filtro-decibelimetros" placeholder="Procurar por modelo, série ou fabricante" oninput="renderDecibelimetros()">
+        <button class="btn out-verde sm" onclick="parNovo('decibelimetros')">+ Novo decibelímetro</button>
+      </div>
+    </div>
+    <div class="par-fixo-lista" id="lista-decibelimetros"></div>
+  </div>
+
+  {{-- RUAS E BAIRROS (Posturas) — escolhida a rua, o formulário sugere os
+       bairros dela. Ver Logradouro e EnderecoController. --}}
+  <div class="par-painel par-fixo" id="par-ruas">
+    <div class="par-fixo-topo">
+      <div class="sec-simples">Ruas e bairros <span class="cont" id="cont-ruas">0</span></div>
+      <div class="par-busca">
+        <input type="search" id="filtro-ruas" placeholder="Procurar por rua ou bairro" oninput="renderRuas()">
+        <button class="btn out-verde sm" onclick="parNovo('ruas')">+ Nova rua</button>
+      </div>
+    </div>
+    <div class="par-fixo-lista" id="lista-ruas"></div>
+    <datalist id="bairros-endereco"></datalist>
+  </div>
+
   {{-- ÓRGÃO --}}
   {{-- CADASTRO MUNICIPAL — a planilha mensal da prefeitura. Grava só o que
        mudou, marca o que sumiu e apaga o arquivo ao fim. Montado por
@@ -1205,13 +1275,17 @@
   {{-- Busca antes do Mapa de propósito: a camada de satélite é paga por
        requisição, e conferir a situação de um lote — que é a maior parte das
        consultas — não precisa de imagem aérea. O caminho mais barato vem
-       primeiro. --}}
+       primeiro.
+       As abas de cada módulo estão em config/modulos.php: a Consulta é do
+       cadastro de lotes, e por isso só existe em Obras. --}}
+  @if ($temAba('busca'))
   <button class="aba" data-destino="busca" title="Consulta" onclick="irPara('busca')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round">
       <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
     <span class="aba-txt">Consulta</span>
   </button>
+  @endif
   <button class="aba" data-destino="mapa" title="Mapa" onclick="irPara('mapa')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M9 20l-6 3V6l6-3 6 3 6-3v17l-6 3z"/><path d="M9 3v17M15 6v17"/></svg>
@@ -1227,11 +1301,14 @@
       <path d="M14 2v6h6"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>
     <span class="aba-txt">Documentos</span>
   </button>
-  <button class="aba" data-destino="protocolos" title="Protocolo e OS" onclick="irPara('protocolos')">
+  {{-- Em Posturas a mesma tela mostra só as ordens de serviço: protocolo é
+       requerimento de imóvel, de Obras (DemandaController). --}}
+  @php $rotuloFila = $modulo === 'obras' ? 'Protocolo & OS' : 'Ordens de serviço'; @endphp
+  <button class="aba" data-destino="protocolos" title="{{ $rotuloFila }}" onclick="irPara('protocolos')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
       <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
       <rect x="9" y="2" width="6" height="4" rx="1"/><path d="m8 13 3 3 5-6"/></svg>
-    <span class="aba-txt">Protocolo &amp; OS</span>
+    <span class="aba-txt">{{ $rotuloFila }}</span>
   </button>
   @endunless
 </nav>
@@ -3184,14 +3261,16 @@
     <div class="field">
       <label for="doc-f-tipo">Tipo de peça</label>
       <select data-combo id="doc-f-tipo">
-        <option value="">Tudo — peças e vistorias</option>
-        @foreach (\App\Models\Documento::TIPOS as $valor => $t)
+        <option value="">{{ $modulo === 'obras' ? 'Tudo — peças e vistorias' : 'Todas as peças' }}</option>
+        @foreach (\App\Models\Documento::tiposDoModulo($modulo) as $valor => $t)
           <option value="{{ $valor }}">{{ $t[0] }}</option>
         @endforeach
         {{-- Não é um tipo de documento: é o recorte que mostra só os atos de
              campo. Fica no mesmo seletor porque, para quem usa, os dois estão
-             na mesma lista e o filtro é um só. --}}
-        <option value="vistoria">Vistorias</option>
+             na mesma lista e o filtro é um só. Vistoria é de Obras. --}}
+        @if ($modulo === 'obras')
+          <option value="vistoria">Vistorias</option>
+        @endif
       </select>
     </div>
 
@@ -3444,6 +3523,17 @@
     <label class="lembrar">
       <input type="checkbox" id="us-ativo" checked> Usuário ativo
     </label>
+    {{-- Quais fiscalizações a pessoa usa. Com as duas, ela troca pelo seletor
+         do cabeçalho; administrador vê todas de qualquer jeito. Ver
+         User::modulos e config/modulos.php. --}}
+    <div class="us-modulos" id="us-modulos">
+      <span class="lembrar-obs">Módulos:</span>
+      @foreach (\App\Support\Modulo::todos() as $mod)
+        <label class="lembrar">
+          <input type="checkbox" class="us-modulo" value="{{ $mod }}"> {{ \App\Support\Modulo::rotulo($mod) }}
+        </label>
+      @endforeach
+    </div>
     {{-- Permissão à parte do perfil: corrigir a base do mapa muda a geometria
          que fundamenta o cálculo de área, e área é a base da multa. Quem
          administra o sistema não é, por isso, quem responde pelo cadastro. --}}

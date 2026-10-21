@@ -68,11 +68,17 @@ async function carregarParametros() {
     parState.feriados = d.feriados
     parState.bairros = d.bairros
     parState.geral = d.geral
+    // Posturas: aparelhos de medição e a relação rua↔bairro.
+    parState.decibelimetros = d.decibelimetros || []
+    parState.ruas = d.ruas || []
+    parState.bairrosEndereco = d.bairros_endereco || []
     parState.carregado = true
     renderUsuarios()
     renderUpfs()
     renderFeriados()
     renderBairros()
+    renderDecibelimetros()
+    renderRuas()
     renderGeral()
     renderBrasao()
     await recarregarLegislacao()
@@ -85,7 +91,7 @@ async function carregarParametros() {
 function renderTudoPar() {
   if (!parState.carregado) return
   renderUsuarios(); renderLeis(); renderUpfs(); renderFeriados()
-  renderBairros(); renderGeral()
+  renderBairros(); renderDecibelimetros(); renderRuas(); renderGeral()
 }
 
 // ── EDIÇÃO NA LINHA (o motor comum de todas as abas) ─────────
@@ -95,6 +101,7 @@ const PAR_RENDER = {
   leis: () => renderLeis(), artigos: () => renderLeis(), textos: () => renderLeis(),
   upf: () => renderUpfs(), anos: () => renderFeriados(), feriados: () => renderFeriados(),
   bairros: () => renderBairros(), geral: () => renderGeral(),
+  decibelimetros: () => renderDecibelimetros(), ruas: () => renderRuas(),
 }
 
 /** Abre a edição de um item. @param {string} lista @param {number|string} id */
@@ -228,7 +235,7 @@ async function parGravar(url, corpo, aoTerminar) {
 /** Excluir, com a confirmação de cada lista. */
 function parExcluir(lista, id) {
   ({ leis: excluirLei, artigos: excluirArtigo, upf: excluirUpf, feriados: excluirFeriado,
-     bairros: excluirBairro })[lista](id)
+     bairros: excluirBairro, decibelimetros: excluirDecibelimetro, ruas: excluirRua })[lista](id)
 }
 
 // Enter salva e Esc cancela o cartão aberto. Em textarea o Enter é quebra de linha.
@@ -295,10 +302,22 @@ function novoUsuario() {
   // do município, e permissão desse porte se concede uma a uma, nunca por
   // padrão de formulário.
   document.getElementById('us-curador').checked = false
+  // Usuário novo nasce em Obras; Posturas se concede marcando.
+  marcarModulosDoUsuario(['obras'])
   document.getElementById('us-senha').value = ''
   document.getElementById('us-senha2').value = ''
   ajustarPerfilDoCargo()
   openModal('m-usuario')
+}
+
+/** Marca as caixas de módulo da janela do usuário. @param {string[]} modulos */
+function marcarModulosDoUsuario(modulos) {
+  document.querySelectorAll('#m-usuario .us-modulo').forEach(c => { c.checked = modulos.includes(c.value) })
+}
+
+/** @returns {string[]} os módulos marcados na janela do usuário */
+function modulosMarcadosDoUsuario() {
+  return [...document.querySelectorAll('#m-usuario .us-modulo:checked')].map(c => c.value)
 }
 
 /**
@@ -353,6 +372,7 @@ function editarUsuario(id) {
   document.getElementById('us-perfil').value = u.perfil
   document.getElementById('us-ativo').checked = !!u.ativo
   document.getElementById('us-curador').checked = !!u.curador_cadastral
+  marcarModulosDoUsuario(u.modulos || ['obras'])
   document.getElementById('us-senha').value = ''
   document.getElementById('us-senha2').value = ''
   ajustarPerfilDoCargo()
@@ -363,6 +383,8 @@ async function salvarUsuario() {
   const senha = document.getElementById('us-senha').value
   const senha2 = document.getElementById('us-senha2').value
   if (senha && senha !== senha2) { exigirCampo('us-senha2', 'As senhas não conferem.'); return }
+  const modulos = modulosMarcadosDoUsuario()
+  if (!modulos.length) { toast('Marque ao menos um módulo.', 'err'); return }
 
   await postParametro('/api/parametros/usuarios', {
     id: document.getElementById('us-id').value || null,
@@ -373,6 +395,7 @@ async function salvarUsuario() {
     perfil: document.getElementById('us-perfil').value,
     ativo: document.getElementById('us-ativo').checked,
     curador_cadastral: document.getElementById('us-curador').checked,
+    modulos,
     senha: senha || null,
     senha_confirmation: senha2 || null,
   }, 'm-usuario', carregarParametros)
@@ -440,7 +463,18 @@ function formLei(l, ver = false) {
       ${parRot('Prazo de defesa (dias úteis)', parInp('prazo_defesa_dias', l.prazo_defesa_dias ?? 5, 'type="number" min="1" max="120"'))}
       ${parRot('Prazo de cumprimento sugerido (dias corridos)', parInp('prazo_cumprimento_dias', l.prazo_cumprimento_dias ?? 10, 'type="number" min="0" max="365"'))}
       ${parChk('ativa', l.ativa ?? true, 'Lei ativa')}
-    </div>`, 'salvarLei()', ver ? { lista: 'leis', id: l.id, semFechar: true } : null)
+    </div>${(l.modulo || window.MODULO) === 'posturas' ? `
+    <div class="cad-row">
+      ${parRot('Formulário da peça', parSel('formulario_tipo', l.formulario_tipo || 'padrao', [
+        ['padrao', 'Padrão'], ['lei_723_2002', 'Lei 723/2002 — com medição de ruído'],
+      ]), 'max-width:320px')}
+      ${parChk('aplica_apreensao', l.aplica_apreensao, 'Permite Auto de Apreensão')}
+      ${parChk('aplica_retencao', l.aplica_retencao, 'Permite retenção de veículo')}
+      ${parChk('aplica_reincidencia', l.aplica_reincidencia, 'Prevê reincidência (dobra a UPF)')}
+    </div>${l.faixa_db?.length ? `
+    <p class="cad-dica">Faixas de multa: ${l.faixa_db.map(f => `${f.ate_db == null ? 'acima' : 'até +' + f.ate_db + ' dB'} = ${f.upf} UPF`).join(' · ')}
+      · Zonas: ${(l.areas_db || []).length} cadastrada(s). Vieram do AppPOSTURAS.</p>` : ''}` : ''}`,
+  'salvarLei()', ver ? { lista: 'leis', id: l.id, semFechar: true } : null)
 }
 
 /** O corpo inteiro da lei vai junto: o servidor grava o que receber. */
@@ -451,6 +485,12 @@ function corpoDaLei(l) {
     prazo_defesa_dias: l.prazo_defesa_dias, prazo_cumprimento_dias: l.prazo_cumprimento_dias,
     ciencia_notificacao: l.ciencia_notificacao || null, ciencia_auto: l.ciencia_auto || null,
     ativa: !!l.ativa,
+    // Posturas: só vai quando a lei é de lá — senão o servidor mantém o gravado.
+    ...((l.modulo || window.MODULO) === 'posturas' ? {
+      formulario_tipo: l.formulario_tipo || 'padrao',
+      aplica_apreensao: !!l.aplica_apreensao, aplica_retencao: !!l.aplica_retencao,
+      aplica_reincidencia: !!l.aplica_reincidencia,
+    } : {}),
   }
 }
 
@@ -466,6 +506,11 @@ async function salvarLei() {
     prazo_defesa_dias: parCampo('prazo_defesa_dias'),
     prazo_cumprimento_dias: parCampo('prazo_cumprimento_dias'),
     ativa: parCampo('ativa'),
+    ...(document.querySelector('#m-parametros .par-linha.editando [name="formulario_tipo"]') ? {
+      formulario_tipo: parCampo('formulario_tipo'),
+      aplica_apreensao: parCampo('aplica_apreensao'), aplica_retencao: parCampo('aplica_retencao'),
+      aplica_reincidencia: parCampo('aplica_reincidencia'),
+    } : {}),
   }), recarregarLegislacao)
   // Lei recém-criada: a janela continua aberta nela, agora com as abas de
   // textos e de artigos liberadas — é o passo seguinte de quem cadastra.
@@ -608,6 +653,8 @@ function formArtigo(a) {
           ['fixa', 'Valor fixo'], ['por_m2', 'Por m²'], ['faixas', 'Por faixa de área'],
           ['intervalo', 'Entre mínimo e máximo (a critério do fiscal)'],
           ['multiplo_alvara', 'Múltiplo do valor do alvará'], ['sem_multa', 'Sem multa (só notificação/embargo)'],
+          // Posturas: a UPF sai da medição de ruído, pelas faixas da lei.
+          ...(leiAbertaDePosturas() ? [['diferenca_db', 'Pela diferença de decibéis (Lei 723/2002)']] : []),
         ], 'onchange="trocarBaseMulta(this)"'), 'flex:2')}
         <span class="art-bloco-qual-area" style="display:${porArea ? 'contents' : 'none'}">
           ${parRot('Sobre qual área', parSel('multa_area', a.multa_area || 'construida', [
@@ -641,7 +688,7 @@ function formArtigo(a) {
       </div>`)
     + '<div class="ed-grupos-lado">' + grupo('Documentos em que se aplica', `
       <div class="cad-row art-docs">
-        ${ARTIGO_DOCUMENTOS.map(([tipo, rotulo]) => parChk('doc_' + tipo, docs.includes(tipo), rotulo)).join('')}
+        ${artigoDocumentos().map(([tipo, rotulo]) => parChk('doc_' + tipo, docs.includes(tipo), rotulo)).join('')}
       </div>
       <div class="cad-row">
         ${parRot('Prazo sugerido na notificação (dias)', parInp('prazo_notificacao_dias', a.prazo_notificacao_dias, 'type="number" min="1" max="365" placeholder="o da lei"'), 'max-width:260px')}
@@ -701,14 +748,30 @@ function termosDoCartao() {
   return [...caixa.querySelectorAll('.art-termo')].map(el => el.dataset.termo)
 }
 
+/** O nome de cada peça, para as caixas "Documentos em que se aplica". */
+const ROTULO_PECA = {
+  notificacao: 'Notificação', notificacao_embargo: 'Notificação de Embargo',
+  auto_embargo: 'Auto de Embargo', auto_infracao: 'Auto de Infração', auto_apreensao: 'Auto de Apreensão',
+}
+
 /**
- * As peças em que um artigo pode entrar (Artigo::DOCUMENTOS). Marcadas uma a
- * uma: é isso que decide quais artigos cada documento oferece.
+ * As peças em que um artigo pode entrar — as do MÓDULO da lei aberta
+ * (Artigo::documentosDoModulo, vindo em `documentos_disponiveis`). Marcadas uma
+ * a uma: é isso que decide quais artigos cada documento oferece.
+ *
+ * @returns {Array<[string, string]>}
  */
-const ARTIGO_DOCUMENTOS = [
-  ['notificacao', 'Notificação'], ['notificacao_embargo', 'Notificação de Embargo'],
-  ['auto_embargo', 'Auto de Embargo'], ['auto_infracao', 'Auto de Infração'],
-]
+function artigoDocumentos() {
+  const lei = parState.leis.find(l => l.id === parState.leiAberta)
+  const tipos = lei?.documentos_disponiveis || ['notificacao', 'notificacao_embargo', 'auto_embargo', 'auto_infracao']
+  return tipos.map(t => [t, ROTULO_PECA[t] || t])
+}
+
+/** A lei aberta é de Posturas? (ou, nova, está sendo criada em Posturas) */
+function leiAbertaDePosturas() {
+  const lei = parState.leis.find(l => l.id === parState.leiAberta)
+  return (lei?.modulo || window.MODULO) === 'posturas'
+}
 
 /** Mostra só os campos de valor da base escolhida. @param {HTMLSelectElement} sel */
 function trocarBaseMulta(sel) {
@@ -767,7 +830,7 @@ async function salvarArtigo() {
   if (base === 'faixas' && faixasDoCartao().slice(0, -1).some(fx => !fx.ate_m2)) {
     toast('Preencha o limite (m²) de cada faixa', 'err'); return
   }
-  if (!ARTIGO_DOCUMENTOS.some(([tipo]) => parCampo('doc_' + tipo))) {
+  if (!artigoDocumentos().some(([tipo]) => parCampo('doc_' + tipo))) {
     toast('Marque ao menos um documento em que o artigo se aplica', 'err'); return
   }
   await parGravar('/api/legislacao/artigos', {
@@ -786,7 +849,7 @@ async function salvarArtigo() {
     multa_mult_min: base === 'multiplo_alvara' ? parCampo('multa_mult_min') || null : null,
     multa_mult_max: base === 'multiplo_alvara' ? parCampo('multa_mult_max') || null : null,
     ativo: parCampo('ativo'),
-    documentos: ARTIGO_DOCUMENTOS.map(([tipo]) => tipo).filter(tipo => parCampo('doc_' + tipo)),
+    documentos: artigoDocumentos().map(([tipo]) => tipo).filter(tipo => parCampo('doc_' + tipo)),
     prazo_notificacao_dias: parCampo('prazo_notificacao_dias') || null,
     multa_dobra_reincidencia: base !== 'sem_multa' && !!parCampo('multa_dobra_reincidencia'),
     termos: termosDoCartao(),
@@ -1232,6 +1295,164 @@ function excluirBairro(id) {
       : 'O bairro sai da lista de escolha no cadastro de lote. Excluir?',
     perigo: true,
     onConfirm: () => excluirParametro('/api/parametros/bairros/' + id),
+  })
+}
+
+// ── DECIBELÍMETROS (Posturas) ────────────────────────────────
+//
+// O aparelho citado no auto da Lei 723. A calibração vencida aparece em
+// vermelho: medição com aparelho vencido não se sustenta na defesa.
+
+function renderDecibelimetros() {
+  const alvo = document.getElementById('lista-decibelimetros')
+  if (!alvo) return
+  const termo = parBusca('filtro-decibelimetros')
+  const todos = parState.decibelimetros || []
+  const lista = todos.filter(d => !termo || [d.modelo, d.serie, d.fabricante, d.identificacao]
+    .some(v => (v || '').toLowerCase().includes(termo)))
+  parContador('cont-decibelimetros', lista.length, todos.length)
+
+  alvo.innerHTML = (parEditando('decibelimetros', 'novo') ? formDecibelimetro({}) : '')
+    + (lista.map(d => parEditando('decibelimetros', d.id) ? formDecibelimetro(d) : `
+      <div class="par-linha${d.ativo ? '' : ' par-linha-inativa'}">
+        ${parPrincipal('decibelimetros', d.id)}
+          <b>${esc(d.rotulo)}</b>
+          <span>${d.calibrado_ate
+            ? (d.vencido ? '<b style="color:var(--red)">Calibração vencida em ' + esc(d.calibrado_ate) + '</b>' : 'Calibrado até ' + esc(d.calibrado_ate))
+            : 'Sem data de calibração'}${d.certificado_calibracao ? ' · certificado ' + esc(d.certificado_calibracao) : ''}${d.ativo ? '' : ' · desativado'}</span>
+        </div>
+        ${parAcoes('decibelimetros', d.id)}
+      </div>`).join('')
+    || '<div class="lista-vazia">Nenhum decibelímetro cadastrado.</div>')
+}
+
+/** @param {Object} d decibelímetro ({} para novo) */
+function formDecibelimetro(d) {
+  return parFormLinha(d.id ? 'Editando decibelímetro' : 'Novo decibelímetro', `
+    <div class="cad-row">
+      ${parRot('Fabricante', parInp('fabricante', d.fabricante, 'maxlength="80" placeholder="Instrutherm"'))}
+      ${parRot('Modelo', parInp('modelo', d.modelo, 'maxlength="80" placeholder="DEC-460"'))}
+      ${parRot('Nº de série', parInp('serie', d.serie, 'class="mono" maxlength="80"'))}
+      ${parRot('Identificação', parInp('identificacao', d.identificacao, 'maxlength="80" placeholder="patrimônio"'))}
+    </div>
+    <div class="cad-row">
+      ${parRot('Certificado de calibração', parInp('certificado_calibracao', d.certificado_calibracao, 'maxlength="120"'))}
+      ${parRot('Empresa calibradora', parInp('empresa_calibradora', d.empresa_calibradora, 'maxlength="160"'), 'flex:2')}
+    </div>
+    <div class="cad-row">
+      ${parRot('Data da calibração', parInp('data_calibracao', d.data_calibracao, 'type="date"'), 'max-width:190px')}
+      ${parRot('Validade (meses)', parInp('validade_calibracao_meses', d.validade_calibracao_meses ?? 12, 'type="number" min="1" max="120"'), 'max-width:150px')}
+      ${parChk('ativo', d.ativo ?? true, 'Em uso')}
+    </div>${d.certificado_pdf_url ? `
+    <p class="cad-dica">O PDF do certificado continua no AppPOSTURAS:
+      <a href="${esc(d.certificado_pdf_url)}" target="_blank" rel="noopener">abrir</a>.</p>` : ''}`, 'salvarDecibelimetro()')
+}
+
+async function salvarDecibelimetro() {
+  if (!parCampo('modelo')) { toast('Informe o modelo do aparelho', 'err'); return }
+  await parGravar('/api/parametros/decibelimetros', {
+    id: parState.ed.id === 'novo' ? null : parState.ed.id,
+    fabricante: parCampo('fabricante') || null, modelo: parCampo('modelo'),
+    serie: parCampo('serie') || null, identificacao: parCampo('identificacao') || null,
+    certificado_calibracao: parCampo('certificado_calibracao') || null,
+    empresa_calibradora: parCampo('empresa_calibradora') || null,
+    data_calibracao: parCampo('data_calibracao') || null,
+    validade_calibracao_meses: parCampo('validade_calibracao_meses') || null,
+    ativo: parCampo('ativo'),
+  }, carregarParametros)
+}
+
+/** @param {number} id */
+function excluirDecibelimetro(id) {
+  confirmarAcao({
+    titulo: 'Excluir decibelímetro',
+    mensagem: 'Para só tirar de uso, desmarque "Em uso". Excluir mesmo assim?',
+    perigo: true,
+    onConfirm: () => excluirParametro('/api/parametros/decibelimetros/' + id),
+  })
+}
+
+// ── RUAS E BAIRROS (Posturas) ────────────────────────────────
+//
+// A relação rua↔bairro do AppPOSTURAS: escolhida a rua no formulário, os
+// bairros dela aparecem primeiro; com um só, ele é preenchido sozinho.
+
+function renderRuas() {
+  const alvo = document.getElementById('lista-ruas')
+  if (!alvo) return
+  const lista0 = document.getElementById('bairros-endereco')
+  if (lista0) lista0.innerHTML = (parState.bairrosEndereco || []).map(b => `<option value="${esc(b)}">`).join('')
+
+  const termo = parBusca('filtro-ruas')
+  const todas = parState.ruas || []
+  const lista = todas.filter(r => !termo || r.nome.toLowerCase().includes(termo)
+    || r.bairros.some(b => b.toLowerCase().includes(termo)))
+  parContador('cont-ruas', lista.length, todas.length)
+
+  // Só as primeiras 300 sem busca: a lista de ruas passa de mil.
+  const mostradas = termo ? lista : lista.slice(0, 300)
+  alvo.innerHTML = (parEditando('ruas', 'novo') ? formRua({ bairros: [] }) : '')
+    + (mostradas.map(r => parEditando('ruas', r.id) ? formRua(r) : `
+      <div class="par-linha">
+        ${parPrincipal('ruas', r.id)}
+          <b>${esc(r.nome)}</b>
+          <span>${r.bairros.length ? r.bairros.map(esc).join(' · ') : 'Sem bairro ligado'}</span>
+        </div>
+        ${parAcoes('ruas', r.id)}
+      </div>`).join('')
+    + (mostradas.length < lista.length ? `<div class="lista-vazia">Mostrando ${mostradas.length} de ${lista.length} — use a busca.</div>` : '')
+    || '<div class="lista-vazia">Nenhuma rua encontrada.</div>')
+}
+
+/** @param {Object} r rua ({bairros: []} para nova) */
+function formRua(r) {
+  return parFormLinha(r.id ? 'Editando rua' : 'Nova rua', `
+    <div class="cad-row">${parRot('Rua', parInp('nome', r.nome, 'maxlength="180" placeholder="RUA MARINGÁ"'), 'flex:2')}</div>
+    <div class="ed-campo"><span>Bairros por onde ela passa</span>
+      <div class="art-termos" id="rua-bairros" onclick="this.querySelector('input')?.focus()">
+        ${r.bairros.map(etiquetaDeBairroDaRua).join('')}
+        <input type="text" class="art-termo-novo" list="bairros-endereco" maxlength="160" autocomplete="off"
+               placeholder="digite o bairro (Enter adiciona)" onkeydown="teclaBairroDaRua(event)">
+      </div>
+      <small class="art-termos-dica">Bairro que ainda não existe entra na lista ao gravar.</small>
+    </div>`, 'salvarRua()')
+}
+
+const etiquetaDeBairroDaRua = b =>
+  `<span class="art-termo" data-bairro="${esc(b)}">${esc(b)}<button type="button" onclick="this.parentNode.remove()" title="Tirar">×</button></span>`
+
+/** Enter (ou vírgula) acrescenta o bairro digitado. @param {KeyboardEvent} e */
+function teclaBairroDaRua(e) {
+  if (e.key !== 'Enter' && e.key !== ',') return
+  e.preventDefault()
+  e.stopPropagation()
+  const v = e.target.value.trim().toUpperCase()
+  if (!v) return
+  const ja = [...document.querySelectorAll('#rua-bairros .art-termo')].some(t => t.dataset.bairro === v)
+  if (!ja) e.target.insertAdjacentHTML('beforebegin', etiquetaDeBairroDaRua(v))
+  e.target.value = ''
+}
+
+async function salvarRua() {
+  const nome = parCampo('nome')
+  if (!nome) { toast('Informe o nome da rua', 'err'); return }
+  // O que ficou digitado e não virou etiqueta também vale.
+  const pendente = document.querySelector('#rua-bairros .art-termo-novo')?.value.trim().toUpperCase()
+  const bairros = [...document.querySelectorAll('#rua-bairros .art-termo')].map(t => t.dataset.bairro)
+  if (pendente && !bairros.includes(pendente)) bairros.push(pendente)
+  await parGravar('/api/parametros/ruas', {
+    id: parState.ed.id === 'novo' ? null : parState.ed.id, nome, bairros,
+  }, carregarParametros)
+}
+
+/** @param {number} id */
+function excluirRua(id) {
+  const r = (parState.ruas || []).find(x => x.id === id)
+  confirmarAcao({
+    titulo: 'Excluir rua',
+    mensagem: `A rua ${r?.nome || ''} sai da lista de sugestões, com as ligações aos bairros. As denúncias já registradas não mudam. Excluir?`,
+    perigo: true,
+    onConfirm: () => excluirParametro('/api/parametros/ruas/' + id),
   })
 }
 

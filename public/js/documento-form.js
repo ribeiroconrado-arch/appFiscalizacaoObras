@@ -76,6 +76,8 @@ async function novoDocumento(ev) {
   const daFicha = !!botao?.closest?.('#m-ficha')
 
   const o = await carregarOpcoes()
+  // As peças são as do módulo ativo; o primeiro auto da lista abre o traço.
+  const primeiroAuto = o.tipos.find(t => t.valor.startsWith('auto'))?.valor
 
   abrirMenuNovo(botao, o.tipos.map(t => ({
     rotulo: t.rotulo,
@@ -83,7 +85,7 @@ async function novoDocumento(ev) {
     icone: ICO_TIPO_DOC[t.valor] || ICO_TIPO_DOC.padrao,
     // Traço antes do primeiro auto: acima ficam os atos que AVISAM, abaixo os
     // que SANCIONAM. Ver o comentário em OBS_TIPO_DOC.
-    separar: t.valor === 'auto_embargo',
+    separar: t.valor === primeiroAuto,
     // "Vistoria" nao e uma peca a redigir: e o ATO de campo, com checklist,
     // area aferida e fotos — e e dele que as outras quatro nascem. Mandar este
     // item para o formulario de documento, como os demais, deixou a tela de
@@ -113,6 +115,7 @@ const OBS_TIPO_DOC = {
   notificacao_embargo: 'Avisa que a obra deve parar.',
   auto_embargo: 'Para a obra de imediato.',
   auto_infracao: 'Aplica a multa, com memória de cálculo.',
+  auto_apreensao: 'Apreende bens ou retém o veículo.',
 }
 
 /** Ícone de cada peça, no menu de criação. */
@@ -130,6 +133,8 @@ const ICO_TIPO_DOC = {
     <path d="M12 9v4M12 17h.01"/></svg>`,
   auto_embargo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
     stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>`,
+  auto_apreensao: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>`,
   padrao: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
     stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
     <path d="M14 2v6h6"/></svg>`,

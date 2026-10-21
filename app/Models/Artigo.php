@@ -43,6 +43,9 @@ class Artigo extends Model
         'faixas'          => 'Por faixa de área',
         'intervalo'       => 'Entre mínimo e máximo, a critério do fiscal',
         'multiplo_alvara' => 'Múltiplo do valor do alvará',
+        // Posturas: a UPF sai da diferença entre o ruído medido e o limite da
+        // zona, pelas faixas da lei (Legislacao::faixa_db) — ver MultaPorRuido.
+        'diferenca_db'    => 'Pela diferença de decibéis (Lei 723/2002)',
     ];
 
     /**
@@ -67,6 +70,18 @@ class Artigo extends Model
      * Embargo, o art. 121-B (descumprir o embargo) é do Auto de Infração.
      */
     public const DOCUMENTOS = ['notificacao', 'notificacao_embargo', 'auto_embargo', 'auto_infracao'];
+
+    /**
+     * As peças que um artigo de lei DESTE módulo pode fundamentar: as do módulo
+     * (config/modulos.php), menos a vistoria, que não cita artigo para sancionar.
+     * Para Obras é exatamente DOCUMENTOS.
+     *
+     * @return list<string>
+     */
+    public static function documentosDoModulo(?string $modulo): array
+    {
+        return array_values(array_diff(\App\Support\Modulo::tipos($modulo ?? 'obras'), ['vistoria']));
+    }
 
     /**
      * Este artigo pode fundamentar uma peça deste tipo?
@@ -158,6 +173,14 @@ class Artigo extends Model
             $valor = (float) ($this->multa_upf ?? 0);
 
             return ['valor' => $valor, 'memoria' => $n($valor) . ' UPF (valor fixo do artigo)'] + $r;
+        }
+
+        // PELA DIFERENÇA DE DECIBÉIS: a conta precisa da medição (zona, hora e
+        // dB aferido), que é da peça — o bloco de ruído do formulário (Fase 4)
+        // a faz com MultaPorRuido. Sem ela, a multa fica pendente.
+        if ($this->base_multa === 'diferenca_db') {
+            return ['memoria' => 'Multa pela diferença de decibéis — depende da medição de ruído.',
+                'pendencia' => 'a medição de ruído do ' . $this->numero] + $r;
         }
 
         // A CRITÉRIO DO FISCAL, dentro do intervalo do artigo (art. 35, §5º:

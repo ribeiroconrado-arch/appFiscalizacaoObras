@@ -57,6 +57,12 @@ class DemandaController extends Controller
 
         $linhas = collect();
 
+        // Protocolo é requerimento de imóvel — coisa de Obras. Nos outros
+        // módulos a fila é só de ordens de serviço (as do módulo, em ordens()).
+        if (\App\Support\Modulo::ativo($u) !== 'obras') {
+            $tipo = 'os';
+        }
+
         if ($tipo !== 'os') {
             $linhas = $linhas->concat($this->protocolos($u->id, $escopo, $texto, $sit));
         }
@@ -160,7 +166,7 @@ class DemandaController extends Controller
             return collect();
         }
 
-        $q = OrdemServico::query()
+        $q = OrdemServico::query()->doModulo()
             ->with(['fiscais:id,name', 'emitente:id,name', 'lote:id,bairro,quadra,numero_lote']);
 
         if ($situacao && array_key_exists($situacao, OrdemServico::SITUACOES)) {

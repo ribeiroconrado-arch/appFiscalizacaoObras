@@ -118,7 +118,8 @@ class DocumentoController extends Controller
             'busca'  => ['nullable', 'string', 'max:80'],
         ]);
 
-        $q = Documento::query()
+        // A lista é a do módulo em que o usuário está (seletor do cabeçalho).
+        $q = Documento::query()->doModulo()
             ->with(['lote:id,bairro,quadra,numero_lote', 'agente:id,name', 'legislacao:id,numero,nome'])
             ->withCount('artigos')
             ->latest('created_at');
@@ -218,6 +219,8 @@ class DocumentoController extends Controller
     {
         $tipo = $d['tipo'] ?? '';
         if ($tipo !== '' && $tipo !== 'vistoria') { return collect(); }
+        // Vistoria de lote é ato de Obras; Posturas não as lista.
+        if (\App\Support\Modulo::ativo() !== 'obras') { return collect(); }
 
         $q = Vistoria::query()
             ->with(['lote:id,bairro,quadra,numero_lote', 'fiscal:id,name'])
@@ -263,8 +266,12 @@ class DocumentoController extends Controller
     /** GET /api/documentos/opcoes — dados para montar o formulário. */
     public function opcoes(): JsonResponse
     {
+        // As peças e as leis são as do módulo ativo (config/modulos.php).
+        $modulo = \App\Support\Modulo::ativo();
+
         return response()->json([
-            'tipos' => collect(Documento::TIPOS)->map(fn ($v, $k) => [
+            'modulo' => $modulo,
+            'tipos' => collect(Documento::tiposDoModulo($modulo))->map(fn ($v, $k) => [
                 'valor'          => $k,
                 'rotulo'         => $v[0],
                 'sigla'          => $v[1],
@@ -275,7 +282,7 @@ class DocumentoController extends Controller
                     default                                        => null,
                 },
             ])->values(),
-            'leis' => Legislacao::ativas()->with(['artigos' => fn ($q) => $q->ativos()])->get()
+            'leis' => Legislacao::ativas()->doModulo($modulo)->with(['artigos' => fn ($q) => $q->ativos()])->get()
                 ->map(fn (Legislacao $l) => [
                     'id'                 => $l->id,
                     'rotulo'             => $l->rotulo(),
@@ -381,10 +388,14 @@ class DocumentoController extends Controller
             ], 403);
         }
 
+        // A peça nasce no módulo em que o usuário está, e só pode ser de um
+        // tipo que esse módulo emite (config/modulos.php).
+        $modulo = \App\Support\Modulo::ativo($request->user());
+
         $d = $request->validate([
-            'tipo'           => ['required', Rule::in(array_keys(Documento::TIPOS))],
+            'tipo'           => ['required', Rule::in(array_keys(Documento::tiposDoModulo($modulo)))],
             'vistoria_id'    => ['nullable', 'exists:vistorias,id'],
-            'legislacao_id'  => ['nullable', 'exists:legislacoes,id'],
+            'legislacao_id'  => ['nullable', Rule::exists('legislacoes', 'id')->where('modulo', $modulo)],
             'data_fato'      => ['nullable', 'date_format:Y-m-d\TH:i'],
             'prazo_dias'     => ['nullable', 'integer', 'min:0', 'max:365'],
             'autuado_nome'   => ['nullable', 'string', 'max:160'],
@@ -432,6 +443,7 @@ class DocumentoController extends Controller
         }
 
         $doc = Documento::create([
+            'modulo'        => $modulo,
             'tipo'          => $d['tipo'],
             'origem_id'     => $d['origem_id'] ?? null,
             ...$motivo,
@@ -572,7 +584,7 @@ class DocumentoController extends Controller
     /** GET /api/documentos/ordens-de-servico — as ordens que podem ter originado uma notificação. */
     public function ordensParaOrigem(Request $request): JsonResponse
     {
-        return response()->json(['ordens' => \App\Models\OrdemServico::orderByDesc('ano')->orderByDesc('sequencia')
+        return response()->json(['ordens' => \App\Models\OrdemServico::doModulo()->orderByDesc('ano')->orderByDesc('sequencia')
             ->limit(200)->get(['id', 'numero', 'objeto'])
             ->map(fn ($o) => ['id' => $o->id, 'rotulo' => $o->numeroFormatado() . ($o->objeto ? ' — ' . \Illuminate\Support\Str::limit($o->objeto, 60) : '')])]);
     }
@@ -594,7 +606,7 @@ class DocumentoController extends Controller
             return response()->json(['origens' => []]);
         }
 
-        $pecas = Documento::where('lote_id', $d['lote_id'])->whereIn('tipo', $tipos)
+        $pecas = Documento::doModulo()->where('lote_id', $d['lote_id'])->whereIn('tipo', $tipos)
             ->whereNotIn('status', Documento::SEM_VALOR_DE_ATO)
             ->when($d['exceto'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
             ->orderByDesc('data_lavratura')->limit(40)->get();
@@ -640,7 +652,7 @@ class DocumentoController extends Controller
             return response()->json(['autos' => []]);
         }
 
-        $autos = Documento::where('tipo', 'auto_infracao')->whereNotIn('status', Documento::SEM_VALOR_DE_ATO)
+        $autos = Documento::doModulo()->where('tipo', 'auto_infracao')->whereNotIn('status', Documento::SEM_VALOR_DE_ATO)
             ->when($d['exceto'] ?? null, fn ($q, $id) => $q->where('id', '!=', $id))
             ->where(fn ($q) => $q
                 ->when($d['lote_id'] ?? null, fn ($x, $id) => $x->orWhere('lote_id', $id))
@@ -1036,13 +1048,16 @@ class DocumentoController extends Controller
             return response()->json(['message' => 'Só o autor pode alterar o próprio documento.'], 403);
         }
 
+        // A peça não muda de módulo: o tipo e a lei têm de ser do módulo dela.
+        $modulo = $documento->modulo ?? 'obras';
+
         $d = $request->validate([
-            'tipo'               => ['required', Rule::in(array_keys(Documento::TIPOS))],
+            'tipo'               => ['required', Rule::in(array_keys(Documento::tiposDoModulo($modulo)))],
             'data_fato'          => ['required', 'date'],
             // O imóvel pode entrar aqui, depois da criação — é o caminho de
             // quem abriu a peça em campo sem tê-lo identificado ainda.
             'lote_id'            => ['nullable', 'exists:lotes,id'],
-            'legislacao_id'      => ['nullable', 'exists:legislacoes,id'],
+            'legislacao_id'      => ['nullable', Rule::exists('legislacoes', 'id')->where('modulo', $modulo)],
             'origem_id'          => ['nullable', 'exists:documentos,id'],
             'autuado_nome'       => ['nullable', 'string', 'max:160'],
             'autuado_documento'  => ['nullable', 'string', 'max:20', new CpfCnpj],

@@ -505,7 +505,10 @@ class VistoriaController extends Controller
         $ids = array_filter(array_map('intval', explode(',', (string) $request->query('ids'))));
         $q = (string) $request->query('q', '');
 
+        // Só artigos das leis do módulo ativo: a busca em "todas as leis" é
+        // em todas as do módulo — Lei do Sossego não fundamenta vistoria de obra.
         $artigos = Artigo::query()->with('legislacao:id,numero,nome')
+            ->whereHas('legislacao', fn ($l) => $l->doModulo())
             ->when($ids, fn ($b) => $b->whereIn('id', $ids), fn ($b) => $b->ativos())
             ->get();
 

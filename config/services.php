@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    // O Supabase do AppPOSTURAS, de onde `php artisan posturas:importar` traz
+    // denúncias, cadastros, leis e configurações. A chave é a PÚBLICA (a mesma
+    // do VITE_SUPABASE_KEY de lá): o acesso de verdade vem do login de um
+    // administrador do Posturas, pedido pelo comando na hora e nunca gravado.
+    'posturas_supabase' => [
+        'url'   => env('POSTURAS_SUPABASE_URL'),
+        'chave' => env('POSTURAS_SUPABASE_CHAVE'),
+    ],
+
 ];

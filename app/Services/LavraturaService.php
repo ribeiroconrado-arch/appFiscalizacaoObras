@@ -48,7 +48,7 @@ class LavraturaService
 
         return DB::transaction(function () use ($doc) {
             if (! $doc->numero) {
-                ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo);
+                ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo, $doc->modulo ?? 'obras');
                 $doc->numero    = $numero;
                 $doc->exercicio = $exercicio;
             }
@@ -71,27 +71,30 @@ class LavraturaService
      * segundo não podem receber o mesmo número. Quem chama é responsável por
      * estar dentro de uma transação — fora dela o lock não vale nada.
      *
-     * @param  string $tipo a série (um tipo de `Documento::TIPOS`)
+     * A série é POR MÓDULO: Obras e Posturas emitem Notificação e Auto de
+     * Infração, e cada fiscalização numera as suas a partir do 1.
+     *
+     * @param  string $tipo   a série (um tipo de `Documento::TIPOS`)
+     * @param  string $modulo de config/modulos.php — a vistoria é sempre de Obras
      * @return array{numero:int, exercicio:int}
      */
-    public static function proximoNumero(string $tipo): array
+    public static function proximoNumero(string $tipo, string $modulo = 'obras'): array
     {
         $exercicio = (int) now()->format('Y');
 
-        $contador = DB::table('documento_contadores')
+        $serie = fn () => DB::table('documento_contadores')
+            ->where('modulo', $modulo)
             ->where('tipo', $tipo)
-            ->where('exercicio', $exercicio)
-            ->lockForUpdate()
-            ->first();
+            ->where('exercicio', $exercicio);
+
+        $contador = $serie()->lockForUpdate()->first();
 
         if (! $contador) {
             DB::table('documento_contadores')->insert([
-                'tipo' => $tipo, 'exercicio' => $exercicio, 'ultimo' => 0,
+                'modulo' => $modulo, 'tipo' => $tipo, 'exercicio' => $exercicio, 'ultimo' => 0,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
-            $contador = DB::table('documento_contadores')
-                ->where('tipo', $tipo)->where('exercicio', $exercicio)
-                ->lockForUpdate()->first();
+            $contador = $serie()->lockForUpdate()->first();
         }
 
         $numero = $contador->ultimo + 1;
@@ -173,7 +176,7 @@ class LavraturaService
             // O número vem do Gravar (ver `gravar`). Só o rascunho lavrado
             // direto chega aqui sem ele.
             if (! $doc->numero) {
-                ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo);
+                ['numero' => $numero, 'exercicio' => $exercicio] = self::proximoNumero($doc->tipo, $doc->modulo ?? 'obras');
                 $doc->numero    = $numero;
                 $doc->exercicio = $exercicio;
             }

@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Cadastro\InscricoesGravadas;
+use App\Models\BairroEndereco;
 use App\Models\CadastroBairro;
+use App\Models\Decibelimetro;
 use App\Models\Feriado;
+use App\Models\Logradouro;
 use App\Models\Lote;
 use App\Models\Parametro;
 use App\Models\Upf;
@@ -45,6 +48,10 @@ class ParametroController extends Controller
                 'curador_cadastral' => (bool) $u->curador_cadastral,
                 'tipo_usuario' => $u->tipo_usuario, 'ativo' => $u->ativo,
                 'perfil_rotulo' => $u->perfilRotulo(),
+                // O que está GRAVADO, e não User::modulos(): o administrador
+                // enxerga todos de qualquer jeito, mas a marcação dele
+                // continua valendo se um dia deixar de ser administrador.
+                'modulos' => $u->getAttribute('modulos') ?: ['obras'],
             ]),
             'geral' => collect(Parametro::CHAVES)->map(fn ($def, $chave) => [
                 'chave' => $chave, 'descricao' => $def[2],
@@ -74,7 +81,111 @@ class ParametroController extends Controller
             'cargos' => User::CARGOS,
             'cargos_externos' => User::EXTERNOS,
             'tipos_feriado' => collect(Feriado::TIPOS)->map(fn ($r, $v) => ['valor' => $v, 'rotulo' => $r])->values(),
+            // Posturas: o equipamento de medição e a relação rua↔bairro.
+            'modulo' => \App\Support\Modulo::ativo($r->user()),
+            'decibelimetros' => Decibelimetro::orderByDesc('ativo')->orderBy('modelo')->get()->map(fn (Decibelimetro $d) => [
+                'id' => $d->id, 'tipo' => $d->tipo, 'fabricante' => $d->fabricante, 'modelo' => $d->modelo,
+                'identificacao' => $d->identificacao, 'serie' => $d->serie,
+                'certificado_calibracao' => $d->certificado_calibracao, 'empresa_calibradora' => $d->empresa_calibradora,
+                'data_calibracao' => $d->data_calibracao?->format('Y-m-d'),
+                'validade_calibracao_meses' => $d->validade_calibracao_meses,
+                'calibrado_ate' => $d->calibradoAte()?->format('d/m/Y'),
+                'vencido' => $d->calibracaoVencida(),
+                'certificado_pdf_url' => $d->certificado_pdf_url,
+                'ativo' => $d->ativo, 'rotulo' => $d->rotulo(),
+            ]),
+            'ruas' => Logradouro::with(['vinculos' => fn ($q) => $q->orderBy('bairro')])->orderBy('nome')->get()
+                ->map(fn (Logradouro $l) => ['id' => $l->id, 'nome' => $l->nome, 'bairros' => $l->vinculos->pluck('bairro')]),
+            'bairros_endereco' => BairroEndereco::orderBy('nome')->pluck('nome'),
         ]);
+    }
+
+    // ── DECIBELÍMETROS (Posturas) ────────────────────────────────
+
+    /** POST /api/parametros/decibelimetros — cria ou atualiza. */
+    public function salvarDecibelimetro(Request $r): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        $d = $r->validate([
+            'id'                        => ['nullable', 'exists:decibelimetros,id'],
+            'tipo'                      => ['nullable', 'string', 'max:80'],
+            'fabricante'                => ['nullable', 'string', 'max:80'],
+            'modelo'                    => ['required', 'string', 'max:80'],
+            'identificacao'             => ['nullable', 'string', 'max:80'],
+            'serie'                     => ['nullable', 'string', 'max:80'],
+            'certificado_calibracao'    => ['nullable', 'string', 'max:120'],
+            'empresa_calibradora'       => ['nullable', 'string', 'max:160'],
+            'data_calibracao'           => ['nullable', 'date'],
+            'validade_calibracao_meses' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'ativo'                     => ['nullable', 'boolean'],
+        ], ['modelo.required' => 'Informe o modelo do aparelho.']);
+
+        $dec = Decibelimetro::updateOrCreate(['id' => $d['id'] ?? null],
+            collect($d)->except('id')->all() + ['tipo' => $d['tipo'] ?? 'Decibelímetro Digital', 'ativo' => $d['ativo'] ?? true]);
+
+        return response()->json(['message' => 'Decibelímetro gravado.', 'id' => $dec->id]);
+    }
+
+    /** DELETE /api/parametros/decibelimetros/{decibelimetro} */
+    public function excluirDecibelimetro(Request $r, Decibelimetro $decibelimetro): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+        $decibelimetro->delete();
+
+        return response()->json(['message' => 'Decibelímetro excluído.']);
+    }
+
+    // ── RUAS E BAIRROS (Posturas) ────────────────────────────────
+
+    /**
+     * POST /api/parametros/ruas — a rua e os bairros dela, de uma vez.
+     *
+     * Bairro digitado que ainda não existe entra na lista de bairros do
+     * endereço: é assim que o Posturas cresce a lista, e obrigar a cadastrar o
+     * bairro antes, em outra aba, só atrasaria quem está ligando a rua.
+     */
+    public function salvarRua(Request $r): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        $d = $r->validate([
+            'id'        => ['nullable', 'exists:logradouros,id'],
+            'nome'      => ['required', 'string', 'max:180'],
+            'bairros'   => ['array'],
+            'bairros.*' => ['string', 'max:160'],
+        ], ['nome.required' => 'Informe o nome da rua.']);
+
+        $nome = Logradouro::normalizar($d['nome']);
+        $outra = Logradouro::where('nome', $nome)->when($d['id'] ?? null, fn ($q, $id) => $q->where('id', '<>', $id))->exists();
+        if ($outra) {
+            return response()->json(['message' => 'Já existe uma rua com esse nome.'], 422);
+        }
+        $bairros = collect($d['bairros'] ?? [])->map(fn ($b) => Logradouro::normalizar($b))->filter()->unique()->values();
+
+        $rua = DB::transaction(function () use ($d, $nome, $bairros) {
+            $rua = Logradouro::updateOrCreate(['id' => $d['id'] ?? null], ['nome' => $nome]);
+            foreach ($bairros as $b) {
+                BairroEndereco::firstOrCreate(['nome' => $b]);
+            }
+            $rua->vinculos()->whereNotIn('bairro', $bairros->all())->delete();
+            foreach ($bairros as $b) {
+                $rua->vinculos()->firstOrCreate(['bairro' => $b]);
+            }
+
+            return $rua;
+        });
+
+        return response()->json(['message' => 'Rua gravada.', 'id' => $rua->id]);
+    }
+
+    /** DELETE /api/parametros/ruas/{logradouro} */
+    public function excluirRua(Request $r, Logradouro $logradouro): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+        $logradouro->delete();
+
+        return response()->json(['message' => 'Rua excluída.']);
     }
 
     // ── USUÁRIOS ─────────────────────────────────────────────────
@@ -102,8 +213,12 @@ class ParametroController extends Controller
             // Permissão para corrigir a base do mapa. Ver a migration
             // 2026_08_27_000100 para por que ela não é um perfil.
             'curador_cadastral' => ['nullable', 'boolean'],
+            // Quais fiscalizações a pessoa usa (config/modulos.php).
+            'modulos'      => ['nullable', 'array', 'min:1'],
+            'modulos.*'    => [Rule::in(\App\Support\Modulo::todos())],
             'senha'        => ['nullable', 'string', Password::min(8), 'confirmed'],
         ], [
+            'modulos.min'                => 'Marque ao menos um módulo.',
             'email.required_without'     => 'Informe a matrícula ou o e-mail — é por um deles que o usuário entra.',
             'matricula.required_without' => 'Informe a matrícula ou o e-mail — é por um deles que o usuário entra.',
         ]);
@@ -137,6 +252,13 @@ class ParametroController extends Controller
             'perfil' => $d['perfil'], 'tipo_usuario' => $d['tipo_usuario'], 'ativo' => $d['ativo'] ?? true,
             'curador_cadastral' => $d['curador_cadastral'] ?? false,
         ];
+        // Na ordem do seletor, sem repetição. Não informado: o usuário novo
+        // nasce em Obras, e o existente fica como está.
+        if (isset($d['modulos'])) {
+            $atributos['modulos'] = array_values(array_intersect(\App\Support\Modulo::todos(), $d['modulos']));
+        } elseif (empty($d['id'])) {
+            $atributos['modulos'] = ['obras'];
+        }
         if (! empty($d['senha'])) {
             $atributos['password'] = Hash::make($d['senha']);
         }

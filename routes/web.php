@@ -231,6 +231,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
 
     // ── SÓ A FISCALIZAÇÃO ────────────────────────────────────────
     Route::prefix('api')->middleware(['interno', 'throttle:api'])->group(function () {
+        // O seletor Obras | Posturas do cabeçalho — ver ModuloController.
+        Route::post('/modulo', [\App\Http\Controllers\ModuloController::class, 'trocar']);
+
         // Painel e notificações
         Route::get('/painel', [PainelController::class, 'index']);
         Route::get('/notificacoes', [PainelController::class, 'notificacoes']);
@@ -367,6 +370,15 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::delete('/parametros/feriados/{feriado}', [ParametroController::class, 'excluirFeriado']);
         Route::post('/parametros/bairros', [ParametroController::class, 'salvarBairro']);
         Route::delete('/parametros/bairros/{bairro}', [ParametroController::class, 'excluirBairro']);
+        // Posturas: o aparelho de medição e a relação rua↔bairro.
+        Route::post('/parametros/decibelimetros', [ParametroController::class, 'salvarDecibelimetro']);
+        Route::delete('/parametros/decibelimetros/{decibelimetro}', [ParametroController::class, 'excluirDecibelimetro']);
+        Route::post('/parametros/ruas', [ParametroController::class, 'salvarRua']);
+        Route::delete('/parametros/ruas/{logradouro}', [ParametroController::class, 'excluirRua']);
+
+        // O autocomplete de endereço do Posturas: a rua sugere os bairros dela.
+        Route::get('/enderecos/logradouros', [\App\Http\Controllers\EnderecoController::class, 'logradouros']);
+        Route::get('/enderecos/bairros', [\App\Http\Controllers\EnderecoController::class, 'bairros']);
     });
 
     // Vias em papel e arquivos da fiscalização: conteúdo, logo interno.

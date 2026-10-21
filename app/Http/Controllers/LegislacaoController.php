@@ -33,7 +33,9 @@ class LegislacaoController extends Controller
     /** GET /api/legislacao — leis com os artigos e os termos de busca. */
     public function index(): JsonResponse
     {
-        $leis = Legislacao::with(['artigos' => fn ($q) => $q->orderBy('numero')])
+        // As leis do módulo ativo: o administrador cuida das de cada
+        // fiscalização trocando de módulo no cabeçalho.
+        $leis = Legislacao::doModulo()->with(['artigos' => fn ($q) => $q->orderBy('numero')])
             ->orderBy('nome')
             ->get()
             ->map(fn (Legislacao $l) => [
@@ -49,6 +51,19 @@ class LegislacaoController extends Controller
                 'ciencia_notificacao' => $l->ciencia_notificacao,
                 'ciencia_auto'      => $l->ciencia_auto,
                 'ativa'             => $l->ativa,
+                // Posturas: o formulário da Lei 723 e as peças de apreensão.
+                'modulo'            => $l->modulo,
+                'formulario_tipo'   => $l->formulario_tipo,
+                'faixa_db'          => $l->faixa_db,
+                'areas_db'          => $l->areas_db,
+                'aplica_apreensao'  => $l->aplica_apreensao,
+                'aplica_retencao'   => $l->aplica_retencao,
+                'ciencia_apreensao' => $l->ciencia_apreensao,
+                'ciencia_retencao'  => $l->ciencia_retencao,
+                'aplica_reincidencia' => $l->aplica_reincidencia,
+                'texto_reincidencia'  => $l->texto_reincidencia,
+                // As peças que os artigos desta lei podem fundamentar.
+                'documentos_disponiveis' => Artigo::documentosDoModulo($l->modulo),
                 // Pelo NÚMERO do artigo (Artigo::ordem), e não pelo texto.
                 'artigos'           => $l->artigos->sortBy(fn (Artigo $a) => $a->ordem())->values()->map(fn (Artigo $a) => [
                     'id'            => $a->id,
@@ -68,7 +83,7 @@ class LegislacaoController extends Controller
                     'multa_rotulo'  => $a->rotuloMulta(),
                     'ativo'         => $a->ativo,
                     'termos'        => $a->termos ?? [],
-                    'documentos'             => $a->documentos ?: Artigo::DOCUMENTOS,
+                    'documentos'             => $a->documentos ?: Artigo::documentosDoModulo($l->modulo),
                     'documentos_rotulo'      => $a->rotuloDocumentos(),
                     'prazo_notificacao_dias' => $a->prazo_notificacao_dias,
                     'multa_dobra_reincidencia' => $a->multa_dobra_reincidencia,
@@ -96,11 +111,25 @@ class LegislacaoController extends Controller
             'ciencia_notificacao'    => ['nullable', 'string', 'max:4000'],
             'ciencia_auto'           => ['nullable', 'string', 'max:4000'],
             'ativa'                  => ['nullable', 'boolean'],
+            // Posturas (só vêm da tela quando a lei é desse módulo).
+            'formulario_tipo'        => ['nullable', Rule::in(['padrao', 'lei_723_2002'])],
+            'aplica_apreensao'       => ['nullable', 'boolean'],
+            'aplica_retencao'        => ['nullable', 'boolean'],
+            'ciencia_apreensao'      => ['nullable', 'string', 'max:4000'],
+            'ciencia_retencao'       => ['nullable', 'string', 'max:4000'],
+            'aplica_reincidencia'    => ['nullable', 'boolean'],
+            'texto_reincidencia'     => ['nullable', 'string', 'max:4000'],
         ]);
+        // Campo de Posturas não enviado não apaga o que está gravado.
+        $d = array_filter($d, fn ($v, $k) => $v !== null || ! in_array($k, [
+            'formulario_tipo', 'aplica_apreensao', 'aplica_retencao', 'aplica_reincidencia',
+        ], true), ARRAY_FILTER_USE_BOTH);
 
+        // Lei nova nasce no módulo ativo; a existente não muda de módulo.
         $lei = Legislacao::updateOrCreate(
             ['id' => $d['id'] ?? null],
             collect($d)->except('id')->all() + ['ativa' => $d['ativa'] ?? true]
+                + (empty($d['id']) ? ['modulo' => \App\Support\Modulo::ativo($r->user())] : [])
         );
 
         return response()->json(['message' => 'Lei gravada.', 'id' => $lei->id]);
@@ -141,7 +170,8 @@ class LegislacaoController extends Controller
             // ou só depois de um prazo (e de quantos dias).
             // Em quais documentos o artigo entra — marcados um a um.
             'documentos'             => ['required', 'array', 'min:1'],
-            'documentos.*'           => [Rule::in(Artigo::DOCUMENTOS)],
+            // As peças do MÓDULO da lei (Artigo::documentosDoModulo).
+            'documentos.*'           => [Rule::in(Artigo::documentosDoModulo(Legislacao::find($r->input('legislacao_id'))?->modulo))],
             // O prazo que a notificação sugere quando este artigo entra nela.
             'prazo_notificacao_dias' => ['nullable', 'integer', 'min:1', 'max:365'],
             'multa_dobra_reincidencia' => ['nullable', 'boolean'],
@@ -193,7 +223,8 @@ class LegislacaoController extends Controller
 
         // Na ordem oficial das peças, sem repetir. O prazo sugerido só faz
         // sentido para artigo que entra em notificação.
-        $d['documentos'] = array_values(array_intersect(Artigo::DOCUMENTOS, $d['documentos']));
+        $d['documentos'] = array_values(array_intersect(
+            Artigo::documentosDoModulo(Legislacao::find($d['legislacao_id'])?->modulo), $d['documentos']));
         if (! array_intersect($d['documentos'], ['notificacao', 'notificacao_embargo'])) {
             $d['prazo_notificacao_dias'] = null;
         }

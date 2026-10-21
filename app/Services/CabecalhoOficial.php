@@ -19,18 +19,24 @@ use Illuminate\Support\Facades\Storage;
  */
 class CabecalhoOficial
 {
-    public function orgao(): array
+    /**
+     * @param string $modulo de qual fiscalização é a peça: o selo e a divisão
+     *                       podem ser próprios do módulo (Parametro::doModulo).
+     */
+    public function orgao(string $modulo = 'obras'): array
     {
+        $p = fn (string $chave) => Parametro::doModulo($chave, $modulo);
+
         return [
-            'nome'         => Parametro::get('orgao_nome'),
-            'secretaria'   => Parametro::get('orgao_secretaria'),
-            'departamento' => Parametro::get('orgao_departamento'),
-            'divisao'      => Parametro::get('orgao_divisao'),
-            'municipio'    => Parametro::get('orgao_municipio'),
-            'endereco'     => Parametro::get('orgao_endereco'),
-            'telefone'     => Parametro::get('orgao_telefone'),
-            'cnpj'         => Parametro::get('orgao_cnpj'),
-            'selo'         => Parametro::get('impressao_selo'),
+            'nome'         => $p('orgao_nome'),
+            'secretaria'   => $p('orgao_secretaria'),
+            'departamento' => $p('orgao_departamento'),
+            'divisao'      => $p('orgao_divisao'),
+            'municipio'    => $p('orgao_municipio'),
+            'endereco'     => $p('orgao_endereco'),
+            'telefone'     => $p('orgao_telefone'),
+            'cnpj'         => $p('orgao_cnpj'),
+            'selo'         => $p('impressao_selo'),
         ];
     }
 

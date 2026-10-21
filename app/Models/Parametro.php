@@ -66,6 +66,30 @@ class Parametro extends Model
             : $valor;
     }
 
+    /**
+     * O valor da chave PARA UM MÓDULO — o selo do cabeçalho impresso, por
+     * exemplo, diz "FISCALIZAÇÃO DE POSTURAS" na peça de Posturas.
+     *
+     * Ordem: o que o administrador gravou em "chave.modulo"; o padrão do módulo
+     * em config/modulos.php; e, na falta dos dois, o valor global de sempre.
+     * Obras não tem nada próprio, então para Obras isto é exatamente get().
+     */
+    public static function doModulo(string $chave, ?string $modulo): ?string
+    {
+        if ($modulo && $modulo !== 'obras') {
+            $proprio = Cache::rememberForever("parametro:$chave.$modulo", fn () => static::find("$chave.$modulo")?->valor);
+            if ($proprio !== null && $proprio !== '') {
+                return $proprio;
+            }
+            $padrao = config("modulos.$modulo.parametros.$chave");
+            if ($padrao !== null && $padrao !== '') {
+                return $padrao;
+            }
+        }
+
+        return static::get($chave);
+    }
+
     public static function set(string $chave, ?string $valor): void
     {
         static::updateOrCreate(['chave' => $chave], ['valor' => $valor]);

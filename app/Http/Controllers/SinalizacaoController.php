@@ -44,6 +44,12 @@ class SinalizacaoController extends Controller
     /** GET /api/sinalizacoes/hoje — o "Para hoje" do Painel. */
     public function hoje(Request $r): JsonResponse
     {
+        // Sinalização é aviso de obra (entulho, placa, avanço): o "Para hoje"
+        // do painel de outro módulo não a mostra.
+        if (\App\Support\Modulo::ativo($r->user()) !== 'obras') {
+            return response()->json(['itens' => []]);
+        }
+
         $lista = Sinalizacao::query()->pendentes()->visiveisPara($r->user())
             ->with(['lote:id,bairro,quadra,numero_lote', 'autor:id,name', 'reforcos.autor:id,name'])
             // O lembrete é de quem o deixou; a sinalização é de todos.
