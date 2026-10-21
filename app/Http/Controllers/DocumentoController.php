@@ -286,6 +286,9 @@ class DocumentoController extends Controller
                 ->map(fn (Legislacao $l) => [
                     'id'                 => $l->id,
                     'rotulo'             => $l->rotulo(),
+                    // Posturas: a Lei 723 (ruído) é a que a notificação de
+                    // denúncia já traz escolhida (denuncias.js).
+                    'formulario_tipo'    => $l->formulario_tipo,
                     'prazo_defesa_dias'  => $l->prazo_defesa_dias,
                     'prazo_cumpr_dias'   => $l->prazo_cumprimento_dias,
                     'artigos'            => $l->artigos->sortBy(fn ($a) => $a->ordem())->values()->map(fn ($a) => [
@@ -515,13 +518,15 @@ class DocumentoController extends Controller
     ];
 
     /**
-     * O que levou à notificação: direta, ordem de serviço (qual) ou denúncia
-     * da ouvidoria (o número dela). Ver Documento::MOTIVOS_DE_ORIGEM.
+     * O que levou à notificação: direta, ordem de serviço (qual), denúncia
+     * da ouvidoria (o número dela) ou denúncia de perturbação registrada aqui
+     * (Posturas). Ver Documento::MOTIVOS_DE_ORIGEM.
      */
     private const REGRAS_DO_MOTIVO = [
-        'origem_motivo'     => ['nullable', 'in:direta,ordem_servico,ouvidoria'],
+        'origem_motivo'     => ['nullable', 'in:direta,ordem_servico,ouvidoria,denuncia'],
         'origem_os_id'      => ['nullable', 'integer', 'exists:ordens_servico,id'],
         'origem_referencia' => ['nullable', 'string', 'max:80'],
+        'denuncia_id'       => ['nullable', 'integer', 'exists:denuncias,id'],
     ];
 
     /**
@@ -533,7 +538,7 @@ class DocumentoController extends Controller
      */
     private function motivoDeOrigem(string $tipo, array $d): array|string
     {
-        $limpo = ['origem_motivo' => null, 'origem_os_id' => null, 'origem_referencia' => null];
+        $limpo = ['origem_motivo' => null, 'origem_os_id' => null, 'origem_referencia' => null, 'denuncia_id' => null];
         if (! in_array($tipo, Documento::COM_CUMPRIMENTO, true)) {
             return $limpo;
         }
@@ -552,6 +557,13 @@ class DocumentoController extends Controller
             }
 
             return ['origem_motivo' => $motivo, 'origem_referencia' => $ref] + $limpo;
+        }
+        if ($motivo === 'denuncia') {
+            if (empty($d['denuncia_id'])) {
+                return 'A notificação de denúncia precisa da denúncia de origem — abra-a pelo "Gerar notificação" da denúncia.';
+            }
+
+            return ['origem_motivo' => $motivo, 'denuncia_id' => (int) $d['denuncia_id']] + $limpo;
         }
 
         return ['origem_motivo' => 'direta'] + $limpo;
@@ -821,7 +833,7 @@ class DocumentoController extends Controller
      */
     public function ficha(Request $request, Documento $documento): JsonResponse
     {
-        $documento->load(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'origemOs', 'anuladoPor', 'vistoria.evidencias']);
+        $documento->load(['lote', 'legislacao', 'agente', 'artigos', 'origem', 'origemOs', 'denuncia', 'anuladoPor', 'vistoria.evidencias']);
 
         [$stTxt, $stCls] = $documento->statusBadge();
         $prazo = $documento->situacaoPrazo();
@@ -847,6 +859,8 @@ class DocumentoController extends Controller
             'origem_os_id'       => $documento->origem_os_id,
             'origem_os_rotulo'   => $documento->origemOs ? 'OS ' . $documento->origemOs->numero : null,
             'origem_referencia'  => $documento->origem_referencia,
+            'denuncia_id'        => $documento->denuncia_id,
+            'denuncia_protocolo' => $documento->denuncia?->protocolo,
             'origem_texto'       => $documento->origemTexto(),
             'pode_editar_origem' => $documento->podeEditarOrigem($request->user()),
             'origem_rotulo'  => $documento->origem ? $documento->origem->rotuloTipo() . ' nº ' . $documento->origem->numeroFormatado() : null,

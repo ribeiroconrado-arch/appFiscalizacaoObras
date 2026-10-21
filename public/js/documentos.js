@@ -971,9 +971,16 @@ function aplicarOrigemNotifDoc() {
   g('nd-bloco-motivo').style.display = ehNotificacao ? '' : 'none'
   if (!ehNotificacao) return
 
+  // "Denúncia de perturbação" (Posturas) não se escolhe à mão: só existe na
+  // peça que veio do "Gerar notificação" de uma denúncia (denuncias.js). O
+  // combo do sistema não lista opção desativada.
+  const opDenuncia = g('nd-origem-motivo').querySelector('option[value="denuncia"]')
+  if (opDenuncia) opDenuncia.disabled = !fdState.denunciaId
+
   const motivo = g('nd-origem-motivo').value
   g('nd-origem-os-campo').hidden = motivo !== 'ordem_servico'
   g('nd-origem-ref-campo').hidden = motivo !== 'ouvidoria'
+  g('nd-origem-den-campo').hidden = motivo !== 'denuncia'
   if (motivo === 'ordem_servico') carregarOrdensDoc()
 
   const lavrado = fdState.estado === 'lavrado'
@@ -1011,6 +1018,7 @@ function motivoDeOrigemDoDoc() {
     origem_motivo: motivo,
     origem_os_id: motivo === 'ordem_servico' ? Number(g('nd-origem-os').value) || null : null,
     origem_referencia: motivo === 'ouvidoria' ? g('nd-origem-ref').value.trim() || null : null,
+    denuncia_id: motivo === 'denuncia' ? fdState.denunciaId || null : null,
   }
 }
 

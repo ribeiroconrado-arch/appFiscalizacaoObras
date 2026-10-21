@@ -35,9 +35,9 @@ return [
         'titulo' => 'Fiscalização de Posturas',
         // Cadeia do AppPOSTURAS: Notificação → Auto de Infração → Auto de Apreensão.
         'tipos'  => ['notificacao', 'auto_infracao', 'auto_apreensao'],
-        // Denúncias entra na Fase 3; Consulta é do cadastro de lotes, de Obras.
+        // Denúncias é a tela principal de Posturas; Consulta é do cadastro de lotes, de Obras.
         // "protocolos" aqui mostra só as ordens de serviço (DemandaController).
-        'abas'   => ['painel', 'mapa', 'documentos', 'protocolos'],
+        'abas'   => ['painel', 'denuncias', 'mapa', 'documentos', 'protocolos'],
         'parametros' => [
             'impressao_selo' => 'FISCALIZAÇÃO DE POSTURAS',
         ],

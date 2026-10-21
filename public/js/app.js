@@ -1007,6 +1007,8 @@ function irPara(destino) {
     }, 60)
   } else if (destino === 'documentos') {
     carregarDocumentos()
+  } else if (destino === 'denuncias') {
+    prepararDenuncias()
   } else if (destino === 'protocolos') {
     // A tela virou UMA fila com protocolos e ordens de serviço juntos.
     carregarDemandas()

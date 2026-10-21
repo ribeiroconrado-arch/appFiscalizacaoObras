@@ -218,7 +218,7 @@
   padding:11px 13px;font-size:12.5px;color:var(--tx2);margin-bottom:12px}
 .aviso-legal b{color:var(--chumbo)}
 
-#t-documentos,#t-protocolos{padding-bottom:80px}
+#t-documentos,#t-denuncias,#t-protocolos{padding-bottom:80px}
 
 /* ── PARÂMETROS (modal, só administrador) ──
    Modal largo para conteúdo tabular: 520px é confortável para
@@ -431,7 +431,7 @@ fieldset[disabled] .art-faixa .fx-x,fieldset[disabled] .art-faixa-mais{display:n
 
 
 @media(min-width:1024px){
-  #t-documentos,#t-protocolos{max-width:900px;margin:0 auto}
+  #t-documentos,#t-denuncias,#t-protocolos{max-width:900px;margin:0 auto}
 }
 
 /* ── AJUSTES DE TELA ESTREITA ──
@@ -533,7 +533,7 @@ body.login-bg{
    sobrava uma faixa vazia grande antes do primeiro filtro.
    Listas param acima da barra flutuante; o mapa corre por baixo dela, que é
    o ganho da pílula destacada — mais mapa visível na tela do celular. */
-#t-painel, #t-documentos, #t-protocolos{position:fixed;left:0;right:0;
+#t-painel, #t-documentos, #t-denuncias, #t-protocolos{position:fixed;left:0;right:0;
   bottom:calc(80px + env(safe-area-inset-bottom));overflow-y:auto;padding:14px}
 #t-mapa{position:fixed;left:0;right:0;bottom:0}
 #t-mapa #map{position:absolute;inset:0}
@@ -1752,7 +1752,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .subcab-ico svg{width:17px;height:17px}
 
 /* As telas descem 42px: o sub-cabeçalho ocupa a faixa que era delas. */
-#t-painel, #t-busca, #t-documentos, #t-protocolos, #t-mapa{top:110px}
+#t-painel, #t-busca, #t-documentos, #t-denuncias, #t-protocolos, #t-mapa{top:110px}
 
 /* Em tela estreita o nome da entidade some e fica só o brasão — o módulo é a
    informação que muda, então é ela que tem prioridade no espaço. */
@@ -2591,7 +2591,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
      que sobrava para o imóvel cortava o nome do bairro — que passou a ser o
      OFICIAL, mais longo que o do desenho ("RESIDENCIAL BURITIS PRIMAVERA V -
      PRIME" no lugar de "Residencial Buritis V"). */
-  #t-documentos,#t-protocolos{max-width:1610px}
+  #t-documentos,#t-denuncias,#t-protocolos{max-width:1610px}
 }
 
 /* Cada lista marca na barra lateral o SEU risco: no protocolo, ficar sem dono

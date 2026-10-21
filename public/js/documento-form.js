@@ -187,6 +187,8 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     fdState.origemOsId = documento.origem_os_id ?? null
     fdState.origemOsRotulo = documento.origem_os_rotulo ?? null
     fdState.podeEditarOrigem = !!documento.pode_editar_origem
+    fdState.denunciaId = documento.denuncia_id ?? null
+    fdState.denunciaProtocolo = documento.denuncia_protocolo ?? null
     fdState.origemId = documento.origem_id ?? null
     fdState.origemRotulo = documento.origem_rotulo ?? null
     fdState.reincidenciaId = documento.reincidencia?.id ?? null
@@ -216,6 +218,8 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     fdState.reincidenciaId = fdState.reincidenciaNumero = fdState.reincidenciaFator = null
     fdState.origemId = fdState.origemRotulo = null
     fdState.origemOsId = fdState.origemOsRotulo = null
+    // A denúncia de origem chega depois, pelo "Gerar notificação" (denuncias.js).
+    fdState.denunciaId = fdState.denunciaProtocolo = null
     fdState.podeEditarOrigem = false
     fdState.anexos = 0
     fdState.vistoriaId = null
@@ -257,6 +261,7 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     os.value = fdState.origemOsId ? String(fdState.origemOsId) : ''
     document.getElementById('nd-origem-motivo').value = documento?.origem_motivo || 'direta'
     document.getElementById('nd-origem-ref').value = documento?.origem_referencia || ''
+    document.getElementById('nd-origem-den').value = fdState.denunciaProtocolo || ''
   }
   // As peças de que este auto pode nascer, para o campo de origem.
   document.getElementById('nd-origem').innerHTML = '<option value="">Direta — sem documento de origem</option>'

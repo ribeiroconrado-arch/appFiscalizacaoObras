@@ -255,14 +255,21 @@ class Documento extends Model
     /** A ordem de serviço que determinou a notificação (origem_motivo = ordem_servico). */
     public function origemOs(): BelongsTo { return $this->belongsTo(OrdemServico::class, 'origem_os_id'); }
 
+    /** A denúncia de perturbação que gerou a notificação (origem_motivo = denuncia, Posturas). */
+    public function denuncia(): BelongsTo { return $this->belongsTo(Denuncia::class); }
+
     /**
      * O QUE LEVOU À NOTIFICAÇÃO — a origem das peças que começam a cadeia.
      * (O auto nasce de outra peça: ver ORIGENS e `origem_id`.)
+     *
+     * `denuncia` é a de Posturas, registrada no próprio sistema: nasce do
+     * "Gerar notificação" da denúncia, e não se escolhe à mão.
      */
     public const MOTIVOS_DE_ORIGEM = [
         'direta'        => 'Direta — vistoria em campo',
         'ordem_servico' => 'Ordem de serviço',
         'ouvidoria'     => 'Denúncia da ouvidoria',
+        'denuncia'      => 'Denúncia de perturbação',
     ];
 
     /** Só as notificações têm motivo de origem; os autos têm peça de origem. */
@@ -285,6 +292,9 @@ class Documento extends Model
         }
         if ($this->origem_motivo === 'ouvidoria') {
             return 'OUVIDORIA' . ($this->origem_referencia ? ' Nº ' . $this->origem_referencia : '');
+        }
+        if ($this->origem_motivo === 'denuncia') {
+            return 'DENÚNCIA' . ($this->denuncia?->protocolo ? ' Nº ' . $this->denuncia->protocolo : '');
         }
 
         return 'DIRETA';

@@ -380,6 +380,19 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // O autocomplete de endereço do Posturas: a rua sugere os bairros dela.
         Route::get('/enderecos/logradouros', [\App\Http\Controllers\EnderecoController::class, 'logradouros']);
         Route::get('/enderecos/bairros', [\App\Http\Controllers\EnderecoController::class, 'bairros']);
+
+        // Denúncias de perturbação — só para quem tem o módulo Posturas.
+        Route::middleware('modulo:posturas')->controller(\App\Http\Controllers\DenunciaController::class)->group(function () {
+            Route::get('/denuncias', 'index');
+            Route::get('/denuncias/reincidencia', 'reincidencia');
+            Route::get('/denuncias/painel', 'painel');
+            Route::get('/denuncias/mapa', 'mapa');
+            Route::get('/denuncias/csv', 'csv');
+            Route::post('/denuncias', 'store');
+            Route::get('/denuncias/{denuncia}', 'show')->whereNumber('denuncia');
+            Route::patch('/denuncias/{denuncia}', 'update')->whereNumber('denuncia');
+            Route::post('/denuncias/{denuncia}/cancelar', 'cancelar')->whereNumber('denuncia');
+        });
     });
 
     // Vias em papel e arquivos da fiscalização: conteúdo, logo interno.

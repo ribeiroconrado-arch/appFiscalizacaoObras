@@ -1,0 +1,97 @@
+/* ══════════════════════════════════════════════
+   DENÚNCIAS (Posturas) — a aba, o formulário, a ficha e o balão do mapa.
+   Só o que é próprio daqui: lista, filtro, KPI e janela reaproveitam as
+   classes do sistema (tabelas.css, tema-f.css).
+   ══════════════════════════════════════════════ */
+
+/* Lista | Painel, logo abaixo do título da aba. */
+.den-sub{margin:4px 0 12px;max-width:320px}
+
+/* A barra lateral da linha repete a cor da tratativa, como a do status nos documentos. */
+.tabela-lista.tl-den tbody tr td:first-child{border-left:4px solid var(--den-cor,#B8860B)}
+.tl-den .den-gps-marca{color:var(--g);font-size:9px;vertical-align:2px}
+
+.den-card{border-left:4px solid #B8860B;cursor:pointer}
+.den-card-topo{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.den-card-end{font-weight:600;margin-top:8px;font-size:14px}
+.den-card-sub{font-size:12.5px;color:var(--tx2);margin-top:2px}
+.den-card-rodape{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--tx3);margin-top:8px}
+.den-rodape{font-size:12px}
+
+/* ── PAINEL ── */
+.den-periodo{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.den-periodo .field{margin:0;min-width:150px}
+.den-metricas{margin-bottom:12px}
+@media (min-width:900px){ .den-metricas{grid-template-columns:repeat(4,minmax(0,1fr))} }
+.den-graficos{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:900px){
+  .den-graficos{grid-template-columns:1fr 1fr}
+  .den-bloco-largo{grid-column:1 / -1}
+}
+.den-barra{display:grid;grid-template-columns:minmax(90px,38%) 1fr 40px;gap:8px;align-items:center;
+  font-size:12.5px;padding:4px 0}
+.den-barra-rot{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx2)}
+.den-barra-trilho{height:10px;background:var(--blt);border-radius:5px;overflow:hidden}
+.den-barra-trilho span{display:block;height:100%;border-radius:5px}
+.den-barra-n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.den-colunas{display:flex;align-items:flex-end;gap:6px;height:170px;padding-top:6px}
+.den-col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px}
+.den-col-barra{width:100%;max-width:38px;background:var(--g);border-radius:5px 5px 0 0;min-height:2px}
+.den-col-n{font-size:11px;font-weight:600;color:var(--tx2)}
+.den-col-rot{font-size:10.5px;color:var(--tx3);text-transform:uppercase}
+
+/* ── FORMULÁRIO ── */
+.den-topo{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.den-datahora{display:flex;gap:6px}
+.den-datahora input{min-width:0}
+.den-agente{text-align:right}
+.den-num-local{display:grid;grid-template-columns:minmax(80px,1fr) minmax(120px,1.3fr) auto;gap:8px;align-items:end}
+.den-num-local .field{margin-bottom:0}
+.den-gps{height:42px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.den-gps svg{width:16px;height:16px}
+.den-gps.marcado{border-color:var(--g);color:var(--g);background:var(--gl)}
+.den-gps-info{font-size:12px;background:var(--gl);border:1px solid var(--gm);border-radius:var(--r);
+  padding:7px 10px;color:var(--gd);margin:8px 0}
+.den-num-local + .den-gps-info{margin-top:8px}
+.den-num-local{margin-bottom:10px}
+
+.den-sugestao{font-size:12px;color:var(--gd);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.den-sugestao button{border:none;border-radius:20px;padding:3px 11px;font:inherit;font-size:12px;font-weight:700;
+  background:var(--gm);color:var(--gd);cursor:pointer}
+
+/* Reincidência: âmbar, que é aviso — não impede salvar. */
+.den-reincid{background:#FFF6DD;border:1.5px solid #F2DE9C;border-radius:var(--r);padding:9px 12px;margin:6px 0 10px}
+.den-reincid-tit{font-size:12px;font-weight:700;color:#8A6408;margin-bottom:6px}
+.den-reincid-item{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;padding:3px 0}
+
+.den-pilulas{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.den-pilulas button{flex:1 1 0;min-width:90px;padding:9px 10px;border-radius:20px;border:1.5px solid var(--bord);
+  background:var(--sur);font:inherit;font-weight:600;color:var(--tx2);cursor:pointer}
+.den-pilulas button.at{border-color:var(--g);background:var(--gl);color:var(--gd)}
+.den-veiculo{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:640px){ .den-veiculo{grid-template-columns:1fr 1fr} .den-num-local{grid-template-columns:1fr 1fr} .den-gps{grid-column:1 / -1;justify-content:center} }
+
+.den-obs-rot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.den-voz{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--bord);border-radius:20px;
+  background:transparent;padding:3px 10px 3px 8px;font:inherit;font-size:11px;font-weight:700;color:var(--tx3);cursor:pointer}
+.den-voz svg{width:13px;height:13px}
+.den-voz.ouvindo{border-color:var(--red);color:var(--red)}
+.den-lgpd{font-size:11px;color:var(--tx3);background:var(--bg);border:1px solid var(--blt);border-radius:var(--r);
+  padding:8px 12px;margin:4px 0 0;line-height:1.5}
+
+/* ── FICHA ── */
+.den-ficha-topo{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+/* A tabela é a do balão do mapa; na ficha, larga, o valor encostado à
+   direita ficava longe do rótulo — aqui ele vem logo depois. */
+.den-ficha-tab{width:100%}
+.den-ficha-tab td:first-child{width:130px}
+.den-ficha-tab td:last-child{text-align:left}
+.den-doc{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--bord);border-radius:var(--r);
+  background:var(--sur);padding:8px 10px;font:inherit;margin-bottom:6px;cursor:pointer;text-align:left}
+.den-doc:hover{background:var(--blt)}
+.den-logs{display:flex;flex-direction:column;gap:6px}
+.den-log{font-size:12px;background:var(--bg);border:1px solid var(--blt);border-radius:var(--r);padding:7px 10px}
+
+/* ── BALÃO DO MAPA ── */
+.den-balao-cab{background:var(--den-cor);color:#fff;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.den-balao-cab span{font-size:11px;opacity:.95}

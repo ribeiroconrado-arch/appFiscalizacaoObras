@@ -37,6 +37,7 @@
 {{-- Por último entre as de lista: o padrão de tabela vale por cima dos temas. --}}
 <link rel="stylesheet" href="@assetv('css/tabelas.css')">
 <link rel="stylesheet" href="@assetv('css/sinalizacoes.css')">
+<link rel="stylesheet" href="@assetv('css/denuncias.css')">
 {{-- Sem defer: precisa rodar antes do primeiro pintar (ver js/tema.js). --}}
 <script src="@assetv('js/tema.js')"></script>
 </head>
@@ -900,6 +901,65 @@
   <div id="busca-resultado"></div>
 </section>
 
+{{-- ══════ ABA: DENÚNCIAS (Posturas) ══════
+     O módulo Perturbação do AppPOSTURAS: a lista do que foi atendido em campo
+     e o painel com os números. O mapa é o da aba Mapa, com a camada
+     "Denúncias" — um mapa só para os dois módulos. Ver js/denuncias.js. --}}
+@if ($temAba('denuncias') && ! $externo)
+<section class="tela" id="t-denuncias">
+  <div class="topo-lista">
+    <div class="sec-simples">Denúncias <span class="cont" id="cont-den">0</span></div>
+    <button class="btn sm" onclick="baixarCsvDenuncias()" title="Baixar a lista filtrada em planilha (CSV)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+      CSV
+    </button>
+    @if (auth()->user()->canEdit())
+      <button class="btn primary sm" onclick="novaDenuncia()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Nova denúncia
+      </button>
+    @endif
+  </div>
+
+  <div class="sub-abas den-sub">
+    <button class="at" data-sub="lista" onclick="subDenuncias('lista')">Lista</button>
+    <button data-sub="painel" onclick="subDenuncias('painel')">Painel</button>
+  </div>
+
+  <div id="den-lista-painel">
+    {{-- O mesmo invólucro de filtro da lista de Documentos: busca à vista, o
+         resto na janela, o que estiver aplicado volta como etiqueta. --}}
+    <div class="busca-form lista-form">
+      <div class="filtro-barra">
+        <div class="lista-campo lista-campo-busca"><label for="den-busca">Busca</label><div class="filtro-busca">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+          <input type="text" id="den-busca" placeholder="Protocolo, rua, bairro, responsável ou placa…"
+                 oninput="filtrarDenuncias('busca', this.value)"
+                 onkeydown="if(event.key==='Enter')carregarDenuncias()"></div>
+        </div>
+        <button type="button" class="bs-mais" onclick="abrirFiltrosDen()" title="Mais filtros">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+          <span class="filtro-cont" id="den-filtro-n" hidden>0</span>
+        </button>
+      </div>
+      {{-- No computador os seletores da janela voltam para cá, à vista —
+           clonados por montarFiltroLargoDen, como em Documentos. --}}
+      <div class="doc-filtro-larga" id="den-filtro-larga"></div>
+      <div class="filtro-chips" id="den-chips"></div>
+      <div class="btn-row lista-form-acoes">
+        <button type="button" class="btn" onclick="limparFiltrosDen()">Limpar</button>
+        <button type="button" class="btn primary" id="den-buscar" onclick="carregarDenuncias()">Buscar</button>
+      </div>
+    </div>
+    <div id="lista-denuncias"></div>
+  </div>
+
+  <div id="den-painel" hidden></div>
+</section>
+@endif
+
 {{-- ══════ ABA: DOCUMENTOS (Etapa 6) ══════ --}}
 <section class="tela" id="t-documentos">
   <div class="topo-lista">
@@ -1272,6 +1332,14 @@
     <span class="aba-txt">Painel</span>
   </button>
   @endunless
+  {{-- Denúncias de perturbação: a tela principal de Posturas (config/modulos.php). --}}
+  @if ($temAba('denuncias') && ! $externo)
+  <button class="aba" data-destino="denuncias" title="Denúncias" onclick="irPara('denuncias')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
+    <span class="aba-txt">Denúncias</span>
+  </button>
+  @endif
   {{-- Busca antes do Mapa de propósito: a camada de satélite é paga por
        requisição, e conferir a situação de um lote — que é a maior parte das
        consultas — não precisa de imagem aérea. O caminho mais barato vem
@@ -2326,6 +2394,11 @@
               <option value="direta">Direta — vistoria em campo</option>
               <option value="ordem_servico">Ordem de serviço</option>
               <option value="ouvidoria">Denúncia da ouvidoria</option>
+              {{-- Posturas: a denúncia registrada aqui. Só aparece quando a peça
+                   veio do "Gerar notificação" dela (aplicarOrigemNotifDoc). --}}
+              @if ($modulo === 'posturas')
+                <option value="denuncia">Denúncia de perturbação</option>
+              @endif
             </select>
           </div>
           <div class="field" id="nd-origem-os-campo" hidden>
@@ -2337,6 +2410,10 @@
           <div class="field" id="nd-origem-ref-campo" hidden>
             <label for="nd-origem-ref">Nº da denúncia na ouvidoria</label>
             <input type="text" id="nd-origem-ref" maxlength="80" placeholder="Ex.: 4471/2026">
+          </div>
+          <div class="field" id="nd-origem-den-campo" hidden>
+            <label for="nd-origem-den">Denúncia de origem</label>
+            <input type="text" id="nd-origem-den" class="mono" readonly>
           </div>
         </div>
         <div class="btn-row" id="nd-origem-salvar-linha" style="justify-content:flex-end;margin-top:6px" hidden>
@@ -3305,6 +3382,186 @@
   </div>
 </div>
 
+@if ($temAba('denuncias') && ! $externo)
+{{-- ══════ DENÚNCIAS: FILTROS ══════ --}}
+<div class="modal-bg" id="m-den-filtros" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <button class="modal-x" onclick="fModalBtn('m-den-filtros')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg></span>
+      <span>Filtrar denúncias</span>
+    </h3>
+    <div class="field">
+      <label for="den-f-tratativa">Tratativa</label>
+      <select data-combo id="den-f-tratativa">
+        <option value="">Todas as tratativas</option>
+        <option value="ativas">Todas, menos canceladas</option>
+        <option value="pendente">Pendentes</option>
+        @foreach (\App\Models\Denuncia::TRATATIVAS as $t)
+          <option value="{{ $t }}">{{ $t }}</option>
+        @endforeach
+        <option value="{{ \App\Models\Denuncia::CANCELADO }}">Canceladas</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="den-f-fonte">Fonte sonora</label>
+      <select data-combo id="den-f-fonte">
+        <option value="">Todas as fontes</option>
+        @foreach (\App\Models\Denuncia::FONTES as $f)
+          <option value="{{ $f }}">{{ $f }}</option>
+        @endforeach
+      </select>
+    </div>
+    <div class="field">
+      <label for="den-f-agente">Agente</label>
+      <select data-combo id="den-f-agente">
+        <option value="todos">Todos os agentes</option>
+        <option value="eu">Minhas denúncias</option>
+      </select>
+    </div>
+    <div class="g2">
+      <div class="field"><label for="den-f-de">De</label><input type="date" id="den-f-de"></div>
+      <div class="field"><label for="den-f-ate">Até</label><input type="date" id="den-f-ate"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="limparFiltrosDen()">Limpar</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-den-filtros')">Cancelar</button>
+      <button class="btn primary" onclick="aplicarFiltrosDen()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ DENÚNCIAS: FORMULÁRIO ══════
+     O #m-den do AppPOSTURAS (modals-denuncias.html): protocolo, hora e agente
+     no topo; o endereço com GPS, a rua sugerindo os bairros dela e o alerta
+     de reincidência; a fonte do barulho; a tratativa; a observação, que dá
+     para ditar. Tudo em caixa alta, como se grava e imprime. --}}
+<div class="modal-bg" id="m-den" onclick="fModal()" data-caixa-alta>
+  <div class="modal modal-trab" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fecharFormDen()">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></span>
+      <span id="dn-titulo">Nova denúncia</span>
+      <span class="proto-badge" id="dn-protocolo" hidden></span>
+    </h3>
+    <div class="mt-corpo">
+      <input type="hidden" id="dn-id">
+
+      <div class="den-topo">
+        <div class="field">
+          <label for="dn-data">Data e hora do atendimento *</label>
+          <div class="den-datahora">
+            <input type="date" id="dn-data" onfocus="preencherDataHojeSeVazio(this)">
+            <input type="time" id="dn-hora" onfocus="preencherHoraAgoraSeVazio(this)">
+          </div>
+        </div>
+        <div class="field den-agente">
+          <label>Agente</label>
+          <div class="valor" id="dn-agente">—</div>
+        </div>
+      </div>
+
+      <div class="sec-title">Local</div>
+      <div class="field">
+        <label for="dn-logradouro">Logradouro *</label>
+        <input type="text" id="dn-logradouro" list="dn-lista-ruas" autocomplete="off" maxlength="180"
+               placeholder="Digite para buscar…" oninput="ruaDigitadaDen()" onchange="ruaEscolhidaDen()">
+        <datalist id="dn-lista-ruas"></datalist>
+      </div>
+      <div class="den-num-local">
+        <div class="field"><label for="dn-numero">Número</label>
+          <input type="text" id="dn-numero" maxlength="20" placeholder="Ex.: 300" oninput="agendarReincidenciaDen()"></div>
+        <div class="field"><label for="dn-local">Localização</label>
+          <select id="dn-local">
+            @foreach (\App\Models\Denuncia::LOCAIS as $l)
+              <option value="{{ $l }}">{{ $l }}</option>
+            @endforeach
+          </select>
+        </div>
+        <button type="button" class="btn den-gps" id="dn-gps" onclick="gpsDen()" title="Marcar a posição pelo GPS">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9"/></svg>
+          <span id="dn-gps-txt">GPS</span>
+        </button>
+      </div>
+      <div class="den-gps-info" id="dn-gps-info" hidden></div>
+      <input type="hidden" id="dn-lat"><input type="hidden" id="dn-lng"><input type="hidden" id="dn-prec">
+      <div class="field">
+        <label for="dn-bairro">Bairro *</label>
+        <div class="den-sugestao" id="dn-sugestao" hidden></div>
+        <input type="text" id="dn-bairro" list="dn-lista-bairros" autocomplete="off" maxlength="160"
+               placeholder="Digite para buscar…" onfocus="carregarBairrosDen()">
+        <datalist id="dn-lista-bairros"></datalist>
+      </div>
+      <div class="den-reincid" id="dn-reincid" hidden></div>
+
+      <div class="sec-title">Fonte sonora</div>
+      <div class="den-pilulas" id="dn-fontes" role="radiogroup" aria-label="Fonte sonora">
+        @foreach (\App\Models\Denuncia::FONTES as $f)
+          <button type="button" role="radio" data-fonte="{{ $f }}" onclick="fonteDen('{{ $f }}')">{{ $f }}</button>
+        @endforeach
+      </div>
+      <div class="g2 den-fonte" data-fonte="Residência">
+        <div class="field"><label for="dn-resp-nome">Nome do responsável</label><input type="text" id="dn-resp-nome" maxlength="160" placeholder="Nome completo"></div>
+        <div class="field"><label for="dn-resp-cpf">CPF</label><input type="text" id="dn-resp-cpf" maxlength="18" inputmode="numeric" placeholder="000.000.000-00" oninput="mascararCpfCnpj(this)" onblur="conferirCpfCnpjCampo(this)"></div>
+      </div>
+      <div class="g2 den-fonte" data-fonte="Empresa" hidden>
+        <div class="field"><label for="dn-emp-nome">Empresa</label><input type="text" id="dn-emp-nome" maxlength="160" placeholder="Razão social"></div>
+        <div class="field"><label for="dn-emp-cnpj">CNPJ</label><input type="text" id="dn-emp-cnpj" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="mascararCpfCnpj(this)" onblur="conferirCpfCnpjCampo(this)"></div>
+      </div>
+      <div class="den-veiculo den-fonte" data-fonte="Veículo" hidden>
+        <div class="field"><label for="dn-placa">Placa</label><input type="text" id="dn-placa" maxlength="8" class="mono" placeholder="ABC1D23"></div>
+        <div class="field"><label for="dn-vmarca">Marca</label><input type="text" id="dn-vmarca" maxlength="60" placeholder="Ex.: HONDA"></div>
+        <div class="field"><label for="dn-vmodelo">Modelo</label><input type="text" id="dn-vmodelo" maxlength="60" placeholder="Ex.: CIVIC"></div>
+        <div class="field"><label for="dn-vcor">Cor</label><input type="text" id="dn-vcor" maxlength="40" placeholder="Ex.: PRATA"></div>
+      </div>
+
+      <div class="sec-title">Atendimento</div>
+      <div class="field">
+        <label for="dn-tratativa">Tratativa <small>(vazia = pendente)</small></label>
+        <select id="dn-tratativa">
+          <option value="">— Pendente —</option>
+          @foreach (\App\Models\Denuncia::TRATATIVAS as $t)
+            <option value="{{ $t }}">{{ $t }}</option>
+          @endforeach
+        </select>
+      </div>
+      <div class="field">
+        <div class="den-obs-rot">
+          <label for="dn-obs">Observação</label>
+          <button type="button" class="den-voz" id="dn-voz" onclick="ditarObsDen()" title="Ditar a observação por voz">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4M8 23h8"/></svg>
+            <span id="dn-voz-txt">Falar</span>
+          </button>
+        </div>
+        <textarea id="dn-obs" rows="3" maxlength="4000" placeholder="Detalhes do atendimento…"></textarea>
+      </div>
+      <p class="den-lgpd"><b>LGPD:</b> os dados pessoais servem exclusivamente à fiscalização e ao
+        cumprimento de obrigação legal do Município (Lei 13.709/2018, art. 7º, II e III).</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="fecharFormDen()">Fechar</button>
+      <div style="flex:1"></div>
+      <button class="btn primary" id="dn-salvar" onclick="salvarDenuncia()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+{{-- ══════ DENÚNCIAS: FICHA ══════ --}}
+<div class="modal-bg" id="m-den-ver" onclick="fModal()">
+  <div class="modal modal-trab" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fModalBtn('m-den-ver')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></span>
+      <span>Denúncia</span>
+      <span class="proto-badge" id="dv-protocolo"></span>
+    </h3>
+    <div class="mt-corpo" id="dv-corpo"></div>
+    <div class="btn-row" id="dv-acoes"></div>
+  </div>
+</div>
+@endif
+
 {{-- FICHA DO PROTOCOLO --}}
 <div class="modal-bg" id="m-proto" onclick="fModal()">
   {{-- `modal-trab`: a MESMA janela das telas de trabalho (ficha, vistoria,
@@ -4008,6 +4265,11 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 {{-- Sinalização e lembrete de revistoria: bandeiras no mapa, aviso na ficha,
      "Para hoje" no Painel. Depois de camadas-mapa.js (registra a camada). --}}
 <script src="@assetv('js/sinalizacoes.js')"></script>
+{{-- Denúncias de perturbação (Posturas): a aba, o formulário e a camada do
+     mapa. Depois de camadas-mapa.js, pela mesma razão das sinalizações. --}}
+@if ($temAba('denuncias') && ! $externo)
+  <script src="@assetv('js/denuncias.js')"></script>
+@endif
 @if (auth()->user()->podeCurarCadastro())
   <script src="@assetv('js/importacoes.js')"></script>
   {{-- Depois de importacoes.js: usa a área de soltar a planilha de lá. --}}
