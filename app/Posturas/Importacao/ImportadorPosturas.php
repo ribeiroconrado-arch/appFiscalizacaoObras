@@ -342,6 +342,14 @@ class ImportadorPosturas
         $r['lidos'] += count($artigos);
         $documentos = json_encode(Artigo::documentosDoModulo('posturas'));
         $ruido = $lei['formulario_tipo'] === 'lei_723_2002';
+        // No AppPOSTURAS a multa do auto da Lei 723 sai SEMPRE das faixas de
+        // dB da lei, qualquer que seja o artigo; `artigo_multa` é só o artigo
+        // citado como penalidade no papel ("art. 17"), e nem precisa estar na
+        // lista de artigos (na base real não estava: a lei tinha só o Art. 1).
+        // Por isso: vale o artigo que bate com `artigo_multa`; não batendo
+        // nenhum, os que têm multa (faixa de UPF) são os calculados por dB.
+        $temArtigoDaMulta = $ruido && collect($artigos)->contains(
+            fn ($a) => $this->mesmoArtigo(trim((string) ($a['numero'] ?? '')), $lei['artigo_multa'] ?? null));
 
         foreach ($artigos as $i => $a) {
             $numero = trim((string) ($a['numero'] ?? ''));
@@ -352,9 +360,11 @@ class ImportadorPosturas
             // A base da multa: na Lei 723 o artigo da multa é calculado pelos
             // decibéis; com faixa de UPF, a critério do fiscal; sem nada, só
             // fundamenta (como os artigos antigos de lá, sem upf_min/max).
+            $temMulta = $min !== null || $max !== null;
             $base = match (true) {
-                $ruido && $this->mesmoArtigo($numero, $lei['artigo_multa'] ?? null) => 'diferenca_db',
-                $min !== null || $max !== null => 'intervalo',
+                $ruido && $temArtigoDaMulta && $this->mesmoArtigo($numero, $lei['artigo_multa'] ?? null) => 'diferenca_db',
+                $ruido && ! $temArtigoDaMulta && $temMulta => 'diferenca_db',
+                $temMulta => 'intervalo',
                 default => 'sem_multa',
             };
 
