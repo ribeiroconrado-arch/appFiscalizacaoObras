@@ -3413,6 +3413,9 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 .ctrl-camadas .cam-rodape{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-top:1px solid var(--bord)}
 .ctrl-camadas .cam-rodape small{font-size:11px;color:var(--tx3)}
 .ctrl-camadas .cam-rodape button{min-height:44px;padding:0 16px;border:0;border-radius:9px;background:var(--gd);color:white;font:inherit;font-size:13px;cursor:pointer}
+.ctrl-camadas .cam-rodape{flex-wrap:wrap}
+.ctrl-camadas #cam-restaurar{background:var(--blt);color:var(--tx2)}
+.ctrl-camadas #cam-restaurar:disabled{opacity:.5;cursor:default}
 @media(max-width:620px){#grupo-camadas .ctrl-camadas{border-radius:18px 18px 0 0}}
 .cad-mesa-x:hover{color:var(--red)}
 .cad-mesa-rolo{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px}

@@ -102,12 +102,28 @@ function pintarPainelCamadas() {
 }
 
 /** Compara as opções disponíveis com os padrões declarados pelos módulos. */
+function camadasForaDoPadrao() {
+  return camadasMapa.filter(c => c.id !== 'satelite' && (!c.disponivel || c.disponivel())
+    && camadaLigada(c.id) !== (c.padrao ?? true))
+}
+
+/** O fundo é uma preferência independente; restaura somente as camadas disponíveis. */
+function restaurarPadraoCamadas() {
+  const alteradas = camadasForaDoPadrao()
+  // Atualiza todas as preferências antes dos callbacks que recarregam o mapa.
+  alteradas.forEach(c => { delete _camadasEscolha[c.id] })
+  try { localStorage.setItem(CAMADAS_CHAVE, JSON.stringify(_camadasEscolha)) } catch { /* vale nesta sessão */ }
+  alteradas.forEach(aplicarCamada)
+  pintarPainelCamadas()
+}
+
 function atualizarIndicadorCamadas() {
-  const quantidade = camadasMapa.filter(c => (!c.disponivel || c.disponivel())
-    && camadaLigada(c.id) !== (c.padrao ?? true)).length
+  const quantidade = camadasForaDoPadrao().length
+  const restaurar = document.getElementById('cam-restaurar')
+  if (restaurar) restaurar.disabled = quantidade === 0
   if (typeof marcarIndicadorControle === 'function') marcarIndicadorControle('grupo-camadas', quantidade || null)
   const botao = document.querySelector('#grupo-camadas .ctrl-btn')
-  const descricao = quantidade ? `Mapa e camadas — ${quantidade} opções diferentes do padrão` : 'Mapa e camadas — configuração padrão'
+  const descricao = quantidade ? `Mapa e camadas — ${quantidade} camadas diferentes do padrão` : 'Mapa e camadas — camadas no padrão'
   botao?.setAttribute('title', descricao)
   botao?.setAttribute('aria-label', descricao)
 }

@@ -445,7 +445,7 @@
                 title="Fechar" aria-label="Fechar as camadas">&#10005;</button>
       </div>
       <div id="camadas-lista"></div>
-      <div class="cam-rodape"><small>Alterações aplicadas ao tocar</small><button type="button" onclick="alternarPainelMapa('grupo-camadas')">Ver mapa</button></div>
+      <div class="cam-rodape"><button type="button" id="cam-restaurar" onclick="restaurarPadraoCamadas()" title="Restaura as camadas e mantém o fundo escolhido" disabled>Restaurar padrão</button><button type="button" onclick="alternarPainelMapa('grupo-camadas')">Ver mapa</button></div>
     </div>
   </div>
 
