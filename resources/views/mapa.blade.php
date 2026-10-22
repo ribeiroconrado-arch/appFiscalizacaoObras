@@ -916,7 +916,7 @@
     @if (auth()->user()->canEdit())
       <button class="btn primary sm" onclick="novaDenuncia()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Nova denúncia
+        Nova<span class="den-txt-longo"> denúncia</span>
       </button>
     @endif
   </div>

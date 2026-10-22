@@ -74,6 +74,13 @@
   .aba{font-size:10px;padding:7px 2px}
   #t-painel .bloco{padding:12px}
 }
+/* iPhone SE/5 (320–380px), com cinco abas: `overflow-wrap:anywhere` partia
+   "Documentos" em "Documento/s". Aqui só se quebra entre palavras ("Ordens
+   de / serviço") e a letra encolhe o bastante para a palavra inteira caber. */
+@media(max-width:380px){
+  .aba{overflow-wrap:normal;word-break:normal;hyphens:none;font-size:9.5px;padding:7px 1px;letter-spacing:-.01em}
+  .aba svg{width:18px;height:18px}
+}
 /* Um único menu: a troca de posição não recria abas nem perde o estado. */
 @media(min-width:1280px){
   .abas{
