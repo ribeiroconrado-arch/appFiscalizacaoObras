@@ -27,7 +27,21 @@ const PranchetaCad = (() => {
   // ao passar o mouse (data-dica, ver prancheta-cadastral.css).
   function botao(k,t,atalho,desc='') {return `<button type="button" data-tool="${k}" data-dica="${t}${atalho?' ('+atalho+')':''}${desc?' — '+desc:''}" aria-label="${t}" onclick="PranchetaCad.ferramenta('${k}')"><svg viewBox="0 0 24 24"><path d="${icones[k]}"/></svg></button>`}
   function botaoAcao(ic,t,acao,desc='',id='') {return `<button type="button" ${id?`id="${id}"`:''} data-dica="${t}${desc?' — '+desc:''}" aria-label="${t}" onclick="${acao}"><svg viewBox="0 0 24 24"><path d="${icones[ic]}"/></svg></button>`}
-  function opcoesSnap(abrir){const p=$('pc-snap-pop');if(!p)return;p.hidden=abrir===undefined?!p.hidden:!abrir;$('pc-snap')?.classList.toggle('ativo',!p.hidden)}
+  function opcoesSnap(abrir){
+    const p=$('pc-snap-pop');if(!p)return
+    p.hidden=abrir===undefined?!p.hidden:!abrir
+    const botao=$('pc-snap')
+    botao?.classList.toggle('ativo',!p.hidden)
+    botao?.setAttribute('aria-expanded',String(!p.hidden))
+    botao?.setAttribute('aria-controls','pc-snap-pop')
+    if(!p.hidden){
+      p.style.left='0px'
+      const r=p.getBoundingClientRect()
+      p.style.left=Math.min(0,window.innerWidth-8-r.right)+'px'
+      p.style.maxHeight=Math.max(0,window.innerHeight-r.top-8)+'px'
+    }
+  }
+  window.addEventListener('resize',()=>{if($('pc-snap-pop')?.hidden===false)opcoesSnap(true)})
   function montar() {
     if(modal) return
     modal=document.createElement('section');modal.id='pc-modal';modal.hidden=true;modal.setAttribute('aria-label','Prancheta cadastral')
@@ -41,15 +55,17 @@ const PranchetaCad = (() => {
 ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       <i></i>${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}${botaoAcao('encerrar','Encerrar linha (Enter)','PranchetaCad.terminar()','termina o traço em curso')}
       <i></i><span class="pc-snap-grupo">${botaoAcao('snap','Snap (OSNAP)','PranchetaCad.opcoesSnap()','onde o cursor encaixa: ponta, meio, na face, perpendicular','pc-snap')}
-        <div class="pc-snap-pop" id="pc-snap-pop" hidden><b>Encaixe do cursor (OSNAP)</b>
-          <label><input id="pc-end" type="checkbox" checked> □ Endpoint <small>ponta das linhas</small></label>
-          <label><input id="pc-mid" type="checkbox" checked> △ Midpoint <small>meio das linhas</small></label>
-          <label><input id="pc-int" type="checkbox" checked> ⊠ Interseção <small>onde duas linhas se cruzam</small></label>
-          <label><input id="pc-near" type="checkbox" checked> × Na face <small>qualquer ponto da linha</small></label>
-          <label><input id="pc-perp" type="checkbox" checked> ∟ Perpendicular <small>pé da perpendicular</small></label>
-          <b>Exibição</b>
-          <label><input id="pc-mapa" type="checkbox" checked onchange="PranchetaCad.mapa(this.checked)"> Mapa cadastral <small>referência de fundo</small></label>
-          <small class="pc-snap-alt">Segure Alt para desenhar sem encaixe.</small></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}
+        <div class="pc-snap-pop" id="pc-snap-pop" hidden aria-label="Encaixe do cursor">
+          <div class="pc-snap-heading">Encaixe do cursor <span>OSNAP</span></div>
+          <div class="pc-snap-options">
+          <label><span class="pc-snap-symbol" aria-hidden="true">□</span><span class="pc-snap-text">Extremidade <small>Endpoint · ponta da linha</small></span><input id="pc-end" type="checkbox" role="switch" checked></label>
+          <label><span class="pc-snap-symbol" aria-hidden="true">△</span><span class="pc-snap-text">Ponto médio <small>Midpoint · centro da linha</small></span><input id="pc-mid" type="checkbox" role="switch" checked></label>
+          <label><span class="pc-snap-symbol" aria-hidden="true">⊠</span><span class="pc-snap-text">Interseção <small>Cruzamento entre duas linhas</small></span><input id="pc-int" type="checkbox" role="switch" checked></label>
+          <label><span class="pc-snap-symbol" aria-hidden="true">×</span><span class="pc-snap-text">Na face <small>Qualquer ponto sobre a linha</small></span><input id="pc-near" type="checkbox" role="switch" checked></label>
+          <label><span class="pc-snap-symbol" aria-hidden="true">∟</span><span class="pc-snap-text">Perpendicular <small>Projeção a 90° sobre a linha</small></span><input id="pc-perp" type="checkbox" role="switch" checked></label>
+          <div class="pc-snap-section">Exibição</div>
+          <label><span class="pc-snap-text">Mapa cadastral <small>Referência de fundo</small></span><input id="pc-mapa" type="checkbox" role="switch" checked onchange="PranchetaCad.mapa(this.checked)"></label>
+          </div><div class="pc-snap-alt"><kbd>Alt</kbd> suspenda o encaixe enquanto pressiona</div></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}
       <i></i>${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal, embaixo do lote')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}
       </nav>
       <button type="button" class="pc-x" style="margin-left:auto" onclick="PranchetaCad.fechar()" aria-label="Fechar prancheta" data-dica="Fechar a prancheta (o rascunho fica guardado)">✕</button></header>
@@ -58,7 +74,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       <div id="pc-cota-ed" hidden><label for="pc-cota-valor">Medida do lado</label><input id="pc-cota-valor" inputmode="decimal" autocomplete="off" aria-label="Nova medida do lado, em metros"><span>m</span>
         <button type="button" class="pc-cota-troca" title="Trocar a ponta que fica parada (Tab)" onclick="PranchetaCad.cotaTrocarPonta()">⇄ ponta</button>
         <label class="pc-cota-junto" title="O lado da ponta que anda desliza paralelo: os ângulos ficam como estão"><input type="checkbox" id="pc-cota-junto" onchange="PranchetaCad.cotaJunto(this.checked)"> levar o lado vizinho junto</label>
-        <small>Enter aplica · Esc cancela</small></div>
+        <small><b class="pc-cota-fica">● verde fica</b> · <b class="pc-cota-anda">● laranja anda</b> · Enter aplica · Esc cancela</small></div>
       <section id="pc-dados" hidden aria-label="Dados e conferência"><header><b>Dados dos imóveis</b><button type="button" class="modal-x pc-fechar-dados" onclick="PranchetaCad.dados(false)" aria-label="Fechar dados">✕</button></header><div id="pc-form"></div><div id="pc-conferencia" role="status" tabindex="-1"></div></section>
       <div class="pc-credito">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · Referência cartográfica</div></main>
       <footer class="pc-rodape"><button type="button" class="btn sm" onclick="PranchetaCad.salvar().catch(()=>{})" id="pc-save">Salvar rascunho</button>
@@ -128,10 +144,24 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     return melhor||p
   }
   function contornos(){return s.tipo==='unificacao'&&s.uniao?[{geometry:s.uniao}]:s.originais}
-  function faces(ignorar=null){return [...facesFixas(),...s.linhas.filter(l=>l.id!==ignorar).flatMap(l=>l.pontos.slice(1).map((b,i)=>[l.pontos[i],b]))]}
+  /**
+   * Tudo o que o OSNAP enxerga: o contorno de origem, os vizinhos, as linhas
+   * desenhadas e os lados já traçados da linha em curso. `ignorar` é o id de
+   * uma linha (ela inteira sai — mover/offset), ou {id, v, fechada} ao arrastar
+   * um VÉRTICE: só os dois lados que encostam nele saem, e o resto do próprio
+   * lote continua valendo como referência.
+   */
+  function faces(ignorar=null){
+    const id=typeof ignorar==='string'?ignorar:null,vx=ignorar&&typeof ignorar==='object'?ignorar:null
+    const lados=l=>l.pontos.slice(1).map((b,i)=>[l.pontos[i],b,i])
+      .filter(([,,i])=>!vx||l.id!==vx.id||!(i===vx.v||i+1===vx.v||(vx.fechada&&vx.v===0&&i===l.pontos.length-2)||(vx.fechada&&vx.v===l.pontos.length-1&&i===0)))
+      .map(([a,b])=>[a,b])
+    const traco=s.traco.length>=2?s.traco.slice(1).map((b,i)=>[s.traco[i],b]):[]
+    return [...facesFixas(),...s.linhas.filter(l=>l.id!==id).flatMap(lados),...traco]}
   // Faces que não se movem: o contorno de origem e, no desenho livre, os vizinhos
   // — é neles que o lote novo encosta.
-  function facesFixas(){const fs=[...contornos(),...(livre()?s.contexto.filter(f=>f.geometry?.coordinates?.[0]):[])];return fs.flatMap(f=>{const r=ring(f);return r.slice(1).map((b,i)=>[r[i],b])})}
+  // Os VIZINHOS valem em toda ferramenta (antes, só no desenho livre).
+  function facesFixas(){const fs=[...contornos(),...s.contexto.filter(f=>f.geometry?.coordinates?.[0])];return fs.flatMap(f=>{const r=ring(f);return r.slice(1).map((b,i)=>[r[i],b])})}
   // O lado sob o ponteiro, para a Concordância: primeiro os desenhados, depois os fixos.
   function segmentoPerto(p){let d=16/s.escala,m=null;const t=(a,b,sel)=>{const x=G.len(G.sub(G.pe(p,a,b),p));if(x<d){d=x;m=sel}}
     for(const l of s.linhas)for(let i=1;i<l.pontos.length;i++)t(l.pontos[i-1],l.pontos[i],{id:l.id,i:i-1})
@@ -162,7 +192,9 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(s.ref){const n=G.normal(...s.ref),m=G.dot(G.sub(p,a),n);let q=G.add(a,G.mul(n,m));for(const f of faces()){const x=G.inter(a,G.add(a,n),...f,false);if(x&&x.s>=0&&x.s<=1&&G.len(G.sub(x.p,q))<12/s.escala&&G.len(G.sub(x.p,a))>.001)q=x.p}s.captura={p:q,t:'⊥ 90° com a face escolhida'};return q}
     // ORTHO (F8, como no AutoCAD): só horizontal ou vertical DA TELA. Shift
     // inverte enquanto pressionado — liga com o Ortho desligado, e vice-versa.
-    if(ortoAtivo(ev))return orto(a,p)
+    // Com o Ortho ligado, o ponto CAPTURADO pelo OSNAP vale por cima (como no
+    // AutoCAD); sem captura (ou só "Na face"), vale o Ortho.
+    if(ortoAtivo(ev)){const q=snap(p,ev,a);if(s.captura&&s.captura.t!=='Na face')return q;s.captura=null;return orto(a,p)}
     return snap(p,ev,a)
   }
   // Ortho: a chave fica valendo entre aberturas da prancheta (deste navegador).
@@ -244,7 +276,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   function move(ev){if(!s)return;const p=ponto(ev);s.mouse=p
     if(s.drag){const d=s.drag
       if(d.pan){s.centro=[d.centro[0]-(ev.clientX-d.inicio[0])/s.escala,d.centro[1]+(ev.clientY-d.inicio[1])/s.escala]}
-      else{const alvo=snap(p,ev,d.inicio,s.sel),delta=G.sub(alvo,d.inicio);d.mudou ||= G.len(delta)>.001;const l=selecionada();if(l){l.pontos=copy(d.orig);if(d.vertex!==null){l.pontos[d.vertex]=alvo;const m=l.pontos.length-1;if(d.fechada&&(d.vertex===0||d.vertex===m))l.pontos[d.vertex===0?m:0]=[...alvo]}else l.pontos=l.pontos.map(q=>G.add(q,delta));recalcular()}}
+      else{const alvo=snap(p,ev,d.inicio,d.vertex!==null?{id:s.sel,v:d.vertex,fechada:d.fechada}:s.sel),delta=G.sub(alvo,d.inicio);d.mudou ||= G.len(delta)>.001;const l=selecionada();if(l){l.pontos=copy(d.orig);if(d.vertex!==null){l.pontos[d.vertex]=alvo;const m=l.pontos.length-1;if(d.fechada&&(d.vertex===0||d.vertex===m))l.pontos[d.vertex===0?m:0]=[...alvo]}else l.pontos=l.pontos.map(q=>G.add(q,delta));recalcular()}}
     }else if(s.ferramenta==='linha'){s.mouse=destino(p,ev);if(s.traco.length)entrada(s.mouse,'Comprimento',true)}
     else if(s.operacao){const o=s.operacao;s.mouse=snap(p,ev,o.basePendente?null:o.inicio,o.basePendente?null:s.sel);if(!o.basePendente&&o.tipo==='mover'&&ortoAtivo(ev))s.mouse=orto(o.inicio,s.mouse);if(!o.basePendente)entrada(s.mouse,o.tipo==='offset'?'Offset':'Mover',true)}
     render()
@@ -259,7 +291,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
    * retângulo). Sem ele, só a ponta anda e o lado vizinho gira um pouco.
    */
   function editarCota(id,i){if(!s||s.leitura)return;const l=s.linhas.find(x=>x.id===id);if(!l||!l.pontos[i]||!l.pontos[i-1])return
-    s.sel=id;s.cotaEd={id,i,fixa:'a',junto:G.fechada(l.pontos)&&l.pontos.length>4}
+    s.sel=id;s.cotaEd={id,i,fixa:'a',junto:true}
     const el=$('pc-cota-ed'),q=tela(G.mul(G.add(l.pontos[i-1],l.pontos[i]),.5));el.hidden=false
     el.style.left=`${Math.max(8,Math.min(s.w-430,q[0]-120))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]+18))}px`
     $('pc-cota-valor').value=fmtMed(G.len(G.sub(l.pontos[i],l.pontos[i-1])));$('pc-cota-junto').checked=s.cotaEd.junto

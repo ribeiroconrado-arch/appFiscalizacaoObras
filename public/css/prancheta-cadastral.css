@@ -48,14 +48,27 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 #pc-modal .pc-vista [data-dica]:hover::after,#pc-modal .pc-x[data-dica]:hover::after{left:auto;right:0;transform:none}
 /* Snap (OSNAP): um botão, e as opções num painel. */
 .pc-snap-grupo{position:relative;display:inline-flex}
-.pc-snap-pop{position:absolute;top:calc(100% + 8px);left:0;z-index:25;width:250px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 28px #0003;padding:10px 12px;font-size:12px}
+.pc-snap-pop{position:absolute;top:calc(100% + 8px);left:0;z-index:25;width:300px;max-width:calc(100vw - 16px);box-sizing:border-box;background:var(--sur,#fff);color:var(--tx,#213547);border:0;border-radius:10px;box-shadow:0 8px 28px #0003;padding:0;font-size:12px;overflow:auto;overscroll-behavior:contain}
 .pc-snap-pop[hidden]{display:none}
 .pc-snap-pop b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#5f7180;margin:6px 0 4px}
 .pc-snap-pop b:first-child{margin-top:0}
-.pc-snap-pop label{display:flex;align-items:baseline;gap:6px;padding:3px 0;cursor:pointer}
-.pc-snap-pop label small{color:#7a8a97;font-size:10.5px;margin-left:auto}
-.pc-snap-pop input{accent-color:var(--g,#009b3a)}
-.pc-snap-alt{display:block;color:#7a8a97;margin-top:6px;font-size:10.5px}
+.pc-snap-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;background:var(--gd,#006b28);color:#fff;font-size:12px;font-weight:600}
+.pc-snap-heading span{font-size:10px;letter-spacing:.08em;font-weight:500}
+.pc-snap-options{padding:4px 10px}
+.pc-snap-pop label{display:flex;align-items:center;gap:10px;min-height:54px;box-sizing:border-box;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--blt,#edf2f6)}
+.pc-snap-pop label:last-child{border-bottom:0}
+.pc-snap-pop label:hover{background:var(--blt,#edf2f6)}
+.pc-snap-text{flex:1;min-width:0;font-weight:500;line-height:1.4}
+.pc-snap-pop label small{display:block;color:var(--tx2,#5f7180);font-size:11px;font-weight:400;margin:2px 0 0;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.4}
+.pc-snap-symbol{display:grid;place-items:center;flex:none;width:26px;height:28px;font:22px/1 monospace;color:var(--gd,#006b28)}
+.pc-snap-section{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2,#5f7180);padding:12px 4px 3px}
+.pc-snap-pop input[type=checkbox]{appearance:none;flex:none;position:relative;width:32px;height:20px;margin:0;border:1px solid var(--bord,#cbd5e1);border-radius:20px;background:var(--blt,#edf2f6);cursor:pointer}
+.pc-snap-pop input[type=checkbox]::after{content:'';position:absolute;width:14px;height:14px;top:2px;left:2px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003}
+.pc-snap-pop input[type=checkbox]:checked{background:var(--gd,#006b28);border-color:var(--gd,#006b28)}
+.pc-snap-pop input[type=checkbox]:checked::after{left:14px}
+.pc-snap-pop input:focus-visible{outline:2px solid var(--gd,#006b28);outline-offset:3px}
+.pc-snap-alt{display:flex;align-items:center;gap:7px;color:var(--tx2,#5f7180);border-top:1px solid var(--bord,#cbd5e1);padding:10px 14px;font-size:11px;line-height:1.4}
+.pc-snap-alt kbd{padding:2px 5px;border:1px solid var(--bord,#cbd5e1);border-radius:4px;font:11px monospace;background:var(--blt,#edf2f6)}
 /* Com o painel do Snap aberto, a dica do botão sairia por cima dele. */
 #pc-snap.ativo:hover::after{display:none}
 /* A referência fixada (Perpendicular): aviso sobre o desenho, no canto. */
@@ -126,3 +139,5 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 #pc-cota-ed .pc-cota-troca{border:1px solid #d3dad5;background:#fff;border-radius:5px;padding:2px 7px;font-size:11px;cursor:pointer}
 #pc-cota-ed .pc-cota-junto{display:flex;align-items:center;gap:4px;cursor:pointer}
 #pc-cota-ed small{color:#6b7280;width:100%}
+#pc-cota-ed .pc-cota-fica{color:#16a34a}
+#pc-cota-ed .pc-cota-anda{color:#ea580c}
