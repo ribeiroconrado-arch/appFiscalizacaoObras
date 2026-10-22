@@ -205,10 +205,15 @@ class ConferenciaComCadastro
         $semLote = array_values($semLote);
 
         // COBERTURA: some da lista a inscrição que ganhou lote no mapa.
+        // Lote inativo do mapa também conta (ver calcular).
         $cobertura = $anterior['cobertura'] ?? null;
         if ($cobertura) {
-            $cobertura['faltam'] = array_values(array_filter($cobertura['faltam'] ?? [],
-                fn ($f) => ! isset($comInscricao[InscricaoImobiliaria::normalizar($f['inscricao'] ?? null) ?? ''])));
+            $inativosNoMapa = $this->inscricoesInativas($nomes, $bairros, $campos);
+            $cobertura['faltam'] = array_values(array_filter($cobertura['faltam'] ?? [], function ($f) use ($comInscricao, $inativosNoMapa) {
+                $insc = InscricaoImobiliaria::normalizar($f['inscricao'] ?? null) ?? '';
+
+                return ! isset($comInscricao[$insc]) && ! isset($inativosNoMapa[$insc]);
+            }));
             $cobertura['no_mapa'] = (int) $cobertura['esperadas'] - count($cobertura['faltam']);
         }
 
@@ -414,6 +419,11 @@ class ConferenciaComCadastro
             }
         }
 
+        // Para a COBERTURA, lote INATIVO do mapa também conta: o lote juntado
+        // numa unificação (ou que saiu num desmembramento) foi importado, só
+        // não vale mais. Sem isto ele aparecia como "sem lote" (22/10/2026).
+        $inativosNoMapa = $this->inscricoesInativas($nomes, $bairros, $campos);
+
         $naoEncontrados = [];
         $inativos = [];
         $semLote = [];
@@ -442,7 +452,7 @@ class ConferenciaComCadastro
                 $cobertura['ignoradas'][$tipo === 'desmembramento' ? 'desmembramentos' : 'unificacoes']++;
             } else {
                 $cobertura['esperadas']++;
-                if (isset($doBairro[$insc])) {
+                if (isset($doBairro[$insc]) || isset($inativosNoMapa[$insc])) {
                     $cobertura['no_mapa']++;
                 } else {
                     $cobertura['faltam'][] = [
@@ -578,6 +588,26 @@ class ConferenciaComCadastro
      *                   (conferido em 21/10/2026); o único acima de 99 é uma
      *                   unificação (Buritis II, Q05 L0102).
      */
+    /**
+     * As inscrições dos lotes INATIVOS do mapa (unificados, desmembrados): para
+     * a cobertura eles foram importados.
+     *
+     * @param  list<string>  $nomes  os nomes de desenho do bairro
+     * @param  list<string>  $campos
+     * @return array<string,true>
+     */
+    private function inscricoesInativas(array $nomes, BairrosDoDesenho $bairros, array $campos): array
+    {
+        $r = [];
+        foreach (DB::table('lotes')->where('situacao', 'inativo')->whereIn('bairro', $nomes)->get($campos) as $l) {
+            if ($insc = InscricaoImobiliaria::normalizar($bairros->inscricaoDe($l))) {
+                $r[$insc] = true;
+            }
+        }
+
+        return $r;
+    }
+
     public static function tipoDaInscricao(?string $inscricao): ?string
     {
         $p = InscricaoImobiliaria::partes($inscricao);

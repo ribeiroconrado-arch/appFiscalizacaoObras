@@ -683,7 +683,7 @@ function htmlCoberturaDoCadastro(cob, acao = () => '') {
         <span class="badge ${faltam.length ? 'bd-er' : 'bd-ok'}">${faltam.length ? n(faltam.length) + ' sem lote' : 'Completo'}</span>
         <b>Todos os lotes do cadastro estão no mapa?</b>
         <span class="imp-sub">${n(cob.no_mapa)} de ${n(cob.esperadas)} inscrições do bairro têm lote no mapa${ignorados ? ` · fora da conta: ${ignorados}` : ''}</span>
-        <span class="imp-sub conf-grupo-nota">Ativas e inativas no cadastro. Inscrição de desmembramento (variação diferente de 000) e de unificação (lote 0708 = 07 + 08) não entram.</span>
+        <span class="imp-sub conf-grupo-nota">Conta as inscrições ativas e inativas no cadastro, e os lotes ativos e inativos do mapa (o lote juntado numa unificação foi importado). Não entram: inscrição de desmembramento (variação diferente de 000) e de unificação — número de lote de 100 para cima, que é como o cadastro numera lotes juntados (01 + 02 = 0102).</span>
       </div>
       ${faltam.length ? `<table class="imp-tabela jt-tabela">
         <thead><tr><th>Inscrição</th><th>Quadra · Lote</th><th>Detalhe</th><th></th></tr></thead>
