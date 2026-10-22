@@ -99,10 +99,12 @@ function _corrMontar() {
 }
 
 /** As pendências que o filtro e a pesquisa deixam à vista. */
-function _corrVisiveis() {
+function _corrVisiveis(incluirResolvidas = false) {
   const termos = _jtNorm(correcaoState.busca).split(/\s+/).filter(Boolean)
-  return correcaoState.itens.filter(it => {
-    if (correcaoState.filtro && it.tipo !== correcaoState.filtro) return false
+  const resolvidas = correcaoState.filtro === 'resolvidas'
+  if (resolvidas && !incluirResolvidas) return []
+  return (resolvidas ? correcaoState.resolvidas : correcaoState.itens).filter(it => {
+    if (!resolvidas && correcaoState.filtro && it.tipo !== correcaoState.filtro) return false
     if (!termos.length) return true
     const texto = _jtNorm(`${it.inscricao || ''} q ${it.quadra ?? ''} l ${it.lote ?? ''} ${_corrTipo(it.tipo).curto}`)
     return termos.every(t => texto.includes(t))
@@ -309,6 +311,7 @@ async function _corrIr(it) {
 }
 
 function _corrPasso(d) {
+  if (correcaoState.filtro === 'resolvidas') return
   const vis = _corrVisiveis()
   if (!vis.length) return
   const i = vis.findIndex(it => it.chave === correcaoState.atual)
@@ -324,7 +327,7 @@ function _corrFiltrar(tipo) {
   correcaoState.filtro = tipo && correcaoState.filtro !== tipo ? tipo : null
   _corrRepintar()
   const vis = _corrVisiveis()
-  if (vis.length && !vis.some(it => it.chave === correcaoState.atual)) _corrIr(vis[0])
+  if (tipo !== 'resolvidas' && vis.length && !vis.some(it => it.chave === correcaoState.atual)) _corrIr(vis[0])
   else _corrPintar()
 }
 
@@ -485,34 +488,22 @@ function _corrPainel() {
   return p
 }
 
-/** Em que passo se está — é o que a faixa do topo acende. */
-function _corrPassoAtual() {
-  if (correcaoState.conferindo) return 4
-  if (correcaoState.emFerramenta) return 3
-  return _corrItem() ? 2 : 1
-}
-
 function _corrPintar() {
   const p = _corrPainel()
   p.hidden = !correcaoState.aberto
   if (!correcaoState.aberto) return
   const it = _corrItem()
-  const passo = _corrPassoAtual()
   const total = correcaoState.itens.length + correcaoState.resolvidas.length
   const feitas = correcaoState.resolvidas.length
   const nome = correcaoState.origem === 'importacao'
     ? (correcaoState.imp?.bairro || 'Importação') : (confState.oficial || confState.bairro || 'Bairro')
   p.classList.toggle('recolhido', correcaoState.emFerramenta)
 
-  const passos = ['Escolha a pendência', 'Escolha a correção', 'Corrija no mapa', 'Conferido sozinho']
-    .map((t, i) => `<li class="${i + 1 < passo ? 'feito' : i + 1 === passo ? 'agora' : ''}"><b>${i + 1}</b>${t}</li>`).join('')
-
   const cabeca = `
     <div class="corr-cab">
-      <div class="corr-tit"><b>Correção · ${esc(nome)}</b>
+      <div class="corr-tit"><b>Correção cadastral</b>
         <button type="button" class="corr-x" onclick="voltarAFichaDaCorrecao()" title="Fechar e voltar à lista" aria-label="Fechar e voltar à lista">&#10005;</button></div>
-      <ol class="corr-passos">${passos}</ol>
-    </div>`
+    </div><div class="corr-nome">${esc(nome)}</div>`
 
   if (correcaoState.emFerramenta) {
     p.innerHTML = `${cabeca}
@@ -524,30 +515,28 @@ function _corrPintar() {
 
   const contaTipo = {}
   for (const x of correcaoState.itens) contaTipo[x.tipo] = (contaTipo[x.tipo] || 0) + 1
-  // OS CARTÕES DA CONFERÊNCIA, aqui também: um por tipo, e clicar filtra a
-  // lista (outro clique no mesmo cartão volta a mostrar todas).
+  // Filtros compactos: um segundo clique volta a mostrar todas as pendências.
   const cartao = (t, n) => {
     const at = correcaoState.filtro === t
-    return `<button type="button" class="imp-kpi conf-kpi${at ? ' ativo' : ''}" style="--kpi-cor:${_corrTipo(t).cor}" aria-pressed="${at}"
-      title="${at ? 'Mostrar todas' : 'Mostrar só estas'}" onclick="_corrFiltrar(${jsArg(t)})"><small><i></i>${esc(_corrTipo(t).curto)}</small><b>${n}</b></button>`
+    return `<button type="button" class="corr-filtro-btn" aria-pressed="${at}"
+      title="${at ? 'Mostrar todas' : 'Mostrar só estas'}" onclick="_corrFiltrar(${jsArg(t)})">${esc(t === 'resolvidas' ? 'Resolvidas' : _corrTipo(t).curto)}<b>${n}</b></button>`
   }
-  const cartoes = `<div class="imp-kpi kpi-ok" style="--kpi-cor:#1D9E75"><small><i></i>resolvidas</small><b>${feitas}</b></div>`
-    + Object.entries(contaTipo).map(([t, n]) => cartao(t, n)).join('')
+  const cartoes = Object.entries(contaTipo).map(([t, n]) => cartao(t, n)).join('') + cartao('resolvidas', feitas)
 
   p.innerHTML = `${cabeca}
     <div class="corr-progresso">
       <span>${correcaoState.conferindo ? 'Conferindo de novo…' : `<b>${feitas}</b> de ${total} resolvida${total === 1 ? '' : 's'}`}</span>
-      <div class="corr-barra"><i style="width:${total ? Math.round(feitas * 100 / total) : 0}%"></i></div>
-      <label class="corr-cores" title="Pinta no mapa todas as pendências do bairro, cada tipo na cor do seu cartão">
+      <div class="corr-barra" role="progressbar" aria-label="Pendências resolvidas" aria-valuemin="0" aria-valuemax="${total || 1}" aria-valuenow="${feitas}"><i style="width:${total ? Math.round(feitas * 100 / total) : 0}%"></i></div>
+      <label class="corr-cores" title="Pinta no mapa as pendências do filtro atual, com uma cor por tipo">
         <input type="checkbox" id="corr-cores" ${correcaoState.cores ? 'checked' : ''} onchange="_corrAlternarCores(this.checked)"> Cores das pendências no mapa</label>
     </div>
-    <div class="imp-kpis corr-kpis">${cartoes}</div>
-    ${correcaoState.filtro ? `<div class="corr-filtro">Só <b>${esc(_corrTipo(correcaoState.filtro).rotulo)}</b> · <a href="#" onclick="event.preventDefault(); _corrFiltrar(null)">mostrar todas</a></div>` : ''}
+    <div class="corr-filtros" aria-label="Tipos de pendência">${cartoes}</div>
     <label class="jt-busca corr-busca" for="corr-busca">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input type="search" id="corr-busca" placeholder="Pesquisar quadra, lote ou inscrição" autocomplete="off" value="${esc(correcaoState.busca)}" oninput="_corrBuscar(this)">
     </label>
-    <div class="corr-lista" id="corr-lista"></div>
+    <div class="corr-conteudo"><div class="corr-lista" id="corr-lista"></div>
+    <section class="corr-detalhe" id="corr-detalhe" aria-label="Pendência selecionada" aria-live="polite" hidden></section></div>
     <div class="corr-pe">
       <span class="corr-nav">
         <button type="button" class="btn sm" onclick="_corrPasso(-1)" title="Pendência anterior">&#8249; Anterior</button>
@@ -561,29 +550,38 @@ function _corrPintar() {
 function _corrPintarLista() {
   const lista = document.getElementById('corr-lista')
   if (!lista) return
-  const vis = _corrVisiveis()
+  const vis = _corrVisiveis(true)
+  const resolvidas = correcaoState.filtro === 'resolvidas'
   const linha = it => {
     const t = _corrTipo(it.tipo)
     const medida = it.tipo === 'area_diferente' && it.diferenca != null
       ? `${it.diferenca > 0 ? '+' : '−'}${fmtNum(Math.abs(it.diferenca))} m²` : esc(t.curto)
-    if (it.chave !== correcaoState.atual) {
-      return `<button type="button" class="corr-item" onclick="_corrIrPara(${jsArg(it.chave)})">
-        <i style="background:${t.cor}"></i><span>Q ${esc(it.quadra ?? '—')} · L ${esc(it.lote ?? '—')}</span><small>${medida}</small></button>`
-    }
-    const sug = _corrSugestoes(it)
-    return `<div class="corr-item atual" id="corr-atual">
-      <div class="corr-item-topo"><i style="background:${t.cor}"></i><b>Q ${esc(it.quadra ?? '—')} · L ${esc(it.lote ?? '—')}</b><small>${medida}</small></div>
-      <div class="corr-tipo">${esc(t.rotulo)}${it.inscricao ? ` · <span class="mono">${esc(it.inscricao)}</span>` : ''}</div>
-      <p class="corr-frase">${_corrFrase(it)}</p>
-      ${correcaoState.esperaUnificar ? '<p class="corr-dica">Toque no lote vizinho para marcá-lo junto (aparece em laranja) e toque em <b>Unificar</b> de novo.</p>' : ''}
-      <div class="corr-acoes">${sug.map((a, i) => `<button type="button" class="btn sm${i === 0 ? ' primary' : ''}" onclick="corrigirCom(${jsArg(a)})">${CORR_ACOES[a]}</button>`).join('')}</div>
-    </div>`
+    if (resolvidas) return `<div class="corr-item feita"><span>Q ${esc(it.quadra ?? '—')} · L ${esc(it.lote ?? '—')}</span><small>Resolvida</small></div>`
+    const atual = it.chave === correcaoState.atual
+    return `<button type="button" class="corr-item${atual ? ' atual' : ''}" ${atual ? 'id="corr-atual"' : ''} aria-pressed="${atual}" onclick="_corrIrPara(${jsArg(it.chave)})">
+      <i style="background:${t.cor}"></i><span>Q ${esc(it.quadra ?? '—')} · L ${esc(it.lote ?? '—')}</span><small>${medida}</small></button>`
   }
-  const feitas = correcaoState.resolvidas.slice(-3).reverse().map(r =>
-    `<div class="corr-item feita"><span>&#10003;</span><span>Q ${esc(r.quadra ?? '—')} · L ${esc(r.lote ?? '—')}</span><small>resolvida</small></div>`).join('')
-  lista.innerHTML = (vis.length ? vis.map(linha).join('')
-    : `<div class="corr-vazio">${correcaoState.itens.length ? 'Nenhuma pendência com este filtro ou pesquisa.' : 'Nenhuma pendência em aberto.'}</div>`) + feitas
-  document.getElementById('corr-atual')?.scrollIntoView({ block: 'nearest' })
+  lista.innerHTML = vis.length ? vis.map(linha).join('')
+    : `<div class="corr-vazio">${resolvidas ? 'Nenhuma pendência resolvida com esta pesquisa.' : correcaoState.itens.length ? 'Nenhuma pendência com este filtro ou pesquisa.' : 'Nenhuma pendência em aberto.'}</div>`
+  const detalhe = document.getElementById('corr-detalhe')
+  const it = !resolvidas && vis.find(x => x.chave === correcaoState.atual)
+  if (detalhe) {
+    detalhe.hidden = !it
+    detalhe.innerHTML = ''
+    if (it) {
+      const t = _corrTipo(it.tipo), sug = _corrSugestoes(it)
+      const m2 = v => v == null || !Number.isFinite(Number(v)) ? '—' : `${fmtNum(Number(v))} m²`
+      const areas = it.tipo === 'area_diferente' ? `<div class="corr-medidas"><div><span>No desenho</span><b>${m2(it.area_desenho)}</b></div><div><span>No cadastro</span><b>${m2(it.area_cadastro)}</b></div><div><span>Diferença</span><b>${it.diferenca > 0 ? '+' : ''}${m2(it.diferenca)}</b></div></div>` : ''
+      detalhe.innerHTML = `<div class="corr-item-topo"><b>Q ${esc(it.quadra ?? '—')} · Lote ${esc(it.lote ?? '—')}</b></div>
+      <div class="corr-tipo">${esc(t.rotulo)}${it.inscricao ? ` · <span class="mono">${esc(it.inscricao)}</span>` : ''}</div>
+      ${areas}<p class="corr-frase">${it.tipo === 'area_diferente' ? _corrFrase(it).replace(`${_confAreas(it)}. `, '') : _corrFrase(it)}</p>
+      ${correcaoState.esperaUnificar ? '<p class="corr-dica">Toque no lote vizinho para marcá-lo junto (aparece em laranja) e toque em <b>Unificar</b> de novo.</p>' : ''}
+      <div class="corr-acoes">${sug.map((a, i) => `<button type="button" class="btn sm${i === 0 ? ' primary' : ''}" onclick="corrigirCom(${jsArg(a)})">${CORR_ACOES[a]}</button>`).join('')}</div>`
+    }
+  }
+  document.querySelectorAll('#corr-painel .corr-nav button').forEach(b => { b.disabled = resolvidas || !vis.length })
+  const atual = document.getElementById('corr-atual')
+  if (atual) lista.scrollTop = Math.max(0, atual.offsetTop - lista.offsetTop - lista.clientHeight / 2 + atual.clientHeight / 2)
 }
 
 // ── O BAIRRO ISOLADO E AS CORES ──────────────────────────────
