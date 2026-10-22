@@ -163,6 +163,24 @@ De 1240px para cima, avisos, pendências e atividade dividem a linha. Entre 900
 e 1240 a atividade atravessa embaixo: é a mais larga das três e a primeira a
 ficar ilegível espremida.
 
+## Módulos: Obras e Posturas na mesma tela
+
+- **A cor não muda com o módulo.** A cor é do tema que cada um escolheu; o
+  módulo se lê no título do cabeçalho, no seletor Obras | Posturas (só para
+  quem tem os dois) e no sub-cabeçalho ("Posturas · Denúncias").
+- **Trocar de módulo recarrega a tela.** Listas, painel e abas vêm do servidor
+  já recortados; trocar sem recarregar deixaria pedaço de um módulo no outro.
+- **Um mapa só.** Posturas não tem mapa próprio: ganha a camada "Denúncias",
+  ligada por padrão lá e inexistente em Obras.
+- **A denúncia é registro de atendimento, não fila.** Como no AppPOSTURAS: o
+  agente registra já com a tratativa; vazio é "Pendente". Por isso a lista
+  mostra as de todos os agentes por padrão.
+- **No painel de Posturas, denúncia vem antes de documento:** pendentes,
+  reincidentes (3+ em 30 dias no mesmo endereço) e rascunhos parados são o que
+  pede ação hoje.
+- **O aplicativo instalado se chama "Fiscalização Municipal"**, e a foto
+  carimbada em campo leva o título do módulo em que foi tirada.
+
 ## O vazio DITO
 
 "Não informado" e "não perguntado" são coisas diferentes num processo. Onde o

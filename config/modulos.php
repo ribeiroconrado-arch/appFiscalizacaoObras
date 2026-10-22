@@ -40,6 +40,10 @@ return [
         'abas'   => ['painel', 'denuncias', 'mapa', 'documentos', 'protocolos'],
         'parametros' => [
             'impressao_selo' => 'FISCALIZAÇÃO DE POSTURAS',
+            // A linha 3 do cabeçalho impresso. O telefone e o resto seguem os
+            // gerais até o administrador gravar os de Posturas (Parâmetros,
+            // com o módulo Posturas aberto — ParametroController::salvarGeral).
+            'orgao_divisao'  => 'Divisão de Fiscalização de Posturas',
         ],
     ],
 

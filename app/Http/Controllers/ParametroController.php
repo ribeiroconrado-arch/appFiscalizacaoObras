@@ -53,9 +53,14 @@ class ParametroController extends Controller
                 // continua valendo se um dia deixar de ser administrador.
                 'modulos' => $u->getAttribute('modulos') ?: ['obras'],
             ]),
+            // Com outro módulo aberto, o cabeçalho impresso mostra (e grava)
+            // o valor DELE — ver salvarGeral e Parametro::doModulo.
             'geral' => collect(Parametro::CHAVES)->map(fn ($def, $chave) => [
-                'chave' => $chave, 'descricao' => $def[2],
-                'valor' => Parametro::get($chave, $def[0]),
+                'chave' => $chave,
+                'descricao' => $def[2] . ($this->doModuloAtivo($r, $chave) ? ' — só ' . \App\Support\Modulo::rotulo(\App\Support\Modulo::ativo($r->user())) : ''),
+                'valor' => $this->doModuloAtivo($r, $chave)
+                    ? Parametro::doModulo($chave, \App\Support\Modulo::ativo($r->user()))
+                    : Parametro::get($chave, $def[0]),
             ])->values(),
             // Data pura (Y-m-d), não o datetime ISO que o cast 'date' serializa
             // por padrão — senão a tela mostra "01T00:00:00.000000Z/01/2026".
@@ -290,12 +295,29 @@ class ParametroController extends Controller
 
         $d = $r->validate(['valores' => ['required', 'array']]);
 
+        $modulo = \App\Support\Modulo::ativo($r->user());
         foreach ($d['valores'] as $chave => $valor) {
             if (! array_key_exists($chave, Parametro::CHAVES)) { continue; }
-            Parametro::set($chave, (string) $valor);
+            // O cabeçalho de outro módulo vai para "chave.modulo"; o de Obras
+            // (e o resto) continua na chave geral.
+            $destino = $this->doModuloAtivo($r, $chave) ? "$chave.$modulo" : $chave;
+            Parametro::set($destino, (string) $valor);
         }
 
         return response()->json(['message' => 'Parâmetros gravados.']);
+    }
+
+    /**
+     * As linhas do cabeçalho impresso que cada módulo tem as suas: órgão,
+     * departamento, divisão, telefone e selo. Posturas e Obras são divisões
+     * diferentes da mesma secretaria, e cada peça sai com a sua.
+     */
+    private const DO_MODULO = ['orgao_nome', 'orgao_departamento', 'orgao_divisao', 'orgao_telefone', 'impressao_selo'];
+
+    /** A chave é do cabeçalho de um módulo que não é Obras (o padrão)? */
+    private function doModuloAtivo(Request $r, string $chave): bool
+    {
+        return in_array($chave, self::DO_MODULO, true) && \App\Support\Modulo::ativo($r->user()) !== 'obras';
     }
 
     // ── UPF ──────────────────────────────────────────────────────

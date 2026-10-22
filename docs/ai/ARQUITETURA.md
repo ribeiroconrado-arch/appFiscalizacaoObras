@@ -395,6 +395,43 @@ ninguém ia ler. A causa está corrigida (ver Auditoria), mas serve de medida: �
 que acontece quando imagem entra onde não devia.
 
 
+## Um sistema, dois módulos (Obras e Posturas)
+
+Desde outubro de 2026 a fiscalização de Posturas (o antigo AppPOSTURAS, em
+Supabase) mora aqui, como **módulo**, ao lado de Obras. Não é outro sistema:
+mesma base, mesmo mapa, mesmas telas de documento, mesmos usuários.
+
+| Peça | Onde |
+|---|---|
+| O que difere entre os módulos (peças, abas, parâmetros padrão) | `config/modulos.php` — e não `if ($modulo === …)` espalhado |
+| Módulo ativo (na sessão), rótulo, título, abas | `App\Support\Modulo` |
+| Quem usa qual | `users.modulos` (json) · `User::modulos()` / `temModulo()`; administrador tem todos |
+| Rota fechada a quem não tem o módulo | middleware `modulo:posturas` (`SoModulo`) |
+| Peças, leis e OS de cada módulo | coluna `modulo` + escopo global `modulos_do_usuario` e `scopeDoModulo` |
+| Numeração | por módulo: `documento_contadores(modulo, tipo, exercicio)` e índice único `uq_doc_numero(modulo, tipo, exercicio, numero)` |
+| Cabeçalho impresso | `Parametro::doModulo` — `chave.modulo` → padrão do config → global; órgão, departamento, divisão, telefone e selo de Posturas são próprios (gravados em Parâmetros com o módulo Posturas aberto) |
+
+**O que só Posturas tem:** a aba Denúncias (`DenunciaController`,
+`denuncias.js`, protocolo DN em `App\Posturas\ProtocoloDenuncia`), a camada
+"Denúncias" no mapa, decibelímetros e a relação rua↔bairro em Parâmetros, a
+medição da Lei 723/2002 nas peças (`documentos.ruido`, multa em
+`App\Posturas\MultaPorRuido`, base `diferenca_db` do artigo), o veículo
+(`documentos.veiculo`) e o Auto de Apreensão/Retenção (`documento_itens`). Em
+Posturas a peça é do **local**: lavra sem lote, com logradouro e bairro
+(`LavraturaService::lavrar`). Os scripts de Posturas (`denuncias.js`,
+`documento-posturas.js`) só são carregados no módulo, e o código comum os chama
+com `typeof … === 'function'` antes.
+
+**De onde veio o dado:** `php artisan posturas:importar [--simular]` lê o
+Supabase com o login de um administrador de lá (a RLS bloqueia a chave
+pública). Traz denúncias, cadastros, leis e configurações; os documentos de lá
+não vêm (eram de teste). Pode rodar de novo: reconhece cada linha pelo
+`origem_id`.
+
+**Armadilha já vista:** toda aba nova precisa entrar nas regras de posição das
+telas (`#t-documentos,#t-denuncias,#t-protocolos` em `tema-f.css` e
+`painel-responsivo.css`); fora delas a tela nasce debaixo do cabeçalho.
+
 ## Duas colações diferentes — cuidado ao juntar tabelas
 
 `lotes.bairro` é `utf8mb4_0900_ai_ci`; `cadastro_bairros.nome_gis` é

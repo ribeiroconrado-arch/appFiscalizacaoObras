@@ -760,7 +760,8 @@ function carimbarFotoAnexo(ctx, f) {
   const quadra = document.getElementById('nd-im-quadra')?.value.trim()
   const lote = document.getElementById('nd-im-lote')?.value.trim()
   if (quadra || lote) linhas.push([quadra && 'Qd. ' + quadra, lote && 'Lt. ' + lote].filter(Boolean).join(' · '))
-  linhas.push('Fiscalização de Obras')
+  // O carimbo diz de qual fiscalização é a foto (o título do módulo, no <h1>).
+  linhas.push(document.querySelector('.topo-tit h1')?.textContent.trim() || 'Fiscalização municipal')
 
   // O quadro tem a largura do texto mais comprido, sem passar da foto.
   ctx.font = `700 ${corpoG}px Arial, sans-serif`

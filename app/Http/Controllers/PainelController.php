@@ -50,9 +50,11 @@ class PainelController extends Controller
         return response()->json([
             'modulo'    => $modulo,
             'periodo'   => ['dias' => $dias, 'desde' => $desde->format('d/m/Y')],
-            'metricas'  => $obras
-                ? $this->metricas(clone $vistorias, clone $documentos)
-                : $this->metricasSemVistoria(clone $documentos),
+            'metricas'  => match (true) {
+                $obras                  => $this->metricas(clone $vistorias, clone $documentos),
+                $modulo === 'posturas'  => $this->metricasDePosturas(clone $documentos, $desde, $soMeu, $request->user()),
+                default                 => $this->metricasSemVistoria(clone $documentos),
+            },
             'atencao'   => $this->atencao($uid, $modulo),
             'recentes'  => $this->recentes($uid, $modulo),
             'por_tipo'  => $this->documentosPorTipo(clone $documentos, $modulo),
@@ -98,11 +100,97 @@ class PainelController extends Controller
     }
 
     /**
+     * Os números de Posturas: as denúncias vêm primeiro, porque são o
+     * trabalho do dia — o que chegou no período e o que ainda espera
+     * tratativa —, e depois as peças. "Pendentes" não tem período: denúncia
+     * esquecida há dois meses continua sendo pendência hoje.
+     */
+    private function metricasDePosturas($documentos, $desde, bool $soMeu, \App\Models\User $u): array
+    {
+        $ativas = fn () => \App\Models\Denuncia::query()
+            ->where(fn ($b) => $b->whereNull('tratativa')->orWhere('tratativa', '<>', \App\Models\Denuncia::CANCELADO))
+            ->when($soMeu, fn ($q) => $q->where(fn ($b) => $b->where('agente_id', $u->id)
+                ->orWhere(fn ($c) => $c->whereNull('agente_id')->where('agente_nome', $u->name))));
+        $pendentes = fn () => $ativas()->where(fn ($b) => $b->whereNull('tratativa')->orWhere('tratativa', ''));
+        // A hora da denúncia é local e sem fuso (como no AppPOSTURAS).
+        $desdeLocal = $desde->copy()->setTimezone('America/Cuiaba')->format('Y-m-d H:i:s');
+        $noPeriodo = $ativas()->where('data_hora', '>=', $desdeLocal)->count();
+        $pendNoPeriodo = $pendentes()->where('data_hora', '>=', $desdeLocal)->count();
+
+        return [
+            'denuncias'  => ['n' => $noPeriodo, 'rotulo' => 'Denúncias registradas',
+                             'detalhe' => $pendNoPeriodo ? $pendNoPeriodo . ' ainda sem tratativa' : 'sem as canceladas'],
+            'pendentes'  => ['n' => $pendentes()->count(), 'rotulo' => 'Denúncias pendentes', 'detalhe' => 'sem tratativa, de qualquer data'],
+            'documentos' => ['n' => (clone $documentos)->count(), 'rotulo' => 'Documentos emitidos',
+                             'detalhe' => ($nl = (clone $documentos)->whereIn('status', ['rascunho', 'gravado'])->count())
+                                 ? $nl . ' ainda não lavrado(s)' : 'todos lavrados'],
+            'em_defesa'  => ['n' => (clone $documentos)->whereIn('status', ['lavrado', 'em_defesa'])->whereNotNull('defesa_ate')
+                                ->where('defesa_ate', '>=', now()->toDateString())->count(),
+                             'rotulo' => 'Autos em prazo de defesa', 'detalhe' => null],
+        ];
+    }
+
+    /**
      * "Precisa de atenção": itens acionáveis, não estatística.
      * Cada linha aponta para algo que trava o processo se ninguém agir.
      *
      * @return list<array{titulo:string,detalhe:string,tag:?array,aba:?string}>
      */
+    /**
+     * O que trava o trabalho em Posturas:
+     *  - denúncia pendente há mais de dois dias: atendida e sem tratativa
+     *    anotada, ninguém sabe o que foi feito;
+     *  - endereço reincidente — três ou mais denúncias em 30 dias —, que é o
+     *    caso de passar da orientação para a notificação e o auto;
+     *  - rascunho meu parado há mais de três dias, peça que não virou ato.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function atencaoDePosturas(int $uid): array
+    {
+        $itens = [];
+        $agora = now('America/Cuiaba');
+        $ativa = fn ($b) => $b->whereNull('tratativa')->orWhere('tratativa', '<>', \App\Models\Denuncia::CANCELADO);
+
+        $atrasadas = \App\Models\Denuncia::query()->where(fn ($b) => $b->whereNull('tratativa')->orWhere('tratativa', ''))
+            ->where('data_hora', '<', $agora->copy()->subDays(2)->format('Y-m-d H:i:s'))->count();
+        if ($atrasadas > 0) {
+            $itens[] = [
+                'titulo'  => $atrasadas . ' denúncia(s) sem tratativa há mais de 2 dias',
+                'detalhe' => 'Registre o que foi feito: orientado, notificado, auto…',
+                'tag'     => ['texto' => 'Pendente', 'classe' => 'bd-pe'],
+                'aba'     => 'denuncias',
+            ];
+        }
+
+        $reincidentes = \App\Models\Denuncia::query()->where($ativa)
+            ->where('data_hora', '>=', $agora->copy()->subDays(30)->format('Y-m-d H:i:s'))
+            ->whereNotNull('logradouro')
+            ->selectRaw('logradouro, numero, count(*) as n')->groupBy('logradouro', 'numero')
+            ->havingRaw('count(*) >= 3')->orderByDesc('n')->limit(5)->get();
+        foreach ($reincidentes as $r) {
+            $itens[] = [
+                'titulo'  => trim($r->logradouro . ($r->numero ? ', ' . $r->numero : '')),
+                'detalhe' => $r->n . ' denúncias nos últimos 30 dias',
+                'tag'     => ['texto' => 'Reincidente', 'classe' => 'bd-er'],
+                'aba'     => 'denuncias',
+            ];
+        }
+
+        $rascunhos = Documento::query()->doModulo('posturas')->where('agente_id', $uid)->where('status', 'rascunho')
+            ->where('created_at', '<', now()->subDays(3))->count();
+        if ($rascunhos > 0) {
+            $itens[] = [
+                'titulo'  => $rascunhos . ' rascunho(s) parado(s) há mais de 3 dias',
+                'detalhe' => 'Peça começada que ainda não virou ato',
+                'tag'     => ['texto' => 'Rascunho', 'classe' => 'bd-in'],
+                'aba'     => 'documentos',
+            ];
+        }
+
+        return $itens;
+    }
+
     private function atencao(int $uid, string $modulo): array
     {
         $itens = [];
@@ -128,8 +216,10 @@ class PainelController extends Controller
             $itens[] = [
                 'titulo'  => $doc->numeroFormatado(),
                 'chave'   => 'documento-prazo-' . $doc->id,
-                'detalhe' => sprintf('%s · Quadra %s · Lote %s',
-                    $doc->rotuloTipo(), $doc->lote?->quadra ?? '—', $doc->lote?->numero_lote ?? '—'),
+                // Em Posturas a peça é do local, não do lote: vai o endereço.
+                'detalhe' => $obras
+                    ? sprintf('%s · Quadra %s · Lote %s', $doc->rotuloTipo(), $doc->lote?->quadra ?? '—', $doc->lote?->numero_lote ?? '—')
+                    : $doc->rotuloTipo() . ' · ' . ($doc->endereco ?: 'sem endereço') . ($doc->autuado_nome ? ' · ' . $doc->autuado_nome : ''),
                 'tag'     => ['texto' => $txt, 'classe' => $cls],
                 'aba'     => 'documentos',
             ];
@@ -194,9 +284,10 @@ class PainelController extends Controller
             ];
         }
 
-        // Daqui para baixo é protocolo e cadastro de lotes: só Obras.
+        // Daqui para baixo é protocolo e cadastro de lotes: só Obras. Posturas
+        // tem as suas pendências — as das denúncias.
         if (! $obras) {
-            return $itens;
+            return $modulo === 'posturas' ? [...$itens, ...$this->atencaoDePosturas($uid)] : $itens;
         }
 
         // 5. Protocolos sob minha responsabilidade com prazo apertado.
