@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -68,6 +69,7 @@ class ImportadorPosturas
             }
             $this->{'importar' . Str::studly($etapa)}();
         }
+        $this->avisarCortes();
     }
 
     // ── USUÁRIOS — só para ligar a denúncia ao agente ────────────
@@ -111,7 +113,7 @@ class ImportadorPosturas
             }
 
             $tipo = in_array($u['tipo_usuario'] ?? null, User::CARGOS, true) ? $u['tipo_usuario'] : 'agente';
-            $id = DB::table('users')->insertGetId([
+            $id = DB::table('users')->insertGetId($this->caber('users', [
                 'name' => $nome, 'email' => ($u['email'] ?? null) ?: null, 'matricula' => ($u['matricula'] ?? null) ?: null,
                 'perfil' => in_array($u['perfil'] ?? null, User::PERFIS, true) && $u['perfil'] !== 'admin' ? $u['perfil'] : 'comum',
                 'tipo_usuario' => $tipo, 'modulos' => json_encode(['posturas']),
@@ -119,7 +121,7 @@ class ImportadorPosturas
                 // depois que o administrador ativar e definir a senha.
                 'ativo' => false, 'password' => Hash::make(Str::random(40)),
                 'created_at' => now(), 'updated_at' => now(),
-            ]);
+            ]));
             $this->agentes[$nome] = $id;
             $this->avisos[] = "Conta criada DESATIVADA para {$nome} — ative e defina a senha em Parâmetros › Usuários.";
             $r['novos']++;
@@ -136,15 +138,18 @@ class ImportadorPosturas
         $r = $this->novaEtapa('bairros', count($linhas));
 
         foreach ($linhas as $b) {
-            $nome = Logradouro::normalizar($b['nome'] ?? '');
+            // Cortado ANTES de procurar: o nome guardado é o cortado, e é com ele
+            // que a próxima importação tem de achar o mesmo bairro.
+            ['nome' => $nome, 'codigo' => $codigo] = $this->caber('bairros_endereco',
+                ['nome' => Logradouro::normalizar($b['nome'] ?? ''), 'codigo' => ($b['codigo'] ?? null) ?: null]);
             if ($nome === '') { $r['ignorados']++; continue; }
             $existe = DB::table('bairros_endereco')->where('nome', $nome)->first();
             if ($existe) {
                 DB::table('bairros_endereco')->where('id', $existe->id)
-                    ->update(['codigo' => ($b['codigo'] ?? null) ?: $existe->codigo, 'updated_at' => now()]);
+                    ->update(['codigo' => $codigo ?: $existe->codigo, 'updated_at' => now()]);
                 $r['atualizados']++;
             } else {
-                DB::table('bairros_endereco')->insert(['nome' => $nome, 'codigo' => ($b['codigo'] ?? null) ?: null,
+                DB::table('bairros_endereco')->insert(['nome' => $nome, 'codigo' => $codigo,
                     'created_at' => now(), 'updated_at' => now()]);
                 $r['novos']++;
             }
@@ -175,7 +180,7 @@ class ImportadorPosturas
 
         foreach ($linhas as $v) {
             $rua = Logradouro::normalizar($v['rua'] ?? '');
-            $bairro = Logradouro::normalizar($v['bairro'] ?? '');
+            $bairro = $this->caber('logradouro_bairros', ['bairro' => Logradouro::normalizar($v['bairro'] ?? '')])['bairro'];
             if ($rua === '' || $bairro === '') { $r['ignorados']++; continue; }
 
             $id = $this->idDoLogradouro($rua);
@@ -192,6 +197,7 @@ class ImportadorPosturas
 
     private function idDoLogradouro(string $nome, ?bool &$novo = null): int
     {
+        $nome = $this->caber('logradouros', ['nome' => $nome])['nome'];
         $novo = false;
         $id = DB::table('logradouros')->where('nome', $nome)->value('id');
         if ($id) {
@@ -532,6 +538,8 @@ class ImportadorPosturas
      */
     private function gravar(string $tabela, array $chave, array $dados, array &$r): int
     {
+        $chave = $this->caber($tabela, $chave);
+        $dados = $this->caber($tabela, $dados);
         $existente = DB::table($tabela)->where($chave)->value('id');
         if ($existente) {
             unset($dados['created_at']);
@@ -544,6 +552,46 @@ class ImportadorPosturas
         $r['novos']++;
 
         return (int) DB::table($tabela)->insertGetId($chave + $dados);
+    }
+
+    /** @var array<string, array<string, int>> tabela → coluna → tamanho, lido do banco uma vez */
+    private array $limites = [];
+
+    /** @var array<string, int> "tabela.coluna" → quantos textos foram cortados */
+    private array $cortes = [];
+
+    /**
+     * O texto que não cabe na coluna é CORTADO, e não derruba a importação.
+     *
+     * No AppPOSTURAS as colunas são `text`, sem limite; aqui elas têm tamanho
+     * (com folga — 2026_10_29_000100). Uma denúncia com observação enfiada no
+     * campo do número parava tudo, e nada era gravado. Agora ela entra, com o
+     * texto cortado no tamanho da coluna, e o relatório diz quantos cortes
+     * houve em cada coluna para conferir.
+     */
+    private function caber(string $tabela, array $dados): array
+    {
+        $limites = $this->limites[$tabela] ??= collect(Schema::getColumns($tabela))
+            ->mapWithKeys(fn ($c) => [$c['name'] => preg_match('/^(?:var)?char\((\d+)\)/i', (string) $c['type'], $m) ? (int) $m[1] : 0])
+            ->filter()->all();
+
+        foreach ($dados as $coluna => $valor) {
+            if (is_string($valor) && isset($limites[$coluna]) && mb_strlen($valor) > $limites[$coluna]) {
+                $dados[$coluna] = mb_substr($valor, 0, $limites[$coluna]);
+                $this->cortes["$tabela.$coluna"] = ($this->cortes["$tabela.$coluna"] ?? 0) + 1;
+            }
+        }
+
+        return $dados;
+    }
+
+    /** Os cortes, um aviso por coluna (e não um por linha), no fim da importação. */
+    private function avisarCortes(): void
+    {
+        foreach ($this->cortes as $onde => $n) {
+            $this->avisos[] = "{$onde}: {$n} texto(s) maior(es) que a coluna — entraram cortados; confira.";
+        }
+        $this->cortes = [];
     }
 
     /** "2026-10-20T23:40" (hora local, sem fuso) → "2026-10-20 23:40:00". */
