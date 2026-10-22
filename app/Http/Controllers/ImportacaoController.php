@@ -392,16 +392,54 @@ class ImportacaoController extends Controller
     private function preCuradoria(ImportacaoLote $i): array
     {
         $q = DB::table('auditoria')->where('importacao_id', $i->id)->where('tabela', 'lotes_em_revisao');
+        // DESFAZER: só com a importação em andamento. O motivo de não poder
+        // vai para a tela (o botão some e a razão aparece no lugar).
+        $andamento = $i->emAndamento();
+        $desfazer = app(\App\Services\DesfazerAlteracao::class);
 
         return [
             'total'   => (clone $q)->count(),
-            'ultimos' => $q->orderByDesc('id')->limit(15)->get()->map(fn ($a) => [
-                'acao'      => $a->acao,
-                'lote'      => $a->descricao,
-                'usuario'   => $a->usuario_nome,
-                'quando'    => date('d/m/Y H:i', strtotime($a->created_at)),
-            ])->all(),
+            'ultimos' => $q->orderByDesc('id')->limit(100)->get()->map(function ($a) use ($andamento, $desfazer) {
+                $motivo = $andamento ? $desfazer->motivoNaRevisao($a) : 'Importação publicada ou excluída';
+
+                return [
+                    'id'        => (int) $a->id,
+                    'acao'      => $a->acao,
+                    'lote'      => $a->descricao,
+                    'usuario'   => $a->usuario_nome,
+                    'quando'    => date('d/m/Y H:i', strtotime($a->created_at)),
+                    'pode_desfazer' => $motivo === null,
+                    'motivo'    => $motivo,
+                ];
+            })->all(),
         ];
+    }
+
+    /**
+     * POST /api/importacoes/{importacao}/ajustes/{auditoria}/desfazer — desfaz
+     * um ajuste da pré-curadoria, como ATO NOVO (a linha original fica). Ver
+     * DesfazerAlteracao::motivoNaRevisao para o que pode e o que não pode.
+     */
+    public function desfazerAjuste(Request $r, ImportacaoLote $importacao, int $auditoria,
+                                   \App\Services\DesfazerAlteracao $svc): JsonResponse
+    {
+        if ($e = $this->exigirCuradorDe($r, $importacao)) { return $e; }
+        if (! $importacao->emAndamento()) {
+            return response()->json(['message' => 'A importação já foi publicada ou excluída: os ajustes dela não se desfazem mais por aqui.'], 422);
+        }
+        $a = DB::table('auditoria')->where('id', $auditoria)->where('importacao_id', $importacao->id)
+            ->where('tabela', 'lotes_em_revisao')->first();
+        if (! $a) {
+            return response()->json(['message' => 'Este ajuste não é desta importação.'], 404);
+        }
+
+        try {
+            $msg = $svc->executar($a, $r->user()->id, $r->user()->name);
+        } catch (RuntimeException $ex) {
+            return $this->recusa($ex);
+        }
+
+        return response()->json(['message' => $msg]);
     }
 
     /** @return array<string,mixed> */

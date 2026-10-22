@@ -211,6 +211,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/importacoes/{importacao}/bairro', [ImportacaoController::class, 'vincularBairro']);
         Route::post('/importacoes/{importacao}/lotes/{lote}/numero', [ImportacaoController::class, 'numerarLote']);
         Route::post('/importacoes/{importacao}/lotes/excluir', [ImportacaoController::class, 'excluirLotes']);
+        // Desfazer um ajuste da pré-curadoria (DesfazerAlteracao::motivoNaRevisao).
+        Route::post('/importacoes/{importacao}/ajustes/{auditoria}/desfazer', [ImportacaoController::class, 'desfazerAjuste'])->whereNumber('auditoria');
         Route::post('/importacoes/{importacao}/salvar', [ImportacaoController::class, 'salvar']);
         Route::post('/importacoes/{importacao}/descartar', [ImportacaoController::class, 'descartar']);
         Route::post('/importacoes/{importacao}/publicar', [ImportacaoController::class, 'publicar']);

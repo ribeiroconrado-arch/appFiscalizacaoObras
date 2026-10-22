@@ -455,6 +455,10 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .ce-chip.ce-er{background:#FCEBEB;color:#A32D2D;max-width:150px;overflow:hidden;text-overflow:ellipsis}
 .ce-ver{font-size:11px}
 /* Ícones escuros, com moldura: sobre o branco da barra, legíveis em qualquer fundo do mapa. */
+/* Registro da pré-curadoria com a coluna "Desfazer" (importacoes.js). */
+.jt-grupo .jt-tabela.jt-registro.pc-com-desfazer th:nth-child(4){width:140px}
+.jt-grupo .jt-tabela.jt-registro.pc-com-desfazer th:last-child{width:150px}
+.pc-sem-desfazer{cursor:help}
 /* "Todos os lotes do cadastro estão no mapa?" — à parte das divergências, separado por um traço. */
 .cob-grupo{margin-top:18px;padding-top:14px;border-top:2px solid var(--gm,#cfe3d6)}
 /* A faixa invisível sobre a linha do contorno: clicar cria vértice (contorno-editor.js). */

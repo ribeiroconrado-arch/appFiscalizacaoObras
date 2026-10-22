@@ -79,8 +79,11 @@ class PreCuradoriaDeLotes
         return DB::transaction(function () use ($ids) {
             $n = 0;
             // Um a um, pelo Eloquent: cada exclusão deixa a sua linha no
-            // registro da importação.
+            // registro da importação. O desenho fica guardado antes, para o
+            // "Desfazer" do ajuste poder trazê-lo de volta (DesfazerAlteracao).
+            $apagados = app(LotesApagados::class);
             foreach (Lote::whereIn('id', $ids)->lockForUpdate()->get() as $l) {
+                $apagados->guardar($l, 'Apagado na pré-curadoria');
                 $l->delete();
                 $n++;
             }

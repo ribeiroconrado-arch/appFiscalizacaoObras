@@ -71,10 +71,9 @@ class EdicaoDeLote
 
         return DB::transaction(function () use ($lote, $dados, $geojson, $area) {
             $antes = $lote->only(['quadra', 'numero_lote', 'chave', 'area_gis_m2']);
-            // Lote publicado: o contorno de antes fica na trilha.
-            if (! $lote->em_revisao) {
-                $antes['contorno'] = DB::table('lotes')->where('id', $lote->id)->selectRaw('ST_AsGeoJSON(geom) g')->value('g');
-            }
+            // O contorno de antes fica na trilha — também na pré-curadoria, onde
+            // é dele que o "Desfazer" do ajuste tira o desenho (DesfazerAlteracao).
+            $antes['contorno'] = DB::table('lotes')->where('id', $lote->id)->selectRaw('ST_AsGeoJSON(geom) g')->value('g');
             $depois = [
                 'quadra'      => $dados['quadra'],
                 'numero_lote' => $dados['numero_lote'],

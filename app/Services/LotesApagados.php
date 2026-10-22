@@ -82,7 +82,7 @@ class LotesApagados
      *
      * @return Lote o lote restaurado
      */
-    public function restaurar(int $id): Lote
+    public function restaurar(int $id, array $extras = []): Lote
     {
         $a = DB::table('lotes_apagados')->where('id', $id)->first();
 
@@ -96,7 +96,7 @@ class LotesApagados
             );
         }
 
-        return DB::transaction(function () use ($a) {
+        return DB::transaction(function () use ($a, $extras) {
             // INSERT CRU, e não `Lote::create`.
             //
             // `geom` é NOT NULL sem default, e o Eloquent não tem como levar
@@ -125,7 +125,9 @@ class LotesApagados
                 'situacao'              => 'ativo',
                 'created_at'            => now(),
                 'updated_at'            => now(),
-            ];
+            // O lote apagado na PRÉ-CURADORIA volta para dentro da importação,
+            // ainda em revisão (importacao_id, em_revisao) — ver DesfazerAlteracao.
+            ] + $extras;
 
             $colunas = implode(', ', array_keys($atributos));
             $marcas  = implode(', ', array_fill(0, count($atributos), '?'));

@@ -572,7 +572,7 @@ function renderFichaImportacao(i) {
             ${vinc.map(([k, n]) => `${rotVinc[k] || k}: ${n}`).join(' · ')}</div>` : ''}
         ${_htmlPendenciasDoDesenho(i)}
         <div id="imp-resultado">${conf ? conf.corpo : naoConferida}</div>
-        ${_htmlPreCuradoria(i.pre_curadoria)}
+        ${_htmlPreCuradoria(i.pre_curadoria, i.id)}
         <div class="jt-nada" hidden>Nenhuma linha com o que foi pesquisado.</div>
       </div>
       <div class="jt-rodape jt-rodape-col">
@@ -616,20 +616,45 @@ function _htmlPendenciasDoDesenho(i) {
 }
 
 /** O registro próprio da pré-curadoria — fora do Histórico do cadastro. */
-function _htmlPreCuradoria(pc) {
+function _htmlPreCuradoria(pc, impId) {
   if (!pc || !pc.total) return ''
   const rot = { editou: 'Editou', 'corrigiu quadra': 'Corrigiu quadra', renumerou: 'Renumerou', desenhou: 'Desenhou',
     excluiu: 'Apagou', unificou: 'Unificou', desmembrou: 'Desmembrou', inativou: 'Inativou',
-    criou: 'Criou', alterou: 'Alterou', 'instituiu frações': 'Instituiu frações', reativou: 'Reativou' }
+    criou: 'Criou', alterou: 'Alterou', 'instituiu frações': 'Instituiu frações', reativou: 'Reativou', restaurou: 'Restaurou' }
+  // DESFAZER, linha a linha. Quando não dá, o porquê fica no lugar do botão
+  // (passando o mouse): faz parte de uma operação, mudou de novo depois, etc.
+  const acao = a => a.pode_desfazer
+    ? `<button type="button" class="btn sm" onclick="desfazerAjusteDaImportacao(${Number(impId)}, ${Number(a.id)}, ${jsArg((rot[a.acao] || a.acao) + ' · ' + (a.lote || ''))})">Desfazer</button>`
+    : `<span class="imp-sub pc-sem-desfazer" title="${esc(a.motivo || '')}">${a.motivo && /^Faz parte/.test(a.motivo) ? esc(a.motivo.replace(/^Faz parte ([^:]+):.*$/, 'parte $1')) : '—'}</span>`
   return `<section class="jt-grupo">
       <div class="jt-grupo-tit"><span class="badge bd-in">${pc.total}</span> <b>Ajustes da pré-curadoria</b>
         <span class="imp-sub">ficam com a importação e não entram no Histórico do cadastro</span></div>
-      <table class="imp-tabela jt-tabela jt-registro"><thead><tr><th>Ajuste</th><th>Lote</th><th>Usuário</th><th>Quando</th></tr></thead>
+      <table class="imp-tabela jt-tabela jt-registro pc-com-desfazer"><thead><tr><th>Ajuste</th><th>Lote</th><th>Usuário</th><th>Quando</th><th></th></tr></thead>
         <tbody>${pc.ultimos.map(a => `
         <tr><td>${esc(rot[a.acao] || a.acao)}</td><td>${esc(a.lote || '—')}</td>
-            <td>${esc(a.usuario || '—')}</td><td>${esc(a.quando)}</td></tr>`).join('')}</tbody></table>
+            <td>${esc(a.usuario || '—')}</td><td>${esc(a.quando)}</td><td class="jt-acoes">${acao(a)}</td></tr>`).join('')}</tbody></table>
       ${pc.total > pc.ultimos.length ? `<div class="imp-sub">Mostrando os ${pc.ultimos.length} mais recentes.</div>` : ''}
     </section>`
+}
+
+/**
+ * Desfaz um ajuste da pré-curadoria — como ajuste NOVO: a linha original
+ * continua no registro (DesfazerAlteracao no servidor).
+ */
+function desfazerAjusteDaImportacao(impId, auditoriaId, rotulo) {
+  confirmarAcao({
+    titulo: 'Desfazer o ajuste',
+    mensagem: `${rotulo} volta a ser como era antes deste ajuste. O ajuste e o desfazer ficam os dois no registro da pré-curadoria.`,
+    textoBtn: 'Desfazer',
+    onConfirm: async () => {
+      try {
+        const d = await _impPedir(`/api/importacoes/${Number(impId)}/ajustes/${Number(auditoriaId)}/desfazer`, { method: 'POST' })
+        _depoisDaPreCuradoria(d.message)
+        // A ficha aberta mostra o registro: refeita, com a linha nova e os botões em dia.
+        if (document.getElementById('m-importacoes')?.classList.contains('open')) abrirImportacao(impId)
+      } catch (e) { toast(e.message, 'err') }
+    },
+  })
 }
 
 /**

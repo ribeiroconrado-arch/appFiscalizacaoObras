@@ -37,8 +37,13 @@ class DesfazerAlteracao
      */
     public function executar(object $a, int $usuarioId, string $usuarioNome): string
     {
-        if ($a->tabela !== 'lotes') {
+        $revisao = $a->tabela === 'lotes_em_revisao';
+        if ($a->tabela !== 'lotes' && ! $revisao) {
             throw new RuntimeException('Só alterações de lote podem ser desfeitas por aqui.');
+        }
+        // PRÉ-CURADORIA: as mesmas recusas que apagam o botão na tela.
+        if ($revisao && ($motivo = $this->motivoNaRevisao($a))) {
+            throw new RuntimeException($motivo . '.');
         }
 
         return match ($a->acao) {
@@ -48,10 +53,161 @@ class DesfazerAlteracao
             'instituiu frações' => $this->desfazerFracoes($a),
             'corrigiu quadra',
             'renumerou'       => $this->desfazerCampo($a),
-            default           => throw new RuntimeException(
-                'A ação "' . $a->acao . '" não tem reversão automática.'
-            ),
+            // Só na pré-curadoria (ver motivoNaRevisao).
+            'alterou'         => $revisao ? $this->desfazerCampo($a) : $this->semReversao($a),
+            'editou'          => $revisao ? $this->desfazerEdicao($a) : $this->semReversao($a),
+            'desenhou',
+            'criou'           => $revisao ? $this->desfazerDesenho($a) : $this->semReversao($a),
+            'inativou'        => $revisao ? $this->desfazerInativacao($a) : $this->semReversao($a),
+            default           => $this->semReversao($a),
         };
+    }
+
+    private function semReversao(object $a): never
+    {
+        throw new RuntimeException('A ação "' . $a->acao . '" não tem reversão automática.');
+    }
+
+    /** As ações que a pré-curadoria sabe desfazer. */
+    public const REVERSIVEIS_NA_REVISAO = ['renumerou', 'corrigiu quadra', 'alterou', 'editou', 'desenhou', 'criou',
+        'inativou', 'excluiu', 'unificou', 'desmembrou', 'instituiu frações'];
+
+    /**
+     * Por que um ajuste da PRÉ-CURADORIA (auditoria `lotes_em_revisao`) não
+     * pode ser desfeito agora — ou null se pode. A tela usa para mostrar ou não
+     * o botão; `executar` refaz o teste antes de mexer.
+     *
+     *   operação     a linha "inativou"/"criou" que faz parte de unificação,
+     *                desmembramento ou fração ideal se desfaz pela linha da
+     *                operação, e não sozinha;
+     *   a mais nova  contorno, desenho e inativação só voltam se forem o último
+     *                ajuste do lote — senão apagariam o que veio depois;
+     *   sem desenho  contorno editado e lote apagado antes de o sistema guardar
+     *                o desenho anterior (22/10/2026) não têm de onde voltar.
+     */
+    public function motivoNaRevisao(object $a): ?string
+    {
+        if (! in_array($a->acao, self::REVERSIVEIS_NA_REVISAO, true)) {
+            return 'Este ajuste não tem reversão automática';
+        }
+        if ($a->acao === 'excluiu') {
+            $g = DB::table('lotes_apagados')->where('lote_id', $a->registro_id)->orderByDesc('id')->first();
+            if (! $g) {
+                return 'Apagado antes de o sistema guardar o desenho: não há de onde restaurar';
+            }
+
+            return $g->restaurado_em ? 'Já restaurado (lote ' . $g->restaurado_como . ')' : null;
+        }
+
+        $lote = Lote::find($a->registro_id);
+        if (! $lote) {
+            return 'O lote deste ajuste não existe mais';
+        }
+
+        // Parte de uma operação: o papel do lote no ato diz qual.
+        $papeis = DB::table('lote_ato_lotes as al')->join('lote_atos as at', 'at.id', '=', 'al.ato_id')
+            ->where('al.lote_id', $lote->id)->get(['al.papel', 'at.tipo'])
+            ->map(fn ($p) => $p->tipo . ':' . $p->papel)->all();
+        $nomes = ['unificacao' => 'da unificação', 'desmembramento' => 'do desmembramento', 'fracao_ideal' => 'das frações'];
+        $linha = ['unificacao' => 'Unificou', 'desmembramento' => 'Desmembrou', 'fracao_ideal' => 'Instituiu frações'];
+        $parteDe = function (array $quais) use ($papeis, $nomes, $linha): ?string {
+            foreach ($quais as $q) {
+                if (in_array($q, $papeis, true)) {
+                    $tipo = explode(':', $q)[0];
+                    return "Faz parte {$nomes[$tipo]}: desfaça pela linha \"{$linha[$tipo]}\"";
+                }
+            }
+
+            return null;
+        };
+        if ($a->acao === 'inativou' && ($m = $parteDe(['unificacao:anterior', 'desmembramento:anterior']))) {
+            return $m;
+        }
+        if ($a->acao === 'criou' && ($m = $parteDe(['desmembramento:posterior', 'fracao_ideal:posterior', 'unificacao:posterior']))) {
+            return $m;
+        }
+        $novos = json_decode($a->dados_novos ?? 'null', true) ?: [];
+        if ($a->acao === 'alterou' && array_key_exists('condominio', $novos) && ($m = $parteDe(['fracao_ideal:terreno']))) {
+            return $m;
+        }
+
+        // Contorno, desenho e inativação: só o ajuste mais recente do lote.
+        if (in_array($a->acao, ['editou', 'desenhou', 'criou', 'inativou'], true)
+            && DB::table('auditoria')->where('registro_id', $lote->id)->whereIn('tabela', ['lotes', 'lotes_em_revisao'])
+                ->where('id', '>', $a->id)->exists()) {
+            return 'O lote foi ajustado de novo depois: desfaça primeiro o ajuste mais recente dele';
+        }
+
+        return match ($a->acao) {
+            'editou'   => isset((json_decode($a->dados_anteriores ?? 'null', true) ?: [])['contorno']) ? null
+                : 'Editado antes de o sistema guardar o contorno anterior: não há de onde voltar',
+            'inativou' => $lote->situacao === 'inativo' ? null : 'O lote já está ativo',
+            'desenhou', 'criou' => ($p = $this->oQuePrende($lote)) ? 'O lote já tem ' . rtrim(substr($p, 3), '.') : null,
+            'renumerou', 'corrigiu quadra', 'alterou' => $this->campoMudouDepois($lote, $novos),
+            default    => null,
+        };
+    }
+
+    /** O campo já não tem o valor que o ajuste gravou? Diz qual. */
+    private function campoMudouDepois(Lote $lote, array $novos): ?string
+    {
+        foreach (array_diff(array_keys($novos), ['updated_at', 'created_at', 'chave', 'chave_identidade']) as $c) {
+            if ((string) $lote->{$c} !== (string) ($novos[$c] ?? null)) {
+                return 'Alterado de novo depois (' . $c . ' agora é "' . ($lote->{$c} ?? '—') . '")';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * O contorno de antes volta (com quadra, número e área de antes). Só na
+     * pré-curadoria, e só quando a edição guardou o contorno anterior.
+     */
+    private function desfazerEdicao(object $a): string
+    {
+        $antes = json_decode($a->dados_anteriores ?? 'null', true) ?: [];
+        $lote = Lote::findOrFail($a->registro_id);
+
+        return DB::transaction(function () use ($antes, $lote) {
+            $volta = [
+                'quadra'      => $antes['quadra'] ?? $lote->quadra,
+                'numero_lote' => $antes['numero_lote'] ?? $lote->numero_lote,
+                'area_gis_m2' => $antes['area_gis_m2'] ?? $lote->area_gis_m2,
+            ];
+            $volta['chave'] = $lote->bairro . '|' . ($volta['quadra'] ?? '?') . '|' . ($volta['numero_lote'] ?? '?');
+            $de = $lote->only(['quadra', 'numero_lote', 'chave', 'area_gis_m2']);
+            DB::update('UPDATE lotes SET quadra = ?, numero_lote = ?, chave = ?, area_gis_m2 = ?,
+                               geom = ST_GeomFromGeoJSON(?, 1, 4326), updated_at = ? WHERE id = ?',
+                [$volta['quadra'], $volta['numero_lote'], $volta['chave'], $volta['area_gis_m2'],
+                 $antes['contorno'], now(), $lote->id]);
+            Lote::findOrFail($lote->id)->registrarAuditoria('editou', $de, $volta + ['contorno' => 'desfeito: voltou o anterior']);
+
+            return 'Edição desfeita: o contorno de antes voltou (' . number_format((float) $volta['area_gis_m2'], 2, ',', '.') . ' m²).';
+        });
+    }
+
+    /** O lote desenhado (ou criado à parte) sai — com o desenho guardado, para poder voltar. */
+    private function desfazerDesenho(object $a): string
+    {
+        $lote = Lote::findOrFail($a->registro_id);
+
+        return DB::transaction(function () use ($lote) {
+            $this->apagados->guardar($lote, 'Desenho desfeito na pré-curadoria');
+            $rotulo = $lote->rotulo();
+            $lote->delete();
+
+            return "Desenho desfeito: {$rotulo} saiu da importação.";
+        });
+    }
+
+    /** O lote inativado à parte volta a ativo. */
+    private function desfazerInativacao(object $a): string
+    {
+        $lote = Lote::findOrFail($a->registro_id);
+        $lote->update(['situacao' => 'ativo', 'inativado_em' => null]);
+
+        return 'Inativação desfeita: ' . $lote->rotulo() . ' voltou a ativo.';
     }
 
     /** O lote volta ao desenho, com id novo. Ver LotesApagados::restaurar. */
@@ -67,7 +223,11 @@ class DesfazerAlteracao
             );
         }
 
-        $lote = $this->apagados->restaurar($g->id);
+        // Na pré-curadoria o lote volta PARA A IMPORTAÇÃO, ainda em revisão —
+        // e não publicado, antes do resto do bairro.
+        $extras = $a->tabela === 'lotes_em_revisao' && $a->importacao_id
+            ? ['importacao_id' => (int) $a->importacao_id, 'em_revisao' => 1] : [];
+        $lote = $this->apagados->restaurar($g->id, $extras);
 
         return sprintf('Lote restaurado como %s (id %d). O registro da exclusão continua na trilha.',
             $lote->rotulo(), $lote->id);
@@ -119,8 +279,10 @@ class DesfazerAlteracao
         $lote->chave = $lote->bairro . '|' . ($lote->quadra ?? '?') . '|' . ($lote->numero_lote ?? '?');
         $lote->save();
 
+        $nomes = ['numero_lote' => 'o número do lote', 'quadra' => 'a quadra', 'condominio' => 'o condomínio'];
+
         return sprintf('Desfeito: %s voltou para "%s".',
-            implode(', ', $campos), $volta[array_key_first($volta)] ?? '—');
+            implode(', ', array_map(fn ($c) => $nomes[$c] ?? $c, $campos)), $volta[array_key_first($volta)] ?? '—');
     }
 
     /**
