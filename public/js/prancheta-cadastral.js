@@ -217,7 +217,23 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   function estado(){return {ordem:copy(s.ordem||[]),linhas:copy(s.linhas),anotacoes:copy(s.anotacoes),angulo:s.angulo,dados:copy(s.dados),numero:s.numero,justificativa:s.justificativa}}
   function antes(){s.undo.push(estado());if(s.undo.length>60)s.undo.shift();s.redo=[];s.revisado=null}
   function mudou(){s.revisado=null;$('pc-conferencia').replaceChildren();recalcular();render();agendar()}
-  function historico(redo=false){if(!s||s.leitura)return;const de=redo?s.redo:s.undo,para=redo?s.undo:s.redo;if(!de.length)return;para.push(estado());Object.assign(s,de.pop());s.traco=[];s.operacao=null;s.sel=null;mudou()}
+  /**
+   * Ctrl+Z / Ctrl+Y. COM UMA LINHA EM CURSO (Line, antes de encerrar), desfaz
+   * e refaz o ÚLTIMO SEGMENTO dela, como o "U" do LINE no AutoCAD — e não a
+   * última alteração da prancheta. Sem linha em curso, o histórico de sempre.
+   */
+  function historico(redo=false){if(!s||s.leitura)return
+    if(s.traco.length){s.tracoRedo||=[]
+      if(!redo){s.tracoRedo.push(s.traco.pop());s.valor=''
+        if(s.traco.length){entrada(s.traco.at(-1),'Comprimento');dica('Último segmento desfeito. Ctrl+Y refaz; continue clicando para seguir a linha.')}
+        else{$('pc-entrada').hidden=true;dica('Linha em curso desfeita. Clique para começar de novo.')}
+        render();return}
+      if(s.tracoRedo.length){s.traco.push(s.tracoRedo.pop());entrada(s.traco.at(-1),'Comprimento');render();return}
+    }
+    // A linha em curso foi desfeita até o fim: Ctrl+Y ainda a traz de volta; Ctrl+Z segue para o histórico.
+    if(redo&&!s.traco.length&&s.tracoRedo?.length){s.traco.push(s.tracoRedo.pop());entrada(s.traco.at(-1),'Comprimento');render();return}
+    s.tracoRedo=[]
+    const de=redo?s.redo:s.undo,para=redo?s.undo:s.redo;if(!de.length)return;para.push(estado());Object.assign(s,de.pop());s.traco=[];s.operacao=null;s.sel=null;mudou()}
   function iniciarOperacao(t){const l=selecionada();if(!l)return;s.operacao={tipo:t,orig:copy(l.pontos),inicio:G.mul(G.add(l.pontos[0],l.pontos.at(-1)),.5),basePendente:t==='mover',antes:estado()};s.mouse=s.operacao.inicio;s.valor='';if(t==='offset')entrada(s.mouse,'Offset');else $('pc-entrada').hidden=true;dica(t==='mover'?'Clique no ponto de origem do movimento (com object snap). Depois indique o destino ou digite a distância.':'Afaste o cursor da linha; digite o offset com sinal ou clique para aplicar.')}
   function deltaOperacao(){const o=s.operacao;if(!o)return [0,0];const d=G.sub(s.mouse||o.inicio,o.inicio);const n=G.normal(o.orig[0],o.orig[1]);const numero=numeroDigitado();return o.tipo==='offset'?G.mul(n,numero??G.dot(d,n)):G.mul(G.unit(G.len(d)>1e-8?d:[1,0]),numero??G.len(d))}
   function numeroDigitado(){if(!s.valor?.trim())return null;const n=Number(s.valor.replace(',','.'));return Number.isFinite(n)?n:null}
@@ -250,7 +266,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       if(s.traco.length&&G.len(G.sub(q,s.traco.at(-1)))<.001)return
       // Clicar de novo no primeiro vértice fecha o contorno.
       if(s.traco.length>=3&&G.len(G.sub(q,s.traco[0]))<1e-6){s.traco.push([...s.traco[0]]);terminar();return}
-      s.traco.push(q);s.valor='';entrada(q,'Comprimento');render();return
+      s.traco.push(q);s.tracoRedo=[];s.valor='';entrada(q,'Comprimento');render();return
     }
     if(s.ferramenta==='anotar'&&!s.leitura){anotar(p);return}
     if(hit){
@@ -316,13 +332,13 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(c.junto&&idx(vizinho)!==idx(fixa)&&(fech||(vizinho>=0&&vizinho<l.pontos.length)))mover(vizinho)
     s.cotaEd=null;$('pc-cota-ed').hidden=true;mudou();svg.focus()
     dica(`Lado ajustado para ${fmtMed(n)} m.`)}
-  function terminar(){if(!s||s.leitura)return;if(s.traco.length>=2){antes();s.linhas.push({id:crypto.randomUUID(),pontos:copy(s.traco)});s.sel=s.linhas.at(-1).id;s.traco=[];mudou()}else s.traco=[];s.valor='';$('pc-entrada').hidden=true;render();dica('Linha encerrada. Clique em outro ponto para começar uma nova; V para selecionar.')}
+  function terminar(){if(!s||s.leitura)return;s.tracoRedo=[];if(s.traco.length>=2){antes();s.linhas.push({id:crypto.randomUUID(),pontos:copy(s.traco)});s.sel=s.linhas.at(-1).id;s.traco=[];mudou()}else s.traco=[];s.valor='';$('pc-entrada').hidden=true;render();dica('Linha encerrada. Clique em outro ponto para começar uma nova; V para selecionar.')}
   function excluir(){if(!s||s.leitura||!s.sel)return;antes();s.linhas=s.linhas.filter(l=>l.id!==s.sel);s.sel=null;s.operacao=null;mudou()}
   function entrada(p,label,mover=false){const el=$('pc-entrada'),q=tela(p);el.hidden=false;el.style.left=`${Math.max(8,Math.min(s.w-220,q[0]+20))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]-45))}px`;$('pc-entrada-label').textContent=label;if(!mover)$('pc-valor').value=''}
   function medida(){const m=numeroDigitado();if(m===null){dica('Digite uma medida válida em metros.');return}
     if(s.ferramenta==='concordancia'){if(m<0){dica('O raio não pode ser negativo.');return}s.raio=m;s.valor='';render();svg.focus();return}
     if(s.operacao){aplicarOperacao();return}
-    if(s.traco.length){if(m<=0){dica('O comprimento deve ser positivo.');return}const a=s.traco.at(-1),d=G.sub(s.mouse||a,a);if(G.len(d)<.0001){dica('Aponte a direção da linha antes de digitar a medida.');return}s.traco.push(G.add(a,G.mul(G.unit(d),m)));s.valor='';$('pc-valor').value='';render();svg.focus()}
+    if(s.traco.length){if(m<=0){dica('O comprimento deve ser positivo.');return}const a=s.traco.at(-1),d=G.sub(s.mouse||a,a);if(G.len(d)<.0001){dica('Aponte a direção da linha antes de digitar a medida.');return}s.traco.push(G.add(a,G.mul(G.unit(d),m)));s.tracoRedo=[];s.valor='';$('pc-valor').value='';render();svg.focus()}
   }
   function tecla(ev){if(!s)return;ev.stopPropagation();if(ev.target.matches('input,textarea,select'))return
     if(s.medindo!=null){if(ev.key==='Escape'){ev.preventDefault();dados(true)}return}
