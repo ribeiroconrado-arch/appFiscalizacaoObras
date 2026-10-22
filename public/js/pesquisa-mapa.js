@@ -78,7 +78,7 @@ function pintarBarraPesquisa() {
   const select = (nome, rotulo, opcoes) => `<label class="pesq-direto-campo"><span>${rotulo}</span><select id="pd-${nome}" name="${nome}">${Object.entries(opcoes).map(([v, label]) => `<option value="${esc(v)}" ${String(c[nome] || '') === v ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
   barra.innerHTML = `<div class="pesq-cabecalho"><h2>Pesquisar no mapa</h2><button type="button" data-pesq="fechar" aria-label="Fechar pesquisa">&#10005;</button></div>
     <div class="pesq-conteudo"><form id="pesq-direta">
-    <div class="pesq-livre"><input id="pd-termo" name="termo" value="${esc(c.termo || '')}" maxlength="120" placeholder="O que você procura?" aria-label="Pesquisa livre" autocomplete="off"><button type="submit">Buscar</button></div>
+    <div class="pesq-livre"><input id="pd-termo" name="termo" value="${esc(c.termo || '')}" maxlength="120" placeholder="Endereço, bairro ou inscrição…" aria-label="Pesquisa livre" autocomplete="off"><button type="button" class="btn" data-pesq="limpar">Limpar</button><button type="submit" class="btn primary">Buscar</button></div>
     <p class="pesq-dica">Digite um endereço, bairro ou inscrição.</p>
     <button type="button" class="pesq-combinar" data-pesq="combinar" aria-expanded="${s.combinando}" aria-controls="pesq-campos-diretos">Combinar campos <span>${s.combinando ? '−' : '+'}</span></button>
     <div id="pesq-campos-diretos" class="${s.combinando ? 'expandido' : ''}"><div class="pesq-direta-titulo">Pesquisar por campos <small>Preencha só o que souber</small></div>
@@ -93,9 +93,9 @@ function pintarBarraPesquisa() {
     </div></details>
     ${Object.keys(o.pendencias || {}).length ? `<details id="pd-situacao"><summary>Situação e vistorias</summary><div class="pesq-direta-grid">${select('pendencia', 'Pendência', { '': 'Todas', ...o.pendencias, sem: 'Sem nenhuma pendência' })}${select('vistoria', 'Última vistoria', { '': 'Qualquer situação', ...o.vistorias })}</div></details>` : ''}
     </div>
-    <div class="pesq-direta-pe"><span>Os campos preenchidos são combinados.</span><button type="button" data-pesq="limpar">Limpar</button></div>
+    <div class="pesq-direta-pe"><span>Os campos preenchidos são combinados.</span></div>
     </form>
-    <details id="pd-coordenada"><summary>Ir para coordenada</summary><div class="pesq-linha"><input id="pesq-coord" class="pesq-coord" aria-label="Coordenada" placeholder="Latitude, longitude ou UTM 21S"><button type="button" data-pesq="ir-coordenada">Ir</button></div><div id="pesq-coord-msg" hidden></div></details>
+    <details id="pd-coordenada"><summary>Ir para coordenada</summary><div class="pesq-linha"><input id="pesq-coord" class="pesq-coord" aria-label="Coordenada" placeholder="Latitude, longitude ou UTM 21S"><button type="button" class="btn primary" data-pesq="ir-coordenada">Ir</button></div><div id="pesq-coord-msg" hidden></div></details>
     <datalist id="pd-bairros">${(o.bairros || []).map(b => `<option value="${esc(b.nome)}">${esc(b.codigo || '')}</option>`).join('')}</datalist>
     <datalist id="pd-ruas">${(o.ruas || []).map(r => `<option value="${esc(r.rua)}"></option>`).join('')}</datalist>
     <div id="pesq-resultado" class="pesq-resultado" aria-live="polite">${_pesqResultadoHtml()}</div></div>`

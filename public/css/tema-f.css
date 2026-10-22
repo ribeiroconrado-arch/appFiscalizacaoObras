@@ -4025,6 +4025,20 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 .fr-acoes small{font-size:11.5px;color:var(--tx3,#7a857f)}
 
 /* Painéis sem filete externo; posição da pesquisa acompanha a lupa. */
+/* Mesmos campos e ações das pesquisas de lista, com alvos maiores no toque. */
+#pesq-barra .pesq-livre{display:grid;grid-template-columns:minmax(0,1fr) auto auto;border:0;padding:0;gap:6px}
+#pesq-barra .pesq-livre input,#pesq-barra .pesq-direto-campo input,#pesq-barra .pesq-direto-campo select,#pesq-barra .pesq-coord{box-sizing:border-box;height:34px;min-height:34px;padding:6px 10px;font-family:inherit;font-weight:400;font-size:12.5px;border:1.5px solid var(--f-bord);border-radius:6px;background:var(--f-fundo);color:var(--tx)}
+#pesq-barra .pesq-livre input:focus,#pesq-barra .pesq-direto-campo input:focus,#pesq-barra .pesq-direto-campo select:focus,#pesq-barra .pesq-coord:focus{outline:none;border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
+#pesq-barra .btn,#pesq-barra .pesq-livre .btn{height:34px;min-height:34px;padding:0 12px;border:1.5px solid transparent;border-radius:999px;background:var(--blt);color:var(--tx2);font-size:12px;font-weight:600;justify-content:center}
+#pesq-barra .btn:hover,#pesq-barra .pesq-livre .btn:hover{background:var(--bord)}
+#pesq-barra .btn.primary,#pesq-barra .pesq-livre .btn.primary{background:var(--g);border-color:var(--g);color:#fff;box-shadow:var(--sombra-primario)}
+#pesq-barra .btn.primary:hover,#pesq-barra .pesq-livre .btn.primary:hover{background:var(--gd);border-color:var(--gd)}
+@media(max-width:620px),(pointer:coarse){
+  #pesq-barra .pesq-livre{grid-template-columns:1fr 1fr}
+  #pesq-barra .pesq-livre input{grid-column:1/-1}
+  #pesq-barra .pesq-livre input,#pesq-barra .pesq-direto-campo input,#pesq-barra .pesq-direto-campo select,#pesq-barra .pesq-coord{height:44px;min-height:44px;font-size:16px}
+  #pesq-barra .btn,#pesq-barra .pesq-livre .btn{height:44px;min-height:44px}
+}
 #grupo-camadas .ctrl-camadas{border:0}
 #t-mapa > #pesq-barra{border:0;box-sizing:border-box;bottom:auto;max-width:none;border-radius:10px}
 @media(max-width:620px){#pesq-barra .pesq-direta-grid{grid-template-columns:minmax(0,1fr)}#pesq-barra .pesq-direta-titulo{flex-wrap:wrap}}
