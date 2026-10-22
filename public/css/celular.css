@@ -1,0 +1,90 @@
+/* ══════════════════════════════════════════════
+   CELULAR — telas pequenas (iPhone SE/5 a 320px, mini e SE 2/3 a 375px,
+   iPhone 12–15 a 390px).
+
+   Revisão de 22/10/2026, tela por tela, no tamanho real dos aparelhos. Mora
+   num arquivo só e é carregado por ÚLTIMO: cada regra corrige um defeito que
+   foi visto, e diz qual — o desenho de cada tela continua no arquivo dela.
+   A aba Denúncias tem os seus em denuncias.css.
+   ══════════════════════════════════════════════ */
+
+/* GRADE DE DOIS CAMPOS (`.g2`). `1fr 1fr` não encolhe abaixo do conteúdo:
+   na vistoria e na nova OS, a "Coordenada" com o botão Capturar somava 339px
+   numa janela de 290, e a janela inteira ganhava rolagem lateral. Com o
+   min-width:0 a coluna aceita encolher; abaixo de 400px os campos vão um
+   embaixo do outro, que é o único jeito de cada um caber inteiro. */
+.g2 > *, .g3 > *{min-width:0}
+@media (max-width:400px){
+  .modal .g2{grid-template-columns:1fr}
+}
+
+/* DATA E HORA DA VISTORIA (`.data-hora-combo`): o rótulo e os dois campos
+   dividiam uma linha de 250px; a data desenhada por cima do campo invadia a
+   hora. No celular o rótulo fica em cima e os campos dividem a linha toda. */
+@media (max-width:420px){
+  .data-hora-combo{flex-wrap:wrap;row-gap:4px}
+  .data-hora-combo .rot{flex-basis:100%}
+  .data-hora-combo .campos{flex-basis:100%}
+}
+
+/* CAMPO DE DATA COM CALENDÁRIO (`.dh-campo`, documento): os 40px reservados
+   ao ícone deixavam ~88px para "21/10/2026" em monoespaçada, e o ícone cobria
+   o último dígito. */
+@media (max-width:400px){
+  .dh-campo{padding-right:32px}
+  .dh-btn{right:2px;width:28px}
+  .dh-campo input{font-size:13px;letter-spacing:-.02em}
+}
+
+/* ABAS DO DOCUMENTO (`.doc-tab`): largura fixa (flex:1 com mínimo de 84px)
+   fazia "Autuado / Imóvel", que precisa de 104px, invadir a aba vizinha
+   ("Autuado / ImóvelInfração"). Cada aba agora tem a largura do seu texto, e
+   a faixa rola de lado como já rolava. */
+@media (max-width:640px){
+  .doc-tab{flex:1 0 auto;padding-left:10px;padding-right:10px}
+}
+
+/* CABEÇALHO DO DOCUMENTO: título, número, datas e abas tomavam 186px — quase
+   metade de uma tela de 568. Mais justo, sem esconder nada. */
+@media (max-width:640px) and (max-height:740px){
+  .doc-head{padding:12px 48px 0 14px}
+  .doc-head-meta{margin:6px 0 8px;font-size:11px;gap:2px 12px}
+}
+
+/* CABEÇALHO DA FICHA DO IMÓVEL: "Ficha Imóvel" quebrava em duas linhas e
+   "Últ. integração" ficava espremido contra o X. Ela desce para uma linha
+   própria, e o título não quebra. */
+@media (max-width:480px){
+  #m-ficha h3.fi-cabeca{flex-wrap:wrap;row-gap:4px}
+  #fi-titulo{white-space:nowrap}
+  #m-ficha .fi-integracao-topo{flex-basis:100%;margin-left:0;order:9}
+}
+
+/* TOPO DAS LISTAS: em "Protocolo & OS" o título quebrava em três linhas e o
+   segundo botão ("+ Nova OS") ficava cortado na borda. Os botões descem para
+   a linha de baixo quando não cabem ao lado do título. */
+@media (max-width:480px){
+  .topo-lista{flex-wrap:wrap;row-gap:8px}
+  .topo-lista .sec-simples{flex:1 1 auto;min-width:0}
+  .topo-lista .btn{flex-shrink:0}
+}
+
+/* SUB-ABAS (perfil, parâmetros): o mínimo de 84px por aba passava a largura
+   da janela. Nos Parâmetros, as 4 colunas fixas cortavam todos os nomes
+   ("Usuári…", "Legisl…", "Formu…"); em 3 colunas eles cabem. As abas internas
+   do Formulário (Órgão, Cabeçalho, Rodapé…) quebram em linhas, em vez de se
+   esconderem para fora da janela. */
+@media (max-width:420px){
+  .sub-abas button{min-width:0}
+  #m-parametros .modal > .sub-abas{grid-template-columns:repeat(3,minmax(0,1fr))}
+  #m-parametros .modal > .sub-abas button{font-size:11.5px;padding:8px 4px}
+  #abas-geral{flex-wrap:wrap}
+  #abas-geral button{flex:1 1 auto}
+}
+/* Em Posturas os Parâmetros têm 7 abas; a 320px "Decibelímetros" (92px) não
+   cabia na coluna de 83 e "Ruas e bairros" e "Cadastro municipal" (Obras)
+   saíam com reticências. Aqui o nome quebra entre palavras e a letra encolhe
+   o bastante para a palavra mais longa caber inteira. */
+@media (max-width:360px){
+  #m-parametros .modal > .sub-abas button{white-space:normal;line-height:1.15;font-size:10.5px;padding:8px 2px;hyphens:none}
+}

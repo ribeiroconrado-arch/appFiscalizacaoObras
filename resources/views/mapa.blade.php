@@ -38,6 +38,8 @@
 <link rel="stylesheet" href="@assetv('css/tabelas.css')">
 <link rel="stylesheet" href="@assetv('css/sinalizacoes.css')">
 <link rel="stylesheet" href="@assetv('css/denuncias.css')">
+{{-- Por último: os ajustes de tela pequena valem por cima de todos (ver o arquivo). --}}
+<link rel="stylesheet" href="@assetv('css/celular.css')">
 {{-- Sem defer: precisa rodar antes do primeiro pintar (ver js/tema.js). --}}
 <script src="@assetv('js/tema.js')"></script>
 </head>
