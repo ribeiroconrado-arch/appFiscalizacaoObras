@@ -57,3 +57,26 @@ test('tolerância visual não apaga quinas curtas nem desvios acima de 2 cm',()=
   assert.equal(G.juntarFaces(quina,.02).length,6);
   assert.equal(G.juntarFaces([[0,0],[10,.03],[20,0],[20,24],[0,24],[0,0]],.02).length,6);
 });
+test('o arco da quina do lote vira UMA face; lados retos continuam um a um',()=>{
+  // Lote 20 x 30 com a quina de cima à direita arredondada: raio 6 m, em 10 pedaços.
+  const arco=[];for(let k=1;k<=10;k++){const t=k*(Math.PI/2)/10;arco.push([14+6*Math.cos(t),24+6*Math.sin(t)])}
+  const lote=[[0,0],[20,0],[20,24],...arco,[0,30],[0,0]]
+  const faces=G.agruparFaces(lote)
+  assert.equal(faces.length,5)
+  const a=faces.find(f=>f.arco);assert.ok(a);assert.equal(a.fim-a.ini+1,10)
+  assert.ok(Math.abs(a.comprimento-6*Math.PI/2)<.05)   // ~9,42 m, a soma dos pedaços
+  assert.equal(G.agruparFaces([[0,0],[20,0],[20,24],[0,24],[0,0]]).length,4)
+  // Lados retos curtos em L não viram arco (giro de 90°).
+  assert.equal(G.agruparFaces([[0,0],[3,0],[3,3],[0,3],[0,0]]).length,4)
+});
+test('ponto repetido no desenho não vira face de 0 m nem quebra o arco',()=>{
+  const arco=[];for(let k=1;k<=10;k++){const t=k*(Math.PI/2)/10;arco.push([14+6*Math.cos(t),24+6*Math.sin(t)])}
+  const lote=[[0,0],[20,0],[20,0],[20,24],...arco.slice(0,5),arco[4],...arco.slice(5),[0,30],[0,0]]
+  const faces=G.agruparFaces(lote)
+  assert.equal(faces.length,5)
+  assert.ok(faces.every(f=>f.comprimento>0))
+  assert.equal(faces.filter(f=>f.arco).length,1)
+  // As faces cobrem todos os segmentos, sem buraco.
+  assert.equal(faces[0].ini,0);assert.equal(faces.at(-1).fim,lote.length-2)
+  for(let k=1;k<faces.length;k++)assert.equal(faces[k].ini,faces[k-1].fim+1)
+});

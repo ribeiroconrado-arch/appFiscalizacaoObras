@@ -21,6 +21,36 @@ const PranchetaGeo = (() => {
     }
     return pontos.length?[...pontos,[...pontos[0]]]:[]
   }
+  /**
+   * As FACES de um anel para apresentar e classificar: os segmentos, com cada
+   * ARCO (o canto chanfrado/arredondado do lote, que o desenho traz em vários
+   * pedacinhos) juntado numa face só. Arco é uma sequência de 2+ segmentos de
+   * tamanho parecido (até o dobro um do outro), cada um virando para o MESMO
+   * lado em ângulo pequeno (0,3° a 40°). Lado reto continua sendo uma face.
+   *
+   * @returns {Array<{ini:number, fim:number, comprimento:number, arco:boolean}>}
+   *   índices de SEGMENTO (o segmento k vai de anel[k] a anel[k+1]), inclusivos
+   */
+  function agruparFaces(anel) {
+    const n=anel.length-1, comp=k=>len(sub(anel[k+1],anel[k]))
+    // Segmento de comprimento zero (ponto repetido no desenho) não é face nem
+    // interrompe o arco: entra na face vizinha.
+    const validos=[];for(let k=0;k<n;k++)if(comp(k)>=1e-3)validos.push(k)
+    const giro=(k1,k2)=>{const u=sub(anel[k1+1],anel[k1]),v=sub(anel[k2+1],anel[k2]);return Math.atan2(cross(u,v),dot(u,v))*180/Math.PI}
+    const faces=[];let i=0
+    while(i<validos.length){let j=i
+      while(j+1<validos.length){const g=giro(validos[j],validos[j+1]),c0=comp(validos[i]),c1=comp(validos[j+1])
+        const mesmoLado=j===i||Math.sign(g)===Math.sign(giro(validos[i],validos[i+1]))
+        if(Math.abs(g)<.3||Math.abs(g)>40||!mesmoLado||c1>2*c0||c1<c0/2)break
+        j++}
+      faces.push({ini:validos[i],fim:validos[j],arco:j>i});i=j+1}
+    if(!faces.length)return n?[{ini:0,fim:n-1,comprimento:0,arco:false}]:[]
+    // Os de comprimento zero completam os intervalos: cada face vai até a seguinte.
+    faces[0].ini=0
+    for(let k=0;k<faces.length;k++)faces[k].fim=k+1<faces.length?faces[k+1].ini-1:n-1
+    for(const fc of faces){let c=0;for(let j=fc.ini;j<=fc.fim;j++)c+=comp(j);fc.comprimento=c}
+    return faces
+  }
   /* Fator de escala do UTM — CÓPIA DELIBERADA de `fatorEscalaUTM` (geo.js),
      que é onde está a explicação de por que a régua do sistema é a GRADE e
      não o terreno. Este arquivo não pode depender de geo.js: ele é carregado
@@ -216,5 +246,5 @@ const PranchetaGeo = (() => {
       return {linhas,unida:l1.id}
     } catch(e) { return {erro:e.message} }
   }
-  return {EPS,add,sub,mul,dot,cross,len,unit,normal,plano,escalaUTM,rot,pe,area,dentro,inter,offset,dividir,juntarFaces,fechada,arcoNoCanto,arredondar,concordancia}
+  return {EPS,add,sub,mul,dot,cross,len,unit,normal,plano,escalaUTM,rot,pe,area,dentro,inter,offset,dividir,juntarFaces,agruparFaces,fechada,arcoNoCanto,arredondar,concordancia}
 })()
