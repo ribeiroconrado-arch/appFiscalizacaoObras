@@ -2,6 +2,31 @@
 const pesqState = { opcoes: null, campos: {}, res: null, aviso: null, pedido: 0, ponto: null, coordenada: false, combinando: false, timer: null, abort: null }
 const _pesqVal = id => document.getElementById(id)?.value.trim() ?? ''
 
+/** Ancora à esquerda da lupa e limita o painel à área visível do mapa. */
+function posicionarPesquisaMapa() {
+  const painel = document.getElementById('pesq-barra')
+  const mapa = document.getElementById('t-mapa')
+  const botao = document.querySelector('#grupo-busca .ctrl-btn')
+  if (!painel || painel.hidden || !mapa || !botao) return
+  const r = mapa.getBoundingClientRect(), b = botao.getBoundingClientRect()
+  const esquerda = Math.max(0, r.left) + 8
+  const topo = Math.max(0, r.top) + 8
+  const base = Math.min(window.innerHeight, r.bottom) - 8
+  const largura = Math.max(0, Math.min(400, b.left - 8 - esquerda))
+  painel.style.width = largura + 'px'
+  painel.style.maxHeight = Math.max(0, base - topo) + 'px'
+  painel.style.left = (b.left - 8 - largura - r.left) + 'px'
+  painel.style.top = (Math.max(topo, Math.min(b.top, base - painel.offsetHeight)) - r.top) + 'px'
+}
+window.addEventListener('resize', posicionarPesquisaMapa)
+document.addEventListener('DOMContentLoaded', () => {
+  const painel = document.getElementById('pesq-barra')
+  const mapa = document.getElementById('t-mapa')
+  const observer = new ResizeObserver(posicionarPesquisaMapa)
+  if (painel) observer.observe(painel)
+  if (mapa) observer.observe(mapa)
+})
+
 function abrirPesquisaMapa() {
   pedirFerramenta('busca', () => {
     fecharPaineisMapa()
@@ -81,6 +106,7 @@ function pintarBarraPesquisa() {
     if (el?.type === 'text' && inicio != null) el.setSelectionRange(inicio, fim)
   }
   barra.querySelector('.pesq-conteudo').scrollTop = rolagem
+  posicionarPesquisaMapa()
 }
 function _pesqParametros() {
   const c = pesqState.campos, p = new URLSearchParams()
@@ -172,9 +198,15 @@ async function _pesqBuscar() {
     destacarLotes(d.ids.length ? d.ids : null)
     if (d.caixa) {
       const [sul, oeste, norte, leste] = d.caixa
-      const mobile = window.innerWidth <= 620
       const barra = document.getElementById('pesq-barra')
-      mapaState.obj?.fitBounds([[sul, oeste], [norte, leste]], { paddingTopLeft: mobile ? [20, 20] : [barra.offsetWidth + 32, 24], paddingBottomRight: mobile ? [20, barra.offsetHeight + 20] : [60, 24], maxZoom: ZOOM_DO_LOTE, animate: false })
+      const mapa = document.getElementById('map').getBoundingClientRect()
+      const painel = barra.getBoundingClientRect()
+      const espacoLateral = painel.left - mapa.left
+      const lateral = espacoLateral >= 160
+      const acima = painel.top - mapa.top > mapa.bottom - painel.bottom
+      const inicio = lateral || acima ? [20, 20] : [20, Math.max(20, painel.bottom - mapa.top + 16)]
+      const final = lateral ? [mapa.right - painel.left + 16, 20] : acima ? [20, mapa.bottom - painel.top + 16] : [20, 20]
+      mapaState.obj?.fitBounds([[sul, oeste], [norte, leste]], { paddingTopLeft: inicio, paddingBottomRight: final, maxZoom: ZOOM_DO_LOTE, animate: false })
     }
   } catch (e) {
     if (pedido !== s.pedido || e.name === 'AbortError') return
