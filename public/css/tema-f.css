@@ -3324,6 +3324,39 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 @media (max-width:620px){ .pesq-tabela td:nth-child(3){display:none} }
 
 /* O lote procurado (pesquisa, conferência): contorno amarelo piscando. */
+/* Pesquisa direta, independente da faixa de ferramentas no alto do mapa. */
+#t-mapa > #pesq-barra{position:absolute;z-index:925;top:12px;left:12px;width:400px;max-width:calc(100% - 76px);max-height:calc(100% - 24px);padding:0;display:flex;flex-direction:column;background:var(--sur);border:1px solid var(--bord);border-radius:6px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+#t-mapa > #pesq-barra[hidden]{display:none}
+#pesq-barra .pesq-cabecalho{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--gd);color:#fff;padding:0 6px 0 14px}
+#pesq-barra .pesq-cabecalho h2{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;margin:0}
+#pesq-barra .pesq-cabecalho button{background:transparent;color:inherit;border:0;min-width:44px;min-height:44px}
+#pesq-barra .pesq-conteudo{padding:14px;overflow:auto;min-height:0;overscroll-behavior:contain}
+#pesq-barra button{cursor:pointer;font:inherit;font-size:12px;min-height:44px}
+#pesq-barra .pesq-livre{display:flex;align-items:center;border:1px solid var(--tx2);border-radius:5px;padding:4px;gap:4px}
+#pesq-barra .pesq-livre input{min-width:0;flex:1;border:0;background:transparent;color:var(--tx);font-size:16px;padding:9px 6px}
+#pesq-barra .pesq-livre button{background:var(--gd);color:white;border:0;border-radius:4px;padding:8px 12px}
+#pesq-barra .pesq-dica{font-size:11px;color:var(--tx2);margin:7px 0 16px}
+#pesq-barra .pesq-direta-titulo{display:flex;justify-content:space-between;gap:8px;margin:12px 0;font-size:12px;font-weight:600}
+#pesq-barra .pesq-direta-titulo small{font-size:11px;font-weight:400;color:var(--tx2)}
+#pesq-barra .pesq-direta-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+#pesq-barra .pesq-direto-campo{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:11px;color:var(--tx2)}
+#pesq-barra .pesq-direto-campo input,#pesq-barra .pesq-direto-campo select{box-sizing:border-box;min-width:0;width:100%;min-height:44px;font-size:14px;color:var(--tx);border:1px solid var(--bord);border-radius:4px;padding:8px;background:var(--sur)}
+#pesq-barra .pesq-linha-inteira,#pesq-barra .pesq-tres{grid-column:1/-1}
+#pesq-barra .pesq-tres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#pesq-barra details{margin-top:12px;border-top:1px solid var(--bord)}
+#pesq-barra summary{min-height:44px;align-content:center;font-size:12px;cursor:pointer}
+#pesq-barra .pesq-direta-pe{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;font-size:11px;color:var(--tx2)}
+#pesq-barra .pesq-direta-pe button,#pd-coordenada button{border:1px solid var(--bord);background:var(--sur);color:var(--tx);border-radius:4px;padding:6px 12px}
+#pesq-barra .pesq-combinar{display:none}
+#pesq-barra .pesq-resultado{max-height:none;overflow:visible}
+#pesq-barra .pesq-imovel{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere;border:1px solid var(--bord);border-radius:4px;padding:10px;background:var(--sur);color:var(--tx);margin-top:6px}
+#pesq-barra .pesq-imovel span,#pesq-barra .pesq-imovel small{font-size:11px;color:var(--tx2)}
+@media(max-width:620px){
+  #t-mapa > #pesq-barra{top:auto;bottom:0;left:0;width:100%;max-width:100%;max-height:72%;border-radius:14px 14px 0 0;box-sizing:border-box}
+  #pesq-barra .pesq-combinar{display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--sur);color:var(--tx);border:1px solid var(--bord);border-radius:4px;padding:8px 12px}
+  #pesq-campos-diretos:not(.expandido){display:none}
+  #pesq-barra .pesq-direto-campo input,#pesq-barra .pesq-direto-campo select{font-size:16px}
+}
 .lote-realce{animation:lote-pisca 1s ease-in-out 6}
 @keyframes lote-pisca{0%,100%{stroke-opacity:1}50%{stroke-opacity:.15}}
 

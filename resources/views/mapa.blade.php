@@ -341,7 +341,7 @@
     <button type="button" class="btn sm" id="med-barra-concluir" disabled onclick="concluirMedida()" title="Concluir (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Concluir</button>
     <button type="button" class="btn sm" id="med-barra-apagar" hidden onclick="apagarMedidaSelecionada()" title="Delete">Apagar medida</button>
     <button type="button" class="btn sm med-limpar" disabled onclick="limparMedidas()" aria-label="Limpar todas as medidas"
-            title="Limpar todas as medidas temporárias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
+            title="Limpar todas as medidas temporárias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 3-7 9M9 10l6 5-5 6H3l1-7zM8 15l-3 6M11 17l-3 4"/></svg></button>
   </div>
   <div class="med-pe">
     <button type="button" class="cad-fer at" id="med-barra-ima" aria-pressed="true" onclick="alternarImaDaMedida()" aria-label="Ímã"

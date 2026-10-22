@@ -64,6 +64,7 @@ function aplicarCamada(c) {
 
 /** O painel, agrupado na ordem em que os grupos aparecem no registro. */
 function pintarPainelCamadas() {
+  atualizarIndicadorCamadas()
   const alvo = document.getElementById('camadas-lista')
   if (!alvo) return
   const abertos = new Set([...alvo.querySelectorAll('details[open]')].map(d => d.dataset.grupo))
@@ -99,6 +100,18 @@ function pintarPainelCamadas() {
   alvo.scrollTop = rolagem
   if (foco) document.getElementById(foco)?.focus({ preventScroll: true })
 }
+
+/** Compara as opções disponíveis com os padrões declarados pelos módulos. */
+function atualizarIndicadorCamadas() {
+  const quantidade = camadasMapa.filter(c => (!c.disponivel || c.disponivel())
+    && camadaLigada(c.id) !== (c.padrao ?? true)).length
+  if (typeof marcarIndicadorControle === 'function') marcarIndicadorControle('grupo-camadas', quantidade || null)
+  const botao = document.querySelector('#grupo-camadas .ctrl-btn')
+  const descricao = quantidade ? `Mapa e camadas — ${quantidade} opções diferentes do padrão` : 'Mapa e camadas — configuração padrão'
+  botao?.setAttribute('title', descricao)
+  botao?.setAttribute('aria-label', descricao)
+}
+document.addEventListener('DOMContentLoaded', atualizarIndicadorCamadas)
 
 function posicionarPainelCamadas() {
   const painel = document.querySelector('#grupo-camadas.aberto .ctrl-camadas')

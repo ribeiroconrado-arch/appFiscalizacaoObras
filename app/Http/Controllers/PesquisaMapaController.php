@@ -16,10 +16,9 @@ use Illuminate\Validation\Rule;
 /**
  * Pesquisa do mapa por FILTROS COMBINADOS.
  *
- * A barra do mapa não tem mais campo de texto livre: quem pesquisa monta a
- * pergunta com filtros — onde (bairro, quadra, lote, inscrição), endereço
- * (rua e número) e pendências — e eles se SOMAM (um E o outro). Dentro de um
- * mesmo filtro de lista, as escolhas valem como OU.
+ * Texto livre e campos se combinam por E. Cada palavra pode aparecer no
+ * bairro, na inscrição ou no endereço cadastral vinculado ao mesmo lote.
+ * Os parâmetros de listas continuam disponíveis para clientes existentes.
  *
  * A Consulta (BuscaController::buscar) continua com a busca dela; aqui a
  * resposta é pensada para o mapa: até 2.000 ids para pintar, a caixa que os
@@ -108,6 +107,9 @@ class PesquisaMapaController extends Controller
     public function pesquisar(Request $r): JsonResponse
     {
         $d = $r->validate([
+            'termo'        => ['nullable', 'string', 'max:120'],
+            'bairro_texto' => ['nullable', 'string', 'max:160'],
+            'rua_texto'    => ['nullable', 'string', 'max:180'],
             'bairros'      => ['nullable', 'array', 'max:40'],
             'bairros.*'    => ['string', 'max:160'],
             'quadra_de'    => ['nullable', 'integer', 'min:0'],
@@ -135,7 +137,7 @@ class PesquisaMapaController extends Controller
 
         $q = Lote::query()->publicados();
         if (! $this->aplicar($q, $d, $r)) {
-            return response()->json(['message' => 'Escolha ao menos um filtro.'], 422);
+            return response()->json(['message' => 'Digite um termo ou preencha um campo para pesquisar.'], 422);
         }
 
         $ids = (clone $q)->reorder()->limit(self::TETO_IDS + 1)->pluck('lotes.id');
@@ -170,6 +172,45 @@ class PesquisaMapaController extends Controller
     private function aplicar(Builder $q, array $d, Request $r): bool
     {
         $usou = false;
+
+        foreach (preg_split('/\s+/u', trim($d['termo'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) as $termo) {
+            $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $termo) . '%';
+            $q->where(function ($s) use ($termo, $like) {
+                $s->whereRaw("lotes.bairro LIKE ? ESCAPE '!'", [$like])
+                    ->orWhereRaw("lotes.inscricao_imobiliaria LIKE ? ESCAPE '!'", [$like]);
+                $s->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('cadastro_bairros as pmb')
+                    ->whereColumn('pmb.nome_gis', 'lotes.bairro')->whereRaw("pmb.nome_cadastro LIKE ? ESCAPE '!'", [$like]));
+                if (preg_match('/^[0-9.\-]+$/', $termo)) {
+                    $s->orWhere('lotes.inscricao_montada', 'like', preg_replace('/\D/', '', $termo) . '%');
+                }
+                $s->orWhereExists(function ($sub) use ($like) {
+                    $this->cadastroRelacionado($sub);
+                    $sub->where(function ($texto) use ($like) {
+                        $texto->whereRaw("pmc.logradouro LIKE ? ESCAPE '!'", [$like])
+                            ->orWhereRaw("pmc.numero_predial LIKE ? ESCAPE '!'", [$like])
+                            ->orWhereRaw("pmb.nome_cadastro LIKE ? ESCAPE '!'", [$like]);
+                    });
+                });
+            });
+            $usou = true;
+        }
+        foreach (['bairro_texto', 'rua_texto'] as $campo) {
+            if (trim($d[$campo] ?? '') === '') continue;
+            $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], trim($d[$campo])) . '%';
+            $q->where(function ($s) use ($campo, $like) {
+                if ($campo === 'bairro_texto') {
+                    $s->whereRaw("lotes.bairro LIKE ? ESCAPE '!'", [$like]);
+                    $s->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('cadastro_bairros as pmb')
+                        ->whereColumn('pmb.nome_gis', 'lotes.bairro')->whereRaw("pmb.nome_cadastro LIKE ? ESCAPE '!'", [$like]));
+                } else {
+                    $s->whereExists(function ($sub) use ($like) {
+                        $this->cadastroRelacionado($sub);
+                        $sub->whereRaw("pmc.logradouro LIKE ? ESCAPE '!'", [$like]);
+                    });
+                }
+            });
+            $usou = true;
+        }
 
         // Chega o nome OFICIAL; `lotes.bairro` guarda o do desenho.
         if (! empty($d['bairros'])) {
@@ -323,15 +364,21 @@ class PesquisaMapaController extends Controller
         return $saida;
     }
 
+    /** Correlaciona endereço e lote pelo bairro amarrado, quadra e lote. */
+    private function cadastroRelacionado($q): void
+    {
+        $q->selectRaw('1')->from('cadastro_externo_imoveis as pmc')
+            ->join('cadastro_bairros as pmb', function ($join) {
+                $join->whereRaw("TRIM(LEADING '0' FROM pmb.codigo) = TRIM(LEADING '0' FROM pmc.codigo_bairro)");
+            })
+            ->whereColumn('pmb.nome_gis', 'lotes.bairro')
+            ->whereRaw("TRIM(LEADING '0' FROM pmc.quadra) = TRIM(LEADING '0' FROM lotes.quadra)")
+            ->whereRaw("TRIM(LEADING '0' FROM pmc.lote) = TRIM(LEADING '0' FROM lotes.numero_lote)");
+    }
+
     /**
-     * Os imóveis do cadastro que estão nas ruas e no trecho de número pedidos,
-     * como tripas `[nomes-de-desenho-do-bairro, quadra, lote]`.
-     *
-     * Só bairro AMARRADO: sem a amarração o par (quadra, lote) ficaria solto,
-     * e ele existe em mais de um bairro da cidade.
-     *
-     * @param  array<int,string>  $ruas
-     * @param  array<string,mixed>  $numero  vazio, ou com numero_modo/de/ate
+     * @param array<int,string> $ruas
+     * @param array<string,mixed> $numero
      * @return array<int, array{0:array<int,string>, 1:string, 2:string}>
      */
     private function imoveisDoEndereco(array $ruas, array $numero): array
