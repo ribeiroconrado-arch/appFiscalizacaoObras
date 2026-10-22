@@ -116,3 +116,13 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 /* A medida de antes, no lado do contorno de origem que mudou (Editar lote). */
 .pc-cota-antes{fill:#6b7280;font-style:italic}
 .pc-nota-pequena{font-size:11.5px;color:#586875;margin:4px 0}
+/* Medida editável: duplo clique na cota do que está sendo desenhado (prancheta-cadastral.js, editarCota). */
+.pc-cota-edit{pointer-events:auto;cursor:text}
+.pc-cota-edit:hover{fill:#2563eb;text-decoration:underline}
+.pc-cota-ativa{fill:#ea580c;font-weight:700}
+#pc-cota-ed{position:absolute;display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:420px;background:white;border:1px solid #ea580c;border-radius:6px;box-shadow:0 3px 15px #0002;padding:6px 9px;font-size:11px;z-index:3}
+#pc-cota-ed[hidden]{display:none}
+#pc-cota-ed input[type=text],#pc-cota-ed #pc-cota-valor{width:84px;border:0;border-bottom:1px solid #8c9aa5;font:600 13px Inter,Arial,sans-serif;text-align:right;outline:none}
+#pc-cota-ed .pc-cota-troca{border:1px solid #d3dad5;background:#fff;border-radius:5px;padding:2px 7px;font-size:11px;cursor:pointer}
+#pc-cota-ed .pc-cota-junto{display:flex;align-items:center;gap:4px;cursor:pointer}
+#pc-cota-ed small{color:#6b7280;width:100%}

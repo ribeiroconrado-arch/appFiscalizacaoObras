@@ -55,6 +55,10 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       <button type="button" class="pc-x" style="margin-left:auto" onclick="PranchetaCad.fechar()" aria-label="Fechar prancheta" data-dica="Fechar a prancheta (o rascunho fica guardado)">✕</button></header>
       <main class="pc-canvas"><span id="pc-ref" class="pc-ref"></span><svg id="pc-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Desenho dos imóveis e suas divisas"></svg>
       <div id="pc-entrada" hidden><label id="pc-entrada-label" for="pc-valor">Comprimento</label><input id="pc-valor" inputmode="decimal" autocomplete="off" aria-label="Medida em metros"><span>m · Enter</span></div>
+      <div id="pc-cota-ed" hidden><label for="pc-cota-valor">Medida do lado</label><input id="pc-cota-valor" inputmode="decimal" autocomplete="off" aria-label="Nova medida do lado, em metros"><span>m</span>
+        <button type="button" class="pc-cota-troca" title="Trocar a ponta que fica parada (Tab)" onclick="PranchetaCad.cotaTrocarPonta()">⇄ ponta</button>
+        <label class="pc-cota-junto" title="O lado da ponta que anda desliza paralelo: os ângulos ficam como estão"><input type="checkbox" id="pc-cota-junto" onchange="PranchetaCad.cotaJunto(this.checked)"> levar o lado vizinho junto</label>
+        <small>Enter aplica · Esc cancela</small></div>
       <section id="pc-dados" hidden aria-label="Dados e conferência"><header><b>Dados dos imóveis</b><button type="button" class="modal-x pc-fechar-dados" onclick="PranchetaCad.dados(false)" aria-label="Fechar dados">✕</button></header><div id="pc-form"></div><div id="pc-conferencia" role="status" tabindex="-1"></div></section>
       <div class="pc-credito">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · Referência cartográfica</div></main>
       <footer class="pc-rodape"><button type="button" class="btn sm" onclick="PranchetaCad.salvar().catch(()=>{})" id="pc-save">Salvar rascunho</button>
@@ -77,7 +81,8 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // Sem isto o navegador abre a "rolagem automática" ao apertar a roda.
     svg.addEventListener('mousedown',ev=>{if(ev.button===1)ev.preventDefault()});svg.addEventListener('auxclick',ev=>{if(ev.button===1)ev.preventDefault()})
     svg.addEventListener('pointercancel',()=>{if(s?.drag){s.linhas=s.drag.antes.linhas;s.drag=null;recalcular();render()}})
-    svg.addEventListener('dblclick',ev=>{ev.preventDefault();terminar()})
+    svg.addEventListener('dblclick',ev=>{ev.preventDefault();const c=ev.target.closest?.('[data-cota-line]');if(c){editarCota(c.dataset.cotaLine,Number(c.dataset.cotaI));return}terminar()})
+    $('pc-cota-valor').addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter'){ev.preventDefault();aplicarCota()}if(ev.key==='Escape'){ev.preventDefault();fecharCota()}if(ev.key==='Tab'){ev.preventDefault();trocarPontaCota()}})
     svg.addEventListener('contextmenu',ev=>{ev.preventDefault();terminar()})
     svg.addEventListener('wheel',wheel,{passive:false})
     modal.addEventListener('keydown',ev=>{ev.stopPropagation();tecla(ev)})
@@ -191,6 +196,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     // ferramenta ativa: a linha em curso continua; só a vista anda.
     if(s&&ev.button===1){ev.preventDefault();s.drag={pan:true,inicio:[ev.clientX,ev.clientY],centro:[...s.centro]};svg.setPointerCapture(ev.pointerId);return}
     if(!s||s.loading||s.busy||s.medindo!=null||ev.button!==0)return;ev.preventDefault();svg.focus();const p=ponto(ev);s.mouse=p
+    if(ev.target.closest?.('[data-cota-line]'))return
     const vertex=ev.target.closest('[data-vertex]'), hit=ev.target.closest('[data-line]')
     if(s.ferramenta==='concordancia'&&!s.leitura){
       const sg=segmentoPerto(p);s.fillet.erro=null
@@ -245,6 +251,39 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function up(ev){if(!s?.drag)return;const d=s.drag;s.drag=null;if(svg.hasPointerCapture(ev.pointerId))svg.releasePointerCapture(ev.pointerId);if(!d.pan&&d.mudou){s.undo.push(d.antes);s.redo=[];mudou()}else render()}
   function wheel(ev){if(!s)return;ev.preventDefault();const b=svg.getBoundingClientRect(),p=[ev.clientX-b.left,ev.clientY-b.top],w=mundo(p);s.escala=Math.max(.01,Math.min(ESCALA_MAX,s.escala*Math.exp(-ev.deltaY*.001)));const q=G.rot(w,s.angulo);s.centro=[q[0]-(p[0]-larguraDesenho()/2)/s.escala,q[1]+(p[1]-s.h/2)/s.escala];render()}
+  /**
+   * EDITAR A MEDIDA DE UM LADO (duplo clique na cota). O lado passa a ter a
+   * medida digitada, na MESMA DIREÇÃO: uma ponta fica parada (verde) e a outra
+   * anda (laranja) — Tab troca. "Levar o lado vizinho junto" desliza também o
+   * vértice seguinte, paralelo: os ângulos ficam (retângulo continua
+   * retângulo). Sem ele, só a ponta anda e o lado vizinho gira um pouco.
+   */
+  function editarCota(id,i){if(!s||s.leitura)return;const l=s.linhas.find(x=>x.id===id);if(!l||!l.pontos[i]||!l.pontos[i-1])return
+    s.sel=id;s.cotaEd={id,i,fixa:'a',junto:G.fechada(l.pontos)&&l.pontos.length>4}
+    const el=$('pc-cota-ed'),q=tela(G.mul(G.add(l.pontos[i-1],l.pontos[i]),.5));el.hidden=false
+    el.style.left=`${Math.max(8,Math.min(s.w-430,q[0]-120))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]+18))}px`
+    $('pc-cota-valor').value=fmtMed(G.len(G.sub(l.pontos[i],l.pontos[i-1])));$('pc-cota-junto').checked=s.cotaEd.junto
+    render();$('pc-cota-valor').focus();$('pc-cota-valor').select()
+    dica('Digite a medida certa do lado. A ponta verde fica parada; Tab troca a ponta.')}
+  function fecharCota(){if(!s)return;s.cotaEd=null;$('pc-cota-ed').hidden=true;render();svg.focus()}
+  function trocarPontaCota(){if(!s?.cotaEd)return;s.cotaEd.fixa=s.cotaEd.fixa==='a'?'b':'a';render();$('pc-cota-valor').focus()}
+  function aplicarCota(){const c=s?.cotaEd;if(!c)return;const l=s.linhas.find(x=>x.id===c.id);if(!l)return fecharCota()
+    // 32,0039 ou 32.0039; com vírgula, o ponto é de milhar (1.234,5).
+    const txt=String($('pc-cota-valor').value).trim(),n=Number(txt.includes(',')?txt.replace(/./g,'').replace(',','.'):txt)
+    if(!Number.isFinite(n)||n<=0){dica('Digite uma medida maior que zero, em metros (ex.: 32,0000).');return}
+    const A=l.pontos[c.i-1],B=l.pontos[c.i],atual=G.len(G.sub(B,A));if(atual<1e-9)return fecharCota()
+    // Anda a ponta escolhida, ao longo do próprio lado; no contorno fechado o
+    // primeiro e o último ponto são o mesmo vértice e andam juntos.
+    const fech=G.fechada(l.pontos),nv=fech?l.pontos.length-1:l.pontos.length,u=G.unit(G.sub(B,A))
+    const delta=G.mul(u,(n-atual)*(c.fixa==='a'?1:-1))
+    const idx=k=>fech?((k%nv)+nv)%nv:k
+    const mover=k=>{if(k<0||k>=l.pontos.length)return;const j=idx(k);l.pontos[j]=G.add(l.pontos[j],delta);if(fech&&j===0)l.pontos[l.pontos.length-1]=[...l.pontos[0]]}
+    antes()
+    const anda=c.fixa==='a'?c.i:c.i-1,vizinho=c.fixa==='a'?c.i+1:c.i-2,fixa=c.fixa==='a'?c.i-1:c.i
+    mover(anda)
+    if(c.junto&&idx(vizinho)!==idx(fixa)&&(fech||(vizinho>=0&&vizinho<l.pontos.length)))mover(vizinho)
+    s.cotaEd=null;$('pc-cota-ed').hidden=true;mudou();svg.focus()
+    dica(`Lado ajustado para ${fmtMed(n)} m.`)}
   function terminar(){if(!s||s.leitura)return;if(s.traco.length>=2){antes();s.linhas.push({id:crypto.randomUUID(),pontos:copy(s.traco)});s.sel=s.linhas.at(-1).id;s.traco=[];mudou()}else s.traco=[];s.valor='';$('pc-entrada').hidden=true;render();dica('Linha encerrada. Clique em outro ponto para começar uma nova; V para selecionar.')}
   function excluir(){if(!s||s.leitura||!s.sel)return;antes();s.linhas=s.linhas.filter(l=>l.id!==s.sel);s.sel=null;s.operacao=null;mudou()}
   function entrada(p,label,mover=false){const el=$('pc-entrada'),q=tela(p);el.hidden=false;el.style.left=`${Math.max(8,Math.min(s.w-220,q[0]+20))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]-45))}px`;$('pc-entrada-label').textContent=label;if(!mover)$('pc-valor').value=''}
@@ -287,9 +326,11 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(s.tipo==='desmembramento'){s.resultado=G.dividir(ring(s.originais[0]),s.linhas.map(l=>l.pontos));const ordem=s.ordem||[];s.resultado.partes.sort((a,b)=>{const ia=ordem.indexOf(parteKey(a)),ib=ordem.indexOf(parteKey(b));return (ia<0?Infinity:ia)-(ib<0?Infinity:ib)})}else s.resultado={partes:s.uniao?[ring({geometry:s.uniao})]:[],erro:s.uniao?null:s.erroUniao||(s.loading?'Calculando unificação…':'Não foi possível preparar a unificação.')}}
   function path(ps,close=false){return ps.map((p,i)=>{const q=tela(p);return `${i?'L':'M'}${q[0].toFixed(3)},${q[1].toFixed(3)}`}).join(' ')+(close?'Z':'')}
   function texto(p,t,cls='pc-label'){const q=tela(p);return `<text class="${cls}" x="${q[0]}" y="${q[1]}" text-anchor="middle">${e(t)}</text>`}
-  function cota(a,b,t,lado=1,cls='pc-cota'){const mid=G.mul(G.add(a,b),.5),q=tela(G.add(mid,G.mul(G.normal(a,b),lado*30/s.escala)));return `<text class="${cls}" x="${q[0]}" y="${q[1]}" text-anchor="middle" dominant-baseline="middle">${e(t)}</text>`}
+  function cota(a,b,t,lado=1,cls='pc-cota',attrs=''){const mid=G.mul(G.add(a,b),.5),q=tela(G.add(mid,G.mul(G.normal(a,b),lado*30/s.escala)));return `<text class="${cls}" ${attrs} x="${q[0]}" y="${q[1]}" text-anchor="middle" dominant-baseline="middle">${e(t)}</text>`}
   function centro(r){const a=r.slice(0,-1);const m=G.mul(a.reduce(G.add,[0,0]),1/a.length);if(G.dentro(m,r))return m;for(let i=1;i<r.length;i++){const mid=G.mul(G.add(r[i-1],r[i]),.5),n=G.normal(r[i-1],r[i]);for(const sign of [1,-1]){const q=G.add(mid,G.mul(n,sign*.1));if(G.dentro(q,r))return q}}return m}
   function render(){if(!s||!svg)return
+    // A caixinha da medida só existe enquanto há uma medida em edição.
+    if(!s.cotaEd&&$('pc-cota-ed'))$('pc-cota-ed').hidden=true
     let h='<defs><pattern id="pc-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#e8edf1" stroke-width=".6"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafb"/><rect width="100%" height="100%" fill="url(#pc-grid)"/>'
     if(s.mapa)h+=edif()?tilesAereos():fundoCadastral()
     // Na edificação os vizinhos ficam quase transparentes: a imagem aérea tem de aparecer.
@@ -323,7 +364,11 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       // mostra mesmo os curtos). No contorno fechado, do lado oposto ao das
       // cotas do contorno de origem, para não encavalar.
       const fech=G.fechada(l.pontos),lado=fech&&G.area(l.pontos)>0?1:fech?-1:1
-      for(let i=1;i<l.pontos.length;i++){const m=G.len(G.sub(l.pontos[i],l.pontos[i-1]));if(!sel&&m*s.escala<70)continue;h+=cota(l.pontos[i-1],l.pontos[i],`${fmtMed(m)} m`,lado)}
+      for(let i=1;i<l.pontos.length;i++){const m=G.len(G.sub(l.pontos[i],l.pontos[i-1]));if(!sel&&m*s.escala<70)continue;const ed=s.cotaEd&&s.cotaEd.id===l.id&&s.cotaEd.i===i
+        h+=cota(l.pontos[i-1],l.pontos[i],`${fmtMed(m)} m`,lado,s.leitura?'pc-cota':'pc-cota pc-cota-edit'+(ed?' pc-cota-ativa':''),s.leitura?'':`data-cota-line="${e(l.id)}" data-cota-i="${i}"`)}
+      // MEDIDA EM EDIÇÃO: a ponta que fica parada em verde, a que anda em laranja.
+      if(s.cotaEd&&s.cotaEd.id===l.id){const c=s.cotaEd,fixa=tela(l.pontos[c.fixa==='a'?c.i-1:c.i]),anda=tela(l.pontos[c.fixa==='a'?c.i:c.i-1])
+        h+=`<circle cx="${fixa[0]}" cy="${fixa[1]}" r="7" fill="#16a34a" stroke="white" stroke-width="2"/><circle cx="${anda[0]}" cy="${anda[1]}" r="7" fill="#ea580c" stroke="white" stroke-width="2"/>`}
     }
     if(s.ref)h+=`<path d="${path(s.ref)}" stroke="#a855f7" stroke-width="5" opacity=".8"/>`
     // A FACE QUE SERÁ ESCOLHIDA, realçada sob o cursor antes do clique: halo
@@ -795,5 +840,5 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function exportar(){if(!s)return;const clone=svg.cloneNode(true);clone.querySelectorAll('image,[data-snap],.pc-snap').forEach(n=>n.remove());clone.removeAttribute('id');clone.setAttribute('width',s.w);clone.setAttribute('height',s.h);const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent='.pc-label,.pc-cota,.pc-confronto,.pc-vizinho{font:12px sans-serif;fill:#243b4b;paint-order:stroke;stroke:white;stroke-width:4px}.pc-hit{fill:none;stroke:transparent;stroke-width:14}.pc-confronto{font-weight:bold}.pc-snap{font:12px sans-serif;fill:#16803c}';clone.prepend(style);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=url;a.download=`${s.tipo}-${s.ids.join('-')}.svg`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   async function verSalvas(id){try{const r=await fetch(`/api/lotes/${id}/pranchas`,{headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.message);if(!d.pranchas.length){toast('Este imóvel ainda não possui prancha finalizada.', 'aviso');return}const p=d.pranchas[0];await abrir(p.tipo,p.visualizacao.originais.map(f=>f.properties.id),null,p.visualizacao)}catch(err){toast(err.message,'err')}}
-  return {distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()
