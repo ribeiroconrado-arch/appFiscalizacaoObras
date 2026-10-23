@@ -498,6 +498,8 @@ body.com-correcao #t-mapa .leaflet-top.leaflet-right{right:372px}
 .cob-grupo{margin-top:18px;padding-top:14px;border-top:2px solid var(--gm,#cfe3d6)}
 /* A faixa invisível sobre a linha do contorno: clicar cria vértice (contorno-editor.js). */
 path.ce-linha{cursor:copy}
+#map.ce-inserindo{cursor:crosshair}
+.ce-ib[aria-pressed="true"]{background:#FFF1E6;border-color:#F97316;color:#C2410C}
 .ce-ib{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:7px;border:1px solid #d3dad5;background:#fff;color:var(--chumbo,#37413F);cursor:pointer;flex:none}
 .ce-ib:hover:not([disabled]){background:var(--gl);border-color:var(--gm);color:var(--gd)}
 .ce-ib[disabled]{opacity:.4;cursor:default;background:#f4f6f4}
@@ -512,3 +514,34 @@ path.ce-linha{cursor:copy}
 @media (max-width:720px){.imp-barra.ce-barra{flex-wrap:wrap;max-width:none}}
 /* A linha do bairro, realçada ao voltar da edição. */
 .jt-tabela tr.jt-realce td{background:#FEF3C7;transition:background .4s}
+
+/* Barra técnica do editor, com o mesmo cabeçalho das ferramentas do mapa. */
+.imp-barra.ce-barra{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0;width:560px;max-width:100%;box-sizing:border-box;border:0;border-radius:5px;background:var(--sur);color:var(--tx);overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.12)}
+.ce-barra .ce-cab{display:flex;align-items:center;justify-content:space-between;background:var(--gd);color:#fff;padding:0 8px 0 12px}
+.ce-cab strong{font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.ce-barra .ce-contexto{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 12px;border-bottom:1px solid var(--bord)}
+.ce-barra .ce-tit{min-width:0;max-width:none;white-space:normal;overflow-wrap:anywhere;color:var(--tx)}
+.ce-barra .ce-sub{white-space:normal;color:var(--tx2)}
+.ce-ferramentas{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:5px}
+.ce-grupo{display:flex;align-items:center;gap:3px}
+.ce-grupo + .ce-grupo{border-left:1px solid var(--bord);padding-left:6px}
+.ce-barra .ce-ib{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:auto;min-width:44px;height:44px;padding:6px 9px;border:1px solid transparent;border-radius:3px;background:transparent;color:var(--tx2);font-family:inherit;font-size:12px;font-weight:500;box-sizing:border-box}
+.ce-barra .ce-ib[disabled]{background:transparent;opacity:.4}
+.ce-barra .ce-ib[aria-pressed=true]{background:var(--gl);border-color:var(--gd);color:var(--gd)}
+.ce-barra .ce-cab .ce-ib{color:inherit}
+.ce-barra .ce-gravar{margin-left:auto;min-height:44px;border-radius:3px}
+.ce-status{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;border-top:1px solid var(--bord);padding:8px 12px;font-size:12px;color:var(--tx2)}
+.ce-status .ce-chip{white-space:normal;max-width:none;overflow-wrap:anywhere}
+.ce-status .ce-ver{color:var(--gd);padding:6px}
+.ce-instrucoes{padding:0 12px 8px;color:var(--tx2);font-size:11px}
+.ce-instrucoes summary{cursor:pointer;padding:6px 0}
+.ce-instrucoes p{margin:5px 0;line-height:1.5}
+.ce-previa .ce-tit,.ce-previa .ce-sub{flex-basis:100%;padding:2px 7px}
+.ce-previa .btn{min-height:44px}
+@media(max-width:720px){
+  .mapa-barras:has(> .ce-barra:not([hidden])){width:auto}
+  .imp-barra.ce-barra{width:100%;max-width:100%}
+  .ce-ferramentas .ce-grupo:first-child{flex-basis:100%;border-bottom:1px solid var(--bord);padding-bottom:4px}
+  .ce-ferramentas .ce-grupo:first-child .ce-ib{flex:1;min-width:0;padding:6px 4px;flex-direction:column;height:auto;min-height:52px;gap:3px}
+  .ce-grupo + .ce-grupo{border-left:0;padding-left:0}
+}

@@ -113,6 +113,21 @@ const AREA_MAX_BAIRROS_GRAUS2 = 0.03
  */
 const AREA_MAX_CURADORIA_GRAUS2 = 0.0012
 
+/**
+ * O ajuste dos tetos de área pelo tamanho da tela (22/10/2026). Cada zoom
+ * multiplica a área por 4, então:
+ *   celular (até 620 px)   ¼ — quadras e lotes só um zoom MAIS PERTO: na tela
+ *                          pequena a mesma área deixava o lote miúdo demais
+ *   computador (≥ 1000 px) 4× nos lotes — eles aparecem um zoom MAIS LONGE
+ * Entre os dois (tablet) e fora do navegador (testes), fica como era.
+ */
+function fatorDaTela(nivel) {
+  if (typeof window === 'undefined' || !window.innerWidth) return 1
+  if (window.innerWidth <= 620) return 0.25
+  if (window.innerWidth >= 1000 && nivel === 'lotes') return 4
+  return 1
+}
+
 /** Alguma ferramenta de curadoria está no mapa? */
 function curadoriaNoMapa() {
   return (typeof impState !== 'undefined' && (impState.noMapa || !!impState.preCuradoria))
@@ -134,9 +149,9 @@ function nivelDoMapa(mapa) {
   if (!mapa) return 'municipio'
   const b = mapa.getBounds()
   const area = (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth())
-  const tetoLotes = curadoriaNoMapa() ? AREA_MAX_CURADORIA_GRAUS2 : AREA_MAX_GRAUS2
+  const tetoLotes = curadoriaNoMapa() ? AREA_MAX_CURADORIA_GRAUS2 : AREA_MAX_GRAUS2 * fatorDaTela('lotes')
   if (mapa.getZoom() >= ZOOM_MINIMO && area <= tetoLotes) return 'lotes'
-  if (area <= AREA_MAX_QUADRAS_GRAUS2) return 'quadras'
+  if (area <= AREA_MAX_QUADRAS_GRAUS2 * fatorDaTela('quadras')) return 'quadras'
   return area <= AREA_MAX_BAIRROS_GRAUS2 ? 'bairros' : 'municipio'
 }
 
