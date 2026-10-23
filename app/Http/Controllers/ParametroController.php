@@ -234,7 +234,7 @@ class ParametroController extends Controller
             // Quais fiscalizações a pessoa usa (config/modulos.php).
             'modulos'      => ['nullable', 'array', 'min:1'],
             'modulos.*'    => [Rule::in(\App\Support\Modulo::todos())],
-            'senha'        => ['nullable', 'string', Password::min(8), 'confirmed'],
+            'senha'        => ['nullable', 'string', Password::min(8)->letters()->numbers(), 'confirmed'],
         ], [
             'modulos.min'                => 'Marque ao menos um módulo.',
             'email.required_without'     => 'Informe a matrícula ou o e-mail — é por um deles que o usuário entra.',

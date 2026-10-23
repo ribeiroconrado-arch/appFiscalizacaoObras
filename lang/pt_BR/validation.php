@@ -31,6 +31,14 @@ return [
     'mimetypes'     => 'O arquivo em :attribute deve ser do tipo: :values.',
     'image'         => 'O campo :attribute deve ser uma imagem.',
 
+    // Regra de senha (Password::min(8)->letters()->numbers()).
+    'password' => [
+        'letters' => 'A senha precisa ter ao menos uma letra.',
+        'numbers' => 'A senha precisa ter ao menos um número.',
+        'mixed'   => 'A senha precisa ter letras maiúsculas e minúsculas.',
+        'symbols' => 'A senha precisa ter ao menos um símbolo.',
+    ],
+
     'min' => [
         'numeric' => 'O campo :attribute deve ser no mínimo :min.',
         'string'  => 'O campo :attribute deve ter ao menos :min caracteres.',

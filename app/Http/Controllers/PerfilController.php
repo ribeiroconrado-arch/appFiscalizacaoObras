@@ -46,7 +46,7 @@ class PerfilController extends Controller
     {
         $d = $r->validate([
             'senha_atual' => ['required', 'string'],
-            'senha'       => ['required', 'string', Password::min(8), 'confirmed'],
+            'senha'       => ['required', 'string', Password::min(8)->letters()->numbers(), 'confirmed'],
         ], [
             'senha.confirmed' => 'A confirmação não confere com a nova senha.',
         ]);

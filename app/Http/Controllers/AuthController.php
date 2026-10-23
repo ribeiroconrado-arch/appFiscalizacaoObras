@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -32,6 +34,11 @@ class AuthController extends Controller
      * acesso suspeito. Trocar um pelo outro perderia isso; aceitar os dois,
      * não.
      */
+    /** Erros de senha de uma mesma conta (de qualquer IP) que travam o login dela. */
+    private const FALHAS_POR_CONTA = 10;
+    /** Por quanto tempo os erros contam, e por quanto tempo a conta fica travada. */
+    private const BLOQUEIO_SEGUNDOS = 15 * 60;
+
     public function entrar(Request $request): RedirectResponse
     {
         $dados = $request->validate([
@@ -47,6 +54,20 @@ class AuthController extends Controller
         // ambiguidade a resolver depois.
         $campo = str_contains($dados['identificador'], '@') ? 'email' : 'matricula';
 
+        // LIMITE POR CONTA (segurança, 23/10/2026): quem testa a senha de UMA
+        // pessoa trocando de IP escapa dos limites por IP (AppServiceProvider).
+        // Aqui contam só os ERROS daquela conta, de qualquer lugar: 10 em 15
+        // minutos e a conta não aceita login por 15 minutos — nem com a senha
+        // certa. Vale também para conta que não existe, com a mesma mensagem:
+        // o bloqueio não revela quem é real. Login certo zera a contagem.
+        $chave = 'login-falhas:' . sha1(mb_strtolower(trim($dados['identificador'])));
+        if (RateLimiter::tooManyAttempts($chave, self::FALHAS_POR_CONTA)) {
+            $min = max(1, (int) ceil(RateLimiter::availableIn($chave) / 60));
+            throw ValidationException::withMessages([
+                'identificador' => "Muitas tentativas para este acesso. Tente de novo em {$min} minuto(s).",
+            ]);
+        }
+
         // `ativo` entra na tentativa: desativar alguém precisa ter efeito
         // imediato no login, não só no cadastro de usuários.
         $ok = Auth::attempt(
@@ -55,6 +76,13 @@ class AuthController extends Controller
         );
 
         if (! $ok) {
+            RateLimiter::hit($chave, self::BLOQUEIO_SEGUNDOS);
+            if (RateLimiter::tooManyAttempts($chave, self::FALHAS_POR_CONTA)) {
+                Log::warning('Login bloqueado por excesso de senhas erradas.', [
+                    'identificador' => mb_substr($dados['identificador'], 0, 80),
+                    'ip'            => $request->ip(),
+                ]);
+            }
             // Mensagem única para senha errada, usuário inexistente ou conta
             // desativada: dizer qual dos três é enumerar usuários válidos — e
             // matrícula, sendo sequencial, seria varrida em minutos.
@@ -63,6 +91,7 @@ class AuthController extends Controller
             ]);
         }
 
+        RateLimiter::clear($chave);
         $request->session()->regenerate(); // impede fixação de sessão
 
         $u = Auth::user();
