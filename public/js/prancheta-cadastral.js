@@ -52,8 +52,8 @@ const PranchetaCad = (() => {
     modal.innerHTML=`<header class="pc-cab"><div class="pc-tit"><b id="pc-titulo">Prancheta cadastral</b><small id="pc-origem"></small></div>
       <nav class="pc-tools" aria-label="Ferramentas de desenho">
       ${botao('selecionar','Selecionar','V','clique numa linha para editar; arraste os vértices')}${botao('linha','Linha','L','clique nos cantos e digite a medida; clicar no 1º vértice fecha o contorno')}${botao('perpendicular','Perpendicular','P','escolha uma face e trace a 90° dela')}${botao('mover','Mover','M','move a linha selecionada; digite a distância')}${botao('offset','Offset','O','cópia paralela da linha, à distância digitada')}${botao('concordancia','Fillet (concordância)','F','clique em dois lados; arredonda o canto com o raio digitado — raio 0 une os lados num canto vivo')}
-${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
-      <i></i>${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}${botaoAcao('encerrar','Encerrar linha (Enter)','PranchetaCad.terminar()','termina o traço em curso')}${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a até 1° de 90° viram 90° exatos, mantendo a medida de cada lado')}
+${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a até 1° de 90° viram 90° exatos, mantendo a medida de cada lado')}${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
+      <i></i>${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}
       <i></i><span class="pc-snap-grupo">${botaoAcao('snap','Snap (OSNAP)','PranchetaCad.opcoesSnap()','onde o cursor encaixa: ponta, meio, na face, perpendicular','pc-snap')}
         <div class="pc-snap-pop" id="pc-snap-pop" hidden aria-label="Encaixe do cursor">
           <div class="pc-snap-heading">Encaixe do cursor <span>OSNAP</span></div>
@@ -102,7 +102,7 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     svg.addEventListener('contextmenu',ev=>{ev.preventDefault();terminar()})
     svg.addEventListener('wheel',wheel,{passive:false})
     modal.addEventListener('keydown',ev=>{ev.stopPropagation();tecla(ev)})
-    $('pc-valor').addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter'){ev.preventDefault();medida()}if(ev.key==='Escape'){$('pc-entrada').hidden=true;svg.focus()}})
+    $('pc-valor').addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter'){ev.preventDefault();if(!$('pc-valor').value.trim()&&s?.traco.length&&s.ferramenta!=='concordancia')terminar();else medida()}if(ev.key==='Escape'){$('pc-entrada').hidden=true;svg.focus()}})
     $('pc-raio').addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter'){ev.preventDefault();raioDigitado()}if(ev.key==='Escape'){ev.preventDefault();svg.focus()}})
     $('pc-raio').addEventListener('change',()=>{if(s)raioDigitado()})
     $('pc-valor').addEventListener('input',()=>{if(s){s.valor=$('pc-valor').value;render()}})
