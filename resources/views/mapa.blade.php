@@ -81,19 +81,17 @@
        não muda com o módulo: ela é do tema que cada um escolheu, e o módulo
        já se lê aqui, no título e no sub-cabeçalho. --}}
   @if (! $externo && count($meusModulos) > 1)
-    <div class="modulo-seg" role="group" aria-label="Módulo">
-      @foreach ($meusModulos as $m)
-        <button type="button" class="{{ $m === $modulo ? 'at' : '' }}" aria-pressed="{{ $m === $modulo ? 'true' : 'false' }}"
-                onclick="trocarModulo('{{ $m }}')" title="{{ \App\Support\Modulo::titulo($m) }}">
-          @if ($m === 'obras')
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>
-          @else
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
-          @endif
-          <span>{{ \App\Support\Modulo::rotulo($m) }}</span>
-        </button>
-      @endforeach
-    </div>
+    {{-- COMBO, e não pílula de botões lado a lado: um alvo só, grande, sem
+         ícone — no celular os botões vizinhos levavam o toque errado. No
+         iPhone o select abre o seletor do próprio sistema. --}}
+    <label class="modulo-sel" title="Trocar de módulo">
+      <select aria-label="Módulo" onchange="trocarModulo(this.value)">
+        @foreach ($meusModulos as $m)
+          <option value="{{ $m }}" @selected($m === $modulo)>{{ \App\Support\Modulo::rotulo($m) }}</option>
+        @endforeach
+      </select>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </label>
   @endif
 
   {{-- A navegação vive só no rodapé, em qualquer largura: repeti-la aqui no
@@ -909,19 +907,14 @@
      "Denúncias" — um mapa só para os dois módulos. Ver js/denuncias.js. --}}
 @if ($temAba('denuncias') && ! $externo)
 <section class="tela" id="t-denuncias">
-  <div class="topo-lista">
-    <div class="sec-simples">Denúncias <span class="cont" id="cont-den">0</span></div>
-    <button class="btn sm" onclick="baixarCsvDenuncias()" title="Baixar a lista filtrada em planilha (CSV)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-      CSV
+  {{-- SEM FAIXA DE TÍTULO: a aba já diz "Denúncias". O CSV mora na janela de
+       filtros (e, no computador, ao lado do Buscar); a nova denúncia é o botão
+       flutuante "+" do canto, como no AppPOSTURAS. --}}
+  @if (auth()->user()->canEdit())
+    <button type="button" class="fab-novo" onclick="novaDenuncia()" title="Nova denúncia" aria-label="Nova denúncia">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>
-    @if (auth()->user()->canEdit())
-      <button class="btn primary sm" onclick="novaDenuncia()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Nova<span class="den-txt-longo"> denúncia</span>
-      </button>
-    @endif
-  </div>
+  @endif
 
   <div class="sub-abas den-sub">
     <button class="at" data-sub="lista" onclick="subDenuncias('lista')">Lista</button>
@@ -953,6 +946,7 @@
       <div class="btn-row lista-form-acoes">
         <button type="button" class="btn" onclick="limparFiltrosDen()">Limpar</button>
         <button type="button" class="btn primary" id="den-buscar" onclick="carregarDenuncias()">Buscar</button>
+        <button type="button" class="btn den-csv-larga" onclick="baixarCsvDenuncias()" title="Baixar a lista filtrada em planilha (CSV)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg> CSV</button>
       </div>
     </div>
     <div id="lista-denuncias"></div>
@@ -3512,6 +3506,7 @@
     </div>
     <div class="btn-row">
       <button class="btn" onclick="limparFiltrosDen()">Limpar</button>
+      <button class="btn" onclick="aplicarFiltrosDen(); baixarCsvDenuncias()" title="Aplica os filtros e baixa a lista em planilha (CSV)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg> CSV</button>
       <div style="flex:1"></div>
       <button class="btn" onclick="fModalBtn('m-den-filtros')">Cancelar</button>
       <button class="btn primary" onclick="aplicarFiltrosDen()">Aplicar</button>

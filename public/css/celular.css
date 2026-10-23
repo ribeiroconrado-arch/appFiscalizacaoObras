@@ -40,8 +40,11 @@
    fazia "Autuado / Imóvel", que precisa de 104px, invadir a aba vizinha
    ("Autuado / ImóvelInfração"). Cada aba agora tem a largura do seu texto, e
    a faixa rola de lado como já rolava. */
+/* No celular as QUATRO abas cabem numa linha: dividem a largura, e o texto
+   longo ("Notificado / Imóvel") quebra em duas linhas, em vez de a última aba
+   ficar fora da tela, rolando. */
 @media (max-width:640px){
-  .doc-tab{flex:1 0 auto;padding-left:10px;padding-right:10px}
+  .doc-tab{flex:1 1 0;min-width:0;white-space:normal;line-height:1.15;padding:6px 4px;font-size:11.5px}
 }
 
 /* CABEÇALHO DO DOCUMENTO: título, número, datas e abas tomavam 186px — quase

@@ -31,7 +31,7 @@
   /* +15% na altura (era 988px). E o limite pela tela passa de 96vh para a tela
      inteira menos a folga do véu (14px em cima e embaixo): em tela baixa quem
      manda é ele, e sem subir junto o pedido não teria efeito nenhum. */
-  --modal-trabalho-alt:min(calc(100vh - 28px), 1136px);
+  --modal-trabalho-alt:min(calc(var(--tela-alt, 100vh) - 28px), 1136px);
 }
 
 /* Cabeçalho do app no degradê mais claro (app.css usa --gxd → --gd). */
@@ -49,25 +49,21 @@
 .topo h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ── SELETOR DE MÓDULO (Obras | Posturas) ──
-   Pílula translúcida sobre o degradê do cabeçalho; o módulo ativo é a pastilha
-   branca. Não muda a cor do sistema: a cor é do tema de cada um. */
-.modulo-seg{display:flex;flex-shrink:0;margin-left:10px;padding:3px;border-radius:999px;
-  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28)}
-.modulo-seg button{display:flex;align-items:center;gap:6px;border:0;background:none;cursor:pointer;
-  color:#fff;opacity:.9;padding:7px 12px;border-radius:999px;
-  font-family:'Inter',sans-serif;font-size:12px;font-weight:600;line-height:1;white-space:nowrap}
-.modulo-seg button svg{width:15px;height:15px;flex-shrink:0}
-.modulo-seg button:hover{background:rgba(255,255,255,.14);opacity:1}
-.modulo-seg button.at{background:#fff;color:var(--gd);opacity:1;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-/* No celular o seletor toma o lugar do título: ele próprio já diz o módulo,
+   Um COMBO translúcido sobre o degradê do cabeçalho: um alvo só, grande, sem
+   ícone (a pílula de dois botões levava o toque para o vizinho no celular).
+   Não muda a cor do sistema: a cor é do tema de cada um. */
+.modulo-sel{position:relative;display:inline-flex;align-items:center;flex-shrink:0;margin-left:10px;cursor:pointer}
+.modulo-sel select{appearance:none;-webkit-appearance:none;cursor:pointer;min-height:36px;padding:0 34px 0 14px;border-radius:999px;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.32);color:#fff;
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:600;line-height:1}
+.modulo-sel select:hover,.modulo-sel select:focus-visible{background:rgba(255,255,255,.26);outline:none}
+.modulo-sel select option{color:#1b2a27;background:#fff}
+.modulo-sel svg{position:absolute;right:12px;width:14px;height:14px;color:#fff;pointer-events:none}
+/* No celular o combo toma o lugar do título: ele próprio já diz o módulo,
    e o sub-cabeçalho repete ("Posturas · Painel"). */
 @media(max-width:640px){
-  .topo:has(.modulo-seg) .topo-tit{display:none}
-  .modulo-seg{margin-left:2px}
-  .modulo-seg button{padding:7px 10px}
-}
-@media(max-width:340px){
-  .modulo-seg button span{display:none}
+  .topo:has(.modulo-sel) .topo-tit{display:none}
+  .modulo-sel{margin-left:2px}
 }
 
 /* O cabeçalho em tela estreita é tratado junto do .perfil-btn, mais abaixo:
@@ -1349,7 +1345,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    mesmo da ficha — o que muda e so o modo de sustenta-lo. */
 .modal.modal-flex{
   display:flex;flex-direction:column;
-  height:var(--modal-trabalho-alt);max-height:calc(100vh - 28px);
+  height:var(--modal-trabalho-alt);max-height:calc(var(--tela-alt, 100vh) - 28px);
   max-width:var(--modal-trabalho);padding:0;overflow:hidden;
 }
 
@@ -1380,6 +1376,9 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 /* Sem transição: a aba troca na hora. O esmaecer de 0,15 s da pílula era lido
    como demora para trocar de aba, mesmo com o conteúdo já trocado. */
 .doc-tab.ativa{background:var(--sur);color:var(--tx);box-shadow:var(--sh)}
+/* As abas vão até a borda direita: o cabeçalho reserva 52px à direita para o ×,
+   e a faixa herdava esse vazio. */
+.doc-head .doc-tabs{margin-right:-34px}
 
 .doc-body{flex:1;min-height:0;overflow-y:auto;padding:16px 18px}
 .doc-painel{display:none}
@@ -2652,7 +2651,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .modal.modal-trab{
   display:flex;flex-direction:column;
   max-width:var(--modal-trabalho);
-  height:var(--modal-trabalho-alt);max-height:calc(100vh - 28px);
+  height:var(--modal-trabalho-alt);max-height:calc(var(--tela-alt, 100vh) - 28px);
   overflow:hidden;
 }
 .modal-trab > .fi-cabeca,.modal-trab > .sub{flex-shrink:0}

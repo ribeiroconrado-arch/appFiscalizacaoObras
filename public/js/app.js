@@ -1050,7 +1050,8 @@ function marcarModuloNoSubcabecalho(destino) {
   const nome = document.getElementById('subcab-nome')
   const ico = document.getElementById('subcab-ico')
   // Quem tem os dois módulos lê aqui em qual está: "Posturas · Painel".
-  const modulo = document.querySelector('.modulo-seg button.at span')?.textContent.trim()
+  const sel = document.querySelector('.modulo-sel select')
+  const modulo = sel ? sel.options[sel.selectedIndex]?.textContent.trim() : null
   if (nome) nome.textContent = (modulo ? modulo + ' · ' : '') + botao.textContent.trim()
   if (ico) ico.innerHTML = botao.querySelector('svg')?.outerHTML || ''
 }
@@ -1064,9 +1065,11 @@ function marcarModuloNoSubcabecalho(destino) {
  */
 async function trocarModulo(modulo) {
   if (modulo === window.MODULO) return
+  // Troca que não acontece (prancheta mantida aberta, erro): o combo volta ao módulo atual.
+  const voltarCombo = () => { const sel = document.querySelector('.modulo-sel select'); if (sel) sel.value = window.MODULO }
   if (typeof PranchetaCad !== 'undefined' && PranchetaCad.ativa()) {
     const fechou = await PranchetaCad.fechar()
-    if (!fechou) return
+    if (!fechou) { voltarCombo(); return }
   }
   try {
     const r = await fetch('/api/modulo', {
@@ -1078,11 +1081,12 @@ async function trocarModulo(modulo) {
       body: JSON.stringify({ modulo }),
     })
     const d = await r.json().catch(() => ({}))
-    if (!r.ok) { toast(d.message || 'Não foi possível trocar de módulo.', 'err'); return }
+    if (!r.ok) { toast(d.message || 'Não foi possível trocar de módulo.', 'err'); voltarCombo(); return }
     if (typeof mostrarCarregandoTela === 'function') { mostrarCarregandoTela(d.titulo || 'Trocando de módulo…') }
     location.reload()
   } catch {
     toast('Sem conexão com o servidor.', 'err')
+    voltarCombo()
   }
 }
 

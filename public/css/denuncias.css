@@ -180,3 +180,17 @@
 /* ── BALÃO DO MAPA ── */
 .den-balao-cab{background:var(--den-cor);color:#fff;display:flex;justify-content:space-between;gap:8px;align-items:center}
 .den-balao-cab span{font-size:11px;opacity:.95}
+
+/* NOVA DENÚNCIA: botão flutuante "+" no canto, como o .fab do AppPOSTURAS.
+   Acima da barra de abas do rodapé; só existe com a aba Denúncias à vista
+   (fica dentro da tela). */
+.fab-novo{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:900;
+  width:56px;height:56px;border-radius:50%;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  background:var(--g,#009B3A);color:#fff;box-shadow:0 4px 16px rgba(0,108,22,.4);transition:transform .15s,background .15s}
+.fab-novo:hover{background:var(--gd,#006c16);transform:scale(1.06)}
+.fab-novo svg{width:26px;height:26px}
+/* O CSV ao lado do Buscar só no computador; no celular ele mora na janela de filtros. */
+.den-csv-larga{display:none}
+@media (min-width:1000px){.den-csv-larga{display:inline-flex;align-items:center;gap:6px}.den-csv-larga svg{width:15px;height:15px}}
+/* O último cartão não fica escondido atrás do "+". */
+#t-denuncias #lista-denuncias{padding-bottom:76px}

@@ -89,7 +89,8 @@ async function carregarDenuncias() {
 
 function renderDenuncias() {
   const alvo = document.getElementById('lista-denuncias')
-  document.getElementById('cont-den').textContent = dnState.total
+  const cont = document.getElementById('cont-den')
+  if (cont) cont.textContent = dnState.total
   pintarChipsDen()
   if (!dnState.lista.length) {
     alvo.innerHTML = '<div class="lista-vazia">Nenhuma denúncia com esses filtros.</div>'

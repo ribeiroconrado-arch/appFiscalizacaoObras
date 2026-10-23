@@ -43,9 +43,19 @@ const ANX_LADO_MAX = 1600
 async function carregarAnexosDoc() {
   const caixa = document.getElementById('nd-anexos')
   if (!caixa) return
+  // DOCUMENTO AINDA NÃO SALVO (a notificação que acabou de nascer da
+  // denúncia, por exemplo): os botões já aparecem. O seletor abre na hora —
+  // o iPhone só abre câmera/arquivo no próprio toque —, e o rascunho é salvo
+  // no envio do anexo (enviarAnexoDoc).
   if (!fdState.id) {
     anxState.dados = null
-    caixa.innerHTML = '<div class="lista-vazia">Grave o documento para juntar anexos: eles ficam guardados na peça.</div>'
+    caixa.innerHTML = `
+      <div class="anx-acoes">
+        <button type="button" class="btn out-cinza" onclick="document.getElementById('anx-camera').click()">Câmera</button>
+        <button type="button" class="btn out-cinza" onclick="document.getElementById('anx-galeria').click()">Galeria</button>
+        <button type="button" class="btn out-cinza" onclick="document.getElementById('anx-pdf').click()">Arquivo PDF</button>
+      </div>
+      <p class="anx-nota">O documento ainda não foi salvo: ao juntar o primeiro anexo, ele é salvo como rascunho (sem número), e o anexo fica guardado nele.</p>`
     return
   }
   try {
@@ -409,6 +419,11 @@ async function prepararFotoDaVistoriaAnexo(id) {
 
 /** Sobe um arquivo já pronto (a foto preparada, ou o PDF). */
 async function enviarAnexoDoc(arquivo, nome, titulo, quando, daVistoria = null) {
+  // Documento novo: salva o rascunho antes, para o anexo ter onde ficar.
+  if (!fdState.id) {
+    await salvarRascunhoDoc()
+    if (!fdState.id) return   // o rascunho não salvou: o aviso já saiu
+  }
   const corpo = new FormData()
   corpo.append('arquivo', arquivo, nome)
   if (daVistoria) corpo.append('da_vistoria', daVistoria)

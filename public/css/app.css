@@ -1,3 +1,8 @@
+/* ALTURA DA TELA para modais: a VISÍVEL (100dvh). No Safari do iPhone, 100vh
+   conta também a área das barras do navegador, e o rodapé dos formulários
+   (Gravar, Salvar) ficava escondido atrás delas. Navegador sem dvh: 100vh. */
+:root{--tela-alt:100vh}
+@supports (height:100dvh){:root{--tela-alt:100dvh}}
 /* ══════════════════════════════════════════════
    DESIGN SYSTEM — Fiscalização de Obras
    Portado do AppPOSTURAS (appPerturbação/AppPerturbacao/src/styles/main.css).
@@ -148,7 +153,7 @@ body{
 .modal{
   background:#fff;border-radius:18px;padding:22px 20px;width:100%;max-width:520px;
   margin:auto;position:relative;box-shadow:var(--shl);border:1.5px solid var(--bord);
-  max-height:calc(100vh - 28px);overflow-y:auto;
+  max-height:calc(var(--tela-alt, 100vh) - 28px);overflow-y:auto;
 }
 .modal h3{
   font-size:15px;margin-bottom:4px;color:var(--gd);
