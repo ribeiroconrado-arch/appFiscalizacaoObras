@@ -51,6 +51,44 @@ const PranchetaGeo = (() => {
     for(const fc of faces){let c=0;for(let j=fc.ini;j<=fc.fim;j++)c+=comp(j);fc.comprimento=c}
     return faces
   }
+  /**
+   * ESQUADREJAR um contorno fechado: todo canto a até `tol` graus de 90° vira
+   * 90° exato, e CADA LADO MANTÉM O COMPRIMENTO. Os outros cantos (arco,
+   * esquina torta de verdade) mantêm o ângulo que tinham. O lado mais comprido
+   * fica parado (vértice inicial e direção); o resto é refeito a partir dele.
+   *
+   * Recusa quando, esquadrejado, o contorno não fecha (as medidas opostas não
+   * batem — 50,0000 de um lado e 49,9952 do outro): fechar à força entortaria
+   * outro canto, e é a medida que precisa ser acertada antes.
+   *
+   * @returns {{pontos:Array<[number,number]>, cantos:number}|{erro:string}}
+   */
+  function esquadrejar(anel,tol=1,fechaM=.001){
+    if(!fechada(anel)||anel.length<5)return {erro:'Esquadrejar vale para contorno fechado.'}
+    const v=anel.slice(0,-1),n=v.length,lado=k=>sub(v[(k+1)%n],v[k])
+    // Começa pelo lado mais comprido.
+    let k0=0;for(let k=1;k<n;k++)if(len(lado(k))>len(lado(k0)))k0=k
+    const vs=[...v.slice(k0),...v.slice(0,k0)],L=k=>sub(vs[(k+1)%n],vs[k])
+    const giro=k=>{const u=L(k-1<0?n-1:k-1),w=L(k);return Math.atan2(cross(u,w),dot(u,w))}
+    const out=[[...vs[0]]];let dir=Math.atan2(L(0)[1],L(0)[0]),cantos=0
+    for(let k=0;k<n-1;k++){
+      if(k>0){const g=giro(k);if(Math.abs(Math.abs(g)-Math.PI/2)<=tol*Math.PI/180&&Math.abs(Math.abs(g)-Math.PI/2)>1e-12){dir+=Math.sign(g)*Math.PI/2;cantos++}else dir+=g}
+      const c=len(L(k)),p=out[k];out.push([p[0]+c*Math.cos(dir),p[1]+c*Math.sin(dir)])}
+    // O último lado tem de chegar ao vértice inicial com o mesmo comprimento,
+    // e os cantos das duas pontas dele, quase retos, têm de ficar retos.
+    const ult=out[n-1],fecha=sub(out[0],ult),cmp=len(L(n-1))
+    const dUlt=Math.atan2(fecha[1],fecha[0]),gUlt=giro(n-1),g0=giro(0)
+    const angDe=(a,b)=>{let d=b-a;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
+    const ehReto=g=>Math.abs(Math.abs(g)-Math.PI/2)<=tol*Math.PI/180
+    const reto=(g,esperado)=>!ehReto(g)||Math.abs(Math.abs(esperado)-Math.PI/2)<1e-6
+    if(Math.abs(len(fecha)-cmp)>fechaM||!reto(gUlt,angDe(dir,dUlt))||!reto(g0,angDe(dUlt,Math.atan2(L(0)[1],L(0)[0]))))
+      return {erro:'As medidas não fecham em esquadro: os lados opostos não têm o mesmo comprimento. Acerte as medidas (duplo clique na cota) e esquadreje de novo.'}
+    if(ehReto(gUlt)&&Math.abs(Math.abs(gUlt)-Math.PI/2)>1e-12)cantos++
+    if(ehReto(g0)&&Math.abs(Math.abs(g0)-Math.PI/2)>1e-12)cantos++
+    // Volta à ordem original dos vértices.
+    const res=[...out.slice(n-k0),...out.slice(0,n-k0)]
+    return {pontos:[...res,[...res[0]]],cantos}
+  }
   /* Fator de escala do UTM — CÓPIA DELIBERADA de `fatorEscalaUTM` (geo.js),
      que é onde está a explicação de por que a régua do sistema é a GRADE e
      não o terreno. Este arquivo não pode depender de geo.js: ele é carregado
@@ -246,5 +284,5 @@ const PranchetaGeo = (() => {
       return {linhas,unida:l1.id}
     } catch(e) { return {erro:e.message} }
   }
-  return {EPS,add,sub,mul,dot,cross,len,unit,normal,plano,escalaUTM,rot,pe,area,dentro,inter,offset,dividir,juntarFaces,agruparFaces,fechada,arcoNoCanto,arredondar,concordancia}
+  return {EPS,add,sub,mul,dot,cross,len,unit,normal,plano,escalaUTM,rot,pe,area,dentro,inter,offset,dividir,juntarFaces,agruparFaces,esquadrejar,fechada,arcoNoCanto,arredondar,concordancia}
 })()

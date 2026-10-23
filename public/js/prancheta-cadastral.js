@@ -3,7 +3,7 @@ const PranchetaCad = (() => {
   const G=PranchetaGeo, cores=['#2563eb','#059669','#d97706','#7c3aed','#db2777','#0891b2']
   const copy=x=>structuredClone(x), $=id=>document.getElementById(id), e=x=>esc(String(x??''))
   let s=null, svg=null, modal=null, resize=null, saveTimer=null, fila=Promise.resolve(), geracao=0, reguaOrigem=null, fechamento=null
-  const icones={desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3'}
+  const icones={esquadrejar:'M5 4v15h15M5 14h5v5M13 4l7 7',desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3'}
   // "Livre": a prancheta desenha O CONTORNO do lote (lote novo, editar lote), em
   // vez de divisas dentro de um lote existente. Ver recalcular() e dados().
   // EDIFICAÇÃO: desenho livre do contorno de uma construção, com o lote por
@@ -53,7 +53,7 @@ const PranchetaCad = (() => {
       <nav class="pc-tools" aria-label="Ferramentas de desenho">
       ${botao('selecionar','Selecionar','V','clique numa linha para editar; arraste os vértices')}${botao('linha','Linha','L','clique nos cantos e digite a medida; clicar no 1º vértice fecha o contorno')}${botao('perpendicular','Perpendicular','P','escolha uma face e trace a 90° dela')}${botao('mover','Mover','M','move a linha selecionada; digite a distância')}${botao('offset','Offset','O','cópia paralela da linha, à distância digitada')}${botao('concordancia','Fillet (concordância)','F','clique em dois lados; arredonda o canto com o raio digitado — raio 0 une os lados num canto vivo')}
 ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
-      <i></i>${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}${botaoAcao('encerrar','Encerrar linha (Enter)','PranchetaCad.terminar()','termina o traço em curso')}
+      <i></i>${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}${botaoAcao('encerrar','Encerrar linha (Enter)','PranchetaCad.terminar()','termina o traço em curso')}${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a até 1° de 90° viram 90° exatos, mantendo a medida de cada lado')}
       <i></i><span class="pc-snap-grupo">${botaoAcao('snap','Snap (OSNAP)','PranchetaCad.opcoesSnap()','onde o cursor encaixa: ponta, meio, na face, perpendicular','pc-snap')}
         <div class="pc-snap-pop" id="pc-snap-pop" hidden aria-label="Encaixe do cursor">
           <div class="pc-snap-heading">Encaixe do cursor <span>OSNAP</span></div>
@@ -332,6 +332,19 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
     if(c.junto&&idx(vizinho)!==idx(fixa)&&(fech||(vizinho>=0&&vizinho<l.pontos.length)))mover(vizinho)
     s.cotaEd=null;$('pc-cota-ed').hidden=true;mudou();svg.focus()
     dica(`Lado ajustado para ${fmtMed(n)} m.`)}
+  /**
+   * ESQUADREJAR o contorno (botão da barra): os cantos quase retos (até 1°)
+   * viram 90° exatos e cada lado mantém a medida — 20,0000 × 50,0000 passa a
+   * dar 1.000,0000 m², e não 999,999. Vale para a linha fechada selecionada
+   * ou, sem seleção, para a única linha fechada do desenho (o contorno em edição).
+   */
+  function esquadrejar(){if(!s||s.leitura)return
+    const fechadas=s.linhas.filter(l=>G.fechada(l.pontos)),l=selecionada()&&G.fechada(selecionada().pontos)?selecionada():fechadas.length===1?fechadas[0]:null
+    if(!l){dica(fechadas.length?'Selecione o contorno que vai ser esquadrejado.':'Esquadrejar vale para um contorno fechado.');return}
+    const r=G.esquadrejar(l.pontos);if(r.erro){dica(r.erro);return}
+    if(!r.cantos){dica('Nenhum canto a até 1° de 90°: nada a esquadrejar.');return}
+    antes();l.pontos=r.pontos;s.sel=l.id;mudou()
+    dica(`${r.cantos} canto(s) acertado(s) em 90°. Área do contorno: ${fmtMed(Math.abs(G.area(r.pontos)))} m².`)}
   function terminar(){if(!s||s.leitura)return;s.tracoRedo=[];if(s.traco.length>=2){antes();s.linhas.push({id:crypto.randomUUID(),pontos:copy(s.traco)});s.sel=s.linhas.at(-1).id;s.traco=[];mudou()}else s.traco=[];s.valor='';$('pc-entrada').hidden=true;render();dica('Linha encerrada. Clique em outro ponto para começar uma nova; V para selecionar.')}
   function excluir(){if(!s||s.leitura||!s.sel)return;antes();s.linhas=s.linhas.filter(l=>l.id!==s.sel);s.sel=null;s.operacao=null;mudou()}
   function entrada(p,label,mover=false){const el=$('pc-entrada'),q=tela(p);el.hidden=false;el.style.left=`${Math.max(8,Math.min(s.w-220,q[0]+20))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]-45))}px`;$('pc-entrada-label').textContent=label;if(!mover)$('pc-valor').value=''}
@@ -890,5 +903,5 @@ ${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
   }
   function exportar(){if(!s)return;const clone=svg.cloneNode(true);clone.querySelectorAll('image,[data-snap],.pc-snap').forEach(n=>n.remove());clone.removeAttribute('id');clone.setAttribute('width',s.w);clone.setAttribute('height',s.h);const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent='.pc-label,.pc-cota,.pc-confronto,.pc-vizinho{font:12px sans-serif;fill:#243b4b;paint-order:stroke;stroke:white;stroke-width:4px}.pc-hit{fill:none;stroke:transparent;stroke-width:14}.pc-confronto{font-weight:bold}.pc-snap{font:12px sans-serif;fill:#16803c}';clone.prepend(style);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=url;a.download=`${s.tipo}-${s.ids.join('-')}.svg`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   async function verSalvas(id){try{const r=await fetch(`/api/lotes/${id}/pranchas`,{headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.message);if(!d.pranchas.length){toast('Este imóvel ainda não possui prancha finalizada.', 'aviso');return}const p=d.pranchas[0];await abrir(p.tipo,p.visualizacao.originais.map(f=>f.properties.id),null,p.visualizacao)}catch(err){toast(err.message,'err')}}
-  return {cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()

@@ -80,3 +80,23 @@ test('ponto repetido no desenho não vira face de 0 m nem quebra o arco',()=>{
   assert.equal(faces[0].ini,0);assert.equal(faces.at(-1).fim,lote.length-2)
   for(let k=1;k<faces.length;k++)assert.equal(faces[k].ini,faces[k-1].fim+1)
 });
+test('esquadrejar: 20 x 50 com os cantos 0,08° fora do esquadro vira 1.000 m² exatos, mantendo os lados',()=>{
+  // Paralelogramo: lados exatos 20 e 50, ângulo de 89,92° — área 999,999 m², como o lote da tela.
+  const t=(90-.081)*Math.PI/180,gira=(p,a)=>[p[0]*Math.cos(a)-p[1]*Math.sin(a),p[0]*Math.sin(a)+p[1]*Math.cos(a)]
+  const base=[[0,0],[20,0],[20+50*Math.cos(t),50*Math.sin(t)],[50*Math.cos(t),50*Math.sin(t)],[0,0]].map(p=>gira(p,.6))
+  assert.ok(Math.abs(Math.abs(G.area(base))-999.999)<.0006)
+  const r=G.esquadrejar(base);assert.ok(!r.erro,r.erro)
+  assert.ok(Math.abs(Math.abs(G.area(r.pontos))-1000)<1e-8)
+  const lados=r.pontos.slice(1).map((p,i)=>G.len(G.sub(p,r.pontos[i])))
+  assert.equal(JSON.stringify(lados.map(x=>Number(x.toFixed(8)))),"[20,50,20,50]")
+  assert.equal(r.cantos,4)
+  // O lado mais comprido fica parado.
+  assert.ok(G.len(G.sub(r.pontos[1],base[1]))<1e-9)   // o lado 1 (50 m) é o primeiro mais comprido
+});
+test('esquadrejar recusa medidas que não fecham e não mexe em canto torto de verdade',()=>{
+  const r=G.esquadrejar([[0,0],[20,0],[20,50],[0,49.9952],[0,0]])
+  assert.ok(r.erro)
+  // Canto de 95° (trapézio de verdade) fica como está: nada a esquadrejar fora de 1°.
+  const trap=[[0,0],[20,0],[20+50*Math.cos(95*Math.PI/180),50*Math.sin(95*Math.PI/180)],[0,50],[0,0]]
+  const q=G.esquadrejar(trap);assert.ok(q.erro||q.cantos<4)
+});
