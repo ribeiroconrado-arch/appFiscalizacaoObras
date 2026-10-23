@@ -38,16 +38,19 @@ final class TipoDoLogradouro
     /** Tipos que não se abreviam, mas contam como "já tem tipo". */
     private const OUTROS = ['VIELA', 'BECO', 'LARGO', 'ACESSO', 'MARGINAL', 'PASSAGEM', 'VIADUTO', 'CONTORNO', 'ANEL', 'CORREDOR'];
 
-    private const CACHE = 'tipo-do-logradouro:indice';
+    private const CACHE = 'tipo-do-logradouro:indice:2';   // :2 — com os códigos de bairro
 
     /** @var array{ruas: array<string, list<array{nome:string, bairros:list<string>}>>, bairros: array<string,string>}|null */
     private static ?array $indice = null;
 
     /**
-     * O logradouro com o tipo, abreviado. `$bairro` é o do imóvel (nome do
-     * cadastro, do desenho ou apelido), para desempatar.
+     * O logradouro com o tipo, abreviado. Para desempatar, o bairro do imóvel:
+     * de preferência pelo CÓDIGO do cadastro, que amarra à aba Bairros sem
+     * depender da grafia; senão pelo nome (do cadastro, do desenho ou apelido).
+     * O nome que o cadastro escreve nem sempre é o da aba ("JARDIM EUROPA I"
+     * no cadastro, "JARDIM EUROPA" na aba) — por isso o código vem primeiro.
      */
-    public static function completar(?string $logradouro, ?string $bairro = null): ?string
+    public static function completar(?string $logradouro, ?string $bairro = null, ?string $codigoBairro = null): ?string
     {
         $nome = Logradouro::normalizar($logradouro);
         if ($nome === '') {
@@ -57,7 +60,13 @@ final class TipoDoLogradouro
             return self::abreviar($nome);
         }
 
-        return self::candidato($nome, $bairro) ?? $nome;
+        return self::candidato($nome, $bairro, $codigoBairro) ?? $nome;
+    }
+
+    /** O nome já começa com RUA, AV., TRAVESSA…? */
+    public static function temTipo(?string $nome): bool
+    {
+        return self::tipo(Logradouro::normalizar($nome)) !== null;
     }
 
     /** O nome sem o tipo na frente ("AV. CUIABÁ" → "CUIABÁ"), para a busca achar o que veio sem ele. */
@@ -70,10 +79,11 @@ final class TipoDoLogradouro
     }
 
     /**
-     * O que o cruzamento não resolve, de uma lista de [logradouro, bairro, imóveis]:
-     * nome sem tipo e sem rua que case, ou com mais de uma e sem desempate.
+     * O que o cruzamento não resolve, de uma lista de [logradouro, bairro,
+     * código do bairro, imóveis]: nome sem tipo e sem rua que case, ou com
+     * mais de uma e sem desempate.
      *
-     * @param  iterable<object{logradouro:?string, bairro:?string, n:int}>  $linhas
+     * @param  iterable<object{logradouro:?string, bairro:?string, codigo?:?string, n:int}>  $linhas
      * @return list<array{nome:string, imoveis:int, bairros:list<string>, candidatos:list<string>}>
      */
     public static function pendencias(iterable $linhas): array
@@ -81,7 +91,7 @@ final class TipoDoLogradouro
         $saida = [];
         foreach ($linhas as $l) {
             $nome = Logradouro::normalizar($l->logradouro);
-            if ($nome === '' || self::tipo($nome) !== null || self::candidato($nome, $l->bairro) !== null) {
+            if ($nome === '' || self::tipo($nome) !== null || self::candidato($nome, $l->bairro, $l->codigo ?? null) !== null) {
                 continue;
             }
             $p = &$saida[$nome];
@@ -107,11 +117,15 @@ final class TipoDoLogradouro
 
     // ── por dentro ──────────────────────────────────────────────
 
-    private static function candidato(string $nome, ?string $bairro): ?string
+    private static function candidato(string $nome, ?string $bairro, ?string $codigoBairro = null): ?string
     {
         $cands = self::indice()['ruas'][self::chave($nome)] ?? [];
-        if (count($cands) > 1 && $bairro) {
-            $b = self::indice()['bairros'][self::chave($bairro)] ?? self::chave($bairro);
+        if (count($cands) > 1) {
+            $b = ($codigoBairro !== null ? self::indice()['codigos'][ltrim(trim($codigoBairro), '0')] ?? null : null)
+                ?? ($bairro ? self::indice()['bairros'][self::chave($bairro)] ?? self::chave($bairro) : null);
+            if ($b === null) {
+                return null;
+            }
             $cands = array_values(array_filter($cands, fn ($c) => in_array($b, $c['bairros'], true)));
         }
 
@@ -147,31 +161,43 @@ final class TipoDoLogradouro
     }
 
     /**
-     * Ruas por nome sem tipo, com os bairros ligados; e cada nome de bairro
-     * (cadastro, desenho, apelido) apontando para o do cadastro, que é o que
-     * a ligação rua↔bairro guarda.
+     * Ruas por nome sem tipo, com os bairros ligados; cada nome de bairro
+     * (cadastro, desenho, apelido) e cada CÓDIGO apontando para o nome do
+     * cadastro, que é o que a ligação rua↔bairro guarda.
+     *
+     * A mesma rua cadastrada duas vezes ("AV CARNAÚBA" e "AV. CARNAÚBA", em
+     * geral a segunda criada por uma denúncia) é UMA candidata só, com os
+     * bairros das duas: antes contava como duas ruas e nada se completava.
      */
     private static function indice(): array
     {
         return self::$indice ??= Cache::remember(self::CACHE, now()->addHours(12), function () {
-            $bairros = [];
-            foreach (CadastroBairro::get(['nome_cadastro', 'nome_gis', 'apelido']) as $b) {
+            $bairros = $codigos = [];
+            foreach (CadastroBairro::whereNotNull('nome_cadastro')->get(['codigo', 'nome_cadastro', 'nome_gis', 'apelido']) as $b) {
+                $oficial = self::chave($b->nome_cadastro);
                 foreach ([$b->nome_cadastro, $b->nome_gis, $b->apelido] as $n) {
-                    if ($n) { $bairros[self::chave($n)] = self::chave($b->nome_cadastro); }
+                    if ($n) { $bairros[self::chave($n)] = $oficial; }
                 }
+                $codigos[ltrim(trim((string) $b->codigo), '0')] = $oficial;
             }
             $ruas = [];
             foreach (Logradouro::with('vinculos')->get() as $l) {
                 if (self::tipo($l->nome) === null) {
                     continue;   // rua da lista sem tipo não completa nada
                 }
-                $ruas[self::chave(self::semTipo($l->nome))][] = [
-                    'nome' => self::abreviar($l->nome),
-                    'bairros' => $l->vinculos->map(fn ($v) => $bairros[self::chave($v->bairro)] ?? self::chave($v->bairro))->all(),
-                ];
+                $nome = self::abreviar($l->nome);
+                $c = &$ruas[self::chave(self::semTipo($l->nome))][self::chave($nome)];
+                // Das grafias da mesma rua, fica a acentuada ("CARNAÚBA", e não "CARNAUBA").
+                $c ??= ['nome' => $nome, 'bairros' => []];
+                if (strlen($nome) > strlen($c['nome'])) { $c['nome'] = $nome; }
+                foreach ($l->vinculos as $v) {
+                    $c['bairros'][] = $bairros[self::chave($v->bairro)] ?? self::chave($v->bairro);
+                }
+                $c['bairros'] = array_values(array_unique($c['bairros']));
+                unset($c);
             }
 
-            return ['ruas' => $ruas, 'bairros' => $bairros];
+            return ['ruas' => array_map('array_values', $ruas), 'bairros' => $bairros, 'codigos' => $codigos];
         });
     }
 }

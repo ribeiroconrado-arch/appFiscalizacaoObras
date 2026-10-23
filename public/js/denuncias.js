@@ -22,6 +22,7 @@ const dnState = {
   /** @type {Object|null} a denúncia aberta na ficha */ ficha: null,
   fonte: 'Residência',
   bairrosCarregados: false,
+  /** @type {string[]} os bairros ligados à rua escolhida (vazio: rua sem ligação) */ bairrosDaRua: [],
   /** @type {SpeechRecognition|null} */ voz: null,
   /** @type {number|null} a denúncia a destacar quando o mapa carregar */ focoNoMapa: null,
 }
@@ -557,6 +558,9 @@ function _dnLimparForm() {
   document.getElementById('dn-local').value = 'Local Exato'
   document.getElementById('dn-tratativa').value = ''
   document.getElementById('dn-sugestao').hidden = true
+  document.getElementById('dn-aviso-bairro').hidden = true
+  dnState.bairrosDaRua = []
+  dnState.bairrosCarregados = false
   document.getElementById('dn-reincid').hidden = true
   _dnLimparGps()
   fonteDen('Residência')
@@ -652,26 +656,33 @@ function ruaDigitadaDen() {
   }, 250)
 }
 
-/** Rua definida: os bairros ligados a ela, e a reincidência no endereço. */
+/**
+ * Rua definida: os bairros ligados a ela, e a reincidência no endereço. Rua
+ * com bairros ligados sugere SÓ eles; sem ligação, a lista é a da aba Bairros.
+ */
 async function ruaEscolhidaDen() {
   const rua = document.getElementById('dn-logradouro').value.trim()
   const caixa = document.getElementById('dn-sugestao')
   agendarReincidenciaDen()
-  if (!rua) { caixa.hidden = true; return }
+  dnState.bairrosDaRua = []
+  if (!rua) { caixa.hidden = true; dnState.bairrosCarregados = false; conferirBairroDen(); return }
   try {
     const d = await _dnPedir('/api/enderecos/bairros?rua=' + encodeURIComponent(rua))
-    const ligados = d.bairros.filter(b => b.sugerido).map(b => b.nome)
+    const ligados = d.da_rua ? d.bairros.map(b => b.nome) : []
+    dnState.bairrosDaRua = ligados
     document.getElementById('dn-lista-bairros').innerHTML = d.bairros.map(b => `<option value="${esc(b.nome)}">`).join('')
     dnState.bairrosCarregados = true
     const campo = document.getElementById('dn-bairro')
     if (ligados.length === 1 && !campo.value.trim()) {
       campo.value = ligados[0]
       caixa.hidden = true
+      conferirBairroDen()
       return
     }
     caixa.hidden = !ligados.length
     caixa.innerHTML = ligados.length ? '<span>Bairros desta rua:</span> ' + ligados.map(b =>
       `<button type="button" onclick="escolherBairroDen(${jsArg(b)})">${esc(b)}</button>`).join('') : ''
+    conferirBairroDen()
   } catch { caixa.hidden = true }
 }
 
@@ -679,9 +690,24 @@ async function ruaEscolhidaDen() {
 function escolherBairroDen(b) {
   document.getElementById('dn-bairro').value = b
   document.getElementById('dn-sugestao').hidden = true
+  conferirBairroDen()
 }
 
-/** A lista de bairros para o campo, uma vez por abertura da tela. */
+/**
+ * Bairro que a rua não tem ligado: pode ser a ponta de rua que ninguém ligou,
+ * então grava — só avisa, e o administrador acerta a ligação depois. Bairro
+ * fora da aba Bairros quem recusa é o servidor.
+ */
+function conferirBairroDen() {
+  const aviso = document.getElementById('dn-aviso-bairro')
+  const b = document.getElementById('dn-bairro').value.trim().toUpperCase()
+  const ligados = dnState.bairrosDaRua || []
+  const fora = !!b && ligados.length > 0 && !ligados.includes(b)
+  aviso.hidden = !fora
+  aviso.textContent = fora ? 'Este bairro não está ligado a esta rua em Ruas e bairros. Confira — dá para gravar assim mesmo.' : ''
+}
+
+/** A lista de bairros para o campo (a da aba Bairros), uma vez por abertura da tela. */
 async function carregarBairrosDen() {
   if (dnState.bairrosCarregados) return
   dnState.bairrosCarregados = true

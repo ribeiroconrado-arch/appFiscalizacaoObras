@@ -1408,8 +1408,8 @@ function renderRuas() {
     + (mostradas.map(r => parEditando('ruas', r.id) ? formRua(r) : `
       <div class="par-linha">
         ${parPrincipal('ruas', r.id)}
-          <b>${esc(r.nome)}</b>
-          <span>${r.bairros.length ? r.bairros.map(bairroNaLinha).join(' · ') : 'Sem bairro ligado'}</span>
+          <b>${esc(r.nome)}${r.sem_tipo ? ' <span class="rua-incompleta" title="Sem RUA, AVENIDA… na frente: não completa o endereço do cadastro">sem tipo</span>' : ''}</b>
+          <span>${r.bairros.length ? r.bairros.map(bairroNaLinha).join(' · ') : '<span class="rua-incompleta">Sem bairro ligado</span>'}</span>
         </div>
         ${parAcoes('ruas', r.id)}
       </div>`).join('')
@@ -1496,11 +1496,43 @@ async function carregarRuasSemTipo() {
 }
 
 /**
- * O bloco "sem tipo no cadastro", no topo da lista: o nome que veio sem
- * RUA/AVENIDA e não achou rua na lista (ou achou duas e o bairro não
- * desempatou). "Cadastrar" abre a rua nova com o nome e os bairros dele.
+ * As pendências, no topo da lista:
+ *   - nomes do cadastro municipal sem RUA/AVENIDA que não acharam rua na
+ *     lista (ou acharam duas e o bairro não desempatou) — "Cadastrar" abre a
+ *     rua nova com o nome e os bairros dele;
+ *   - ruas da lista sem tipo ou sem bairro — quase sempre as criadas sozinhas
+ *     por uma denúncia, com o nome como o agente digitou.
  */
 function _ruasSemTipoHtml(termo) {
+  return _ruasIncompletasHtml(termo) + _nomesSemTipoHtml(termo)
+}
+
+function _ruasIncompletasHtml(termo) {
+  const rs = (parState.ruas || []).filter(r => (r.sem_tipo || !r.bairros.length) && (!termo || r.nome.toLowerCase().includes(termo)))
+  if (!rs.length) return ''
+  return `<details class="rua-sem-tipo">
+    <summary><b>${rs.length} rua(s) da lista sem tipo ou sem bairro</b> <span>em geral criadas por uma denúncia — acerte o nome (RUA, AVENIDA…) e ligue os bairros</span></summary>
+    ${rs.slice(0, 200).map(r => `
+      <div class="par-linha">
+        <div class="principal">
+          <b>${esc(r.nome)}</b>
+          <span>${[r.sem_tipo ? 'sem tipo' : '', !r.bairros.length ? 'sem bairro' : ''].filter(Boolean).join(' · ')}</span>
+        </div>
+        <button class="btn sm out-verde" type="button" onclick="editarRuaPendente(${Number(r.id)})">Editar</button>
+      </div>`).join('')}
+    ${rs.length > 200 ? `<div class="lista-vazia">Mostrando 200 de ${rs.length} — use a busca.</div>` : ''}
+  </details>`
+}
+
+/** Abre a rua pendente para editar — buscada pelo nome, porque sem busca a lista só mostra as 300 primeiras. */
+function editarRuaPendente(id) {
+  const r = (parState.ruas || []).find(x => x.id === id)
+  const busca = document.getElementById('filtro-ruas')
+  if (r && busca) busca.value = r.nome
+  parEditar('ruas', id)
+}
+
+function _nomesSemTipoHtml(termo) {
   const ps = (parState.ruasSemTipo || []).filter(p => !termo || p.nome.toLowerCase().includes(termo))
   if (!ps.length) return ''
   const imoveis = ps.reduce((s, p) => s + p.imoveis, 0)

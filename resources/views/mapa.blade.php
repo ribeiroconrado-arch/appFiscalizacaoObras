@@ -3570,8 +3570,10 @@
         <label for="dn-bairro">Bairro *</label>
         <div class="den-sugestao" id="dn-sugestao" hidden></div>
         <input type="text" id="dn-bairro" list="dn-lista-bairros" autocomplete="off" maxlength="160"
-               placeholder="Digite para buscar…" onfocus="carregarBairrosDen()">
+               placeholder="Digite para buscar…" onfocus="carregarBairrosDen()" onchange="conferirBairroDen()">
         <datalist id="dn-lista-bairros"></datalist>
+        {{-- Bairro da lista, mas que a rua não tem ligado: grava, só avisa. --}}
+        <small class="den-aviso-bairro" id="dn-aviso-bairro" hidden></small>
       </div>
       <div class="den-reincid" id="dn-reincid" hidden></div>
 

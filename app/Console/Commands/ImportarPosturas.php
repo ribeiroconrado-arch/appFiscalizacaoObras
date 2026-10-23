@@ -27,7 +27,7 @@ class ImportarPosturas extends Command
 {
     protected $signature = 'posturas:importar
         {--simular : Lê e confere tudo, mas desfaz no fim — nada é gravado}
-        {--so=* : Só estas etapas (usuarios, bairros, logradouros, rua_bairro, contribuintes, decibelimetros, leis, feriados, upf, config, denuncias)}
+        {--so=* : Só estas etapas (usuarios, logradouros, rua_bairro, contribuintes, decibelimetros, leis, feriados, upf, config, denuncias)}
         {--criar-usuarios : Cria conta DESATIVADA para quem do Posturas não existe aqui}
         {--email= : E-mail do administrador do Posturas (senão, é perguntado)}';
 

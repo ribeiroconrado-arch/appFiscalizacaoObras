@@ -4079,3 +4079,4 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 .rua-sem-tipo summary span{color:var(--tx2,#5b6461);font-size:12px}
 .rua-sem-tipo .par-linha{background:#fff}
 .rua-sem-tipo em{color:#92400E;font-style:normal}
+.rua-incompleta{display:inline-block;font-size:11px;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:0 5px}

@@ -55,6 +55,15 @@ try {
     confere(T::completar(null) === null && T::completar('') === '', 'vazio continua vazio');
     confere(T::semTipo('AV. ZZTESTE CUIABÁ') === 'ZZTESTE CUIABÁ', 'semTipo tira o tipo para a busca');
 
+    echo "Rua repetida e desempate pelo código\n";
+    $rua('AV ZZTESTE CARNAUBA', ['JARDIM TESTE ALFA']);
+    $rua('AV. ZZTESTE CARNAÚBA', []);
+    T::esquecer();
+    confere(T::completar('ZZTESTE CARNAUBA') === 'AV. ZZTESTE CARNAÚBA', 'a mesma rua cadastrada duas vezes conta como uma (e fica a grafia acentuada)');
+    confere(T::completar('ZZTESTE DUPLA', 'JARDIM EUROPA I (grafia do cadastro)', '9902') === 'AV. ZZTESTE DUPLA', 'o código do bairro desempata, mesmo com o nome diferente');
+    confere(T::completar('ZZTESTE DUPLA', 'JARDIM TESTE BETA', '009901') === 'R. ZZTESTE DUPLA', 'o código vale antes do nome, com zeros à esquerda');
+    confere(T::completar('ZZTESTE DUPLA', null, '99999') === 'ZZTESTE DUPLA', 'código desconhecido e sem nome: não chuta');
+
     echo "Pendências\n";
     $p = T::pendencias([
         (object) ['logradouro' => 'ZZTESTE CUIABÁ', 'bairro' => 'JARDIM TESTE ALFA', 'n' => 4],
@@ -82,7 +91,33 @@ try {
     $nova->vinculos()->create(['bairro' => 'BAIRRO ANTIGO DO POSTURAS']);
     $r = $ctl->salvarRua($pedido($admin, ['id' => $nova->id, 'nome' => 'RUA ZZTESTE NOVA', 'bairros' => ['BAIRRO ANTIGO DO POSTURAS', 'JARDIM TESTE BETA']]));
     confere($r->status() === 200, 'a ligação antiga, de fora da lista, continua aceita ao regravar');
-    confere(! DB::table('bairros_endereco')->where('nome', 'JARDIM TESTE BETA')->exists(), 'não cria mais bairro na lista à parte');
+    confere(! Illuminate\Support\Facades\Schema::hasTable('bairros_endereco'), 'a lista de bairros herdada do Posturas não existe mais');
+
+    echo "Sugestão de bairro pela rua\n";
+    $end = $app->make(App\Http\Controllers\EnderecoController::class);
+    $sug = fn (array $q) => $end->bairros(Request::create('/x', 'GET', $q))->getData(true);
+    $d = $sug(['rua' => 'Avenida Zzteste Cuiabá']);
+    confere($d['da_rua'] && array_column($d['bairros'], 'nome') === ['JARDIM TESTE ALFA'], 'rua com bairro ligado sugere só ele');
+    $d = $sug(['rua' => 'RUA ZZTESTE GOIÁS']);
+    $nomes = array_column($d['bairros'], 'nome');
+    confere(! $d['da_rua'] && in_array('JARDIM TESTE ALFA', $nomes, true) && in_array('JARDIM TESTE BETA', $nomes, true), 'rua sem ligação sugere a aba Bairros');
+    confere(! in_array('BAIRRO ANTIGO DO POSTURAS', $nomes, true), 'nome de fora da aba Bairros não é sugerido');
+
+    echo "Denúncia\n";
+    $den = $app->make(App\Http\Controllers\DenunciaController::class);
+    $repo = $app->make(App\Repositories\LoteRepository::class);
+    $denuncia = fn (string $rua, string $bairro) => $den->store($pedido($admin, ['data_hora' => now()->format('Y-m-d\TH:i'),
+        'logradouro' => $rua, 'bairro' => $bairro, 'fonte_sonora' => 'Residência']), $repo);
+    $r = $denuncia('Avenida Zzteste Cuiabá', 'Bairro Inventado Zz');
+    confere($r->status() === 422, 'bairro fora da aba Bairros é recusado');
+    $r = $denuncia('Avenida Zzteste Cuiabá', 'jardim teste beta');
+    confere($r->status() === 201, 'bairro da lista que a rua não tem ligado é aceito (a tela só avisa)');
+    $r = $denuncia('zzteste rua digitada', 'JARDIM TESTE ALFA');
+    confere($r->status() === 201 && Logradouro::where('nome', 'ZZTESTE RUA DIGITADA')->exists(), 'rua nova entra na lista de ruas');
+    $ruas = collect($ctl->index($pedido($admin, []))->getData(true)['ruas']);
+    $digitada = $ruas->firstWhere('nome', 'ZZTESTE RUA DIGITADA');
+    confere($digitada['sem_tipo'] === true && $digitada['bairros'] === [], 'e aparece sem tipo e sem bairro, para as pendências');
+    confere($ruas->firstWhere('nome', 'AVENIDA ZZTESTE CUIABÁ')['sem_tipo'] === false, 'rua com tipo não é pendência');
 
     echo "\n{$ok} conferências ok\n";
 } finally {

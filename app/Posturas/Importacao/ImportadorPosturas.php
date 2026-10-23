@@ -56,8 +56,12 @@ class ImportadorPosturas
 
     // ── ORDEM ────────────────────────────────────────────────────
 
-    /** As etapas, na ordem em que dependem umas das outras. */
-    public const ETAPAS = ['usuarios', 'bairros', 'logradouros', 'rua_bairro', 'contribuintes',
+    /**
+     * As etapas, na ordem em que dependem umas das outras. Os bairros do
+     * Posturas não vêm mais: o bairro de endereço é o da aba Bairros
+     * (2026_10_30_000100_aposenta_bairros_endereco).
+     */
+    public const ETAPAS = ['usuarios', 'logradouros', 'rua_bairro', 'contribuintes',
         'decibelimetros', 'leis', 'feriados', 'upf', 'config', 'denuncias'];
 
     /** @param list<string> $so só estas etapas (vazio = todas) */
@@ -130,33 +134,7 @@ class ImportadorPosturas
         $this->fecharEtapa('usuarios', $r);
     }
 
-    // ── BAIRROS, RUAS E RUA↔BAIRRO ───────────────────────────────
-
-    public function importarBairros(): void
-    {
-        $linhas = $this->sb->todas('bairros', 'nome,codigo', 'nome.asc');
-        $r = $this->novaEtapa('bairros', count($linhas));
-
-        foreach ($linhas as $b) {
-            // Cortado ANTES de procurar: o nome guardado é o cortado, e é com ele
-            // que a próxima importação tem de achar o mesmo bairro.
-            ['nome' => $nome, 'codigo' => $codigo] = $this->caber('bairros_endereco',
-                ['nome' => Logradouro::normalizar($b['nome'] ?? ''), 'codigo' => ($b['codigo'] ?? null) ?: null]);
-            if ($nome === '') { $r['ignorados']++; continue; }
-            $existe = DB::table('bairros_endereco')->where('nome', $nome)->first();
-            if ($existe) {
-                DB::table('bairros_endereco')->where('id', $existe->id)
-                    ->update(['codigo' => $codigo ?: $existe->codigo, 'updated_at' => now()]);
-                $r['atualizados']++;
-            } else {
-                DB::table('bairros_endereco')->insert(['nome' => $nome, 'codigo' => $codigo,
-                    'created_at' => now(), 'updated_at' => now()]);
-                $r['novos']++;
-            }
-        }
-
-        $this->fecharEtapa('bairros_endereco', $r);
-    }
+    // ── RUAS E RUA↔BAIRRO ────────────────────────────────────────
 
     public function importarLogradouros(): void
     {

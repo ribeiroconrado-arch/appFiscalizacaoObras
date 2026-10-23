@@ -102,7 +102,10 @@ class ParametroController extends Controller
                 'ativo' => $d->ativo, 'rotulo' => $d->rotulo(),
             ]),
             'ruas' => Logradouro::with(['vinculos' => fn ($q) => $q->orderBy('bairro')])->orderBy('nome')->get()
-                ->map(fn (Logradouro $l) => ['id' => $l->id, 'nome' => $l->nome, 'bairros' => $l->vinculos->pluck('bairro')]),
+                // Sem tipo, a rua não completa o endereço do cadastro; vai para
+                // as pendências da aba junto com a que não tem bairro.
+                ->map(fn (Logradouro $l) => ['id' => $l->id, 'nome' => $l->nome, 'bairros' => $l->vinculos->pluck('bairro'),
+                    'sem_tipo' => ! \App\Cadastro\TipoDoLogradouro::temTipo($l->nome)]),
         ]);
     }
 
@@ -118,8 +121,8 @@ class ParametroController extends Controller
 
         $linhas = DB::table('cadastro_externo_imoveis')->whereNull('ausente_desde_carga_id')
             ->whereNotNull('logradouro')->where('logradouro', '<>', '')
-            ->selectRaw('logradouro, nome_bairro AS bairro, COUNT(*) AS n')
-            ->groupBy('logradouro', 'nome_bairro')->cursor();
+            ->selectRaw('logradouro, nome_bairro AS bairro, codigo_bairro AS codigo, COUNT(*) AS n')
+            ->groupBy('logradouro', 'nome_bairro', 'codigo_bairro')->cursor();
 
         return response()->json(['pendencias' => \App\Cadastro\TipoDoLogradouro::pendencias($linhas)]);
     }
@@ -198,7 +201,7 @@ class ParametroController extends Controller
             return response()->json(['message' => 'Já existe uma rua com esse nome.'], 422);
         }
         $bairros = collect($d['bairros'] ?? [])->map(fn ($b) => Logradouro::normalizar($b))->filter()->unique()->values();
-        $cadastrados = CadastroBairro::pluck('nome_cadastro')->map(fn ($b) => Logradouro::normalizar($b))->all();
+        $cadastrados = CadastroBairro::nomesDeEndereco();
         $jaLigados = ($d['id'] ?? null) ? Logradouro::find($d['id'])->bairros() : [];
         $fora = $bairros->reject(fn ($b) => in_array($b, $cadastrados, true) || in_array($b, $jaLigados, true));
         if ($fora->isNotEmpty()) {

@@ -38,6 +38,18 @@ class CadastroBairro extends Model
     }
 
     /**
+     * Os nomes de bairro que um ENDEREÇO aceita (a rua↔bairro de Parâmetros e
+     * o bairro da denúncia): o do cadastro, em maiúsculas, em ordem alfabética.
+     *
+     * @return list<string>
+     */
+    public static function nomesDeEndereco(): array
+    {
+        return static::whereNotNull('nome_cadastro')->pluck('nome_cadastro')
+            ->map(fn ($n) => Logradouro::normalizar($n))->filter()->unique()->sort()->values()->all();
+    }
+
+    /**
      * O nome a mostrar: o do cadastro é o oficial; o do desenho socorre.
      *
      * Chama-se `rotulo` e não `nome` de propósito. `nome` é um dos nomes que o

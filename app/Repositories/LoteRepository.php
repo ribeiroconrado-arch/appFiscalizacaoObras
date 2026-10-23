@@ -610,8 +610,8 @@ class LoteRepository
             ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim($codigoCadastro, '0')])
             ->whereNull('ausente_desde_carga_id')
             ->whereNotNull('logradouro')->where('logradouro', '<>', '')
-            ->distinct()->get(['logradouro', 'nome_bairro'])
-            ->map(fn ($l) => \App\Cadastro\TipoDoLogradouro::completar($l->logradouro, $l->nome_bairro))
+            ->distinct()->get(['logradouro', 'nome_bairro', 'codigo_bairro'])
+            ->map(fn ($l) => \App\Cadastro\TipoDoLogradouro::completar($l->logradouro, $l->nome_bairro, $l->codigo_bairro))
             ->unique()->sort()->values()->all();
     }
 

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BairroEndereco;
+use App\Models\CadastroBairro;
 use App\Models\Denuncia;
 use App\Models\Logradouro;
 use App\Models\User;
@@ -240,7 +240,10 @@ class DenunciaController extends Controller
         }
 
         $dados = $this->dados($r->validate($this->regras()));
-        $this->cadastrarEndereco($dados['logradouro'], $dados['bairro']);
+        if ($erro = $this->bairroForaDaLista($dados['bairro'])) {
+            return $erro;
+        }
+        $this->cadastrarEndereco($dados['logradouro']);
 
         $den = Denuncia::create($dados + [
             'protocolo'        => ProtocoloDenuncia::gerar(fn ($p) => Denuncia::where('protocolo', $p)->exists()),
@@ -266,7 +269,12 @@ class DenunciaController extends Controller
         }
 
         $dados = $this->dados($r->validate($this->regras()));
-        $this->cadastrarEndereco($dados['logradouro'], $dados['bairro']);
+        // A denúncia antiga, gravada com um bairro de fora da lista, continua
+        // editável enquanto ninguém troca o bairro.
+        if ($dados['bairro'] !== $denuncia->bairro && ($erro = $this->bairroForaDaLista($dados['bairro']))) {
+            return $erro;
+        }
+        $this->cadastrarEndereco($dados['logradouro']);
 
         // O histórico de lá: o que mudou de relevante, em palavras.
         $mudancas = [];
@@ -320,14 +328,26 @@ class DenunciaController extends Controller
     }
 
     /**
-     * Rua e bairro novos entram nas listas de sugestão — o auto-cadastro do
-     * AppPOSTURAS, que mantém o autocomplete em dia sem cadastro prévio. A
-     * relação rua↔bairro continua sendo do administrador (Parâmetros).
+     * Rua nova entra na lista de sugestões — o auto-cadastro do AppPOSTURAS,
+     * que mantém o autocomplete em dia sem cadastro prévio. Ela entra como foi
+     * digitada, sem bairro e às vezes sem tipo, e por isso aparece nas
+     * pendências da aba Ruas e bairros até o administrador acertar. Bairro
+     * novo, não: ele vem da aba Bairros (ver bairroForaDaLista).
      */
-    private function cadastrarEndereco(string $logradouro, string $bairro): void
+    private function cadastrarEndereco(string $logradouro): void
     {
-        Logradouro::firstOrCreate(['nome' => $logradouro]);
-        BairroEndereco::firstOrCreate(['nome' => $bairro]);
+        if (! Logradouro::where('nome', $logradouro)->exists()) {
+            Logradouro::create(['nome' => $logradouro]);
+            \App\Cadastro\TipoDoLogradouro::esquecer();
+        }
+    }
+
+    /** O bairro tem de estar na aba Bairros. Fora do que a rua tem ligado, vale — a tela só avisa. */
+    private function bairroForaDaLista(string $bairro): ?JsonResponse
+    {
+        return in_array($bairro, CadastroBairro::nomesDeEndereco(), true) ? null
+            : response()->json(['message' => "O bairro \"{$bairro}\" não está na lista de bairros. Escolha um bairro da lista.",
+                'errors' => ['bairro' => ['Escolha um bairro da lista.']]], 422);
     }
 
     /** O lote em que o ponto do GPS caiu — quando há GPS, e quando cai num. */

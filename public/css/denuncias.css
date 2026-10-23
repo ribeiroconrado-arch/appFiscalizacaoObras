@@ -58,6 +58,7 @@
 .den-sugestao{font-size:12px;color:var(--gd);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .den-sugestao button{border:none;border-radius:20px;padding:3px 11px;font:inherit;font-size:12px;font-weight:700;
   background:var(--gm);color:var(--gd);cursor:pointer}
+.den-aviso-bairro{display:block;margin-top:4px;font-size:12px;color:#92400E}
 
 /* Reincidência: âmbar, que é aviso — não impede salvar. */
 .den-reincid{background:#FFF6DD;border:1.5px solid #F2DE9C;border-radius:var(--r);padding:9px 12px;margin:6px 0 10px}

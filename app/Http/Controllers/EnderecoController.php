@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BairroEndereco;
+use App\Models\CadastroBairro;
 use App\Models\Logradouro;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * O autocomplete de endereço do Posturas (autocomplete.js de lá): a rua pelo
- * nome, com os bairros por onde ela passa; e os bairros, com os da rua
- * escolhida em primeiro lugar, marcados como sugeridos.
+ * nome, com os bairros por onde ela passa; e os bairros — só os da rua
+ * escolhida, quando ela tem algum ligado; senão, os da aba Bairros.
  */
 class EnderecoController extends Controller
 {
@@ -30,25 +30,25 @@ class EnderecoController extends Controller
     }
 
     /**
-     * GET /api/enderecos/bairros?q=&rua= — até 60 bairros. Os ligados à rua
-     * vêm primeiro, com `sugerido`; com um só, a tela preenche sozinha.
+     * GET /api/enderecos/bairros?q=&rua= — a rua com bairros ligados sugere
+     * SÓ eles (`da_rua`, cada um `sugerido`; com um só, a tela preenche
+     * sozinha). Rua sem ligação, ou sem rua, sugere a aba Bairros inteira.
+     *
+     * Até 23/10/2026 os ligados vinham à frente da lista solta herdada do
+     * Posturas (`bairros_endereco`), e a Av. Cuiabá sugeria a cidade toda.
      */
     public function bairros(Request $r): JsonResponse
     {
         $q = Logradouro::normalizar($r->query('q', ''));
         $daRua = ($rua = Logradouro::where('nome', Logradouro::normalizar($r->query('rua', '')))->first())
             ? $rua->bairros() : [];
-
-        $outros = BairroEndereco::query()
-            ->when($q !== '', fn ($b) => $b->where('nome', 'like', '%' . $q . '%'))
-            ->whereNotIn('nome', $daRua)->orderBy('nome')->limit(60)->pluck('nome');
-
-        $sugeridos = collect($daRua)->filter(fn ($b) => $q === '' || str_contains($b, $q));
+        $casa = fn ($b) => $q === '' || str_contains($b, $q);
 
         return response()->json([
-            'bairros' => $sugeridos->map(fn ($b) => ['nome' => $b, 'sugerido' => true])
-                ->concat($outros->map(fn ($b) => ['nome' => $b, 'sugerido' => false]))
-                ->take(60)->values(),
+            'da_rua'  => $daRua !== [],
+            'bairros' => $daRua
+                ? collect($daRua)->filter($casa)->map(fn ($b) => ['nome' => $b, 'sugerido' => true])->values()
+                : collect(CadastroBairro::nomesDeEndereco())->filter($casa)->map(fn ($b) => ['nome' => $b, 'sugerido' => false])->values(),
         ]);
     }
 }
