@@ -1378,23 +1378,18 @@
 </nav>
 
 {{-- CENTRAL DE NOTIFICAÇÕES DO SISTEMA --}}
-<div class="modal-bg" id="m-notif" onclick="fModal()">
+<div class="modal-bg" id="m-notif" data-usuario="{{ auth()->id() }}" onclick="fModal()">
   <div class="modal" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="fModalBtn('m-notif')">&#10005;</button>
     <h3>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-      Avisos
+      Notificações <span id="notif-contagem" class="notif-contagem"></span>
     </h3>
-    <div class="sub">
-      Ligados aos seus atos no sistema. Não confundir com a aba
-      <b>Documentos</b>, que reúne notificações e autos fiscais.
-    </div>
+    <div class="notif-filtros"><div><button type="button" data-notif-filtro="todas" aria-pressed="true" onclick="filtrarNotificacoes('todas')">Todas</button><button type="button" data-notif-filtro="nao-lidas" aria-pressed="false" onclick="filtrarNotificacoes('nao-lidas')">Não lidas</button></div><button type="button" onclick="lerTodasNotificacoes()">Marcar todas como lidas</button></div>
     <div id="lista-notificacoes"></div>
-    <div class="btn-row">
-      <button class="btn" onclick="fModalBtn('m-notif')">Fechar</button>
-    </div>
+    <div class="notif-rodape">Fim das notificações</div>
   </div>
 </div>
 

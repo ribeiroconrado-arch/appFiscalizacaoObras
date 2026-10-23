@@ -185,28 +185,7 @@ async function carregarNotificacoes() {
     const d = await r.json()
     pState.notificacoes = d.notificacoes
 
-    const chip = document.getElementById('sino-n')
-    chip.textContent = d.total
-    chip.style.display = d.total ? '' : 'none'
-
-    // O sino mantém todos os avisos. O painel agrupa os já presentes nas pendências.
-    const html = d.total
-      ? d.notificacoes.map(n => `
-          <div class="notif"${n.aba ? ` onclick="fModalBtn('m-notif');irPara('${n.aba}')"` : ''}>
-            <div class="ic">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                   stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-            </div>
-            <div class="c">
-              <div class="t">${esc(n.titulo)}</div>
-              <div class="b">${esc(n.texto)}</div>
-              <div class="h">${esc(n.quando)}</div>
-            </div>
-          </div>`).join('')
-      : '<div class="lista-vazia">Nenhum aviso no momento.</div>'
-
-    document.getElementById('lista-notificacoes').innerHTML = html
+    renderCentralNotificacoes()
 
     renderAvisosPainel()
   } catch (e) {
@@ -236,6 +215,59 @@ function renderAvisosPainel() {
 }
 
 function abrirNotificacoes() {
+  renderCentralNotificacoes()
   carregarNotificacoes()
   openModal('m-notif')
+}
+
+let filtroNotificacoes = 'todas'
+let leiturasNotificacoes = null
+function chaveLeiturasNotificacoes() {
+  return 'avisos-lidos-v1-' + document.getElementById('m-notif')?.dataset.usuario
+}
+function obterLeiturasNotificacoes() {
+  if (!leiturasNotificacoes) {
+    try { const ids = JSON.parse(localStorage.getItem(chaveLeiturasNotificacoes()) || '[]'); leiturasNotificacoes = new Set(Array.isArray(ids) ? ids : []) }
+    catch { leiturasNotificacoes = new Set() }
+  }
+  return leiturasNotificacoes
+}
+function salvarLeiturasNotificacoes() {
+  try { localStorage.setItem(chaveLeiturasNotificacoes(), JSON.stringify([...obterLeiturasNotificacoes()].slice(-1000))) } catch { /* Mantém a leitura nesta sessão. */ }
+}
+function filtrarNotificacoes(filtro) { filtroNotificacoes = filtro; renderCentralNotificacoes() }
+function alternarLeituraNotificacao(indice) {
+  const n = pState.notificacoes[indice]
+  if (!n?.leitura_id) return
+  const lidas = obterLeiturasNotificacoes()
+  if (lidas.has(n.leitura_id)) lidas.delete(n.leitura_id); else lidas.add(n.leitura_id)
+  salvarLeiturasNotificacoes(); renderCentralNotificacoes()
+}
+function lerTodasNotificacoes() {
+  pState.notificacoes.forEach(n => { if (n.leitura_id) obterLeiturasNotificacoes().add(n.leitura_id) })
+  salvarLeiturasNotificacoes(); renderCentralNotificacoes()
+}
+function detalhesNotificacao(indice, botao) {
+  const detalhe = document.getElementById('notif-detalhe-' + indice)
+  if (!detalhe) return
+  detalhe.hidden = !detalhe.hidden
+  botao.setAttribute('aria-expanded', String(!detalhe.hidden))
+  botao.textContent = detalhe.hidden ? 'Saiba mais' : 'Mostrar menos'
+}
+function renderCentralNotificacoes() {
+  const lista = document.getElementById('lista-notificacoes')
+  if (!lista) return
+  const lidas = obterLeiturasNotificacoes(), avisos = pState.notificacoes || []
+  const total = avisos.filter(n => !lidas.has(n.leitura_id)).length
+  const chip = document.getElementById('sino-n')
+  if (chip) { chip.textContent = total; chip.style.display = total ? '' : 'none' }
+  const contagem = document.getElementById('notif-contagem')
+  if (contagem) { contagem.textContent = total; contagem.setAttribute('aria-label', total + ' não lidas') }
+  document.querySelectorAll('[data-notif-filtro]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.notifFiltro === filtroNotificacoes)))
+  const vis = avisos.map((n, i) => ({ n, i, lida: lidas.has(n.leitura_id) })).filter(x => filtroNotificacoes !== 'nao-lidas' || !x.lida)
+  lista.innerHTML = vis.length ? vis.map(({ n, i, lida }) => `<article class="notif-feed${lida ? ' lida' : ''}">
+    <div class="notif-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">${n.tipo === 'rascunho' ? '<path d="M14 2H6v20h12V6zM14 2v5h5M9 12h6M9 16h4"/>' : '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'}</svg></div>
+    <div class="notif-conteudo"><h4>${esc(n.titulo)}</h4><p>${esc(n.texto)}</p><time>${esc(n.quando)}</time>
+    <div class="notif-acoes"><button type="button" aria-expanded="false" aria-controls="notif-detalhe-${i}" onclick="detalhesNotificacao(${i},this)">Saiba mais</button><button type="button" onclick="alternarLeituraNotificacao(${i})">${lida ? 'Marcar como não lida' : 'Marcar como lida'}</button></div>
+    <div class="notif-detalhe" id="notif-detalhe-${i}" hidden>${n.tipo === 'rascunho' ? 'Este documento ainda aguarda conclusão. Consulte os detalhes na aba Documentos.' : 'Confira a situação atual e o prazo na aba Documentos. Ler este aviso não resolve a pendência.'}${n.aba === 'documentos' ? '<button type="button" onclick="fModalBtn(\'m-notif\');irPara(\'documentos\')">Ir para Documentos</button>' : ''}</div></div><span class="notif-ponto" aria-label="${lida ? 'Lida' : 'Não lida'}"></span></article>`).join('') : `<div class="lista-vazia">${avisos.length ? 'Você leu todas as notificações.' : 'Nenhuma notificação no momento.'}</div>`
 }

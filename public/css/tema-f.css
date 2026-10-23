@@ -4044,3 +4044,30 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 #grupo-camadas .ctrl-camadas{border:0}
 #t-mapa > #pesq-barra{border:0;box-sizing:border-box;bottom:auto;max-width:none;border-radius:10px}
 @media(max-width:620px){#pesq-barra .pesq-direta-grid{grid-template-columns:minmax(0,1fr)}#pesq-barra .pesq-direta-titulo{flex-wrap:wrap}}
+/* Central de notificações: leitura independente da situação dos documentos. */
+#m-notif .modal{width:490px;max-width:calc(100vw - 24px);padding:0;overflow:auto;background:var(--sur)}
+#m-notif h3{margin:0;padding:20px 48px 16px 20px;font-size:20px;color:var(--tx);gap:9px}
+#m-notif h3 svg{display:none}
+.notif-contagem{background:var(--gl);color:var(--gd);padding:3px 7px;border-radius:20px;font-size:12px}
+.notif-filtros{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 12px 8px;border-bottom:1px solid var(--bord);flex-wrap:wrap}
+.notif-filtros button,.notif-acoes button,.notif-detalhe button{border:0;background:transparent;font:inherit;font-size:12px;color:var(--tx2);min-height:44px;padding:6px 8px;cursor:pointer}
+.notif-filtros button[aria-pressed=true]{background:var(--gl);color:var(--gd);border-radius:6px;font-weight:600}
+.notif-filtros>button{font-size:11px;color:var(--gd)}
+.notif-feed{display:grid;grid-template-columns:36px minmax(0,1fr) 6px;gap:12px;padding:18px 20px 12px;background:color-mix(in srgb,var(--gl) 60%,var(--sur));border-bottom:1px solid var(--bord)}
+.notif-feed.lida{background:var(--sur)}
+.notif-icone{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--gl);color:var(--gd)}
+.notif-icone svg{width:18px;height:18px}
+.notif-conteudo{min-width:0;overflow-wrap:anywhere}
+.notif-conteudo h4{font-size:14px;line-height:1.4;margin:0 0 5px;font-weight:600;color:var(--tx)}
+.notif-conteudo p{font-size:13px;line-height:1.5;margin:0;color:var(--tx2)}
+.notif-conteudo time{display:block;font-size:11px;color:var(--tx3);margin-top:7px}
+.notif-acoes{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+.notif-acoes button{padding:4px 0;font-size:11px}
+.notif-acoes button:first-child{color:var(--gd);font-weight:600}
+.notif-ponto{width:6px;height:6px;border-radius:50%;background:var(--gd);margin-top:7px}
+.notif-feed.lida .notif-ponto{visibility:hidden}
+.notif-detalhe{font-size:12px;line-height:1.5;color:var(--tx2);padding:4px 0 4px 10px;border-left:2px solid var(--gd)}
+.notif-detalhe[hidden]{display:none}
+.notif-detalhe button{display:block;color:var(--gd);padding-left:0}
+.notif-rodape{text-align:center;padding:14px;font-size:11px;color:var(--tx3)}
+@media(max-width:380px){.notif-feed{grid-template-columns:30px minmax(0,1fr) 6px;gap:8px;padding:16px 12px 10px}.notif-icone{width:30px;height:30px}}

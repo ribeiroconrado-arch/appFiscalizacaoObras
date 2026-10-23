@@ -550,6 +550,8 @@ class PainelController extends Controller
 
             if ($doc->naoLavrado()) {
                 $avisos[] = [
+                    'leitura_id' => 'documento-' . $doc->id . '-' . $doc->status . '-' . $doc->updated_at?->timestamp,
+                    'tipo' => 'rascunho',
                     'titulo'  => $doc->status === 'gravado' ? 'Documento gravado, ainda não lavrado' : 'Rascunho não gravado',
                     'texto'   => $doc->rotuloTipo() . ' — ' . $imovel . '. '
                         . ($doc->status === 'gravado' ? 'Nº ' . $doc->numeroFormatado() . ', aguardando a lavratura.' : 'Sem número enquanto não for gravado.'),
@@ -564,6 +566,8 @@ class PainelController extends Controller
                     $avisos[] = [
                         'titulo'  => $txt . ' — ' . $doc->numeroFormatado(),
                         'chave'   => 'documento-prazo-' . $doc->id,
+                        'leitura_id' => 'documento-prazo-' . $doc->id . '-' . $cls . '-' . $doc->updated_at?->timestamp,
+                        'tipo' => 'prazo',
                         'texto'   => $doc->rotuloTipo() . ' — ' . $imovel,
                         'quando'  => $doc->data_lavratura?->diffForHumans() ?? '',
                         'aba'     => 'documentos',
