@@ -12,7 +12,10 @@
  *                        cria um vértice ali, e o modo desliga sozinho. Fora
  *                        dele, clicar na linha não faz nada (22/10/2026: o
  *                        clique solto criava vértice sem querer)
- *   ímã                  o vértice gruda no vértice ou na linha do bairro
+ *   E (ou o botão −)     liga o "excluir vértice": o próximo vértice clicado
+ *                        some, e o modo desliga. No celular, que não tem
+ *                        Delete, é o jeito de apagar
+ *   ímã                o vértice gruda no vértice ou na linha do bairro
  *                        vizinho (Alt segurado desliga) — a divisa fica comum
  *   Encostar no vizinho  escolha dois vértices: o trecho entre eles passa a
  *                        seguir a divisa do vizinho mais próximo, de uma vez
@@ -31,7 +34,7 @@ const ceState = {
   ativo: false, bairro: null,
   /** @type {Array<Array<Array<[number,number]>>>} polígonos → anéis → vértices (sem repetir o primeiro) */
   polis: [],
-  undo: [], redo: [], sel: null, modo: null, encostarA: null, inserir: false,
+  undo: [], redo: [], sel: null, modo: null, encostarA: null, inserir: false, remover: false,
   camada: null, alcas: null, ima: null, invasoes: null,
   vizinhos: [], conf: null, timer: null, pedido: 0, gravando: false, alterado: false,
   lotesFora: new Set(),
@@ -127,7 +130,7 @@ function _ceAbrir(nome, f) {
   const polis = (g.type === 'Polygon' ? [g.coordinates] : g.coordinates)
     .map(p => p.map(r => { const a = r.map(c => [c[0], c[1]]); if (a.length > 1 && a[0][0] === a.at(-1)[0] && a[0][1] === a.at(-1)[1]) a.pop(); return a }))
   Object.assign(ceState, { ativo: true, bairro: nome, polis, undo: [], redo: [], sel: null, modo: null, encostarA: null,
-    inserir: false, conf: null, alterado: false, gravando: false })
+    inserir: false, remover: false, invasaoIdx: null, conf: null, alterado: false, gravando: false })
   ceState.vizinhos = (contornoState.dados.features || []).filter(x => x.properties?.nome !== nome).flatMap(x => {
     const gg = x.geometry, ps = gg.type === 'Polygon' ? [gg.coordinates] : gg.coordinates
     return ps.flatMap(p => p.map(r => {
@@ -189,11 +192,11 @@ function sairDaEdicaoDoContorno(semPerguntar = false, voltar = true) {
   ceState.camada = ceState.alcas = ceState.invasoes = ceState.ima = ceState.linha = null
   m.off('moveend', _ceDesenharAlcas)
   m.off('layeradd', _ceZoomDaCamadaNova)
-  m.getContainer().classList.remove('ce-inserindo')
+  m.getContainer().classList.remove('ce-inserindo', 'ce-removendo')
   _ceZoomMaximo(ZOOM_MAXIMO)
   document.removeEventListener('keydown', _ceTeclas, true)
   _ceMarcarLotesFora([])
-  ceState.ativo = false; ceState.daLista = false; ceState.modo = null; ceState.encostarA = null; ceState.inserir = false
+  ceState.ativo = false; ceState.daLista = false; ceState.modo = null; ceState.encostarA = null; ceState.inserir = false; ceState.remover = false
   const barra = document.getElementById('ce-barra'); if (barra) { barra.hidden = true; barra.innerHTML = '' }
   document.dispatchEvent(new CustomEvent('ferramenta-encerrada'))
   if (voltar && daLista && typeof abrirContornosDosBairros === 'function') {
@@ -236,6 +239,7 @@ function alternarInserirVertice(ligar = !ceState.inserir) {
   if (!ceState.ativo) return
   if (ligar && ceState.modo) { toast('Termine o "Encostar no vizinho" antes.', 'aviso'); return }
   const m = mapaState.obj
+  if (ligar) alternarRemoverVertice(false)
   ceState.inserir = ligar
   if (ligar) {
     ceState.linha.addTo(m)
@@ -243,6 +247,25 @@ function alternarInserirVertice(ligar = !ceState.inserir) {
   } else ceState.linha.remove()
   m.getContainer().classList.toggle('ce-inserindo', ligar)
   _cePintarBarra()
+}
+
+/**
+ * Liga ou desliga o "excluir vértice" (tecla E ou o botão −). Nunca apaga na
+ * hora o vértice selecionado: depois de "adicionar vértice" o novo fica
+ * selecionado, e o E logo em seguida o apagava. Ligado, os vértices param de
+ * arrastar (o clique não vira movimento sem querer), os meios dos lados somem
+ * e o próximo vértice clicado é apagado — e o modo desliga sozinho.
+ */
+function alternarRemoverVertice(ligar = !ceState.remover) {
+  if (!ceState.ativo) return
+  if (ligar && ceState.modo) { toast('Termine o "Encostar no vizinho" antes.', 'aviso'); return }
+  if (ligar) { alternarInserirVertice(false); ceState.sel = null }
+  if (ceState.remover === ligar) return
+  const m = mapaState.obj
+  ceState.remover = ligar
+  if (ligar && m.getZoom() < CE_ZOOM_ALCAS) toast('Aproxime o mapa até ver os vértices do contorno.', 'aviso')
+  m.getContainer().classList.toggle('ce-removendo', ligar)
+  _ceDesenharAlcas()
 }
 
 /**
@@ -287,7 +310,7 @@ function _ceDesenharAlcas() {
     const d = r[(i + 1) % r.length], meio = [(c[0] + d[0]) / 2, (c[1] + d[1]) / 2]
     if (vista.contains([meio[1], meio[0]])) ms.push([pi, ri, i, meio])
   })))
-  const comMeios = vs.length + ms.length <= CE_MAX_ALCAS
+  const comMeios = !ceState.remover && vs.length + ms.length <= CE_MAX_ALCAS
   for (const [pi, ri, i] of vs.slice(0, CE_MAX_ALCAS)) _ceAlcaVertice(pi, ri, i)
   if (comMeios) for (const [pi, ri, i, meio] of ms) _ceAlcaMeio(pi, ri, i, meio)
 }
@@ -301,7 +324,7 @@ function _ceAlcaVertice(pi, ri, i) {
   const c = ceState.polis[pi][ri][i]
   const s = ceState.sel, selecionado = s && s[0] === pi && s[1] === ri && s[2] === i
   const ea = ceState.encostarA, escolhido = ea && ea[0] === pi && ea[1] === ri && ea[2] === i
-  const mk = L.marker([c[1], c[0]], { pane: 'ceAlcas', draggable: !ceState.modo, keyboard: false,
+  const mk = L.marker([c[1], c[0]], { pane: 'ceAlcas', draggable: !ceState.modo && !ceState.remover, keyboard: false,
     icon: _ceIcone('ce-v' + (selecionado ? ' ce-sel' : '') + (escolhido ? ' ce-escolhido' : '')) })
   let antes = null
   mk.on('click', () => _ceClicouVertice(pi, ri, i))
@@ -396,6 +419,7 @@ function _ceEmpilhar(antes) {
 function _ceClicouVertice(pi, ri, i) {
   if (ceState.modo === 'encostar') { _ceEscolherParaEncostar(pi, ri, i); return }
   ceState.sel = [pi, ri, i]
+  if (ceState.remover) { apagarVerticeDoContorno(); return }
   _ceDesenharAlcas()
 }
 
@@ -409,12 +433,14 @@ function _ceTeclas(ev) {
   if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); ev.stopPropagation(); refazerPassoContorno(); return }
   if (k === 'delete' || k === 'backspace') { ev.preventDefault(); ev.stopPropagation(); apagarVerticeDoContorno(); return }
   if (k === 'a' && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ceState.modo) { ev.preventDefault(); ev.stopPropagation(); alternarInserirVertice(); return }
+  if (k === 'e' && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ceState.modo) { ev.preventDefault(); ev.stopPropagation(); alternarRemoverVertice(); return }
   if (ceState.modo === 'previa' && k === 'enter') { ev.preventDefault(); ev.stopPropagation(); aplicarEncostar(); return }
   if (ceState.modo === 'previa' && k === 'tab') { ev.preventDefault(); ev.stopPropagation(); outroLadoEncostar(); return }
   if (k === 'escape') {
     ev.preventDefault(); ev.stopPropagation()
     if (ceState.modo) cancelarEncostar()
     else if (ceState.inserir) alternarInserirVertice(false)
+    else if (ceState.remover) alternarRemoverVertice(false)
     else { ceState.sel = null; _ceDesenharAlcas() }
   }
 }
@@ -423,10 +449,12 @@ function apagarVerticeDoContorno() {
   const s = ceState.sel
   if (!s) { toast('Clique num vértice para selecioná-lo, e então Delete.', 'aviso'); return }
   const anel = ceState.polis[s[0]]?.[s[1]]
-  if (!anel || anel.length <= 3) { toast('O contorno precisa de ao menos três vértices.', 'aviso'); return }
+  if (!anel || anel.length <= 3) { alternarRemoverVertice(false); toast('O contorno precisa de ao menos três vértices.', 'aviso'); return }
   const antes = _ceCopia(ceState.polis)
   anel.splice(s[2], 1)
   ceState.sel = null
+  ceState.remover = false
+  mapaState.obj.getContainer().classList.remove('ce-removendo')
   _ceEmpilhar(antes)
 }
 
@@ -464,7 +492,7 @@ function simplificarContorno() {
 function encostarNoVizinho() {
   if (!ceState.vizinhos.length) { toast('Não há outro bairro com contorno para encostar.', 'aviso'); return }
   if (ceState.modo) { _ceLimparPrevia(); ceState.modo = null; ceState.encostarA = null }
-  else { alternarInserirVertice(false); ceState.modo = 'encostar'; ceState.encostarA = null; ceState.sel = null }
+  else { alternarInserirVertice(false); alternarRemoverVertice(false); ceState.modo = 'encostar'; ceState.encostarA = null; ceState.sel = null }
   if (mapaState.obj.getZoom() < CE_ZOOM_ALCAS) toast('Aproxime o mapa até ver os vértices do contorno.', 'aviso')
   _ceDesenharAlcas()
 }
@@ -582,14 +610,48 @@ function _ceConferir() {
   }, 450)
 }
 
+/**
+ * A INVASÃO em destaque (23/10/2026): a área invadida em vermelho forte,
+ * piscando; a divisa do bairro invadido em vermelho tracejado; e um marcador
+ * "!" em cada pedaço. A invasão costuma ser uma tira de poucos metros, que
+ * some no zoom do bairro inteiro — o marcador tem tamanho fixo na tela e
+ * aparece em qualquer zoom. Clicar nele (ou no "ver" da barra) enquadra o pedaço.
+ */
 function _ceMostrarConferencia() {
-  const c = ceState.conf
+  const c = ceState.conf, m = mapaState.obj
   ceState.invasoes?.clearLayers()
+  ceState.pecasInvasao = []
   for (const i of c?.invasoes || []) {
-    L.geoJSON(i.geometry, { pane: 'ceContorno', interactive: false, style: { color: '#DC2626', weight: 1.5, dashArray: '4 3', fillColor: '#DC2626', fillOpacity: .3 } }).addTo(ceState.invasoes)
+    for (const v of ceState.vizinhos.filter(x => x.nome === i.bairro)) {
+      L.polygon(v.anel.map(p => [p[1], p[0]]), { pane: 'ceContorno', interactive: false, fill: false,
+        color: '#DC2626', weight: 2, opacity: .8, dashArray: '6 5' }).addTo(ceState.invasoes)
+    }
+    const polis = i.geometry.type === 'Polygon' ? [i.geometry.coordinates] : i.geometry.coordinates
+    for (const p of polis) {
+      const area = L.polygon(p.map(r => r.map(x => [x[1], x[0]])), { pane: 'ceContorno', interactive: false,
+        color: '#B91C1C', weight: 3, fillColor: '#DC2626', fillOpacity: .55, className: 'ce-invasao' }).addTo(ceState.invasoes)
+      const k = ceState.pecasInvasao.push({ bairro: i.bairro, bounds: area.getBounds() }) - 1
+      const rot = `Invade ${i.bairro} (${String(i.area_m2).replace('.', ',')} m² no total)`
+      L.marker(area.getBounds().getCenter(), { pane: 'ceAlcas', keyboard: false, title: rot, alt: rot,
+        icon: L.divIcon({ className: 'ce-invasao-pino', iconSize: [22, 22], html: '!' }) })
+        .on('click', () => verInvasao(k)).addTo(ceState.invasoes)
+    }
   }
+  if (ceState.invasaoIdx >= ceState.pecasInvasao.length) ceState.invasaoIdx = null
   _ceMarcarLotesFora((c?.lotes_fora || []).map(l => l.id))
   ceState.camada?.setStyle({ color: c && !c.pode ? '#DC2626' : '#2563EB' })
+  _cePintarBarra()
+}
+
+/**
+ * Enquadra um pedaço invadido. Sem `k`, vai ao próximo — o "ver" da barra
+ * passa por todos, um de cada vez.
+ */
+function verInvasao(k) {
+  const ps = ceState.pecasInvasao || []
+  if (!ps.length) return
+  ceState.invasaoIdx = k ?? ((ceState.invasaoIdx ?? -1) + 1) % ps.length
+  mapaState.obj.fitBounds(ps[ceState.invasaoIdx].bounds, { padding: [120, 120], maxZoom: 21 })
   _cePintarBarra()
 }
 
@@ -636,6 +698,7 @@ function desfazerEdicaoDoContorno(nome) {
 
 const _CE_ICO = {
   inserir: '<path d="M4 18 11 6l9 12" opacity=".45"/><circle cx="11" cy="6" r="2.2"/><path d="M18 3v6M15 6h6"/>',
+  remover: '<path d="M4 18 11 6l9 12" opacity=".45"/><circle cx="11" cy="6" r="2.2"/><path d="M15 6h6"/>',
   simplificar: '<path d="M3 16l4-5 3 3 4-6 3 4 4-3"/><path d="M3 20h18" opacity=".45"/>',
   encostar: '<rect x="3" y="5" width="7" height="14" rx="1"/><rect x="15" y="5" width="6" height="14" rx="1"/><path d="M10 12h4M12.5 10.5 14 12l-1.5 1.5"/>',
   desfazer: '<path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>',
@@ -654,12 +717,13 @@ function _cePintarBarra() {
   const curto = !c ? null : !c.valido ? 'lados se cruzam'
     : c.lotes_fora?.length ? `${c.lotes_fora.length} lote(s) de fora`
       : c.quadras_fora?.length ? `${c.quadras_fora.length} quadra(s) de fora`
-        : c.invasoes?.length ? `invade ${c.invasoes[0].bairro}` : null
+        : c.invasoes?.length ? `invade ${c.invasoes.map(i => i.bairro).join(', ')}` : null
+  const np = ceState.pecasInvasao?.length || 0
   const estado = !c ? '<span class="ce-chip">conferindo…</span>'
     : c.pode ? '<span class="ce-chip ce-ok">ok</span>'
       : `<span class="ce-chip ce-er" title="${esc(c.motivo || '')}">${esc(curto || 'não fecha')}</span>`
-      + (c.lotes_fora?.length ? ` <a href="#" class="ce-ver" onclick="event.preventDefault(); irAoLoteIsolado(${Number(c.lotes_fora[0].id)})">ver</a>` : '')
-  const ajuda = 'A (ou o botão +): adicionar vértice — o próximo clique na linha laranja cria um, e o modo desliga; Esc cancela. Vértice (quadrado): arraste; clique e Delete apaga. Meio do lado (retângulo): arraste o lado inteiro na perpendicular; Shift + arrastar cria vértice. Ímã no vizinho; Alt desliga. Ctrl+Z / Ctrl+Y desfazem e refazem.'
+      + (c.lotes_fora?.length ? ` <a href="#" class="ce-ver" onclick="event.preventDefault(); irAoLoteIsolado(${Number(c.lotes_fora[0].id)})">ver</a>`
+        : np && !c.quadras_fora?.length ? ` <a href="#" class="ce-ver" title="Enquadra cada local invadido, um de cada vez" onclick="event.preventDefault(); verInvasao()">${np === 1 ? 'ver local' : ceState.invasaoIdx == null ? `ver os ${np} locais` : `local ${ceState.invasaoIdx + 1}/${np} · próximo`}</a>` : '')
   const b = (ico, rot, acao, extra = '', texto = '') => `<button class="ce-ib" type="button" title="${rot}" aria-label="${rot}" onclick="${acao}" ${extra}>${_ceIco(ico)}${texto ? `<span>${texto}</span>` : ''}</button>`
   const cab = `<div class="ce-cab"><strong>Edição de contorno</strong>${b('fechar', 'Cancelar e voltar à lista', 'sairDaEdicaoDoContorno()')}</div>`
   barra.className = 'imp-barra ce-barra'
@@ -678,12 +742,12 @@ function _cePintarBarra() {
   }
   barra.innerHTML = `${cab}<div class="ce-contexto"><b class="ce-tit">${esc(ceState.bairro)}</b><span class="ce-sub">${n} vértices</span></div><div class="ce-ferramentas"><div class="ce-grupo">
     ${b('inserir', ceState.inserir ? 'Adicionar vértice: clique na linha laranja (A ou Esc desliga)' : 'Adicionar vértice (A)', 'alternarInserirVertice()', `aria-pressed="${ceState.inserir}"`, 'Vértice')}
+    ${b('remover', ceState.remover ? 'Excluir vértice: clique no vértice a apagar (E ou Esc desliga)' : 'Excluir vértice (E)', 'alternarRemoverVertice()', `aria-pressed="${ceState.remover}"`, 'Excluir')}
     ${b('simplificar', 'Simplificar: tira vértices que não mudam a forma (0,5 m)', 'simplificarContorno()', '', 'Simplificar')}
     ${b('encostar', 'Encostar no vizinho: o trecho entre dois vértices segue a divisa do bairro ao lado', 'encostarNoVizinho()', '', 'Encostar')}
     </div><div class="ce-grupo">
     ${b('desfazer', 'Desfazer (Ctrl+Z)', 'desfazerPassoContorno()', ceState.undo.length ? '' : 'disabled')}
     ${b('refazer', 'Refazer (Ctrl+Y)', 'refazerPassoContorno()', ceState.redo.length ? '' : 'disabled')}
-    </div><button class="btn sm primary ce-gravar" type="button" onclick="gravarContornoEditado()" ${c?.pode && ceState.alterado && !ceState.gravando ? '' : 'disabled'}>${ceState.gravando ? 'Gravando…' : 'Gravar'}</button></div>
-    <div class="ce-status" role="status">${estado}${ceState.inserir ? '<span>Toque na linha laranja para adicionar um vértice.</span>' : ''}</div>
-    <details class="ce-instrucoes"><summary>Como editar o contorno</summary><p>${ajuda}</p></details>`
+    </div><div class="ce-status" role="status">${estado}</div>
+    <button class="btn sm primary ce-gravar" type="button" onclick="gravarContornoEditado()" ${c?.pode && ceState.alterado && !ceState.gravando ? '' : 'disabled'}>${ceState.gravando ? 'Gravando…' : 'Gravar'}</button></div>`
 }
