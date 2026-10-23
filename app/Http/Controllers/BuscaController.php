@@ -155,8 +155,11 @@ class BuscaController extends Controller
             ->whereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), array_keys($porCodigo));
 
         // A rua casa por PEDAÇO — quem digita "babaçu" não devia precisar
-        // saber que o cadastro grava "AV BABAÇU".
-        if ($logradouro !== '') { $q->where('logradouro', 'like', '%' . $logradouro . '%'); }
+        // saber que o cadastro grava "AV BABAÇU". E sem o tipo: a lista
+        // oferece "AV. CUIABÁ" (TipoDoLogradouro), e o cadastro pode ter
+        // gravado só "CUIABÁ".
+        $semTipo = \App\Cadastro\TipoDoLogradouro::semTipo($logradouro);
+        if ($semTipo !== '') { $q->where('logradouro', 'like', '%' . $semTipo . '%'); }
         // O número casa EXATO, sem zero à esquerda: é identificação, não busca.
         if ($numero !== '') {
             $q->whereRaw("TRIM(LEADING '0' FROM numero_predial) = ?", [ltrim($numero, '0')]);
@@ -535,8 +538,10 @@ class BuscaController extends Controller
         $ruas = DB::table('cadastro_externo_imoveis')
             ->whereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), $codigos)
             ->whereNotNull('logradouro')->where('logradouro', '<>', '')
-            ->distinct()->orderBy('logradouro')
-            ->pluck('logradouro');
+            ->distinct()->pluck('logradouro')
+            // Com o tipo; o mesmo nome com e sem ele vira um só.
+            ->map(fn ($l) => \App\Cadastro\TipoDoLogradouro::completar($l))
+            ->unique()->sort()->values();
 
         return response()->json(['logradouros' => $ruas]);
     }

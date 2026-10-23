@@ -376,6 +376,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/parametros/decibelimetros', [ParametroController::class, 'salvarDecibelimetro']);
         Route::delete('/parametros/decibelimetros/{decibelimetro}', [ParametroController::class, 'excluirDecibelimetro']);
         Route::get('/parametros/decibelimetros/{decibelimetro}/certificado', [ParametroController::class, 'certificadoDecibelimetro']);
+        Route::get('/parametros/ruas/sem-tipo', [ParametroController::class, 'ruasSemTipo']);
         Route::post('/parametros/ruas', [ParametroController::class, 'salvarRua']);
         Route::delete('/parametros/ruas/{logradouro}', [ParametroController::class, 'excluirRua']);
 

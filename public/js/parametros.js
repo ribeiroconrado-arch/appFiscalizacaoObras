@@ -55,6 +55,8 @@ function subParametros(nome) {
   // Cadastro municipal também carrega só quando abre: a lista de cargas é
   // consultada de novo enquanto uma planilha processa.
   if (nome === 'cadastro' && typeof carregarCargasDoCadastro === 'function') { carregarCargasDoCadastro() }
+  // Os nomes sem tipo percorrem o cadastro inteiro: só quando a aba abre.
+  if (nome === 'ruas') { carregarRuasSemTipo() }
 }
 
 async function carregarParametros() {
@@ -68,10 +70,9 @@ async function carregarParametros() {
     parState.feriados = d.feriados
     parState.bairros = d.bairros
     parState.geral = d.geral
-    // Posturas: aparelhos de medição e a relação rua↔bairro.
+    // Posturas: aparelhos de medição. Ruas e bairros: dos dois módulos.
     parState.decibelimetros = d.decibelimetros || []
     parState.ruas = d.ruas || []
-    parState.bairrosEndereco = d.bairros_endereco || []
     parState.carregado = true
     renderUsuarios()
     renderUpfs()
@@ -1372,16 +1373,25 @@ function excluirDecibelimetro(id) {
   })
 }
 
-// ── RUAS E BAIRROS (Posturas) ────────────────────────────────
+// ── RUAS E BAIRROS ───────────────────────────────────────────
 //
 // A relação rua↔bairro do AppPOSTURAS: escolhida a rua no formulário, os
-// bairros dela aparecem primeiro; com um só, ele é preenchido sozinho.
+// bairros dela aparecem primeiro; com um só, ele é preenchido sozinho. Serve
+// aos dois módulos, e o bairro só vem da aba Bairros (o nome do cadastro).
+// O nome da rua também completa o TIPO do logradouro que o cadastro municipal
+// manda sem ele (App\Cadastro\TipoDoLogradouro); o que não completa aparece
+// no topo da lista, em "sem tipo no cadastro".
+
+/** Os nomes de bairro aceitos na ligação: os da aba Bairros. */
+const _bairrosDaRua = () => (parState.bairros || []).map(b => String(b.nome_cadastro || '').trim().toUpperCase()).filter(Boolean)
 
 function renderRuas() {
   const alvo = document.getElementById('lista-ruas')
   if (!alvo) return
-  const lista0 = document.getElementById('bairros-endereco')
-  if (lista0) lista0.innerHTML = (parState.bairrosEndereco || []).map(b => `<option value="${esc(b)}">`).join('')
+  const lista0 = document.getElementById('bairros-da-rua')
+  if (lista0) lista0.innerHTML = _bairrosDaRua().sort().map(b => `<option value="${esc(b)}">`).join('')
+  const aceitos = new Set(_bairrosDaRua())
+  if (!parEditando('ruas', 'novo')) parState.ruaNova = null
 
   const termo = parBusca('filtro-ruas')
   const todas = parState.ruas || []
@@ -1391,12 +1401,15 @@ function renderRuas() {
 
   // Só as primeiras 300 sem busca: a lista de ruas passa de mil.
   const mostradas = termo ? lista : lista.slice(0, 300)
-  alvo.innerHTML = (parEditando('ruas', 'novo') ? formRua({ bairros: [] }) : '')
+  const bairroNaLinha = b => aceitos.has(b) ? esc(b)
+    : `<span class="rua-bairro-fora" title="Fora da aba Bairros: corrija a ligação ou cadastre o bairro">${esc(b)}</span>`
+  alvo.innerHTML = _ruasSemTipoHtml(termo)
+    + (parEditando('ruas', 'novo') ? formRua(parState.ruaNova || { bairros: [] }) : '')
     + (mostradas.map(r => parEditando('ruas', r.id) ? formRua(r) : `
       <div class="par-linha">
         ${parPrincipal('ruas', r.id)}
           <b>${esc(r.nome)}</b>
-          <span>${r.bairros.length ? r.bairros.map(esc).join(' · ') : 'Sem bairro ligado'}</span>
+          <span>${r.bairros.length ? r.bairros.map(bairroNaLinha).join(' · ') : 'Sem bairro ligado'}</span>
         </div>
         ${parAcoes('ruas', r.id)}
       </div>`).join('')
@@ -1406,27 +1419,36 @@ function renderRuas() {
 
 /** @param {Object} r rua ({bairros: []} para nova) */
 function formRua(r) {
+  const aceitos = new Set(_bairrosDaRua())
   return parFormLinha(r.id ? 'Editando rua' : 'Nova rua', `
     <div class="cad-row">${parRot('Rua', parInp('nome', r.nome, 'maxlength="180" placeholder="RUA MARINGÁ"'), 'flex:2')}</div>
     <div class="ed-campo"><span>Bairros por onde ela passa</span>
       <div class="art-termos" id="rua-bairros" onclick="this.querySelector('input')?.focus()">
-        ${r.bairros.map(etiquetaDeBairroDaRua).join('')}
-        <input type="text" class="art-termo-novo" list="bairros-endereco" maxlength="160" autocomplete="off"
-               placeholder="digite o bairro (Enter adiciona)" onkeydown="teclaBairroDaRua(event)">
+        ${r.bairros.map(b => etiquetaDeBairroDaRua(b, !aceitos.has(b))).join('')}
+        <input type="text" class="art-termo-novo" list="bairros-da-rua" maxlength="160" autocomplete="off"
+               placeholder="escolha o bairro (Enter adiciona)" onkeydown="teclaBairroDaRua(event)">
       </div>
-      <small class="art-termos-dica">Bairro que ainda não existe entra na lista ao gravar.</small>
+      <small class="art-termos-dica">Só bairros da aba Bairros. O nome com o tipo (RUA, AVENIDA…) completa o endereço que o cadastro municipal manda sem ele.</small>
     </div>`, 'salvarRua()')
 }
 
-const etiquetaDeBairroDaRua = b =>
-  `<span class="art-termo" data-bairro="${esc(b)}">${esc(b)}<button type="button" onclick="this.parentNode.remove()" title="Tirar">×</button></span>`
+const etiquetaDeBairroDaRua = (b, fora = false) =>
+  `<span class="art-termo${fora ? ' rua-bairro-fora' : ''}" data-bairro="${esc(b)}"${fora ? ' title="Fora da aba Bairros"' : ''}>${esc(b)}<button type="button" onclick="this.parentNode.remove()" title="Tirar">×</button></span>`
+
+/** O bairro digitado, se está na aba Bairros; senão avisa e devolve null. */
+function _bairroAceito(v) {
+  if (!v) return null
+  if (_bairrosDaRua().includes(v)) return v
+  toast(`"${v}" não está na aba Bairros. Cadastre o bairro lá antes de ligar à rua.`, 'err')
+  return null
+}
 
 /** Enter (ou vírgula) acrescenta o bairro digitado. @param {KeyboardEvent} e */
 function teclaBairroDaRua(e) {
   if (e.key !== 'Enter' && e.key !== ',') return
   e.preventDefault()
   e.stopPropagation()
-  const v = e.target.value.trim().toUpperCase()
+  const v = _bairroAceito(e.target.value.trim().toUpperCase())
   if (!v) return
   const ja = [...document.querySelectorAll('#rua-bairros .art-termo')].some(t => t.dataset.bairro === v)
   if (!ja) e.target.insertAdjacentHTML('beforebegin', etiquetaDeBairroDaRua(v))
@@ -1436,13 +1458,15 @@ function teclaBairroDaRua(e) {
 async function salvarRua() {
   const nome = parCampo('nome')
   if (!nome) { toast('Informe o nome da rua', 'err'); return }
-  // O que ficou digitado e não virou etiqueta também vale.
-  const pendente = document.querySelector('#rua-bairros .art-termo-novo')?.value.trim().toUpperCase()
+  // O que ficou digitado e não virou etiqueta também vale — se for da aba Bairros.
+  const digitado = document.querySelector('#rua-bairros .art-termo-novo')?.value.trim().toUpperCase()
+  if (digitado && !_bairroAceito(digitado)) return
   const bairros = [...document.querySelectorAll('#rua-bairros .art-termo')].map(t => t.dataset.bairro)
-  if (pendente && !bairros.includes(pendente)) bairros.push(pendente)
+  if (digitado && !bairros.includes(digitado)) bairros.push(digitado)
+  parState.ruaNova = null
   await parGravar('/api/parametros/ruas', {
     id: parState.ed.id === 'novo' ? null : parState.ed.id, nome, bairros,
-  }, carregarParametros)
+  }, async () => { await carregarParametros(); carregarRuasSemTipo() })
 }
 
 /** @param {number} id */
@@ -1454,6 +1478,57 @@ function excluirRua(id) {
     perigo: true,
     onConfirm: () => excluirParametro('/api/parametros/ruas/' + id),
   })
+}
+
+// ── nomes do cadastro municipal sem o tipo ───────────────────
+
+async function carregarRuasSemTipo() {
+  parState.ruasSemTipo = null
+  try {
+    const r = await fetch('/api/parametros/ruas/sem-tipo', { headers: { Accept: 'application/json' } })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    parState.ruasSemTipo = (await r.json()).pendencias || []
+  } catch (e) {
+    console.error(e)
+    parState.ruasSemTipo = []
+  }
+  renderRuas()
+}
+
+/**
+ * O bloco "sem tipo no cadastro", no topo da lista: o nome que veio sem
+ * RUA/AVENIDA e não achou rua na lista (ou achou duas e o bairro não
+ * desempatou). "Cadastrar" abre a rua nova com o nome e os bairros dele.
+ */
+function _ruasSemTipoHtml(termo) {
+  const ps = (parState.ruasSemTipo || []).filter(p => !termo || p.nome.toLowerCase().includes(termo))
+  if (!ps.length) return ''
+  const imoveis = ps.reduce((s, p) => s + p.imoveis, 0)
+  return `<details class="rua-sem-tipo">
+    <summary><b>${ps.length} nome(s) sem tipo no cadastro municipal</b> <span>${imoveis} imóvel(is) — o endereço deles sai sem RUA/AVENIDA</span></summary>
+    ${ps.slice(0, 200).map((p, i) => `
+      <div class="par-linha">
+        <div class="principal">
+          <b>${esc(p.nome)}</b>
+          <span>${p.imoveis} imóvel(is)${p.bairros.length ? ' · ' + p.bairros.map(esc).join(' · ') : ''}${p.candidatos.length
+            ? ` · <em>duas ruas com esse nome (${p.candidatos.map(esc).join(', ')}): ligue o bairro na certa</em>` : ''}</span>
+        </div>
+        ${p.candidatos.length ? '' : `<button class="btn sm out-verde" type="button" onclick="cadastrarRuaSemTipo(${i})">Cadastrar</button>`}
+      </div>`).join('')}
+    ${ps.length > 200 ? `<div class="lista-vazia">Mostrando 200 de ${ps.length} — use a busca.</div>` : ''}
+  </details>`
+}
+
+/** Abre "Nova rua" com o nome sem tipo (falta escrever RUA/AVENIDA na frente) e os bairros dele que estão na aba Bairros. */
+function cadastrarRuaSemTipo(i) {
+  const termo = parBusca('filtro-ruas')
+  const p = (parState.ruasSemTipo || []).filter(x => !termo || x.nome.toLowerCase().includes(termo))[i]
+  if (!p) return
+  const aceitos = new Set(_bairrosDaRua())
+  parNovo('ruas')
+  parState.ruaNova = { nome: 'RUA ' + p.nome, bairros: p.bairros.map(b => String(b).toUpperCase()).filter(b => aceitos.has(b)) }
+  renderRuas()
+  toast('Confira o tipo (RUA, AVENIDA…) antes de gravar.')
 }
 
 // ── BRASÃO DO MUNICÍPIO ──────────────────────────────────────

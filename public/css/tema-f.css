@@ -4071,3 +4071,11 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 .notif-detalhe button{display:block;color:var(--gd);padding-left:0}
 .notif-rodape{text-align:center;padding:14px;font-size:11px;color:var(--tx3)}
 @media(max-width:380px){.notif-feed{grid-template-columns:30px minmax(0,1fr) 6px;gap:8px;padding:16px 12px 10px}.notif-icone{width:30px;height:30px}}
+/* Ruas e bairros: bairro ligado que não está na aba Bairros, e o bloco dos nomes do cadastro sem tipo (parametros.js). */
+.rua-bairro-fora{color:#B91C1C;text-decoration:underline dotted}
+.art-termo.rua-bairro-fora{background:#FEF2F2;border-color:#FCA5A5}
+.rua-sem-tipo{margin:0 0 10px;border:1px solid #FCD34D;background:#FFFBEB;border-radius:6px;padding:0 10px}
+.rua-sem-tipo summary{cursor:pointer;padding:9px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
+.rua-sem-tipo summary span{color:var(--tx2,#5b6461);font-size:12px}
+.rua-sem-tipo .par-linha{background:#fff}
+.rua-sem-tipo em{color:#92400E;font-style:normal}

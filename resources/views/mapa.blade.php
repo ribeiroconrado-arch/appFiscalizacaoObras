@@ -1115,14 +1115,15 @@
     <button data-sub="legislacao" onclick="subParametros('legislacao')">Legislação</button>
     <button data-sub="upf" onclick="subParametros('upf')">UPF</button>
     <button data-sub="feriados" onclick="subParametros('feriados')">Feriados</button>
-    {{-- Bairros do desenho e cadastro municipal são de Obras (lotes); o
-         aparelho de medição e a relação rua↔bairro, de Posturas. --}}
+    {{-- Bairros e Ruas e bairros servem aos dois módulos: a rua só se liga a
+         bairro desta lista (23/10/2026). O cadastro municipal é de Obras
+         (lotes); o aparelho de medição, de Posturas. --}}
+    <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
+    <button data-sub="ruas" onclick="subParametros('ruas')">Ruas e bairros</button>
     @if ($modulo === 'obras')
-      <button data-sub="bairros" onclick="subParametros('bairros')">Bairros</button>
       <button data-sub="cadastro" onclick="subParametros('cadastro')">Cadastro municipal</button>
     @else
       <button data-sub="decibelimetros" onclick="subParametros('decibelimetros')">Decibelímetros</button>
-      <button data-sub="ruas" onclick="subParametros('ruas')">Ruas e bairros</button>
     @endif
     <button data-sub="geral" onclick="subParametros('geral')">Formulário</button>
   </div>
@@ -1234,8 +1235,10 @@
     <div class="par-fixo-lista" id="lista-decibelimetros"></div>
   </div>
 
-  {{-- RUAS E BAIRROS (Posturas) — escolhida a rua, o formulário sugere os
-       bairros dela. Ver Logradouro e EnderecoController. --}}
+  {{-- RUAS E BAIRROS — escolhida a rua, o formulário sugere os bairros dela.
+       O bairro vem da aba Bairros; o nome da rua completa o tipo do
+       logradouro que o cadastro municipal manda sem ele. Ver Logradouro,
+       EnderecoController e App\Cadastro\TipoDoLogradouro. --}}
   <div class="par-painel par-fixo" id="par-ruas">
     <div class="par-fixo-topo">
       <div class="sec-simples">Ruas e bairros <span class="cont" id="cont-ruas">0</span></div>
@@ -1245,7 +1248,7 @@
       </div>
     </div>
     <div class="par-fixo-lista" id="lista-ruas"></div>
-    <datalist id="bairros-endereco"></datalist>
+    <datalist id="bairros-da-rua"></datalist>
   </div>
 
   {{-- ÓRGÃO --}}

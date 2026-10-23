@@ -69,7 +69,8 @@ class CadastroCarregado implements FonteDoCadastro
                 // O bairro COMO O CADASTRO O CHAMA: é com ele, e não com o do
                 // sistema, que se confere se a ficha puxou o imóvel certo.
                 'nome_bairro'           => $c->nome_bairro,
-                'logradouro'            => $c->logradouro,
+                // Com o tipo (RUA, AV.…) que a exportação às vezes omite.
+                'logradouro'            => TipoDoLogradouro::completar($c->logradouro, $c->nome_bairro),
                 'numero_predial'        => $c->numero_predial,
                 'complemento'           => $c->complemento,
                 'area_terreno_m2'       => $c->area_terreno_m2,
@@ -220,7 +221,7 @@ class CadastroCarregado implements FonteDoCadastro
                 'lote'            => $l->lote ?? (string) (InscricaoImobiliaria::partes($l->inscricao)['lote'] ?? ''),
                 'isencao'         => $l->isencao,
                 'area_terreno_m2' => $l->area_terreno_m2 !== null ? (float) $l->area_terreno_m2 : null,
-                'endereco'        => trim(($l->logradouro ?? '') . ' ' . ($l->numero_predial ?? '')) ?: null,
+                'endereco'        => trim((TipoDoLogradouro::completar($l->logradouro, $l->nome_bairro) ?? '') . ' ' . ($l->numero_predial ?? '')) ?: null,
             ];
         }
     }

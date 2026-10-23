@@ -193,6 +193,7 @@ class ImportadorPosturas
         }
 
         $this->fecharEtapa('logradouro_bairros', $r);
+        \App\Cadastro\TipoDoLogradouro::esquecer();   // a lista de ruas mudou
     }
 
     private function idDoLogradouro(string $nome, ?bool &$novo = null): int

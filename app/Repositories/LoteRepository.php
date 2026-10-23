@@ -599,7 +599,8 @@ class LoteRepository
 
     /**
      * Os logradouros do cadastro num bairro — a lista oficial de onde o
-     * curador escolhe o nome de um trecho de rua.
+     * curador escolhe o nome de um trecho de rua. Com o tipo completado, como
+     * o nome dos trechos (ruasDoBairro): o combo acha o nome atual do trecho.
      *
      * @return list<string>
      */
@@ -609,7 +610,9 @@ class LoteRepository
             ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim($codigoCadastro, '0')])
             ->whereNull('ausente_desde_carga_id')
             ->whereNotNull('logradouro')->where('logradouro', '<>', '')
-            ->distinct()->orderBy('logradouro')->pluck('logradouro')->all();
+            ->distinct()->get(['logradouro', 'nome_bairro'])
+            ->map(fn ($l) => \App\Cadastro\TipoDoLogradouro::completar($l->logradouro, $l->nome_bairro))
+            ->unique()->sort()->values()->all();
     }
 
     /**
@@ -818,7 +821,8 @@ class LoteRepository
 
     /**
      * Os trechos de rua de um bairro, os gerados com os manuais por cima (ver
-     * App\Cadastro\TrechosDeRua).
+     * App\Cadastro\TrechosDeRua). O nome sai com o tipo (R., AV.…), que o
+     * cadastro às vezes não traz — o gravado continua como veio.
      *
      * @return list<array{id:?int, nome:?string, de:array, ate:array, origem:string}>
      */
@@ -832,7 +836,8 @@ class LoteRepository
             ->map(fn ($l) => ['id' => (int) $l->id, 'nome' => $l->nome, 'oculto' => (bool) $l->oculto,
                 'de' => $ponto($l, 'de'), 'ate' => $ponto($l, 'ate')])->all();
 
-        return \App\Cadastro\TrechosDeRua::combinar($gerados, $manuais);
+        return array_map(fn ($t) => ['nome' => \App\Cadastro\TipoDoLogradouro::completar($t['nome'], $bairro)] + $t,
+            \App\Cadastro\TrechosDeRua::combinar($gerados, $manuais));
     }
 
     /** Quantas quadras cada bairro tem gravadas. @return array<string,int> */

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Cadastro\InscricoesGravadas;
-use App\Models\BairroEndereco;
 use App\Models\CadastroBairro;
 use App\Models\Decibelimetro;
 use App\Models\Feriado;
@@ -104,8 +103,25 @@ class ParametroController extends Controller
             ]),
             'ruas' => Logradouro::with(['vinculos' => fn ($q) => $q->orderBy('bairro')])->orderBy('nome')->get()
                 ->map(fn (Logradouro $l) => ['id' => $l->id, 'nome' => $l->nome, 'bairros' => $l->vinculos->pluck('bairro')]),
-            'bairros_endereco' => BairroEndereco::orderBy('nome')->pluck('nome'),
         ]);
+    }
+
+    /**
+     * GET /api/parametros/ruas/sem-tipo — os logradouros do cadastro municipal
+     * que vieram sem o tipo e que a lista de ruas não completa (ver
+     * App\Cadastro\TipoDoLogradouro). Só na hora em que a aba abre: percorre o
+     * cadastro inteiro agrupado por nome e bairro.
+     */
+    public function ruasSemTipo(Request $r): JsonResponse
+    {
+        if ($erro = $this->exigirAdmin($r)) { return $erro; }
+
+        $linhas = DB::table('cadastro_externo_imoveis')->whereNull('ausente_desde_carga_id')
+            ->whereNotNull('logradouro')->where('logradouro', '<>', '')
+            ->selectRaw('logradouro, nome_bairro AS bairro, COUNT(*) AS n')
+            ->groupBy('logradouro', 'nome_bairro')->cursor();
+
+        return response()->json(['pendencias' => \App\Cadastro\TipoDoLogradouro::pendencias($linhas)]);
     }
 
     // ── DECIBELÍMETROS (Posturas) ────────────────────────────────
@@ -154,14 +170,16 @@ class ParametroController extends Controller
         return response()->json(['message' => 'Decibelímetro excluído.']);
     }
 
-    // ── RUAS E BAIRROS (Posturas) ────────────────────────────────
+    // ── RUAS E BAIRROS ───────────────────────────────────────────
 
     /**
      * POST /api/parametros/ruas — a rua e os bairros dela, de uma vez.
      *
-     * Bairro digitado que ainda não existe entra na lista de bairros do
-     * endereço: é assim que o Posturas cresce a lista, e obrigar a cadastrar o
-     * bairro antes, em outra aba, só atrasaria quem está ligando a rua.
+     * O bairro tem de estar na aba Bairros (o nome do cadastro). Antes, o
+     * digitado entrava sozinho numa lista à parte e a mesma divisa ganhava
+     * duas grafias (23/10/2026). A ligação que a rua já tinha com um nome de
+     * fora continua aceita — ela vem da importação do Posturas e some quando
+     * alguém a tirar.
      */
     public function salvarRua(Request $r): JsonResponse
     {
@@ -180,12 +198,15 @@ class ParametroController extends Controller
             return response()->json(['message' => 'Já existe uma rua com esse nome.'], 422);
         }
         $bairros = collect($d['bairros'] ?? [])->map(fn ($b) => Logradouro::normalizar($b))->filter()->unique()->values();
+        $cadastrados = CadastroBairro::pluck('nome_cadastro')->map(fn ($b) => Logradouro::normalizar($b))->all();
+        $jaLigados = ($d['id'] ?? null) ? Logradouro::find($d['id'])->bairros() : [];
+        $fora = $bairros->reject(fn ($b) => in_array($b, $cadastrados, true) || in_array($b, $jaLigados, true));
+        if ($fora->isNotEmpty()) {
+            return response()->json(['message' => 'Bairro fora da aba Bairros: ' . $fora->implode(', ') . '. Cadastre-o lá antes de ligar à rua.'], 422);
+        }
 
         $rua = DB::transaction(function () use ($d, $nome, $bairros) {
             $rua = Logradouro::updateOrCreate(['id' => $d['id'] ?? null], ['nome' => $nome]);
-            foreach ($bairros as $b) {
-                BairroEndereco::firstOrCreate(['nome' => $b]);
-            }
             $rua->vinculos()->whereNotIn('bairro', $bairros->all())->delete();
             foreach ($bairros as $b) {
                 $rua->vinculos()->firstOrCreate(['bairro' => $b]);
@@ -193,6 +214,7 @@ class ParametroController extends Controller
 
             return $rua;
         });
+        \App\Cadastro\TipoDoLogradouro::esquecer();
 
         return response()->json(['message' => 'Rua gravada.', 'id' => $rua->id]);
     }
@@ -202,6 +224,7 @@ class ParametroController extends Controller
     {
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
         $logradouro->delete();
+        \App\Cadastro\TipoDoLogradouro::esquecer();
 
         return response()->json(['message' => 'Rua excluída.']);
     }
@@ -439,6 +462,7 @@ class ParametroController extends Controller
         if ($novo !== null) {
             (new InscricoesGravadas())->gravar([$novo]);
         }
+        \App\Cadastro\TipoDoLogradouro::esquecer();
 
         return response()->json(['message' => 'Bairro gravado.']);
     }
