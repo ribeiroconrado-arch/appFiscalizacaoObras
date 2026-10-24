@@ -173,15 +173,22 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   /**
    * ALINHAR FACE: a face clicada fica na horizontal e EMBAIXO, com o lote
    * acima dela — como a testada na frente do lote (frenteParaBaixo). O lado
-   * do lote é o que cai dentro de algum contorno (o de origem, o resultado ou
-   * uma linha fechada); sem nenhum, vale o lado do centro do desenho.
+   * do lote é o que cai dentro de algum contorno, nesta ordem: o de origem, o
+   * resultado ou uma linha fechada; depois os LOTES VIZINHOS. Sem os vizinhos,
+   * a face de um vizinho não caía em contorno nenhum, valia o centro do
+   * desenho (o lote em edição, em outro lugar) e a face subia (24/10/2026).
+   * Sem nenhum contorno, vale o lado do centro do desenho.
    */
   function alinharFaceEmbaixo(f){
     const d=G.sub(f[1],f[0]);s.angulo=-Math.atan2(d[1],d[0])
     const meio=G.mul(G.add(f[0],f[1]),.5),n=G.normal(f[0],f[1])
     const aneis=[...contornos().map(ring),...(s.resultado?.partes||[]),...s.linhas.map(l=>l.pontos).filter(r=>r.length>=4&&G.len(G.sub(r[0],r.at(-1)))<1e-6)]
+    const vizinhos=s.contexto.filter(c=>c.geometry?.coordinates?.[0]).map(ring)
     let dentro=null
-    for(const sinal of [1,-1]){const q=G.add(meio,G.mul(n,sinal*.3));if(aneis.some(r=>G.dentro(q,r))){dentro=q;break}}
+    for(const grupo of [aneis,vizinhos]){
+      for(const sinal of [1,-1]){const q=G.add(meio,G.mul(n,sinal*.3));if(grupo.some(r=>G.dentro(q,r))){dentro=q;break}}
+      if(dentro)break
+    }
     if(!dentro){const pts=aneis.flat();if(pts.length)dentro=G.mul(pts.reduce(G.add,[0,0]),1/pts.length)}
     // Lote abaixo da face na tela: meia-volta, para a face descer.
     if(dentro&&tela(dentro)[1]>tela(meio)[1])s.angulo+=Math.PI

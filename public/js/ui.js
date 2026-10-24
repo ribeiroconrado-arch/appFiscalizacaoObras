@@ -1072,18 +1072,38 @@ function comboDeSelect(sel) {
   sincronizar()
 }
 
-/** Veste todos os `select[data-combo]` de um trecho da página. @param {ParentNode} [raiz] */
-function vestirCombos(raiz = document) {
-  raiz.querySelectorAll?.('select[data-combo]').forEach(comboDeSelect)
-  if (raiz instanceof HTMLSelectElement && raiz.dataset.combo !== undefined) comboDeSelect(raiz)
+/**
+ * A partir de quantas opções um select ganha a pesquisa SOZINHO, sem
+ * `data-combo` (24/10/2026: "tem que ter pesquisar em combos grandes como o de
+ * bairro"). Abaixo disso a lista nativa se lê de uma olhada. `data-sem-combo`
+ * deixa um select de fora; múltipla escolha e lista aberta (size) não mudam.
+ */
+const COMBO_MINIMO_OPCOES = 12
+
+/** O select vira combobox: marcado com data-combo, ou grande o bastante. @param {HTMLSelectElement} sel */
+function talvezCombo(sel) {
+  if (sel.dataset.comboPronto || sel.dataset.semCombo !== undefined || sel.multiple || sel.size > 1) return
+  if (sel.dataset.combo !== undefined || sel.options.length >= COMBO_MINIMO_OPCOES) comboDeSelect(sel)
 }
 
-// Os que já estão na página, e os que as telas montarem depois (janelas e
-// listas desenhadas em JavaScript): basta o select nascer com data-combo.
+/** Veste os selects de um trecho da página que pedem combobox. @param {ParentNode} [raiz] */
+function vestirCombos(raiz = document) {
+  raiz.querySelectorAll?.('select').forEach(talvezCombo)
+  if (raiz instanceof HTMLSelectElement) talvezCombo(raiz)
+}
+
+// Os que já estão na página, os que as telas montarem depois (janelas e
+// listas desenhadas em JavaScript) e os que CRESCEM depois — a lista de
+// bairros nasce só com "— escolha —" e recebe as opções quando chega do
+// servidor: aí o select passa do limite e ganha a pesquisa.
 document.addEventListener('DOMContentLoaded', () => {
   vestirCombos()
   new MutationObserver(mudancas => {
-    for (const m of mudancas) for (const no of m.addedNodes) if (no.nodeType === 1) vestirCombos(no)
+    for (const m of mudancas) {
+      if (m.target instanceof HTMLSelectElement) talvezCombo(m.target)
+      else if (m.target.parentElement instanceof HTMLSelectElement) talvezCombo(m.target.parentElement)   // <optgroup>
+      for (const no of m.addedNodes) if (no.nodeType === 1 && no.tagName !== 'OPTION') vestirCombos(no)
+    }
   }).observe(document.body, { childList: true, subtree: true })
 })
 
