@@ -489,6 +489,47 @@ function _carregarJsts() {
 }
 
 /**
+ * UNIÃO QUE NÃO CAI NO ARREDONDAMENTO. Dois lados de lotes vizinhos que quase
+ * coincidem (diferença na 14ª casa) fazem a união do JSTS desistir com "found
+ * non-noded intersection" (JD das Américas II, 24/10/2026). Tenta a união
+ * normal; se ela cai, repete com as coordenadas presas a uma grade de 1 mm e
+ * depois de 1 cm — nada visível no contorno — e, por último, o buffer(0), que
+ * costura o que restar.
+ *
+ * @param {Object} fabrica GeometryFactory do JSTS
+ * @param {Object[]} geoms
+ */
+function _unirComSeguranca(fabrica, geoms) {
+  const J = window.jsts
+  const unir = gs => J.operation.union.UnaryUnionOp.union(fabrica.createGeometryCollection(gs))
+  try { return unir(geoms) } catch (e) { console.warn('União do JSTS caiu; refazendo com precisão reduzida:', e?.message || e) }
+  for (const escala of [1000, 100]) {
+    const pm = new J.geom.PrecisionModel(escala)
+    try { return unir(geoms.map(g => J.precision.GeometryPrecisionReducer.reduce(g, pm))) } catch { /* tenta a grade seguinte */ }
+  }
+  return fabrica.createGeometryCollection(geoms).buffer(0)
+}
+
+/**
+ * Diferença ou interseção com o mesmo socorro da união: refaz com as
+ * coordenadas presas a 1 mm e a 1 cm. Se ainda cair, devolve null — quem
+ * chama trata como "não dá para conferir" e deixa aquele trecho como estava,
+ * em vez de derrubar o contorno inteiro.
+ *
+ * @param {Object} a @param {Object} b @param {'difference'|'intersection'} op
+ * @returns {Object|null}
+ */
+function _sobreporComSeguranca(a, b, op) {
+  const J = window.jsts
+  try { return a[op](b) } catch { /* refaz com precisão reduzida */ }
+  for (const escala of [1000, 100]) {
+    const pm = new J.geom.PrecisionModel(escala), r = g => J.precision.GeometryPrecisionReducer.reduce(g, pm)
+    try { return r(a)[op](r(b)) } catch { /* tenta a grade seguinte */ }
+  }
+  return null
+}
+
+/**
  * Calcula e grava o contorno de um bairro.
  *
  * @param {string} bairro nome do desenho (lotes.bairro)
@@ -572,7 +613,7 @@ function _endireitarReentrancias(geom, livre, fabrica, lotesEmMetros) {
     const p = geom.getGeometryN(k)
     partes.push(p.getGeometryType() === 'Polygon' ? _endireitarPoligono(p, livre, fabrica, lotes) : p)
   }
-  return J.operation.union.UnaryUnionOp.union(fabrica.createGeometryCollection(partes))
+  return _unirComSeguranca(fabrica, partes)
 }
 
 function _endireitarPoligono(p, livre, fabrica, lotes) {
@@ -613,7 +654,8 @@ function _endireitarPoligono(p, livre, fabrica, lotes) {
       if (!x || lado(x, pts[i]) > CONTORNO_QUINA_MAX_M || lado(x, pts[j]) > CONTORNO_QUINA_MAX_M) continue
       const g = poligono([...pts.slice(i, j + 1), x])
       if (!g || g.getArea() < 0.05 || g.getArea() > CONTORNO_QUINA_AREA_MAX_M2) continue
-      if (g.intersection(p).getArea() > 0.05 || !livre(g)) continue   // só por fora, e sem vizinho
+      const sobre = _sobreporComSeguranca(g, p, 'intersection')
+      if (!sobre || sobre.getArea() > 0.05 || !livre(g)) continue   // só por fora, e sem vizinho
       melhor = { j, x }
     }
     if (melhor) { pts.splice(i, melhor.j - i + 1, melhor.x); mudou = true }
@@ -628,7 +670,11 @@ function _endireitarPoligono(p, livre, fabrica, lotes) {
   for (let h = 0; h < p.getNumInteriorRing(); h++) furos.push(fabrica.createLinearRing(p.getInteriorRingN(h).getCoordinates()))
   const comFuros = cs => { try { return fabrica.createPolygon(anel([...cs, cs[0]]), furos) } catch { return null } }
   const semLote = g => g.getArea() < 0.05 || !lotes.query(g.getEnvelopeInternal()).toArray()
-    .some(l => l.intersects(g) && l.intersection(g).getArea() >= 0.05)
+    .some(l => {
+      if (!l.intersects(g)) return false
+      const x = _sobreporComSeguranca(l, g, 'intersection')
+      return !x || x.getArea() >= 0.05   // sem conferir, conta como lote: o trecho não muda
+    })
   const saida = []
   let i = 0
   while (i < pts.length) {
@@ -653,14 +699,16 @@ function _endireitarPoligono(p, livre, fabrica, lotes) {
       const j = candidatos[c]
       const novo = comFuros([...saida, ...pts.slice(j)])
       if (!novo || !novo.isValid()) continue
-      if (semLote(atual.difference(novo)) && livreOuVazio(novo.difference(atual))) alvo = j
+      const corta = _sobreporComSeguranca(atual, novo, 'difference'), poe = _sobreporComSeguranca(novo, atual, 'difference')
+      if (corta && poe && semLote(corta) && livreOuVazio(poe)) alvo = j
     }
     if (alvo > i + 1) { mudou = true; i = alvo } else i++
   }
   if (!mudou) return p
   const novo = comFuros(saida)
   // Conferência final: válido, e nenhum lote do bairro de fora.
-  return novo && novo.isValid() && semLote(p.difference(novo)) ? novo : p
+  const cortado = novo && novo.isValid() ? _sobreporComSeguranca(p, novo, 'difference') : null
+  return cortado && semLote(cortado) ? novo : p
 }
 
 /**
@@ -702,7 +750,7 @@ function calcularContorno(lotes, raio, vizinhos = []) {
     g: leitor.read({ type: 'Polygon', coordinates: l.geometry.coordinates.map(anel => anel.map(c => plano.para(c))) }),
   }))
   const fabrica = emMetros[0].g.getFactory()
-  const uniao = J.operation.union.UnaryUnionOp.union(fabrica.createGeometryCollection(emMetros.map(x => x.g)))
+  const uniao = _unirComSeguranca(fabrica, emMetros.map(x => x.g))
 
   // Fechamento com quina em esquadro: a borda do loteamento fica reta, não arredondada.
   const P = J.operation.buffer.BufferParameters
@@ -713,23 +761,25 @@ function calcularContorno(lotes, raio, vizinhos = []) {
 
   // O que a fusão não pode engolir: os lotes dos outros bairros (com 2 m de folga).
   const outros = vizinhos.length
-    ? J.operation.union.UnaryUnionOp.union(fabrica.createGeometryCollection(vizinhos.map(v =>
-        leitor.read({ type: 'Polygon', coordinates: v.coordinates.map(anel => anel.map(c => plano.para(c))) })))).buffer(2)
+    ? _unirComSeguranca(fabrica, vizinhos.map(v =>
+        leitor.read({ type: 'Polygon', coordinates: v.coordinates.map(anel => anel.map(c => plano.para(c))) }))).buffer(2)
     : null
   const livre = g => !outros || !g.intersects(outros)
 
   // 1 e 2: fechamento comum, e a fusão só onde não há vizinho.
   let fechado = fechar(uniao, raio)
-  const acrescimos = partesDe(fechar(uniao, Math.max(raio, CONTORNO_RAIO_FUSAO)).difference(fechado)).filter(livre)
+  // Sem conseguir a diferença, não há fusão: fica o fechamento comum.
+  const fundido = _sobreporComSeguranca(fechar(uniao, Math.max(raio, CONTORNO_RAIO_FUSAO)), fechado, 'difference')
+  const acrescimos = fundido ? partesDe(fundido).filter(livre) : []
   if (acrescimos.length) {
     // A união sai em pedaços que só se ENCOSTAM (arredondamento nas bordas
     // comuns); 5 cm de dilata-contrai os costura num polígono só. Sem isto a
     // simplificação adiante colapsava o bairro num triângulo.
-    fechado = fechar(J.operation.union.UnaryUnionOp.union(fabrica.createGeometryCollection([fechado, ...acrescimos])), 0.05)
+    fechado = fechar(_unirComSeguranca(fabrica, [fechado, ...acrescimos]), 0.05)
   }
 
   // 3: furo sem vizinho dentro vira bairro.
-  fechado = J.operation.union.UnaryUnionOp.union(fabrica.createGeometryCollection(partesDe(fechado).filter(p => p.getGeometryType() === 'Polygon').map(p => {
+  fechado = _unirComSeguranca(fabrica, partesDe(fechado).filter(p => p.getGeometryType() === 'Polygon').map(p => {
     const furos = []
     for (let i = 0; i < p.getNumInteriorRing(); i++) {
       const anel = p.getInteriorRingN(i)
@@ -738,7 +788,7 @@ function calcularContorno(lotes, raio, vizinhos = []) {
       }
     }
     return fabrica.createPolygon(fabrica.createLinearRing(p.getExteriorRing().getCoordinates()), furos)
-  })))
+  }))
   // Simplificação que preserva a topologia: Douglas-Peucker puro pode cruzar
   // anéis e entregar um polígono inválido.
   fechado = J.simplify.TopologyPreservingSimplifier.simplify(fechado, 0.5)
@@ -843,7 +893,7 @@ function calcularQuadrasERuas(lotes) {
   const quadras = [], lados = [], todasAsPartes = []
   for (const [numero, ls] of grupos) {
     const f = ls[0].g.getFactory()
-    let g = J.operation.union.UnaryUnionOp.union(f.createGeometryCollection(ls.map(l => l.g)))
+    let g = _unirComSeguranca(f, ls.map(l => l.g))
     g = buf(buf(g, QUADRA_RAIO), -QUADRA_RAIO)
     g = J.simplify.TopologyPreservingSimplifier.simplify(g, 0.3)
 
