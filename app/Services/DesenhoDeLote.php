@@ -34,6 +34,61 @@ class DesenhoDeLote
     }
 
     /**
+     * ONDE o contorno se cruza, para a tela marcar (24/10/2026): o ST_IsValid
+     * do banco só diz sim ou não. Em metros, num plano em volta do primeiro
+     * vértice: lados não vizinhos que se tocam e ESPINHO (a linha volta pelo
+     * mesmo caminho num vértice). Vértice repetido o banco aceita e não entra.
+     * A mesma conta da prancheta (cruzamentosDe, prancheta-cadastral.js).
+     *
+     * @param  list<array{0:float,1:float}>  $anel  [lon, lat], fechado ou não
+     * @return list<array{0:float,1:float}>  [lon, lat]
+     */
+    public static function pontosDoCruzamento(array $anel): array
+    {
+        if (count($anel) > 1 && $anel[0] == end($anel)) {
+            array_pop($anel);
+        }
+        $n = count($anel);
+        if ($n < 3) {
+            return [];
+        }
+        [$lon0, $lat0] = $anel[0];
+        $kx = 111320 * cos(deg2rad($lat0));
+        $ky = 110574;
+        $m = array_map(fn ($c) => [($c[0] - $lon0) * $kx, ($c[1] - $lat0) * $ky], $anel);
+        $geo = fn ($p) => [round($lon0 + $p[0] / $kx, 10), round($lat0 + $p[1] / $ky, 10)];
+        $saida = [];
+        $marcar = function ($p) use (&$saida) {
+            foreach ($saida as $q) { if (hypot($q[0] - $p[0], $q[1] - $p[1]) < 0.01) return; }
+            $saida[] = $p;
+        };
+        $cruz = fn ($a, $b) => $a[0] * $b[1] - $a[1] * $b[0];
+        for ($k = 0; $k < $n; $k++) {
+            $a = $m[($k - 1 + $n) % $n]; $v = $m[$k]; $b = $m[($k + 1) % $n];
+            $u = [$v[0] - $a[0], $v[1] - $a[1]]; $w = [$b[0] - $v[0], $b[1] - $v[1]];
+            $lu = hypot(...$u); $lw = hypot(...$w);
+            if ($lw < 0.001) continue;   // vértice repetido: o banco aceita
+            if ($lu >= 0.001 && ($u[0] * $w[0] + $u[1] * $w[1]) < 0 && abs($cruz($u, $w)) < 0.01 * $lu * $lw) { $marcar($v); }
+        }
+        for ($i = 0; $i < $n; $i++) {
+            for ($j = $i + 2; $j < $n; $j++) {
+                if ($i === 0 && $j === $n - 1) continue;   // o último lado encosta no primeiro
+                $a = $m[$i]; $b = $m[($i + 1) % $n]; $c = $m[$j]; $d = $m[($j + 1) % $n];
+                $r = [$b[0] - $a[0], $b[1] - $a[1]]; $s = [$d[0] - $c[0], $d[1] - $c[1]];
+                $den = $cruz($r, $s);
+                if (abs($den) < 1e-12) continue;
+                $ca = [$c[0] - $a[0], $c[1] - $a[1]];
+                $t = $cruz($ca, $s) / $den; $q = $cruz($ca, $r) / $den;
+                if ($t >= -1e-9 && $t <= 1 + 1e-9 && $q >= -1e-9 && $q <= 1 + 1e-9) {
+                    $marcar([$a[0] + $r[0] * $t, $a[1] + $r[1] * $t]);
+                }
+            }
+        }
+
+        return array_map($geo, $saida);
+    }
+
+    /**
      * O que a tela mostra antes de gravar.
      *
      * @return array<string,mixed>

@@ -92,12 +92,27 @@ class CadastroLoteController extends Controller
         }
 
         $d = $this->validarDesenho($request);
+        $impedimento = $svc->impedimento($d);
 
         return response()->json([
-            'impedimento' => $svc->impedimento($d),
+            'impedimento' => $impedimento,
+            'cruzamentos' => $this->cruzamentos($impedimento, $d),
             'avisos'      => $svc->avisos($d),
             'retrato'     => $svc->retrato($d),
         ]);
+    }
+
+    /**
+     * Com o contorno recusado por se cruzar, os pontos do problema, para a
+     * prancheta marcar em vermelho (DesenhoDeLote::pontosDoCruzamento).
+     *
+     * @return list<array{0:float,1:float}>
+     */
+    private function cruzamentos(?string $impedimento, array $d): array
+    {
+        return $impedimento && str_contains($impedimento, 'se cruza')
+            ? DesenhoDeLote::pontosDoCruzamento($d['geometry']['coordinates'][0] ?? [])
+            : [];
     }
 
     /** POST /api/lotes — cria o lote desenhado. */
@@ -795,9 +810,11 @@ class CadastroLoteController extends Controller
             return $erro;
         }
         $d = $this->validarEdicao($request);
+        $impedimento = $svc->impedimento($lote, $d);
 
         return response()->json([
-            'impedimento' => $svc->impedimento($lote, $d),
+            'impedimento' => $impedimento,
+            'cruzamentos' => $this->cruzamentos($impedimento, $d),
             'retrato'     => $svc->retrato($lote, $d),
         ]);
     }

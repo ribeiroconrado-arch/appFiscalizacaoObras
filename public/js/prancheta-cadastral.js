@@ -194,18 +194,28 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     if(dentro&&tela(dentro)[1]>tela(meio)[1])s.angulo+=Math.PI
   }
   /**
-   * Os pontos em que um contorno cruza ou encosta em si mesmo: lados que não
-   * são vizinhos e se tocam. É o que o servidor recusa com "O contorno se
-   * cruza" — e a mensagem sozinha não dizia ONDE (24/10/2026). Pontos a menos
-   * de 1 cm um do outro contam uma vez só.
+   * Os pontos que fazem o servidor recusar com "O contorno se cruza" — a
+   * mensagem sozinha não dizia ONDE (24/10/2026):
+   *   - lados que não são vizinhos e se tocam (cruzamento);
+   *   - ESPINHO: num vértice a linha volta pelo mesmo caminho (quase 180°) —
+   *     sobra nos cantos depois de arrastar vértice ou de um fillet e é
+   *     invisível no desenho.
+   * Vértice repetido o banco aceita: não é marcado. Pontos a menos de 1 cm
+   * contam uma vez.
    */
   function cruzamentosDe(r){
     const pts=r.length>1&&G.len(G.sub(r[0],r.at(-1)))<1e-9?r.slice(0,-1):r,n=pts.length,saida=[]
-    if(n<4)return saida
+    const marcar=p=>{if(!saida.some(q=>G.len(G.sub(q,p))<.01))saida.push(p)}
+    if(n<3)return saida
+    for(let k=0;k<n;k++){
+      const a=pts[(k-1+n)%n],v=pts[k],b=pts[(k+1)%n],u=G.sub(v,a),w=G.sub(b,v),lu=G.len(u),lw=G.len(w)
+      if(lw<.001)continue   // vértice repetido: o banco aceita, não é problema
+      if(lu>=.001&&G.dot(u,w)<0&&Math.abs(G.cross(u,w))<.01*lu*lw)marcar(v)   // espinho: volta a menos de ~0,6°
+    }
     for(let i=0;i<n;i++)for(let j=i+2;j<n;j++){
       if(i===0&&j===n-1)continue   // o último lado encosta no primeiro: são vizinhos
       const x=G.inter(pts[i],pts[(i+1)%n],pts[j],pts[(j+1)%n])
-      if(x&&!saida.some(p=>G.len(G.sub(p,x.p))<.01))saida.push(x.p)
+      if(x)marcar(x.p)
     }
     return saida
   }
@@ -214,6 +224,8 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     const n=(s?.cruzamentos||[]).length
     return n&&/se cruza/i.test(msg)?`${msg} ${n===1?'O ponto marcado':`Os ${n} pontos marcados`} em vermelho no desenho ${n===1?'mostra':'mostram'} onde.`:msg
   }
+  /** Os pontos do problema que o servidor devolveu ([lon, lat]) passam a ser marcados no desenho. */
+  function mostrarCruzamentos(d){s.cruzServidor=(d?.cruzamentos||[]).map(s.plano.para);render()}
   function facePerto(p){let d=16/s.escala,melhor=null;for(const f of faces()){const x=G.len(G.sub(G.pe(p,...f),p));if(x<d){d=x;melhor=f}}return melhor}
   function destino(p,ev){
     const a=s.traco.at(-1);if(!a)return snap(p,ev)
@@ -244,7 +256,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   function selecionada(){return s.linhas.find(l=>l.id===s.sel)}
   function estado(){return {ordem:copy(s.ordem||[]),linhas:copy(s.linhas),anotacoes:copy(s.anotacoes),angulo:s.angulo,dados:copy(s.dados),numero:s.numero,justificativa:s.justificativa}}
   function antes(){s.undo.push(estado());if(s.undo.length>60)s.undo.shift();s.redo=[];s.revisado=null}
-  function mudou(){s.revisado=null;$('pc-conferencia').replaceChildren();recalcular();render();agendar()}
+  function mudou(){s.revisado=null;s.cruzServidor=null;$('pc-conferencia').replaceChildren();recalcular();render();agendar()}
   /**
    * Ctrl+Z / Ctrl+Y. COM UMA LINHA EM CURSO (Line, antes de encerrar), desfaz
    * e refaz o ÚLTIMO SEGMENTO dela, como o "U" do LINE no AutoCAD — e não a
@@ -434,7 +446,8 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // filete escuro, e nenhum preenchimento por cima da imagem.
     for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
-    s.cruzamentos=partes.flatMap(cruzamentosDe)
+    // Os do servidor entram também: o banco recusa até o que a conta daqui não pegou.
+    s.cruzamentos=[...partes.flatMap(cruzamentosDe),...(s.cruzServidor||[])]
     partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtMed(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
     // Cotas das faces de origem, na mesma escala métrica usada nas ferramentas.
     // Na EDIÇÃO, o contorno de origem mostra a medida (em cinza) só dos lados
@@ -746,7 +759,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     s.busy=true;$('pc-conferencia').innerHTML='<p>Conferindo…</p>'
     try{
       const r=await postCadastro('/api/lotes/previa',corpoLoteNovo());if(!r){$('pc-conferencia').replaceChildren();return}
-      if(r.impedimento){$('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(comCruzamentos(r.impedimento))}</b></div>`;return}
+      if(r.impedimento){mostrarCruzamentos(r);$('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(comCruzamentos(r.impedimento))}</b></div>`;return}
       const t=r.retrato,dv=t.divergencia,encosta=(t.vizinhos||[]).filter(v=>v.area_comum===0).length
       $('pc-conferencia').innerHTML=`<div class="pc-identidade"><span class="lote-tag-origem">NOVO</span>
         <p>Lote de <b>${fmtNum(t.area_m2)} m²</b> com ${t.vertices} canto(s), em ${e(t.bairro)} · quadra ${e(t.quadra)} · lote ${e(t.lote)}.${encosta?` Encosta em ${encosta} lote(s) vizinho(s).`:''}</p>
@@ -773,7 +786,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     if(!s||s.busy)return;if(!s.dados.quadra||!s.dados.numero_lote){$('pc-conferencia').textContent='Informe a quadra e o número do lote.';return}
     s.busy=true;$('pc-conferencia').textContent='Conferindo…'
     try{const d=await request(`/api/lotes/${s.ids[0]}/edicao/previa`,corpoEdicao())
-      if(d.impedimento){exibirErro({message:d.impedimento});return}
+      if(d.impedimento){mostrarCruzamentos(d);exibirErro({message:d.impedimento});return}
       const r=d.retrato,antes=r.area_anterior_exata??r.area_anterior_m2,agora=r.area_m2_exata??r.area_m2,dif=Math.round((agora-antes)*10000)/10000
       $('pc-conferencia').innerHTML=`<p>Área: <b>${fmtMed(antes)} m²</b> → <b>${fmtMed(agora)} m²</b>${alvoTxt(Number(agora))}.</p>
         ${dif!==0&&Math.abs(dif)<0.05?`<p class="pc-nota-pequena">Diferença de ${fmtMed(Math.abs(dif))} m²: é de centímetros no desenho. Os lados que mudaram aparecem com a medida de antes, em cinza.</p>`:''}
@@ -907,7 +920,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     }
     if(Object.keys(campos).length){exibirErro({campos});return false}limparErros();return true
   }
-  async function conferir(){if(s.busy||!validarDados())return;const c=corpo();s.busy=true;$('pc-conferencia').textContent='Conferindo…';try{const d=await request(rota(true),c);if(JSON.stringify(c)!==JSON.stringify(corpo()))return;if(d.impedimento){exibirErro({message:d.impedimento});return}s.revisado=JSON.stringify(c);const rf=d.retrato;$('pc-conferencia').innerHTML=(frac()?`<p>Conferido: ${rf.unidades.length} unidade(s); as frações somam <b>${fmtNum(rf.soma_fracoes)}</b> de ${fmtNum(rf.referencia)} m²${rf.area_comum?' · área comum '+fmtNum(rf.area_comum)+' m²':''}. O terreno continua ativo e as unidades nascem dentro dele.</p>`:`<p>Geometria conferida. O ato preservará os imóveis de origem como inativos e criará os sucessores.</p>`)+`${(d.avisos||[]).map(a=>`<p>${e(a)}</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.finalizar()">${frac()?'Confirmar e instituir as frações':'Confirmar e finalizar '+(s.tipo==='unificacao'?'unificação':'desmembramento')}</button>`}catch(err){exibirErro(err)}finally{s.busy=false}}
+  async function conferir(){if(s.busy||!validarDados())return;const c=corpo();s.busy=true;$('pc-conferencia').textContent='Conferindo…';try{const d=await request(rota(true),c);if(JSON.stringify(c)!==JSON.stringify(corpo()))return;if(d.impedimento){mostrarCruzamentos(d);exibirErro({message:d.impedimento});return}s.revisado=JSON.stringify(c);const rf=d.retrato;$('pc-conferencia').innerHTML=(frac()?`<p>Conferido: ${rf.unidades.length} unidade(s); as frações somam <b>${fmtNum(rf.soma_fracoes)}</b> de ${fmtNum(rf.referencia)} m²${rf.area_comum?' · área comum '+fmtNum(rf.area_comum)+' m²':''}. O terreno continua ativo e as unidades nascem dentro dele.</p>`:`<p>Geometria conferida. O ato preservará os imóveis de origem como inativos e criará os sucessores.</p>`)+`${(d.avisos||[]).map(a=>`<p>${e(a)}</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.finalizar()">${frac()?'Confirmar e instituir as frações':'Confirmar e finalizar '+(s.tipo==='unificacao'?'unificação':'desmembramento')}</button>`}catch(err){exibirErro(err)}finally{s.busy=false}}
   async function finalizar(){if(!s||s.busy||!validarDados())return;const c=corpo();if(s.revisado!==JSON.stringify(c)){dica('Confira os dados novamente.');return}if(!s.protocoloId&&s.justificativa.trim().length<10){$('pc-conferencia').textContent='Informe a justificativa do ato direto (mínimo de 10 caracteres).';return}s.busy=true;clearTimeout(saveTimer);try{await fila.catch(()=>{});const d=await request(rota(),c);try{localStorage.removeItem(chaveLocal())}catch{}s.leitura=true;s.finalFeatures=(d.lotes||[{id:d.id,numero_lote:s.numero}]).map((p,i)=>({properties:p}));$('pc-dados').hidden=true;$('pc-save').hidden=true;$('pc-continuar').hidden=true;$('pc-titulo').textContent='Prancha finalizada · '+({fracao_ideal:'Fração ideal',desmembramento:'Desmembramento',unificacao:'Unificação'}[s.tipo]||s.tipo);$('pc-salvo').textContent='Desenho e orientação salvos com o ato';toast(d.message);atoState.tipo=null;limparLotesDoMapa();carregarLotesVisiveis();render()}catch(err){exibirErro(err)}finally{s.busy=false}}
   function fechar(forcar=false){
     if(!fechamento)fechamento=fecharSessao(forcar).finally(()=>{fechamento=null})
