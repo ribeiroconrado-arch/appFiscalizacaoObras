@@ -48,6 +48,8 @@ try {
     confere(T::completar('zzteste  cuiaba') === 'AV. ZZTESTE CUIABÁ', 'sem acento, minúscula e espaço sobrando também casam');
     confere(T::completar('RUA ZZTESTE CUIABÁ') === 'R. ZZTESTE CUIABÁ', 'já com tipo: fica o dele, abreviado');
     confere(T::completar('AV ZZTESTE GOIÁS') === 'AV. ZZTESTE GOIÁS', '"AV" sem ponto conta como tipo');
+    confere(T::completar('ALAM. ZZTESTE DAS FLORES') === 'ALAM. ZZTESTE DAS FLORES' && T::temTipo('ALAM. ZZTESTE DAS FLORES'), '"ALAM." é Alameda');
+    confere(T::completar('ALAMEDA ZZTESTE DAS FLORES') === 'ALAM. ZZTESTE DAS FLORES', 'ALAMEDA abrevia para ALAM.');
     confere(T::completar('ZZTESTE DUPLA') === 'ZZTESTE DUPLA', 'duas ruas e sem bairro: não chuta');
     confere(T::completar('ZZTESTE DUPLA', 'JARDIM TESTE BETA') === 'AV. ZZTESTE DUPLA', 'o bairro desempata');
     confere(T::completar('ZZTESTE DUPLA', 'Teste Alfa') === 'R. ZZTESTE DUPLA', 'o nome do desenho também desempata');

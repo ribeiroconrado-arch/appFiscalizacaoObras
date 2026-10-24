@@ -30,7 +30,7 @@ final class TipoDoLogradouro
     /** O tipo por extenso (ou já abreviado) → a abreviação. A mesma do mapa (bairros-contorno.js). */
     private const ABREVIACOES = [
         'AVENIDA' => 'AV.', 'AV' => 'AV.', 'RUA' => 'R.', 'R' => 'R.',
-        'TRAVESSA' => 'TV.', 'TRAV' => 'TV.', 'TV' => 'TV.', 'ALAMEDA' => 'AL.', 'AL' => 'AL.',
+        'TRAVESSA' => 'TV.', 'TRAV' => 'TV.', 'TV' => 'TV.', 'ALAMEDA' => 'ALAM.', 'ALAM' => 'ALAM.', 'AL' => 'ALAM.',
         'RODOVIA' => 'ROD.', 'ROD' => 'ROD.', 'ESTRADA' => 'EST.', 'EST' => 'EST.',
         'PRACA' => 'PÇ.', 'PC' => 'PÇ.', 'PCA' => 'PÇ.',
     ];

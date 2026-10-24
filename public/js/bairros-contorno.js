@@ -235,7 +235,7 @@ function _desenharRotulosDeQuadra() {
 
 /** Tipo de logradouro abreviado, para quando o nome inteiro não cabe no trecho. */
 const RUA_ABREVIACOES = [[/^AVENIDA\b/i, 'AV.'], [/^RUA\b/i, 'R.'], [/^TRAVESSA\b/i, 'TV.'],
-  [/^ALAMEDA\b/i, 'AL.'], [/^RODOVIA\b/i, 'ROD.'], [/^ESTRADA\b/i, 'EST.'], [/^PRA[CÇ]A\b/i, 'PÇ.']]
+  [/^ALAMEDA\b/i, 'ALAM.'], [/^RODOVIA\b/i, 'ROD.'], [/^ESTRADA\b/i, 'EST.'], [/^PRA[CÇ]A\b/i, 'PÇ.']]
 
 /** Largura média de uma letra do rótulo de rua, em pixels (ver .rot-rua). */
 const RUA_PX_POR_LETRA = 6.4
