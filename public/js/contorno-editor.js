@@ -579,15 +579,101 @@ function _ceCandidatosEncostar(pi, ri, i, j) {
   // trocar i→j (fica j→i) ou trocar j→i (fica i→j); o trecho mais curto primeiro.
   const opcoes = comp(t1) <= comp(t2) ? ['ij', 'ji'] : ['ji', 'ij']
   const cands = []
+  let cruzadas = 0
+  const areaAntes = Math.abs(_ceArea(anel.map(M.para)))
   for (const cam of caminhos) for (const o of opcoes) {
     const nova = cam.map(M.de)
-    const r = o === 'ij' ? [...nova, ...t2.slice(1, -1).map(k => anel[k])] : [...nova.slice().reverse(), ...t1.slice(1, -1).map(k => anel[k])]
-    if (r.length >= 3) cands.push(r)
+    const bruto = o === 'ij' ? [...nova, ...t2.slice(1, -1).map(k => anel[k])] : [...nova.slice().reverse(), ...t1.slice(1, -1).map(k => anel[k])]
+    // EMENDAS LIMPAS e forma VÁLIDA (24/10/2026): a divisa do vizinho entrava
+    // como estava, e nas pontas sobravam vértices amontoados, zigue-zagues e
+    // pequenos laços — o próprio Encostar entregava "lados se cruzam"
+    // (Primavera II). O laço da emenda é desatado; o que ainda se cruzar, ou
+    // mudar a área do bairro pela metade, não entra na prévia.
+    const r = _ceLimparAnel(_ceDesatarLacos(_ceLimparAnel(bruto.map(M.para)))).map(M.de)
+    if (r.length < 3) continue
+    const emM = r.map(M.para), area = Math.abs(_ceArea(emM))
+    if (area < areaAntes / 2 || area > areaAntes * 2) continue
+    if (_ceSeCruza(emM)) { cruzadas++; continue }
+    cands.push(r)
   }
   // A ordem: menor trecho + menor caminho, menor trecho + caminho longo vem por último.
-  const ordem = cands.length === 4 ? [cands[0], cands[1], cands[2], cands[3]] : cands
-  if (!ordem.length) { toast('O trecho escolhido não deixa contorno suficiente.', 'aviso'); return null }
-  return { nome: viz.nome, cands: ordem }
+  if (!cands.length) {
+    toast(cruzadas ? 'Encostar nesse trecho deixaria lados se cruzando. Escolha vértices mais perto da divisa do vizinho.'
+      : 'O trecho escolhido não deixa contorno suficiente.', 'aviso')
+    return null
+  }
+  return { nome: viz.nome, cands }
+}
+
+/**
+ * Tira do anel (em metros) o que a emenda com a divisa do vizinho deixa:
+ * vértices a menos de 5 cm do anterior e ESPINHOS — a linha que volta pelo
+ * mesmo caminho num vértice (menos de ~1° de abertura). Repete até nada mudar.
+ *
+ * @param {Array<[number,number]>} pts anel aberto (sem repetir o primeiro)
+ */
+function _ceLimparAnel(pts) {
+  let r = pts.slice(), mudou = true
+  while (mudou && r.length > 3) {
+    mudou = false
+    for (let k = 0; k < r.length && r.length > 3; k++) {
+      const a = r[(k - 1 + r.length) % r.length], v = r[k], b = r[(k + 1) % r.length]
+      const u = [v[0] - a[0], v[1] - a[1]], w = [b[0] - v[0], b[1] - v[1]], lu = Math.hypot(...u), lw = Math.hypot(...w)
+      const espinho = lu > 0 && lw > 0 && u[0] * w[0] + u[1] * w[1] < 0 && Math.abs(u[0] * w[1] - u[1] * w[0]) < 0.0175 * lu * lw
+      if (lu < 0.05 || espinho) { r.splice(k, 1); mudou = true; k-- }
+    }
+  }
+  return r
+}
+
+/** Área com sinal de um anel aberto (em metros). */
+function _ceArea(pts) {
+  let s = 0
+  for (let i = 0; i < pts.length; i++) { const q = pts[(i + 1) % pts.length]; s += pts[i][0] * q[1] - q[0] * pts[i][1] }
+  return s / 2
+}
+
+/**
+ * DESATA OS LAÇOS PEQUENOS (em metros): dois lados que se cruzam com até 8
+ * vértices entre eles — o nó que fica na emenda com a divisa do vizinho —
+ * viram o ponto do cruzamento, e o laço sai. Cruzamento entre trechos
+ * longos fica como está: aí não é nó, é forma errada.
+ */
+function _ceDesatarLacos(pts) {
+  let r = pts.slice()
+  const cruz = (p, q) => p[0] * q[1] - p[1] * q[0]
+  for (let volta = 0; volta < 30 && r.length > 3; volta++) {
+    const n = r.length
+    let achou = null
+    for (let i = 0; i < n && !achou; i++) for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue
+      const a = r[i], b = r[(i + 1) % n], c = r[j], d = r[(j + 1) % n]
+      const s1 = [b[0] - a[0], b[1] - a[1]], s2 = [d[0] - c[0], d[1] - c[1]], den = cruz(s1, s2)
+      if (Math.abs(den) < 1e-12) continue
+      const ca = [c[0] - a[0], c[1] - a[1]], t = cruz(ca, s2) / den, u = cruz(ca, s1) / den
+      if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) continue
+      const dentro = j - i, fora = n - dentro
+      if (Math.min(dentro, fora) <= 8) { achou = { i, j, x: [a[0] + s1[0] * t, a[1] + s1[1] * t], frente: dentro <= fora }; break }
+    }
+    if (!achou) break
+    const { i, j, x, frente } = achou
+    r = frente ? [...r.slice(0, i + 1), x, ...r.slice(j + 1)] : [x, ...r.slice(i + 1, j + 1)]
+  }
+  return r
+}
+
+/** Algum par de lados NÃO vizinhos do anel (em metros) se toca? */
+function _ceSeCruza(pts) {
+  const n = pts.length, cruz = (p, q) => p[0] * q[1] - p[1] * q[0]
+  for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+    if (i === 0 && j === n - 1) continue
+    const a = pts[i], b = pts[(i + 1) % n], c = pts[j], d = pts[(j + 1) % n]
+    const r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]], den = cruz(r, s)
+    if (Math.abs(den) < 1e-12) continue
+    const ca = [c[0] - a[0], c[1] - a[1]], t = cruz(ca, s) / den, u = cruz(ca, r) / den
+    if (t >= -1e-9 && t <= 1 + 1e-9 && u >= -1e-9 && u <= 1 + 1e-9) return true
+  }
+  return false
 }
 
 // ── conferência e gravação ──────────────────────────────────────
