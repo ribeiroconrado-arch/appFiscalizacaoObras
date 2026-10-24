@@ -65,3 +65,25 @@ test('as linhas originais não são alteradas (a operação devolve cópia)',()=
   G.concordancia(linhas,{id:'a',i:0},{id:'b',i:0},0)
   assert.equal(JSON.stringify(linhas),antes)
 })
+
+test('raio 0 entre dois lados com um ARCO no meio fecha a quina em ponta',()=>{
+  const lote=[[0,0],[10,0],[10,9.5],[9.8,9.8],[9.5,10],[0,10],[0,0]]
+  for(const [a,b] of [[1,4],[4,1]]){
+    const r=G.concordancia([{id:'a',pontos:lote}],{id:'a',i:a},{id:'a',i:b},0)
+    assert.equal(r.erro,undefined,r.erro)
+    const ps=r.linhas[0].pontos
+    assert.equal(ps.length,5); perto(ps[2],[10,10]); assert.ok(G.fechada(ps))
+  }
+})
+
+test('o arco que passa pelo fechamento do contorno também fecha em ponta',()=>{
+  const r=G.concordancia([{id:'a',pontos:[[0,0.4],[0,10],[10,10],[10,0],[0.4,0],[0.15,0.15],[0,0.4]]}],{id:'a',i:0},{id:'a',i:3},0)
+  assert.equal(r.erro,undefined,r.erro)
+  assert.equal(r.linhas[0].pontos.length,5); perto(r.linhas[0].pontos[0],[0,0])
+})
+
+test('com raio, os lados com arco no meio ganham o arco novo',()=>{
+  const r=G.concordancia([{id:'a',pontos:[[0,0],[10,0],[10,9.5],[9.8,9.8],[9.5,10],[0,10],[0,0]]}],{id:'a',i:1},{id:'a',i:4},1)
+  assert.equal(r.erro,undefined,r.erro)
+  assert.ok(G.fechada(r.linhas[0].pontos) && r.linhas[0].pontos.length>5)
+})

@@ -251,6 +251,27 @@ const PranchetaGeo = (() => {
           if(!(r>0)) throw new Error('Esses lados já se encontram. Informe um raio maior que zero para arredondar o canto.')
           L(s1.id).pontos=arredondar(ps,k,r,n); return {linhas}
         }
+        // Lados NÃO vizinhos da mesma linha — com o arco de lados curtos de uma
+        // quina entre eles (24/10/2026): os vértices do meio saem e os dois
+        // lados se estendem até o encontro (raio 0: canto em ponta) ou ganham
+        // o arco do raio. Na linha fechada sai o trecho MAIS CURTO entre eles,
+        // que é o arco, e não o resto do lote. As duas PONTAS SOLTAS de uma
+        // linha aberta não entram aqui: elas fecham a linha, mais abaixo.
+      }
+      if(s1.id===s2.id&&!(!fechada(L(s1.id).pontos)&&Math.min(s1.i,s2.i)===0&&Math.max(s1.i,s2.i)===L(s1.id).pontos.length-2)){
+        const ps=L(s1.id).pontos,f=fechada(ps),m=ps.length-1,[i,j]=[s1.i,s2.i].sort((x,y)=>x-y)
+        const X=inter(ps[i],ps[i+1],ps[j],ps[j+1],false)?.p
+        if(!X) throw new Error('Os lados são paralelos: eles nunca se encontram.')
+        const anel=f?ps.slice(0,m):ps, N=anel.length
+        const comp=(de,ate)=>{let c=0;for(let q=de%N;q!==ate%N;q=(q+1)%N)c+=len(sub(anel[(q+1)%N],anel[q]));return c}
+        const frente=comp(i+1,j), tras=f?comp(j+1,i):Infinity
+        let novo,kc
+        if(frente<=tras){novo=[...anel.slice(0,i+1),X,...anel.slice(j+1)];kc=i+1}   // saem os vértices i+1..j
+        else{novo=[X,...anel.slice(i+1,j+1)];kc=0}                                  // saem j+1..i, dando a volta
+        if(novo.length<(f?3:2)) throw new Error('Sobraria pouco da linha: escolha os dois lados de um mesmo canto.')
+        if(f)novo.push([...novo[0]])
+        L(s1.id).pontos=r>0?arredondar(novo,kc,r,n):novo
+        return {linhas}
       }
       const lado=sel=>{if(sel.id==null)return [sel.a,sel.b];const ps=L(sel.id).pontos;return [ps[sel.i],ps[sel.i+1]]}
       const [a1,b1]=lado(s1),[a2,b2]=lado(s2),x=inter(a1,b1,a2,b2,false)

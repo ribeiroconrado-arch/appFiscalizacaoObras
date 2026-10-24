@@ -193,6 +193,27 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // Lote abaixo da face na tela: meia-volta, para a face descer.
     if(dentro&&tela(dentro)[1]>tela(meio)[1])s.angulo+=Math.PI
   }
+  /**
+   * Os pontos em que um contorno cruza ou encosta em si mesmo: lados que não
+   * são vizinhos e se tocam. É o que o servidor recusa com "O contorno se
+   * cruza" — e a mensagem sozinha não dizia ONDE (24/10/2026). Pontos a menos
+   * de 1 cm um do outro contam uma vez só.
+   */
+  function cruzamentosDe(r){
+    const pts=r.length>1&&G.len(G.sub(r[0],r.at(-1)))<1e-9?r.slice(0,-1):r,n=pts.length,saida=[]
+    if(n<4)return saida
+    for(let i=0;i<n;i++)for(let j=i+2;j<n;j++){
+      if(i===0&&j===n-1)continue   // o último lado encosta no primeiro: são vizinhos
+      const x=G.inter(pts[i],pts[(i+1)%n],pts[j],pts[(j+1)%n])
+      if(x&&!saida.some(p=>G.len(G.sub(p,x.p))<.01))saida.push(x.p)
+    }
+    return saida
+  }
+  /** A mensagem de contorno cruzado, apontando as marcas vermelhas do desenho. */
+  function comCruzamentos(msg){
+    const n=(s?.cruzamentos||[]).length
+    return n&&/se cruza/i.test(msg)?`${msg} ${n===1?'O ponto marcado':`Os ${n} pontos marcados`} em vermelho no desenho ${n===1?'mostra':'mostram'} onde.`:msg
+  }
   function facePerto(p){let d=16/s.escala,melhor=null;for(const f of faces()){const x=G.len(G.sub(G.pe(p,...f),p));if(x<d){d=x;melhor=f}}return melhor}
   function destino(p,ev){
     const a=s.traco.at(-1);if(!a)return snap(p,ev)
@@ -413,6 +434,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // filete escuro, e nenhum preenchimento por cima da imagem.
     for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
+    s.cruzamentos=partes.flatMap(cruzamentosDe)
     partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtMed(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
     // Cotas das faces de origem, na mesma escala métrica usada nas ferramentas.
     // Na EDIÇÃO, o contorno de origem mostra a medida (em cinza) só dos lados
@@ -453,6 +475,8 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // Um número por FACE: o arco da quina conta como uma só (G.agruparFaces), com o número no meio dele.
     if(s.medindo!=null){const r=partes[s.medindo];if(r)for(const [j0,fc] of G.agruparFaces(r).entries()){const j=j0+1,mid=Math.floor((fc.ini+fc.fim)/2),q=tela(fc.arco&&(fc.fim-fc.ini)%2===0?G.mul(G.add(r[mid],r[mid+1]),.5):fc.arco?r[mid+1]:G.mul(G.add(r[fc.ini],r[fc.ini+1]),.5));h+=`<g pointer-events="none"><circle cx="${q[0]}" cy="${q[1]}" r="12" fill="#006c16"/><text x="${q[0]}" y="${q[1]+4}" text-anchor="middle" fill="white" font-size="12">${j}</text></g>`}}
     for(const a of s.anotacoes)h+=texto(posicaoConfronto(a.p,a.texto),a.texto,'pc-confronto')
+    // ONDE O CONTORNO SE CRUZA: círculo vermelho em cada ponto, por cima de tudo.
+    for(const p of s.cruzamentos||[]){const q=tela(p);h+=`<g class="pc-cruzamento" pointer-events="none"><circle cx="${q[0]}" cy="${q[1]}" r="11" fill="#dc2626" fill-opacity=".15" stroke="#dc2626" stroke-width="2.5"/><circle cx="${q[0]}" cy="${q[1]}" r="2.5" fill="#dc2626"/></g>`}
     const north=G.rot([0,1],s.angulo);h+=`<g transform="translate(${s.w-38} 42)"><path d="M0 0L${north[0]*22} ${-north[1]*22}" stroke="#243b4b" stroke-width="2"/><text x="${north[0]*32}" y="${-north[1]*32}" text-anchor="middle" font-size="12">N</text></g>`
     const passo=10**Math.floor(Math.log10(120/s.escala)), px=passo*s.escala;h+=`<path d="M25 ${s.h-35}v7h${px}v-7" fill="none" stroke="#243b4b"/><text x="25" y="${s.h-40}" font-size="11">${passo>=1?fmtNum(passo)+' m':passo>=.01?Math.round(passo*100)+' cm':Math.round(passo*1000)+' mm'}</text>`
     svg.innerHTML=h
@@ -463,7 +487,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // "Feche o contorno" é orientação, não erro: fica fora do rodapé.
     $('pc-resumo').classList.toggle('erro',!!s.resultado?.erro&&!s.resultado?.orientacao)
     $('pc-resumo').textContent=s.resultado?.erro||(livre()?(partes[0]?`Contorno fechado · ${fmtNum(Math.abs(G.area(partes[0])))} m²${alvoTxt(Math.abs(G.area(partes[0])))}`:"Carregando…"):`${s.linhas.length} linha(s) · ${partes.length} ${s.tipo==='unificacao'?'resultado(s)':'parte(s)'}`)
-    if(!s.operacao)dica(s.leitura?'Visualização salva do ato.':s.ferramenta==='concordancia'?(s.fillet?.erro||`Concordância · raio ${fmtNum(s.raio)} m · clique no ${s.fillet?.primeiro?'2º':'1º'} lado. Raio 0 estende até o encontro; digite outro raio e Enter.`):s.ferramenta==='linha'&&livre()?`Clique nos cantos ${edif()?'da construção':'do lote'} · digite a medida · clique no primeiro vértice para fechar`:s.ferramenta==='linha'?'Clique para desenhar · digite a medida · Enter encerra · novo clique inicia outra linha':s.ferramenta==='perpendicular'?'Clique na face à qual a nova linha será perpendicular.':s.ferramenta==='alinhar'?'Clique na face que deseja deixar horizontal.':s.ferramenta==='anotar'?'Clique na posição da identificação do confronto.':'Selecione e arraste uma linha ou um vértice · Shift+clique no lado insere vértice · M mover · O offset · F concordância')
+    if(!s.operacao)dica(s.leitura?'Visualização salva do ato.':s.ferramenta==='concordancia'?(s.fillet?.erro||`Concordância · raio ${fmtNum(s.raio)} m · clique no ${s.fillet?.primeiro?"2º":"1º"} lado. Raio 0 estende até o encontro — com um arco entre os dois lados, fecha em ponta; digite outro raio e Enter.`):s.ferramenta==='linha'&&livre()?`Clique nos cantos ${edif()?'da construção':'do lote'} · digite a medida · clique no primeiro vértice para fechar`:s.ferramenta==='linha'?'Clique para desenhar · digite a medida · Enter encerra · novo clique inicia outra linha':s.ferramenta==='perpendicular'?'Clique na face à qual a nova linha será perpendicular.':s.ferramenta==='alinhar'?'Clique na face que deseja deixar horizontal.':s.ferramenta==='anotar'?'Clique na posição da identificação do confronto.':'Selecione e arraste uma linha ou um vértice · Shift+clique no lado insere vértice · M mover · O offset · F concordância')
     // Fillet ativo: o raio e o passo no rodapé; trocou de ferramenta, some.
     {const fl=s.ferramenta==='concordancia'&&!s.leitura;$('pc-fillet').hidden=!fl;if(fl){if(document.activeElement!==$('pc-raio'))$('pc-raio').value=String(s.raio).replace('.',',');$('pc-fillet-passo').textContent=s.fillet?.erro||(s.fillet?.primeiro?'clique no 2º lado':'clique no 1º lado · raio 0 = canto vivo')}}
   }
@@ -722,7 +746,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     s.busy=true;$('pc-conferencia').innerHTML='<p>Conferindo…</p>'
     try{
       const r=await postCadastro('/api/lotes/previa',corpoLoteNovo());if(!r){$('pc-conferencia').replaceChildren();return}
-      if(r.impedimento){$('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(r.impedimento)}</b></div>`;return}
+      if(r.impedimento){$('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(comCruzamentos(r.impedimento))}</b></div>`;return}
       const t=r.retrato,dv=t.divergencia,encosta=(t.vizinhos||[]).filter(v=>v.area_comum===0).length
       $('pc-conferencia').innerHTML=`<div class="pc-identidade"><span class="lote-tag-origem">NOVO</span>
         <p>Lote de <b>${fmtNum(t.area_m2)} m²</b> com ${t.vertices} canto(s), em ${e(t.bairro)} · quadra ${e(t.quadra)} · lote ${e(t.lote)}.${encosta?` Encosta em ${encosta} lote(s) vizinho(s).`:''}</p>
@@ -856,7 +880,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       if(input){const aviso=document.createElement('small');aviso.className='pc-erro-campo';aviso.id='pc-erro-'+mensagens.length;aviso.textContent=msg;input.setAttribute('aria-invalid','true');input.setAttribute('aria-describedby',aviso.id);input.closest('label').appendChild(aviso);const details=input.closest('details');if(details)details.open=true;primeiro||=input}
     }
     abrirCartoesComErro()   // campo com erro no "Mostrar mais": o cartão abre
-    $('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(mensagens.length?'Revise os campos indicados':err.message||'Não foi possível concluir.')}</b>${mensagens.length?'<ul>'+mensagens.map(m=>'<li>'+e(m)+'</li>').join('')+'</ul>':''}</div>`;
+    $('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(mensagens.length?'Revise os campos indicados':comCruzamentos(err.message||'Não foi possível concluir.'))}</b>${mensagens.length?'<ul>'+mensagens.map(m=>'<li>'+e(m)+'</li>').join('')+'</ul>':''}</div>`;
     const alvo=primeiro||$('pc-conferencia');alvo.focus();alvo.scrollIntoView({block:'nearest',behavior:'smooth'})
   }
   function validarDados(){
