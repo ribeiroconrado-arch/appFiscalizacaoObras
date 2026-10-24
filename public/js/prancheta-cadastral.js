@@ -623,7 +623,16 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // propriedades (quadra, número) continuam as do mapa, quando ele tem o lote.
     const originais=salva?.originais||(tipo==='novo'?[]:await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok){if(f)return f;throw new Error('Não foi possível ler o contorno do imóvel.')}const d=await r.json();const g=d.type==='Feature'?d.geometry:(d.geometry||d);return {type:'Feature',geometry:g,properties:f?.properties||{id}}})))
     if(token!==geracao)return
+    // VAZIO INTERNO DE ÁREA ZERO sai sozinho: é resto da conversão do desenho
+    // (triângulo achatado, 0,001 m² no Cond. Esplendore, Q01 L11) e é ele que
+    // deixa o contorno inválido — recusar abrir deixava o lote sem conserto
+    // (24/10/2026). Vazio de verdade (1 m² ou mais) continua recusado.
+    let semFuro=0
+    for(const f of originais){const c=f.geometry?.coordinates;if(f.geometry?.type!=='Polygon'||!c||c.length<2)continue
+      const pl=G.plano(c[0][0]),ficam=c.filter((r,k)=>k===0||Math.abs(G.area(r.map(pl.para)))>=1)
+      if(ficam.length<c.length){semFuro+=c.length-ficam.length;f.geometry={...f.geometry,coordinates:ficam}}}
     if(originais.some(f=>f.geometry?.type!=='Polygon'||f.geometry.coordinates.length!==1)){toast('A prancheta atende polígonos sem vazios internos.', 'err');return}
+    if(semFuro)toast(`${semFuro} vazio(s) interno(s) sem área (resto da conversão) foram descartados: o contorno fica só com a borda.`, 'aviso')
     if($('t-mapa')&&!$('t-mapa').classList.contains('at')&&typeof irPara==='function')irPara('mapa')
     const centroGeo=opts.centro||originais[0].geometry.coordinates[0][0]
     s={tipo,ids:ids.map(Number),protocoloId,originais,opts,plano:G.plano(centroGeo),linhas:[],traco:[],anotacoes:[],contexto:[],angulo:0,centro:[0,0],escala:1,undo:[],redo:[],dados:{},numero:'',justificativa:atoState.justificativa||'',ferramenta:tipo==='novo'||tipo==='edificacao'||tipo==='fracao_ideal'?'linha':'selecionar',sel:null,ref:null,operacao:null,drag:null,mouse:null,mapa:true,valor:'',leitura:!!salva,resultado:{partes:[]},uniao:null,revisado:null,raio:0,fillet:{primeiro:null,erro:null}}
