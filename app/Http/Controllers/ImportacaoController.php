@@ -62,10 +62,24 @@ class ImportacaoController extends Controller
         // Rascunho é de quem o carregou (e do administrador); os demais
         // curadores só o enxergam depois de salvo.
         $u = $r->user();
-        $lista = ImportacaoLote::with('usuario:id,name')
+        // EM DOIS PASSOS: o banco ordena só id e situação, e as linhas vêm
+        // depois, pelos ids. Ordenar as linhas inteiras carregava junto os
+        // relatórios de conferência (JSON de centenas de KB num bairro grande)
+        // e estourou a memória de ordenação do MySQL: a lista dava erro 500
+        // (24/10/2026, com o Primavera II). Do relatório do cadastro a lista
+        // só usa o total de divergências, que o banco extrai sozinho.
+        $ids = ImportacaoLote::query()
             ->when(! $u->isAdmin(), fn ($q) => $q->where(fn ($w) => $w
                 ->where('status', '<>', 'rascunho')->orWhere('user_id', $u->id)))
-            ->orderByRaw("status = 'rascunho' DESC")->orderByDesc('id')->limit(100)->get()
+            ->orderByRaw("status = 'rascunho' DESC")->orderByDesc('id')->limit(100)->pluck('id')->all();
+        $ordem = array_flip($ids);
+        $lista = ImportacaoLote::with('usuario:id,name')
+            ->select(['id', 'bairro', 'arquivo_nome', 'total_lotes', 'status', 'user_id',
+                'created_at', 'salvo_em', 'publicado_em', 'excluido_em', 'conferido_em'])
+            ->selectRaw("conferencia_cadastro IS NOT NULL AS tem_conferencia_cadastro,
+                CAST(JSON_EXTRACT(conferencia_cadastro, '$.total_divergencias') AS UNSIGNED) AS divergencias_cadastro")
+            ->whereIn('id', $ids)->get()
+            ->sortBy(fn (ImportacaoLote $i) => $ordem[$i->id])->values()
             ->map(fn (ImportacaoLote $i) => $this->resumo($i));
 
         return response()->json([
@@ -445,7 +459,10 @@ class ImportacaoController extends Controller
     /** @return array<string,mixed> */
     private function resumo(ImportacaoLote $i): array
     {
-        $c = $i->conferencia_cadastro;
+        // Da lista vem só o total (index); da ficha, o relatório inteiro.
+        $c = array_key_exists('tem_conferencia_cadastro', $i->getAttributes())
+            ? ($i->tem_conferencia_cadastro ? ['total_divergencias' => $i->divergencias_cadastro] : null)
+            : $i->conferencia_cadastro;
 
         return [
             'id'           => $i->id,
