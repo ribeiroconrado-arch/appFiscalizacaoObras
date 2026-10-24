@@ -1551,16 +1551,25 @@ function _nomesSemTipoHtml(termo) {
   </details>`
 }
 
-/** Abre "Nova rua" com o nome sem tipo (falta escrever RUA/AVENIDA na frente) e os bairros dele que estão na aba Bairros. */
+/**
+ * Abre "Nova rua" com o nome sem tipo (falta escrever RUA/AVENIDA na frente)
+ * e os bairros dele. Os bairros vêm com o nome da ABA Bairros (`bairros_aba`,
+ * achados pelo código no servidor): o cadastro escreve "JARDIM EUROPA V" e a
+ * aba pode escrever diferente — comparando a grafia do cadastro, o bairro
+ * sumia do formulário.
+ */
 function cadastrarRuaSemTipo(i) {
   const termo = parBusca('filtro-ruas')
   const p = (parState.ruasSemTipo || []).filter(x => !termo || x.nome.toLowerCase().includes(termo))[i]
   if (!p) return
   const aceitos = new Set(_bairrosDaRua())
+  const bairros = (p.bairros_aba || p.bairros).map(b => String(b).toUpperCase()).filter(b => aceitos.has(b))
   parNovo('ruas')
-  parState.ruaNova = { nome: 'RUA ' + p.nome, bairros: p.bairros.map(b => String(b).toUpperCase()).filter(b => aceitos.has(b)) }
+  parState.ruaNova = { nome: 'RUA ' + p.nome, bairros }
   renderRuas()
-  toast('Confira o tipo (RUA, AVENIDA…) antes de gravar.')
+  toast(bairros.length < p.bairros.length
+    ? 'Confira o tipo (RUA, AVENIDA…). Algum bairro do cadastro não está na aba Bairros e ficou de fora.'
+    : 'Confira o tipo (RUA, AVENIDA…) antes de gravar.')
 }
 
 // ── BRASÃO DO MUNICÍPIO ──────────────────────────────────────

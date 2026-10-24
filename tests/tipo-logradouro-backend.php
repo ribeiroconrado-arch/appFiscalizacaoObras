@@ -76,6 +76,8 @@ try {
     confere($nomes === ['ZZTESTE DUPLA', 'ZZTESTE INEXISTENTE'], 'só o que não completa, do mais frequente ao menos');
     confere($p[1]['imoveis'] === 3 && $p[1]['bairros'] === ['JARDIM TESTE ALFA', 'JARDIM TESTE BETA'], 'soma os imóveis e junta os bairros');
     confere(count($p[0]['candidatos']) === 2, 'a ambígua mostra as duas ruas');
+    $p = T::pendencias([(object) ['logradouro' => 'ZZTESTE SEM RUA', 'bairro' => 'JD TESTE ALFA (GRAFIA DO CADASTRO)', 'codigo' => '009901', 'n' => 3]]);
+    confere($p[0]['bairros_aba'] === ['JARDIM TESTE ALFA'], 'o bairro sai com o nome da aba Bairros, achado pelo código');
 
     echo "Ligação rua↔bairro\n";
     $admin = User::where('perfil', 'admin')->first() ?? User::create(['name' => 'Admin Teste Rua', 'email' => 'adm.rua@exemplo.test',

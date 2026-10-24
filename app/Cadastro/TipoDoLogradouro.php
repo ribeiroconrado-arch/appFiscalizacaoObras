@@ -38,7 +38,7 @@ final class TipoDoLogradouro
     /** Tipos que não se abreviam, mas contam como "já tem tipo". */
     private const OUTROS = ['VIELA', 'BECO', 'LARGO', 'ACESSO', 'MARGINAL', 'PASSAGEM', 'VIADUTO', 'CONTORNO', 'ANEL', 'CORREDOR'];
 
-    private const CACHE = 'tipo-do-logradouro:indice:2';   // :2 — com os códigos de bairro
+    private const CACHE = 'tipo-do-logradouro:indice:3';   // :3 — com os códigos e os nomes da aba Bairros
 
     /** @var array{ruas: array<string, list<array{nome:string, bairros:list<string>}>>, bairros: array<string,string>}|null */
     private static ?array $indice = null;
@@ -83,8 +83,12 @@ final class TipoDoLogradouro
      * código do bairro, imóveis]: nome sem tipo e sem rua que case, ou com
      * mais de uma e sem desempate.
      *
+     * `bairros` é como o cadastro escreve; `bairros_aba`, os mesmos bairros
+     * com o nome da aba Bairros (achados pelo código, senão pelo nome) — é
+     * com eles que o "Cadastrar" da tela já liga a rua nova.
+     *
      * @param  iterable<object{logradouro:?string, bairro:?string, codigo?:?string, n:int}>  $linhas
-     * @return list<array{nome:string, imoveis:int, bairros:list<string>, candidatos:list<string>}>
+     * @return list<array{nome:string, imoveis:int, bairros:list<string>, bairros_aba:list<string>, candidatos:list<string>}>
      */
     public static function pendencias(iterable $linhas): array
     {
@@ -95,11 +99,15 @@ final class TipoDoLogradouro
                 continue;
             }
             $p = &$saida[$nome];
-            $p ??= ['nome' => $nome, 'imoveis' => 0, 'bairros' => [],
+            $p ??= ['nome' => $nome, 'imoveis' => 0, 'bairros' => [], 'bairros_aba' => [],
                 'candidatos' => array_column(self::indice()['ruas'][self::chave($nome)] ?? [], 'nome')];
             $p['imoveis'] += (int) $l->n;
             if ($l->bairro && ! in_array($l->bairro, $p['bairros'], true)) {
                 $p['bairros'][] = $l->bairro;
+            }
+            $aba = self::nomeNaAba($l->bairro, $l->codigo ?? null);
+            if ($aba !== null && ! in_array($aba, $p['bairros_aba'], true)) {
+                $p['bairros_aba'][] = $aba;
             }
             unset($p);
         }
@@ -116,6 +124,16 @@ final class TipoDoLogradouro
     }
 
     // ── por dentro ──────────────────────────────────────────────
+
+    /** O nome do bairro na aba Bairros (maiúsculas), pelo código e, sem ele, pelo nome; null se não achar. */
+    private static function nomeNaAba(?string $bairro, ?string $codigo): ?string
+    {
+        $i = self::indice();
+        $chave = ($codigo !== null ? $i['codigos'][ltrim(trim($codigo), '0')] ?? null : null)
+            ?? ($bairro ? $i['bairros'][self::chave($bairro)] ?? null : null);
+
+        return $chave !== null ? $i['oficiais'][$chave] ?? null : null;
+    }
 
     private static function candidato(string $nome, ?string $bairro, ?string $codigoBairro = null): ?string
     {
@@ -172,9 +190,10 @@ final class TipoDoLogradouro
     private static function indice(): array
     {
         return self::$indice ??= Cache::remember(self::CACHE, now()->addHours(12), function () {
-            $bairros = $codigos = [];
+            $bairros = $codigos = $oficiais = [];
             foreach (CadastroBairro::whereNotNull('nome_cadastro')->get(['codigo', 'nome_cadastro', 'nome_gis', 'apelido']) as $b) {
                 $oficial = self::chave($b->nome_cadastro);
+                $oficiais[$oficial] = Logradouro::normalizar($b->nome_cadastro);
                 foreach ([$b->nome_cadastro, $b->nome_gis, $b->apelido] as $n) {
                     if ($n) { $bairros[self::chave($n)] = $oficial; }
                 }
@@ -197,7 +216,7 @@ final class TipoDoLogradouro
                 unset($c);
             }
 
-            return ['ruas' => array_map('array_values', $ruas), 'bairros' => $bairros, 'codigos' => $codigos];
+            return ['ruas' => array_map('array_values', $ruas), 'bairros' => $bairros, 'codigos' => $codigos, 'oficiais' => $oficiais];
         });
     }
 }
