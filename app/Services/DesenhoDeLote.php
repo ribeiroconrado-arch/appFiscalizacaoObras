@@ -85,7 +85,82 @@ class DesenhoDeLote
             }
         }
 
+        // SEM PONTO NO PLANO, A CONTA DO BANCO (24/10/2026, faixa estreita de
+        // 24.662 m²): o ST_IsValid confere em coordenada geográfica, onde cada
+        // lado é um ARCO sobre a Terra e não uma reta — dois lados longos que
+        // passam a 1 cm um do outro no plano se cruzam para o banco. Aqui o
+        // cruzamento é procurado entre os arcos, numa esfera.
+        if (! $saida) {
+            foreach (self::cruzamentosNaEsfera($anel) as $c) {
+                $marcar([($c[0] - $lon0) * $kx, ($c[1] - $lat0) * $ky]);
+            }
+        }
+        // Nem assim: o banco usa o elipsoide e uma tolerância própria (recusou
+        // lados a 1 cm no plano). Os lugares onde dois lados passam MAIS PERTO,
+        // até 5 cm, são o melhor palpite — os 5 mais próximos.
+        if (! $saida) {
+            $pertos = [];
+            $pe = function ($p, $a, $b) {
+                $ab = [$b[0] - $a[0], $b[1] - $a[1]]; $l2 = $ab[0] ** 2 + $ab[1] ** 2;
+                $t = $l2 ? max(0, min(1, (($p[0] - $a[0]) * $ab[0] + ($p[1] - $a[1]) * $ab[1]) / $l2)) : 0;
+                $q = [$a[0] + $ab[0] * $t, $a[1] + $ab[1] * $t];
+
+                return [hypot($p[0] - $q[0], $p[1] - $q[1]), $q];
+            };
+            for ($i = 0; $i < $n; $i++) {
+                for ($j = $i + 2; $j < $n; $j++) {
+                    if ($i === 0 && $j === $n - 1) continue;
+                    $a = $m[$i]; $b = $m[($i + 1) % $n]; $c = $m[$j]; $d = $m[($j + 1) % $n];
+                    $perto = null;
+                    foreach ([[$a, $c, $d], [$b, $c, $d], [$c, $a, $b], [$d, $a, $b]] as [$p, $x, $y]) {
+                        [$dist, $q] = $pe($p, $x, $y);
+                        if ($perto === null || $dist < $perto[0]) $perto = [$dist, [($p[0] + $q[0]) / 2, ($p[1] + $q[1]) / 2]];
+                    }
+                    if ($perto[0] < 0.05) $pertos[] = $perto;
+                }
+            }
+            usort($pertos, fn ($p, $q) => $p[0] <=> $q[0]);
+            foreach (array_slice($pertos, 0, 5) as $p) $marcar($p[1]);
+        }
+
         return array_map($geo, $saida);
+    }
+
+    /**
+     * Cruzamento entre lados NÃO vizinhos tomados como arcos de círculo máximo
+     * (o caminho mais curto sobre a esfera entre dois vértices), como o banco
+     * os enxerga em SRID 4326.
+     *
+     * @param  list<array{0:float,1:float}>  $anel  [lon, lat], aberto
+     * @return list<array{0:float,1:float}>  [lon, lat]
+     */
+    private static function cruzamentosNaEsfera(array $anel): array
+    {
+        $v = fn ($c) => [cos(deg2rad($c[1])) * cos(deg2rad($c[0])), cos(deg2rad($c[1])) * sin(deg2rad($c[0])), sin(deg2rad($c[1]))];
+        $x = fn ($a, $b) => [$a[1] * $b[2] - $a[2] * $b[1], $a[2] * $b[0] - $a[0] * $b[2], $a[0] * $b[1] - $a[1] * $b[0]];
+        $d = fn ($a, $b) => $a[0] * $b[0] + $a[1] * $b[1] + $a[2] * $b[2];
+        $p = array_map($v, $anel);
+        $n = count($p);
+        $saida = [];
+        // O ponto P está no arco AB (de normal N = A×B) se fica entre A e B.
+        $noArco = fn ($P, $A, $B, $N) => $d($x($A, $P), $N) >= -1e-15 && $d($x($P, $B), $N) >= -1e-15;
+        for ($i = 0; $i < $n; $i++) {
+            for ($j = $i + 2; $j < $n; $j++) {
+                if ($i === 0 && $j === $n - 1) continue;
+                [$A, $B, $C, $D] = [$p[$i], $p[($i + 1) % $n], $p[$j], $p[($j + 1) % $n]];
+                $N1 = $x($A, $B); $N2 = $x($C, $D); $L = $x($N1, $N2);
+                $len = sqrt($d($L, $L));
+                if ($len < 1e-18) continue;
+                foreach ([1, -1] as $sinal) {
+                    $P = [$L[0] / $len * $sinal, $L[1] / $len * $sinal, $L[2] / $len * $sinal];
+                    if ($noArco($P, $A, $B, $N1) && $noArco($P, $C, $D, $N2)) {
+                        $saida[] = [rad2deg(atan2($P[1], $P[0])), rad2deg(asin(max(-1, min(1, $P[2]))))];
+                    }
+                }
+            }
+        }
+
+        return $saida;
     }
 
     /**

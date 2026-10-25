@@ -221,8 +221,11 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   }
   /** A mensagem de contorno cruzado, apontando as marcas vermelhas do desenho. */
   function comCruzamentos(msg){
+    if(!/se cruza/i.test(msg))return msg
     const n=(s?.cruzamentos||[]).length
-    return n&&/se cruza/i.test(msg)?`${msg} ${n===1?'O ponto marcado':`Os ${n} pontos marcados`} em vermelho no desenho ${n===1?'mostra':'mostram'} onde.`:msg
+    // Em lado longo (faixa estreita), o banco vê cruzamento onde dois lados só PASSAM PERTO.
+    return n?`${msg} ${n===1?'O ponto marcado':`Os ${n} pontos marcados`} em vermelho no desenho ${n===1?'mostra':'mostram'} onde — afaste ali os lados que se encostam ou passam a poucos centímetros.`
+      :`${msg} Procure lados que se encostam ou passam a poucos centímetros um do outro (o banco confere sobre a curvatura da Terra).`
   }
   /** Os pontos do problema que o servidor devolveu ([lon, lat]) passam a ser marcados no desenho. */
   function mostrarCruzamentos(d){s.cruzServidor=(d?.cruzamentos||[]).map(s.plano.para);render()}
