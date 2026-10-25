@@ -122,16 +122,8 @@ porque o PHP **não** é alcançável direto da internet — só o Nginx fala co
 
 ## 5. Backup
 
-O que não pode se perder: o banco e `storage/app/private` (fotos e anexos das
-vistorias). Diário, guardado **fora** da VPS:
-
-```bash
-mysqldump --single-transaction fiscalizacao_obras | gzip > /var/backups/fiscobras-$(date +%F).sql.gz
-tar czf /var/backups/fiscobras-arquivos-$(date +%F).tgz -C /caminho/do/app storage/app/private
-```
-
-Backup que nunca foi restaurado não é backup: restaurar uma vez num banco de
-teste e abrir o sistema.
+Banco e anexos, diário, com cópia cifrada **fora** da VPS: ver
+[backup.md](backup.md) (como funciona, como trocar de provedor e como restaurar).
 
 ## 6. Antes de entrar em produção
 
