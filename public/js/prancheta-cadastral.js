@@ -3,7 +3,7 @@ const PranchetaCad = (() => {
   const G=PranchetaGeo, cores=['#2563eb','#059669','#d97706','#7c3aed','#db2777','#0891b2']
   const copy=x=>structuredClone(x), $=id=>document.getElementById(id), e=x=>esc(String(x??''))
   let s=null, svg=null, modal=null, resize=null, saveTimer=null, fila=Promise.resolve(), geracao=0, reguaOrigem=null, fechamento=null
-  const icones={esquadrejar:'M5 4v15h15M5 14h5v5M13 4l7 7',desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3'}
+  const icones={esquadrejar:'M5 4v15h15M5 14h5v5M13 4l7 7',desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3',proximidades:'M5 4v16M19 4v16M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3'}
   // "Livre": a prancheta desenha O CONTORNO do lote (lote novo, editar lote), em
   // vez de divisas dentro de um lote existente. Ver recalcular() e dados().
   // EDIFICAÇÃO: desenho livre do contorno de uma construção, com o lote por
@@ -52,7 +52,7 @@ const PranchetaCad = (() => {
     modal.innerHTML=`<header class="pc-cab"><div class="pc-tit"><b id="pc-titulo">Prancheta cadastral</b><small id="pc-origem"></small></div>
       <nav class="pc-tools" aria-label="Ferramentas de desenho">
       ${botao('selecionar','Selecionar','V','clique numa linha para editar; arraste os vértices')}${botao('linha','Linha','L','clique nos cantos e digite a medida; clicar no 1º vértice fecha o contorno')}${botao('perpendicular','Perpendicular','P','escolha uma face e trace a 90° dela')}${botao('mover','Mover','M','move a linha selecionada; digite a distância')}${botao('offset','Offset','O','cópia paralela da linha, à distância digitada')}${botao('concordancia','Fillet (concordância)','F','clique em dois lados; arredonda o canto com o raio digitado — raio 0 une os lados num canto vivo')}
-${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a até 1° de 90° viram 90° exatos, mantendo a medida de cada lado')}${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
+${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a até 1° de 90° viram 90° exatos, mantendo a medida de cada lado')}${botaoAcao('proximidades','Proximidades','PranchetaCad.proximidades()','lados que passam a menos de 5 cm um do outro: ir até lá, afastar ou excluir o vértice','pc-prox-btn')}${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
       <i></i>${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}
       <i></i><span class="pc-snap-grupo">${botaoAcao('snap','Snap (OSNAP)','PranchetaCad.opcoesSnap()','onde o cursor encaixa: ponta, meio, na face, perpendicular','pc-snap')}
         <div class="pc-snap-pop" id="pc-snap-pop" hidden aria-label="Encaixe do cursor">
@@ -70,6 +70,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       </nav>
       <button type="button" class="pc-x" style="margin-left:auto" onclick="PranchetaCad.fechar()" aria-label="Fechar prancheta" data-dica="Fechar a prancheta (o rascunho fica guardado)">✕</button></header>
       <main class="pc-canvas"><span id="pc-ref" class="pc-ref"></span><svg id="pc-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Desenho dos imóveis e suas divisas"></svg>
+      <div id="pc-prox" class="pc-prox" hidden></div>
       <div id="pc-entrada" hidden><label id="pc-entrada-label" for="pc-valor">Comprimento</label><input id="pc-valor" inputmode="decimal" autocomplete="off" aria-label="Medida em metros"><span>m · Enter</span></div>
       <div id="pc-cota-ed" hidden><label for="pc-cota-valor">Medida do lado</label><input id="pc-cota-valor" inputmode="decimal" autocomplete="off" aria-label="Nova medida do lado, em metros"><span>m</span>
         <button type="button" class="pc-cota-troca" title="Trocar a ponta que fica parada (Tab)" onclick="PranchetaCad.cotaTrocarPonta()">⇄ ponta</button>
@@ -228,7 +229,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       :`${msg} Procure lados que se encostam ou passam a poucos centímetros um do outro (o banco confere sobre a curvatura da Terra).`
   }
   /** Os pontos do problema que o servidor devolveu ([lon, lat]) passam a ser marcados no desenho. */
-  function mostrarCruzamentos(d){s.cruzServidor=(d?.cruzamentos||[]).map(s.plano.para);render()}
+  function mostrarCruzamentos(d){s.cruzServidor=(d?.cruzamentos||[]).map(s.plano.para);render();atualizarProx()}
   function facePerto(p){let d=16/s.escala,melhor=null;for(const f of faces()){const x=G.len(G.sub(G.pe(p,...f),p));if(x<d){d=x;melhor=f}}return melhor}
   function destino(p,ev){
     const a=s.traco.at(-1);if(!a)return snap(p,ev)
@@ -259,7 +260,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   function selecionada(){return s.linhas.find(l=>l.id===s.sel)}
   function estado(){return {ordem:copy(s.ordem||[]),linhas:copy(s.linhas),anotacoes:copy(s.anotacoes),angulo:s.angulo,dados:copy(s.dados),numero:s.numero,justificativa:s.justificativa}}
   function antes(){s.undo.push(estado());if(s.undo.length>60)s.undo.shift();s.redo=[];s.revisado=null}
-  function mudou(){s.revisado=null;s.cruzServidor=null;$('pc-conferencia').replaceChildren();recalcular();render();agendar()}
+  function mudou(){s.revisado=null;s.cruzServidor=null;$('pc-conferencia').replaceChildren();recalcular();render();agendar();atualizarProx()}
   /**
    * Ctrl+Z / Ctrl+Y. COM UMA LINHA EM CURSO (Line, antes de encerrar), desfaz
    * e refaz o ÚLTIMO SEGMENTO dela, como o "U" do LINE no AutoCAD — e não a
@@ -288,6 +289,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     if(s&&ev.button===1){ev.preventDefault();s.drag={pan:true,inicio:[ev.clientX,ev.clientY],centro:[...s.centro]};svg.setPointerCapture(ev.pointerId);return}
     if(!s||s.loading||s.busy||s.medindo!=null||ev.button!==0)return;ev.preventDefault();svg.focus();const p=ponto(ev);s.mouse=p
     if(ev.target.closest?.('[data-cota-line]'))return
+    if(proxNoClique(p))return
     const vertex=ev.target.closest('[data-vertex]'), hit=ev.target.closest('[data-line]')
     if(s.ferramenta==='concordancia'&&!s.leitura){
       const sg=segmentoPerto(p);s.fillet.erro=null
@@ -338,10 +340,10 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       else{const alvo=snap(p,ev,d.inicio,d.vertex!==null?{id:s.sel,v:d.vertex,fechada:d.fechada}:s.sel),delta=G.sub(alvo,d.inicio);d.mudou ||= G.len(delta)>.001;const l=selecionada();if(l){l.pontos=copy(d.orig);if(d.vertex!==null){l.pontos[d.vertex]=alvo;const m=l.pontos.length-1;if(d.fechada&&(d.vertex===0||d.vertex===m))l.pontos[d.vertex===0?m:0]=[...alvo]}else l.pontos=l.pontos.map(q=>G.add(q,delta));recalcular()}}
     }else if(s.ferramenta==='linha'){s.mouse=destino(p,ev);if(s.traco.length)entrada(s.mouse,'Comprimento',true)}
     else if(s.operacao){const o=s.operacao;s.mouse=snap(p,ev,o.basePendente?null:o.inicio,o.basePendente?null:s.sel);if(!o.basePendente&&o.tipo==='mover'&&ortoAtivo(ev))s.mouse=orto(o.inicio,s.mouse);if(!o.basePendente)entrada(s.mouse,o.tipo==='offset'?'Offset':'Mover',true)}
-    render()
+    renderLogo()
   }
   function up(ev){if(!s?.drag)return;const d=s.drag;s.drag=null;if(svg.hasPointerCapture(ev.pointerId))svg.releasePointerCapture(ev.pointerId);if(!d.pan&&d.mudou){s.undo.push(d.antes);s.redo=[];mudou()}else render()}
-  function wheel(ev){if(!s)return;ev.preventDefault();const b=svg.getBoundingClientRect(),p=[ev.clientX-b.left,ev.clientY-b.top],w=mundo(p);s.escala=Math.max(.01,Math.min(ESCALA_MAX,s.escala*Math.exp(-ev.deltaY*.001)));const q=G.rot(w,s.angulo);s.centro=[q[0]-(p[0]-larguraDesenho()/2)/s.escala,q[1]+(p[1]-s.h/2)/s.escala];render()}
+  function wheel(ev){if(!s)return;ev.preventDefault();const b=svg.getBoundingClientRect(),p=[ev.clientX-b.left,ev.clientY-b.top],w=mundo(p);s.escala=Math.max(.01,Math.min(ESCALA_MAX,s.escala*Math.exp(-ev.deltaY*.001)));const q=G.rot(w,s.angulo);s.centro=[q[0]-(p[0]-larguraDesenho()/2)/s.escala,q[1]+(p[1]-s.h/2)/s.escala];renderLogo()}
   /**
    * EDITAR A MEDIDA DE UM LADO (duplo clique na cota). O lado passa a ter a
    * medida digitada, na MESMA DIREÇÃO: uma ponta fica parada (verde) e a outra
@@ -428,7 +430,42 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // linhas de construção, e não entram no resultado.
     if(livre()){const fs=s.linhas.filter(l=>G.fechada(l.pontos));s.resultado=fs.length===1?{partes:[fs[0].pontos],erro:null}:{partes:[],erro:fs.length?'Há mais de um contorno fechado. Exclua o que sobra.':`Feche o contorno ${edif()?'da construção':'do lote'}: clique de novo no primeiro vértice, ou use o Fillet (F) com raio 0.`,orientacao:!fs.length};return}
     if(s.tipo==='desmembramento'){s.resultado=G.dividir(ring(s.originais[0]),s.linhas.map(l=>l.pontos));const ordem=s.ordem||[];s.resultado.partes.sort((a,b)=>{const ia=ordem.indexOf(parteKey(a)),ib=ordem.indexOf(parteKey(b));return (ia<0?Infinity:ia)-(ib<0?Infinity:ib)})}else s.resultado={partes:s.uniao?[ring({geometry:s.uniao})]:[],erro:s.uniao?null:s.erroUniao||(s.loading?'Calculando unificação…':'Não foi possível preparar a unificação.')}}
-  function path(ps,close=false){return ps.map((p,i)=>{const q=tela(p);return `${i?'L':'M'}${q[0].toFixed(3)},${q[1].toFixed(3)}`}).join(' ')+(close?'Z':'')}
+  /**
+   * O caminho SVG de pontos do desenho, RECORTADO numa caixa em volta da tela
+   * (uma tela de folga de cada lado). No zoom alto (até 50.000 px/m) um
+   * vizinho a 50 m da vista ia parar a milhões de pixels, e o navegador
+   * rasterizava tudo isso a cada giro da roda — a prancheta ficava pesada
+   * (24/10/2026). O que está todo fora sai vazio; o que entra em parte é
+   * recortado (polígono: Sutherland–Hodgman; linha: lado a lado).
+   */
+  function path(ps,close=false){
+    const t=ps.map(tela),M=Math.max(s.w,s.h),x0=-M,y0=-M,x1=s.w+M,y1=s.h+M,f=q=>`${q[0].toFixed(3)},${q[1].toFixed(3)}`
+    let bx0=Infinity,by0=Infinity,bx1=-Infinity,by1=-Infinity
+    for(const q of t){if(q[0]<bx0)bx0=q[0];if(q[0]>bx1)bx1=q[0];if(q[1]<by0)by0=q[1];if(q[1]>by1)by1=q[1]}
+    if(bx1<x0||bx0>x1||by1<y0||by0>y1)return ''
+    if(bx0>=x0&&bx1<=x1&&by0>=y0&&by1<=y1)return t.map((q,i)=>`${i?'L':'M'}${f(q)}`).join(' ')+(close?'Z':'')
+    if(close){
+      let r=t
+      for(const [dentro,corte] of [[q=>q[0]>=x0,(a,b)=>[x0,a[1]+(b[1]-a[1])*(x0-a[0])/(b[0]-a[0])]],[q=>q[0]<=x1,(a,b)=>[x1,a[1]+(b[1]-a[1])*(x1-a[0])/(b[0]-a[0])]],
+        [q=>q[1]>=y0,(a,b)=>[a[0]+(b[0]-a[0])*(y0-a[1])/(b[1]-a[1]),y0]],[q=>q[1]<=y1,(a,b)=>[a[0]+(b[0]-a[0])*(y1-a[1])/(b[1]-a[1]),y1]]]){
+        const sai=[];for(let i=0;i<r.length;i++){const a=r[(i-1+r.length)%r.length],b=r[i],da=dentro(a),db=dentro(b);if(db){if(!da)sai.push(corte(a,b));sai.push(b)}else if(da)sai.push(corte(a,b))}
+        r=sai;if(!r.length)return ''
+      }
+      return r.map((q,i)=>`${i?'L':'M'}${f(q)}`).join(' ')+'Z'
+    }
+    // Linha aberta: cada lado recortado (Liang–Barsky); trechos contínuos num só "M…L…".
+    let h='',fim=null
+    for(let i=1;i<t.length;i++){const a=t[i-1],b=t[i],d=[b[0]-a[0],b[1]-a[1]];let u0=0,u1=1,ok=true
+      for(const [p,q] of [[-d[0],a[0]-x0],[d[0],x1-a[0]],[-d[1],a[1]-y0],[d[1],y1-a[1]]]){if(p===0){if(q<0){ok=false;break}continue}const u=q/p;if(p<0){if(u>u1){ok=false;break}if(u>u0)u0=u}else{if(u<u0){ok=false;break}if(u<u1)u1=u}}
+      if(!ok)continue
+      const ini=[a[0]+d[0]*u0,a[1]+d[1]*u0],fi=[a[0]+d[0]*u1,a[1]+d[1]*u1]
+      h+=(fim&&Math.abs(fim[0]-ini[0])<1e-6&&Math.abs(fim[1]-ini[1])<1e-6?'':`M${f(ini)}`)+`L${f(fi)}`;fim=fi}
+    return h
+  }
+  // UM REDESENHO POR QUADRO: girar a roda ou mover o mouse dispara dezenas de
+  // eventos por quadro, e cada um redesenhava a prancheta inteira.
+  let quadroPendente=0
+  function renderLogo(){if(quadroPendente)return;quadroPendente=requestAnimationFrame(()=>{quadroPendente=0;render()})}
   function texto(p,t,cls='pc-label'){const q=tela(p);return `<text class="${cls}" x="${q[0]}" y="${q[1]}" text-anchor="middle">${e(t)}</text>`}
   function cota(a,b,t,lado=1,cls='pc-cota',attrs=''){const mid=G.mul(G.add(a,b),.5),q=tela(G.add(mid,G.mul(G.normal(a,b),lado*30/s.escala)));return `<text class="${cls}" ${attrs} x="${q[0]}" y="${q[1]}" text-anchor="middle" dominant-baseline="middle">${e(t)}</text>`}
   function centro(r){const a=r.slice(0,-1);const m=G.mul(a.reduce(G.add,[0,0]),1/a.length);if(G.dentro(m,r))return m;for(let i=1;i<r.length;i++){const mid=G.mul(G.add(r[i-1],r[i]),.5),n=G.normal(r[i-1],r[i]);for(const sign of [1,-1]){const q=G.add(mid,G.mul(n,sign*.1));if(G.dentro(q,r))return q}}return m}
@@ -493,6 +530,13 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     for(const a of s.anotacoes)h+=texto(posicaoConfronto(a.p,a.texto),a.texto,'pc-confronto')
     // ONDE O CONTORNO SE CRUZA: círculo vermelho em cada ponto, por cima de tudo.
     for(const p of s.cruzamentos||[]){const q=tela(p);h+=`<g class="pc-cruzamento" pointer-events="none"><circle cx="${q[0]}" cy="${q[1]}" r="11" fill="#dc2626" fill-opacity=".15" stroke="#dc2626" stroke-width="2.5"/><circle cx="${q[0]}" cy="${q[1]}" r="2.5" fill="#dc2626"/></g>`}
+    // PROXIMIDADES: um anel laranja numerado em cada lugar da lista; no
+    // escolhido, os dois lados em destaque (roxo e azul) e o vértice que anda.
+    if(s.prox?.aberto)s.prox.itens.forEach((it,k)=>{const q=tela(it.p),sel=s.prox.sel===k
+      if(sel&&it.i!=null){const l=s.linhas.find(x=>x.id===it.id);if(l){const pts=G.fechada(l.pontos)?l.pontos.slice(0,-1):l.pontos,n=pts.length
+        h+=`<path d="${path([pts[it.i],pts[(it.i+1)%n]])}" stroke="#a855f7" stroke-width="5" opacity=".8" fill="none" pointer-events="none"/><path d="${path([pts[it.j],pts[(it.j+1)%n]])}" stroke="#0891b2" stroke-width="5" opacity=".8" fill="none" pointer-events="none"/>`
+        if(it.vertice!=null){const v=tela(pts[it.vertice]);h+=`<circle cx="${v[0]}" cy="${v[1]}" r="7" fill="#f97316" stroke="white" stroke-width="2" pointer-events="none"/>`}}}
+      h+=`<g class="pc-proximidade" pointer-events="none"><circle cx="${q[0]}" cy="${q[1]}" r="${sel?16:13}" fill="none" stroke="#f97316" stroke-width="${sel?3:2}" stroke-dasharray="4 3"/><text x="${q[0]+16}" y="${q[1]-12}" font-size="12" font-weight="700" fill="#c2410c" paint-order="stroke" stroke="white" stroke-width="3">${k+1}</text></g>`})
     const north=G.rot([0,1],s.angulo);h+=`<g transform="translate(${s.w-38} 42)"><path d="M0 0L${north[0]*22} ${-north[1]*22}" stroke="#243b4b" stroke-width="2"/><text x="${north[0]*32}" y="${-north[1]*32}" text-anchor="middle" font-size="12">N</text></g>`
     const passo=10**Math.floor(Math.log10(120/s.escala)), px=passo*s.escala;h+=`<path d="M25 ${s.h-35}v7h${px}v-7" fill="none" stroke="#243b4b"/><text x="25" y="${s.h-40}" font-size="11">${passo>=1?fmtNum(passo)+' m':passo>=.01?Math.round(passo*100)+' cm':Math.round(passo*1000)+' mm'}</text>`
     svg.innerHTML=h
@@ -640,6 +684,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     const centroGeo=opts.centro||originais[0].geometry.coordinates[0][0]
     s={tipo,ids:ids.map(Number),protocoloId,originais,opts,plano:G.plano(centroGeo),linhas:[],traco:[],anotacoes:[],contexto:[],angulo:0,centro:[0,0],escala:1,undo:[],redo:[],dados:{},numero:'',justificativa:atoState.justificativa||'',ferramenta:tipo==='novo'||tipo==='edificacao'||tipo==='fracao_ideal'?'linha':'selecionar',sel:null,ref:null,operacao:null,drag:null,mouse:null,mapa:true,valor:'',leitura:!!salva,resultado:{partes:[]},uniao:null,revisado:null,raio:0,fillet:{primeiro:null,erro:null}}
     s.loading=!salva
+    if($('pc-prox'))$('pc-prox').hidden=true   // a lista era do lote anterior
     // Editar lote: o próprio contorno é a linha que se edita (fechada).
     if(tipo==='edicao'&&!salva){const r=ring(originais[0]);s.linhas=[{id:crypto.randomUUID(),pontos:r}];s.sel=s.linhas[0].id}
     // Lote novo reaberto para correção: o contorno que já estava pronto volta.
@@ -959,5 +1004,95 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   }
   function exportar(){if(!s)return;const clone=svg.cloneNode(true);clone.querySelectorAll('image,[data-snap],.pc-snap').forEach(n=>n.remove());clone.removeAttribute('id');clone.setAttribute('width',s.w);clone.setAttribute('height',s.h);const style=document.createElementNS('http://www.w3.org/2000/svg','style');style.textContent='.pc-label,.pc-cota,.pc-confronto,.pc-vizinho{font:12px sans-serif;fill:#243b4b;paint-order:stroke;stroke:white;stroke-width:4px}.pc-hit{fill:none;stroke:transparent;stroke-width:14}.pc-confronto{font-weight:bold}.pc-snap{font:12px sans-serif;fill:#16803c}';clone.prepend(style);const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));const a=document.createElement('a');a.href=url;a.download=`${s.tipo}-${s.ids.join('-')}.svg`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   async function verSalvas(id){try{const r=await fetch(`/api/lotes/${id}/pranchas`,{headers:{Accept:'application/json'}});const d=await r.json();if(!r.ok)throw new Error(d.message);if(!d.pranchas.length){toast('Este imóvel ainda não possui prancha finalizada.', 'aviso');return}const p=d.pranchas[0];await abrir(p.tipo,p.visualizacao.originais.map(f=>f.properties.id),null,p.visualizacao)}catch(err){toast(err.message,'err')}}
-  return {esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  // ── PROXIMIDADES ─────────────────────────────────────────────
+  //
+  // Lados da mesma linha que não são vizinhos e passam a menos de 5 cm um do
+  // outro. Numa faixa estreita, o banco confere sobre a curvatura da Terra e
+  // vê ali um cruzamento que o desenho não mostra (24/10/2026). O painel lista
+  // cada lugar; "Ir" enquadra no zoom certo, "Afastar" empurra o vértice até a
+  // folga digitada (10 cm por padrão), "Excluir" tira o vértice que sobra. Os
+  // pontos que o servidor devolveu na última conferência entram também.
+  const PROX_LIMITE_M=.05
+  function calcularProximidades(){
+    const itens=[],perto=(a,b)=>G.len(G.sub(a,b))
+    for(const l of s.linhas){
+      const f=G.fechada(l.pontos),pts=f?l.pontos.slice(0,-1):l.pontos,n=pts.length,nl=f?n:n-1
+      if(n<3)continue
+      for(let i=0;i<nl;i++)for(let j=i+2;j<nl;j++){
+        if(f&&i===0&&j===n-1)continue
+        const a=pts[i],b=pts[(i+1)%n],c=pts[j],d=pts[(j+1)%n],x=G.inter(a,b,c,d)
+        if(x){itens.push({id:l.id,i,j,d:0,p:x.p,meio:{seg:i,p:x.p},laco:Math.min(j-i,f?n-(j-i):Infinity)<=8});continue}
+        // A ponta mais perto do outro lado é o vértice que se afasta.
+        let m=null
+        for(const [v,k,o0,o1] of [[a,i,c,d],[b,(i+1)%n,c,d],[c,j,a,b],[d,(j+1)%n,a,b]]){const q=G.pe(v,o0,o1),dist=perto(v,q);if(!m||dist<m.d)m={d:dist,v:k,q}}
+        if(m.d<PROX_LIMITE_M)itens.push({id:l.id,i,j,d:m.d,p:G.mul(G.add(pts[m.v],m.q),.5),vertice:m.v})
+      }
+    }
+    // O servidor achou o que a conta daqui não acha: entra como "apontado pelo servidor".
+    for(const p of s.cruzServidor||[]){if(itens.some(it=>perto(it.p,p)<.02))continue
+      let m=null;for(const l of s.linhas){const f=G.fechada(l.pontos),pts=f?l.pontos.slice(0,-1):l.pontos;pts.forEach((v,k)=>{const dist=perto(v,p);if(!m||dist<m.d)m={id:l.id,v:k,d:dist}})}
+      if(m)itens.push({id:m.id,i:null,j:null,d:null,p,vertice:m.v,servidor:true})}
+    const unicos=[];for(const it of itens)if(!unicos.some(u=>perto(u.p,it.p)<.01))unicos.push(it)
+    return unicos.sort((x,y)=>(x.d??1)-(y.d??1))
+  }
+  function proximidades(){if(!s)return;if(s.prox?.aberto){proxFechar();return}s.prox={aberto:true,folga:s.prox?.folga??.1,sel:null,itens:[]};atualizarProx()}
+  function proxFechar(){if(!s)return;s.prox={...(s.prox||{}),aberto:false,sel:null};$('pc-prox').hidden=true;render()}
+  function atualizarProx(){if(!s?.prox?.aberto)return;s.prox.itens=calcularProximidades();if(s.prox.sel>=s.prox.itens.length)s.prox.sel=null;pintarProx();render()}
+  function pintarProx(){
+    const el=$('pc-prox'),p=s.prox
+    const mm=d=>d==null?'apontado pelo servidor':d===0?'encostados':d<.01?`${fmtNum(Math.round(d*10000)/10)} mm`:`${fmtNum(Math.round(d*1000)/10)} cm`
+    el.hidden=false
+    el.innerHTML=`<header><b>Proximidades</b><small>lados a menos de ${PROX_LIMITE_M*100} cm</small><button type="button" class="pc-prox-x" onclick="PranchetaCad.proxFechar()" aria-label="Fechar">✕</button></header>
+      <label class="pc-prox-folga">Afastar até <input id="pc-prox-folga" inputmode="decimal" value="${String(p.folga).replace('.',',')}" onchange="PranchetaCad.proxFolga(this.value)"> m</label>
+      ${p.itens.length?`<ol>${p.itens.map((it,k)=>`<li class="${p.sel===k?'sel':''}"><span>${it.i!=null?`lados ${it.i+1} e ${it.j+1}`:'vértice '+(it.vertice+1)} · <b>${mm(it.d)}</b></span>
+        <span class="pc-prox-acoes"><button type="button" class="btn sm" onclick="PranchetaCad.proxIr(${k})">Ir</button><button type="button" class="btn sm primary" onclick="PranchetaCad.proxAfastar(${k})" title="${it.laco?'Tira o laço: fica só o ponto do cruzamento':'Empurra o vértice até a folga'}">${it.laco?'Desatar':'Afastar'}</button>${it.vertice!=null?`<button type="button" class="btn sm" onclick="PranchetaCad.proxExcluir(${k})" title="Exclui o vértice que está perto demais">Excluir vértice</button>`:''}</span></li>`).join('')}</ol>`
+        :'<p class="pc-prox-vazio">Nenhum par de lados a menos de 5 cm. Se o Conferir ainda recusar, é outro problema.</p>'}`
+  }
+  function proxFolga(v){const n=Number(String(v).replace(',','.'));if(Number.isFinite(n)&&n>0&&n<=5)s.prox.folga=n;else $('pc-prox-folga').value=String(s.prox.folga).replace('.',',')}
+  /** Enquadra o lugar: a folga em volta ocupa boa parte da tela. */
+  function proxIr(k){const it=s?.prox?.itens[k];if(!it)return;s.prox.sel=k
+    const vao=Math.max(.04,(it.d||0)*20);s.escala=Math.min(ESCALA_MAX,.6*larguraDesenho()/vao);s.centro=G.rot(it.p,s.angulo);pintarProx();render()}
+  /**
+   * O vértice vai para a folga, na perpendicular do outro lado. Lados que SE
+   * CRUZAM com poucos vértices entre eles formam um laço (a "gravata" no arco
+   * de uma quina): aí o laço sai e fica o ponto do cruzamento — "Desatar".
+   * Afastar não desfaz um laço (achado no lote 1 do banco local, 24/10/2026).
+   */
+  function proxAfastar(k){
+    const it=s?.prox?.itens[k];if(!it)return;const l=s.linhas.find(x=>x.id===it.id);if(!l)return
+    const f=G.fechada(l.pontos);let pts=f?l.pontos.slice(0,-1):l.pontos.slice(),n=pts.length,v=it.vertice
+    antes()
+    if(it.laco){
+      const dentro=it.j-it.i,X=[...it.meio.p]
+      pts=!f||dentro<=n-dentro?[...pts.slice(0,it.i+1),X,...pts.slice(it.j+1)]:[X,...pts.slice(it.i+1,it.j+1)]
+      l.pontos=f?[...pts,[...pts[0]]]:pts;s.prox.sel=null;mudou();return
+    }
+    if(v==null){pts.splice(it.meio.seg+1,0,[...it.meio.p]);n++;v=it.meio.seg+1}
+    // O outro lado: o mais perto do vértice entre os que não encostam nele. Na
+    // ponta de um "V", afastar de um lado aproxima do outro: repete até a
+    // folga valer para todos.
+    const maisPerto=()=>{let o=null;for(let k2=0;k2<(f?n:n-1);k2++){if(k2===v||(k2+1)%n===v)continue;const q=G.pe(pts[v],pts[k2],pts[(k2+1)%n]),dist=G.len(G.sub(q,pts[v]));if(!o||dist<o.d)o={d:dist,q,a:pts[k2],b:pts[(k2+1)%n]}}return o}
+    if(!maisPerto()){s.undo.pop();return}
+    for(let volta=0;volta<20;volta++){
+      const outro=maisPerto();if(outro.d>=s.prox.folga-1e-6)break
+      let dir=G.sub(pts[v],outro.q)
+      if(G.len(dir)<1e-9){const nn=G.normal(outro.a,outro.b),viz=G.mul(G.add(pts[(v-1+n)%n],pts[(v+1)%n]),.5);dir=G.dot(G.sub(viz,outro.q),nn)>=0?nn:G.mul(nn,-1)}
+      pts[v]=G.add(outro.q,G.mul(G.unit(dir),s.prox.folga))
+    }
+    l.pontos=f?[...pts,[...pts[0]]]:pts
+    s.prox.sel=null;mudou()
+  }
+  function proxExcluir(k){
+    const it=s?.prox?.itens[k];if(!it||it.vertice==null)return;const l=s.linhas.find(x=>x.id===it.id);if(!l)return
+    const f=G.fechada(l.pontos),pts=f?l.pontos.slice(0,-1):l.pontos.slice()
+    if(pts.length<=(f?3:2)){toast('A linha ficaria com poucos vértices.','aviso');return}
+    antes();pts.splice(it.vertice,1);l.pontos=f?[...pts,[...pts[0]]]:pts;s.prox.sel=null;mudou()
+  }
+  /** Clique perto de um lugar listado (ou de uma marca vermelha) enquadra ele. */
+  function proxNoClique(p){if(!s?.prox?.aberto)return false
+    const q=tela(p);let melhor=null
+    s.prox.itens.forEach((it,k)=>{const t=tela(it.p),d=Math.hypot(t[0]-q[0],t[1]-q[1]);if(d<16&&(!melhor||d<melhor.d))melhor={k,d}})
+    if(!melhor)return false;proxIr(melhor.k);return true}
+
+  return {proximidades,proxFechar,proxIr,proxAfastar,proxExcluir,proxFolga,esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()
