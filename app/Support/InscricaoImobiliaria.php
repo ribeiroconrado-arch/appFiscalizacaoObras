@@ -87,6 +87,11 @@ final class InscricaoImobiliaria
             STR_PAD_LEFT
         );
 
+        $quadra = self::numeroDaQuadra($quadra);
+        if ($quadra === null) {
+            return null;
+        }
+
         $numero = $setor
             . $parte($bairro, 'bairro')
             . $parte($quadra, 'quadra')
@@ -96,6 +101,52 @@ final class InscricaoImobiliaria
         // Um número maior que a casa dele não é uma inscrição comprida: é um
         // dado que não cabe no formato, e dizer isso é melhor que truncar.
         return strlen($numero) === 15 ? $numero : null;
+    }
+
+    /**
+     * O número que a quadra ocupa na inscrição.
+     *
+     * Quadra com letra ganha um dígito a mais, a posição da letra:
+     * 82A → 821, 82B → 822, 82C → 823. É assim que o cadastro municipal grava
+     * (Parque Eldorado: quadra "46C" → 463; Primavera I: "80A" → 801). Antes a
+     * letra era jogada fora e a 82A virava a quadra 82, que é outro imóvel.
+     * O desenho escreve a mesma coisa de vários jeitos ("96/A", "109-A",
+     * "5 A"); todos valem.
+     *
+     * Só cabe de A a I (1 a 9): J ou além não tem dígito que o represente, e a
+     * inscrição fica sem montar em vez de cair na quadra de outro.
+     *
+     * @param  int|string|null  $quadra
+     * @return string|null  só dígitos; null se a letra não couber
+     */
+    public static function numeroDaQuadra($quadra): ?string
+    {
+        $q = trim((string) $quadra);
+        if (preg_match('/^(\d+)\s*[-\/]?\s*([A-Za-z])$/', $q, $m)) {
+            $letra = ord(strtoupper($m[2])) - 64;
+
+            return $letra <= 9 ? (string) ((int) $m[1] * 10 + $letra) : null;
+        }
+
+        return preg_replace('/\D/', '', $q);
+    }
+
+    /**
+     * As grafias que o desenho pode ter usado para a quadra que aparece na
+     * inscrição — o caminho de volta de numeroDaQuadra(): 821 é a "821" ou a
+     * "82A". Sem zero à esquerda e sem separador ("82/A" e "82-A" se comparam
+     * como "82A").
+     *
+     * @return list<string>
+     */
+    public static function grafiasDaQuadra(int $quadra): array
+    {
+        $grafias = [(string) $quadra];
+        if ($quadra >= 10 && $quadra % 10 !== 0) {
+            $grafias[] = intdiv($quadra, 10) . chr(64 + $quadra % 10);
+        }
+
+        return $grafias;
     }
 
     /**

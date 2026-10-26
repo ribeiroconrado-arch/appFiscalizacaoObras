@@ -312,7 +312,10 @@ class BuscaController extends Controller
                 $n = InscricaoImobiliaria::normalizar($d['inscricao']);
                 $q->where(function ($s) use ($partes, $nomes, $n) {
                     $s->where(function ($p) use ($partes, $nomes) {
-                        $p->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [(string) $partes['quadra']])
+                        // 821 é a quadra "821" ou a "82A" (também escrita "82/A", "82-A").
+                        $grafias = InscricaoImobiliaria::grafiasDaQuadra($partes['quadra']);
+                        $p->whereRaw("REPLACE(REPLACE(REPLACE(TRIM(LEADING '0' FROM quadra), '/', ''), '-', ''), ' ', '') IN ("
+                                . implode(',', array_fill(0, count($grafias), '?')) . ')', $grafias)
                             ->whereRaw("TRIM(LEADING '0' FROM numero_lote) = ?", [(string) $partes['lote']])
                             ->where('desmembramento', $partes['variacao'])
                             ->whereIn('bairro', $nomes);
