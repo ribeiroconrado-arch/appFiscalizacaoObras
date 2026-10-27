@@ -136,6 +136,7 @@ class ImportacaoController extends Controller
     {
         if ($e = $this->exigirCurador($r)) { return $e; }
         $arquivo = $this->arquivoEnviado($r);
+        if ($e = $this->recusarPerimetro($arquivo)) { return $e; }
 
         try {
             $conf = $this->importacao->conferirArquivo($arquivo->getRealPath(), $arquivo->getClientOriginalName());
@@ -153,6 +154,7 @@ class ImportacaoController extends Controller
     {
         if ($e = $this->exigirCurador($r)) { return $e; }
         $arquivo = $this->arquivoEnviado($r);
+        if ($e = $this->recusarPerimetro($arquivo)) { return $e; }
 
         try {
             $imp = $this->importacao->gravar($arquivo->getRealPath(), $arquivo->getClientOriginalName(), $r->user(),
@@ -380,6 +382,18 @@ class ImportacaoController extends Controller
         }
 
         return response()->json(['message' => "Importação nº {$importacao->id} excluída: {$n} lotes apagados."]);
+    }
+
+    /**
+     * O arquivo do PERÍMETRO URBANO não é loteamento: sem isto ele entraria
+     * como zero lotes. A tela troca de fluxo ao ver `perimetro: true`
+     * (perimetro-urbano.js); aqui é a garantia para quem chamar a API direto.
+     */
+    private function recusarPerimetro($arquivo): ?JsonResponse
+    {
+        return \App\Services\PerimetrosUrbanos::arquivoEhDePerimetro($arquivo->getRealPath())
+            ? response()->json(['message' => 'Este arquivo é do perímetro urbano, não de loteamento.', 'perimetro' => true], 422)
+            : null;
     }
 
     /** @return \Illuminate\Http\UploadedFile */

@@ -317,6 +317,7 @@ function pintarJanelaConferencia() {
       ${r.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
       ${r.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${r.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
       ${confState.itens.length === 0 ? '<div class="cad-nota imp-nota">Nenhuma pendência aberta neste bairro.</div>' : ''}
+      ${r.area_arredondamento ? `<div class="cad-nota imp-nota">${Number(r.area_arredondamento).toLocaleString('pt-BR')} lote(s) com diferença de arredondamento (até 0,02 m², medidas quebradas) resolvido(s) sozinho(s): vale a área do cadastro.</div>` : ''}
       ${r.tolerancia_area?.valor ? `<div class="cad-nota imp-nota">Diferença de área de até ${Number(r.tolerancia_area.valor).toLocaleString('pt-BR')} ${r.tolerancia_area.unidade === 'pct' ? '%' : 'm²'} não foi contada como divergência.</div>` : ''}
       ${confState.filtro ? `<div class="conf-filtro-aviso">Mostrando só <b>${esc(CONF_TIPOS[confState.filtro].rotulo)}</b>. <a href="#" onclick="event.preventDefault(); _confFiltrar(null)">Mostrar todas</a></div>` : ''}
       ${Object.keys(CONF_TIPOS).filter(t => !confState.filtro || t === confState.filtro).map(grupo).join('')}

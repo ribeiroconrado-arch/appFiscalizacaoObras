@@ -59,20 +59,36 @@ $fonte = new class implements FonteDoCadastro {
 $linha = fn (object $l, string $insc, ?float $area) => ['inscricao' => $insc, 'quadra' => $l->quadra, 'lote' => $l->numero_lote,
     'isencao' => 'Normal', 'area_terreno_m2' => $area, 'endereco' => null];
 
+// O centésimo só é divergência em lote de medidas INTEIRAS; no de medidas
+// quebradas é arredondamento (26/10/2026). Um de cada, pela geometria real.
+$quebrada = function (object $l): bool {
+    $gj = DB::table('lotes')->where('id', $l->id)->selectRaw('ST_AsGeoJSON(geom) g')->value('g');
+    return ConferenciaComCadastro::temMedidaQuebrada(App\Support\GeometriaPlana::projetar(json_decode($gj, true)['coordinates'][0]));
+};
+$iInteira = $lotes->search(fn ($p) => ! $quebrada($p[0]));
+$iQuebrada = $lotes->search(fn ($p) => $quebrada($p[0]));
+if ($iInteira === false || $iQuebrada === false || $lotes->count() < 5) {
+    throw new RuntimeException('O bairro do teste precisa de lotes de medidas inteiras e quebradas.');
+}
+$resto = $lotes->except([$iInteira, $iQuebrada])->values();
+
 DB::beginTransaction();
 try {
-    [$igual, $inscIgual]       = $lotes[0];   // área idêntica à do cadastro
-    [$centavo, $inscCentavo]   = $lotes[1];   // um centésimo de diferença
-    [$maior, $inscMaior]       = $lotes[2];   // cadastro bem maior
-    [$semArea, $inscSemArea]   = $lotes[3];   // cadastro não informa a área
+    [$igual, $inscIgual]       = $resto[0];   // área idêntica à do cadastro
+    [$centavo, $inscCentavo]   = $lotes[$iInteira];   // um centésimo de diferença, medidas inteiras
+    [$arred, $inscArred]       = $lotes[$iQuebrada];  // 0,02 m², medidas quebradas: arredondamento
+    [$maior, $inscMaior]       = $resto[1];   // cadastro bem maior
+    [$semArea, $inscSemArea]   = $resto[2];   // cadastro não informa a área
 
     // Área do desenho com casas além do centésimo: o que conta é o valor arredondado.
     DB::table('lotes')->where('id', $igual->id)->update(['area_gis_m2' => 360.004]);
     DB::table('lotes')->where('id', $centavo->id)->update(['area_gis_m2' => 250.00]);
     DB::table('lotes')->where('id', $maior->id)->update(['area_gis_m2' => 300.50]);
+    DB::table('lotes')->where('id', $arred->id)->update(['area_gis_m2' => 231.21]);
     $fonte->linhas = [
         $linha($igual, $inscIgual, 360.00),
         $linha($centavo, $inscCentavo, 250.01),
+        $linha($arred, $inscArred, 231.23),
         $linha($maior, $inscMaior, 312.00),
         $linha($semArea, $inscSemArea, null),
     ];
@@ -81,11 +97,13 @@ try {
     $svc = app(ConferenciaComCadastro::class);
     $r = $svc->conferirBairro($bairro, $fonte, 'Cadastro de teste');
     $dif = collect($r['area_diferente'])->keyBy('lote_id');
-    confere($r['casaram'] === 4, 'os quatro lotes casam pela inscrição');
+    confere($r['casaram'] === 5, 'os cinco lotes casam pela inscrição');
+    confere(! $dif->has($arred->id) && $r['area_arredondamento'] === 1,
+        'medidas quebradas: 0,02 m² é arredondamento — não é divergência, e conta à parte');
     confere(! $dif->has($igual->id), 'área igual ao centésimo (360,004 e 360,00) NÃO é divergência');
     confere($dif->has($centavo->id) && $dif[$centavo->id]['diferenca'] === -0.01
         && $dif[$centavo->id]['area_desenho'] === 250.0 && $dif[$centavo->id]['area_cadastro'] === 250.01,
-        'um centésimo de m² já é divergência, com as duas áreas e a diferença');
+        'medidas inteiras: um centésimo de m² já é divergência, com as duas áreas e a diferença');
     confere($dif->has($maior->id) && $dif[$maior->id]['diferenca'] === -11.5, 'diferença grande também, com o valor certo');
     confere(! $dif->has($semArea->id) && $r['sem_area_no_cadastro'] === 1, 'cadastro sem a área do terreno: não compara, e conta à parte');
     $outros = count($r['nao_encontrados']) + count($r['inativos']) + count($r['sem_lote']) + count($r['sem_inscricao']);
@@ -130,6 +148,14 @@ try {
     Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
     $areas = new App\Cadastro\AreaOficial();
     confere($areas->doCadastro($loteMaior) === 312.0 && $areas->doLote($loteMaior) === 312.0, 'com imóvel no cadastro: vale a área do cadastro, e não a do desenho');
+
+    // Quadra com letra: o desenho diz "80A", o cadastro grava 801 na inscrição e na coluna.
+    $insc801 = InscricaoImobiliaria::montar($r0['codigo_bairro'], '801', 77);
+    DB::table('cadastro_externo_imoveis')->insert(['inscricao' => $insc801, 'codigo_bairro' => $r0['codigo_bairro'],
+        'quadra' => '801', 'lote' => '77', 'area_terreno_m2' => 444.44, 'created_at' => now(), 'updated_at' => now()]);
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+    $comLetra = (object) ['bairro' => $loteMaior->bairro, 'quadra' => '80/A', 'numero_lote' => '77', 'area_gis_m2' => 440.0];
+    confere((new App\Cadastro\AreaOficial())->doCadastro($comLetra) === 444.44, 'quadra "80/A" do desenho acha o imóvel 801 do cadastro');
     Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
 
     echo "\n{$ok} verificações passaram.\n";

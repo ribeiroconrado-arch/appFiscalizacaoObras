@@ -4080,3 +4080,9 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 .rua-sem-tipo .par-linha{background:#fff}
 .rua-sem-tipo em{color:#92400E;font-style:normal}
 .rua-incompleta{display:inline-block;font-size:11px;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:0 5px}
+#med-barra{border:0}
+#med-barra .med-titulo{cursor:grab;touch-action:none;user-select:none}
+#med-barra .med-titulo:active{cursor:grabbing}
+#t-mapa > #med-barra.med-movel{position:fixed;z-index:925;max-width:none;transform:none;right:auto;box-sizing:border-box}
+body.prancheta-aberta #t-mapa > #med-barra{visibility:hidden}
+#t-mapa .cad-barra,#t-mapa .des-barra,#t-mapa .imp-barra,#t-mapa .corr-painel,#t-mapa .ctrl-camadas,#t-mapa > #pesq-barra{border:0}

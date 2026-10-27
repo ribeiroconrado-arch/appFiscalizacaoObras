@@ -7,6 +7,7 @@ use App\Cadastro\FonteDoCadastro;
 use App\Cadastro\PlanilhaDoCadastro;
 use Illuminate\Http\Request;
 use App\Models\ImportacaoLote;
+use App\Support\GeometriaPlana;
 use App\Support\InscricaoImobiliaria;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -29,6 +30,8 @@ use RuntimeException;
  * padrão é NÃO tolerar diferença nenhuma (decisão de 10/10/2026); quem confere
  * pode informar uma variação aceitável, em m² ou em % da área do cadastro —
  * inclusive zero (11/10/2026). A variação usada fica guardada no resultado.
+ * Exceção (26/10/2026): até 0,02 m² em lote de medidas quebradas é
+ * arredondamento e se resolve sozinho (ver areaDiferente).
  *
  * A diferença NÃO impede a importação nem a publicação: entra na lista de
  * divergências, para ser corrigida ou justificada. E é só AQUI que ela
@@ -61,6 +64,15 @@ class ConferenciaComCadastro
      * @var array{valor:float, unidade:'m2'|'pct'}|null
      */
     private ?array $tolerancia = null;
+
+    /** Diferença de área que, em lote de medidas quebradas, é arredondamento. */
+    private const ARREDONDAMENTO_M2 = 0.02;
+
+    /** Quanto um lado pode fugir do metro inteiro e ainda ser "inteiro" (imprecisão do desenho). */
+    private const LADO_INTEIRO_TOL_M = 0.005;
+
+    /** Quantas diferenças de arredondamento a conferência em curso resolveu. */
+    private int $arredondamentos = 0;
 
     /**
      * Define a variação aceitável de área para a próxima conferência.
@@ -129,6 +141,7 @@ class ConferenciaComCadastro
     {
         // A variação aceitável: a pedida agora, ou a da conferência que está sendo revista.
         $this->tolerancia ??= $anterior['tolerancia_area'] ?? null;
+        $this->arredondamentos = 0;
         $bairros = new BairrosDoDesenho();
         $nomes = $anterior['nomes_do_desenho'] ?? [$bairro];
         $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2', 'terreno_id', 'fracao_ideal_m2'];
@@ -225,6 +238,7 @@ class ConferenciaComCadastro
             'sem_inscricao'     => $semInscricao,
             'area_diferente'    => $areaDiferente,
             'tolerancia_area'   => $this->tolerancia ?? ['valor' => 0.0, 'unidade' => 'm2'],
+            'area_arredondamento' => (int) ($anterior['area_arredondamento'] ?? 0) + $this->arredondamentos,
             'casaram'           => (int) ($anterior['casaram'] ?? 0) + $casaramAgora,
             'lotes_conferidos'  => $conferidos,
             'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao) + count($areaDiferente),
@@ -379,6 +393,7 @@ class ConferenciaComCadastro
     private function calcular(string $bairro, FonteDoCadastro $fonte, string $descricaoFonte,
                               ?int $importacaoId, string $comoLigar): array
     {
+        $this->arredondamentos = 0;
         $bairros = new BairrosDoDesenho();
         $codigo = $bairros->codigos()[BairrosDoDesenho::chave($bairro)] ?? null;
         if (! $codigo) {
@@ -530,6 +545,8 @@ class ConferenciaComCadastro
             // não deu para comparar — e zero diferenças, sem este número,
             // pareceria que todas as áreas batem.
             'sem_area_no_cadastro' => $semAreaNoCadastro,
+            // Diferenças de arredondamento resolvidas sozinhas (ver areaDiferente).
+            'area_arredondamento' => $this->arredondamentos,
             'total_divergencias' => count($naoEncontrados) + count($inativos) + count($semLote) + count($semInscricao) + count($areaDiferente),
             // Planilha sem coluna de situação: "inativo no cadastro" não pôde
             // ser conferido — e zero inativos, sem este aviso, pareceria certeza.
@@ -569,12 +586,75 @@ class ConferenciaComCadastro
         if ($desenho !== null && abs($desenho - $cadastro) <= round($aceita, 2) + 0.000001) {
             return null;
         }
+        // ARREDONDAMENTO (26/10/2026): até 0,02 m² num lote de medidas
+        // quebradas não é erro de desenho — os lados já vêm com centímetros
+        // (10,19 × 22,53) e cada sistema arredonda a conta de um jeito. Não é
+        // divergência, e vale a área do cadastro, que já é a do resto do
+        // sistema (AreaOficial). Lote de medidas inteiras (12 × 20) não tem o
+        // que arredondar: 240,02 ali é desenho torto, e continua apontado.
+        if ($desenho !== null && empty($l->terreno_id)
+                && abs($desenho - $cadastro) <= self::ARREDONDAMENTO_M2 + 0.000001
+                && $this->medidasQuebradas((int) $l->id)) {
+            $this->arredondamentos++;
+
+            return null;
+        }
 
         return $this->lote($l, $inscricao) + [
             'area_desenho'  => $desenho,
             'area_cadastro' => $cadastro,
             'diferenca'     => $desenho !== null ? round($desenho - $cadastro, 2) : null,
         ];
+    }
+
+    /** Lote com algum lado sem metro inteiro (ver temMedidaQuebrada), pela geometria gravada. */
+    private function medidasQuebradas(int $loteId): bool
+    {
+        $gj = DB::table('lotes')->where('id', $loteId)->selectRaw('ST_AsGeoJSON(geom) g')->value('g');
+        $anel = $gj ? (json_decode($gj, true)['coordinates'][0] ?? []) : [];
+
+        return count($anel) >= 4 && self::temMedidaQuebrada(GeometriaPlana::projetar($anel));
+    }
+
+    /**
+     * Algum lado do anel (em metros) tem centímetros? 10,19 m sim; 12,00 m e
+     * 20,002 m não — o milímetro que sobra é imprecisão do desenho, não medida.
+     * O lado vai de CANTO a canto: vértice repetido ou no meio de uma reta
+     * (a menos de 1 cm dela) parte o lado em dois pedaços quebrados, e não é
+     * medida nenhuma.
+     *
+     * @param  list<array{0:float,1:float}>  $anel
+     */
+    public static function temMedidaQuebrada(array $anel): bool
+    {
+        if (count($anel) > 1 && $anel[0] == end($anel)) {
+            array_pop($anel);
+        }
+        // Tira o vértice que não é canto, até não sobrar nenhum.
+        do {
+            $tirou = false;
+            for ($i = 0, $n = count($anel); $n > 3 && $i < $n; $i++) {
+                [$a, $b, $c] = [$anel[($i - 1 + $n) % $n], $anel[$i], $anel[($i + 1) % $n]];
+                $ac = hypot($c[0] - $a[0], $c[1] - $a[1]);
+                $fora = $ac > 0 ? abs(($c[0] - $a[0]) * ($b[1] - $a[1]) - ($c[1] - $a[1]) * ($b[0] - $a[0])) / $ac : 0;
+                if (hypot($b[0] - $a[0], $b[1] - $a[1]) < 0.05 || $fora < 0.01) {
+                    array_splice($anel, $i, 1);
+                    $tirou = true;
+                    break;
+                }
+            }
+        } while ($tirou);
+
+        for ($i = 0, $n = count($anel); $i < $n; $i++) {
+            $p = $anel[$i];
+            $q = $anel[($i + 1) % $n];
+            $lado = hypot($q[0] - $p[0], $q[1] - $p[1]);
+            if (abs($lado - round($lado)) >= self::LADO_INTEIRO_TOL_M) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

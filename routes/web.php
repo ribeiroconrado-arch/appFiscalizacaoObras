@@ -116,6 +116,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/pranchetas/salvar', [\App\Http\Controllers\PranchetaController::class, 'salvar']);
         Route::get('/lotes/{lote}/pranchas', [\App\Http\Controllers\PranchetaController::class, 'historico']);
         Route::get('/mapa/extensao', [MapaController::class, 'extensao']);
+        // Perímetro urbano vigente (camada do mapa). Atualização: Importações.
+        Route::get('/mapa/perimetro', [\App\Http\Controllers\PerimetroUrbanoController::class, 'vigente'])->middleware('comprimir');
         // Contorno de cada bairro: o mapa de todos lê; o curador gera e grava.
         Route::get('/mapa/bairros', [BairroContornoController::class, 'index'])->middleware('comprimir');
         Route::get('/mapa/quadras', [BairroContornoController::class, 'quadras'])->middleware('comprimir');
@@ -217,6 +219,19 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/importacoes/{importacao}/descartar', [ImportacaoController::class, 'descartar']);
         Route::post('/importacoes/{importacao}/publicar', [ImportacaoController::class, 'publicar']);
         Route::post('/importacoes/{importacao}/excluir', [ImportacaoController::class, 'excluir']);
+
+        // Perímetro urbano — também pela tela de Importações. Curador carrega;
+        // só administrador publica (ver PerimetroUrbanoController).
+        Route::controller(\App\Http\Controllers\PerimetroUrbanoController::class)->group(function () {
+            Route::get('/perimetros', 'index');
+            Route::post('/perimetros/conferir', 'conferir')->middleware('throttle:pesado');
+            Route::post('/perimetros', 'carregar')->middleware('throttle:pesado');
+            Route::get('/perimetros/{perimetro}', 'mostrar')->whereNumber('perimetro');
+            Route::patch('/perimetros/{perimetro}', 'atualizar')->whereNumber('perimetro');
+            Route::get('/perimetros/{perimetro}/mapa', 'mapa')->whereNumber('perimetro')->middleware('comprimir');
+            Route::post('/perimetros/{perimetro}/publicar', 'publicar')->whereNumber('perimetro');
+            Route::post('/perimetros/{perimetro}/descartar', 'descartar')->whereNumber('perimetro');
+        });
 
         // Meu perfil — qualquer usuário autenticado, só sobre si mesmo
         Route::get('/perfil', [PerfilController::class, 'index']);

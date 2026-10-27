@@ -4298,11 +4298,10 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 {{-- Uma ferramenta do mapa por vez: busca, medir, curadoria, desenho. --}}
 <script src="@assetv('js/ferramentas-mapa.js')"></script>
 <script src="@assetv('js/geo.js')"></script>
-{{-- O perímetro urbano vem do servidor porque é configuração de município,
-     e não constante de código: outra prefeitura muda o retângulo sem tocar no
-     JavaScript. Ver config/gis.php. --}}
+{{-- O retângulo do "ver tudo": o do perímetro urbano VIGENTE (Importações →
+     perímetro); sem perímetro publicado, o do .env (config/gis.php). --}}
 <script>
-  const PERIMETRO_URBANO = @json(config('gis.perimetro_urbano'))
+  const PERIMETRO_URBANO = @json(\App\Services\PerimetrosUrbanos::retanguloParaOMapa())
 </script>
 <script src="@assetv('js/mapa.js')"></script>
 <script src="@assetv('js/vistoria.js')"></script>
@@ -4369,6 +4368,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
   {{-- Editar o contorno do bairro à mão (vértices, ímã, encostar no vizinho). --}}
   <script src="@assetv('js/contorno-editor.js')"></script>
 @endif
+{{-- Perímetro urbano: a camada é de todos; a atualização (Importações), do curador. --}}
+<script src="@assetv('js/perimetro-urbano.js')"></script>
 @if (auth()->user()->isAdmin())
   <script src="@assetv('js/parametros.js')"></script>
   <script src="@assetv('js/cadastro-municipal.js')"></script>

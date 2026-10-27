@@ -617,12 +617,23 @@ function _medPintarBarra() {
 }
 
 /** No celular, encaixa a barra na borda inferior do mapa, acima da navegação. */
+let medBarraPosicao = null
 function posicionarBarraMedicao() {
   const barra = document.getElementById('med-barra')
   const mapa = document.getElementById('map')
   if (!barra || !mapa) return
   const mobile = window.innerWidth <= 620
   const r = mapa.getBoundingClientRect()
+  if (medBarraPosicao) {
+    barra.style.width = Math.min(570, Math.max(0, r.width - 16)) + 'px'
+    const b = barra.getBoundingClientRect()
+    medBarraPosicao.x = Math.max(r.left + 8, Math.min(medBarraPosicao.x, r.right - b.width - 8))
+    medBarraPosicao.y = Math.max(r.top + 8, Math.min(medBarraPosicao.y, r.bottom - b.height - 8))
+    barra.style.left = medBarraPosicao.x + 'px'
+    barra.style.top = medBarraPosicao.y + 'px'
+    barra.style.bottom = 'auto'
+    return
+  }
   barra.style.left = mobile ? r.left + 'px' : ''
   barra.style.width = mobile ? r.width + 'px' : ''
   barra.style.bottom = mobile ? Math.max(0, window.innerHeight - r.bottom) + 'px' : ''
@@ -631,4 +642,30 @@ window.addEventListener('resize', posicionarBarraMedicao)
 document.addEventListener('DOMContentLoaded', () => {
   const mapa = document.getElementById('map')
   if (mapa) new ResizeObserver(posicionarBarraMedicao).observe(mapa)
+  const barra = document.getElementById('med-barra')
+  const cab = barra?.querySelector('.med-titulo')
+  if (!cab) return
+  cab.title = 'Arraste para mover a barra'
+  let arrasto = null
+  cab.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return
+    e.preventDefault(); e.stopPropagation()
+    const r = barra.getBoundingClientRect()
+    arrasto = { x: e.clientX, y: e.clientY, left: r.left, top: r.top }
+    medBarraPosicao = { x: r.left, y: r.top }
+    document.getElementById('t-mapa').appendChild(barra)
+    barra.classList.add('med-movel')
+    posicionarBarraMedicao()
+    cab.setPointerCapture(e.pointerId)
+  })
+  cab.addEventListener('pointermove', e => {
+    if (!arrasto) return
+    e.preventDefault(); e.stopPropagation()
+    medBarraPosicao = { x: arrasto.left + e.clientX - arrasto.x, y: arrasto.top + e.clientY - arrasto.y }
+    posicionarBarraMedicao()
+  })
+  const terminar = () => { arrasto = null }
+  cab.addEventListener('pointerup', terminar)
+  cab.addEventListener('pointercancel', terminar)
+  cab.addEventListener('lostpointercapture', terminar)
 })

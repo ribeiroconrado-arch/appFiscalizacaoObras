@@ -2,6 +2,7 @@
 
 namespace App\Cadastro;
 
+use App\Support\InscricaoImobiliaria;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -48,7 +49,13 @@ class AreaOficial
         $codigo = ltrim((string) $codigo, '0');
         $this->porBairro[$codigo] ??= $this->areasDoBairro($codigo);
 
-        return $this->porBairro[$codigo][self::chave($lote->quadra, $lote->numero_lote)] ?? null;
+        // Primeiro pela quadra como ela entra na inscrição (82A → 821, ver
+        // InscricaoImobiliaria::numeroDaQuadra); depois pela grafia do desenho.
+        $areas = $this->porBairro[$codigo];
+
+        return $areas[self::chave(InscricaoImobiliaria::numeroDaQuadra($lote->quadra) ?: $lote->quadra, $lote->numero_lote)]
+            ?? $areas[self::chave($lote->quadra, $lote->numero_lote)]
+            ?? null;
     }
 
     /** A área que VALE para o lote: a do cadastro, ou a do desenho na falta dela. */
@@ -68,11 +75,16 @@ class AreaOficial
                 // Imóvel que saiu da última carga não é referência: os presentes primeiro.
                 ->orderByRaw('ausente_desde_carga_id IS NOT NULL')
                 ->orderBy('inscricao')
-                ->get(['quadra', 'lote', 'area_terreno_m2']);
+                ->get(['inscricao', 'quadra', 'lote', 'area_terreno_m2']);
             foreach ($linhas as $l) {
                 // Várias linhas do mesmo lote são as construções dele, e repetem
                 // o mesmo terreno: vale a primeira.
                 $areas[self::chave($l->quadra, $l->lote)] ??= (float) $l->area_terreno_m2;
+                // E pela quadra da INSCRIÇÃO: o cadastro grava "801" na coluna
+                // quadra do lote que o desenho chama de "80A".
+                if ($p = InscricaoImobiliaria::partes($l->inscricao)) {
+                    $areas[self::chave($p['quadra'], $l->lote)] ??= (float) $l->area_terreno_m2;
+                }
             }
 
             return $areas;

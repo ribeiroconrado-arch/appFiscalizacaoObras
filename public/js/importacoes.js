@@ -57,7 +57,7 @@ async function _impPedir(url, opts = {}) {
   return d
 }
 
-function _impCorpo(html, titulo = 'Importações de bairro') {
+function _impCorpo(html, titulo = 'Importações') {
   document.getElementById('imp-titulo').textContent = titulo
   document.getElementById('imp-corpo').innerHTML = html
 }
@@ -189,6 +189,7 @@ async function carregarListaImportacoes() {
           <p class="imp-expl">O arquivo entra como <b>rascunho</b>: só você o vê, e dá para fazer a pré-curadoria
             e conferir com o cadastro antes de decidir. Ao <b>salvar</b>, fica <b>salva, não publicada</b>, na lista
             dos curadores. Ao <b>publicar</b> (administrador), o bairro passa a valer para todos.</p>
+          <div id="imp-perimetros"></div>
         </div>
         <div class="jt-rolagem">
           ${d.importacoes.length ? `
@@ -206,6 +207,8 @@ async function carregarListaImportacoes() {
         </div>
       </div>`)
     jtAplicar('imp-busca')
+    // O perímetro urbano também se atualiza por aqui (perimetro-urbano.js).
+    if (typeof pintarPerimetrosNaLista === 'function') pintarPerimetrosNaLista()
   } catch (e) {
     _impCorpo(`<div class="cad-nota cad-erro">${esc(e.message)}</div>`)
   }
@@ -235,8 +238,8 @@ function novaImportacao() {
     <div class="jt">
       <div class="jt-topo">
         <div class="imp-passos" id="imp-passo-arquivo"><b>1 Arquivo</b> › 2 Leitura › 3 Pré-curadoria e conferência › 4 Salvar</div>
-        <p class="imp-expl">O DWG da topografia é convertido antes, com <span class="mono">gis/tools/dxf_para_geojson.py</span>.
-          Nada é gravado nesta etapa: o sistema só lê o arquivo e mostra o que ele traz.</p>
+        <p class="imp-expl">O DWG é convertido antes, no conversor de GeoJSON: o <b>loteamento</b> ou o <b>perímetro urbano</b>
+          (o sistema reconhece qual é ao ler o arquivo). Nada é gravado nesta etapa: só a leitura do que ele traz.</p>
       </div>
       <div class="jt-rolagem jt-folga">
         <label class="imp-soltar" id="imp-soltar" for="imp-arquivo">
@@ -323,6 +326,12 @@ async function conferirArquivoImportacao() {
     : 'ou clique para escolher no computador · EPSG:4326, um bairro por arquivo'
 
   if (!arq) { alvo.innerHTML = ''; return }
+
+  // Arquivo do PERÍMETRO URBANO: outro fluxo (perimetro-urbano.js).
+  if (typeof arquivoEhPerimetro === 'function' && await arquivoEhPerimetro(arq)) {
+    abrirPerimetroNovo(arq)
+    return
+  }
 
   alvo.innerHTML = '<div class="vazio-msg">Lendo o arquivo…</div>'
   const fd = new FormData()
@@ -745,6 +754,7 @@ function _htmlConferenciaCadastro(i, c) {
         andamento ? corrigir('sem_lote', l) : ''), 'sem_lote')}
     ${c.area_diferente === undefined ? '<div class="cad-nota cad-aviso">Esta conferência é de antes da comparação de áreas. Confira de novo para apontar os lotes com metragem diferente da do cadastro.</div>' : ''}
     ${c.sem_area_no_cadastro ? `<div class="cad-nota cad-aviso">${c.sem_area_no_cadastro} imóvel(is) casaram pela inscrição, mas o cadastro não traz a área do terreno deles: a metragem não pôde ser comparada.</div>` : ''}
+    ${c.area_arredondamento ? `<div class="cad-nota imp-nota">${Number(c.area_arredondamento).toLocaleString('pt-BR')} lote(s) com diferença de arredondamento (até 0,02 m², medidas quebradas) resolvido(s) sozinho(s): vale a área do cadastro.</div>` : ''}
     ${grupo('Área do desenho diferente da área do cadastro', 'bd-er',
       [...(c.area_diferente || [])].sort((a, b) => Math.abs(b.diferenca ?? 0) - Math.abs(a.diferenca ?? 0)),
       l => linha(l, typeof _confAreas === 'function' ? _confAreas(l) : '', acaoDe('area_diferente')(l)), 'area_diferente')}
