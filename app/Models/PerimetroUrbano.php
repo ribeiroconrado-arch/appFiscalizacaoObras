@@ -20,7 +20,7 @@ class PerimetroUrbano extends Model
 
     protected $table = 'perimetros_urbanos';
     protected $guarded = [];
-    protected $hidden = ['geom'];
+    protected $hidden = ['geom', 'memorial_texto'];
 
     public const SITUACOES = [
         'rascunho' => 'Rascunho · não publicado',
@@ -32,6 +32,8 @@ class PerimetroUrbano extends Model
     {
         return [
             'comparacao'    => 'array',
+            'vertices'      => 'array',
+            'conferencia_memorial' => 'array',
             'lei_data'      => 'date',
             'vigente_desde' => 'date',
             'vigente_ate'   => 'date',

@@ -92,6 +92,8 @@ async function pintarPerimetrosNaLista() {
           <span class="per-cab-acoes">
             ${vig ? `<button class="btn sm" onclick="abrirPerimetro(${vig.id})">Abrir</button>` : ''}
             ${ant.length ? `<button class="btn sm" onclick="const v=document.getElementById('per-versoes'); v.hidden=!v.hidden">Versões anteriores (${ant.length})</button>` : ''}
+            ${vig ? `<button class="btn sm" onclick="abrirEditorMemorial({ base: ${vig.id} })" title="Os vértices da vigente já preenchidos: altere só o que a lei nova mudou">Nova versão a partir da vigente</button>` : ''}
+            <button class="btn sm" onclick="abrirEditorMemorial({})" title="Colar o memorial descritivo da lei ou digitar os vértices">Pelo memorial</button>
           </span>
         </div>
         ${rasc.map(p => `
@@ -110,8 +112,6 @@ async function pintarPerimetrosNaLista() {
               <button class="btn sm">Abrir</button>
             </div>`).join('')}
         </div>
-        ${!vig && !rasc.length ? `<p class="imp-expl">Para carregar: <b>+ Nova importação</b> e solte o .geojson do perímetro
-          (gerado no conversor com a camada no papel "Perímetro urbano"). O sistema reconhece o arquivo.</p>` : ''}
       </div>`
   } catch (e) {
     alvo.innerHTML = `<div class="cad-nota cad-erro">Perímetro urbano: ${esc(e.message)}</div>`
@@ -238,11 +238,14 @@ async function abrirPerimetro(id) {
           <dl class="per-dados">
             <dt>Vigência</dt><dd>${p.situacao === 'rascunho' ? 'ainda não vale'
               : `${_perData(p.vigente_desde)} ${p.vigente_ate ? 'a ' + _perData(p.vigente_ate) : 'até hoje'}`}</dd>
-            <dt>Arquivo</dt><dd>${esc(p.arquivo)}${p.fonte && p.fonte !== p.arquivo ? ` · DWG ${esc(p.fonte)}` : ''}${p.camada ? ` · camada ${esc(p.camada)}` : ''}</dd>
+            ${p.origem === 'memorial'
+              ? `<dt>Origem</dt><dd>Memorial descritivo · ${Number(p.vertices_total || 0)} vértices (UTM 21S, SIRGAS 2000)</dd>`
+              : `<dt>Arquivo</dt><dd>${esc(p.arquivo)}${p.fonte && p.fonte !== p.arquivo ? ` · DWG ${esc(p.fonte)}` : ''}${p.camada ? ` · camada ${esc(p.camada)}` : ''}</dd>`}
             <dt>Carregado</dt><dd>${esc(p.enviado_por || '—')} · ${esc(p.enviado_em || '—')}</dd>
             ${p.publicado_em ? `<dt>Publicado</dt><dd>${esc(p.publicado_em)}</dd>` : ''}
             ${!rascunho && p.observacao ? `<dt>Observação</dt><dd>${esc(p.observacao)}</dd>` : ''}
           </dl>
+          ${p.conferencia_memorial ? `<h4 class="per-tit">Conferência do memorial</h4>${_perHtmlItens(p.conferencia_memorial.itens)}` : ''}
           ${rascunho ? `<h4 class="per-tit">Lei</h4>${_perCamposDaLei(p)}
             <div class="btn-row"><button class="btn sm" onclick="gravarLeiDoPerimetro()">Gravar dados da lei</button></div>` : ''}
           ${p.situacao !== 'anterior' ? `<h4 class="per-tit">O que muda${rascunho ? '' : ' (na publicação)'}</h4>${_perHtmlComparacao(p.comparacao)}` : ''}
@@ -253,6 +256,8 @@ async function abrirPerimetro(id) {
           <div class="btn-row">
             <button class="btn" onclick="carregarListaImportacoes()">Voltar à lista</button>
             <button class="btn" onclick="verPerimetroNoMapa(${p.id})">Ver no mapa</button>
+            ${rascunho ? `<button class="btn" onclick="abrirEditorMemorial({ rascunho: ${p.id} })">${p.origem === 'memorial' ? 'Editar vértices' : 'Refazer pelo memorial'}</button>`
+              : (p.vertices_total ? `<button class="btn" onclick="abrirEditorMemorial({ base: ${p.id} })">Nova versão a partir desta</button>` : '')}
             ${rascunho && (p.meu || p.pode_publicar) ? `<button class="btn" onclick="pedirDescartePerimetro()">Descartar</button>` : ''}
             ${rascunho && p.pode_publicar ? `<button class="btn primary" onclick="pedirPublicacaoPerimetro()">Publicar</button>` : ''}
           </div>
@@ -408,4 +413,229 @@ function sairDoPerimetroNoMapa() {
   perState.revisao = null
   const b = document.getElementById('per-barra')
   if (b) b.hidden = true
+}
+
+// ── PELO MEMORIAL DESCRITIVO ──────────────────────────────────
+//
+// A lei define o perímetro pelos vértices (P-01 … P-n) em UTM 21S. Três jeitos
+// de chegar à tabela: colar o texto da lei e "Ler"; partir dos vértices da
+// versão vigente e alterar só o que a lei nova mudou; ou digitar. A conferência
+// é do servidor (MemorialDoPerimetro): cada trecho contra o azimute e a
+// distância da lei, área e perímetro declarados. Editou, confere de novo.
+
+const PER_TRECHOS = { seca: 'linha seca', corrego: 'córrego', serra: 'serra', estrada: 'estrada' }
+
+/** Número digitado: "8.287.874,960", "8287874,960" ou "8287874.960". */
+const _perNum = s => {
+  s = String(s ?? '').trim()
+  if (!s) return null
+  const n = s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s)
+  return Number.isFinite(n) ? n : null
+}
+const _perFmt = (n, casas = 3) => n == null ? '' : Number(n).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas, useGrouping: false })
+
+/**
+ * @param {{base?:number, rascunho?:number}} op  base: versão de onde copiar os
+ *   vértices (nova versão); rascunho: o rascunho que será refeito.
+ */
+async function abrirEditorMemorial(op = {}) {
+  const m = perState.memorial = { vertices: [], texto: '', area: null, perimetro: null, conferido: null, alvo: op.rascunho || null, base: null }
+  let aviso = ''
+  try {
+    const id = op.base || op.rascunho
+    if (id) {
+      const d = await _impPedir(`/api/perimetros/${id}/memorial`)
+      m.vertices = d.vertices || []
+      m.texto = op.rascunho ? (d.texto || '') : ''
+      m.area = d.conferencia?.area_declarada_m2 ?? null
+      m.perimetro = d.conferencia?.perimetro_declarado_m ?? null
+      if (op.base) {
+        m.base = d.rotulo
+        // A versão nova parte da área e do perímetro de AGORA: a lei nova declara os dela.
+        m.area = m.perimetro = null
+        aviso = m.vertices.length
+          ? `Vértices copiados de <b>${esc(d.rotulo)}</b>. Altere só o que a lei nova mudou — ou cole o memorial novo inteiro acima.`
+          : `<b>${esc(d.rotulo)}</b> veio de arquivo GeoJSON e não tem tabela de vértices: cole o memorial da lei nova.`
+      }
+    }
+  } catch (e) { toast(e.message, 'err') }
+
+  _impCorpo(`
+    <div class="jt">
+      <div class="jt-topo">
+        <div class="imp-passos"><b>1 Memorial</b> › 2 Conferência › 3 Rascunho › 4 Publicação (administrador)</div>
+        <p class="imp-expl">Vértices em <b>UTM 21S, SIRGAS 2000</b>, como na lei. As coordenadas definem o perímetro; azimute e
+          distância servem para conferir. ${m.alvo ? 'Ao gravar, o rascunho é refeito com estes vértices.' : ''}</p>
+      </div>
+      <div class="jt-rolagem jt-folga">
+        <details class="per-texto" ${m.vertices.length ? '' : 'open'}>
+          <summary>Texto do memorial (colar da lei)</summary>
+          <textarea id="per-mem-texto" rows="7" placeholder="Cole aqui o memorial descritivo: …vértice P-01 de coordenadas N=8287874,960 e E=793640,650… — ou uma tabela com vértice, N e E por linha.">${esc(m.texto)}</textarea>
+          <div class="btn-row"><button class="btn sm primary" onclick="lerTextoDoMemorial()">Ler o texto</button>
+            <span class="imp-sub">Substitui a tabela abaixo pelos vértices do texto.</span></div>
+        </details>
+        ${aviso ? `<div class="cad-nota imp-nota">${aviso}</div>` : ''}
+        <div class="per-declarados">
+          <div class="field"><label for="per-mem-area">Área declarada na lei (ha)</label>
+            <input id="per-mem-area" inputmode="decimal" placeholder="ex.: 8699,382" value="${m.area != null ? _perFmt(m.area / 10000) : ''}"></div>
+          <div class="field"><label for="per-mem-perim">Perímetro declarado (m)</label>
+            <input id="per-mem-perim" inputmode="decimal" placeholder="ex.: 71550,5" value="${m.perimetro != null ? _perFmt(m.perimetro, 1) : ''}"></div>
+        </div>
+        <div id="per-mem-tabela"></div>
+        <div id="per-mem-resultado"></div>
+        ${m.alvo ? '' : `<h4 class="per-tit">Lei</h4>${_perCamposDaLei()}`}
+      </div>
+      <div class="jt-rodape">
+        <span class="imp-sub" id="per-mem-status"></span>
+        <div class="btn-row">
+          <button class="btn" onclick="${m.alvo ? `abrirPerimetro(${m.alvo})` : 'carregarListaImportacoes()'}">Voltar</button>
+          <button class="btn" onclick="conferirMemorial()">Conferir</button>
+          <button class="btn primary" id="per-mem-gravar" disabled onclick="gravarMemorial()">${m.alvo ? 'Gravar no rascunho' : 'Carregar como rascunho'}</button>
+        </div>
+      </div>
+    </div>`, m.alvo ? 'Perímetro urbano · vértices do rascunho' : 'Perímetro urbano pelo memorial')
+  _perPintarTabela()
+  for (const id of ['per-mem-area', 'per-mem-perim']) document.getElementById(id).addEventListener('input', _perMemorialMudou)
+}
+
+/** A tabela de vértices. As linhas com trecho que não bate ficam marcadas depois de conferir. */
+function _perPintarTabela() {
+  const m = perState.memorial
+  const alvo = document.getElementById('per-mem-tabela')
+  if (!alvo) return
+  const ruins = new Map()   // linha → texto do problema
+  const trechos = m.conferido?.conferencia?.trechos || []
+  trechos.forEach((t, i) => {
+    if (t.ok) return
+    const linha = i + 1 < m.vertices.length ? i + 1 : 0
+    const partes = []
+    if (t.dif_distancia != null && Math.abs(t.dif_distancia) > 0.05) partes.push(`distância: lei ${_perFmt(t.distancia_lei)} m, coordenadas ${_perFmt(t.distancia_calc)} m`)
+    if (t.dif_azimute_seg != null && Math.abs(t.dif_azimute_seg) > 5) partes.push(`azimute: lei ${t.azimute_lei}, coordenadas ${t.azimute_calc}`)
+    ruins.set(linha, `${t.de} → ${t.para}: ${partes.join('; ')}`)
+  })
+  const fecha = m.vertices.length > 3 && m.vertices[0]?.p && m.vertices[m.vertices.length - 1]?.p === m.vertices[0].p
+  alvo.innerHTML = `
+    <div class="per-mem-cab"><b>${m.vertices.length} vértice(s)</b>
+      <button class="btn sm" onclick="_perInserir(${m.vertices.length})">+ vértice no fim</button></div>
+    ${m.vertices.length ? `
+    <div class="per-mem-rolagem">
+      <table class="per-mem">
+        <thead><tr><th>#</th><th>Vértice</th><th>N</th><th>E</th><th>Azimute</th><th>Distância (m)</th><th>Trecho</th><th></th></tr></thead>
+        <tbody>${m.vertices.map((v, i) => `
+          <tr class="${ruins.has(i) ? 'ruim' : ''}" ${ruins.has(i) ? `title="${esc(ruins.get(i))}"` : ''}>
+            <td class="num">${i + 1}</td>
+            <td><input data-i="${i}" data-c="p" value="${esc(v.p ?? '')}" maxlength="20">${fecha && i === m.vertices.length - 1 ? '<small>fecha</small>' : ''}</td>
+            <td><input data-i="${i}" data-c="n" inputmode="decimal" value="${_perFmt(v.n)}"></td>
+            <td><input data-i="${i}" data-c="e" inputmode="decimal" value="${_perFmt(v.e)}"></td>
+            <td><input data-i="${i}" data-c="azimute" value="${esc(v.azimute ?? '')}" placeholder="—" maxlength="20"></td>
+            <td><input data-i="${i}" data-c="distancia" inputmode="decimal" value="${_perFmt(v.distancia)}" placeholder="—"></td>
+            <td><select data-i="${i}" data-c="trecho">${Object.entries(PER_TRECHOS).map(([k, r]) => `<option value="${k}" ${v.trecho === k ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
+            <td class="per-mem-acoes"><button class="btn sm" title="Inserir vértice abaixo" onclick="_perInserir(${i + 1})">+</button><button class="btn sm" title="Remover" onclick="_perRemover(${i})">&#10005;</button></td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <p class="imp-sub">Azimute e distância de cada linha são os do trecho que <b>chega</b> no vértice. A última linha igual à primeira é o fechamento.</p>`
+    : '<div class="vazio-msg">Nenhum vértice ainda: cole o memorial acima e clique em "Ler o texto", ou acrescente vértice a vértice.</div>'}`
+  alvo.querySelectorAll('[data-c]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', e => {
+    const i = Number(e.target.dataset.i), c = e.target.dataset.c
+    const v = m.vertices[i]
+    v[c] = ['n', 'e', 'distancia'].includes(c) ? _perNum(e.target.value) : (e.target.value.trim() || null)
+    _perMemorialMudou()
+  }))
+}
+
+function _perInserir(i) {
+  perState.memorial.vertices.splice(i, 0, { p: '', n: null, e: null, azimute: null, distancia: null, trecho: perState.memorial.vertices[i - 1]?.trecho || 'seca' })
+  _perMemorialMudou()
+  _perPintarTabela()
+  document.querySelector(`#per-mem-tabela input[data-i="${i}"][data-c="p"]`)?.focus()
+}
+
+function _perRemover(i) {
+  perState.memorial.vertices.splice(i, 1)
+  _perMemorialMudou()
+  _perPintarTabela()
+}
+
+/** Mexeu em alguma coisa: o que foi conferido não vale mais. */
+function _perMemorialMudou() {
+  const m = perState.memorial
+  if (!m.conferido) return
+  m.conferido = null
+  document.getElementById('per-mem-gravar').disabled = true
+  document.getElementById('per-mem-status').textContent = 'Alterado: confira de novo antes de gravar.'
+}
+
+function _perDeclarados() {
+  const ha = _perNum(document.getElementById('per-mem-area')?.value)
+  return { area_declarada_m2: ha != null ? ha * 10000 : null, perimetro_declarado_m: _perNum(document.getElementById('per-mem-perim')?.value) }
+}
+
+async function lerTextoDoMemorial() {
+  const texto = document.getElementById('per-mem-texto').value
+  if (!texto.trim()) { toast('Cole o texto do memorial.', 'err'); return }
+  perState.memorial.texto = texto
+  // Os declarados vêm do texto: os campos só valem se foram preenchidos à mão depois.
+  document.getElementById('per-mem-area').value = ''
+  document.getElementById('per-mem-perim').value = ''
+  await conferirMemorial({ texto })
+}
+
+/** Confere no servidor: lê o texto (se veio) ou a tabela. */
+async function conferirMemorial(op = {}) {
+  const m = perState.memorial
+  const corpo = op.texto != null ? { texto: op.texto } : { vertices: m.vertices }
+  const res = document.getElementById('per-mem-resultado')
+  res.innerHTML = '<div class="vazio-msg">Conferindo…</div>'
+  try {
+    const d = await _impPedir('/api/perimetros/memorial/conferir', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...corpo, ..._perDeclarados() }),
+    })
+    m.vertices = d.vertices || []
+    m.conferido = d
+    if (d.area_declarada_m2 != null) document.getElementById('per-mem-area').value = _perFmt(d.area_declarada_m2 / 10000)
+    if (d.perimetro_declarado_m != null) document.getElementById('per-mem-perim').value = _perFmt(d.perimetro_declarado_m, 1)
+    if (op.texto != null) document.querySelector('.per-texto')?.removeAttribute('open')
+    _perPintarTabela()
+    const c = d.conferencia
+    res.innerHTML = `
+      <h4 class="per-tit">Conferência</h4>
+      ${_perHtmlItens(c.itens)}
+      ${c.bloqueia ? '' : `<div class="per-kpis">
+        <div class="imp-kpi"><small>Área (UTM)</small><b>${_perHa(c.area_m2)}</b></div>
+        <div class="imp-kpi"><small>Perímetro</small><b>${Number(c.perimetro_m).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m</b></div>
+        <div class="imp-kpi"><small>Vértices</small><b>${m.vertices.length - (m.vertices.length > 3 && m.vertices[0].p === m.vertices[m.vertices.length - 1].p ? 1 : 0)}</b></div>
+      </div>`}
+      ${d.comparacao ? `<h4 class="per-tit">O que muda</h4>${_perHtmlComparacao(d.comparacao)}` : ''}`
+    document.getElementById('per-mem-gravar').disabled = !!c.bloqueia
+    document.getElementById('per-mem-status').textContent = c.bloqueia ? 'Corrija os erros para gravar.' : 'Conferido.'
+  } catch (e) {
+    res.innerHTML = `<div class="cad-nota cad-erro">${esc(e.message)}</div>`
+  }
+}
+
+async function gravarMemorial() {
+  const m = perState.memorial
+  if (!m.conferido) { toast('Confira antes de gravar.', 'err'); return }
+  const b = document.getElementById('per-mem-gravar')
+  b.disabled = true
+  const corpo = { vertices: m.vertices, texto: m.texto || null, ..._perDeclarados(), ...(m.alvo ? {} : _perLeiDoFormulario()) }
+  for (const k of Object.keys(corpo)) if (corpo[k] === '') corpo[k] = null
+  try {
+    const d = await _impPedir(m.alvo ? `/api/perimetros/${m.alvo}/memorial` : '/api/perimetros/memorial', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+    })
+    toast(d.message)
+    await abrirPerimetro(m.alvo || d.id)
+  } catch (e) {
+    toast(e.message, 'err')
+    b.disabled = false
+  }
+}
+
+/** Os itens da conferência: ✓ ok, ! aviso, ✕ erro. */
+function _perHtmlItens(itens = []) {
+  const sinal = { ok: '✓', aviso: '!', erro: '✕' }
+  return `<ul class="per-itens">${itens.map(i => `<li class="${esc(i.nivel)}"><span>${sinal[i.nivel] || '·'}</span>${esc(i.texto)}</li>`).join('')}</ul>`
 }

@@ -226,6 +226,11 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
             Route::get('/perimetros', 'index');
             Route::post('/perimetros/conferir', 'conferir')->middleware('throttle:pesado');
             Route::post('/perimetros', 'carregar')->middleware('throttle:pesado');
+            // Pelo memorial descritivo da lei (vértices com coordenadas UTM).
+            Route::post('/perimetros/memorial/conferir', 'conferirMemorial')->middleware('throttle:pesado');
+            Route::post('/perimetros/memorial', 'carregarMemorial')->middleware('throttle:pesado');
+            Route::get('/perimetros/{perimetro}/memorial', 'memorial')->whereNumber('perimetro');
+            Route::post('/perimetros/{perimetro}/memorial', 'refazerMemorial')->whereNumber('perimetro')->middleware('throttle:pesado');
             Route::get('/perimetros/{perimetro}', 'mostrar')->whereNumber('perimetro');
             Route::patch('/perimetros/{perimetro}', 'atualizar')->whereNumber('perimetro');
             Route::get('/perimetros/{perimetro}/mapa', 'mapa')->whereNumber('perimetro')->middleware('comprimir');

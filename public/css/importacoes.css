@@ -579,3 +579,26 @@ path.ce-invasao{animation:ce-invasao 1.1s ease-in-out infinite alternate}
 .per-legenda i{width:14px;height:10px;border-radius:2px;display:inline-block}
 .per-legenda i.tracejado{border-top:2px dashed #6B7280;height:0;border-radius:0}
 @media (max-width:560px){ .per-lotes ul{columns:1} .per-dados{grid-template-columns:1fr} }
+/* Memorial descritivo do perímetro */
+.per-texto{margin:6px 0 10px}
+.per-texto summary{cursor:pointer;font-weight:600;font-size:13px;margin-bottom:6px}
+.per-texto textarea{width:100%;box-sizing:border-box;font:12px/1.4 ui-monospace,monospace;resize:vertical}
+.per-declarados{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:6px 0}
+.per-mem-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 4px}
+.per-mem-rolagem{max-height:46vh;overflow:auto;border:1px solid var(--bd,#E5E7EB);border-radius:8px}
+table.per-mem{border-collapse:collapse;width:100%;font-size:12px}
+table.per-mem th{position:sticky;top:0;background:var(--blt,#F3F4F6);text-align:left;padding:4px 6px;font-weight:600;z-index:1}
+table.per-mem td{padding:2px 4px;border-top:1px solid var(--bd,#E5E7EB);white-space:nowrap}
+table.per-mem input,table.per-mem select{font:inherit;padding:3px 5px;width:100%;min-width:64px;box-sizing:border-box}
+table.per-mem td:nth-child(3) input,table.per-mem td:nth-child(4) input{min-width:110px}
+table.per-mem td:nth-child(7) select{min-width:104px}
+table.per-mem td small{display:block;color:var(--tx3);font-size:10px}
+table.per-mem tr.ruim td{background:rgba(217,119,6,.12)}
+.per-mem-acoes{display:flex;gap:2px}
+.per-mem-acoes .btn{padding:2px 7px}
+.per-itens{list-style:none;margin:4px 0 8px;padding:0;font-size:13px}
+.per-itens li{display:flex;gap:6px;padding:2px 0}
+.per-itens li span{width:16px;flex:none;text-align:center;font-weight:700}
+.per-itens li.ok span{color:#1D9E75}
+.per-itens li.aviso span{color:#D97706}
+.per-itens li.erro{color:var(--red,#C81E1E)}

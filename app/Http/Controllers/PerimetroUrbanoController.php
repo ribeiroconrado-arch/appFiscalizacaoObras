@@ -82,6 +82,97 @@ class PerimetroUrbanoController extends Controller
             'id' => $p->id], 201);
     }
 
+    // ── pelo memorial descritivo ──────────────────────────────────
+
+    /** POST /api/perimetros/memorial/conferir — lê e confere, sem gravar. */
+    public function conferirMemorial(Request $r): JsonResponse
+    {
+        if ($e = $this->exigirCurador($r)) { return $e; }
+        $d = $this->dadosDoMemorial($r);
+
+        try {
+            $m = $this->perimetros->lerMemorial($d['texto'], $d['vertices'], $d['area'], $d['perimetro']);
+            $comparacao = $m['geometry'] ? $this->perimetros->comparar($m['geometry']) : null;
+        } catch (RuntimeException $ex) {
+            return $this->recusa($ex);
+        }
+        unset($m['geometry']);
+
+        return response()->json($m + ['comparacao' => $comparacao]);
+    }
+
+    /** POST /api/perimetros/memorial — grava como rascunho. */
+    public function carregarMemorial(Request $r): JsonResponse
+    {
+        if ($e = $this->exigirCurador($r)) { return $e; }
+        $d = $this->dadosDoMemorial($r);
+
+        try {
+            $p = $this->perimetros->carregarMemorial($d['texto'], $d['vertices'], $d['area'], $d['perimetro'], $this->dadosDaLei($r), $r->user());
+        } catch (RuntimeException $ex) {
+            return $this->recusa($ex);
+        }
+
+        return response()->json(['message' => 'Perímetro gerado pelo memorial e carregado como rascunho.', 'id' => $p->id], 201);
+    }
+
+    /** GET /api/perimetros/{perimetro}/memorial — os vértices, para editar ou para a versão seguinte. */
+    public function memorial(Request $r, PerimetroUrbano $perimetro): JsonResponse
+    {
+        if ($e = $this->exigirCurador($r)) { return $e; }
+
+        return response()->json([
+            'id'          => $perimetro->id,
+            'rotulo'      => $perimetro->rotulo(),
+            'situacao'    => $perimetro->situacao,
+            'vertices'    => $perimetro->vertices,
+            'texto'       => $perimetro->memorial_texto,
+            'conferencia' => $perimetro->conferencia_memorial,
+        ]);
+    }
+
+    /** POST /api/perimetros/{perimetro}/memorial — o rascunho com os vértices corrigidos. */
+    public function refazerMemorial(Request $r, PerimetroUrbano $perimetro): JsonResponse
+    {
+        if ($e = $this->exigirCurador($r)) { return $e; }
+        $d = $this->dadosDoMemorial($r);
+
+        try {
+            $this->perimetros->refazerPeloMemorial($perimetro, $d['texto'], $d['vertices'], $d['area'], $d['perimetro']);
+            if ($lei = array_filter($this->dadosDaLei($r), fn ($v) => $v !== null)) {
+                $this->perimetros->atualizarLei($perimetro->fresh(), $lei);
+            }
+        } catch (RuntimeException $ex) {
+            return $this->recusa($ex);
+        }
+
+        return response()->json(['message' => 'Rascunho refeito com os vértices corrigidos.']);
+    }
+
+    /** @return array{texto:?string, vertices:?array, area:?float, perimetro:?float} */
+    private function dadosDoMemorial(Request $r): array
+    {
+        $d = $r->validate([
+            'texto'                  => ['nullable', 'string', 'max:500000'],
+            'vertices'               => ['nullable', 'array', 'max:5000'],
+            'vertices.*.p'           => ['nullable', 'string', 'max:20'],
+            'vertices.*.n'           => ['nullable', 'numeric'],
+            'vertices.*.e'           => ['nullable', 'numeric'],
+            'vertices.*.azimute'     => ['nullable', 'string', 'max:20'],
+            'vertices.*.distancia'   => ['nullable', 'numeric'],
+            'vertices.*.trecho'      => ['nullable', 'in:seca,corrego,serra,estrada'],
+            'area_declarada_m2'      => ['nullable', 'numeric', 'min:0'],
+            'perimetro_declarado_m'  => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        return [
+            'texto'     => $d['texto'] ?? null,
+            'vertices'  => $d['vertices'] ?? null,
+            'area'      => isset($d['area_declarada_m2']) ? (float) $d['area_declarada_m2'] : null,
+            'perimetro' => isset($d['perimetro_declarado_m']) ? (float) $d['perimetro_declarado_m'] : null,
+        ];
+    }
+
     /** GET /api/perimetros/{perimetro} — a ficha, com a comparação de agora. */
     public function mostrar(Request $r, PerimetroUrbano $perimetro): JsonResponse
     {
@@ -92,6 +183,11 @@ class PerimetroUrbanoController extends Controller
             'fonte'      => $perimetro->fonte,
             'camada'     => $perimetro->camada,
             'comparacao' => $this->perimetros->comparacaoAtual($perimetro),
+            'origem'     => $perimetro->origem,
+            // Sem a linha de fechamento (o primeiro vértice repetido no fim).
+            'vertices_total' => is_array($v = $perimetro->vertices)
+                ? count($v) - (count($v) > 3 && ($v[0]['p'] ?? null) === (end($v)['p'] ?? '') ? 1 : 0) : null,
+            'conferencia_memorial' => $perimetro->conferencia_memorial,
             'pode_publicar' => $r->user()->isAdmin(),
         ]);
     }

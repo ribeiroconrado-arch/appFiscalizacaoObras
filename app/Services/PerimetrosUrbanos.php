@@ -111,27 +111,10 @@ class PerimetrosUrbanos
             }
         }
 
-        $cidade = config('gis.perimetro_urbano');
-        if (is_array($cidade) && count($cidade) === 4) {
-            $f = self::FOLGA_DA_REGIAO;
-            $longe = $caixa[2] < $cidade[0] - $f || $caixa[0] > $cidade[2] + $f
-                  || $caixa[3] < $cidade[1] - $f || $caixa[1] > $cidade[3] + $f;
-            if ($longe) {
-                throw new RuntimeException('O perímetro não cai na região do município: confira se o DWG estava '
-                    . 'georreferenciado (ou se faltou o deslocamento dx/dy no conversor).');
-            }
-        }
-
         $geometry = ['type' => 'MultiPolygon', 'coordinates' => $poligonos];
-        $area = self::area($geometry);
-        if ($area < self::AREA_MIN_M2 || $area > self::AREA_MAX_M2) {
-            throw new RuntimeException(sprintf('A área do perímetro (%s ha) está fora do esperado para uma cidade: '
-                . 'confira se a camada escolhida no conversor é mesmo o perímetro.', number_format($area / 10000, 2, ',', '.')));
-        }
-        if (! DB::scalar('SELECT ST_IsValid(ST_GeomFromGeoJSON(?, 1, 4326))', [json_encode($geometry)])) {
-            throw new RuntimeException('O polígono do perímetro se cruza (autointerseção) ou tem partes sobrepostas. '
-                . 'Corrija no DWG e converta de novo.');
-        }
+        $area = $this->validarGeometria($geometry, $caixa,
+            'confira se o DWG estava georreferenciado (ou se faltou o deslocamento dx/dy no conversor)',
+            'confira se a camada escolhida no conversor é mesmo o perímetro', 'Corrija no DWG e converta de novo');
 
         $p = $doPerimetro[0]['properties'] ?? [];
 
@@ -146,6 +129,33 @@ class PerimetrosUrbanos
             'camada'          => isset($p['camada']) ? mb_substr((string) $p['camada'], 0, 200) : null,
             'caixa'           => $caixa,
         ];
+    }
+
+    /**
+     * O que vale para qualquer origem (arquivo ou memorial): cai no município,
+     * tem tamanho de cidade e não se cruza. Devolve a área (m², UTM).
+     *
+     * @param  array{0:float,1:float,2:float,3:float}  $caixa  oeste, sul, leste, norte
+     */
+    private function validarGeometria(array $geometry, array $caixa, string $seLonge, string $seArea, string $seCruza): float
+    {
+        $cidade = config('gis.perimetro_urbano');
+        if (is_array($cidade) && count($cidade) === 4) {
+            $f = self::FOLGA_DA_REGIAO;
+            if ($caixa[2] < $cidade[0] - $f || $caixa[0] > $cidade[2] + $f || $caixa[3] < $cidade[1] - $f || $caixa[1] > $cidade[3] + $f) {
+                throw new RuntimeException("O perímetro não cai na região do município: {$seLonge}.");
+            }
+        }
+        $area = self::area($geometry);
+        if ($area < self::AREA_MIN_M2 || $area > self::AREA_MAX_M2) {
+            throw new RuntimeException(sprintf('A área do perímetro (%s ha) está fora do esperado para uma cidade: %s.',
+                number_format($area / 10000, 2, ',', '.'), $seArea));
+        }
+        if (! DB::scalar('SELECT ST_IsValid(ST_GeomFromGeoJSON(?, 1, 4326))', [json_encode($geometry)])) {
+            throw new RuntimeException("O polígono do perímetro se cruza (autointerseção) ou tem partes sobrepostas. {$seCruza}.");
+        }
+
+        return $area;
     }
 
     /** A feição é do perímetro? (é o que a tela usa para trocar de fluxo) */
@@ -163,8 +173,11 @@ class PerimetrosUrbanos
     }
 
     /**
-     * Área de um Polygon/MultiPolygon em 4326, em m² de grade. Furos descontados.
-     * Todos os anéis projetados na mesma origem.
+     * Área de um Polygon/MultiPolygon em 4326, em m² de GRADE UTM 21S — a régua
+     * do memorial da lei. Medida pelo MySQL (ST_Transform para 31981): o plano
+     * tangente da GeometriaPlana, ótimo num lote, erra 0,04% numa cidade de
+     * 30 km (Lei 2.121/2022: 8.702,614 ha contra os 8.699,382 declarados; pelo
+     * MySQL, 8.699,382). O plano tangente fica de reserva.
      */
     public static function area(array $geometry): float
     {
@@ -180,6 +193,12 @@ class PerimetrosUrbanos
         $origem = $poligonos[0][0][0] ?? null;
         if (! $origem) {
             return 0.0;
+        }
+        try {
+            return (float) DB::scalar('SELECT ST_Area(ST_Transform(ST_GeomFromGeoJSON(?, 1, 4326), ' . MemorialDoPerimetro::EPSG . '))',
+                [json_encode(['type' => 'MultiPolygon', 'coordinates' => $poligonos])]);
+        } catch (\Throwable) {
+            // reserva: plano tangente (abaixo)
         }
         $total = 0.0;
         foreach ($poligonos as $aneis) {
@@ -215,7 +234,130 @@ class PerimetrosUrbanos
     public function carregar(string $caminho, string $nomeArquivo, array $lei, User $u): PerimetroUrbano
     {
         $l = $this->lerArquivo($caminho);
-        $comparacao = $this->comparar($l['geometry']);
+
+        return $this->gravarRascunho($l['geometry'], $l['area_m2'], $lei, $u, [
+            'origem'       => 'geojson',
+            'arquivo_nome' => mb_substr($nomeArquivo, 0, 200),
+            'fonte'        => $l['fonte'],
+            'camada'       => $l['camada'],
+        ]);
+    }
+
+    // ── pelo memorial descritivo ──────────────────────────────────
+
+    /**
+     * Lê (se veio o texto) e confere o memorial, e gera o polígono. Não grava.
+     *
+     * @param  list<array>|null  $vertices  a tabela editada na tela; nula = ler do texto
+     * @return array{vertices: list<array>, conferencia: array, geometry: ?array, area_declarada_m2: ?float, perimetro_declarado_m: ?float}
+     */
+    public function lerMemorial(?string $texto, ?array $vertices, ?float $areaDeclarada, ?float $perimetroDeclarado): array
+    {
+        $memorial = app(MemorialDoPerimetro::class);
+        if ($vertices === null) {
+            if (trim((string) $texto) === '') {
+                throw new RuntimeException('Cole o texto do memorial descritivo ou preencha a tabela de vértices.');
+            }
+            $l = $memorial->ler($texto);
+            if (! $l['vertices']) {
+                throw new RuntimeException('Nenhum vértice com coordenadas N e E foi encontrado no texto. '
+                    . 'Confira se o memorial traz "vértice P-01 de coordenadas N=… e E=…", ou cole uma tabela (vértice; N; E).');
+            }
+            $vertices = $l['vertices'];
+            $areaDeclarada ??= $l['area_declarada_m2'];
+            $perimetroDeclarado ??= $l['perimetro_declarado_m'];
+        }
+
+        $c = $memorial->conferir($vertices, $areaDeclarada, $perimetroDeclarado);
+        $geometry = null;
+        if (! $c['bloqueia']) {
+            $geometry = $memorial->poligono($c['vertices']);
+            $pts = array_merge(...$geometry['coordinates'][0]);
+            $xs = array_column($pts, 0);
+            $ys = array_column($pts, 1);
+            try {
+                $this->validarGeometria($geometry, [min($xs), min($ys), max($xs), max($ys)],
+                    'confira as coordenadas (N e E trocados? outra zona UTM?)',
+                    'confira se faltam vértices', 'Confira a ordem dos vértices');
+            } catch (RuntimeException $ex) {
+                $c['itens'][] = ['nivel' => 'erro', 'texto' => $ex->getMessage()];
+                $c['bloqueia'] = true;
+                $geometry = null;
+            }
+        }
+
+        return ['vertices' => $c['vertices'], 'conferencia' => $c, 'geometry' => $geometry,
+            'area_declarada_m2' => $areaDeclarada, 'perimetro_declarado_m' => $perimetroDeclarado];
+    }
+
+    /** O memorial vira RASCUNHO. A área gravada é a calculada em UTM, a da lei. */
+    public function carregarMemorial(?string $texto, ?array $vertices, ?float $areaDecl, ?float $perimDecl, array $lei, User $u): PerimetroUrbano
+    {
+        $m = $this->lerMemorial($texto, $vertices, $areaDecl, $perimDecl);
+        if (! $m['geometry']) {
+            throw new RuntimeException('O memorial tem erro que impede de gerar o perímetro: '
+                . collect($m['conferencia']['itens'])->where('nivel', 'erro')->pluck('texto')->implode(' '));
+        }
+
+        return $this->gravarRascunho($m['geometry'], $m['conferencia']['area_m2'], $lei, $u, [
+            'origem'               => 'memorial',
+            'arquivo_nome'         => 'Memorial descritivo' . (($lei['lei_numero'] ?? null) ? ' · Lei nº ' . $lei['lei_numero'] : ''),
+            'fonte'                => 'memorial',
+            'vertices'             => json_encode($m['vertices'], JSON_UNESCAPED_UNICODE),
+            'memorial_texto'       => $texto,
+            'conferencia_memorial' => json_encode(self::conferenciaParaGuardar($m), JSON_UNESCAPED_UNICODE),
+        ]);
+    }
+
+    /** O rascunho tem os vértices corrigidos: o polígono é refeito, e a comparação também. */
+    public function refazerPeloMemorial(PerimetroUrbano $p, ?string $texto, ?array $vertices, ?float $areaDecl, ?float $perimDecl): PerimetroUrbano
+    {
+        if ($p->situacao !== 'rascunho') {
+            throw new RuntimeException('Só o rascunho tem os vértices alterados. Para mudar o perímetro publicado, crie uma versão nova a partir dele.');
+        }
+        $m = $this->lerMemorial($texto, $vertices, $areaDecl, $perimDecl);
+        if (! $m['geometry']) {
+            throw new RuntimeException('O memorial tem erro que impede de gerar o perímetro: '
+                . collect($m['conferencia']['itens'])->where('nivel', 'erro')->pluck('texto')->implode(' '));
+        }
+        DB::table('perimetros_urbanos')->where('id', $p->id)->update([
+            'origem'               => 'memorial',
+            'geom'                 => DB::raw('ST_GeomFromGeoJSON(' . DB::getPdo()->quote(json_encode($m['geometry'])) . ', 1, 4326)'),
+            'area_m2'              => $m['conferencia']['area_m2'],
+            'vertices'             => json_encode($m['vertices'], JSON_UNESCAPED_UNICODE),
+            'memorial_texto'       => $texto ?? $p->memorial_texto,
+            'conferencia_memorial' => json_encode(self::conferenciaParaGuardar($m), JSON_UNESCAPED_UNICODE),
+            'comparacao'           => json_encode($this->comparar($m['geometry']), JSON_UNESCAPED_UNICODE),
+            'updated_at'           => now(),
+        ]);
+        $p->registrarAuditoria('refez pelo memorial', ['area_m2' => $p->area_m2], ['area_m2' => $m['conferencia']['area_m2'],
+            'vertices' => count($m['vertices'])]);
+
+        return $p->fresh();
+    }
+
+    /** O que fica da conferência na versão: os itens, os trechos que não bateram e os números. */
+    private static function conferenciaParaGuardar(array $m): array
+    {
+        $c = $m['conferencia'];
+
+        return [
+            'itens'                 => $c['itens'],
+            'trechos_divergentes'   => array_values(array_filter($c['trechos'], fn ($t) => ! $t['ok'])),
+            'area_m2'               => $c['area_m2'],
+            'perimetro_m'           => $c['perimetro_m'],
+            'area_declarada_m2'     => $m['area_declarada_m2'],
+            'perimetro_declarado_m' => $m['perimetro_declarado_m'],
+            'feita_em'              => now()->format('d/m/Y H:i'),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $extras  origem, arquivo_nome, fonte, camada, vertices…
+     */
+    private function gravarRascunho(array $geometry, float $area, array $lei, User $u, array $extras): PerimetroUrbano
+    {
+        $comparacao = $this->comparar($geometry);
 
         $id = DB::table('perimetros_urbanos')->insertGetId([
             'situacao'      => 'rascunho',
@@ -223,19 +365,16 @@ class PerimetrosUrbanos
             'lei_data'      => $lei['lei_data'] ?? null,
             'vigente_desde' => $lei['vigente_desde'] ?? null,
             'observacao'    => $lei['observacao'] ?? null,
-            'area_m2'       => $l['area_m2'],
-            'geom'          => DB::raw('ST_GeomFromGeoJSON(' . DB::getPdo()->quote(json_encode($l['geometry'])) . ', 1, 4326)'),
-            'arquivo_nome'  => mb_substr($nomeArquivo, 0, 200),
-            'fonte'         => $l['fonte'],
-            'camada'        => $l['camada'],
+            'area_m2'       => round($area, 2),
+            'geom'          => DB::raw('ST_GeomFromGeoJSON(' . DB::getPdo()->quote(json_encode($geometry)) . ', 1, 4326)'),
             'comparacao'    => json_encode($comparacao, JSON_UNESCAPED_UNICODE),
             'user_id'       => $u->id,
             'created_at'    => now(),
             'updated_at'    => now(),
-        ]);
+        ] + $extras);
 
         $p = PerimetroUrbano::findOrFail($id);
-        $p->registrarAuditoria('carregou', null, $p->only(['situacao', 'lei_numero', 'vigente_desde', 'area_m2', 'arquivo_nome', 'fonte']));
+        $p->registrarAuditoria('carregou', null, $p->only(['situacao', 'origem', 'lei_numero', 'vigente_desde', 'area_m2', 'arquivo_nome', 'fonte']));
 
         return $p;
     }

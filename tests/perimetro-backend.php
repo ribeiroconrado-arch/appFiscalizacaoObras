@@ -114,6 +114,45 @@ try {
     confere(DB::table('auditoria')->where('tabela', 'perimetros_urbanos')->where('registro_id', $p3->id)->where('acao', 'descartou')->exists(),
         'e a trilha registra o descarte');
 
+    echo "Pelo memorial descritivo (Lei 2.121/2022, texto do PDF)\n";
+    $mem = app(App\Services\MemorialDoPerimetro::class);
+    $lei = file_get_contents(__DIR__ . '/fixtures/lei-2121-2022-perimetro-urbano.txt');
+    $l = $mem->ler($lei);
+    $v = $l['vertices'];
+    confere(count($v) === 242 && $v[0]['p'] === 'P-01' && $v[240]['p'] === 'P-241' && end($v)['p'] === 'P-01',
+        '241 vértices + o fechamento em P-01 (rótulo partido na linha, rodapé do PDF no meio)');
+    confere($v[1]['azimute'] === '125°24\'46"' && abs($v[1]['distancia'] - 703.012) < 1e-9, 'minuto com crase: 125º24`46" e 703,012 m');
+    confere($v[203]['p'] === 'P-204' && $v[203]['azimute'] === '22°12\'05"', 'segundos só com espaço: 22º12 5"');
+    confere($v[4]['trecho'] === 'corrego' && $v[5]['trecho'] === 'corrego' && $v[1]['trecho'] === 'seca' && $v[9]['trecho'] === 'seca',
+        '"segue pelo Córrego abaixo" vale até o memorial mudar ("por linha seca até um Córrego" é linha seca)');
+    confere(abs($l['area_declarada_m2'] - 86993820) < 1 && $l['perimetro_declarado_m'] === 71550.5, 'área e perímetro declarados lidos');
+    $c = $mem->conferir($v, $l['area_declarada_m2'], $l['perimetro_declarado_m']);
+    confere(! $c['bloqueia'] && collect($c['itens'])->every(fn ($i) => $i['nivel'] === 'ok')
+        && collect($c['trechos'])->every(fn ($t) => $t['ok']), 'os 241 trechos, a área e o perímetro batem');
+    confere(abs($c['area_m2'] - 86993820) < 5, 'área calculada: 8.699,382 ha');
+
+    $errada = str_replace('703,012m', '703,112m', $lei);
+    $ce = $mem->conferir($mem->ler($errada)['vertices'], null, null);
+    $t1 = $ce['trechos'][0];
+    confere(! $ce['bloqueia'] && ! $t1['ok'] && abs($t1['dif_distancia'] + 0.1) < 0.001
+        && collect($ce['itens'])->contains(fn ($i) => $i['nivel'] === 'aviso' && str_contains($i['texto'], '1 trecho')),
+        'distância digitada errada na lei: aponta o trecho P-01 → P-02 (−0,100 m), sem impedir');
+
+    $tab = $mem->ler("P-01;8287874,960;793640,650\nP-02\t8287467,591\t794213,604\nP-03;793640,650;8283869,459\n");
+    confere(count($tab['vertices']) === 3 && $tab['vertices'][2]['n'] === 8283869.459, 'tabela colada (; ou tab), N e E em qualquer ordem');
+    $cb = $mem->conferir([['p' => 'P-01', 'n' => 8287874.96, 'e' => 793640.65], ['p' => 'P-02', 'n' => 794213.6, 'e' => null]], null, null);
+    confere($cb['bloqueia'], 'vértice sem coordenada impede de gerar');
+
+    $pm = $svc->carregarMemorial($lei, null, null, null, ['lei_numero' => '2.121/2022', 'lei_data' => '2022-10-10', 'vigente_desde' => '2022-10-10'], $u);
+    confere($pm->origem === 'memorial' && count($pm->vertices) === 242 && abs($pm->area_m2 - 86993820) < 5
+        && $pm->conferencia_memorial['area_declarada_m2'] !== null, 'vira rascunho: origem memorial, vértices e conferência guardados, área da lei');
+    $novos = $pm->vertices;
+    $novos[2]['e'] += 50;   // P-03 50 m para leste
+    $pm2 = $svc->refazerPeloMemorial($pm, null, $novos, null, null);
+    confere($pm2->area_m2 !== $pm->area_m2 && $pm2->vertices[2]['e'] === $novos[2]['e'], 'editar um vértice refaz o polígono e a área do rascunho');
+    $gj = $svc->geometria($pm2)['coordinates'][0][0][0];
+    confere(abs($gj[0] - (-54.2635)) < 0.001 && abs($gj[1] - (-15.4695)) < 0.001, 'P-01 no mapa: lon −54,2635, lat −15,4695');
+
     echo "\n{$ok} verificações passaram.\n";
 } finally {
     DB::rollBack();
