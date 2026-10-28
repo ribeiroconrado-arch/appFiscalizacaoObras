@@ -65,6 +65,7 @@ function aplicarCamada(c) {
 /** O painel, agrupado na ordem em que os grupos aparecem no registro. */
 function pintarPainelCamadas() {
   atualizarIndicadorCamadas()
+  document.querySelectorAll('[data-fundo-mapa]').forEach(b => b.setAttribute('aria-pressed', String(camadaLigada('satelite') === (b.dataset.fundoMapa === 'satelite'))))
   const alvo = document.getElementById('camadas-lista')
   if (!alvo) return
   const abertos = new Set([...alvo.querySelectorAll('details[open]')].map(d => d.dataset.grupo))
@@ -81,14 +82,7 @@ function pintarPainelCamadas() {
     if (!g) { g = { nome, itens: [] }; grupos.push(g) }
     g.itens.push(c)
   }
-  // O FUNDO É UMA ESCOLHA ENTRE DOIS, e não um liga-desliga: sem satélite o
-  // mapa não fica vazio, fica cadastral (fundo-cadastral.js).
-  const fundo = () => `
-    <label class="cam-item"><input id="cam-fundo-cadastral" type="radio" name="cam-fundo" ${camadaLigada('satelite') ? '' : 'checked'}
-           onchange="ligarCamada('satelite', false)"><span>Cadastral<small class="cam-obs">Leve, sem imagem</small></span></label>
-    <label class="cam-item"><input id="cam-fundo-satelite" type="radio" name="cam-fundo" ${camadaLigada('satelite') ? 'checked' : ''}
-           onchange="ligarCamada('satelite', true)"><span>Satélite<small class="cam-obs">Imagem aérea</small></span></label>`
-  alvo.innerHTML = `<div class="cam-secao">Fundo do mapa</div><div class="cam-fundos">${fundo()}</div><div class="cam-secao">Camadas do mapa</div>` + grupos.filter(g => g.nome !== 'Fundo').map(g => `
+  alvo.innerHTML = '' + grupos.filter(g => g.nome !== 'Fundo').map(g => `
     <details class="cam-grupo" data-grupo="${esc(g.nome)}" ${abertos.has(g.nome) || (inicial && g.nome === 'Lotes') ? 'open' : ''}>
     <summary>${esc(g.nome)}<span>${g.itens.filter(c => camadaLigada(c.id)).length}/${g.itens.length}</span></summary>
     ${g.itens.map(c => `
@@ -188,6 +182,6 @@ registrarCamada({
   },
 })
 registrarCamada({
-  id: 'satelite', grupo: 'Fundo', rotulo: 'Imagem de satélite',
+  id: 'satelite', grupo: 'Fundo', rotulo: 'Imagem de satélite', padrao: false,
   aoMudar: () => { if (typeof aplicarFundoDoMapa === 'function') aplicarFundoDoMapa() },
 })

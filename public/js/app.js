@@ -1157,3 +1157,22 @@ anunciarCarregamento({
   excluirParametro: 'Excluindo…',
   carregarHistoricoCadastral: 'Carregando o histórico…',
 })
+
+// O seletor mantém o mesmo fluxo de autorização e proteção da prancheta.
+document.addEventListener('click', async e => {
+  const menu = document.querySelector('details.modulo-sel')
+  if (!menu) return
+  const opcao = e.target.closest('[data-modulo]')
+  if (opcao && menu.contains(opcao)) {
+    menu.open = false
+    menu.querySelector('summary').focus()
+    await trocarModulo(opcao.dataset.modulo)
+  } else if (!menu.contains(e.target)) menu.open = false
+})
+document.addEventListener('keydown', e => {
+  const menu = document.querySelector('details.modulo-sel[open]')
+  if (e.key === 'Escape' && menu) {
+    menu.open = false
+    menu.querySelector('summary').focus()
+  }
+})

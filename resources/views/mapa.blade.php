@@ -81,17 +81,26 @@
        não muda com o módulo: ela é do tema que cada um escolheu, e o módulo
        já se lê aqui, no título e no sub-cabeçalho. --}}
   @if (! $externo && count($meusModulos) > 1)
-    {{-- COMBO, e não pílula de botões lado a lado: um alvo só, grande, sem
-         ícone — no celular os botões vizinhos levavam o toque errado. No
-         iPhone o select abre o seletor do próprio sistema. --}}
-    <label class="modulo-sel" title="Trocar de módulo">
-      <select aria-label="Módulo" onchange="trocarModulo(this.value)">
+    <details class="modulo-sel">
+      <summary aria-label="Selecionar módulo">{{ \App\Support\Modulo::rotulo($modulo) }} <span aria-hidden="true">⌄</span></summary>
+      <select hidden aria-label="Módulo" onchange="trocarModulo(this.value)">
         @foreach ($meusModulos as $m)
           <option value="{{ $m }}" @selected($m === $modulo)>{{ \App\Support\Modulo::rotulo($m) }}</option>
         @endforeach
       </select>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-    </label>
+      <div class="modulo-opcoes">
+        @foreach ($meusModulos as $m)
+          <button type="button" data-modulo="{{ $m }}" aria-pressed="{{ $m === $modulo ? 'true' : 'false' }}">
+            <span class="modulo-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              @if ($m === 'obras')<path d="M3 21h18M6 21V8l6-5 6 5v13M9 11h2m2 0h2m-6 4h2m2 0h2M10 21v-3h4v3"/>
+              @else<path d="M9 5H5v16h14V5h-4M9 3h6v4H9zM8 12l2 2 5-4M8 17h8"/>@endif
+            </svg></span>
+            <span class="modulo-texto"><strong>{{ \App\Support\Modulo::rotulo($m) }}</strong><small>{{ $m === 'obras' ? 'Fiscalização de obras e construções.' : ($m === 'posturas' ? 'Fiscalização de posturas municipais.' : \App\Support\Modulo::titulo($m)) }}</small></span>
+            @if ($m === $modulo)<span class="modulo-atual" aria-label="Módulo atual">✓</span>@endif
+          </button>
+        @endforeach
+      </div>
+    </details>
   @endif
 
   {{-- A navegação vive só no rodapé, em qualquer largura: repeti-la aqui no
@@ -251,6 +260,10 @@
 <section class="tela" id="t-mapa">
 
 <div id="map"></div>
+<div class="mapa-fundo-seletor" role="group" aria-label="Fundo do mapa">
+  <button type="button" data-fundo-mapa="cadastral" aria-pressed="true" onclick="ligarCamada('satelite', false)">Cadastral</button>
+  <button type="button" data-fundo-mapa="satelite" aria-pressed="false" onclick="ligarCamada('satelite', true)">Satélite</button>
+</div>
 
 {{-- ══════ FAIXA DAS BARRAS DO MAPA ══════
      Todas as barras que aparecem no alto do mapa moram AQUI, uma embaixo da

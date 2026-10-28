@@ -4086,3 +4086,21 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 #t-mapa > #med-barra.med-movel{position:fixed;z-index:925;max-width:none;transform:none;right:auto;box-sizing:border-box}
 body.prancheta-aberta #t-mapa > #med-barra{visibility:hidden}
 #t-mapa .cad-barra,#t-mapa .des-barra,#t-mapa .imp-barra,#t-mapa .corr-painel,#t-mapa .ctrl-camadas,#t-mapa > #pesq-barra{border:0}
+
+/* Seleção de módulos no padrão das ações dos documentos. */
+.modulo-sel > summary{display:flex;align-items:center;gap:18px;list-style:none;min-height:36px;padding:0 14px;border:1px solid #ffffff60;border-radius:999px;background:#ffffff22;color:#fff;font-size:13px;font-weight:600;cursor:pointer}
+.modulo-sel > summary::-webkit-details-marker{display:none}
+.modulo-sel > select[hidden]{display:none}
+.modulo-sel .modulo-opcoes{position:absolute;top:calc(100% + 12px);left:0;z-index:2100;width:320px;max-width:calc(100vw - 28px);padding:10px;background:var(--sur);border:1px solid var(--bord);border-radius:18px;box-shadow:0 12px 36px #0003;color:var(--tx)}
+.modulo-opcoes button{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:10px 8px;border:0;border-radius:10px;background:transparent;color:var(--tx);text-align:left;cursor:pointer;font-family:inherit}
+.modulo-opcoes button:hover,.modulo-opcoes button:focus-visible{background:var(--gl)}
+.modulo-opcoes button+button{border-top:1px solid var(--bord)}
+.modulo-icone{display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:10px;background:var(--g);color:#fff;box-shadow:0 2px 5px #0002}
+.modulo-sel .modulo-icone svg{position:static;width:21px;height:21px;color:inherit}
+.modulo-texto{flex:1;min-width:0}.modulo-texto strong{display:block;font-size:14px;font-weight:600}.modulo-texto small{display:block;margin-top:3px;font-size:12px;line-height:1.4;color:var(--tx2)}
+.modulo-atual{color:var(--g);font-weight:700}
+.mapa-fundo-seletor{position:absolute;left:12px;bottom:26px;z-index:800;display:flex;gap:3px;padding:4px;border-radius:10px;background:var(--sur);box-shadow:0 2px 12px #0003}
+.mapa-fundo-seletor button{min-height:44px;padding:0 16px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--tx);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer}
+.mapa-fundo-seletor button[aria-pressed="true"]{border-color:var(--g);background:var(--gl);color:var(--g);font-weight:600}
+body.prancheta-aberta .mapa-fundo-seletor{display:none}
+@media(max-width:620px){#t-mapa:has(#med-barra:not([hidden]):not(.med-movel)) .mapa-fundo-seletor{bottom:210px}.mapa-fundo-seletor{left:10px}.modulo-sel .modulo-opcoes{position:fixed;top:64px;left:14px}}
