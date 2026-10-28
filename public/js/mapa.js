@@ -630,6 +630,34 @@ function montarOrtofoto(satelite) {
  * O contorno vai numa camada própria, acima dos lotes, para a divisa
  * continuar visível quando o fiscal estiver com a malha toda desenhada.
  */
+/**
+ * (Re)pinta o véu: tudo fora do município do IBGE somado ao perímetro urbano
+ * vigente (/api/mapa/area-visivel). Chamado ao abrir o mapa e quando um
+ * perímetro novo é publicado (perimetro-urbano.js).
+ *
+ * @param {Object} [reserva] geometria do município, se o servidor não responder
+ */
+async function atualizarMascaraDoMapa(reserva) {
+  let g = null
+  try {
+    const r = await fetch('/api/mapa/area-visivel', { headers: { Accept: 'application/json' } })
+    if (r.ok) g = (await r.json()).geometry
+  } catch { /* fica a reserva */ }
+  g ||= reserva || mapaState.mascara?.geometria
+  if (!g) return
+
+  const paraLatLng = anel => anel.map(([lon, lat]) => [lat, lon])
+  const aneis = g.type === 'MultiPolygon' ? g.coordinates.flat().map(paraLatLng) : g.coordinates.map(paraLatLng)
+  const mundo = [[-90, -360], [-90, 360], [90, 360], [90, -360]]
+
+  mapaState.mascara?.camada.remove()
+  const camada = L.polygon([mundo, ...aneis], {
+    pane: 'mascara', stroke: false, fillColor: '#FAF7F4', fillOpacity: .93,
+    interactive: false,
+  }).addTo(mapaState.obj)
+  mapaState.mascara = { camada, geometria: g, areaVisivel: L.polygon(aneis).getBounds() }
+}
+
 async function recortarMunicipio() {
   try {
     const r = await fetch('/geo/primavera-do-leste.geojson', { headers: { Accept: 'application/json' } })
@@ -642,16 +670,14 @@ async function recortarMunicipio() {
       ? f.geometry.coordinates.flat().map(paraLatLng)
       : f.geometry.coordinates.map(paraLatLng)
 
-    const mundo = [[-90, -360], [-90, 360], [90, 360], [90, -360]]
-
     mapaState.obj.createPane('mascara')
     mapaState.obj.getPane('mascara').style.zIndex = 350
     mapaState.obj.getPane('mascara').style.pointerEvents = 'none'
 
-    L.polygon([mundo, ...aneis], {
-      pane: 'mascara', stroke: false, fillColor: '#FAF7F4', fillOpacity: .93,
-      interactive: false,
-    }).addTo(mapaState.obj)
+    // O véu deixa à vista o município E o perímetro urbano vigente: a malha do
+    // IBGE é generalizada e corta bairros no sul da cidade. Sem o servidor,
+    // vale só o município.
+    await atualizarMascaraDoMapa(f.geometry)
 
     const contorno = L.polygon(aneis, {
       pane: 'rotulos', color: '#EA580C', weight: 1.6, opacity: .75,
@@ -674,9 +700,9 @@ async function recortarMunicipio() {
       permanent: true, direction: 'center', className: 'rot rot-cidade',
     }).addTo(mapaState.obj)
 
-    // Limite de navegação = o próprio município, com uma folga pequena para
-    // a divisa não colar na borda da tela.
-    LIMITE_MUNICIPIO = contorno.getBounds().pad(0.04)
+    // Limite de navegação = a área à vista (município + perímetro), com uma
+    // folga pequena para a divisa não colar na borda da tela.
+    LIMITE_MUNICIPIO = (mapaState.mascara?.areaVisivel || contorno.getBounds()).pad(0.04)
     mapaState.obj.setMaxBounds(LIMITE_MUNICIPIO)
   } catch (e) {
     // Sem a malha o mapa continua utilizável: perde o recorte, mantém o

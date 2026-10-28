@@ -153,6 +153,17 @@ try {
     $gj = $svc->geometria($pm2)['coordinates'][0][0][0];
     confere(abs($gj[0] - (-54.2635)) < 0.001 && abs($gj[1] - (-15.4695)) < 0.001, 'P-01 no mapa: lon −54,2635, lat −15,4695');
 
+    echo "Área à vista no mapa (máscara)\n";
+    $svc->atualizarLei($pm2, ['vigente_desde' => '2027-01-01']);
+    $svc->publicar($pm2->fresh(), $u);
+    $municipio = json_decode(file_get_contents(public_path('geo/primavera-do-leste.geojson')), true)['geometry'];
+    $area = $svc->areaDoMapa();
+    $sobra = fn ($a, $b) => PerimetrosUrbanos::area(json_decode((string) DB::scalar(
+        'SELECT ST_AsGeoJSON(ST_Difference(ST_GeomFromGeoJSON(?, 1, 0), ST_GeomFromGeoJSON(?, 1, 0)))', [json_encode($a), json_encode($b)]), true));
+    confere($sobra($svc->geometria($pm2), $municipio) > 1_000_000 && $sobra($svc->geometria($pm2), $area) < 10 && $sobra($municipio, $area) < 10,
+        'município do IBGE + perímetro da lei: a faixa da serra fora da malha do IBGE fica à vista');
+    Cache::forget('perimetro-urbano:area-do-mapa:' . $pm2->id);
+
     echo "\n{$ok} verificações passaram.\n";
 } finally {
     DB::rollBack();

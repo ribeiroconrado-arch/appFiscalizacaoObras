@@ -346,6 +346,7 @@ async function publicarPerimetro() {
     toast(d.message)
     perState.camada?.remove(); perState.camada = null
     carregarPerimetroDoMapa()
+    if (typeof atualizarMascaraDoMapa === 'function') atualizarMascaraDoMapa()   // o véu do mapa segue o perímetro novo
     await abrirPerimetro(p.id)
   } catch (e) { toast(e.message, 'err') }
 }

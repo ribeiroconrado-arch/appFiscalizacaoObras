@@ -621,6 +621,33 @@ class PerimetrosUrbanos
     }
 
     /**
+     * A área que o MAPA mostra sem véu: o município (malha do IBGE) somado ao
+     * perímetro urbano vigente. A malha do IBGE é generalizada e, no sul da
+     * cidade, passa por dentro dos bairros — a imagem sumia debaixo da máscara
+     * onde a lei diz que é cidade (28/10/2026). A união é feita no plano
+     * (SRID 0): com lados de dezenas de metros, a diferença para a geodésica
+     * não aparece na tela.
+     *
+     * @return array{type:string, coordinates:array}  Polygon ou MultiPolygon em 4326
+     */
+    public function areaDoMapa(): array
+    {
+        $municipio = json_decode((string) file_get_contents(public_path('geo/primavera-do-leste.geojson')), true)['geometry'];
+        $vig = $this->vigente();
+        if (! $vig) {
+            return $municipio;
+        }
+
+        return Cache::remember('perimetro-urbano:area-do-mapa:' . $vig->id, now()->addDay(), function () use ($municipio, $vig) {
+            $gj = DB::scalar('SELECT ST_AsGeoJSON(ST_Union(ST_GeomFromGeoJSON(?, 1, 0), ST_GeomFromGeoJSON(?, 1, 0)), 9)',
+                [json_encode($municipio), json_encode($this->geometria($vig))]);
+            $g = json_decode((string) $gj, true);
+
+            return in_array($g['type'] ?? null, ['Polygon', 'MultiPolygon'], true) ? $g : $municipio;
+        });
+    }
+
+    /**
      * O retângulo [oeste, sul, leste, norte] que o mapa usa para "ver tudo": o
      * do perímetro vigente; sem perímetro publicado, o do .env (config/gis.php).
      */

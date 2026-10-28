@@ -272,6 +272,12 @@ class PerimetroUrbanoController extends Controller
         ] : ['geometry' => null]);
     }
 
+    /** GET /api/mapa/area-visivel — município (IBGE) + perímetro vigente: o que a máscara do mapa deixa à vista. */
+    public function areaVisivel(): JsonResponse
+    {
+        return response()->json(['geometry' => $this->perimetros->areaDoMapa()]);
+    }
+
     // ─────────────────────────────────────────────────────────────
 
     /** @return \Illuminate\Http\UploadedFile */
