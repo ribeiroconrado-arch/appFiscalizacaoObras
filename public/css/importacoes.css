@@ -599,3 +599,6 @@ table.per-mem tr.ruim td{background:rgba(217,119,6,.12)}
 .imp-abas{margin-bottom:10px;max-width:420px}
 .per-entradas{justify-content:space-between;flex-wrap:wrap;gap:8px}
 .per-entradas .btn-row{flex-wrap:wrap}
+/* Dica do perímetro urbano no mapa (perimetro-urbano.js) */
+.leaflet-tooltip.per-dica{border:0;border-left:3px solid #7C3AED;border-radius:6px;padding:5px 9px;font-size:12px;line-height:1.35;box-shadow:0 2px 8px rgba(0,0,0,.18);white-space:nowrap}
+.leaflet-tooltip.per-dica small{display:block;color:var(--tx3,#6B7280);font-size:11px}

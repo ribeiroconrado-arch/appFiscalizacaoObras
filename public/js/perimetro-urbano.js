@@ -57,14 +57,82 @@ async function carregarPerimetroDoMapa() {
       pane: _perPane(mapa), interactive: false,
       style: { color: PER_COR, weight: 2.5, opacity: 0.9, dashArray: '10 6', fill: false },
     }).addTo(mapa)
+    perState.dica = `<b>Perímetro urbano</b> · ${esc(d.rotulo || '')}`
+      + `<small>vigente desde ${esc(d.vigente_desde || '—')} · ${_perHa(d.area_m2)}</small>`
+    // Os anéis, para medir a distância do mouse à linha (_perPertoDaLinha).
+    perState.aneis = (d.geometry.type === 'MultiPolygon' ? d.geometry.coordinates.flat() : d.geometry.coordinates)
+      .map(anel => anel.map(([lon, lat]) => L.latLng(lat, lon)))
   } catch { /* sem perímetro: o mapa segue sem a camada */ }
+}
+
+// ── O NOME E A LEI, AO PASSAR PERTO DA LINHA ───────────────────
+//
+// A linha NÃO recebe clique (interactive: false): por cima dos lotes, uma
+// faixa clicável roubaria o clique do lote da divisa. Em vez disso, o mapa
+// observa o mouse e, a menos de PER_DICA_PX da linha, mostra a dica — passiva,
+// não interrompe medir, desenhar nem selecionar. No toque (sem "passar o
+// mouse"), o toque perto da linha mostra a dica por alguns segundos.
+
+const PER_DICA_PX = 8
+
+/** O ponto de tela (container) mais perto da linha, se estiver a menos de PER_DICA_PX. */
+function _perPertoDaLinha(mapa, p) {
+  if (!perState.aneis || !perState.camada || !mapa.hasLayer(perState.camada)) return null
+  let melhor = null, dMin = PER_DICA_PX
+  for (const anel of perState.aneis) {
+    let a = mapa.latLngToContainerPoint(anel[0])
+    for (let i = 1; i < anel.length; i++) {
+      const b = mapa.latLngToContainerPoint(anel[i])
+      // Lado inteiro fora da folga em volta do ponto: pula sem a conta.
+      if (!(Math.max(a.x, b.x) < p.x - dMin || Math.min(a.x, b.x) > p.x + dMin
+         || Math.max(a.y, b.y) < p.y - dMin || Math.min(a.y, b.y) > p.y + dMin)) {
+        const q = L.LineUtil.closestPointOnSegment(p, a, b)
+        const d = q.distanceTo(p)
+        if (d < dMin) { dMin = d; melhor = q }
+      }
+      a = b
+    }
+  }
+  return melhor
+}
+
+function _perMostrarDica(mapa, ponto) {
+  perState.tooltip ||= L.tooltip({ className: 'per-dica', direction: 'top', offset: [0, -10], opacity: 1 })
+  perState.tooltip.setLatLng(mapa.containerPointToLatLng(ponto)).setContent(perState.dica)
+  if (!mapa.hasLayer(perState.tooltip)) mapa.openTooltip(perState.tooltip)
+}
+
+function _perEsconderDica(mapa) {
+  if (perState.tooltip && mapa.hasLayer(perState.tooltip)) mapa.closeTooltip(perState.tooltip)
+}
+
+function _perLigarDica(mapa) {
+  let pendente = null
+  mapa.on('mousemove', e => {
+    if (pendente) return
+    pendente = requestAnimationFrame(() => {
+      pendente = null
+      const q = _perPertoDaLinha(mapa, e.containerPoint)
+      q ? _perMostrarDica(mapa, q) : _perEsconderDica(mapa)
+    })
+  })
+  mapa.on('mouseout zoomstart movestart', () => _perEsconderDica(mapa))
+  // Toque: não há mousemove; o toque perto da linha mostra a dica.
+  mapa.on('click', e => {
+    if (!L.Browser.touch) return
+    const q = _perPertoDaLinha(mapa, e.containerPoint)
+    if (!q) return
+    _perMostrarDica(mapa, q)
+    clearTimeout(perState.dicaTempo)
+    perState.dicaTempo = setTimeout(() => _perEsconderDica(mapa), 3500)
+  })
 }
 
 // O mapa nasce depois deste arquivo: espera ele estar pronto.
 document.addEventListener('DOMContentLoaded', () => {
   let tentativas = 0
   const t = setInterval(() => {
-    if (mapaState?.obj?._loaded) { clearInterval(t); carregarPerimetroDoMapa() }
+    if (mapaState?.obj?._loaded) { clearInterval(t); carregarPerimetroDoMapa(); _perLigarDica(mapaState.obj) }
     else if (++tentativas > 60) clearInterval(t)
   }, 500)
 })
