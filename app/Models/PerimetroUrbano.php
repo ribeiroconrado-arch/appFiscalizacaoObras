@@ -60,6 +60,16 @@ class PerimetroUrbano extends Model
             : $this->arquivo_nome;
     }
 
+    /** Publicar e encerrar vigência têm nome próprio na trilha (e no Painel). */
+    protected function acaoAuditoria(array $novos): string
+    {
+        return match ($novos['situacao'] ?? null) {
+            'vigente'  => 'publicou',
+            'anterior' => 'encerrou vigência',
+            default    => 'alterou',
+        };
+    }
+
     protected function descricaoAuditoria(): string
     {
         return 'Perímetro urbano · ' . $this->rotulo();

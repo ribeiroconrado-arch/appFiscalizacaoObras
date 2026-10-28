@@ -71,50 +71,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── NA LISTA DE IMPORTAÇÕES ─────────────────────────────────────
 
-/** O bloco do perímetro no alto da lista de Importações (chamado por importacoes.js). */
-async function pintarPerimetrosNaLista() {
-  const alvo = document.getElementById('imp-perimetros')
-  if (!alvo) return
+/**
+ * A aba "Perímetro urbano" da janela de Importações (importacoes.js chama
+ * quando `impState.aba === 'perimetro'`): as versões — rascunhos, a vigente e
+ * as anteriores — e as três entradas (memorial, nova versão, GeoJSON).
+ */
+async function pintarAbaPerimetro() {
+  impState.aba = 'perimetro'
+  _impCorpo('<div class="vazio-msg">Carregando…</div>')
   try {
     const d = await _impPedir('/api/perimetros')
     const lista = d.perimetros || []
     const vig = lista.find(p => p.situacao === 'vigente')
-    const rasc = lista.filter(p => p.situacao === 'rascunho')
-    const ant = lista.filter(p => p.situacao === 'anterior')
-    alvo.innerHTML = `
-      <div class="per-bloco">
-        <div class="per-cab">
-          <span class="per-ico" aria-hidden="true"></span>
-          <b>Perímetro urbano</b>
-          <span class="imp-sub">${vig
-            ? `${esc(vig.rotulo)} · vigente desde ${_perData(vig.vigente_desde)} · ${_perHa(vig.area_m2)}`
-            : 'nenhum publicado — o mapa usa o retângulo de reserva'}</span>
-          <span class="per-cab-acoes">
-            ${vig ? `<button class="btn sm" onclick="abrirPerimetro(${vig.id})">Abrir</button>` : ''}
-            ${ant.length ? `<button class="btn sm" onclick="const v=document.getElementById('per-versoes'); v.hidden=!v.hidden">Versões anteriores (${ant.length})</button>` : ''}
-            ${vig ? `<button class="btn sm" onclick="abrirEditorMemorial({ base: ${vig.id} })" title="Os vértices da vigente já preenchidos: altere só o que a lei nova mudou">Nova versão a partir da vigente</button>` : ''}
-            <button class="btn sm" onclick="abrirEditorMemorial({})" title="Colar o memorial descritivo da lei ou digitar os vértices">Pelo memorial</button>
-          </span>
+    const vigencia = p => p.situacao === 'rascunho' ? 'ainda não vale'
+      : `${_perData(p.vigente_desde)} ${p.vigente_ate ? 'a ' + _perData(p.vigente_ate) : 'até hoje'}`
+    const linhas = lista.map(p => `
+      <tr onclick="abrirPerimetro(${p.id})">
+        <td><span class="badge ${PER_BADGE[p.situacao] || 'bd-in'}">${esc(p.situacao_rotulo)}</span></td>
+        <td><b class="jt-forte">${esc(p.rotulo)}</b><div class="imp-sub">${p.origem === 'memorial' ? 'Memorial descritivo' : 'Arquivo GeoJSON'}</div></td>
+        <td>${vigencia(p)}</td>
+        <td class="num">${_perHa(p.area_m2)}</td>
+        <td>${esc(p.enviado_por || '—')}<div class="imp-sub">${esc(p.enviado_em || '')}</div></td>
+        <td class="jt-acoes"><button type="button" class="btn sm">${p.situacao === 'rascunho' ? 'Continuar' : 'Abrir'}</button></td>
+      </tr>`).join('')
+    _impCorpo(`
+      <div class="jt">
+        <div class="jt-topo">
+          ${_impAbas()}
+          <div class="jt-linha per-entradas">
+            <span class="imp-sub">${vig ? `Vigente: <b>${esc(vig.rotulo)}</b> · ${_perHa(vig.area_m2)}` : 'Nenhum perímetro publicado.'}</span>
+            <span class="btn-row">
+              ${vig ? `<button class="btn sm" onclick="abrirEditorMemorial({ base: ${vig.id} })" title="Os vértices da vigente já preenchidos: altere só o que a lei nova mudou">Nova versão a partir da vigente</button>` : ''}
+              <button class="btn sm" onclick="novaImportacao()" title="Arquivo .geojson gerado no conversor">Importar GeoJSON</button>
+              <button class="btn primary sm" onclick="abrirEditorMemorial({})" title="Colar o memorial descritivo da lei ou digitar os vértices">+ Pelo memorial</button>
+            </span>
+          </div>
         </div>
-        ${rasc.map(p => `
-          <div class="per-linha" onclick="abrirPerimetro(${p.id})">
-            <span class="badge ${PER_BADGE.rascunho}">Rascunho</span>
-            <b>${esc(p.rotulo)}</b>
-            <span class="imp-sub">${_perHa(p.area_m2)} · enviado por ${esc(p.enviado_por || '—')} em ${esc(p.enviado_em || '—')}</span>
-            <button class="btn sm">Continuar</button>
-          </div>`).join('')}
-        <div id="per-versoes" hidden>
-          ${ant.map(p => `
-            <div class="per-linha" onclick="abrirPerimetro(${p.id})">
-              <span class="badge ${PER_BADGE.anterior}">Anterior</span>
-              <b>${esc(p.rotulo)}</b>
-              <span class="imp-sub">${_perData(p.vigente_desde)} a ${_perData(p.vigente_ate)} · ${_perHa(p.area_m2)}</span>
-              <button class="btn sm">Abrir</button>
-            </div>`).join('')}
+        <div class="jt-rolagem">
+          ${lista.length ? `
+            <table class="imp-tabela jt-tabela">
+              <thead><tr><th>Situação</th><th>Perímetro</th><th>Vigência</th><th class="num">Área</th>
+                <th>Enviado</th><th></th></tr></thead>
+              <tbody>${linhas}</tbody>
+            </table>`
+            : '<div class="lista-vazia">Nenhum perímetro carregado ainda.</div>'}
         </div>
-      </div>`
+        <div class="jt-rodape">
+          <span class="imp-sub">${lista.length} versão(ões)${lista.some(p => p.situacao === 'rascunho') ? ` · ${lista.filter(p => p.situacao === 'rascunho').length} rascunho(s)` : ''}</span>
+          <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button></div>
+        </div>
+      </div>`)
   } catch (e) {
-    alvo.innerHTML = `<div class="cad-nota cad-erro">Perímetro urbano: ${esc(e.message)}</div>`
+    _impCorpo(`${_impAbas()}<div class="cad-nota cad-erro">${esc(e.message)}</div>`)
   }
 }
 
@@ -154,6 +162,7 @@ function _perLeiDoFormulario() {
 
 /** Chamado por importacoes.js quando o arquivo solto é do perímetro. */
 async function abrirPerimetroNovo(arq) {
+  impState.aba = 'perimetro'   // "Voltar à lista" cai na aba do perímetro
   perState.arquivo = arq
   _impCorpo(`
     <div class="jt">
@@ -216,6 +225,7 @@ async function carregarPerimetro() {
 // ── A FICHA ────────────────────────────────────────────────────
 
 async function abrirPerimetro(id) {
+  impState.aba = 'perimetro'
   if (!document.getElementById('m-importacoes')?.classList.contains('open') && typeof abrirImportacoes === 'function') {
     await abrirJanelaDoMapa()
     openModal('m-importacoes')
@@ -440,6 +450,7 @@ const _perFmt = (n, casas = 3) => n == null ? '' : Number(n).toLocaleString('pt-
  *   vértices (nova versão); rascunho: o rascunho que será refeito.
  */
 async function abrirEditorMemorial(op = {}) {
+  impState.aba = 'perimetro'
   const m = perState.memorial = { vertices: [], texto: '', area: null, perimetro: null, conferido: null, alvo: op.rascunho || null, base: null }
   let aviso = ''
   try {

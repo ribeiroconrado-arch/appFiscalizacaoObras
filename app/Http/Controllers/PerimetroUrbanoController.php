@@ -311,6 +311,7 @@ class PerimetroUrbanoController extends Controller
             'id'            => $p->id,
             'situacao'      => $p->situacao,
             'situacao_rotulo' => PerimetroUrbano::SITUACOES[$p->situacao] ?? $p->situacao,
+            'origem'        => $p->origem,
             'rotulo'        => $p->rotulo(),
             'lei_numero'    => $p->lei_numero,
             'lei_data'      => $p->lei_data?->format('Y-m-d'),

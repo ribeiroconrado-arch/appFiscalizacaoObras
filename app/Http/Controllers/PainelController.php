@@ -375,7 +375,9 @@ class PainelController extends Controller
                 // Título: o que foi mexido, identificável de relance.
                 'titulo'   => $doc
                     ? $doc->numeroFormatado() . ' · ' . $doc->rotuloTipo()
-                    : ucfirst($this->rotuloTabela($a->tabela)) . ($a->descricao ? ' ' . $a->descricao : ''),
+                    // O perímetro já se descreve ("Perímetro urbano · Lei nº …", PerimetroUrbano::descricaoAuditoria).
+                    : ($a->tabela === 'perimetros_urbanos' && $a->descricao ? $a->descricao
+                        : ucfirst($this->rotuloTabela($a->tabela)) . ($a->descricao ? ' ' . $a->descricao : '')),
                 // Descrição: o que aconteceu, em frase.
                 'detalhe'  => $this->fraseAcao($a->acao, $a->tabela),
                 'usuario'  => $a->usuario_nome ?? 'sistema',
@@ -433,6 +435,11 @@ class PainelController extends Controller
             'anulou'       => $feminino ? 'anulada' : 'anulado',
             'assinou'      => $feminino ? 'assinada' : 'assinado',
             'alterou prazo' => 'com prazo alterado',
+            'carregou'     => 'carregado',
+            'publicou'     => 'publicado',
+            'encerrou vigência' => 'com vigência encerrada',
+            'descartou'    => 'descartado',
+            'refez pelo memorial' => 'refeito pelo memorial',
             default        => $acao,
         };
 
@@ -468,6 +475,7 @@ class PainelController extends Controller
             'legislacoes'    => 'lei',
             'evidencias'     => 'evidência',
             'users'          => 'usuário',
+            'perimetros_urbanos' => 'perímetro urbano',
             default          => $t,
         };
     }

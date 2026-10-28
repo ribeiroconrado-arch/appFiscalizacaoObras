@@ -159,7 +159,23 @@ function fecharImportacoes() {
   pintarBarraImportacao()
 }
 
+/**
+ * As abas da janela: Loteamentos e Perímetro urbano (perimetro-urbano.js).
+ * A aba escolhida fica em `impState.aba` — "Voltar à lista" volta para ela.
+ */
+function _impAbas() {
+  const aba = impState.aba || 'loteamentos'
+  const b = (id, rotulo) => `<button type="button" class="${aba === id ? 'at' : ''}" onclick="trocarAbaImportacoes('${id}')">${rotulo}</button>`
+  return `<div class="sub-abas imp-abas">${b('loteamentos', 'Loteamentos')}${typeof pintarAbaPerimetro === 'function' ? b('perimetro', 'Perímetro urbano') : ''}</div>`
+}
+
+function trocarAbaImportacoes(aba) {
+  impState.aba = aba
+  carregarListaImportacoes()
+}
+
 async function carregarListaImportacoes() {
+  if (impState.aba === 'perimetro' && typeof pintarAbaPerimetro === 'function') return pintarAbaPerimetro()
   _impCorpo('<div class="vazio-msg">Carregando…</div>')
   try {
     const d = await _impPedir('/api/importacoes')
@@ -182,6 +198,7 @@ async function carregarListaImportacoes() {
     _impCorpo(`
       <div class="jt">
         <div class="jt-topo">
+          ${_impAbas()}
           <div class="jt-linha">
             ${jtBusca('imp-busca', 'Pesquisar por bairro, arquivo, situação ou quem enviou')}
             <button class="btn primary sm" onclick="novaImportacao()">+ Nova importação</button>
@@ -189,7 +206,6 @@ async function carregarListaImportacoes() {
           <p class="imp-expl">O arquivo entra como <b>rascunho</b>: só você o vê, e dá para fazer a pré-curadoria
             e conferir com o cadastro antes de decidir. Ao <b>salvar</b>, fica <b>salva, não publicada</b>, na lista
             dos curadores. Ao <b>publicar</b> (administrador), o bairro passa a valer para todos.</p>
-          <div id="imp-perimetros"></div>
         </div>
         <div class="jt-rolagem">
           ${d.importacoes.length ? `
@@ -207,8 +223,6 @@ async function carregarListaImportacoes() {
         </div>
       </div>`)
     jtAplicar('imp-busca')
-    // O perímetro urbano também se atualiza por aqui (perimetro-urbano.js).
-    if (typeof pintarPerimetrosNaLista === 'function') pintarPerimetrosNaLista()
   } catch (e) {
     _impCorpo(`<div class="cad-nota cad-erro">${esc(e.message)}</div>`)
   }
