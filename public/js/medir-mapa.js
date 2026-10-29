@@ -636,7 +636,8 @@ function posicionarBarraMedicao() {
   }
   barra.style.left = mobile ? r.left + 'px' : ''
   barra.style.width = mobile ? r.width + 'px' : ''
-  barra.style.bottom = mobile ? Math.max(0, window.innerHeight - r.bottom) + 'px' : ''
+  const nav = document.querySelector('.abas')?.getBoundingClientRect()
+  barra.style.bottom = mobile ? Math.max(0, window.innerHeight - Math.min(r.bottom, nav ? nav.top - 8 : r.bottom)) + 'px' : ''
 }
 window.addEventListener('resize', posicionarBarraMedicao)
 document.addEventListener('DOMContentLoaded', () => {

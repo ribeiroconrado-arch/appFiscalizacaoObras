@@ -170,3 +170,25 @@
   html.menu-recolhido .abas .aba.at:after{display:none}
 }
 @media(prefers-reduced-transparency:reduce){.abas{background:var(--sur);backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* O conteúdo segue até a borda; só o fim da rolagem reserva espaço para o dock. */
+@media(max-width:1279px){
+  :root{--menu-altura:calc(80px + env(safe-area-inset-bottom))}
+  #t-painel,#t-busca,#t-documentos,#t-denuncias,#t-protocolos,#t-mapa{bottom:0}
+  #t-painel.at,#t-busca,#t-documentos,#t-denuncias,#t-protocolos{padding-bottom:calc(var(--menu-altura) + 16px);scroll-padding-bottom:calc(var(--menu-altura) + 16px)}
+  .abas{width:calc(100% - clamp(16px,4vw,48px));max-width:720px;height:62px;padding:5px;bottom:calc(10px + env(safe-area-inset-bottom));border-radius:999px}
+  .abas .aba{min-height:50px;border-radius:999px;gap:3px;padding:4px 0;font-size:clamp(9px,2.5vw,11px)}
+  .abas .aba svg{width:22px;height:22px}
+  .mapa-fundo-seletor{bottom:calc(var(--menu-altura) + 10px)}
+  #map .leaflet-bottom{bottom:var(--menu-altura)}
+  #t-mapa:has(#med-barra:not([hidden]):not(.med-movel)) .mapa-fundo-seletor{bottom:calc(var(--menu-altura) + 210px)}
+}
+@media(min-width:600px) and (max-width:1279px){
+  .abas .aba{flex-direction:row;gap:9px;font-size:12px}
+}
+@media(min-width:1280px){
+  :root{--menu-largura:224px}
+  .abas .aba{white-space:nowrap;overflow-wrap:normal;gap:12px;font-size:13px}
+  .abas .aba-txt{white-space:nowrap}
+  html.menu-recolhido{--menu-largura:64px}
+}
