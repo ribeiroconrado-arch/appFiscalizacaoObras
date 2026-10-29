@@ -49,6 +49,7 @@ class FundoDaCidade
         'https://overpass-api.de/api/interpreter',
         'https://overpass.kumi.systems/api/interpreter',
         'https://overpass.private.coffee/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
     ];
 
     /** Largura da faixa branca, em metros, por tipo de via do OpenStreetMap. */
@@ -115,15 +116,24 @@ class FundoDaCidade
     public function andamento(): array
     {
         $e = is_file($c = storage_path(self::ESTADO)) ? json_decode((string) file_get_contents($c), true) : [];
-        // Começou há mais de 8 min e não terminou: o processo morreu no meio.
-        $vivo = isset($e['inicio']) && ! isset($e['fim']) && time() - $e['inicio'] < 480;
+        // Passou do tempo máximo (2 pedidos × 4 servidores × 70 s + o recorte)
+        // e não terminou: o processo morreu no meio.
+        $vivo = isset($e['inicio']) && ! isset($e['fim']) && time() - $e['inicio'] < 720;
         $erro = $e['erro'] ?? null;
         if (! $vivo && isset($e['inicio']) && ! isset($e['fim'])) {
             $erro = 'o processo parou no meio, sem resposta (última etapa: ' . ($e['etapa'] ?? 'começando') . '). Tente de novo.';
         }
+        $pct = (int) ($e['pct'] ?? 0);
+        // Esperando o OpenStreetMap: a barra anda de `pct` em direção a `ate`
+        // sem nunca chegar lá (metade do caminho a cada 30 s). Não mede o
+        // download — só mostra que o processo segue vivo.
+        if ($vivo && isset($e['ate'], $e['desde'])) {
+            $pct += (int) floor(($e['ate'] - 1 - $pct) * (1 - 0.5 ** ((time() - $e['desde']) / 30)));
+        }
 
         return ['andamento' => $vivo, 'erro' => $vivo ? null : $erro,
-                'etapa' => $vivo ? ($e['etapa'] ?? 'Começando…') : null, 'pct' => $vivo ? (int) ($e['pct'] ?? 0) : null,
+                'etapa' => $vivo ? ($e['etapa'] ?? 'Começando…') : null, 'pct' => $vivo ? $pct : null,
+                'aguardando' => $vivo && isset($e['ate']),
                 'decorrido' => $vivo ? time() - $e['inicio'] : null];
     }
 
@@ -134,11 +144,11 @@ class FundoDaCidade
      * Grava a etapa e o percentual para a barra de progresso da tela.
      * Fora da tela (CLI, testes) não faz nada.
      */
-    private function progresso(string $etapa, int $pct): void
+    private function progresso(string $etapa, int $pct, array $espera = []): void
     {
         if ($this->inicio !== null) {
             file_put_contents(storage_path(self::ESTADO),
-                json_encode(['inicio' => $this->inicio, 'etapa' => $etapa, 'pct' => $pct], JSON_UNESCAPED_UNICODE));
+                json_encode(['inicio' => $this->inicio, 'etapa' => $etapa, 'pct' => $pct] + $espera, JSON_UNESCAPED_UNICODE));
         }
     }
 
@@ -169,14 +179,11 @@ class FundoDaCidade
      */
     public function atualizar(): array
     {
-        @set_time_limit(420);
+        @set_time_limit(720);
         // ~80 MB no local (2 bairros); em produção há dezenas de bairros na grade.
         @ini_set('memory_limit', '256M');
         $this->progresso('Lendo o perímetro e os bairros…', 2);
         $this->montarRegiao();
-        // O download é a parte longa e não tem como medir: a barra fica em 5%
-        // com a etapa escrita, e anda depois que os dados chegam.
-        $this->progresso('Baixando do OpenStreetMap…', 5);
         $osm = $this->baixar();
         $this->progresso('Separando vias, verde e água…', 40);
 
@@ -247,40 +254,59 @@ class FundoDaCidade
 
     // ── DOWNLOAD ─────────────────────────────────────────────────
 
+    /**
+     * Em DOIS pedidos — vias, depois verde e água —, e não num só: em 29/10 o
+     * pedido único da cidade inteira levou 502/504 dos três servidores. Pedido
+     * menor passa onde o grande cai, e a barra ganha uma etapa de verdade.
+     *
+     * @return array{elements: array}
+     */
     private function baixar(): array
     {
         [$o, $s, $l, $n] = PerimetrosUrbanos::retanguloParaOMapa();
         $c = "($s,$o,$n,$l)";
-        $q = '[out:json][timeout:110];('
-            . 'way["highway"~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link|unclassified|residential|living_street|pedestrian|service|track|cycleway|footway|path)$"]' . $c . ';'
-            . 'way["waterway"~"^(river|canal|stream)$"]' . $c . ';'
-            . 'way["natural"~"^(wood|scrub|grassland|wetland|water)$"]' . $c . ';'
+        $vias = 'way["highway"~"^(motorway|trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link|unclassified|residential|living_street|pedestrian|service|track|cycleway|footway|path)$"]' . $c . ';'
+            . 'way["waterway"~"^(river|canal|stream)$"]' . $c . ';';
+        $areas = 'way["natural"~"^(wood|scrub|grassland|wetland|water)$"]' . $c . ';'
             . 'way["leisure"~"^(park|garden|nature_reserve|pitch)$"]' . $c . ';'
             . 'way["landuse"~"^(grass|forest|meadow|recreation_ground|village_green|reservoir|basin)$"]' . $c . ';'
             . 'relation["natural"~"^(wood|scrub|grassland|wetland|water)$"]' . $c . ';'
             . 'relation["leisure"~"^(park|nature_reserve)$"]' . $c . ';'
-            . 'relation["landuse"~"^(grass|forest|meadow|reservoir)$"]' . $c . ';'
-            . ');out tags geom;';
+            . 'relation["landuse"~"^(grass|forest|meadow|reservoir)$"]' . $c . ';';
 
+        return ['elements' => array_merge(
+            $this->pedirAoOverpass($vias, 'as vias', 5, 28),
+            $this->pedirAoOverpass($areas, 'o verde e a água', 28, 40),
+        )];
+    }
+
+    /**
+     * Um pedido, tentado servidor a servidor. Enquanto espera a resposta, a
+     * barra anda sozinha de $de para perto de $ate (andamento()): parada em
+     * 5% por minutos, parecia travada.
+     */
+    private function pedirAoOverpass(string $consulta, string $oque, int $de, int $ate): array
+    {
+        $q = '[out:json][timeout:65];(' . $consulta . ');out tags geom;';
+        $desde = time();
         $falhas = [];
         foreach (self::SERVIDORES as $n => $url) {
-            // Qual servidor está sendo tentado: na tela, mostra que não travou.
-            if ($n > 0) {
-                $this->progresso('Baixando do OpenStreetMap — tentando o servidor ' . ($n + 1) . ' de ' . count(self::SERVIDORES) . '…', 5);
-            }
+            $this->progresso('Baixando ' . $oque . ' do OpenStreetMap'
+                . ($n > 0 ? ' — tentando o servidor ' . ($n + 1) . ' de ' . count(self::SERVIDORES) : '') . '…',
+                $de, ['ate' => $ate, 'desde' => $desde]);
             try {
-                $r = Http::connectTimeout(20)->timeout(120)->asForm()
+                $r = Http::connectTimeout(10)->timeout(70)->asForm()
                     ->withHeaders(['User-Agent' => 'FiscalizacaoObras/1.0 (mapa municipal; complemento visual)'])
                     ->post($url, ['data' => $q]);
                 if ($r->successful() && is_array($r->json('elements'))) {
-                    return $r->json();
+                    return $r->json('elements');
                 }
                 $falhas[] = parse_url($url, PHP_URL_HOST) . ' ' . $r->status();
             } catch (\Throwable $ex) {
                 $falhas[] = parse_url($url, PHP_URL_HOST) . ' ' . class_basename($ex);
             }
         }
-        throw new RuntimeException('O OpenStreetMap não respondeu (' . implode('; ', $falhas) . '). Tente de novo em alguns minutos.');
+        throw new RuntimeException('O OpenStreetMap não respondeu ao pedir ' . $oque . ' (' . implode('; ', $falhas) . '). Tente de novo em alguns minutos.');
     }
 
     private function tipoDeVia(array $t): ?string

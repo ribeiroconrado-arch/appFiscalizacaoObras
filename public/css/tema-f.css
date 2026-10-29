@@ -4106,12 +4106,12 @@ body.prancheta-aberta .mapa-fundo-seletor{display:none}
 @media(max-width:620px){#t-mapa:has(#med-barra:not([hidden]):not(.med-movel)) .mapa-fundo-seletor{bottom:210px}.mapa-fundo-seletor{left:10px}.modulo-sel .modulo-opcoes{position:fixed;top:64px;left:14px}}
 
 /* Importações › Mapa: progresso da atualização do fundo da cidade (fundo-cidade.js).
-   Enquanto baixa do OpenStreetMap não há como medir: a barra fica listrada, andando. */
+   Esperando o OpenStreetMap (sem como medir), a barra anda devagar e fica listrada. */
 .fundo-prog{height:8px;border-radius:99px;background:var(--blt);overflow:hidden;margin:4px 0 6px}
-.fundo-prog-barra{height:100%;border-radius:99px;background:var(--g);transition:width .6s ease}
-.fundo-prog-barra.esperando{width:100%!important;opacity:.55;
-  background:repeating-linear-gradient(45deg,var(--g) 0 10px,transparent 10px 20px);
-  background-size:28px 28px;animation:fundo-prog-anda 1s linear infinite}
-@keyframes fundo-prog-anda{to{background-position:28px 0}}
+.fundo-prog-barra{height:100%;border-radius:99px;background:var(--g);transition:width 1.8s ease}
+.fundo-prog-barra.esperando{
+  background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 8px,transparent 8px 16px);
+  background-size:22px 22px;animation:fundo-prog-anda 1s linear infinite}
+@keyframes fundo-prog-anda{to{background-position:22px 0}}
 .fundo-prog-texto{display:flex;justify-content:space-between;gap:8px;margin-bottom:12px}
 @media (prefers-reduced-motion:reduce){.fundo-prog-barra.esperando{animation:none}}

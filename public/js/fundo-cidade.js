@@ -226,7 +226,7 @@ async function pintarAbaMapa(aoTerminar = false) {
           ${!d.andamento && d.erro ? `<div class="cad-nota cad-erro" style="margin-bottom:12px">A última tentativa falhou: ${esc(d.erro)}</div>` : ''}
           ${d.andamento ? `
             <div class="fundo-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${d.pct}">
-              <div class="fundo-prog-barra ${d.pct <= 5 ? 'esperando' : ''}" style="width:${Math.max(5, d.pct)}%"></div>
+              <div class="fundo-prog-barra ${d.aguardando ? 'esperando' : ''}" style="width:${Math.max(3, d.pct)}%"></div>
             </div>
             <div class="imp-sub fundo-prog-texto"><span>${esc(d.etapa || '')}</span><b>${d.decorrido != null ? _fundoTempo(d.decorrido) + ' · ' : ''}${d.pct}%</b></div>`
           : d.pode_atualizar
