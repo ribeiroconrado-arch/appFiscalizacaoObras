@@ -223,6 +223,7 @@ async function pintarAbaMapa(aoTerminar = false) {
             ? `Última cópia: <b>${esc(r.gerado_em)}</b> · ${esc(r.perimetro)}<br>
                ${r.vias} trechos de via (${r.nomes} nomes) · ${r.verde} áreas verdes · ${r.agua} rios e lagoas`
             : 'Ainda não foi baixado. O mapa cadastral mostra só os bairros importados.'}</div>
+          ${!d.andamento && d.erro ? `<div class="cad-nota cad-erro" style="margin-bottom:12px">A última tentativa falhou: ${esc(d.erro)}</div>` : ''}
           ${d.andamento ? `
             <div class="fundo-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${d.pct}">
               <div class="fundo-prog-barra ${d.pct <= 5 ? 'esperando' : ''}" style="width:${Math.max(5, d.pct)}%"></div>

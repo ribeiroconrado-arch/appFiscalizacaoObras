@@ -117,8 +117,12 @@ class FundoDaCidade
         $e = is_file($c = storage_path(self::ESTADO)) ? json_decode((string) file_get_contents($c), true) : [];
         // Começou há mais de 8 min e não terminou: o processo morreu no meio.
         $vivo = isset($e['inicio']) && ! isset($e['fim']) && time() - $e['inicio'] < 480;
+        $erro = $e['erro'] ?? null;
+        if (! $vivo && isset($e['inicio']) && ! isset($e['fim'])) {
+            $erro = 'o processo parou no meio, sem resposta (última etapa: ' . ($e['etapa'] ?? 'começando') . '). Tente de novo.';
+        }
 
-        return ['andamento' => $vivo, 'erro' => $vivo ? null : ($e['erro'] ?? null),
+        return ['andamento' => $vivo, 'erro' => $vivo ? null : $erro,
                 'etapa' => $vivo ? ($e['etapa'] ?? 'Começando…') : null, 'pct' => $vivo ? (int) ($e['pct'] ?? 0) : null,
                 'decorrido' => $vivo ? time() - $e['inicio'] : null];
     }
