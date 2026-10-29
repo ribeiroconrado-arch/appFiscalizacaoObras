@@ -260,10 +260,13 @@
 <section class="tela" id="t-mapa">
 
 <div id="map"></div>
-<div class="mapa-fundo-seletor" role="group" aria-label="Fundo do mapa">
-  <button type="button" data-fundo-mapa="cadastral" aria-pressed="true" onclick="ligarCamada('satelite', false)">Cadastral</button>
-  <button type="button" data-fundo-mapa="satelite" aria-pressed="false" onclick="ligarCamada('satelite', true)">Satélite</button>
-</div>
+<details class="mapa-fundo-seletor" aria-label="Fundo do mapa">
+  <summary aria-label="Escolher fundo do mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 7 9-5 9 5-9 5zM3 12l9 5 9-5M3 17l9 5 9-5"/></svg><span id="fundo-mapa-atual">Cadastral</span><span aria-hidden="true">⌃</span></summary>
+  <div class="fundo-mapa-opcoes" role="group" aria-label="Tipo de mapa">
+    <button type="button" data-fundo-mapa="cadastral" aria-pressed="true" onclick="escolherFundoMapa(false)"><span><strong>Cadastral</strong><small>Ruas, quadras e lotes</small></span><span class="fundo-check" aria-hidden="true">✓</span></button>
+    <button type="button" data-fundo-mapa="satelite" aria-pressed="false" onclick="escolherFundoMapa(true)"><span><strong>Satélite</strong><small>Imagem aérea</small></span><span class="fundo-check" aria-hidden="true">✓</span></button>
+  </div>
+</details>
 
 {{-- ══════ FAIXA DAS BARRAS DO MAPA ══════
      Todas as barras que aparecem no alto do mapa moram AQUI, uma embaixo da

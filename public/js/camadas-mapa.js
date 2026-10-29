@@ -66,6 +66,8 @@ function aplicarCamada(c) {
 function pintarPainelCamadas() {
   atualizarIndicadorCamadas()
   document.querySelectorAll('[data-fundo-mapa]').forEach(b => b.setAttribute('aria-pressed', String(camadaLigada('satelite') === (b.dataset.fundoMapa === 'satelite'))))
+  const atual = document.getElementById('fundo-mapa-atual')
+  if (atual) atual.textContent = camadaLigada('satelite') ? 'Satélite' : 'Cadastral'
   const alvo = document.getElementById('camadas-lista')
   if (!alvo) return
   const abertos = new Set([...alvo.querySelectorAll('details[open]')].map(d => d.dataset.grupo))
@@ -184,4 +186,21 @@ registrarCamada({
 registrarCamada({
   id: 'satelite', grupo: 'Fundo', rotulo: 'Imagem de satélite', padrao: false,
   aoMudar: () => { if (typeof aplicarFundoDoMapa === 'function') aplicarFundoDoMapa() },
+})
+
+function escolherFundoMapa(satelite) {
+  ligarCamada('satelite', satelite)
+  const seletor = document.querySelector('.mapa-fundo-seletor')
+  if (seletor) { seletor.open = false; seletor.querySelector('summary').focus() }
+}
+document.addEventListener('click', e => {
+  const seletor = document.querySelector('.mapa-fundo-seletor[open]')
+  if (seletor && !seletor.contains(e.target)) seletor.open = false
+})
+document.addEventListener('keydown', e => {
+  const seletor = document.querySelector('.mapa-fundo-seletor[open]')
+  if (e.key === 'Escape' && seletor) {
+    seletor.open = false
+    seletor.querySelector('summary').focus()
+  }
 })
