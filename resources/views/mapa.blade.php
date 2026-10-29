@@ -1338,9 +1338,7 @@
   </button>
   @unless ($externo)
   <button class="aba at" aria-current="page" data-destino="painel" title="Painel" onclick="irPara('painel')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-      <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
-      <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 9v12"/></svg>
     <span class="aba-txt">Painel</span>
   </button>
   @endunless
@@ -1360,15 +1358,12 @@
        cadastro de lotes, e por isso só existe em Obras. --}}
   @if ($temAba('busca'))
   <button class="aba" data-destino="busca" title="Consulta" onclick="irPara('busca')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5m-14-10 2 2 4-4"/></svg>
     <span class="aba-txt">Consulta</span>
   </button>
   @endif
   <button class="aba" data-destino="mapa" title="Mapa" onclick="irPara('mapa')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-      <path d="M9 20l-6 3V6l6-3 6 3 6-3v17l-6 3z"/><path d="M9 3v17M15 6v17"/></svg>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18-6 3V7l4-2m8 14 6-3V9m-12 9 6 3V11M9 14v4"/><path d="M18 6c0 3-4 6-4 6s-4-3-4-6a4 4 0 0 1 8 0Z"/><circle cx="14" cy="6" r="1"/></svg>
     <span class="aba-txt">Mapa</span>
   </button>
   {{-- Painel, Documentos e Protocolo são da fiscalização. O externo
@@ -1376,19 +1371,15 @@
        qualquer jeito (middleware `interno`). --}}
   @unless ($externo)
   <button class="aba" data-destino="documentos" title="Documentos" onclick="irPara('documentos')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <path d="M14 2v6h6"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="12" height="15" rx="2"/><path d="M16 21H6a2 2 0 0 1-2-2V8m8-1h4m-4 4h4"/></svg>
     <span class="aba-txt">Documentos</span>
   </button>
   {{-- Em Posturas a mesma tela mostra só as ordens de serviço: protocolo é
        requerimento de imóvel, de Obras (DemandaController). --}}
   @php $rotuloFila = $modulo === 'obras' ? 'Protocolo & OS' : 'Ordens de serviço'; @endphp
-  <button class="aba" data-destino="protocolos" title="{{ $rotuloFila }}" onclick="irPara('protocolos')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
-      <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
-      <rect x="9" y="2" width="6" height="4" rx="1"/><path d="m8 13 3 3 5-6"/></svg>
-    <span class="aba-txt">{{ $rotuloFila }}</span>
+  <button class="aba" data-destino="protocolos" aria-label="{{ $rotuloFila }}" title="{{ $rotuloFila }}" onclick="irPara('protocolos')">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h.01M12 11h4M9 16h.01M12 16h4"/></svg>
+    <span class="aba-txt aba-txt-longa">{{ $rotuloFila }}</span><span class="aba-txt aba-txt-curta" aria-hidden="true">{{ $modulo === 'obras' ? 'Prot. & OS' : 'Ordens' }}</span>
   </button>
   @endunless
 </nav>
