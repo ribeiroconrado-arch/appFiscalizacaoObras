@@ -157,7 +157,7 @@
   :root{--menu-altura:calc(92px + env(safe-area-inset-bottom))}
   .abas{left:50%;right:auto;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));width:calc(100% - 20px);max-width:560px;height:72px;padding:6px;gap:2px;border:1px solid color-mix(in srgb,var(--sur) 85%,var(--bord));border-radius:30px;background:var(--sur);box-shadow:0 8px 28px rgba(0,0,0,.14),inset 0 1px 1px rgba(255,255,255,.45)}
   @supports(backdrop-filter:blur(16px)) or (-webkit-backdrop-filter:blur(16px)){
-    .abas{background:color-mix(in srgb,var(--sur) 80%,transparent);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2)}
+    .abas{background:color-mix(in srgb,var(--sur) 65%,transparent);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2)}
   }
   .abas .aba{flex:1 1 0;min-width:0;min-height:58px;padding:6px 0;gap:5px;border-radius:23px;font-size:10px;white-space:nowrap;overflow-wrap:normal;letter-spacing:0}
   .abas .aba.at{background:color-mix(in srgb,var(--gl) 90%,transparent);box-shadow:inset 0 1px 1px rgba(255,255,255,.35)}
