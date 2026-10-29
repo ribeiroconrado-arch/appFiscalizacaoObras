@@ -51,6 +51,8 @@ function aplicarFundoDoMapa() {
     }
   }
   desenharBairrosDoFundo()
+  // As vias, o verde e a água do OpenStreetMap nos vazios (fundo-cidade.js).
+  if (typeof desenharFundoDaCidade === 'function') desenharFundoDaCidade()
   // Lotes, quadras e a linha dos bairros trocam de estilo junto.
   mapaState.camadas?.forEach(c => c.setStyle(estiloColorido(c.feature)))
   if (typeof quadraState !== 'undefined') {

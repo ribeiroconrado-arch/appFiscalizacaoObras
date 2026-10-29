@@ -3227,7 +3227,7 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 #map.cam-sem-medidas .rot-medida,
 #map.cam-sem-rot-quadra .rot-quadra,
 #map.cam-sem-rot-bairro .rot-bairro,
-#map.cam-sem-ruas-cadastro .rot-rua{display:none}
+#map.cam-sem-ruas-cadastro .rot-rua:not(.rot-rua-osm){display:none}
 #map.cam-sem-bairro-contorno .leaflet-contornos-pane,
 #map.cam-sem-ruas .leaflet-rotulos-pane,
 #map.cam-sem-edificacoes .leaflet-edificacoes-pane{display:none}

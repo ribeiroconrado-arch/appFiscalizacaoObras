@@ -57,6 +57,62 @@ function subParametros(nome) {
   if (nome === 'cadastro' && typeof carregarCargasDoCadastro === 'function') { carregarCargasDoCadastro() }
   // Os nomes sem tipo percorrem o cadastro inteiro: só quando a aba abre.
   if (nome === 'ruas') { carregarRuasSemTipo() }
+  if (nome === 'mapa') { carregarResumoDoFundo() }
+}
+
+// ── MAPA: FUNDO DA CIDADE ────────────────────────────────────
+
+function _pintarResumoDoFundo(r) {
+  const alvo = document.getElementById('fundo-resumo')
+  if (!alvo) return
+  alvo.innerHTML = r
+    ? `Última cópia: <b>${esc(r.gerado_em)}</b> · ${esc(r.perimetro)}<br>
+       ${r.vias} trechos de via (${r.nomes} nomes) · ${r.verde} áreas verdes · ${r.agua} rios e lagoas`
+    : 'Ainda não foi baixado. O mapa cadastral mostra só os bairros importados.'
+}
+
+/** O botão enquanto o servidor trabalha. @param {boolean} ocupado */
+function _botaoDoFundo(ocupado) {
+  const btn = document.getElementById('fundo-atualizar')
+  if (!btn) return
+  btn.disabled = ocupado
+  btn.textContent = ocupado ? 'Baixando do OpenStreetMap…' : 'Atualizar o fundo'
+}
+
+/**
+ * O resumo e, se houver atualização em curso, pergunta de novo a cada 4 s.
+ * @param {boolean} [aoTerminar] avisar e redesenhar o mapa quando acabar
+ */
+async function carregarResumoDoFundo(aoTerminar = false) {
+  try {
+    const r = await fetch('/api/parametros/fundo-cidade', { headers: { Accept: 'application/json' } })
+    if (!r.ok) return
+    const d = await r.json()
+    _pintarResumoDoFundo(d.resumo)
+    _botaoDoFundo(d.andamento)
+    if (d.andamento) { setTimeout(() => carregarResumoDoFundo(true), 4000); return }
+    if (!aoTerminar) return
+    if (d.erro) { toast(d.erro, 'err'); return }
+    toast('Fundo da cidade atualizado', 'ok')
+    if (typeof carregarFundoDaCidade === 'function') carregarFundoDaCidade()
+  } catch { /* fica o traço */ }
+}
+
+/** Pede a atualização (o servidor trabalha depois de responder) e acompanha. */
+async function atualizarFundoDaCidade() {
+  _botaoDoFundo(true)
+  try {
+    const r = await fetch('/api/parametros/fundo-cidade', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '' },
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
+    setTimeout(() => carregarResumoDoFundo(true), 4000)
+  } catch (e) {
+    _botaoDoFundo(false)
+    toast(e.message || 'Não foi possível atualizar o fundo', 'err')
+  }
 }
 
 async function carregarParametros() {

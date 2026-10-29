@@ -299,13 +299,16 @@ function _desenharRotulosDeRua() {
   /** Os candidatos de todos os bairros, antes da regra de "uma rua, um nome". */
   const candidatos = []
 
-  for (const b of quadraState.porBairro.values()) {
+  // Os trechos de cada bairro e, no fundo cadastral, os do OpenStreetMap nos
+  // vazios entre bairros (fundo-cidade.js) — que passam pela mesma regra.
+  const fontes = [...quadraState.porBairro.values()].filter(b => b !== 'carregando').map(b => b.ruas || [])
+  if (typeof trechosDeRuaDoFundo === 'function') fontes.push(trechosDeRuaDoFundo())
 
-    if (b === 'carregando') continue
+  for (const trechosDaFonte of fontes) {
 
     // 1. Os trechos com nome, agrupados por rua, com a posição absoluta do meio.
     const ruas = new Map()
-    for (const t of b.ruas) {
+    for (const t of trechosDaFonte) {
       if (!t.nome || t.origem === 'oculto' || t.origem === 'sem_nome') continue
       const meio = L.latLng((t.de[0] + t.ate[0]) / 2, (t.de[1] + t.ate[1]) / 2)
       // RUA NÃO PASSA POR DENTRO DE QUADRA. O trecho gerado fica 7 m para
@@ -372,7 +375,7 @@ function _desenharRotulosDeRua() {
     else if (ang <= -90) ang += 180
     quadraState.rotulosRua.push(L.marker(c.meio, {
       interactive: false, keyboard: false,
-      icon: L.divIcon({ className: 'rot-rua', iconSize: [0, 0],
+      icon: L.divIcon({ className: c.t.origem === 'osm' ? 'rot-rua rot-rua-osm' : 'rot-rua', iconSize: [0, 0],
         html: `<span style="transform:translate(-50%,-50%) rotate(${ang.toFixed(1)}deg)">${esc(c.texto)}</span>` }),
     }).addTo(mapa))
   }

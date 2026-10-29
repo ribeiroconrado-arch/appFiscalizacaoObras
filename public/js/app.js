@@ -468,6 +468,7 @@ async function prepararMapa() {
       // permanentes precisam de um mapa já com centro e zoom. Sem await —
       // ele não segura a carga dos lotes.
       if (typeof carregarContornosDosBairros === 'function') { carregarContornosDosBairros() }
+      if (typeof carregarFundoDaCidade === 'function') { carregarFundoDaCidade() }
     }
     // Aguarda também a carga que o moveend iniciou durante o enquadramento.
     await carregarLotesVisiveis()

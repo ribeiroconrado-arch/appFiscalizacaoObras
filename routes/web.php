@@ -120,6 +120,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/mapa/perimetro', [\App\Http\Controllers\PerimetroUrbanoController::class, 'vigente'])->middleware('comprimir');
         // A área sem máscara: município do IBGE + perímetro vigente.
         Route::get('/mapa/area-visivel', [\App\Http\Controllers\PerimetroUrbanoController::class, 'areaVisivel'])->middleware('comprimir');
+        // O fundo do mapa completado com o OpenStreetMap nos vazios (FundoDaCidade).
+        Route::get('/mapa/fundo-cidade', [\App\Http\Controllers\FundoDaCidadeController::class, 'mapa'])->middleware('comprimir');
         // Contorno de cada bairro: o mapa de todos lê; o curador gera e grava.
         Route::get('/mapa/bairros', [BairroContornoController::class, 'index'])->middleware('comprimir');
         Route::get('/mapa/quadras', [BairroContornoController::class, 'quadras'])->middleware('comprimir');
@@ -401,6 +403,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/parametros/ruas/sem-tipo', [ParametroController::class, 'ruasSemTipo']);
         Route::post('/parametros/ruas', [ParametroController::class, 'salvarRua']);
         Route::delete('/parametros/ruas/{logradouro}', [ParametroController::class, 'excluirRua']);
+        Route::get('/parametros/fundo-cidade', [\App\Http\Controllers\FundoDaCidadeController::class, 'resumo']);
+        Route::post('/parametros/fundo-cidade', [\App\Http\Controllers\FundoDaCidadeController::class, 'atualizar'])->middleware('throttle:pesado');
 
         // O autocomplete de endereço do Posturas: a rua sugere os bairros dela.
         Route::get('/enderecos/logradouros', [\App\Http\Controllers\EnderecoController::class, 'logradouros']);

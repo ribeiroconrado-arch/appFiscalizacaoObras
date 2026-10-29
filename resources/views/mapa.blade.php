@@ -1138,6 +1138,7 @@
     @else
       <button data-sub="decibelimetros" onclick="subParametros('decibelimetros')">Decibelímetros</button>
     @endif
+    <button data-sub="mapa" onclick="subParametros('mapa')">Mapa</button>
     <button data-sub="geral" onclick="subParametros('geral')">Formulário</button>
   </div>
 
@@ -1293,6 +1294,20 @@
     <div class="par-sec" style="margin-top:20px"><span class="par-num">2</span>Cargas<span class="cont" id="cont-cargas">0</span></div>
     <div id="cm-lista"></div>
     <div id="cm-detalhe"></div>
+  </div>
+
+  {{-- MAPA — o fundo da cidade: vias, verde e água do OpenStreetMap nos vazios
+       entre os bairros importados. Complemento visual; ver FundoDaCidade. --}}
+  <div class="par-painel" id="par-mapa">
+    <div class="par-sec">Fundo da cidade (OpenStreetMap)</div>
+    <p class="imp-sub" style="margin:4px 0 10px">
+      Completa o mapa cadastral fora dos bairros importados: vias com nome, áreas verdes e água,
+      só dentro do perímetro urbano. É só desenho — nada entra no cadastro.
+      Atualize depois de importar bairros ou de publicar um perímetro novo.
+    </p>
+    <div id="fundo-resumo" class="imp-sub" style="margin-bottom:10px">—</div>
+    <button class="btn out-verde sm" id="fundo-atualizar" onclick="atualizarFundoDaCidade()">Atualizar o fundo</button>
+    <p class="imp-sub" style="margin-top:10px">Dados © colaboradores do OpenStreetMap (licença ODbL).</p>
   </div>
 
   <div class="par-painel" id="par-geral">
@@ -4341,6 +4356,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/bairros-contorno.js')"></script>
 {{-- O mapa cadastral: fundo desenhado com os contornos e as quadras de bairros-contorno.js. --}}
 <script src="@assetv('js/fundo-cadastral.js')"></script>
+{{-- O fundo completado com o OpenStreetMap nos vazios entre bairros (FundoDaCidade). --}}
+<script src="@assetv('js/fundo-cidade.js')"></script>
 <script src="@assetv('js/ruas-manuais.js')"></script>
 <script src="@assetv('js/prancheta-cadastral.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>
