@@ -624,11 +624,13 @@ function posicionarBarraMedicao() {
   if (!barra || !mapa) return
   const mobile = window.innerWidth <= 620
   const r = mapa.getBoundingClientRect()
+  const dockTop = window.innerWidth < 1280 ? document.querySelector('.abas')?.getBoundingClientRect().top : Infinity
+  const limiteInferior = Math.min(r.bottom, dockTop ?? Infinity)
   if (medBarraPosicao) {
     barra.style.width = Math.min(570, Math.max(0, r.width - 16)) + 'px'
     const b = barra.getBoundingClientRect()
     medBarraPosicao.x = Math.max(r.left + 8, Math.min(medBarraPosicao.x, r.right - b.width - 8))
-    medBarraPosicao.y = Math.max(r.top + 8, Math.min(medBarraPosicao.y, r.bottom - b.height - 8))
+    medBarraPosicao.y = Math.max(r.top + 8, Math.min(medBarraPosicao.y, limiteInferior - b.height - 8))
     barra.style.left = medBarraPosicao.x + 'px'
     barra.style.top = medBarraPosicao.y + 'px'
     barra.style.bottom = 'auto'

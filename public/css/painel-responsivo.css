@@ -209,3 +209,19 @@
   #t-mapa .mapa-fundo-seletor{right:max(clamp(8px,2vw,24px),calc((100% - 720px)/2));bottom:calc(var(--menu-altura) + 2px)}
 }
 @media(prefers-reduced-transparency:reduce){#t-mapa .mapa-fundo-seletor{background:var(--sur);backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* Créditos em faixa própria abaixo do dock, sem disputar espaço com o seletor. */
+@media(max-width:1279px){
+  :root{--menu-altura:calc(102px + env(safe-area-inset-bottom))}
+  .abas{bottom:calc(32px + env(safe-area-inset-bottom))}
+  #map .leaflet-bottom.leaflet-right:has(.leaflet-control-attribution){bottom:env(safe-area-inset-bottom)}
+  #map .leaflet-control-attribution{max-width:calc(100vw - 16px);margin:0 8px 2px;padding:2px 5px;white-space:normal;overflow-wrap:anywhere;font-size:10px;line-height:12px}
+}
+
+/* Painéis usam a área útil acima do dock; o mapa continua por trás dele. */
+@media(max-width:1279px){
+  #t-mapa .corr-painel:not(.recolhido){bottom:calc(var(--menu-altura) + 8px);max-height:calc(100% - var(--menu-altura) - 24px)}
+  #t-mapa .desm-mesa:not([hidden]),#t-mapa .cad-mesa{bottom:calc(var(--menu-altura) + 8px);max-height:calc(100dvh - 130px - var(--menu-altura));overflow-y:auto}
+  #t-mapa .mapa-barras{max-height:calc(100% - var(--menu-altura) - 100px);overflow-y:auto;scroll-padding-bottom:12px}
+  #t-mapa .ctrl-grupo.aberto .ctrl-corpo{max-height:calc(100dvh - 150px - var(--menu-altura));overflow-y:auto}
+}

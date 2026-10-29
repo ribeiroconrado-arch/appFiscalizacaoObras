@@ -131,7 +131,8 @@ function posicionarPainelCamadas() {
   if (!painel || !mapa) return
   const r = mapa.getBoundingClientRect()
   const mobile = window.innerWidth <= 620
-  const altura = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0))
+  const dock = window.innerWidth < 1280 ? document.querySelector('.abas')?.getBoundingClientRect().top : Infinity
+  const altura = Math.max(0, Math.min(r.bottom, window.innerHeight, (dock ?? Infinity) - 8) - Math.max(r.top, 0))
   const largura = Math.max(0, mobile ? r.width : Math.min(360, r.width - 76))
   painel.style.width = largura + 'px'
   painel.style.left = (mobile ? r.left : r.right - largura - 62) + 'px'

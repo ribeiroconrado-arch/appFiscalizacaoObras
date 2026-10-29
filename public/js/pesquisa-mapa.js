@@ -11,7 +11,8 @@ function posicionarPesquisaMapa() {
   const r = mapa.getBoundingClientRect(), b = botao.getBoundingClientRect()
   const esquerda = Math.max(0, r.left) + 8
   const topo = Math.max(0, r.top) + 8
-  const base = Math.min(window.innerHeight, r.bottom) - 8
+  const dock = window.innerWidth < 1280 ? document.querySelector('.abas')?.getBoundingClientRect().top : Infinity
+  const base = Math.min(window.innerHeight, r.bottom, dock ?? Infinity) - 8
   const largura = Math.max(0, Math.min(400, b.left - 8 - esquerda))
   painel.style.width = largura + 'px'
   painel.style.maxHeight = Math.max(0, base - topo) + 'px'
