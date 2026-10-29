@@ -34,18 +34,27 @@ class EdificacaoController extends Controller
      */
     public function listar(Lote $lote): JsonResponse
     {
-        $linhas = DB::table('edificacoes')
-            ->where('lote_id', $lote->id)
-            ->orderBy('id')
-            ->get(['id', 'area_m2', 'descricao', DB::raw('ST_AsGeoJSON(geom) AS geojson')]);
+        $linhas = DB::table('edificacoes as e')
+            ->leftJoin('users as u', 'u.id', '=', 'e.criado_por')
+            ->where('e.lote_id', $lote->id)
+            ->orderBy('e.id')
+            ->get(['e.id', 'e.area_m2', 'e.descricao', 'e.origem', 'e.origem_ref', 'e.created_at',
+                'u.name as autor', DB::raw('ST_AsGeoJSON(e.geom) AS geojson')]);
 
         return response()->json([
             'edificacoes' => $linhas->map(fn ($e) => [
-                'id'        => $e->id,
-                'area_m2'   => (float) $e->area_m2,
-                'descricao' => $e->descricao,
-                'geometry'  => json_decode($e->geojson),
+                'id'            => $e->id,
+                'area_m2'       => (float) $e->area_m2,
+                'descricao'     => $e->descricao,
+                // Quem desenhou, quando e para qual demanda: a ficha mostra.
+                'autor'         => $e->autor,
+                'desenhado_em'  => $e->created_at ? date('d/m/Y', strtotime($e->created_at)) : null,
+                'origem'        => $e->origem,
+                'origem_rotulo' => Edificacao::ORIGENS[$e->origem] ?? $e->origem,
+                'origem_ref'    => $e->origem_ref,
+                'geometry'      => json_decode($e->geojson),
             ]),
+            'origens' => Edificacao::ORIGENS,
             'area_construida_m2' => round((float) $linhas->sum('area_m2'), 2),
         ]);
     }
@@ -74,7 +83,12 @@ class EdificacaoController extends Controller
             // pontos — o mesmo defeito que derrubava o desenho de lote.
             'geometry.coordinates' => ['required', 'array'],
             'descricao'            => ['nullable', 'string', 'max:160'],
+            'origem'               => ['nullable', 'string', 'in:' . implode(',', array_keys(Edificacao::ORIGENS))],
+            'origem_ref'           => ['nullable', 'string', 'max:40'],
         ]);
+        $origem = $d['origem'] ?? 'atualizacao_cadastral';
+        $ref = trim((string) ($d['origem_ref'] ?? '')) ?: null;
+        $autor = $r->user()->id;
 
         $geojson = json_encode($d['geometry']);
 
@@ -107,11 +121,11 @@ class EdificacaoController extends Controller
 
         $area = (float) DB::scalar('SELECT ST_Area(ST_GeomFromGeoJSON(?, 1, 4326))', [$geojson]);
 
-        $id = DB::transaction(function () use ($lote, $d, $geojson, $area) {
+        $id = DB::transaction(function () use ($lote, $d, $geojson, $area, $origem, $ref, $autor) {
             DB::insert(
-                'INSERT INTO edificacoes (lote_id, area_m2, descricao, geom, created_at, updated_at)
-                 VALUES (?, ?, ?, ST_GeomFromGeoJSON(?, 1, 4326), ?, ?)',
-                [$lote->id, round($area, 2), $d['descricao'] ?? null, $geojson, now(), now()]
+                'INSERT INTO edificacoes (lote_id, area_m2, descricao, criado_por, origem, origem_ref, geom, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ST_GeomFromGeoJSON(?, 1, 4326), ?, ?)',
+                [$lote->id, round($area, 2), $d['descricao'] ?? null, $autor, $origem, $ref, $geojson, now(), now()]
             );
 
             return (int) DB::getPdo()->lastInsertId();
@@ -122,6 +136,7 @@ class EdificacaoController extends Controller
         $e = Edificacao::find($id);
         $e->registrarAuditoria('desenhou', null, [
             'lote_id' => $lote->id, 'area_m2' => round($area, 2), 'descricao' => $d['descricao'] ?? null,
+            'origem' => $origem, 'origem_ref' => $ref,
         ]);
 
         return response()->json([

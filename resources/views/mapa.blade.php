@@ -2882,6 +2882,40 @@
   </div>
 </div>
 
+{{-- DADOS DA EDIFICAÇÃO — pedidos depois de fechar o contorno (edificacoes.js).
+     A origem diz para qual demanda o croqui foi feito; as características da
+     construção entram aqui quando a planilha com os campos chegar. --}}
+<div class="modal-bg" id="m-edificacao" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <button class="modal-x" onclick="fModalBtn('m-edificacao')">&#10005;</button>
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>
+      </span>
+      <span>Dados da edificação</span>
+    </h3>
+    <div class="field">
+      <label for="med-descricao">Descrição</label>
+      <input id="med-descricao" type="text" maxlength="160" placeholder="Casa, edícula, barracão… (opcional)">
+    </div>
+    <div class="field">
+      <label for="med-origem">Desenhada para</label>
+      <select id="med-origem"></select>
+    </div>
+    <div class="field">
+      <label for="med-ref">Nº do protocolo, processo ou vistoria</label>
+      <input id="med-ref" type="text" maxlength="40" placeholder="Opcional">
+    </div>
+    <div class="leg">Fechar esta janela sem gravar descarta o contorno.</div>
+    <div class="btn-row">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-edificacao')">Cancelar</button>
+      <button class="btn primary" onclick="_medConfirmar()">Gravar edificação</button>
+    </div>
+  </div>
+</div>
+
 {{-- ══════ APAGAR LOTE RESIDUAL ══════
      Pede SENHA além do motivo. Não é excesso: a ação é irreversível e o sistema
      é usado no celular, em campo, com o dedo — um toque errado não pode apagar

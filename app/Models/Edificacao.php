@@ -20,7 +20,18 @@ class Edificacao extends Model
 
     protected $table = 'edificacoes';
 
-    protected $fillable = ['lote_id', 'area_m2', 'descricao'];
+    protected $fillable = ['lote_id', 'area_m2', 'descricao', 'criado_por', 'origem', 'origem_ref'];
+
+    /**
+     * De onde o croqui veio. O croqui serve a várias demandas, e a ficha diz
+     * de qual — chave gravada → rótulo da tela.
+     */
+    public const ORIGENS = [
+        'atualizacao_cadastral' => 'Atualização cadastral',
+        'vistoria'              => 'Vistoria',
+        'desmembramento'        => 'Desmembramento',
+        'unificacao'            => 'Unificação',
+    ];
 
     protected $casts = ['area_m2' => 'float'];
 
@@ -39,13 +50,19 @@ class Edificacao extends Model
     {
         static::addGlobalScope('sem_geometria', function (Builder $q) {
             $q->select('edificacoes.id', 'edificacoes.lote_id', 'edificacoes.area_m2',
-                'edificacoes.descricao', 'edificacoes.created_at', 'edificacoes.updated_at');
+                'edificacoes.descricao', 'edificacoes.criado_por', 'edificacoes.origem', 'edificacoes.origem_ref',
+                'edificacoes.created_at', 'edificacoes.updated_at');
         });
     }
 
     public function lote(): BelongsTo
     {
         return $this->belongsTo(Lote::class);
+    }
+
+    public function autor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'criado_por');
     }
 
     /** O que a trilha de auditoria mostra no lugar do id. */

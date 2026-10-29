@@ -93,6 +93,8 @@ async function carregarHistorico(loteId) {
  * @param {Object|null} resumo
  */
 function renderResumo(resumo) {
+  // O croqui não depende do resumo: vem das edificações do lote (edificacoes.js).
+  if (typeof renderCroquiAtual === 'function') { renderCroquiAtual() }
   const põe = (id, texto) => {
     const el = document.getElementById(id)
     if (el) { el.textContent = texto }
