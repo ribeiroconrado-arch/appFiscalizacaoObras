@@ -198,6 +198,9 @@ function trechosDeRuaDoFundo() {
 // (leva de 40 s a alguns minutos); a aba pergunta a cada 2 s e mostra a
 // etapa e o percentual numa barra (FundoDaCidade::progresso) até acabar.
 
+/** "45 s", "2 min 10 s" */
+const _fundoTempo = s => s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + (s % 60) + ' s'
+
 /** @param {boolean} [aoTerminar] avisar e redesenhar o mapa quando acabar */
 async function pintarAbaMapa(aoTerminar = false) {
   impState.aba = 'mapa'
@@ -224,7 +227,7 @@ async function pintarAbaMapa(aoTerminar = false) {
             <div class="fundo-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${d.pct}">
               <div class="fundo-prog-barra ${d.pct <= 5 ? 'esperando' : ''}" style="width:${Math.max(5, d.pct)}%"></div>
             </div>
-            <div class="imp-sub fundo-prog-texto"><span>${esc(d.etapa || '')}</span><b>${d.pct}%</b></div>`
+            <div class="imp-sub fundo-prog-texto"><span>${esc(d.etapa || '')}</span><b>${d.decorrido != null ? _fundoTempo(d.decorrido) + ' · ' : ''}${d.pct}%</b></div>`
           : d.pode_atualizar
             ? '<button class="btn out-verde sm" onclick="atualizarFundoDaCidade()">Atualizar o fundo</button>'
             : '<span class="imp-sub">Só o administrador atualiza.</span>'}

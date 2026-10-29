@@ -119,7 +119,8 @@ class FundoDaCidade
         $vivo = isset($e['inicio']) && ! isset($e['fim']) && time() - $e['inicio'] < 480;
 
         return ['andamento' => $vivo, 'erro' => $vivo ? null : ($e['erro'] ?? null),
-                'etapa' => $vivo ? ($e['etapa'] ?? 'Começando…') : null, 'pct' => $vivo ? (int) ($e['pct'] ?? 0) : null];
+                'etapa' => $vivo ? ($e['etapa'] ?? 'Começando…') : null, 'pct' => $vivo ? (int) ($e['pct'] ?? 0) : null,
+                'decorrido' => $vivo ? time() - $e['inicio'] : null];
     }
 
     /** Quando a atualização roda pela tela: a hora de início, que o estado guarda. */
@@ -258,7 +259,11 @@ class FundoDaCidade
             . ');out tags geom;';
 
         $falhas = [];
-        foreach (self::SERVIDORES as $url) {
+        foreach (self::SERVIDORES as $n => $url) {
+            // Qual servidor está sendo tentado: na tela, mostra que não travou.
+            if ($n > 0) {
+                $this->progresso('Baixando do OpenStreetMap — tentando o servidor ' . ($n + 1) . ' de ' . count(self::SERVIDORES) . '…', 5);
+            }
             try {
                 $r = Http::connectTimeout(20)->timeout(120)->asForm()
                     ->withHeaders(['User-Agent' => 'FiscalizacaoObras/1.0 (mapa municipal; complemento visual)'])
