@@ -118,7 +118,23 @@ class FundoDaCidade
         // Começou há mais de 8 min e não terminou: o processo morreu no meio.
         $vivo = isset($e['inicio']) && ! isset($e['fim']) && time() - $e['inicio'] < 480;
 
-        return ['andamento' => $vivo, 'erro' => $vivo ? null : ($e['erro'] ?? null)];
+        return ['andamento' => $vivo, 'erro' => $vivo ? null : ($e['erro'] ?? null),
+                'etapa' => $vivo ? ($e['etapa'] ?? 'Começando…') : null, 'pct' => $vivo ? (int) ($e['pct'] ?? 0) : null];
+    }
+
+    /** Quando a atualização roda pela tela: a hora de início, que o estado guarda. */
+    private ?int $inicio = null;
+
+    /**
+     * Grava a etapa e o percentual para a barra de progresso da tela.
+     * Fora da tela (CLI, testes) não faz nada.
+     */
+    private function progresso(string $etapa, int $pct): void
+    {
+        if ($this->inicio !== null) {
+            file_put_contents(storage_path(self::ESTADO),
+                json_encode(['inicio' => $this->inicio, 'etapa' => $etapa, 'pct' => $pct], JSON_UNESCAPED_UNICODE));
+        }
     }
 
     /** Marca o início; a tela passa a perguntar até terminar. */
@@ -130,13 +146,14 @@ class FundoDaCidade
     /** Atualiza e registra o fim (ou o erro) para a tela. */
     public function atualizarRegistrando(): void
     {
-        $estado = ['inicio' => time()];
+        $estado = ['inicio' => $this->inicio = time()];
         try {
             $this->atualizar();
         } catch (\Throwable $ex) {
             report($ex);
             $estado['erro'] = $ex instanceof RuntimeException ? $ex->getMessage() : 'Falha ao montar o fundo: ' . class_basename($ex);
         }
+        $this->inicio = null;
         $estado['fim'] = time();
         file_put_contents(storage_path(self::ESTADO), json_encode($estado, JSON_UNESCAPED_UNICODE));
     }
@@ -150,8 +167,13 @@ class FundoDaCidade
         @set_time_limit(420);
         // ~80 MB no local (2 bairros); em produção há dezenas de bairros na grade.
         @ini_set('memory_limit', '256M');
+        $this->progresso('Lendo o perímetro e os bairros…', 2);
         $this->montarRegiao();
+        // O download é a parte longa e não tem como medir: a barra fica em 5%
+        // com a etapa escrita, e anda depois que os dados chegam.
+        $this->progresso('Baixando do OpenStreetMap…', 5);
         $osm = $this->baixar();
+        $this->progresso('Separando vias, verde e água…', 40);
 
         $vias = [];
         $areas = [];
@@ -170,11 +192,16 @@ class FundoDaCidade
             }
         }
 
+        $this->progresso('Juntando as pistas duplas…', 45);
         $this->juntarPistasDuplas($vias);
 
         // O recorte.
         $saida = [];
-        foreach ($vias as $v) {
+        $total = max(1, count($vias));
+        foreach ($vias as $k => $v) {
+            if ($k % 200 === 0) {
+                $this->progresso('Recortando as vias (' . $k . ' de ' . $total . ')…', 50 + intdiv(40 * $k, $total));
+            }
             foreach ($this->recortarLinha($v['c']) as $pedaco) {
                 if ($this->comprimento($pedaco) < 5) {
                     continue;
@@ -184,6 +211,7 @@ class FundoDaCidade
             }
         }
         $areasSaida = [];
+        $this->progresso('Recortando o verde e a água…', 92);
         foreach ($areas as $a) {
             foreach ($this->recortarArea($a['c']) as $anel) {
                 $areasSaida[] = ['t' => $a['t'], 'c' => $this->arredondar($anel)];
@@ -203,6 +231,7 @@ class FundoDaCidade
         ];
         $json = json_encode(['resumo' => $resumo, 'vias' => $saida, 'areas' => $areasSaida],
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $this->progresso('Gravando…', 98);
         // Grava num temporário e troca: quem estiver lendo nunca pega o arquivo pela metade.
         $destino = storage_path(self::ARQUIVO);
         file_put_contents($destino . '.tmp', $json);

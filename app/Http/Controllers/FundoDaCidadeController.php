@@ -10,7 +10,7 @@ use Illuminate\Http\Response;
 /**
  * O fundo do mapa completado com o OpenStreetMap nos vazios entre os bairros
  * (App\Services\FundoDaCidade). O mapa de todos lê; só o administrador
- * atualiza, em Parâmetros › Mapa.
+ * atualiza, em Importações › Mapa (o curador vê a aba, sem o botão).
  */
 class FundoDaCidadeController extends Controller
 {
@@ -35,18 +35,20 @@ class FundoDaCidadeController extends Controller
         ]);
     }
 
-    /** GET /api/parametros/fundo-cidade — última cópia, quantidades e se há atualização em curso. */
+    /** GET /api/mapa/fundo-cidade/estado — última cópia, quantidades e se há atualização em curso. */
     public function resumo(Request $r): JsonResponse
     {
-        if ($n = $this->exigirAdmin($r)) {
-            return $n;
+        $u = $r->user();
+        if (! $u->isAdmin() && ! $u->podeCurarCadastro()) {
+            return response()->json(['message' => 'Só curador e administrador veem o fundo do mapa.'], 403);
         }
 
-        return response()->json(['resumo' => $this->fundo->resumo()] + $this->fundo->andamento());
+        return response()->json(['resumo' => $this->fundo->resumo(), 'pode_atualizar' => $u->isAdmin()]
+            + $this->fundo->andamento());
     }
 
     /**
-     * POST /api/parametros/fundo-cidade — baixa e recorta de novo.
+     * POST /api/mapa/fundo-cidade/atualizar — baixa e recorta de novo.
      *
      * Responde na hora e trabalha DEPOIS da resposta: o download e o recorte
      * levam até um minuto, e o servidor web cortaria a requisição antes. A

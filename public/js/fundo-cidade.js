@@ -189,3 +189,68 @@ function trechosDeRuaDoFundo() {
     return !t._noBairro
   })
 }
+
+// ── IMPORTAÇÕES › MAPA ───────────────────────────────────────────
+//
+// A aba da janela de Importações (importacoes.js chama quando
+// `impState.aba === 'mapa'`): a última cópia e o botão de atualizar, que é
+// só do administrador. A atualização roda no servidor DEPOIS da resposta
+// (leva de 40 s a alguns minutos); a aba pergunta a cada 2 s e mostra a
+// etapa e o percentual numa barra (FundoDaCidade::progresso) até acabar.
+
+/** @param {boolean} [aoTerminar] avisar e redesenhar o mapa quando acabar */
+async function pintarAbaMapa(aoTerminar = false) {
+  impState.aba = 'mapa'
+  if (!aoTerminar) _impCorpo('<div class="vazio-msg">Carregando…</div>')
+  try {
+    const d = await _impPedir('/api/mapa/fundo-cidade/estado')
+    if (impState.aba !== 'mapa') return   // trocou de aba enquanto esperava
+    const r = d.resumo
+    _impCorpo(`
+      <div class="jt">
+        <div class="jt-topo">${_impAbas()}</div>
+        <div class="jt-rolagem" style="padding:4px 2px">
+          <div class="par-sec">Fundo da cidade (OpenStreetMap)</div>
+          <p class="imp-sub" style="margin:6px 0 12px">
+            Completa o mapa cadastral fora dos bairros importados: vias com nome, áreas verdes e água,
+            só dentro do perímetro urbano. É só desenho — nada entra no cadastro.
+            Atualize depois de importar bairros ou de publicar um perímetro novo.
+          </p>
+          <div class="imp-sub" style="margin-bottom:12px">${r
+            ? `Última cópia: <b>${esc(r.gerado_em)}</b> · ${esc(r.perimetro)}<br>
+               ${r.vias} trechos de via (${r.nomes} nomes) · ${r.verde} áreas verdes · ${r.agua} rios e lagoas`
+            : 'Ainda não foi baixado. O mapa cadastral mostra só os bairros importados.'}</div>
+          ${d.andamento ? `
+            <div class="fundo-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${d.pct}">
+              <div class="fundo-prog-barra ${d.pct <= 5 ? 'esperando' : ''}" style="width:${Math.max(5, d.pct)}%"></div>
+            </div>
+            <div class="imp-sub fundo-prog-texto"><span>${esc(d.etapa || '')}</span><b>${d.pct}%</b></div>`
+          : d.pode_atualizar
+            ? '<button class="btn out-verde sm" onclick="atualizarFundoDaCidade()">Atualizar o fundo</button>'
+            : '<span class="imp-sub">Só o administrador atualiza.</span>'}
+          <p class="imp-sub" style="margin-top:14px">Dados © colaboradores do OpenStreetMap (licença ODbL).</p>
+        </div>
+        <div class="jt-rodape">
+          <span></span>
+          <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button></div>
+        </div>
+      </div>`)
+    if (d.andamento) { setTimeout(() => { if (impState.aba === 'mapa') pintarAbaMapa(true) }, 2000); return }
+    if (!aoTerminar) return
+    if (d.erro) { toast(d.erro, 'err'); return }
+    toast('Fundo da cidade atualizado', 'ok')
+    carregarFundoDaCidade()
+  } catch (e) {
+    _impCorpo(`${_impAbas()}<div class="cad-nota cad-erro">${esc(e.message)}</div>`)
+  }
+}
+
+/** Pede a atualização e passa a acompanhar. */
+async function atualizarFundoDaCidade() {
+  try {
+    await _impPedir('/api/mapa/fundo-cidade/atualizar', { method: 'POST' })
+    pintarAbaMapa(true)
+  } catch (e) {
+    toast(e.message || 'Não foi possível atualizar o fundo', 'err')
+  }
+}

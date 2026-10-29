@@ -160,13 +160,14 @@ function fecharImportacoes() {
 }
 
 /**
- * As abas da janela: Loteamentos e Perímetro urbano (perimetro-urbano.js).
+ * As abas da janela: Loteamentos, Perímetro urbano (perimetro-urbano.js) e
+ * Mapa — o fundo da cidade (fundo-cidade.js).
  * A aba escolhida fica em `impState.aba` — "Voltar à lista" volta para ela.
  */
 function _impAbas() {
   const aba = impState.aba || 'loteamentos'
   const b = (id, rotulo) => `<button type="button" class="${aba === id ? 'at' : ''}" onclick="trocarAbaImportacoes('${id}')">${rotulo}</button>`
-  return `<div class="sub-abas imp-abas">${b('loteamentos', 'Loteamentos')}${typeof pintarAbaPerimetro === 'function' ? b('perimetro', 'Perímetro urbano') : ''}</div>`
+  return `<div class="sub-abas imp-abas">${b('loteamentos', 'Loteamentos')}${typeof pintarAbaPerimetro === 'function' ? b('perimetro', 'Perímetro urbano') : ''}${typeof pintarAbaMapa === 'function' ? b('mapa', 'Mapa') : ''}</div>`
 }
 
 function trocarAbaImportacoes(aba) {
@@ -176,6 +177,7 @@ function trocarAbaImportacoes(aba) {
 
 async function carregarListaImportacoes() {
   if (impState.aba === 'perimetro' && typeof pintarAbaPerimetro === 'function') return pintarAbaPerimetro()
+  if (impState.aba === 'mapa' && typeof pintarAbaMapa === 'function') return pintarAbaMapa()
   _impCorpo('<div class="vazio-msg">Carregando…</div>')
   try {
     const d = await _impPedir('/api/importacoes')
