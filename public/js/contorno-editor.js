@@ -717,7 +717,7 @@ function _ceMostrarConferencia() {
       const area = L.polygon(p.map(r => r.map(x => [x[1], x[0]])), { pane: 'ceContorno', interactive: false,
         color: '#B91C1C', weight: 3, fillColor: '#DC2626', fillOpacity: .55, className: 'ce-invasao' }).addTo(ceState.invasoes)
       const k = ceState.pecasInvasao.push({ bairro: i.bairro, bounds: area.getBounds() }) - 1
-      const rot = `Invade ${i.bairro} (${String(i.area_m2).replace('.', ',')} m² no total)`
+      const rot = `Invade ${i.bairro} (${fmtNum(i.area_m2)} m² no total)`
       L.marker(area.getBounds().getCenter(), { pane: 'ceAlcas', keyboard: false, title: rot, alt: rot,
         icon: L.divIcon({ className: 'ce-invasao-pino', iconSize: [22, 22], html: '!' }) })
         .on('click', () => verInvasao(k)).addTo(ceState.invasoes)

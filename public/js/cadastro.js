@@ -1610,7 +1610,7 @@ function _corpoDesmembramento() {
 /** @param {string|number|null|undefined} v @returns {number|null} */
 function _num(v) {
   if (v === null || v === undefined || String(v).trim() === '') { return null }
-  const n = Number(String(v).replace(',', '.'))
+  const n = lerNumeroBR(v)
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
@@ -1876,7 +1876,7 @@ async function popularBairrosDoDesenho(selecionado) {
 
 /** @param {string} id @returns {number|null} */
 function numeroDoCampo(id) {
-  const v = String(document.getElementById(id)?.value ?? '').replace(',', '.').trim()
+  const v = String(document.getElementById(id)?.value ?? '').trim()
   if (v === '') { return null }
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? n : null
@@ -1926,7 +1926,7 @@ function conferirMedidas() {
     linhas.push(`<div class="cad-nota${fora ? ' cad-aviso' : ''}">`
       + `Matrícula <b>${fmtNum(m.area_matricula_m2)} m²</b> · `
       + `desenho <b>${fmtNum(areaDesenho)} m²</b> · `
-      + `<b>${dif > 0 ? '+' : ''}${dif.toFixed(1).replace('.', ',')}%</b>`
+      + `<b>${dif > 0 ? '+' : ''}${fmtBR(dif, 1)}%</b>`
       + (fora ? ' — confira se o desenho não pegou a calçada ou faltou pedaço.' : '')
       + '</div>')
   }
@@ -2016,7 +2016,7 @@ async function conferirDesenho() {
   const dv = r.divergencia
   const divergencia = dv === null || dv === undefined ? '' :
     `<div class="cad-nota${Math.abs(dv) > 5 ? ' cad-aviso' : ''}">
-      Matrícula × desenho: <b>${dv > 0 ? '+' : ''}${String(dv).replace('.', ',')}%</b>.
+      Matrícula × desenho: <b>${dv > 0 ? '+' : ''}${fmtNum(dv)}%</b>.
       ${Math.abs(dv) > 5
         ? 'A diferença é grande — o lote é gravado assim mesmo, e as duas medidas ficam registradas.'
         : 'As duas medidas batem.'}</div>`

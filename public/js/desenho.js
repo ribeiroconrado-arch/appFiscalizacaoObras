@@ -195,7 +195,7 @@ function alternarConcordanciaDesenho() {
 
 /** @param {number} i índice do canto */
 function _concordanciaNoCanto(i) {
-  const r = Number(String(document.getElementById('des-raio')?.value || '').replace(',', '.'))
+  const r = lerNumeroBR(document.getElementById('des-raio')?.value || '')
   if (!(r > 0)) { toast('Informe um raio maior que zero, em metros.', 'err'); return }
   const v = desenhoState.vertices, m = v.length
   if (desenhoState.modo !== 'poligono' && (i === 0 || i === m - 1)) {
@@ -582,7 +582,7 @@ function distanciaNoPlano(a, b) {
 
 /** @param {number} m @returns {string} */
 function fmtMedida(m) {
-  return m.toFixed(2).replace('.', ',') + ' m'
+  return fmtBR(m, 2) + ' m'
 }
 
 /** Área do anel em desenho, em m². Fórmula do cadarço sobre o plano local. */
@@ -744,7 +744,7 @@ function _pintarMedidas() {
   // que o operador faz naturalmente para conferir uma medida.
   if (fecha && _cabeNaTela(v, 96)) {
     desenhoState.rotuloArea = _rotulo(cy, cx,
-      areaDoDesenho().toFixed(2).replace('.', ',') + ' m²', 'des-area')
+      fmtBR(areaDoDesenho(), 2) + ' m²', 'des-area')
   }
 }
 
@@ -811,13 +811,13 @@ function editarLado(i) {
   // A caixa nasce EM CIMA da etiqueta, com o valor atual selecionado: o gesto
   // é corrigir um número que já está lá, não preencher um campo vazio.
   rot.innerHTML = `<input class="des-medida-campo" inputmode="decimal"
-    value="${atual.toFixed(2).replace('.', ',')}" aria-label="Medida do lado em metros">`
+    value="${fmtBR(atual, 2)}" aria-label="Medida do lado em metros">`
   const campo = rot.querySelector('input')
   campo.focus()
   campo.select()
 
   const aplicar = () => {
-    const n = Number(String(campo.value).replace(',', '.'))
+    const n = lerNumeroBR(campo.value)
     if (Number.isFinite(n) && n > 0.05) { aplicarMedidaDoLado(i, n) } else { _pintar() }
   }
 

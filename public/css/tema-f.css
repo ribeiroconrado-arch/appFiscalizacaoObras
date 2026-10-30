@@ -2110,7 +2110,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   border:1.5px solid var(--f-bord);border-radius:var(--r);background:var(--sur);
   color:var(--tx);font-family:inherit;outline:none}
 .vs-nova-exig input:focus{border-color:var(--f-bord-foco);box-shadow:0 0 0 3px var(--f-anel)}
-.vs-nova-exig input[type=number]{flex:0 0 76px}
+.vs-nova-exig input[type=number],.vs-nova-exig input.campo-num{flex:0 0 76px}
 .vs-nova-exig .btn{flex-shrink:0;min-width:42px;justify-content:center}
 
 .vs-exig{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;margin-bottom:6px;
@@ -3621,7 +3621,7 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
   flex:1 1 150px;min-width:0;padding:8px 10px;border:1.5px solid var(--bord);
   border-radius:8px;background:var(--sur);color:var(--tx);font:inherit;font-size:13px;
 }
-.tr-filtros input[type=number]{flex:0 0 120px}
+.tr-filtros input[type=number],.tr-filtros input.campo-num{flex:0 0 120px}
 
 .tr-linha{
   display:flex;align-items:baseline;gap:12px;padding:11px 4px;

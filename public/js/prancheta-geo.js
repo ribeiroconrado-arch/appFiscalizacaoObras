@@ -213,7 +213,7 @@ const PranchetaGeo = (() => {
     const u1=unit(sub(a,v)), u2=unit(sub(b,v)), c=Math.max(-1,Math.min(1,dot(u1,u2))), th=Math.acos(c)
     if(th<Math.PI/180||th>Math.PI*179/180) throw new Error('Os dois lados estão quase alinhados: não há canto para arredondar.')
     const d=r/Math.tan(th/2), max=Math.min(len(sub(a,v)),len(sub(b,v)))
-    if(d>max-1e-6) throw new Error(`O raio não cabe nesses lados. O máximo aqui é ${(max*Math.tan(th/2)).toFixed(2).replace('.',',')} m.`)
+    if(d>max-1e-6) throw new Error(`O raio não cabe nesses lados. O máximo aqui é ${(max*Math.tan(th/2)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})} m.`)
     const t1=add(v,mul(u1,d)), t2=add(v,mul(u2,d)), centro=add(v,mul(unit(add(u1,u2)),r/Math.sin(th/2)))
     const a1=Math.atan2(t1[1]-centro[1],t1[0]-centro[0]), a2=Math.atan2(t2[1]-centro[1],t2[0]-centro[0])
     let delta=a2-a1; while(delta>Math.PI)delta-=2*Math.PI; while(delta<-Math.PI)delta+=2*Math.PI

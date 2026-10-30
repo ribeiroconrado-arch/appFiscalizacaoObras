@@ -371,7 +371,7 @@ async function conferirBairroAgora() {
   }
   if (document.querySelector('input[name="conf-fonte"]:checked')?.value === 'ultima') fd.append('fonte', 'ultima')
   // A variação de área aceita (zero = exata), em m² ou em % da área do cadastro.
-  const tol = Number(String(document.getElementById('conf-tol')?.value ?? '0').replace(',', '.'))
+  const tol = lerNumeroBR(document.getElementById('conf-tol')?.value || '0')
   fd.append('tolerancia_area', Number.isFinite(tol) && tol > 0 ? String(tol) : '0')
   fd.append('tolerancia_unidade', document.getElementById('conf-tol-un')?.value || 'm2')
   const btn = document.getElementById('conf-btn')

@@ -225,7 +225,7 @@ function _realcarAlvo(feicao) {
       pane: _paneMesa(), interactive: false, keyboard: false,
       icon: L.divIcon({
         className: 'des-medida', iconSize: null,
-        html: `<span class="des-rot">${d.toFixed(2).replace('.', ',')} m</span>`,
+        html: `<span class="des-rot">${fmtBR(d, 2)} m</span>`,
       }),
     }).addTo(mapa)
   }).filter(Boolean)

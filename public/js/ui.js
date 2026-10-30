@@ -389,6 +389,104 @@ function fmtNum(n) {
   return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 })
 }
 
+// ── NÚMEROS NO PADRÃO BRASILEIRO ─────────────────────────────
+//
+// Regra do sistema (30/10/2026): vírgula para decimais e ponto para milhares,
+// na tela e na digitação — 1.234,56. A exceção são as COORDENADAS (-15.519896,
+// -54.306069), que ficam no formato do GPS para colar no Google Maps.
+//
+// O que vai ao servidor continua no formato de máquina (1234.56): a conversão
+// é só na borda, entre o que se vê e o que se lê.
+
+/** "1.234,56" → 1234.56. Aceita também "1234.56" (ponto decimal) e "1.234" (milhar). NaN se não for número. */
+function lerNumeroBR(v) {
+  if (typeof v === 'number') return v
+  let s = String(v ?? '').trim().replace(/\s/g, '')
+  if (!s) return NaN
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.')
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '')
+  return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(s) ? Number(s) : NaN
+}
+
+/** 1234.5 → "1.234,50": casas fixas, com milhar. @param {number} n @param {number} [casas] */
+function fmtBR(n, casas = 2) {
+  return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
+}
+
+/**
+ * CAMPOS NUMÉRICOS. O `<input type="number">` mostra e aceita o número
+ * conforme o idioma do NAVEGADOR — 1234.56 num, 1234,56 noutro, e nunca o
+ * milhar. Todo campo numérico vira campo de texto no padrão brasileiro, e a
+ * propriedade `value` passa a converter nas duas mãos:
+ *   - lida pelo código, devolve o número de máquina ("1234.56"), então
+ *     `Number(campo.value)` e os envios ao servidor continuam como estavam;
+ *   - escrita pelo código (`campo.value = 1234.5`), mostra "1.234,5".
+ * Campo de inteiro (sem casas no `step`) não ganha milhar: ano, prazo e
+ * número de casa não viram "2.026".
+ */
+const _VALOR_NATIVO = typeof HTMLInputElement === 'undefined' ? null : Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+
+/** As casas decimais que o campo pede (step="0.01" → 2); 0 para inteiro. */
+function _casasDoCampo(el) {
+  const passo = el.dataset.passo
+  if (passo === 'any') return 2
+  return (String(passo || '').split('.')[1] || '').length
+}
+
+/** O texto que o campo mostra para um número. */
+function _textoDoCampo(el, n, casasDigitadas = 0) {
+  const minimo = _casasDoCampo(el)
+  const casas = Math.min(10, Math.max(minimo, casasDigitadas))
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: minimo ? Math.min(minimo, casas) : 0,
+    maximumFractionDigits: casas, useGrouping: minimo > 0 })
+}
+
+/** @param {HTMLInputElement} el */
+function prepararCampoNumero(el) {
+  if (!_VALOR_NATIVO || el.dataset.numBr) return
+  el.dataset.numBr = '1'
+  el.dataset.passo = el.getAttribute('step') || ''
+  const inicial = _VALOR_NATIVO.get.call(el)
+  el.type = 'text'
+  if (!el.hasAttribute('inputmode')) el.setAttribute('inputmode', _casasDoCampo(el) ? 'decimal' : 'numeric')
+  el.classList.add('campo-num')
+  Object.defineProperty(el, 'value', {
+    configurable: true,
+    get() {
+      const t = _VALOR_NATIVO.get.call(this)
+      if (!t.trim()) return ''
+      const n = lerNumeroBR(t)
+      return Number.isFinite(n) ? String(n) : t
+    },
+    // Quem escreve pelo código escreve em formato de máquina (12.5, "608.19").
+    set(v) {
+      if (v === '' || v == null) { _VALOR_NATIVO.set.call(this, ''); return }
+      const n = typeof v === 'number' ? v : (Number.isFinite(Number(v)) ? Number(v) : lerNumeroBR(v))
+      const casas = (String(v).split('.')[1] || '').length
+      _VALOR_NATIVO.set.call(this, Number.isFinite(n) ? _textoDoCampo(this, n, typeof v === 'number' ? 10 : casas) : String(v))
+    },
+  })
+  Object.defineProperty(el, 'valueAsNumber', { configurable: true, get() { return lerNumeroBR(_VALOR_NATIVO.get.call(this)) } })
+  if (inicial !== '') el.value = inicial
+  // Ao sair do campo, o que foi digitado é reescrito no padrão: 1234,5 → 1.234,5.
+  el.addEventListener('blur', () => {
+    const t = _VALOR_NATIVO.get.call(el), n = lerNumeroBR(t)
+    if (t.trim() && Number.isFinite(n)) _VALOR_NATIVO.set.call(el, _textoDoCampo(el, n, (t.split(',')[1] || '').length))
+  })
+}
+
+function _prepararCamposNumero(raiz) {
+  if (raiz.matches?.('input[type=number]')) prepararCampoNumero(raiz)
+  raiz.querySelectorAll?.('input[type=number]').forEach(prepararCampoNumero)
+}
+document.addEventListener?.('DOMContentLoaded', () => {
+  _prepararCamposNumero(document)
+  // As telas montadas depois (Parâmetros, documento, prancheta) também.
+  new MutationObserver(lista => {
+    for (const m of lista) for (const n of m.addedNodes) if (n.nodeType === 1) _prepararCamposNumero(n)
+  }).observe(document.body, { childList: true, subtree: true })
+})
+
 // ── SETAS DE ABA ─────────────────────────────────────────────
 //
 // Todo formulário de várias abas ganha os mesmos quatro controles NO RODAPÉ,

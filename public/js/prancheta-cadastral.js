@@ -79,6 +79,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       <section id="pc-dados" hidden aria-label="Dados e conferência"><header><b>Dados dos imóveis</b><button type="button" class="modal-x pc-fechar-dados" onclick="PranchetaCad.dados(false)" aria-label="Fechar dados">✕</button></header><div id="pc-form"></div><div id="pc-conferencia" role="status" tabindex="-1"></div></section>
       <div class="pc-credito">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · Referência cartográfica</div></main>
       <footer class="pc-rodape"><button type="button" class="btn sm" onclick="PranchetaCad.salvar().catch(()=>{})" id="pc-save">Salvar rascunho</button>
+      <button type="button" class="btn sm" id="pc-descartar" hidden onclick="PranchetaCad.descartarRascunho()" title="A edição volta ao contorno gravado do lote">Descartar rascunho</button>
       <button type="button" class="btn sm" onclick="PranchetaCad.exportar()">Exportar SVG</button><span id="pc-salvo" role="status"></span>
       <span class="pc-fillet" id="pc-fillet" hidden><b>Fillet</b><label>raio <input id="pc-raio" inputmode="decimal" autocomplete="off" aria-label="Raio do fillet, em metros"> m</label><small id="pc-fillet-passo"></small></span><span id="pc-dica" role="status"></span><span id="pc-resumo"></span><button type="button" class="btn primary" id="pc-continuar" onclick="PranchetaCad.dados(true)">Dados e finalizar →</button></footer>`
     // O painel do Snap fecha ao clicar fora dele.
@@ -170,7 +171,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   // O raio do Fillet mora no RODAPÉ, à vista enquanto o Fillet está ativo (ver
   // render): a caixa flutuante cobria o desenho bem onde se escolhe o lado.
   function entradaRaio(){$('pc-entrada').hidden=true;$('pc-fillet').hidden=false;$('pc-raio').value=String(s.raio).replace('.',',')}
-  function raioDigitado(){const n=Number(String($('pc-raio').value).replace(',','.').trim());if(!Number.isFinite(n)||n<0){$('pc-fillet-passo').textContent='Raio inválido.';return}s.raio=n;s.fillet.erro=null;render();svg.focus()}
+  function raioDigitado(){const n=lerNumeroBR($('pc-raio').value);if(!Number.isFinite(n)||n<0){$('pc-fillet-passo').textContent='Raio inválido.';return}s.raio=n;s.fillet.erro=null;render();svg.focus()}
   /**
    * ALINHAR FACE: a face clicada fica na horizontal e EMBAIXO, com o lote
    * acima dela — como a testada na frente do lote (frenteParaBaixo). O lado
@@ -280,7 +281,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     const de=redo?s.redo:s.undo,para=redo?s.undo:s.redo;if(!de.length)return;para.push(estado());Object.assign(s,de.pop());s.traco=[];s.operacao=null;s.sel=null;mudou()}
   function iniciarOperacao(t){const l=selecionada();if(!l)return;s.operacao={tipo:t,orig:copy(l.pontos),inicio:G.mul(G.add(l.pontos[0],l.pontos.at(-1)),.5),basePendente:t==='mover',antes:estado()};s.mouse=s.operacao.inicio;s.valor='';if(t==='offset')entrada(s.mouse,'Offset');else $('pc-entrada').hidden=true;dica(t==='mover'?'Clique no ponto de origem do movimento (com object snap). Depois indique o destino ou digite a distância.':'Afaste o cursor da linha; digite o offset com sinal ou clique para aplicar.')}
   function deltaOperacao(){const o=s.operacao;if(!o)return [0,0];const d=G.sub(s.mouse||o.inicio,o.inicio);const n=G.normal(o.orig[0],o.orig[1]);const numero=numeroDigitado();return o.tipo==='offset'?G.mul(n,numero??G.dot(d,n)):G.mul(G.unit(G.len(d)>1e-8?d:[1,0]),numero??G.len(d))}
-  function numeroDigitado(){if(!s.valor?.trim())return null;const n=Number(s.valor.replace(',','.'));return Number.isFinite(n)?n:null}
+  function numeroDigitado(){if(!s.valor?.trim())return null;const n=lerNumeroBR(s.valor);return Number.isFinite(n)?n:null}
   function pontosOperacao(){const o=s.operacao;if(!o)return null;const d=deltaOperacao();return o.tipo==='offset'?G.offset(o.orig,G.dot(d,G.normal(o.orig[0],o.orig[1]))):o.orig.map(p=>G.add(p,d))}
   function aplicarOperacao(){if(!s.operacao||s.operacao.basePendente)return;try{const p=pontosOperacao();antes();selecionada().pontos=p;s.operacao=null;s.valor='';s.captura=null;$('pc-entrada').hidden=true;mudou();svg.focus()}catch(err){dica(err.message)}}
   function down(ev){
@@ -362,7 +363,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   function trocarPontaCota(){if(!s?.cotaEd)return;s.cotaEd.fixa=s.cotaEd.fixa==='a'?'b':'a';render();$('pc-cota-valor').focus()}
   function aplicarCota(){const c=s?.cotaEd;if(!c)return;const l=s.linhas.find(x=>x.id===c.id);if(!l)return fecharCota()
     // 32,0039 ou 32.0039; com vírgula, o ponto é de milhar (1.234,5).
-    const txt=String($('pc-cota-valor').value).trim(),n=Number(txt.includes(',')?txt.replace(/./g,'').replace(',','.'):txt)
+    const txt=String($('pc-cota-valor').value).trim(),n=lerNumeroBR(txt)
     if(!Number.isFinite(n)||n<=0){dica('Digite uma medida maior que zero, em metros (ex.: 32,0000).');return}
     const A=l.pontos[c.i-1],B=l.pontos[c.i],atual=G.len(G.sub(B,A));if(atual<1e-9)return fecharCota()
     // Anda a ponta escolhida, ao longo do próprio lado; no contorno fechado o
@@ -634,7 +635,17 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   }
   function norte(){if(!s)return;s.angulo=0;enquadrar();if(!s.leitura)mudou()}
   function mapa(v){s.mapa=v;render();if(!s.leitura)agendar()}
-  function agendar(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>salvar().catch(()=>{}),900)}
+  // Lote novo, Editar lote e edificação NÃO se salvam sozinhos (30/10/2026): o
+  // rascunho é só o que se guarda em "Salvar rascunho". Fechar sem salvar perde
+  // a edição (com aviso), e reabrir mostra o contorno gravado ou o rascunho
+  // guardado — nunca uma cópia que ninguém pediu para guardar.
+  function agendar(){if(livre()){if(!s.loading){s.sujo=true;pintarRascunho()}return}clearTimeout(saveTimer);saveTimer=setTimeout(()=>salvar().catch(()=>{}),900)}
+  const quando=ts=>new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+  /** "Descartar rascunho" (há rascunho guardado) ou "Voltar ao original" (só alterações não salvas). Editar lote. */
+  function pintarRascunho(){const b=$('pc-descartar');if(!b)return;const v=!!s&&s.tipo==='edicao'&&!s.leitura&&!!(s.temRascunho||s.sujo);b.hidden=!v;if(v)b.textContent=s.temRascunho?'Descartar rascunho':'Voltar ao original'}
+  function descartarRascunho(){if(!s||s.tipo!=='edicao')return;const tem=!!s.temRascunho
+    confirmarAcao({titulo:tem?'Descartar o rascunho?':'Voltar ao original?',mensagem:'A edição volta ao contorno gravado do lote'+(tem?' e o rascunho guardado é apagado':'')+'. Não dá para desfazer.',textoBtn:tem?'Descartar rascunho':'Voltar ao original',perigo:true,
+      onConfirm:async()=>{try{localStorage.removeItem(chaveLocal())}catch{};const {tipo,ids,protocoloId,opts}=s;s.sujo=false;s.temRascunho=null;await abrir(tipo,ids,protocoloId,null,opts);if(s)$('pc-salvo').textContent='Edição de volta ao original'}})}
   function visualizacao(){return {versao:1,dados:copy(s.dados),ordem:s.ordem||[],angulo:s.angulo,mapa:s.mapa,linhas:s.linhas.map(l=>({id:l.id,pontos:l.pontos.map(s.plano.de)})),anotacoes:s.anotacoes.map(a=>({...a,p:s.plano.de(a.p)})),contexto:s.contexto}}
   function payload(){return {tipo:s.tipo,ids:s.ids,protocolo_id:s.protocoloId}}
   async function request(url,body){
@@ -649,7 +660,8 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     if(!s||s.leitura||s.loading)return;clearTimeout(saveTimer);
     // Lote novo e Editar lote não têm rascunho no servidor (a rota de
     // pranchetas é do ato cadastral); a cópia fica neste navegador.
-    if(livre()){guardarLocal({estado:{...visualizacao(),traco:s.traco.map(s.plano.de)}});$('pc-salvo').textContent='Rascunho guardado neste navegador';return}
+    if(livre()){const r={rascunho:1,salvo_em:Date.now(),estado:{...visualizacao(),traco:s.traco.map(s.plano.de)}};let ok=false;try{localStorage.setItem(chaveLocal(),JSON.stringify(r));ok=true}catch{}
+      if(ok){s.sujo=false;s.temRascunho=r.salvo_em}$('pc-salvo').textContent=ok?'Rascunho salvo neste navegador · '+quando(r.salvo_em):'Não foi possível guardar o rascunho neste navegador';pintarRascunho();return}
     const sessao=s,k=chaveLocal(),corpo=copy({...payload(),estado:{...visualizacao(),dados:s.dados,numero:s.numero,justificativa:s.justificativa,traco:s.traco.map(s.plano.de)}});
     const local=guardarLocal(corpo);$('pc-salvo').textContent='Salvando…';
     fila=fila.catch(()=>{}).then(()=>request('/api/pranchetas/salvar',corpo));
@@ -663,7 +675,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
    *   edicao  {quadra, numero_lote, aoSalvar()} — o lote de `ids[0]` vira linha editável.
    */
   async function abrir(tipo,ids,protocoloId=null,salva=null,opts={}){
-    montar();if(s&&!s.leitura)await salvar();const token=++geracao
+    montar();if(s&&!s.leitura&&!livre())await salvar();const token=++geracao
     // O contorno de origem vem SEMPRE do servidor, com a precisão gravada: o do
     // mapa vem com 8 casas (~1 mm), e só esse arredondamento já muda a área em
     // ~0,01 m² — a diferença contra o cadastro que não se achava. As
@@ -713,8 +725,13 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       // Lote novo não recupera cópia local: sem lote de origem, a chave não diz
       // de qual desenho ela era, e traria o rascunho de outro lugar do mapa.
       // (Nem a edificação: cada construção é um desenho novo sobre o mesmo lote.)
-      if(tipo!=='novo'&&tipo!=='edificacao')try{const local=localStorage.getItem(chaveLocal());if(local){restaurar(JSON.parse(local));$('pc-salvo').textContent=livre()?'Cópia local recuperada':'Cópia local recuperada · salve novamente no servidor'}}catch{}
-      if(tipo==='unificacao')s.numero=s.numeroUniao||'';s.loading=false
+      // Editar lote: só o rascunho SALVO volta ({rascunho:1}). A cópia antiga,
+      // gravada sozinha a cada alteração, é apagada sem ser restaurada.
+      if(tipo!=='novo'&&tipo!=='edificacao')try{const local=localStorage.getItem(chaveLocal());if(local){const v=JSON.parse(local)
+        if(!livre()){restaurar(v);$('pc-salvo').textContent='Cópia local recuperada · salve novamente no servidor'}
+        else if(v?.rascunho){restaurar(v.estado);s.temRascunho=v.salvo_em;$('pc-salvo').textContent='Rascunho de '+quando(v.salvo_em)+' recuperado'}
+        else localStorage.removeItem(chaveLocal())}}catch{}
+      if(tipo==='unificacao')s.numero=s.numeroUniao||'';s.loading=false;pintarRascunho()
       // Edificação: com os vizinhos carregados, dá para saber qual lado é a rua.
       if(tipo==='edificacao'){const t=frenteParaBaixo();$('pc-salvo').textContent=t?`Frente do lote para baixo (testada de ${fmtNum(t)} m) · "Norte" desfaz`:'Não deu para identificar a frente do lote: norte para cima'}
       recalcular();enquadrar()
@@ -820,7 +837,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       const t=r.retrato,dv=t.divergencia,encosta=(t.vizinhos||[]).filter(v=>v.area_comum===0).length
       $('pc-conferencia').innerHTML=`<div class="pc-identidade"><span class="lote-tag-origem">NOVO</span>
         <p>Lote de <b>${fmtNum(t.area_m2)} m²</b> com ${t.vertices} canto(s), em ${e(t.bairro)} · quadra ${e(t.quadra)} · lote ${e(t.lote)}.${encosta?` Encosta em ${encosta} lote(s) vizinho(s).`:''}</p>
-        ${dv===null||dv===undefined?'':`<p>Matrícula × desenho: <b>${dv>0?'+':''}${String(dv).replace('.',',')}%</b>${Math.abs(dv)>5?' — diferença grande; o lote é gravado assim mesmo, com as duas medidas.':''}</p>`}
+        ${dv===null||dv===undefined?'':`<p>Matrícula × desenho: <b>${dv>0?'+':''}${fmtNum(dv)}%</b>${Math.abs(dv)>5?' — diferença grande; o lote é gravado assim mesmo, com as duas medidas.':''}</p>`}
         ${(r.avisos||[]).map(a=>`<p>⚠ ${e(a)}</p>`).join('')}</div>
         <div class="pc-form-acoes"><button type="button" class="btn primary" onclick="PranchetaCad.criarLoteNovo()">Criar lote</button></div>`
       $('pc-conferencia').scrollIntoView({block:'nearest',behavior:'smooth'})
@@ -989,7 +1006,9 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   }
   async function fecharSessao(forcar=false){
     if(!s)return true;if(s.busy)return false;
-    if(!s.leitura&&!forcar){try{await salvar()}catch(err){
+    // Editar lote com alteração não salva: fechar é perder a edição — pergunta antes.
+    if(livre()&&!s.leitura&&!forcar&&s.sujo&&s.tipo==='edicao'){confirmarAcao({titulo:'Fechar sem salvar?',mensagem:'As alterações feitas'+(s.temRascunho?' depois do último rascunho':'')+' serão perdidas. Para guardá-las, clique em "Salvar rascunho" antes de fechar.',textoBtn:'Fechar sem salvar',perigo:true,onConfirm:()=>fechar(true)});return false}
+    if(!s.leitura&&!forcar&&!livre()){try{await salvar()}catch(err){
       if(!s.recuperacaoLocal){let aviso=modal.querySelector('.pc-falha');if(!aviso){aviso=document.createElement('section');aviso.className='pc-anotar pc-falha';aviso.innerHTML='<p>Não foi possível salvar no servidor nem neste navegador. Sair agora perde as alterações não salvas.</p><div class="pc-acoes"><button class="btn out-cinza" type="button" onclick="this.closest(\'.pc-falha\').remove()">Continuar editando</button><button class="btn out-vermelho" type="button" onclick="PranchetaCad.fechar(true)">Sair sem salvar</button></div>';svg.parentElement.appendChild(aviso)}return}
       toast('Prancheta fechada. Rascunho guardado apenas neste navegador; reabra os mesmos lotes para recuperá-lo.','aviso')
     }}
@@ -1052,7 +1071,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
         <span class="pc-prox-acoes"><button type="button" class="btn sm" onclick="PranchetaCad.proxIr(${k})">Ir</button><button type="button" class="btn sm primary" onclick="PranchetaCad.proxAfastar(${k})" title="${it.laco?'Tira o laço: fica só o ponto do cruzamento':'Empurra o vértice até a folga'}">${it.laco?'Desatar':'Afastar'}</button>${it.vertice!=null?`<button type="button" class="btn sm" onclick="PranchetaCad.proxExcluir(${k})" title="Exclui o vértice que está perto demais">Excluir vértice</button>`:''}</span></li>`).join('')}</ol>`
         :'<p class="pc-prox-vazio">Nenhum par de lados a menos de 5 cm. Se o Conferir ainda recusar, é outro problema.</p>'}`
   }
-  function proxFolga(v){const n=Number(String(v).replace(',','.'));if(Number.isFinite(n)&&n>0&&n<=5)s.prox.folga=n;else $('pc-prox-folga').value=String(s.prox.folga).replace('.',',')}
+  function proxFolga(v){const n=lerNumeroBR(v);if(Number.isFinite(n)&&n>0&&n<=5)s.prox.folga=n;else $('pc-prox-folga').value=String(s.prox.folga).replace('.',',')}
   /** Enquadra o lugar: a folga em volta ocupa boa parte da tela. */
   function proxIr(k){const it=s?.prox?.itens[k];if(!it)return;s.prox.sel=k
     const vao=Math.max(.04,(it.d||0)*20);s.escala=Math.min(ESCALA_MAX,.6*larguraDesenho()/vao);s.centro=G.rot(it.p,s.angulo);pintarProx();render()}
@@ -1098,5 +1117,5 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     s.prox.itens.forEach((it,k)=>{const t=tela(it.p),d=Math.hypot(t[0]-q[0],t[1]-q[1]);if(d<16&&(!melhor||d<melhor.d))melhor={k,d}})
     if(!melhor)return false;proxIr(melhor.k);return true}
 
-  return {proximidades,proxFechar,proxIr,proxAfastar,proxExcluir,proxFolga,esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {descartarRascunho,proximidades,proxFechar,proxIr,proxAfastar,proxExcluir,proxFolga,esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()
