@@ -51,6 +51,12 @@ class EdicaoDeLote
         return $this->desenho->impedimento($this->dados($lote, $d), $lote->id);
     }
 
+    /** @return list<string> o que a tela mostra e pede para confirmar (lote do tamanho de gleba) */
+    public function avisos(Lote $lote, array $d): array
+    {
+        return array_values(array_filter([$this->desenho->avisoDeArea($this->dados($lote, $d))]));
+    }
+
     /** @return array<string,mixed> */
     public function retrato(Lote $lote, array $d): array
     {

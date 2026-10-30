@@ -816,6 +816,7 @@ class CadastroLoteController extends Controller
             'impedimento' => $impedimento,
             'cruzamentos' => $this->cruzamentos($impedimento, $d),
             'retrato'     => $svc->retrato($lote, $d),
+            'avisos'      => $impedimento ? [] : $svc->avisos($lote, $d),
         ]);
     }
 

@@ -844,14 +844,18 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     s.busy=true;$('pc-conferencia').textContent='Conferindo…'
     try{const d=await request(`/api/lotes/${s.ids[0]}/edicao/previa`,corpoEdicao())
       if(d.impedimento){mostrarCruzamentos(d);exibirErro({message:d.impedimento});return}
+      // Lote do tamanho de gleba: grava, mas pede confirmação (DesenhoDeLote::avisoDeArea).
+      s.avisosEdicao=d.avisos||[]
       const r=d.retrato,antes=r.area_anterior_exata??r.area_anterior_m2,agora=r.area_m2_exata??r.area_m2,dif=Math.round((agora-antes)*10000)/10000
       $('pc-conferencia').innerHTML=`<p>Área: <b>${fmtMed(antes)} m²</b> → <b>${fmtMed(agora)} m²</b>${alvoTxt(Number(agora))}.</p>
         ${dif!==0&&Math.abs(dif)<0.05?`<p class="pc-nota-pequena">Diferença de ${fmtMed(Math.abs(dif))} m²: é de centímetros no desenho. Os lados que mudaram aparecem com a medida de antes, em cinza.</p>`:''}
-        <p class="pc-nota-pequena">Grava-se com 2 casas (${fmtNum(agora)} m²), como o cadastro.</p>${(r.vizinhos||[]).filter(v=>v.area_comum>0).map(v=>`<p>Encosta em Q${e(v.quadra)} Lt${e(v.lote)} (${fmtNum(v.area_comum)} m² em comum, dentro da tolerância).</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.salvarEdicao()">Salvar lote</button>`
+        <p class="pc-nota-pequena">Grava-se com 2 casas (${fmtNum(agora)} m²), como o cadastro.</p>${(r.vizinhos||[]).filter(v=>v.area_comum>0).map(v=>`<p>Encosta em Q${e(v.quadra)} Lt${e(v.lote)} (${fmtNum(v.area_comum)} m² em comum, dentro da tolerância).</p>`).join('')}${s.avisosEdicao.map(a=>`<p>⚠ ${e(a)}</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.salvarEdicao()">Salvar lote</button>`
     }catch(err){exibirErro(err)}finally{s.busy=false}
   }
-  async function salvarEdicao(){
-    if(!s||s.busy)return;s.busy=true
+  async function salvarEdicao(confirmado){
+    if(!s||s.busy)return
+    if(!confirmado&&s.avisosEdicao?.length){confirmarAcao({titulo:'Lote do tamanho de gleba',mensagem:s.avisosEdicao.join(' '),textoBtn:'Salvar assim mesmo',onConfirm:()=>salvarEdicao(true)});return}
+    s.busy=true
     try{const d=await request(`/api/lotes/${s.ids[0]}/edicao`,corpoEdicao());try{localStorage.removeItem(chaveLocal())}catch{}
       const cb=s.opts?.aoSalvar;s.busy=false;await fechar(true);toast(d.message);limparLotesDoMapa();carregarLotesVisiveis();cb?.()
     }catch(err){exibirErro(err)}finally{if(s)s.busy=false}

@@ -265,17 +265,20 @@ class DesenhoDeLote
         // ── tamanho ──
         $area = $this->lotes->areaDoGeoJson($geojson);
         $min = (float) config('gis.lote_area_min_m2', 20);
-        $max = (float) config('gis.lote_area_max_m2', 20000);
+        // Lote GRANDE não é erro: área institucional, comercial de quadra
+        // inteira. Acima de `lote_area_max_m2` só AVISA (avisoDeArea); recusa
+        // só no tamanho em que o desenho com certeza saiu errado (30/10/2026).
+        $bloqueio = (float) config('gis.lote_area_bloqueio_m2', 1000000);
 
         if ($area < $min) {
             return sprintf('O desenho tem %s m². Abaixo de %s m² não é lote urbano — '
                 . 'provavelmente foi um toque acidental.',
                 number_format($area, 2, ',', '.'), number_format($min, 0, ',', '.'));
         }
-        if ($area > $max) {
-            return sprintf('O desenho tem %s m². Acima de %s m² é gleba, não lote: '
-                . 'área desse tamanho entra por aprovação de loteamento.',
-                number_format($area, 2, ',', '.'), number_format($max, 0, ',', '.'));
+        if ($area > $bloqueio) {
+            return sprintf('O desenho tem %s m². Acima de %s m² o contorno saiu errado — '
+                . 'confira se ele não pegou a quadra ou o bairro inteiro.',
+                number_format($area, 2, ',', '.'), number_format($bloqueio, 0, ',', '.'));
         }
 
         // ── identificação livre ──
@@ -340,8 +343,37 @@ class DesenhoDeLote
             $avisos[] = 'O desenho não encosta em nenhum lote existente. '
                 . 'Confira se ele não ficou no meio da via.';
         }
+        if ($gleba = $this->avisoDeArea($d)) {
+            $avisos[] = $gleba;
+        }
 
         return $avisos;
+    }
+
+    /**
+     * Lote acima de `lote_area_max_m2` (20.000 m²): tamanho de gleba. Grava,
+     * mas pede confirmação — a não ser que a área do CADASTRO confirme o
+     * tamanho (até 5% de diferença): aí o lote grande é o lote de verdade.
+     *
+     * @param  array<string,mixed>  $d  geometry, bairro, quadra, numero_lote
+     */
+    public function avisoDeArea(array $d): ?string
+    {
+        $area = $this->lotes->areaDoGeoJson(json_encode($d['geometry']));
+        $max = (float) config('gis.lote_area_max_m2', 20000);
+        if ($area <= $max) {
+            return null;
+        }
+        $cadastro = (new \App\Cadastro\AreaOficial())->doCadastro((object) [
+            'bairro' => $d['bairro'] ?? null, 'quadra' => $d['quadra'] ?? null, 'numero_lote' => $d['numero_lote'] ?? null,
+        ]);
+        if ($cadastro && abs($area / $cadastro - 1) <= 0.05) {
+            return null;
+        }
+
+        return sprintf('O desenho tem %s m², acima de %s m² — tamanho de gleba. %sConfira se é mesmo um lote só antes de salvar.',
+            number_format($area, 2, ',', '.'), number_format($max, 0, ',', '.'),
+            $cadastro ? 'O cadastro informa ' . number_format($cadastro, 2, ',', '.') . ' m². ' : '');
     }
 
     /**

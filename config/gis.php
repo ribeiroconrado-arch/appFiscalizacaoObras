@@ -103,7 +103,9 @@ return [
     */
     'sobreposicao_tolerada_m2' => env('GIS_SOBREPOSICAO_M2', 0.5),
     'lote_area_min_m2'         => env('GIS_LOTE_AREA_MIN', 20),
+    // Acima de max: só aviso (tamanho de gleba). Acima de bloqueio: recusa.
     'lote_area_max_m2'         => env('GIS_LOTE_AREA_MAX', 20000),
+    'lote_area_bloqueio_m2'    => env('GIS_LOTE_AREA_BLOQUEIO', 1000000),
     'desenho_distancia_max_m'  => env('GIS_DESENHO_DIST_MAX', 50),
 
     'srid_armazenamento' => 4326,
