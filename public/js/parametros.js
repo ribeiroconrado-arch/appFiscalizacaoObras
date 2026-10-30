@@ -34,12 +34,15 @@ const parState = {
 }
 
 function abrirParametros() {
+  prepararSeletorParametros()
   openModal('m-parametros')
   carregarParametros()
 }
 
 /** @param {string} nome */
 function subParametros(nome) {
+  const seletor = document.getElementById('par-menu-mobile')
+  if (seletor) seletor.value = nome
   document.querySelectorAll('#m-parametros > .modal > .sub-abas > button[data-sub]')
     .forEach(b => b.classList.toggle('at', b.dataset.sub === nome))
   document.querySelectorAll('.par-painel').forEach(p => p.classList.toggle('at', p.id === 'par-' + nome))
@@ -1651,4 +1654,27 @@ function trocarBrasaoNoSubcabecalho(url) {
     cx.prepend(img)
   }
   img.src = url
+}
+
+/** Reutiliza as abas autorizadas, inclusive as específicas de cada módulo. */
+function prepararSeletorParametros() {
+  const abas = document.querySelector('#m-parametros > .modal > .sub-abas')
+  if (!abas) return
+  let seletor = document.getElementById('par-menu-mobile')
+  if (!seletor) {
+    const campo = document.createElement('label')
+    campo.className = 'par-menu-mobile'
+    campo.textContent = 'Seção dos parâmetros'
+    seletor = document.createElement('select')
+    seletor.id = 'par-menu-mobile'
+    seletor.addEventListener('change', () => subParametros(seletor.value))
+    campo.append(seletor)
+    abas.before(campo)
+  }
+  seletor.replaceChildren(...Array.from(abas.querySelectorAll('button[data-sub]'), b => {
+    const option = new Option(b.textContent.trim(), b.dataset.sub)
+    option.selected = b.classList.contains('at')
+    option.disabled = b.disabled
+    return option
+  }))
 }
