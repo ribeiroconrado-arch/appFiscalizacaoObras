@@ -212,9 +212,9 @@
 
 /* Créditos em faixa própria abaixo do dock, sem disputar espaço com o seletor. */
 @media(max-width:1279px){
-  :root{--menu-altura:calc(90px + env(safe-area-inset-bottom))}
-  .abas{bottom:calc(20px + env(safe-area-inset-bottom))}
-  #map .leaflet-bottom.leaflet-right:has(.leaflet-control-attribution){bottom:env(safe-area-inset-bottom)}
+  :root{--dock-recuo:max(18px, env(safe-area-inset-bottom));--menu-altura:calc(70px + var(--dock-recuo))}
+  .abas{bottom:var(--dock-recuo)}
+  #map .leaflet-bottom.leaflet-right:has(.leaflet-control-attribution){bottom:0}
   #map .leaflet-control-attribution{max-width:calc(100vw - 16px);margin:0 8px 2px;padding:2px 5px;white-space:normal;overflow-wrap:anywhere;font-size:10px;line-height:12px}
 }
 
