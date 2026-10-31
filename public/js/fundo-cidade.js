@@ -49,11 +49,9 @@ for (const [id, rotulo] of [['fundo-vias', 'Vias'], ['fundo-nomes', 'Nomes de ru
 
 /** Pede o arquivo (uma vez; de novo depois de "Atualizar o fundo"). */
 async function carregarFundoDaCidade() {
-  try {
-    const r = await fetch('/api/mapa/fundo-cidade', { headers: { Accept: 'application/json' } })
-    if (!r.ok) return
-    fundoCidadeState.dados = await r.json()
-  } catch { return }
+  const d = await jsonDoFundo('/api/mapa/fundo-cidade')   // da pré-carga (app.js), na primeira vez
+  if (!d) return
+  fundoCidadeState.dados = d
   fundoCidadeState.trechos = _trechosComNome(fundoCidadeState.dados.vias || [])
   desenharFundoDaCidade()
   if (typeof _desenharRotulosDeRua === 'function') _desenharRotulosDeRua()

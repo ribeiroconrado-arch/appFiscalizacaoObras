@@ -116,14 +116,15 @@ const AREA_MAX_CURADORIA_GRAUS2 = 0.0012
 /**
  * O ajuste dos tetos de área pelo tamanho da tela (22/10/2026). Cada zoom
  * multiplica a área por 4, então:
- *   celular (até 620 px)   ¼ — quadras e lotes só um zoom MAIS PERTO: na tela
- *                          pequena a mesma área deixava o lote miúdo demais
+ *   celular (até 620 px)   ¼ nas quadras — um zoom MAIS PERTO; os lotes, como
+ *                          no tablet (31/10/2026: no ¼ eles só apareciam perto
+ *                          demais, e o fiscal aproximava um zoom a mais à toa)
  *   computador (≥ 1000 px) 4× nos lotes — eles aparecem um zoom MAIS LONGE
  * Entre os dois (tablet) e fora do navegador (testes), fica como era.
  */
 function fatorDaTela(nivel) {
   if (typeof window === 'undefined' || !window.innerWidth) return 1
-  if (window.innerWidth <= 620) return 0.25
+  if (window.innerWidth <= 620) return nivel === 'lotes' ? 1 : 0.25
   if (window.innerWidth >= 1000 && nivel === 'lotes') return 4
   return 1
 }
@@ -420,6 +421,38 @@ function atualizarChip(texto) {
     : `${state.lotes.size} lotes carregados`
 }
 
+// ── PRÉ-CARGA DO FUNDO DO MAPA ────────────────────────────────
+//
+// O fundo cadastral depende de quatro pedidos: a extensão da base, o contorno
+// dos bairros (o chão branco), a silhueta das quadras e o fundo do
+// OpenStreetMap. Pedidos em cascata, só quando a aba Mapa abria, eles deixavam
+// a tela branca por 2 a 3 s (31/10/2026). Agora saem juntos, assim que a
+// página carrega — o app abre no Painel, e o mapa encontra tudo pronto.
+// Cada resposta pré-carregada serve UMA vez: depois de publicar ou editar, o
+// recarregamento pede de novo.
+
+const FUNDO_PRECARGA = ['/api/mapa/extensao', '/api/mapa/bairros', '/api/mapa/quadras-silhueta', '/api/mapa/fundo-cidade']
+/** @type {Map<string, Promise<Object|null>>} */
+const _fundoPedidos = new Map()
+
+const _pedirJson = url => fetch(url, { headers: { Accept: 'application/json' } })
+  .then(r => (r.ok ? r.json() : null)).catch(() => null)
+
+function preCarregarFundoDoMapa() {
+  for (const u of FUNDO_PRECARGA) if (!_fundoPedidos.has(u)) _fundoPedidos.set(u, _pedirJson(u))
+}
+
+/** O JSON de uma url do fundo: o da pré-carga, se houver (e ele sai dela), ou um pedido novo. Nulo se falhar. */
+function jsonDoFundo(url) {
+  const p = _fundoPedidos.get(url)
+  if (p) { _fundoPedidos.delete(url); return p }
+  return _pedirJson(url)
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.getElementById('map')) setTimeout(preCarregarFundoDoMapa, 0)
+})
+
 /**
  * Pede ao servidor o retângulo de toda a base e enquadra o mapa nele.
  * Se falhar, cai no centro do município — melhor um mapa deslocado do que
@@ -427,9 +460,8 @@ function atualizarChip(texto) {
  */
 async function enquadrarBase() {
   try {
-    const r = await fetch('/api/mapa/extensao', { headers: { Accept: 'application/json' } })
-    const d = await r.json()
-    if (!d.extensao) throw new Error('base vazia')
+    const d = await jsonDoFundo('/api/mapa/extensao')
+    if (!d?.extensao) throw new Error('base vazia')
     const e = d.extensao
 
     // Guardada para o botão "ver tudo" usar como segunda opção, quando o

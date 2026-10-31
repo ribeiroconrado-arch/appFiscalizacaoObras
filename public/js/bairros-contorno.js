@@ -99,11 +99,10 @@ async function carregarContornosDosBairros() {
     mapa.getPane('quadras').style.pointerEvents = 'none'
     mapa.on('zoomend', () => contornoState.camada?.setStyle(_estiloContorno()))
   }
-  try {
-    const r = await fetch('/api/mapa/bairros', { headers: { Accept: 'application/json' } })
-    if (!r.ok) return
-    contornoState.dados = await r.json()
-  } catch { return }
+  // Da pré-carga, na primeira vez (app.js, jsonDoFundo); depois, pedido novo.
+  const dados = await jsonDoFundo('/api/mapa/bairros')
+  if (!dados) return
+  contornoState.dados = dados
 
   contornoState.camada?.remove()
   contornoState.camada = L.geoJSON(contornoState.dados, {
@@ -247,8 +246,12 @@ function _abreviarRua(nome) {
 }
 
 
-/** De quantos em quantos pixels o nome da MESMA rua se repete ao longo dela. */
-const RUA_REPETE_PX = 1100
+/**
+ * De quantos em quantos pixels o nome da MESMA rua se repete ao longo dela.
+ * No celular, 450 (31/10/2026): com 1.100 px numa tela de ~400, a rua
+ * atravessava a tela sem nome nenhum.
+ */
+const RUA_REPETE_PX = typeof window !== 'undefined' && window.innerWidth <= 620 ? 450 : 1100
 
 /** Dois nomes iguais mais perto do que isto, em pixels, são a mesma rua dita duas vezes. */
 const RUA_MESMA_PX = RUA_REPETE_PX * 0.5
@@ -462,9 +465,8 @@ async function _carregarSilhuetaDasQuadras() {
     mapa.getPane('silhuetas').style.pointerEvents = 'none'
   }
   try {
-    const r = await fetch('/api/mapa/quadras-silhueta', { headers: { Accept: 'application/json' } })
-    if (!r.ok) throw new Error('HTTP ' + r.status)
-    const gj = await r.json()
+    const gj = await jsonDoFundo('/api/mapa/quadras-silhueta')
+    if (!gj) throw new Error('silhueta indisponível')
     if (quadraState.silhueta !== 'carregando') return   // largada enquanto chegava
     quadraState.silhueta = L.geoJSON(gj, { pane: 'silhuetas', interactive: false, style: estiloSilhuetaDaQuadra() }).addTo(mapa)
     if (typeof aplicarNivelDoMapa === 'function') aplicarNivelDoMapa()
