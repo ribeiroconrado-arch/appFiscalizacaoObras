@@ -380,17 +380,17 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     dica(`Lado ajustado para ${fmtMed(n)} m.`)}
   /**
    * ESQUADREJAR o contorno (botão da barra): os cantos quase retos (até 1°)
-   * viram 90° exatos e cada lado mantém a medida — 20,0000 × 50,0000 passa a
-   * dar 1.000,0000 m², e não 999,999. Vale para a linha fechada selecionada
+   * viram 90° exatos e a diferença de fechamento é repartida entre os lados,
+   * pelo menor ajuste (G.esquadrejar). Vale para a linha fechada selecionada
    * ou, sem seleção, para a única linha fechada do desenho (o contorno em edição).
    */
   function esquadrejar(){if(!s||s.leitura)return
     const fechadas=s.linhas.filter(l=>G.fechada(l.pontos)),l=selecionada()&&G.fechada(selecionada().pontos)?selecionada():fechadas.length===1?fechadas[0]:null
     if(!l){dica(fechadas.length?'Selecione o contorno que vai ser esquadrejado.':'Esquadrejar vale para um contorno fechado.');return}
     const r=G.esquadrejar(l.pontos);if(r.erro){dica(r.erro);return}
-    if(!r.cantos){dica('Nenhum canto a até 1° de 90°: nada a esquadrejar.');return}
+    if(!r.cantos&&r.ajuste<1e-6){dica('Nenhum canto a até 1° de 90°: nada a esquadrejar.');return}
     antes();l.pontos=r.pontos;s.sel=l.id;mudou()
-    dica(`${r.cantos} canto(s) acertado(s) em 90°. Área do contorno: ${fmtMed(Math.abs(G.area(r.pontos)))} m².`)}
+    dica(`${r.cantos} canto(s) acertado(s) em 90°; maior ajuste num lado: ${r.ajuste*1000<.05?'menos de 0,1':fmtNum(r.ajuste*1000)} mm. Área do contorno: ${fmtMed(Math.abs(G.area(r.pontos)))} m².`)}
   function terminar(){if(!s||s.leitura)return;s.tracoRedo=[];if(s.traco.length>=2){antes();s.linhas.push({id:crypto.randomUUID(),pontos:copy(s.traco)});s.sel=s.linhas.at(-1).id;s.traco=[];mudou()}else s.traco=[];s.valor='';$('pc-entrada').hidden=true;render();dica('Linha encerrada. Clique em outro ponto para começar uma nova; V para selecionar.')}
   function excluir(){if(!s||s.leitura||!s.sel)return;antes();s.linhas=s.linhas.filter(l=>l.id!==s.sel);s.sel=null;s.operacao=null;mudou()}
   function entrada(p,label,mover=false){const el=$('pc-entrada'),q=tela(p);el.hidden=false;el.style.left=`${Math.max(8,Math.min(s.w-220,q[0]+20))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]-45))}px`;$('pc-entrada-label').textContent=label;if(!mover)$('pc-valor').value=''}

@@ -53,41 +53,56 @@ const PranchetaGeo = (() => {
   }
   /**
    * ESQUADREJAR um contorno fechado: todo canto a até `tol` graus de 90° vira
-   * 90° exato, e CADA LADO MANTÉM O COMPRIMENTO. Os outros cantos (arco,
-   * esquina torta de verdade) mantêm o ângulo que tinham. O lado mais comprido
-   * fica parado (vértice inicial e direção); o resto é refeito a partir dele.
+   * 90° exato, e o vértice quase em linha reta (a até `tol` de 180°) fica
+   * reto. Os outros cantos (chanfro, arco, esquina torta de verdade) mantêm o
+   * ângulo. O lado mais comprido fica parado (vértice inicial e direção).
    *
-   * Recusa quando, esquadrejado, o contorno não fecha (as medidas opostas não
-   * batem — 50,0000 de um lado e 49,9952 do outro): fechar à força entortaria
-   * outro canto, e é a medida que precisa ser acertada antes.
+   * Com os cantos acertados, o contorno quase nunca fecha sozinho: os lados
+   * opostos de um lote do DWG diferem alguns milímetros (32,0068 e 32,0074).
+   * A diferença é REPARTIDA entre os lados pelo menor ajuste possível
+   * (mínimos quadrados: as direções ficam, só os comprimentos mudam). Até
+   * 31/10/2026 exigia fechamento de 1 mm e recusava quase todo lote real.
    *
-   * @returns {{pontos:Array<[number,number]>, cantos:number}|{erro:string}}
+   * Recusa quando algum lado teria de mudar mais que `maxAjuste` (5 cm): aí a
+   * medida está errada, não o esquadro — acerta-se na cota antes.
+   *
+   * @returns {{pontos:Array<[number,number]>, cantos:number, ajuste:number}|{erro:string}}
    */
-  function esquadrejar(anel,tol=1,fechaM=.001){
+  function esquadrejar(anel,tol=1,maxAjuste=.05){
     if(!fechada(anel)||anel.length<5)return {erro:'Esquadrejar vale para contorno fechado.'}
-    const v=anel.slice(0,-1),n=v.length,lado=k=>sub(v[(k+1)%n],v[k])
+    const v=anel.slice(0,-1),n=v.length,lado=k=>sub(v[(k+1)%n],v[k]),t=tol*Math.PI/180
     // Começa pelo lado mais comprido.
     let k0=0;for(let k=1;k<n;k++)if(len(lado(k))>len(lado(k0)))k0=k
     const vs=[...v.slice(k0),...v.slice(0,k0)],L=k=>sub(vs[(k+1)%n],vs[k])
     const giro=k=>{const u=L(k-1<0?n-1:k-1),w=L(k);return Math.atan2(cross(u,w),dot(u,w))}
-    const out=[[...vs[0]]];let dir=Math.atan2(L(0)[1],L(0)[0]),cantos=0
-    for(let k=0;k<n-1;k++){
-      if(k>0){const g=giro(k);if(Math.abs(Math.abs(g)-Math.PI/2)<=tol*Math.PI/180&&Math.abs(Math.abs(g)-Math.PI/2)>1e-12){dir+=Math.sign(g)*Math.PI/2;cantos++}else dir+=g}
-      const c=len(L(k)),p=out[k];out.push([p[0]+c*Math.cos(dir),p[1]+c*Math.sin(dir)])}
-    // O último lado tem de chegar ao vértice inicial com o mesmo comprimento,
-    // e os cantos das duas pontas dele, quase retos, têm de ficar retos.
-    const ult=out[n-1],fecha=sub(out[0],ult),cmp=len(L(n-1))
-    const dUlt=Math.atan2(fecha[1],fecha[0]),gUlt=giro(n-1),g0=giro(0)
-    const angDe=(a,b)=>{let d=b-a;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
-    const ehReto=g=>Math.abs(Math.abs(g)-Math.PI/2)<=tol*Math.PI/180
-    const reto=(g,esperado)=>!ehReto(g)||Math.abs(Math.abs(esperado)-Math.PI/2)<1e-6
-    if(Math.abs(len(fecha)-cmp)>fechaM||!reto(gUlt,angDe(dir,dUlt))||!reto(g0,angDe(dUlt,Math.atan2(L(0)[1],L(0)[0]))))
-      return {erro:'As medidas não fecham em esquadro: os lados opostos não têm o mesmo comprimento. Acerte as medidas (duplo clique na cota) e esquadreje de novo.'}
-    if(ehReto(gUlt)&&Math.abs(Math.abs(gUlt)-Math.PI/2)>1e-12)cantos++
-    if(ehReto(g0)&&Math.abs(Math.abs(g0)-Math.PI/2)>1e-12)cantos++
+    // A direção de cada lado: a do anterior mais o canto, acertado ou não.
+    // O giro acertado de cada canto (k = 0 é o do fechamento); `livre` são os
+    // que mantêm o ângulo (chanfro, arco).
+    const alvo=k=>{const g=giro(k),f=Math.abs(Math.abs(g)-Math.PI/2);return f<=t?Math.sign(g)*Math.PI/2:Math.abs(g)<=t?0:null}
+    const giros=[],livres=[];let cantos=0
+    for(let k=0;k<n;k++){const g=giro(k),a=alvo(k);if(a===null){giros.push(g);if(k)livres.push(k)}else{giros.push(a);if(k&&Math.abs(a-g)>1e-12)cantos++}}
+    // A volta inteira tem de somar ±360°. O que os cantos acertados deixam de
+    // fora vai para os livres, por igual: o chanfro absorve, o canto reto fica reto.
+    const soma=giros.reduce((x,y)=>x+y,0),falta=Math.sign(soma)*2*Math.PI-soma
+    if(livres.length)for(const k of livres)giros[k]+=falta/livres.length
+    const dirs=[Math.atan2(L(0)[1],L(0)[0])]
+    for(let k=1;k<n;k++)dirs.push(dirs[k-1]+giros[k])
+    // O que falta para fechar, com as direções novas e os comprimentos de antes.
+    const comp=Array.from({length:n},(_,k)=>len(L(k))),d=dirs.map(a=>[Math.cos(a),Math.sin(a)])
+    let cx=0,cy=0;for(let k=0;k<n;k++){cx+=comp[k]*d[k][0];cy+=comp[k]*d[k][1]}
+    // Menor ajuste dos comprimentos que fecha o contorno: δ = −Dᵀ(DDᵀ)⁻¹c.
+    let a=0,b=0,c=0;for(const [x,y] of d){a+=x*x;b+=x*y;c+=y*y}
+    const det=a*c-b*b;if(Math.abs(det)<1e-12)return {erro:'Esquadrejar precisa de lados em mais de uma direção.'}
+    const lx=(c*cx-b*cy)/det,ly=(a*cy-b*cx)/det,delta=d.map(([x,y])=>-(x*lx+y*ly))
+    const ajuste=Math.max(...delta.map(Math.abs))
+    if(ajuste>maxAjuste)return {erro:`As medidas não fecham em esquadro: um lado teria de mudar ${(ajuste*100).toLocaleString('pt-BR',{maximumFractionDigits:1})} cm. Acerte a medida (duplo clique na cota) e esquadreje de novo.`}
+    const out=[[...vs[0]]];for(let k=0;k<n-1;k++){const p=out[k],cc=comp[k]+delta[k];out.push([p[0]+cc*d[k][0],p[1]+cc*d[k][1]])}
+    // O canto do fechamento: conta se ficou reto agora e não estava.
+    const g0=giro(0),fim=sub(out[0],out[n-1]),g0n=Math.atan2(cross(fim,L(0)),dot(fim,L(0)))
+    if(Math.abs(Math.abs(g0)-Math.PI/2)>1e-12&&Math.abs(Math.abs(g0n)-Math.PI/2)<1e-9)cantos++
     // Volta à ordem original dos vértices.
     const res=[...out.slice(n-k0),...out.slice(0,n-k0)]
-    return {pontos:[...res,[...res[0]]],cantos}
+    return {pontos:[...res,[...res[0]]],cantos,ajuste}
   }
   /* Fator de escala do UTM — CÓPIA DELIBERADA de `fatorEscalaUTM` (geo.js),
      que é onde está a explicação de por que a régua do sistema é a GRADE e

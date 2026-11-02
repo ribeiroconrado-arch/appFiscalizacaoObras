@@ -93,9 +93,25 @@ test('esquadrejar: 20 x 50 com os cantos 0,08° fora do esquadro vira 1.000 m² 
   // O lado mais comprido fica parado.
   assert.ok(G.len(G.sub(r.pontos[1],base[1]))<1e-9)   // o lado 1 (50 m) é o primeiro mais comprido
 });
-test('esquadrejar recusa medidas que não fecham e não mexe em canto torto de verdade',()=>{
+test('esquadrejar reparte alguns milímetros de diferença entre os lados opostos',()=>{
+  // 50,0000 de um lado e 49,9952 do outro: antes recusava; agora fecha em
+  // 90° com cada lado mudando 2,4 mm (metade da diferença).
   const r=G.esquadrejar([[0,0],[20,0],[20,50],[0,49.9952],[0,0]])
-  assert.ok(r.erro)
+  assert.ok(!r.erro,r.erro)
+  assert.ok(Math.abs(r.ajuste-.0024)<1e-6)
+  const p=r.pontos,canto=i=>{const u=G.sub(p[i],p[(i+3)%4]),w=G.sub(p[(i+1)%4],p[i]);return Math.abs(G.dot(u,w))/(G.len(u)*G.len(w))}
+  for(let i=0;i<4;i++)assert.ok(canto(i)<1e-12)
+});
+test('esquadrejar endireita o vértice quase em linha e recusa diferença de centímetros',()=>{
+  // Vértice no meio do lado (5 + 14), 0,02° fora da reta: fica reto.
+  const r=G.esquadrejar([[0,0],[32,0],[32,19],[0,19],[-.0017,14],[0,0]]);assert.ok(!r.erro,r.erro)
+  const v=r.pontos;assert.ok(Math.abs(G.cross(G.sub(v[4],v[3]),G.sub(v[5],v[4])))<1e-9)
+  // 20 cm de diferença entre os lados opostos: a medida está errada, recusa.
+  const e=G.esquadrejar([[0,0],[20,0],[20,50],[0,49.8],[0,0]]);assert.ok(e.erro&&/cm/.test(e.erro))
+  // Esquina com chanfro: os cantos retos ficam 90° exatos; o resto vai para o chanfro.
+  const ch=G.esquadrejar([[0,0],[15,0],[15,27],[12.002,30.001],[0,30.003],[0,0]]);assert.ok(!ch.erro,ch.erro)
+  const w=ch.pontos,cos=i=>{const u=G.sub(w[i],w[(i+4)%5]),z=G.sub(w[(i+1)%5],w[i]);return G.dot(u,z)/(G.len(u)*G.len(z))}
+  for(const i of [0,1,4])assert.ok(Math.abs(cos(i))<1e-12,'canto '+i)
   // Canto de 95° (trapézio de verdade) fica como está: nada a esquadrejar fora de 1°.
   const trap=[[0,0],[20,0],[20+50*Math.cos(95*Math.PI/180),50*Math.sin(95*Math.PI/180)],[0,50],[0,0]]
   const q=G.esquadrejar(trap);assert.ok(q.erro||q.cantos<4)
