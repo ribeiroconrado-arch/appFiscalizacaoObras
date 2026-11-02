@@ -116,3 +116,10 @@ test('esquadrejar endireita o vértice quase em linha e recusa diferença de cen
   const trap=[[0,0],[20,0],[20+50*Math.cos(95*Math.PI/180),50*Math.sin(95*Math.PI/180)],[0,50],[0,0]]
   const q=G.esquadrejar(trap);assert.ok(q.erro||q.cantos<4)
 });
+test('esquadrejar descarta vértice repetido e recusa ponta que volta sobre si',()=>{
+  // Lado de 0,0000 m (vértice repetido, comum no DWG): sai, e o resto esquadreja.
+  const r=G.esquadrejar([[0,0],[9.74,0],[9.74,0],[12,.003],[12,24],[0,24],[0,0]]);assert.ok(!r.erro,r.erro)
+  assert.equal(r.repetidos,1);assert.equal(r.base.length,r.pontos.length)
+  // Ponta: o contorno vai e volta no mesmo vértice.
+  const e=G.esquadrejar([[0,0],[12,0],[12,24],[6,24],[6,30],[6.01,24],[0,24],[0,0]]);assert.ok(e.erro&&/volta sobre si/.test(e.erro))
+});

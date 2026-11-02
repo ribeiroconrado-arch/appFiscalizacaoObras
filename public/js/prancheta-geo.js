@@ -70,7 +70,17 @@ const PranchetaGeo = (() => {
    */
   function esquadrejar(anel,tol=1,maxAjuste=.05){
     if(!fechada(anel)||anel.length<5)return {erro:'Esquadrejar vale para contorno fechado.'}
-    const v=anel.slice(0,-1),n=v.length,lado=k=>sub(v[(k+1)%n],v[k]),t=tol*Math.PI/180
+    // Vértice repetido (lado de menos de 1 mm, comum no DWG) sai antes: o canto
+    // dele não tem direção, e saía como 0° e 360°. `base` é o contorno limpo,
+    // vértice a vértice com o resultado.
+    const v=[];for(const p of anel.slice(0,-1))if(!v.length||len(sub(p,v.at(-1)))>1e-3)v.push(p)
+    while(v.length>1&&len(sub(v[0],v.at(-1)))<=1e-3)v.pop()
+    if(v.length<3)return {erro:'Esquadrejar vale para contorno fechado.'}
+    const repetidos=anel.length-1-v.length,base=[...v,[...v[0]]]
+    const n=v.length,lado=k=>sub(v[(k+1)%n],v[k]),t=tol*Math.PI/180
+    // Ponta que volta sobre si (canto de quase 0°): não há esquadro a acertar.
+    for(let k=0;k<n;k++){const u=lado((k-1+n)%n),w=lado(k);if(Math.abs(Math.abs(Math.atan2(cross(u,w),dot(u,w)))-Math.PI)<=t)
+      return {erro:'O contorno volta sobre si num canto (quase 0°). Tire esse vértice (Proximidades ajuda a achar) e esquadreje de novo.'}}
     // Começa pelo lado mais comprido.
     let k0=0;for(let k=1;k<n;k++)if(len(lado(k))>len(lado(k0)))k0=k
     const vs=[...v.slice(k0),...v.slice(0,k0)],L=k=>sub(vs[(k+1)%n],vs[k])
@@ -102,7 +112,7 @@ const PranchetaGeo = (() => {
     if(Math.abs(Math.abs(g0)-Math.PI/2)>1e-12&&Math.abs(Math.abs(g0n)-Math.PI/2)<1e-9)cantos++
     // Volta à ordem original dos vértices.
     const res=[...out.slice(n-k0),...out.slice(0,n-k0)]
-    return {pontos:[...res,[...res[0]]],cantos,ajuste}
+    return {pontos:[...res,[...res[0]]],cantos,ajuste,base,repetidos}
   }
   /* Fator de escala do UTM — CÓPIA DELIBERADA de `fatorEscalaUTM` (geo.js),
      que é onde está a explicação de por que a régua do sistema é a GRADE e

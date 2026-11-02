@@ -72,7 +72,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       <main class="pc-canvas"><span id="pc-ref" class="pc-ref"></span><svg id="pc-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Desenho dos imóveis e suas divisas"></svg>
       <div id="pc-prox" class="pc-prox" hidden></div>
       <div id="pc-entrada" hidden><label id="pc-entrada-label" for="pc-valor">Comprimento</label><input id="pc-valor" inputmode="decimal" autocomplete="off" aria-label="Medida em metros"><span>m · Enter</span></div>
-      <div id="pc-cota-ed" hidden><label for="pc-cota-valor">Medida do lado</label><input id="pc-cota-valor" inputmode="decimal" autocomplete="off" aria-label="Nova medida do lado, em metros"><span>m</span>
+      <div id="pc-esq" hidden role="dialog" aria-label="Esquadrejar"></div><div id="pc-cota-ed" hidden><label for="pc-cota-valor">Medida do lado</label><input id="pc-cota-valor" inputmode="decimal" autocomplete="off" aria-label="Nova medida do lado, em metros"><span>m</span>
         <button type="button" class="pc-cota-troca" title="Trocar a ponta que fica parada (Tab)" onclick="PranchetaCad.cotaTrocarPonta()">⇄ ponta</button>
         <label class="pc-cota-junto" title="O lado da ponta que anda desliza paralelo: os ângulos ficam como estão"><input type="checkbox" id="pc-cota-junto" onchange="PranchetaCad.cotaJunto(this.checked)"> levar o lado vizinho junto</label>
         <small><b class="pc-cota-fica">● verde fica</b> · <b class="pc-cota-anda">● laranja anda</b> · Enter aplica · Esc cancela</small></div>
@@ -388,9 +388,30 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     const fechadas=s.linhas.filter(l=>G.fechada(l.pontos)),l=selecionada()&&G.fechada(selecionada().pontos)?selecionada():fechadas.length===1?fechadas[0]:null
     if(!l){dica(fechadas.length?'Selecione o contorno que vai ser esquadrejado.':'Esquadrejar vale para um contorno fechado.');return}
     const r=G.esquadrejar(l.pontos);if(r.erro){dica(r.erro);return}
-    if(!r.cantos&&r.ajuste<1e-6){dica('Nenhum canto a até 1° de 90°: nada a esquadrejar.');return}
-    antes();l.pontos=r.pontos;s.sel=l.id;mudou()
-    dica(`${r.cantos} canto(s) acertado(s) em 90°; maior ajuste num lado: ${r.ajuste*1000<.05?'menos de 0,1':fmtNum(r.ajuste*1000)} mm. Área do contorno: ${fmtMed(Math.abs(G.area(r.pontos)))} m².`)}
+    if(!r.cantos&&r.ajuste<1e-6){const reto=angulosInternos(r.base).some(a=>Math.abs(a-90)<=1||Math.abs(a-270)<=1)
+      dica(reto?'Os cantos já estão em esquadro: nada a ajustar.':'Nenhum canto a até 1° de 90°: nada a esquadrejar.');return}
+    // NÃO aplica direto (31/10/2026): mostra os ângulos de cada canto, antes e
+    // depois, e pergunta. O contorno novo aparece tracejado por cima.
+    const angA=angulosInternos(r.base),angD=angulosInternos(r.pontos)
+    const mudam=angA.filter((a,i)=>Math.abs(a-angD[i])>1e-7).length
+    if(!mudam){dica('Os cantos já estão em esquadro: nada a ajustar.');return}
+    s.esq={id:l.id,r,angA,angD,chave:JSON.stringify(l.pontos)};s.sel=l.id
+    const areaA=Math.abs(G.area(l.pontos)),areaD=Math.abs(G.area(r.pontos))
+    $('pc-esq').innerHTML=`<b>Esquadrejar</b>
+      <p>${mudam} canto(s) fora do esquadro: os valores em laranja no desenho mostram o ângulo de agora → o ajustado.</p>
+      ${r.repetidos?`<p>${r.repetidos} vértice(s) repetido(s) — lado de menos de 1 mm — sai(em) do contorno.</p>`:''}<p>Maior ajuste num lado: <b>${r.ajuste*1000<.05?'menos de 0,1':fmtNum(r.ajuste*1000)} mm</b> · área ${fmtMed(areaA)} → <b>${fmtMed(areaD)} m²</b></p>
+      <div class="pc-esq-acoes"><button type="button" class="btn sm" onclick="PranchetaCad.esquadrejarCancelar()">Cancelar</button><button type="button" class="btn primary sm" onclick="PranchetaCad.esquadrejarAplicar()">Ajustar os cantos</button></div>`
+    $('pc-esq').hidden=false;render();$('pc-esq').querySelector('.primary').focus()
+    dica('Confira os ângulos no desenho. Enter ajusta; Esc cancela.')}
+  /** Ângulo interno de cada vértice, em graus (o canto de dentro do L passa de 180°). */
+  function angulosInternos(p){const v=p.slice(0,-1),n=v.length,sg=Math.sign(G.area(p))||1
+    return v.map((b,i)=>{const a=v[(i-1+n)%n],c=v[(i+1)%n],u=G.sub(b,a),w=G.sub(c,b);return 180-sg*Math.atan2(G.cross(u,w),G.dot(u,w))*180/Math.PI})}
+  function esquadrejarCancelar(){if(!s?.esq)return;s.esq=null;$('pc-esq').hidden=true;render();svg.focus();dica('Esquadrejar cancelado: nada mudou.')}
+  function esquadrejarAplicar(){const q=s?.esq;if(!q)return;const l=s.linhas.find(x=>x.id===q.id)
+    s.esq=null;$('pc-esq').hidden=true
+    if(!l||JSON.stringify(l.pontos)!==q.chave){render();dica('O contorno mudou depois da prévia. Clique em Esquadrejar de novo.');return}
+    antes();l.pontos=q.r.pontos;s.sel=l.id;mudou();svg.focus()
+    dica(`${q.r.cantos} canto(s) acertado(s) em 90°; maior ajuste num lado: ${q.r.ajuste*1000<.05?'menos de 0,1':fmtNum(q.r.ajuste*1000)} mm. Área do contorno: ${fmtMed(Math.abs(G.area(q.r.pontos)))} m².`)}
   function terminar(){if(!s||s.leitura)return;s.tracoRedo=[];if(s.traco.length>=2){antes();s.linhas.push({id:crypto.randomUUID(),pontos:copy(s.traco)});s.sel=s.linhas.at(-1).id;s.traco=[];mudou()}else s.traco=[];s.valor='';$('pc-entrada').hidden=true;render();dica('Linha encerrada. Clique em outro ponto para começar uma nova; V para selecionar.')}
   function excluir(){if(!s||s.leitura||!s.sel)return;antes();s.linhas=s.linhas.filter(l=>l.id!==s.sel);s.sel=null;s.operacao=null;mudou()}
   function entrada(p,label,mover=false){const el=$('pc-entrada'),q=tela(p);el.hidden=false;el.style.left=`${Math.max(8,Math.min(s.w-220,q[0]+20))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]-45))}px`;$('pc-entrada-label').textContent=label;if(!mover)$('pc-valor').value=''}
@@ -401,6 +422,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   }
   function tecla(ev){if(!s)return;ev.stopPropagation();if(ev.target.matches('input,textarea,select'))return
     if(s.medindo!=null){if(ev.key==='Escape'){ev.preventDefault();dados(true)}return}
+    if(s.esq){if(ev.key==='Escape'){ev.preventDefault();esquadrejarCancelar();return}if(ev.key==='Enter'){ev.preventDefault();esquadrejarAplicar();return}}
     const k=ev.key.toLowerCase();if(ev.ctrlKey||ev.metaKey){if(k==='z'||k==='y'){ev.preventDefault();historico(k==='y'||ev.shiftKey)}return}
     if(k==='escape'){ev.preventDefault();s.traco=[];s.operacao=null;s.drag=null;s.ref=null;s.valor='';s.ferramenta='selecionar';$('pc-entrada').hidden=true;render();return}
     if(k==='enter'){ev.preventDefault();if(s.operacao)aplicarOperacao();else terminar();return}
@@ -514,6 +536,20 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       if(s.cotaEd&&s.cotaEd.id===l.id){const c=s.cotaEd,fixa=tela(l.pontos[c.fixa==='a'?c.i-1:c.i]),anda=tela(l.pontos[c.fixa==='a'?c.i:c.i-1])
         h+=`<circle cx="${fixa[0]}" cy="${fixa[1]}" r="7" fill="#16a34a" stroke="white" stroke-width="2"/><circle cx="${anda[0]}" cy="${anda[1]}" r="7" fill="#ea580c" stroke="white" stroke-width="2"/>`}
     }
+    if(s.esq){const q=s.esq,l=s.linhas.find(x=>x.id===q.id)
+      // O contorno mudou por baixo (desfazer, outra ferramenta): a prévia sai.
+      if(!l||JSON.stringify(l.pontos)!==q.chave){s.esq=null;$('pc-esq').hidden=true}
+      else{h+=`<path d="${path(q.r.pontos)}" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="7 4" pointer-events="none"/>`
+        const v=q.r.base.slice(0,-1),cx=v.reduce((a,p)=>a+p[0],0)/v.length,cy=v.reduce((a,p)=>a+p[1],0)/v.length,cen=tela([cx,cy])
+        // Diferença pequena (menos de 0,01°) sai com 4 casas, senão "90,00° → 90°" não diria nada.
+        const grau=(a,c=2)=>Math.abs(a-Math.round(a))<1e-7?Math.round(a)+'°':a.toLocaleString('pt-BR',{minimumFractionDigits:c,maximumFractionDigits:c})+'°'
+        // Cantos próximos: o rótulo seguinte desce até não encostar no anterior.
+        const postos=[]
+        v.forEach((p,i)=>{const t=tela(p),d=G.sub(cen,t),k=Math.min(34,G.len(d)/3)/(G.len(d)||1),x=t[0]+d[0]*k;let y=t[1]+d[1]*k
+          while(postos.some(([px,py])=>Math.abs(px-x)<110&&Math.abs(py-y)<15))y+=15
+          postos.push([x,y])
+          const dif=Math.abs(q.angA[i]-q.angD[i]),muda=dif>1e-7,txt=muda?`${grau(q.angA[i],dif<.01?4:2)} → ${grau(q.angD[i])}`:grau(q.angA[i])
+          h+=`<text class="pc-esq-ang${muda?' muda':''}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${txt}</text>`})}}
     if(s.ref)h+=`<path d="${path(s.ref)}" stroke="#a855f7" stroke-width="5" opacity=".8"/>`
     // A FACE QUE SERÁ ESCOLHIDA, realçada sob o cursor antes do clique: halo
     // largo, traço forte, as duas pontas e um aviso do que vai acontecer.
@@ -1122,5 +1158,5 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     s.prox.itens.forEach((it,k)=>{const t=tela(it.p),d=Math.hypot(t[0]-q[0],t[1]-q[1]);if(d<16&&(!melhor||d<melhor.d))melhor={k,d}})
     if(!melhor)return false;proxIr(melhor.k);return true}
 
-  return {descartarRascunho,proximidades,proxFechar,proxIr,proxAfastar,proxExcluir,proxFolga,esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {descartarRascunho,esquadrejarAplicar,esquadrejarCancelar,proximidades,proxFechar,proxIr,proxAfastar,proxExcluir,proxFolga,esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()
