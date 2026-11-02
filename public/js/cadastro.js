@@ -1711,7 +1711,8 @@ function iniciarDesenhoDeLote(contorno) {
       if (cadModo === 'desenho') { sairModoCadastral(true) }
       pintarPainelCadastro()
       limparLotesDoMapa()
-      carregarLotesVisiveis()
+      // Devolve a carga: a prancheta mantém a tela de carregamento até o mapa voltar.
+      return carregarLotesVisiveis()
     },
     // Fechou a prancheta sem entregar o contorno: larga a ferramenta. O
     // rascunho do traçado fica guardado no navegador (prancheta-cadastral.js),

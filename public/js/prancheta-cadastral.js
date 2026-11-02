@@ -887,7 +887,11 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   function criarLoteNovo(){
     if(!s)return
     confirmarAcao({titulo:'Criar lote',mensagem:'Vai inserir um imóvel novo no cadastro, com a geometria desenhada. A criação fica registrada com o seu nome, e o lote passa a ser protegido contra sobrescrita por reimportação do DWG.',textoBtn:'Criar',
-      onConfirm:async()=>{const d=await postCadastro('/api/lotes',corpoLoteNovo());if(!d)return;toast(d.message);const cb=s?.opts?.aoGravar;if(s)s.entregue=true;await fechar(true);cb?.()}})
+      onConfirm:async()=>{let d=null
+        await comCarregando('Criando o lote…',async()=>{d=await postCadastro('/api/lotes',corpoLoteNovo());if(!d)return
+          const cb=s?.opts?.aoGravar;if(s)s.entregue=true;await fechar(true)
+          if(cb){mostrarCarregandoTela('Atualizando o mapa…');await cb()}})
+        if(d){await carregandoSaiu();toast(d.message)}}})
   }
   // A área que o contorno tem de ter (a do cadastro), quando quem abriu a
   // edição foi a pendência de área da conferência: diz quanto falta ou sobra.
@@ -914,9 +918,20 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     if(!s||s.busy)return
     if(!confirmado&&s.avisosEdicao?.length){confirmarAcao({titulo:'Lote do tamanho de gleba',mensagem:s.avisosEdicao.join(' '),textoBtn:'Salvar assim mesmo',onConfirm:()=>salvarEdicao(true)});return}
     s.busy=true
-    try{const d=await request(`/api/lotes/${s.ids[0]}/edicao`,corpoEdicao());try{localStorage.removeItem(chaveLocal())}catch{}
-      const cb=s.opts?.aoSalvar;s.busy=false;await fechar(true);toast(d.message);limparLotesDoMapa();carregarLotesVisiveis();cb?.()
-    }catch(err){exibirErro(err)}finally{if(s)s.busy=false}
+    // A tela de carregamento do sistema fica até TUDO terminar — gravar,
+    // recarregar o mapa e, se veio da conferência, refazê-la — e só então o
+    // aviso de salvo (31/10/2026). Antes o aviso saía logo depois de gravar, e
+    // o mapa e a conferência ainda mudavam por baixo por alguns segundos.
+    const ident=`o lote ${s.dados.numero_lote||s.opts?.numero_lote} da quadra ${s.dados.quadra||s.opts?.quadra}`
+    let d=null,gravou=false
+    try{await comCarregando(`Salvando ${ident}…`,async()=>{
+        d=await request(`/api/lotes/${s.ids[0]}/edicao`,corpoEdicao());gravou=true;try{localStorage.removeItem(chaveLocal())}catch{}
+        const cb=s.opts?.aoSalvar;s.busy=false;await fechar(true)
+        mostrarCarregandoTela('Atualizando o mapa…');limparLotesDoMapa();await carregarLotesVisiveis()
+        if(cb){mostrarCarregandoTela('Refazendo a conferência…');await cb()}})
+      await carregandoSaiu();toast(d.message)
+    }catch(err){if(gravou)toast(`${d?.message||'Lote salvo.'} O mapa não terminou de atualizar: recarregue a página.`,'aviso');else exibirErro(err)}
+    finally{if(s)s.busy=false}
   }
   // ── FRAÇÃO IDEAL: as unidades, a fração de cada uma e a soma ──
   function unidadesFrac(){const d=s.dados;d.semDesenho||=[];return [...s.resultado.partes.map(r=>({r,d:(d[parteKey(r)]||={})})),...d.semDesenho.map(u=>({r:null,d:u}))]}
@@ -1040,7 +1055,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     if(Object.keys(campos).length){exibirErro({campos});return false}limparErros();return true
   }
   async function conferir(){if(s.busy||!validarDados())return;const c=corpo();s.busy=true;$('pc-conferencia').textContent='Conferindo…';try{const d=await request(rota(true),c);if(JSON.stringify(c)!==JSON.stringify(corpo()))return;if(d.impedimento){mostrarCruzamentos(d);exibirErro({message:d.impedimento});return}s.revisado=JSON.stringify(c);const rf=d.retrato;$('pc-conferencia').innerHTML=(frac()?`<p>Conferido: ${rf.unidades.length} unidade(s); as frações somam <b>${fmtNum(rf.soma_fracoes)}</b> de ${fmtNum(rf.referencia)} m²${rf.area_comum?' · área comum '+fmtNum(rf.area_comum)+' m²':''}. O terreno continua ativo e as unidades nascem dentro dele.</p>`:`<p>Geometria conferida. O ato preservará os imóveis de origem como inativos e criará os sucessores.</p>`)+`${(d.avisos||[]).map(a=>`<p>${e(a)}</p>`).join('')}<button type="button" class="btn primary" onclick="PranchetaCad.finalizar()">${frac()?'Confirmar e instituir as frações':'Confirmar e finalizar '+(s.tipo==='unificacao'?'unificação':'desmembramento')}</button>`}catch(err){exibirErro(err)}finally{s.busy=false}}
-  async function finalizar(){if(!s||s.busy||!validarDados())return;const c=corpo();if(s.revisado!==JSON.stringify(c)){dica('Confira os dados novamente.');return}if(!s.protocoloId&&s.justificativa.trim().length<10){$('pc-conferencia').textContent='Informe a justificativa do ato direto (mínimo de 10 caracteres).';return}s.busy=true;clearTimeout(saveTimer);try{await fila.catch(()=>{});const d=await request(rota(),c);try{localStorage.removeItem(chaveLocal())}catch{}s.leitura=true;s.finalFeatures=(d.lotes||[{id:d.id,numero_lote:s.numero}]).map((p,i)=>({properties:p}));$('pc-dados').hidden=true;$('pc-save').hidden=true;$('pc-continuar').hidden=true;$('pc-titulo').textContent='Prancha finalizada · '+({fracao_ideal:'Fração ideal',desmembramento:'Desmembramento',unificacao:'Unificação'}[s.tipo]||s.tipo);$('pc-salvo').textContent='Desenho e orientação salvos com o ato';toast(d.message);atoState.tipo=null;limparLotesDoMapa();carregarLotesVisiveis();render()}catch(err){exibirErro(err)}finally{s.busy=false}}
+  async function finalizar(){if(!s||s.busy||!validarDados())return;const c=corpo();if(s.revisado!==JSON.stringify(c)){dica('Confira os dados novamente.');return}if(!s.protocoloId&&s.justificativa.trim().length<10){$('pc-conferencia').textContent='Informe a justificativa do ato direto (mínimo de 10 caracteres).';return}s.busy=true;clearTimeout(saveTimer);try{await fila.catch(()=>{});const d=await comCarregando('Gravando o ato…',()=>request(rota(),c));try{localStorage.removeItem(chaveLocal())}catch{}s.leitura=true;s.finalFeatures=(d.lotes||[{id:d.id,numero_lote:s.numero}]).map((p,i)=>({properties:p}));$('pc-dados').hidden=true;$('pc-save').hidden=true;$('pc-continuar').hidden=true;$('pc-titulo').textContent='Prancha finalizada · '+({fracao_ideal:'Fração ideal',desmembramento:'Desmembramento',unificacao:'Unificação'}[s.tipo]||s.tipo);$('pc-salvo').textContent='Desenho e orientação salvos com o ato';atoState.tipo=null;limparLotesDoMapa();await comCarregando('Atualizando o mapa…',()=>carregarLotesVisiveis());await carregandoSaiu();toast(d.message);render()}catch(err){exibirErro(err)}finally{s.busy=false}}
   function fechar(forcar=false){
     if(!fechamento)fechamento=fecharSessao(forcar).finally(()=>{fechamento=null})
     return fechamento

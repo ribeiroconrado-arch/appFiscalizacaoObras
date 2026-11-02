@@ -279,6 +279,17 @@ function esconderCarregandoTela() {
 }
 
 /**
+ * Resolve quando o overlay de carregamento já saiu da tela (respeitado o tempo
+ * mínimo). Para o aviso de "salvo" não aparecer por baixo do overlay.
+ */
+function carregandoSaiu() {
+  return new Promise(ok => {
+    const ver = () => (_carregandoTimer || _carregandoDesde) ? setTimeout(ver, 40) : ok()
+    ver()
+  })
+}
+
+/**
  * Roda uma tarefa com o aviso de carregamento na tela, dizendo O QUE está
  * sendo carregado. O aviso sai mesmo se a tarefa falhar.
  *
