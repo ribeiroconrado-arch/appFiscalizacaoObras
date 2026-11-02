@@ -2876,6 +2876,26 @@
   </div>
 </div>
 
+{{-- ETAPAS — o que um salvamento está fazendo, uma linha por etapa (ui.js,
+     abrirEtapas). Sem X nem clique no fundo: fecha sozinho quando tudo termina;
+     só ganha "Fechar" se uma etapa falhar. --}}
+<div class="modal-bg" id="m-etapas">
+  <div class="modal met-modal" role="dialog" aria-modal="true" aria-labelledby="met-titulo">
+    <h3 class="fi-cabeca">
+      <span class="cab-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+      </span>
+      <span id="met-titulo">Salvando</span>
+    </h3>
+    <ul class="met-lista" id="met-lista" aria-live="polite"></ul>
+    <div class="btn-row" id="met-acoes" hidden>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="fModalBtn('m-etapas')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 {{-- DADOS DA EDIFICAÇÃO — pedidos depois de fechar o contorno (edificacoes.js).
      A origem diz para qual demanda o croqui foi feito; as características da
      construção entram aqui quando a planilha com os campos chegar. --}}

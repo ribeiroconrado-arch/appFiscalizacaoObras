@@ -279,14 +279,43 @@ function esconderCarregandoTela() {
 }
 
 /**
- * Resolve quando o overlay de carregamento já saiu da tela (respeitado o tempo
- * mínimo). Para o aviso de "salvo" não aparecer por baixo do overlay.
+ * ETAPAS DE UM SALVAMENTO, num modal (#m-etapas): uma linha por etapa, que
+ * passa de pendente a "fazendo" (girando) a feita (check) ou falhou (x).
+ *
+ * Feito para os segundos depois de "Salvar" em que o lote já foi gravado mas
+ * o mapa e a conferência ainda estão mudando (31/10/2026): com o aviso de
+ * "salvo" já na tela, parecia possível clicar em outra coisa. O modal cobre a
+ * tela inteira até a última etapa; quem chama mostra o aviso DEPOIS de
+ * `fechar()`.
+ *
+ * @param {string} titulo @param {string[]} rotulos
  */
-function carregandoSaiu() {
-  return new Promise(ok => {
-    const ver = () => (_carregandoTimer || _carregandoDesde) ? setTimeout(ver, 40) : ok()
-    ver()
-  })
+function abrirEtapas(titulo, rotulos) {
+  document.getElementById('met-titulo').textContent = titulo
+  document.getElementById('met-acoes').hidden = true
+  const lista = document.getElementById('met-lista')
+  lista.innerHTML = rotulos.map((r, i) =>
+    `<li class="met-pend" data-i="${i}"><span class="met-ico" aria-hidden="true"></span><span class="met-txt">${esc(r)}</span></li>`).join('')
+  openModal('m-etapas')
+  const desde = Date.now()
+  const marca = (i, cls, txt) => {
+    const li = lista.querySelector(`[data-i="${i}"]`)
+    if (!li) return
+    li.className = cls
+    if (txt) li.querySelector('.met-txt').textContent = txt
+  }
+  return {
+    vai: (i, txt) => marca(i, 'met-vai', txt),
+    ok: (i, txt) => marca(i, 'met-ok', txt),
+    /** Falhou: a etapa fica em vermelho e o modal ganha "Fechar". */
+    erro: (i, txt) => { marca(i, 'met-erro', txt); document.getElementById('met-acoes').hidden = false },
+    /** Fecha — no mínimo 600 ms depois de abrir, para não piscar. */
+    async fechar() {
+      const falta = 600 - (Date.now() - desde)
+      if (falta > 0) await new Promise(r => setTimeout(r, falta))
+      fModalBtn('m-etapas')
+    },
+  }
 }
 
 /**

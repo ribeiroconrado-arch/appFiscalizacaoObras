@@ -4124,3 +4124,19 @@ body.prancheta-aberta .mapa-fundo-seletor{display:none}
 #fi-lista-croquis .edif-croqui svg{max-height:220px}
 .edif-autor{display:block;font-size:11px;color:var(--tx3);padding:0 10px 8px}
 .par-linha .edif-autor{padding:0}
+
+/* Modal de etapas de um salvamento (ui.js, abrirEtapas). Acima da prancheta e
+   do overlay de carregamento: é ele que diz o que ainda está acontecendo. */
+#m-etapas{z-index:2600;align-items:center}
+.met-modal{max-width:360px}
+.met-lista{list-style:none;margin:12px 0 2px;padding:0;display:flex;flex-direction:column;gap:9px}
+.met-lista li{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.4;color:var(--tx3)}
+.met-ico{flex:0 0 16px;width:16px;height:16px;margin-top:1px;border-radius:50%;border:1.5px solid var(--bord);box-sizing:border-box}
+.met-vai{color:var(--tx)!important;font-weight:600}
+.met-vai .met-ico{border:2px solid var(--gm);border-top-color:var(--g);animation:met-gira .8s linear infinite}
+.met-ok{color:var(--gd)!important}
+.met-ok .met-ico{border:0;background:var(--g);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/16px no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/16px no-repeat;border-radius:0}
+.met-erro{color:var(--red)!important;font-weight:600}
+.met-erro .met-ico{border:0;background:var(--red);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/16px no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/16px no-repeat;border-radius:0}
+@keyframes met-gira{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.met-vai .met-ico{animation:none}}
