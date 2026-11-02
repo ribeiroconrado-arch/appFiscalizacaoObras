@@ -151,7 +151,11 @@ function nivelDoMapa(mapa) {
   const b = mapa.getBounds()
   const area = (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth())
   const tetoLotes = curadoriaNoMapa() ? AREA_MAX_CURADORIA_GRAUS2 : AREA_MAX_GRAUS2 * fatorDaTela('lotes')
-  if (mapa.getZoom() >= ZOOM_MINIMO && area <= tetoLotes) return 'lotes'
+  // As LINHAS dos lotes só a partir do zoom em que o NÚMERO aparece (mapa.js,
+  // ZOOM_ROTULO_LOTE) — também na curadoria, que antes as mostrava dois zooms
+  // antes, sem número e com o bairro inteiro carregado (31/10/2026).
+  const zoomDosLotes = typeof ZOOM_ROTULO_LOTE === 'number' ? ZOOM_ROTULO_LOTE : ZOOM_MINIMO
+  if (mapa.getZoom() >= zoomDosLotes && area <= tetoLotes) return 'lotes'
   if (area <= AREA_MAX_QUADRAS_GRAUS2 * fatorDaTela('quadras')) return 'quadras'
   return area <= AREA_MAX_BAIRROS_GRAUS2 ? 'bairros' : 'municipio'
 }
