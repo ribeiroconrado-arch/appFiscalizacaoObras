@@ -706,7 +706,12 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // O rótulo da opção de fundo acompanha o que ela mostra.
     {const rot=$('pc-mapa')?.nextSibling;if(rot?.nodeType===3)rot.textContent=tipo==='edificacao'?' Imagem aérea ':' Mapa cadastral '}
     $('pc-titulo').textContent=(salva?'Prancha finalizada · ':'')+(titulos[tipo]||tipo)
-    $('pc-origem').textContent=tipo==='novo'?(opts.bairro||'Desenhe o contorno do lote'):originais.map(f=>`Q ${f.properties?.quadra||opts.quadra||'—'} · Lote ${f.properties?.numero_lote||opts.numero_lote||f.properties?.id}`).join(' + ')
+    // A quadra e o lote em destaque (31/10/2026): é o que se confere antes de mexer.
+    const idLote=f=>`<span class="pc-id"><span>Quadra</span><b>${e(f.properties?.quadra||opts.quadra||'—')}</b><span>Lote</span><b>${e(f.properties?.numero_lote||opts.numero_lote||f.properties?.id)}</b></span>`
+    const bairroDe=originais.find(f=>f.properties?.bairro)?.properties?.bairro||opts.bairro
+    $('pc-origem').classList.toggle('pc-ids',tipo!=='novo')
+    if(tipo==='novo')$('pc-origem').textContent=opts.bairro||'Desenhe o contorno do lote'
+    else $('pc-origem').innerHTML=originais.map(idLote).join('<i class="pc-id-mais">+</i>')+(bairroDe?`<small class="pc-id-bairro">${e(bairroDe)}</small>`:'')
     $('pc-continuar').textContent=tipo==='fracao_ideal'?'Unidades e finalizar →':tipo==='novo'?'Informar os dados →':tipo==='edificacao'?'Gravar edificação →':tipo==='edicao'?'Número, quadra e salvar →':'Dados e finalizar →'
     $('pc-salvo').textContent=salva?'Visualização preservada':'';$('pc-save').hidden=!!salva;$('pc-continuar').hidden=!!salva;$('pc-dados').hidden=true;$('pc-entrada').hidden=true
     // A prancheta ocupa o mapa INTEIRO e fica sozinha: a régua da curadoria não
