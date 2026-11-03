@@ -57,9 +57,9 @@ function lerCoordenadasGMS(texto) {
       return
     }
 
-    // Arredondado já na leitura: 7 casas são ~1 cm, e é a mesma régua do
-    // desenho livre. Sem isso, a prévia mostraria -54.31108333333333, que não
-    // significa nada além de ruído de ponto flutuante.
+    // Arredondado já na leitura, em 10 casas (~0,01 mm): tira o ruído de ponto
+    // flutuante (-54.31108333333333) sem mexer na 4ª casa das medidas. Eram 7
+    // casas (~1 cm), que alteravam os lados.
     vertices.push([_arred(lon), _arred(lat)])
   })
 
@@ -180,8 +180,8 @@ function _paraDecimal(m) {
   return { valor, eixo }
 }
 
-/** 7 casas ≈ 1 cm, a mesma régua do desenho livre. */
-function _arred(n) { return Number(n.toFixed(7)) }
+/** 10 casas ≈ 0,01 mm. */
+function _arred(n) { return Number(n.toFixed(10)) }
 
 function _mesmoPonto(a, b) {
   return Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7

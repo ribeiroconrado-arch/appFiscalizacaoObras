@@ -203,10 +203,13 @@ class LoteRepository
             $params[] = $rascunhosDe;
         }
 
-        // 8 casas decimais: ~1 mm no terreno, bem abaixo do centímetro em que
-        // as medidas dos lados são mostradas — e o ST_AsGeoJSON sem limite
-        // escreve até 15 casas por coordenada, que só pesam na resposta.
-        $sql = 'SELECT ' . self::CAMPOS . ', ST_AsGeoJSON(geom, 8) AS geojson
+        // PRECISÃO CHEIA, de propósito (03/11/2026). Com 8 casas (~1 mm) cada
+        // vértice saía arredondado, e um lado de 20,0000 m no desenho virava
+        // 20,0004 ou 19,9993 na tela — as medidas têm 4 casas. Pior: este
+        // desenho é o que a prancheta usa de vizinho e o Mover lotes grava,
+        // então o arredondamento ia para o banco e abria frestas entre lotes
+        // que encostavam. Custa ~35% a mais na geometria da resposta.
+        $sql = 'SELECT ' . self::CAMPOS . ', ST_AsGeoJSON(geom) AS geojson
                   FROM lotes
                  WHERE ' . ($incluirRevisao ? self::SO_ATIVOS : self::SO_PUBLICADOS) . ' AND ' . self::SEM_UNIDADE_SEM_DESENHO . '
                    AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))' . $alheios . '

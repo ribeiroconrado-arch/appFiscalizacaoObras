@@ -41,9 +41,6 @@ const desenhoState = {
   ultimoClique: { t: 0, x: 0, y: 0 },
 }
 
-/** Casas decimais na saída. 7 ≈ 1 cm em EPSG:4326. */
-const DESENHO_CASAS = 7
-
 /** Raio de encaixe em vértice vizinho, em pixels de tela. */
 const DESENHO_SNAP_PX = 14
 
@@ -291,7 +288,9 @@ function voltarATracar() {
 
 /** @returns {Object|null} GeoJSON Polygon ou LineString, em (lon, lat) */
 function geometriaDoDesenho() {
-  const v = desenhoState.vertices.map(c => [_arredondar(c[0]), _arredondar(c[1])])
+  // Sem arredondar: o vértice encaixado num lote tem de ser IGUAL ao dele.
+  // 7 casas (~1 cm) deslocavam o ponto e abriam fresta entre os dois.
+  const v = desenhoState.vertices.map(c => [...c])
   if (!v.length) { return null }
 
   if (desenhoState.modo === 'linha') {
@@ -1154,11 +1153,6 @@ function _limpar() {
   document.getElementById('map')?.classList.remove('desenhando')
   _pintarBarraDesenho()
   if (typeof aoDesenharVertice === 'function') { aoDesenharVertice(0) }
-}
-
-/** @param {number} v */
-function _arredondar(v) {
-  return Number(v.toFixed(DESENHO_CASAS))
 }
 
 // Esc cancela; Ctrl+Z desfaz; Enter fecha. O handler roda na fase de CAPTURA

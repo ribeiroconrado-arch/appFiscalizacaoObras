@@ -749,7 +749,7 @@ const PranchetaCad = (() => {
     // mapa vem com 8 casas (~1 mm), e só esse arredondamento já muda a área em
     // ~0,01 m² — a diferença contra o cadastro que não se achava. As
     // propriedades (quadra, número) continuam as do mapa, quando ele tem o lote.
-    const originais=salva?.originais||(tipo==='novo'?[]:await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok){if(f)return f;throw new Error('Não foi possível ler o contorno do imóvel.')}const d=await r.json();const g=d.type==='Feature'?d.geometry:(d.geometry||d);return {type:'Feature',geometry:g,properties:{...(f?.properties||{id,bairro:d.bairro,quadra:d.quadra,numero_lote:d.numero_lote}),caixa_quadra:d.caixa_quadra}}})))
+    const originais=salva?.originais||(tipo==='novo'?[]:await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok){if(f)return f;throw new Error('Não foi possível ler o contorno do imóvel.')}const d=await r.json();const g=d.type==='Feature'?d.geometry:(d.geometry||d);return {type:'Feature',geometry:g,properties:{...(f?.properties||{id,bairro:d.bairro,quadra:d.quadra,numero_lote:d.numero_lote}),bairro_oficial:f?.properties?.bairro_oficial||d.bairro_oficial,caixa_quadra:d.caixa_quadra}}})))
     if(token!==geracao)return
     // VAZIO INTERNO DE ÁREA ZERO sai sozinho: é resto da conversão do desenho
     // (triângulo achatado, 0,001 m² no Cond. Esplendore, Q01 L11) e é ele que
@@ -775,7 +775,8 @@ const PranchetaCad = (() => {
     $('pc-titulo').textContent=(salva?'Prancha finalizada · ':'')+(titulos[tipo]||tipo)
     // A quadra e o lote em destaque (31/10/2026): é o que se confere antes de mexer.
     const idLote=f=>`<span class="pc-id"><span>Quadra</span><b>${e(f.properties?.quadra||opts.quadra||'—')}</b><span>Lote</span><b>${e(f.properties?.numero_lote||opts.numero_lote||f.properties?.id)}</b></span>`
-    const bairroDe=originais.find(f=>f.properties?.bairro)?.properties?.bairro||opts.bairro
+    // O bairro da tabela de bairros; o nome do desenho só se o bairro não estiver nela.
+    const bairroDe=(f=>f&&(f.properties.bairro_oficial||f.properties.bairro))(originais.find(f=>f.properties?.bairro_oficial||f.properties?.bairro))||opts.bairro
     $('pc-origem').classList.toggle('pc-ids',tipo!=='novo')
     if(tipo==='novo')$('pc-origem').textContent=opts.bairro||'Desenhe o contorno do lote'
     else $('pc-origem').innerHTML=originais.map(idLote).join('<i class="pc-id-mais">+</i>')+(bairroDe?`<small class="pc-id-bairro">${e(bairroDe)}</small>`:'')

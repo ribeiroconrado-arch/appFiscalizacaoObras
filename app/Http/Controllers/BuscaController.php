@@ -482,6 +482,9 @@ class BuscaController extends Controller
             'inativado_em' => $lote->inativado_em?->format('d/m/Y'),
             // A prancheta acha a quadra inteira do lote por aqui (31/10/2026).
             'bairro'      => $lote->bairro,
+            // O nome que o cabeçalho da prancheta mostra: o da tabela de bairros
+            // (Parâmetros › Bairros), e não o que veio escrito no desenho.
+            'bairro_oficial' => $this->bairroOficial($lote->bairro),
             'quadra'      => $lote->quadra,
             'numero_lote' => $lote->numero_lote,
             'caixa_quadra' => $this->caixaDaQuadra($lote),
@@ -503,7 +506,7 @@ class BuscaController extends Controller
         }
         $c = [INF, INF, -INF, -INF];
         $aneis = DB::table('lotes')->where('bairro', $lote->bairro)->where('quadra', $lote->quadra)
-            ->where('situacao', 'ativo')->selectRaw('ST_AsGeoJSON(geom, 7) g')->pluck('g');
+            ->where('situacao', 'ativo')->selectRaw('ST_AsGeoJSON(geom) g')->pluck('g');
         foreach ($aneis as $g) {
             $geo = json_decode((string) $g, true);
             $pts = ($geo['type'] ?? '') === 'MultiPolygon' ? array_merge(...array_merge(...$geo['coordinates'])) : array_merge(...($geo['coordinates'] ?? [[]]));
