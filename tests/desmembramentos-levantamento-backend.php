@@ -63,29 +63,22 @@ try {
     $obs = [];
     foreach ($linhas as $l) { $sit[$l[0]] = $l[10]; $obs[$l[0]] = $l[11]; }
     $ok(($sit['PRIMAVERA II|13|4'] ?? null) === 'pronta', 'Caso limpo não ficou pronto: '.json_encode([$sit, $obs], JSON_UNESCAPED_UNICODE));
-    $ok(($sit['PRIMAVERA II|71|9'] ?? null) === 'sem_numero', 'Metades iguais não ficaram em branco (empate).');
+    $ok(($sit['PRIMAVERA II|71|9'] ?? null) === 'pronta', 'Metades iguais (empate) não seguiram a sequência: ' . ($obs['PRIMAVERA II|71|9'] ?? ''));
     $ok(($sit['PQ. ELDORADO|37|13'] ?? null) === 'sem_numero', 'Sem cadastro deveria ficar sem número.');
     $ok(($sit['JARDIM RIVA|08|8'] ?? null) === 'desatualizada', 'Mãe deslocada não ficou desatualizada.');
+    $n = 0;
     foreach ($linhas as $l) {
-        if ($l[0] === 'PRIMAVERA II|71|9') $ok($l[6] === '' && str_contains($l[11], 'áreas iguais'), 'Empate sem aviso ou com inscrição chutada.');
+        // empate: em ordem crescente, a primeira parte com a .001 e a segunda com a .002
+        if ($l[0] === 'PRIMAVERA II|71|9') {
+            $n++;
+            $ok($l[6] === App\Support\InscricaoImobiliaria::formatar($prefixos['PRIMAVERA II|71|9'].sprintf('%03d', $n)) && $l[12] === 'sim',
+                "Empate fora da sequência na parte {$n}: {$l[6]}");
+        }
         if ($l[0] === 'PRIMAVERA II|13|4') $ok($l[6] !== '' && $l[12] === 'sim', 'Caso limpo sem inscrição ou sem "sim".');
     }
-
-    // ── aplicação: o limpo, e o empate resolvido à mão na planilha ──
-    // como ele faria no Excel: preenche as duas inscrições do empate e marca "sim"
-    $todas = array_map(fn ($l) => str_getcsv($l, ';'), file($csv, FILE_IGNORE_NEW_LINES));
-    $n = 0;
-    foreach ($todas as $k => $l) {
-        if ($k > 0 && $l[0] === 'PRIMAVERA II|71|9') {
-            $n++;
-            $todas[$k][6] = App\Support\InscricaoImobiliaria::formatar($prefixos['PRIMAVERA II|71|9'].sprintf('%03d', $n));
-            $todas[$k][12] = 'sim';
-        }
-    }
     $ok($n === 2, 'Não achei as duas linhas do empate na planilha.');
-    $f = fopen($csv, 'w');
-    foreach ($todas as $l) fputcsv($f, $l, ';');
-    fclose($f);
+
+    // ── aplicação: o limpo e o empate, como vieram da simulação ──
 
     $codigo = Artisan::call('gis:desmembramentos-levantamento', ['arquivo' => $fixture, '--planilha' => $csv,
         '--aplicar' => true, '--usuario' => $user->email]);

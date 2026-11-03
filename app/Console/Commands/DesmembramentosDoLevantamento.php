@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Cadastro\SequenciaDoDesmembramento;
 use App\Models\Lote;
 use App\Models\User;
 use App\Services\DesmembramentoDeLote;
@@ -29,10 +30,11 @@ use Illuminate\Support\Facades\DB;
  * justificativa — desfazer é pela tela, como qualquer outro.
  *
  * Numeração pelo cadastro: as candidatas são as inscrições ATIVAS do cadastro
- * carregado com os mesmos 12 primeiros dígitos da mãe e sufixo ainda livre.
- * Cada parte fica com a de "Área Terreno" mais próxima, uma inscrição por
- * parte, dentro da tolerância; empate ou nada perto deixa em branco — melhor
- * em branco na planilha do que lote com a inscrição do vizinho.
+ * carregado com os mesmos 12 primeiros dígitos da mãe e sufixo ainda livre, e
+ * a distribuição é a regra do sistema (App\Cadastro\SequenciaDoDesmembramento):
+ * .000 ativa para a primeira parte, depois em sequência, trocadas quando a
+ * área diz que o desenho está invertido; empate fica com a sequência. Parte
+ * a mais que as inscrições fica em branco.
  */
 class DesmembramentosDoLevantamento extends Command
 {
@@ -90,6 +92,8 @@ class DesmembramentosDoLevantamento extends Command
                 $obs = count($m['partes']) . ' partes: a mãe pode ser uma quadra inteira gravada como lote.';
             }
             $resumo[$situacao] = ($resumo[$situacao] ?? 0) + 1;
+            // Uma parte com a .000: as letras começam nela (A), como no serviço.
+            $zero = (bool) array_filter($r['inscricoes'], fn ($s) => $s && (int) substr($s['inscricao'], 12) === 0);
             foreach ($m['partes'] as $i => $p) {
                 $s = $r['inscricoes'][$i] ?? null;
                 $linhas[] = [
@@ -102,7 +106,7 @@ class DesmembramentosDoLevantamento extends Command
                     'inscricao_sugerida' => $s ? InscricaoImobiliaria::formatar($s['inscricao']) : '',
                     'area_cadastro_m2'   => $s && $s['area'] !== null ? $this->num($s['area']) : '',
                     'diferenca_pct'      => $s && $s['area'] ? $this->num(100 * ($p['area'] - $s['area']) / $s['area'], 1) : '',
-                    'numero_resultante'  => $s ? InscricaoImobiliaria::apelidoDesmembrado($s['inscricao'], (int) substr($s['inscricao'], 12)) : '',
+                    'numero_resultante'  => $s ? InscricaoImobiliaria::apelidoDesmembrado($s['inscricao'], (int) substr($s['inscricao'], 12), $zero) : '',
                     'situacao'           => $situacao,
                     'observacao'         => $obs,
                     'aplicar'            => $situacao === 'pronta' ? 'sim' : 'não',
@@ -160,12 +164,10 @@ class DesmembramentosDoLevantamento extends Command
             return $saida('sem_inscricao', 'A mãe não tem inscrição: o desmembramento precisa dela.', $lote);
         }
 
-        [$inscricoes, $empates] = $this->numerarPeloCadastro($svc, $lote, $m['partes'], $tolerancia);
+        [$inscricoes, $longe] = $this->numerarPeloCadastro($svc, $lote, $m['partes'], $tolerancia);
         $faltam = count(array_filter($m['partes'], fn ($p, $i) => empty($inscricoes[$i]), ARRAY_FILTER_USE_BOTH));
         if ($faltam) {
-            return $saida('sem_numero', $empates
-                ? "{$faltam} parte(s) sem inscrição: áreas iguais no cadastro ({$empates}). Confira pelo endereço e preencha."
-                : "{$faltam} parte(s) sem inscrição do cadastro dentro de {$this->num($tolerancia, 0)} %.",
+            return $saida('sem_numero', "{$faltam} parte(s) a mais que as inscrições ativas livres no cadastro. Preencha, ou deixe \"não\".",
                 $lote, $inscricoes);
         }
 
@@ -174,7 +176,11 @@ class DesmembramentosDoLevantamento extends Command
             return $saida('impedida', $erro, $lote, $inscricoes);
         }
 
-        return $saida('pronta', '', $lote, $inscricoes);
+        // Área longe da do cadastro não impede (regra de 03/11/2026): a
+        // conferência marca a divergência depois.
+        return $saida('pronta', $longe
+            ? "Área difere mais de {$this->num($tolerancia, 0)} % do cadastro em {$longe}: vai aparecer como divergência na conferência."
+            : '', $lote, $inscricoes);
     }
 
     /**
@@ -188,56 +194,42 @@ class DesmembramentosDoLevantamento extends Command
     {
         $identidade = $svc->identidade($lote);
         $prefixo = $identidade['prefixo'];
+        // `usados` já deixa livre a .000 da própria mãe, que é inativada no
+        // mesmo ato: pela regra, se ela está ativa no cadastro, é a da parte A.
         $usados = $identidade['usados'];
-        $propria = (int) substr($lote->inscricao(), 12);
 
-        $cadastro = [];
+        $cadastro = [];   // final => área, só as ativas e livres
         $linhas = DB::table('cadastro_externo_imoveis')
             ->whereRaw("REPLACE(REPLACE(REPLACE(inscricao, '.', ''), '-', ''), ' ', '') LIKE ?", [$prefixo . '%'])
             ->whereNull('ausente_desde_carga_id')
             ->get(['inscricao', 'isencao', 'area_terreno_m2']);
         foreach ($linhas as $l) {
             $n = InscricaoImobiliaria::normalizar($l->inscricao);
-            if (! $n || isset($cadastro[$n])) continue;
+            if (! $n || substr($n, 0, 12) !== $prefixo) continue;
             if (\App\Cadastro\RetratoBci::isencaoAtiva($l->isencao) === false) continue;
             $sufixo = (int) substr($n, 12);
-            if ($sufixo === $propria || in_array($sufixo, $usados, true)) continue;
-            $cadastro[$n] = $l->area_terreno_m2 !== null ? (float) $l->area_terreno_m2 : null;
+            if (in_array($sufixo, $usados, true) || array_key_exists($sufixo, $cadastro)) continue;
+            $cadastro[$sufixo] = $l->area_terreno_m2 !== null ? (float) $l->area_terreno_m2 : null;
         }
 
-        // todos os pares, do mais parecido ao menos
-        $pares = [];
-        foreach ($partes as $i => $p) {
-            foreach ($cadastro as $insc => $area) {
-                if (! $area) continue;
-                $pct = 100 * abs($p['area'] - $area) / $area;
-                if ($pct <= $tolerancia) $pares[] = [$pct, $i, $insc];
+        // A regra do sistema (SequenciaDoDesmembramento): em sequência, trocada
+        // pela área; empate fica com a sequência.
+        $chaves = array_keys($partes);
+        $finais = SequenciaDoDesmembramento::atribuir(array_map(fn ($p) => (float) $p['area'], array_values($partes)), $cadastro);
+
+        $resultado = [];
+        $longe = [];
+        foreach ($chaves as $k => $i) {
+            $final = $finais[$k];
+            if ($final === null) { $resultado[$i] = null; continue; }
+            $area = $cadastro[$final];
+            $resultado[$i] = ['inscricao' => $prefixo . sprintf('%03d', $final), 'area' => $area];
+            if ($area && 100 * abs($partes[$i]['area'] - $area) / $area > $tolerancia) {
+                $longe[] = sprintf('.%03d', $final);
             }
         }
-        usort($pares, fn ($a, $b) => $a[0] <=> $b[0]);
 
-        $resultado = array_fill_keys(array_keys($partes), null);
-        $tomadas = [];
-        $empatadas = [];
-        foreach ($pares as $k => [$pct, $i, $insc]) {
-            if ($resultado[$i] !== null || isset($tomadas[$insc])) continue;
-            // Empate: outra inscrição livre com a mesma diferença para esta
-            // parte (lotes iguais lado a lado). Escolher seria chutar.
-            $empate = false;
-            foreach ($pares as $j => [$pct2, $i2, $insc2]) {
-                if ($j !== $k && $i2 === $i && ! isset($tomadas[$insc2]) && $insc2 !== $insc && abs($pct2 - $pct) < 0.05) {
-                    $empate = true;
-                    $empatadas[$insc] = $empatadas[$insc2] = true;
-                    break;
-                }
-            }
-            if ($empate) continue;
-            $resultado[$i] = ['inscricao' => $insc, 'area' => $cadastro[$insc]];
-            $tomadas[$insc] = true;
-        }
-
-        $empatadas = array_diff_key($empatadas, $tomadas);
-        return [$resultado, implode(', ', array_map(fn ($n) => InscricaoImobiliaria::formatar($n), array_keys($empatadas)))];
+        return [$resultado, implode(', ', $longe)];
     }
 
     // ── aplicação ────────────────────────────────────────────────

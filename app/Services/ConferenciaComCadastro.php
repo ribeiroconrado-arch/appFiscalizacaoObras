@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Cadastro\BairrosDoDesenho;
 use App\Cadastro\FonteDoCadastro;
 use App\Cadastro\PlanilhaDoCadastro;
+use App\Cadastro\SequenciaDoDesmembramento;
 use Illuminate\Http\Request;
 use App\Models\ImportacaoLote;
 use App\Support\GeometriaPlana;
@@ -147,13 +148,19 @@ class ConferenciaComCadastro
         $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2', 'terreno_id', 'fracao_ideal_m2'];
         $lotes = DB::table('lotes')->where('situacao', 'ativo')->whereIn('bairro', $nomes)->get($campos);
 
+        // Os desmembrados que a última conferência deixou sem inscrição: a
+        // montada deles (.000) não é inscrição de verdade.
+        $semNumeroAntes = [];
+        foreach ($anterior['sem_inscricao'] ?? [] as $i) {
+            if ($i['desmembrado'] ?? false) { $semNumeroAntes[(int) $i['lote_id']] = true; }
+        }
         $porId = [];          // lote ativo => [inscrição atual (ou null), linha]
         $comInscricao = [];   // inscrição => lote, bairro inteiro
         $conferidos = 0;
         foreach ($lotes as $l) {
             $insc = InscricaoImobiliaria::normalizar($bairros->inscricaoDe($l));
             $porId[(int) $l->id] = [$insc, $l];
-            if ($insc !== null) { $comInscricao[$insc] = $l; }
+            if ($insc !== null && ! isset($semNumeroAntes[(int) $l->id])) { $comInscricao[$insc] = $l; }
             $conferidos += ($importacaoId === null || (int) $l->importacao_id === $importacaoId) ? 1 : 0;
         }
 
@@ -201,6 +208,14 @@ class ConferenciaComCadastro
         foreach ($anterior['nao_encontrados'] ?? [] as $i) { if ($r = $revisaLote($i, 'nao_encontrados')) { $naoEncontrados[] = $r; } }
         foreach ($anterior['inativos'] ?? [] as $i) { if ($r = $revisaLote($i, 'inativos')) { $inativos[] = $r; } }
         foreach ($anterior['sem_inscricao'] ?? [] as $i) {
+            // Desmembrado que sobrou sem inscrição ativa no cadastro: só a
+            // conferência com o cadastro diz se isso mudou — enquanto o lote
+            // continua igual, a pendência continua.
+            $atual = $porId[(int) ($i['lote_id'] ?? 0)] ?? null;
+            if (($i['desmembrado'] ?? false) && $atual && (int) $atual[1]->desmembramento === (int) ($i['desmembramento'] ?? -1)) {
+                $semInscricao[] = $i;
+                continue;
+            }
             $r = $revisaLote($i, 'sem_inscricao');
             if (! $r) { continue; }
             // Ganhou inscrição que a lista não conhece: deixa de ser "sem
@@ -306,7 +321,7 @@ class ConferenciaComCadastro
             $this->importacao->auditar('conferiu com cadastro', $imp, null, [
                 'fonte' => $descricaoFonte, 'divergencias' => $resultado['total_divergencias'],
                 'casaram' => $resultado['casaram'],
-            ]);
+            ] + ($resultado['numerados'] ? ['desmembrados_renumerados' => count($resultado['numerados'])] : []));
         }
 
         return $resultado;
@@ -401,7 +416,7 @@ class ConferenciaComCadastro
                 . 'cadastro, e sem o código dele não há como montar a inscrição dos lotes. ' . $comoLigar);
         }
 
-        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2', 'terreno_id', 'fracao_ideal_m2'];
+        $campos = ['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada', 'importacao_id', 'area_gis_m2', 'terreno_id', 'fracao_ideal_m2', 'origem'];
 
         // Todos os nomes de desenho amarrados ao MESMO código: o cadastro não
         // sabe que o desenho partiu o bairro em dois nomes.
@@ -412,19 +427,34 @@ class ConferenciaComCadastro
         $lotesDoBairro = DB::table('lotes')->where('situacao', 'ativo')
             ->whereIn('bairro', $nomes)->get($campos);
 
+        $imoveis = [];
+        foreach ($fonte->imoveisDoBairro((string) $codigo) as $c) {
+            $imoveis[] = $c;
+        }
+
+        // Lotes desmembrados (4A, 4B…): o final da inscrição vem do cadastro,
+        // antes de tudo — é ele que decide com que inscrição cada um é conferido.
+        [$numerados, $desmembradoSemNumero] = $imoveis
+            ? $this->numerarDesmembrados($lotesDoBairro, $imoveis, $bairros, $importacaoId)
+            : [[], []];
+
         $doBairro = [];              // inscrição => true, bairro inteiro
         $doArquivo = [];             // inscrição => lote, o que está sendo conferido
         $semInscricao = [];
         $lotesConferidos = 0;
 
         foreach ($lotesDoBairro as $l) {
-            $insc = InscricaoImobiliaria::normalizar($bairros->inscricaoDe($l));
+            $insc = isset($desmembradoSemNumero[(int) $l->id]) ? null
+                : InscricaoImobiliaria::normalizar($bairros->inscricaoDe($l));
             $conta = $importacaoId === null || (int) $l->importacao_id === $importacaoId;
             $lotesConferidos += $conta ? 1 : 0;
 
             if ($insc === null) {
                 if ($conta) {
-                    $semInscricao[] = $this->lote($l, null);
+                    $semInscricao[] = $this->lote($l, null) + (isset($desmembradoSemNumero[(int) $l->id])
+                        ? ['desmembrado' => true, 'desmembramento' => (int) $l->desmembramento,
+                           'motivo' => 'Desmembrado sem inscrição ativa livre no cadastro para esta parte.']
+                        : []);
                 }
                 continue;
             }
@@ -450,7 +480,7 @@ class ConferenciaComCadastro
         $cobertura = ['esperadas' => 0, 'no_mapa' => 0, 'faltam' => [],
                       'ignoradas' => ['desmembramentos' => 0, 'unificacoes' => 0]];
 
-        foreach ($fonte->imoveisDoBairro((string) $codigo) as $c) {
+        foreach ($imoveis as $c) {
             $insc = $c['inscricao'];
             if (isset($vistos[$insc])) {
                 continue;   // linha repetida da mesma inscrição (várias construções)
@@ -535,6 +565,9 @@ class ConferenciaComCadastro
             'sem_lote'          => $semLote,
             'sem_inscricao'     => $semInscricao,
             'area_diferente'    => $areaDiferente,
+            // À PARTE das divergências: os lotes desmembrados (4A, 4B…) que
+            // esta conferência renumerou pelo cadastro (ver numerarDesmembrados).
+            'numerados'         => $numerados,
             // À PARTE das divergências: as inscrições do bairro (ativas ou não,
             // sem desmembramento e unificação) que não têm lote no mapa — para
             // saber se TODOS os lotes do loteamento foram importados.
@@ -554,6 +587,92 @@ class ConferenciaComCadastro
             'conferido_por'     => auth()->user()?->name,
             'conferido_em'      => now()->format('d/m/Y H:i'),
         ];
+    }
+
+    /**
+     * NUMERA OS DESMEMBRADOS pelo cadastro (regra de 03/11/2026, ver
+     * App\Cadastro\SequenciaDoDesmembramento): o lote sem letra e os 4A, 4B…
+     * do mesmo número, na mesma quadra, recebem os finais das inscrições
+     * ATIVAS da família — em sequência, e trocados quando a área diz que o
+     * desenho está invertido.
+     *
+     * Grava `desmembramento` (e a inscrição montada) só nos lotes desta
+     * conferência cujo final mudou; a trilha é o próprio resultado, em
+     * `numerados` (como em InscricoesGravadas: a causa, não cada linha).
+     * Ficam de fora os grupos com inscrição informada à mão, unidade de
+     * fração ideal, lote que já nasceu de desmembramento no sistema, ou duas
+     * partes com a mesma letra — ali a regra não tem como decidir.
+     *
+     * @param  iterable<object>  $lotesDoBairro  alterados no lugar (o desmembramento novo)
+     * @param  list<array<string,mixed>>  $imoveis
+     * @return array{0: list<array<string,mixed>>, 1: array<int,true>}
+     *         os renumerados, e os que sobraram sem inscrição (lote_id => true)
+     */
+    private function numerarDesmembrados(iterable $lotesDoBairro, array $imoveis, BairrosDoDesenho $bairros, ?int $importacaoId): array
+    {
+        $grupos = [];
+        foreach ($lotesDoBairro as $l) {
+            $nl = SequenciaDoDesmembramento::numeroELetra($l->numero_lote);
+            if ($nl) {
+                $grupos[$l->bairro . '|' . $l->quadra . '|' . $nl[0]][$nl[1]][] = $l;
+            }
+        }
+
+        // O cadastro por família (12 primeiros dígitos): final => área, só as ativas.
+        $familias = [];
+        foreach ($imoveis as $c) {
+            $insc = InscricaoImobiliaria::normalizar($c['inscricao'] ?? null);
+            if (! $insc || \App\Cadastro\RetratoBci::isencaoAtiva($c['isencao'] ?? null) === false) continue;
+            $familias[substr($insc, 0, 12)][(int) substr($insc, 12)] ??=
+                is_numeric($c['area_terreno_m2'] ?? null) ? (float) $c['area_terreno_m2'] : null;
+        }
+
+        $numerados = [];
+        $semNumero = [];
+        foreach ($grupos as $porLetra) {
+            if (count($porLetra) < 2 && isset($porLetra[''])) continue;   // só o lote sem letra: não é desmembrado
+            ksort($porLetra);                                              // '' (sem letra), A, B…
+            $partes = [];
+            foreach ($porLetra as $lotes) {
+                if (count($lotes) > 1) continue 2;                         // letra repetida
+                $partes[] = $lotes[0];
+            }
+            foreach ($partes as $l) {
+                if (! empty($l->inscricao_imobiliaria) || ! empty($l->terreno_id) || $l->origem === 'desmembramento') continue 2;
+            }
+
+            $base = clone $partes[0];
+            $base->numero_lote = (string) SequenciaDoDesmembramento::numeroELetra($base->numero_lote)[0];
+            $base->desmembramento = 0;
+            $prefixo = substr((string) $bairros->montadaAgora($base), 0, 12);
+            if (strlen($prefixo) !== 12) continue;
+
+            $finais = SequenciaDoDesmembramento::atribuir(
+                array_map(fn ($l) => $l->area_gis_m2 !== null ? (float) $l->area_gis_m2 : null, $partes),
+                $familias[$prefixo] ?? []);
+
+            foreach ($partes as $i => $l) {
+                if ($importacaoId !== null && (int) $l->importacao_id !== $importacaoId) continue;
+                $final = $finais[$i];
+                if ($final === null) {
+                    $semNumero[(int) $l->id] = true;
+                    continue;
+                }
+                if ($final === (int) $l->desmembramento) continue;
+
+                $antes = $bairros->inscricaoDe($l);
+                $l->desmembramento = $final;
+                $agora = $bairros->montadaAgora($l);
+                DB::table('lotes')->where('id', $l->id)->update([
+                    'desmembramento' => $final, 'inscricao_montada' => $agora,
+                    'inscricao_montada_em' => now(), 'updated_at' => now(),
+                ]);
+                $l->inscricao_montada = $agora;
+                $numerados[] = $this->lote($l, $agora) + ['antes' => InscricaoImobiliaria::formatar($antes)];
+            }
+        }
+
+        return [$numerados, $semNumero];
     }
 
     /**
