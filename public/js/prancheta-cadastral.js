@@ -3,7 +3,7 @@ const PranchetaCad = (() => {
   const G=PranchetaGeo, cores=['#2563eb','#059669','#d97706','#7c3aed','#db2777','#0891b2']
   const copy=x=>structuredClone(x), $=id=>document.getElementById(id), e=x=>esc(String(x??''))
   let s=null, svg=null, modal=null, resize=null, saveTimer=null, fila=Promise.resolve(), geracao=0, reguaOrigem=null, fechamento=null
-  const icones={medir:'M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2',esquadrejar:'M5 4v15h15M5 14h5v5M13 4l7 7',desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3',proximidades:'M5 4v16M19 4v16M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3'}
+  const icones={satelite:'M4 5h16v14H4zM4 15l5-5 4 4 2-2 5 5M15 9h.01',medir:'M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2',esquadrejar:'M5 4v15h15M5 14h5v5M13 4l7 7',desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3',proximidades:'M5 4v16M19 4v16M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3'}
   // "Livre": a prancheta desenha O CONTORNO do lote (lote novo, editar lote), em
   // vez de divisas dentro de um lote existente. Ver recalcular() e dados().
   // EDIFICAÇÃO: desenho livre do contorno de uma construção, com o lote por
@@ -65,10 +65,10 @@ const PranchetaCad = (() => {
           <label><span class="pc-snap-symbol" aria-hidden="true">×</span><span class="pc-snap-text">Na face <small>Qualquer ponto sobre a linha</small></span><input id="pc-near" type="checkbox" role="switch" checked></label>
           <label><span class="pc-snap-symbol" aria-hidden="true">∟</span><span class="pc-snap-text">Perpendicular <small>Projeção a 90° sobre a linha</small></span><input id="pc-perp" type="checkbox" role="switch" checked></label>
           <div class="pc-snap-section">Exibição</div>
-          <label><span class="pc-snap-text">Mapa cadastral <small>Referência de fundo</small></span><input id="pc-mapa" type="checkbox" role="switch" checked onchange="PranchetaCad.mapa(this.checked)"></label>
+          <label><span class="pc-snap-text">Fundo de referência <small>Mapa cadastral ou satélite</small></span><input id="pc-mapa" type="checkbox" role="switch" checked onchange="PranchetaCad.mapa(this.checked)"></label>
           </div><div class="pc-snap-alt"><kbd>Alt</kbd> suspenda o encaixe enquanto pressiona</div></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}</div></div>
       <div class="pc-gp" role="group" aria-label="Histórico"><span class="pc-gp-nome">Histórico</span><div class="pc-gp-bot">${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}</div></div>
-      <div class="pc-gp" role="group" aria-label="Vista"><span class="pc-gp-nome">Vista</span><div class="pc-gp-bot">${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal, embaixo do lote')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}</div></div>
+      <div class="pc-gp" role="group" aria-label="Vista"><span class="pc-gp-nome">Vista</span><div class="pc-gp-bot">${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal, embaixo do lote')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('satelite','Imagem de satélite','PranchetaCad.satelite()','troca o fundo cadastral pela imagem aérea; ao abrir outra prancheta, volta o cadastral','pc-sat')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}</div></div>
       </nav></header>
       <main class="pc-canvas"><span id="pc-ref" class="pc-ref"></span><svg id="pc-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Desenho dos imóveis e suas divisas"></svg>
       <div id="pc-prox" class="pc-prox" hidden></div>
@@ -515,9 +515,9 @@ const PranchetaCad = (() => {
     // A caixinha da medida só existe enquanto há uma medida em edição.
     if(!s.cotaEd&&$('pc-cota-ed'))$('pc-cota-ed').hidden=true
     let h='<defs><pattern id="pc-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#e8edf1" stroke-width=".6"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafb"/><rect width="100%" height="100%" fill="url(#pc-grid)"/>'
-    if(s.mapa)h+=edif()?tilesAereos():fundoCadastral()
-    // Na edificação os vizinhos ficam quase transparentes: a imagem aérea tem de aparecer.
-    for(const f of s.contexto){if(!f.geometry?.coordinates?.[0])continue;const r=ring(f),p=f.properties||{};h+=`<path d="${path(r,true)}" fill="#e7ebec" fill-opacity="${edif()?'.12':'.78'}" stroke="${edif()?'#ffffff':'#9ca9af'}" stroke-width="1"/>`
+    if(s.mapa)h+=s.sat?tilesAereos():fundoCadastral()
+    // Com o satélite os vizinhos ficam quase transparentes: a imagem aérea tem de aparecer.
+    for(const f of s.contexto){if(!f.geometry?.coordinates?.[0])continue;const r=ring(f),p=f.properties||{};h+=`<path d="${path(r,true)}" fill="#e7ebec" fill-opacity="${s.sat?'.12':'.78'}" stroke="${s.sat?'#ffffff':'#9ca9af'}" stroke-width="1"/>`
       const vis=r.map(tela),b=bounds(vis);if(b[2]<0||b[0]>s.w||b[3]<0||b[1]>s.h)continue
       // Identificação no fragmento visível, mesmo com centro do vizinho fora.
       const q=[Math.max(65,Math.min(s.w-65,(Math.max(0,b[0])+Math.min(s.w,b[2]))/2)),Math.max(28,Math.min(s.h-28,(Math.max(0,b[1])+Math.min(s.h,b[3]))/2))]
@@ -602,6 +602,7 @@ const PranchetaCad = (() => {
     const passo=10**Math.floor(Math.log10(120/s.escala)), px=passo*s.escala;h+=`<path d="M25 ${s.h-35}v7h${px}v-7" fill="none" stroke="#243b4b"/><text x="25" y="${s.h-40}" font-size="11">${passo>=1?fmtNum(passo)+' m':passo>=.01?Math.round(passo*100)+' cm':Math.round(passo*1000)+' mm'}</text>`
     svg.innerHTML=h
     for(const b of modal.querySelectorAll('[data-tool]')){b.classList.toggle('ativo',b.dataset.tool===s.ferramenta);b.setAttribute('aria-pressed',String(b.dataset.tool===s.ferramenta));b.disabled=(s.leitura&&!['selecionar','alinhar'].includes(b.dataset.tool))||(s.tipo==='unificacao'&&['linha','perpendicular','mover','offset','concordancia'].includes(b.dataset.tool))}
+    {const b=$('pc-sat');if(b){b.classList.toggle('ativo',!!s.sat);b.setAttribute('aria-pressed',String(!!s.sat))}}
     $('pc-ref').textContent=s.ref?'⊥ Face de referência fixada · 90°':''
     // O rodapé não traz mais dicas; o resumo só aparece quando é ERRO (o
     // contorno que não fecha, a parte inválida) — esse a pessoa precisa ver.
@@ -620,21 +621,27 @@ const PranchetaCad = (() => {
     if(fundoSatPedido)return;fundoSatPedido=true
     fetch('/api/mapa/google-sessao',{headers:{Accept:'application/json'}})
       .then(r=>r.ok?r.json():null)
-      .then(d=>{if(!d?.session)return;fundoSat=d;if(edif())render()})
+      .then(d=>{if(!d?.session)return;fundoSat=d;if(s?.sat)render()})
       .catch(()=>{fundoSatPedido=false})
   }
   // O crédito no canto diz de quem é o fundo que está na tela.
   function creditar(t){const c=document.querySelector('#pc-modal .pc-credito');if(c&&c.textContent!==t)c.textContent=t}
   function tilesAereos(){
-    pedirFundoSat();creditar(fundoSat?'Imagem aérea © Google':'Imagem aérea © Esri')
+    pedirFundoSat()
     const ps=[[0,0],[s.w,0],[s.w,s.h],[0,s.h]].map(p=>s.plano.de(mundo(p))),b=bounds(ps)
-    const zmax=fundoSat?20:17
-    const nmax=2**zmax,tx=lon=>(lon+180)/360*nmax,ty=lat=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*nmax
-    const url=fundoSat
+    const nmax=2**20,tx=lon=>(lon+180)/360*nmax,ty=lat=>(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*nmax
+    // O maior zoom (até 20) em que a tela cabe em 36 blocos.
+    let z=20
+    while(z>10){const n=2**z,k=n/nmax;if((Math.ceil(tx(b[2])*k)-Math.floor(tx(b[0])*k)+1)*(Math.ceil(ty(b[1])*k)-Math.floor(ty(b[3])*k)+1)<=36)break;z--}
+    // A MESMA REGRA DO MAPA GERAL: o Google, que cobra por bloco, só do zoom 18
+    // em diante — onde acrescenta detalhe. Abaixo disso, a Esri (gratuita, até
+    // o 17). Antes a prancheta pedia o Google em qualquer zoom, até no 14.
+    const google=!!fundoSat&&z>=18
+    if(!google)z=Math.min(z,17)
+    creditar(google?'Imagem aérea © Google':'Imagem aérea © Esri')
+    const url=google
       ?(z,x,y)=>`https://tile.googleapis.com/v1/2dtiles/${z}/${x}/${y}?session=${encodeURIComponent(fundoSat.session)}&amp;key=${encodeURIComponent(fundoSat.key)}`
       :(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
-    let z=zmax
-    while(z>10){const n=2**z,k=n/nmax;if((Math.ceil(tx(b[2])*k)-Math.floor(tx(b[0])*k)+1)*(Math.ceil(ty(b[1])*k)-Math.floor(ty(b[3])*k)+1)<=36)break;z--}
     const n=2**z,k=n/nmax;let h='<g>'
     const lon=x=>x/n*360-180,lat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI
     for(let x=Math.floor(tx(b[0])*k);x<=Math.floor(tx(b[2])*k);x++)for(let y=Math.floor(ty(b[3])*k);y<=Math.floor(ty(b[1])*k);y++){
@@ -695,6 +702,8 @@ const PranchetaCad = (() => {
   }
   function norte(){if(!s)return;s.angulo=0;enquadrar();if(!s.leitura)mudou()}
   function mapa(v){s.mapa=v;render();if(!s.leitura)agendar()}
+  // O satélite não fica guardado na prancha: toda prancheta abre no cadastral.
+  function satelite(v){if(!s)return;s.sat=v??!s.sat;if(s.sat&&!s.mapa){s.mapa=true;$('pc-mapa').checked=true}render()}
   // Lote novo, Editar lote e edificação NÃO se salvam sozinhos (30/10/2026): o
   // rascunho é só o que se guarda em "Salvar rascunho". Fechar sem salvar perde
   // a edição (com aviso), e reabrir mostra o contorno gravado ou o rascunho
@@ -763,8 +772,6 @@ const PranchetaCad = (() => {
     if(tipo==='novo'&&opts.contorno){s.linhas=[{id:crypto.randomUUID(),pontos:opts.contorno.coordinates[0].map(s.plano.para)}];s.ferramenta='selecionar'}
     if(salva){restaurar(salva);s.contexto=salva.contexto||[];s.finalFeatures=salva.resultantes;if(tipo==='unificacao')s.uniao=salva.resultantes[0]?.geometry;s.resultado={partes:salva.resultantes.map(ring)}}
     const titulos={fracao_ideal:'Fração ideal',desmembramento:'Desmembramento',unificacao:'Unificação',novo:'Lote novo',edicao:'Editar lote',edificacao:'Desenhar edificação'}
-    // O rótulo da opção de fundo acompanha o que ela mostra.
-    {const rot=$('pc-mapa')?.nextSibling;if(rot?.nodeType===3)rot.textContent=tipo==='edificacao'?' Imagem aérea ':' Mapa cadastral '}
     $('pc-titulo').textContent=(salva?'Prancha finalizada · ':'')+(titulos[tipo]||tipo)
     // A quadra e o lote em destaque (31/10/2026): é o que se confere antes de mexer.
     const idLote=f=>`<span class="pc-id"><span>Quadra</span><b>${e(f.properties?.quadra||opts.quadra||'—')}</b><span>Lote</span><b>${e(f.properties?.numero_lote||opts.numero_lote||f.properties?.id)}</b></span>`
@@ -1213,5 +1220,5 @@ const PranchetaCad = (() => {
     s.prox.itens.forEach((it,k)=>{const t=tela(it.p),d=Math.hypot(t[0]-q[0],t[1]-q[1]);if(d<16&&(!melhor||d<melhor.d))melhor={k,d}})
     if(!melhor)return false;proxIr(melhor.k);return true}
 
-  return {descartarRascunho,esquadrejarAplicar,esquadrejarCancelar,proximidades,proxFechar,proxIr,proxAfastar,proxExcluir,proxFolga,esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
+  return {satelite,descartarRascunho,esquadrejarAplicar,esquadrejarCancelar,proximidades,proxFechar,proxIr,proxAfastar,proxExcluir,proxFolga,esquadrejar,cotaTrocarPonta:trocarPontaCota,cotaJunto:v=>{if(s?.cotaEd){s.cotaEd.junto=!!v;$('pc-cota-valor').focus()}},distribuir,maisSemDesenho,tirarSemDesenho,ativa:()=>!!s,opcoesSnap,mais,conferirLoteNovo,criarLoteNovo,ortho:()=>{alternarOrtho();if(s)render()},conferirEdicao,salvarEdicao,ordenarParte,sequenciar,classificarFaces,abrir,fechar,ferramenta,terminar,excluir,historico,salvar,exportar,enquadrar,norte,mapa,dados,conferir,finalizar,verSalvas}
 })()

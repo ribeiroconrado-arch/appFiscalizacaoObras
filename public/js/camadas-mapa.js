@@ -28,6 +28,12 @@ const camadasMapa = []
 /** @type {Object<string, boolean>} */
 let _camadasEscolha = {}
 try { _camadasEscolha = JSON.parse(localStorage.getItem(CAMADAS_CHAVE) || '{}') || {} } catch { _camadasEscolha = {} }
+// O FUNDO NÃO É LEMBRADO (03/11/2026): toda vez que a página carrega — login,
+// F5, volta depois do tempo de sessão, aba nova — o mapa abre no cadastral.
+// O satélite vale só enquanto a página está aberta: cada bloco do Google
+// acima do zoom 18 é cobrado, e quem esquecia o satélite ligado pagava por
+// ele em todo acesso. As demais camadas continuam guardadas.
+delete _camadasEscolha.satelite
 
 /** @param {Camada} c */
 function registrarCamada(c) {
