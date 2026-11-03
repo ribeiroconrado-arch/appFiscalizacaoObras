@@ -68,10 +68,13 @@ function aplicarNivelDoMapa() {
   }
   const mostrar = (pane, sim) => { const p = m.getPane(pane); if (p) p.style.display = sim ? '' : 'none' }
   mostrar('overlayPane', nivel === 'lotes')
-  mostrar('contornos', nivel !== 'municipio')
+  // Na cidade inteira, o CONTORNO dos loteamentos, e não as quadras (03/11/2026):
+  // de tão longe a silhueta das quadras vira mancha e o contorno é o que diz
+  // onde está cada loteamento. As quadras entram no nível dos bairros.
+  mostrar('contornos', true)
   mostrar('quadras', nivel === 'quadras')
-  // De longe, a silhueta de todas as quadras (bairros-contorno.js); de perto, a de cada bairro.
-  mostrar('silhuetas', ['bairros', 'municipio'].includes(nivel) && (typeof camadaLigada !== 'function' || camadaLigada('quadras-silhueta')))
+  // No nível dos bairros, a silhueta de todas as quadras (bairros-contorno.js); de perto, a de cada bairro.
+  mostrar('silhuetas', nivel === 'bairros' && (typeof camadaLigada !== 'function' || camadaLigada('quadras-silhueta')))
 }
 
 /** Cria o mapa. Idempotente. */

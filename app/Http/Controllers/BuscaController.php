@@ -484,8 +484,35 @@ class BuscaController extends Controller
             'bairro'      => $lote->bairro,
             'quadra'      => $lote->quadra,
             'numero_lote' => $lote->numero_lote,
+            'caixa_quadra' => $this->caixaDaQuadra($lote),
             'geometry'   => json_decode($geojson),
         ]);
+    }
+
+    /**
+     * [oeste, sul, leste, norte] de TODOS os lotes ativos da quadra do lote —
+     * a área que a prancheta carrega em volta dele (Editar lote). Pelos lotes,
+     * e não pelo contorno de quadra gerado: bairro sem contorno gerado (ou com
+     * a quadra numerada de outro jeito) deixava a quadra cortada (03/11/2026).
+     * A caixa é feita aqui porque ST_Envelope não aceita o SRID 4326.
+     */
+    private function caixaDaQuadra(Lote $lote): ?array
+    {
+        if (! $lote->bairro || $lote->quadra === null || $lote->quadra === '') {
+            return null;
+        }
+        $c = [INF, INF, -INF, -INF];
+        $aneis = DB::table('lotes')->where('bairro', $lote->bairro)->where('quadra', $lote->quadra)
+            ->where('situacao', 'ativo')->selectRaw('ST_AsGeoJSON(geom, 7) g')->pluck('g');
+        foreach ($aneis as $g) {
+            $geo = json_decode((string) $g, true);
+            $pts = ($geo['type'] ?? '') === 'MultiPolygon' ? array_merge(...array_merge(...$geo['coordinates'])) : array_merge(...($geo['coordinates'] ?? [[]]));
+            foreach ($pts as $p) {
+                $c = [min($c[0], $p[0]), min($c[1], $p[1]), max($c[2], $p[0]), max($c[3], $p[1])];
+            }
+        }
+
+        return is_finite($c[0]) ? $c : null;
     }
 
     /**

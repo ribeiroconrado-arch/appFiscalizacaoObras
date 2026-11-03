@@ -3,7 +3,7 @@ const PranchetaCad = (() => {
   const G=PranchetaGeo, cores=['#2563eb','#059669','#d97706','#7c3aed','#db2777','#0891b2']
   const copy=x=>structuredClone(x), $=id=>document.getElementById(id), e=x=>esc(String(x??''))
   let s=null, svg=null, modal=null, resize=null, saveTimer=null, fila=Promise.resolve(), geracao=0, reguaOrigem=null, fechamento=null
-  const icones={esquadrejar:'M5 4v15h15M5 14h5v5M13 4l7 7',desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3',proximidades:'M5 4v16M19 4v16M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3'}
+  const icones={medir:'M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2',esquadrejar:'M5 4v15h15M5 14h5v5M13 4l7 7',desfazer:'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',refazer:'M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3',excluir:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',encerrar:'M5 12.5l4.5 4.5L19 7',snap:'M6 3v8a6 6 0 0 0 12 0V3M6 3h4v4H6zM14 3h4v4h-4z',enquadrar:'M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3',norte:'M12 3l5 12-5-3-5 3zM12 15v6',ortho:'M5 4v15h15M5 12h7v7',selecionar:'M5 3l14 10-8 1-3 7z',linha:'M4 20L20 4M3 18v3h3M18 3h3v3',perpendicular:'M4 19h16M12 4v15M12 14h5v5',mover:'M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4',offset:'M4 19L16 7M8 21L20 9M8 7l6-6M8 1v6h6',alinhar:'M3 19h18M5 14l13-8M17 2l3 4-4 2',anotar:'M4 4h16M12 4v16M8 20h8',concordancia:'M4 21V13a9 9 0 0 1 9-9h8M4 4h3M4 4v3',proximidades:'M5 4v16M19 4v16M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3'}
   // "Livre": a prancheta desenha O CONTORNO do lote (lote novo, editar lote), em
   // vez de divisas dentro de um lote existente. Ver recalcular() e dados().
   // EDIFICAÇÃO: desenho livre do contorno de uma construção, com o lote por
@@ -45,16 +45,17 @@ const PranchetaCad = (() => {
   function montar() {
     if(modal) return
     modal=document.createElement('section');modal.id='pc-modal';modal.hidden=true;modal.setAttribute('aria-label','Prancheta cadastral')
-    // UMA LINHA DE CABEÇALHO: título, ferramentas (só ícone), Snap e Ortho,
-    // e Enquadrar/Norte empilhados. Salvar rascunho e Exportar SVG descem para
-    // o rodapé, à esquerda; as dicas de texto do rodapé saíram — a descrição
-    // de cada ferramenta está no próprio ícone, ao passar o mouse.
+    // DUAS LINHAS (03/11/2026): em cima o título e a quadra/lote em edição;
+    // embaixo as ferramentas, em grupos — Desenho, Modificar, Medir, Precisão,
+    // Histórico e Vista. Cada ícone diz o nome e o atalho ao passar o mouse.
+    // Salvar rascunho e Exportar SVG ficam no rodapé.
     modal.innerHTML=`<header class="pc-cab"><div class="pc-tit"><b id="pc-titulo">Prancheta cadastral</b><small id="pc-origem"></small></div>
-      <nav class="pc-tools" aria-label="Ferramentas de desenho">
-      ${botao('selecionar','Selecionar','V','clique numa linha para editar; arraste os vértices')}${botao('linha','Linha','L','clique nos cantos e digite a medida; clicar no 1º vértice fecha o contorno')}${botao('perpendicular','Perpendicular','P','escolha uma face e trace a 90° dela')}${botao('mover','Mover','M','move a linha selecionada; digite a distância')}${botao('offset','Offset','O','cópia paralela da linha, à distância digitada')}${botao('concordancia','Fillet (concordância)','F','clique em dois lados; arredonda o canto com o raio digitado — raio 0 une os lados num canto vivo')}
-${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a até 1° de 90° viram 90° exatos, mantendo a medida de cada lado')}${botaoAcao('proximidades','Proximidades','PranchetaCad.proximidades()','lados que passam a menos de 5 cm um do outro: ir até lá, afastar ou excluir o vértice','pc-prox-btn')}${botao('anotar','Confronto','T','escreve o confrontante de um lado')}
-      <i></i>${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}
-      <i></i><span class="pc-snap-grupo">${botaoAcao('snap','Snap (OSNAP)','PranchetaCad.opcoesSnap()','onde o cursor encaixa: ponta, meio, na face, perpendicular','pc-snap')}
+      <button type="button" class="pc-x" onclick="PranchetaCad.fechar()" aria-label="Fechar prancheta" data-dica="Fechar a prancheta (o rascunho fica guardado)">✕</button>
+      <nav class="pc-tools" aria-label="Ferramentas da prancheta">
+      <div class="pc-gp" role="group" aria-label="Desenho"><span class="pc-gp-nome">Desenho</span><div class="pc-gp-bot">${botao('selecionar','Selecionar','V','clique numa linha para editar; arraste os vértices')}${botao('linha','Linha','L','clique nos cantos e digite a medida; clicar no 1º vértice fecha o contorno')}${botao('perpendicular','Perpendicular','P','escolha uma face e trace a 90° dela')}${botao('concordancia','Fillet (concordância)','F','clique em dois lados; arredonda o canto com o raio digitado — raio 0 une os lados num canto vivo')}${botao('anotar','Confronto','T','escreve o confrontante de um lado')}</div></div>
+      <div class="pc-gp" role="group" aria-label="Modificar"><span class="pc-gp-nome">Modificar</span><div class="pc-gp-bot">${botao('mover','Mover','M','move a linha selecionada; digite a distância')}${botao('offset','Offset','O','cópia paralela da linha, à distância digitada')}${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','mostra o ângulo de cada canto; os que estão a até 1° de 90° podem virar 90° exatos')}${botaoAcao('proximidades','Proximidades','PranchetaCad.proximidades()','lados que passam a menos de 5 cm um do outro: ir até lá, afastar ou excluir o vértice','pc-prox-btn')}${botaoAcao('excluir','Excluir linha (Delete)','PranchetaCad.excluir()','apaga a linha selecionada')}</div></div>
+      <div class="pc-gp" role="group" aria-label="Medir"><span class="pc-gp-nome">Medir</span><div class="pc-gp-bot">${botao('medir','Régua','D','clique em dois pontos (com encaixe) e veja a distância; um 3º clique começa outra medida')}</div></div>
+      <div class="pc-gp" role="group" aria-label="Precisão"><span class="pc-gp-nome">Precisão</span><div class="pc-gp-bot"><span class="pc-snap-grupo">${botaoAcao('snap','Snap (OSNAP)','PranchetaCad.opcoesSnap()','onde o cursor encaixa: ponta, meio, na face, perpendicular','pc-snap')}
         <div class="pc-snap-pop" id="pc-snap-pop" hidden aria-label="Encaixe do cursor">
           <div class="pc-snap-heading">Encaixe do cursor <span>OSNAP</span></div>
           <div class="pc-snap-options">
@@ -65,10 +66,10 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
           <label><span class="pc-snap-symbol" aria-hidden="true">∟</span><span class="pc-snap-text">Perpendicular <small>Projeção a 90° sobre a linha</small></span><input id="pc-perp" type="checkbox" role="switch" checked></label>
           <div class="pc-snap-section">Exibição</div>
           <label><span class="pc-snap-text">Mapa cadastral <small>Referência de fundo</small></span><input id="pc-mapa" type="checkbox" role="switch" checked onchange="PranchetaCad.mapa(this.checked)"></label>
-          </div><div class="pc-snap-alt"><kbd>Alt</kbd> suspenda o encaixe enquanto pressiona</div></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}
-      <i></i>${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal, embaixo do lote')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}
-      </nav>
-      <button type="button" class="pc-x" style="margin-left:auto" onclick="PranchetaCad.fechar()" aria-label="Fechar prancheta" data-dica="Fechar a prancheta (o rascunho fica guardado)">✕</button></header>
+          </div><div class="pc-snap-alt"><kbd>Alt</kbd> suspenda o encaixe enquanto pressiona</div></div></span>${botaoAcao('ortho','Ortho (F8)','PranchetaCad.ortho()','linhas só na horizontal ou na vertical da tela, como no AutoCAD; Shift inverte enquanto pressionado','pc-ortho')}</div></div>
+      <div class="pc-gp" role="group" aria-label="Histórico"><span class="pc-gp-nome">Histórico</span><div class="pc-gp-bot">${botaoAcao('desfazer','Desfazer (Ctrl+Z)','PranchetaCad.historico()')}${botaoAcao('refazer','Refazer (Ctrl+Y)','PranchetaCad.historico(true)')}</div></div>
+      <div class="pc-gp" role="group" aria-label="Vista"><span class="pc-gp-nome">Vista</span><div class="pc-gp-bot">${botao('alinhar','Alinhar face','R','gira a vista até a face clicada ficar na horizontal, embaixo do lote')}${botaoAcao('norte','Norte para cima','PranchetaCad.norte()','desfaz a rotação da vista')}${botaoAcao('enquadrar','Enquadrar','PranchetaCad.enquadrar()','mostra o desenho inteiro · arrastar a vista: roda do mouse pressionada; zoom: girar a roda')}</div></div>
+      </nav></header>
       <main class="pc-canvas"><span id="pc-ref" class="pc-ref"></span><svg id="pc-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Desenho dos imóveis e suas divisas"></svg>
       <div id="pc-prox" class="pc-prox" hidden></div>
       <div id="pc-entrada" hidden><label id="pc-entrada-label" for="pc-valor">Comprimento</label><input id="pc-valor" inputmode="decimal" autocomplete="off" aria-label="Medida em metros"><span>m · Enter</span></div>
@@ -120,7 +121,10 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   function bounds(ps){const xs=ps.map(p=>p[0]),ys=ps.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]}
   /** A quadra dos lotes de origem (todos da mesma): {caixa:[oeste,sul,leste,norte], pts}, ou null. */
   async function caixaDaQuadra(originais){
-    const p=originais[0]?.properties;if(!p?.bairro||p.quadra==null)return null
+    const p=originais[0]?.properties
+    // A caixa que o servidor já calculou pelos lotes da quadra (BuscaController::caixaDaQuadra).
+    if(p?.caixa_quadra&&originais.every(f=>f.properties?.quadra===p.quadra))return {caixa:p.caixa_quadra}
+    if(!p?.bairro||p.quadra==null)return null
     if(originais.some(f=>f.properties?.quadra!==p.quadra||f.properties?.bairro!==p.bairro))return null
     const sem0=v=>String(v).replace(/^0+(?=.)/,'')
     try{const r=await fetch('/api/mapa/quadras?bairro='+encodeURIComponent(p.bairro),{headers:{Accept:'application/json'}});if(!r.ok)return null
@@ -132,6 +136,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // Lote novo não tem contorno de origem: enquadra o que já foi desenhado, ou
     // abre com cerca de 60 m de largura em volta do ponto escolhido no mapa.
     let pts=s.originais.flatMap(f=>ring(f).map(p=>G.rot(p,s.angulo)))
+    if(s.quadraAneis?.length)pts=pts.concat(s.quadraAneis.flatMap(a=>a.map(c=>G.rot(s.plano.para(c),s.angulo))))
     if(!pts.length)pts=s.linhas.flatMap(l=>l.pontos.map(p=>G.rot(p,s.angulo)))
     if(!pts.length){s.centro=[0,0];s.escala=Math.max(1,larguraDesenho()/60);render();return}
     const b=bounds(pts);s.centro=[(b[0]+b[2])/2,(b[1]+b[3])/2];s.escala=Math.min((larguraDesenho()-100)/Math.max(1,b[2]-b[0]),(s.h-150)/Math.max(1,b[3]-b[1]));render()}
@@ -259,10 +264,10 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   function alternarOrtho(){ortho=!ortho;try{localStorage.setItem('pc-ortho',ortho?'1':'0')}catch{}$('pc-ortho')?.classList.toggle('ativo',ortho);$('pc-ortho')?.setAttribute('aria-pressed',String(ortho))}
   function ferramenta(t){
     if(!s||s.loading||s.busy||s.medindo!=null)return
-    if(s.leitura&&!['selecionar','alinhar'].includes(t))return
+    if(s.leitura&&!['selecionar','alinhar','medir'].includes(t))return
     if(s.tipo==='unificacao'&&['linha','perpendicular','mover','offset','concordancia'].includes(t))return
     if(s.traco.length>1)terminar();else s.traco=[]
-    s.ref=null;s.ferramenta=t;s.operacao=null;s.valor='';$('pc-entrada').hidden=true;s.fillet={primeiro:null,erro:null}
+    s.ref=null;s.ferramenta=t;s.operacao=null;s.valor='';$('pc-entrada').hidden=true;s.fillet={primeiro:null,erro:null};s.regua=null
     if(t==='concordancia')entradaRaio()
     if(t==='mover'||t==='offset') { if(!selecionada())dica('Selecione uma linha. Depois use '+(t==='mover'?'Mover':'Offset')+'.');else iniciarOperacao(t) }
     render();svg.focus()
@@ -324,6 +329,8 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       if(s.traco.length>=3&&G.len(G.sub(q,s.traco[0]))<1e-6){s.traco.push([...s.traco[0]]);terminar();return}
       s.traco.push(q);s.tracoRedo=[];s.valor='';entrada(q,'Comprimento');render();return
     }
+    // RÉGUA: 1º clique, 2º clique; o 3º começa outra medida.
+    if(s.ferramenta==='medir'){const q=snap(p,ev,s.regua&&!s.regua.b?s.regua.a:null);if(!s.regua||s.regua.b)s.regua={a:q,b:null};else s.regua.b=q;render();return}
     if(s.ferramenta==='anotar'&&!s.leitura){anotar(p);return}
     if(hit){
       const jaSelecionada=s.sel===hit.dataset.line
@@ -346,6 +353,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     render()
   }
   function move(ev){if(!s)return;const p=ponto(ev);s.mouse=p
+    if(s.ferramenta==='medir'&&!s.drag){s.mouse=snap(p,ev,s.regua&&!s.regua.b?s.regua.a:null);renderLogo();return}
     if(s.drag){const d=s.drag
       if(d.pan){s.centro=[d.centro[0]-(ev.clientX-d.inicio[0])/s.escala,d.centro[1]+(ev.clientY-d.inicio[1])/s.escala]}
       else{const alvo=snap(p,ev,d.inicio,d.vertex!==null?{id:s.sel,v:d.vertex,fechada:d.fechada}:s.sel),delta=G.sub(alvo,d.inicio);d.mudou ||= G.len(delta)>.001;const l=selecionada();if(l){l.pontos=copy(d.orig);if(d.vertex!==null){l.pontos[d.vertex]=alvo;const m=l.pontos.length-1;if(d.fechada&&(d.vertex===0||d.vertex===m))l.pontos[d.vertex===0?m:0]=[...alvo]}else l.pontos=l.pontos.map(q=>G.add(q,delta));recalcular()}}
@@ -397,15 +405,16 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   function esquadrejar(){if(!s||s.leitura)return
     const fechadas=s.linhas.filter(l=>G.fechada(l.pontos)),l=selecionada()&&G.fechada(selecionada().pontos)?selecionada():fechadas.length===1?fechadas[0]:null
     if(!l){dica(fechadas.length?'Selecione o contorno que vai ser esquadrejado.':'Esquadrejar vale para um contorno fechado.');return}
-    const r=G.esquadrejar(l.pontos);if(r.erro){dica(r.erro);return}
-    if(!r.cantos&&r.ajuste<1e-6){const reto=angulosInternos(r.base).some(a=>Math.abs(a-90)<=1||Math.abs(a-270)<=1)
-      dica(reto?'Os cantos já estão em esquadro: nada a ajustar.':'Nenhum canto a até 1° de 90°: nada a esquadrejar.');return}
     // NÃO aplica direto (31/10/2026): mostra os ângulos de cada canto, antes e
-    // depois, e pergunta. O contorno novo aparece tracejado por cima.
-    const angA=angulosInternos(r.base),angD=angulosInternos(r.pontos)
-    const mudam=angA.filter((a,i)=>Math.abs(a-angD[i])>1e-7).length
-    if(!mudam){dica('Os cantos já estão em esquadro: nada a ajustar.');return}
-    s.esq={id:l.id,r,angA,angD,chave:JSON.stringify(l.pontos)};s.sel=l.id
+    // depois, e pergunta. O contorno novo aparece tracejado por cima. Também
+    // sem nada a ajustar os ângulos aparecem, para conferência (03/11/2026).
+    const r=G.esquadrejar(l.pontos),base=r.base||l.pontos,angA=angulosInternos(base),angD=r.erro?angA:angulosInternos(r.pontos)
+    const mudam=r.erro?0:angA.filter((a,i)=>Math.abs(a-angD[i])>1e-7).length
+    s.esq={id:l.id,r:mudam?r:null,base,angA,angD:mudam?angD:angA,chave:JSON.stringify(l.pontos)};s.sel=l.id
+    if(!mudam){const reto=angA.some(a=>Math.abs(a-90)<=1||Math.abs(a-270)<=1)
+      $('pc-esq').innerHTML=`<b>Esquadrejar</b><p>${r.erro?e(r.erro):reto?'Os cantos já estão em esquadro: nada a ajustar.':'Nenhum canto a até 1° de 90°: nada a esquadrejar.'}</p><p>O ângulo de cada canto está no desenho, para conferência.</p>
+        <div class="pc-esq-acoes"><button type="button" class="btn sm" onclick="PranchetaCad.esquadrejarCancelar()">Fechar</button></div>`
+      $('pc-esq').hidden=false;render();$('pc-esq').querySelector('button').focus();dica('Ângulos para conferência. Esc fecha.');return}
     const areaA=Math.abs(G.area(l.pontos)),areaD=Math.abs(G.area(r.pontos))
     $('pc-esq').innerHTML=`<b>Esquadrejar</b>
       <p>${mudam} canto(s) fora do esquadro: os valores em laranja no desenho mostram o ângulo de agora → o ajustado.</p>
@@ -416,8 +425,8 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
   /** Ângulo interno de cada vértice, em graus (o canto de dentro do L passa de 180°). */
   function angulosInternos(p){const v=p.slice(0,-1),n=v.length,sg=Math.sign(G.area(p))||1
     return v.map((b,i)=>{const a=v[(i-1+n)%n],c=v[(i+1)%n],u=G.sub(b,a),w=G.sub(c,b);return 180-sg*Math.atan2(G.cross(u,w),G.dot(u,w))*180/Math.PI})}
-  function esquadrejarCancelar(){if(!s?.esq)return;s.esq=null;$('pc-esq').hidden=true;render();svg.focus();dica('Esquadrejar cancelado: nada mudou.')}
-  function esquadrejarAplicar(){const q=s?.esq;if(!q)return;const l=s.linhas.find(x=>x.id===q.id)
+  function esquadrejarCancelar(){if(!s?.esq)return;const so=!s.esq.r;s.esq=null;$('pc-esq').hidden=true;render();svg.focus();dica(so?'Conferência dos ângulos fechada.':'Esquadrejar cancelado: nada mudou.')}
+  function esquadrejarAplicar(){const q=s?.esq;if(!q)return;if(!q.r){esquadrejarCancelar();return}const l=s.linhas.find(x=>x.id===q.id)
     s.esq=null;$('pc-esq').hidden=true
     if(!l||JSON.stringify(l.pontos)!==q.chave){render();dica('O contorno mudou depois da prévia. Clique em Esquadrejar de novo.');return}
     antes();l.pontos=q.r.pontos;s.sel=l.id;mudou();svg.focus()
@@ -438,7 +447,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     if(k==='enter'){ev.preventDefault();if(s.operacao)aplicarOperacao();else terminar();return}
     if(k==='delete'||k==='backspace'){ev.preventDefault();excluir();return}
     if(ev.key==='F8'){ev.preventDefault();alternarOrtho();render();return}
-    const tools={v:'selecionar',l:'linha',p:'perpendicular',m:'mover',o:'offset',r:'alinhar',t:'anotar',f:'concordancia'}
+    const tools={v:'selecionar',l:'linha',p:'perpendicular',m:'mover',o:'offset',r:'alinhar',t:'anotar',f:'concordancia',d:'medir'}
     if(tools[k]){ev.preventDefault();ferramenta(tools[k]);return}
     if(/^[0-9.,]$/.test(k)&&s.ferramenta==='concordancia'){ev.preventDefault();entradaRaio();$('pc-raio').value=k;$('pc-raio').focus();return}
     if(/^[0-9.,-]$/.test(k)&&(s.traco.length||(s.operacao&&!s.operacao.basePendente))){ev.preventDefault();s.valor=k;entrada(s.mouse||s.traco.at(-1),s.operacao?.tipo==='offset'?'Offset':s.operacao?'Mover':'Comprimento');$('pc-valor').value=k;$('pc-valor').focus()}
@@ -513,6 +522,8 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       // Identificação no fragmento visível, mesmo com centro do vizinho fora.
       const q=[Math.max(65,Math.min(s.w-65,(Math.max(0,b[0])+Math.min(s.w,b[2]))/2)),Math.max(28,Math.min(s.h-28,(Math.max(0,b[1])+Math.min(s.h,b[3]))/2))]
       const nome='Q '+(p.quadra||'—')+' · Lote '+(p.numero_lote||'—');h+=texto(posicaoConfronto(mundo(q),nome),nome,'pc-vizinho')
+      // AS MEDIDAS DO VIZINHO (03/11/2026), em cinza: só os lados que cabem na tela.
+      if(!edif())for(let i=1;i<r.length;i++){const m=G.len(G.sub(r[i],r[i-1]));if(m<.5||m*s.escala<70)continue;h+=cota(r[i-1],r[i],`${fmtMed(m)} m`,G.area(r)>0?-1:1,'pc-cota pc-cota-viz')}
     }
     // No Editar lote o contorno de origem é só referência: tracejado, por baixo.
     // Na edificação o lote é a referência em destaque: contorno amarelo com
@@ -546,11 +557,14 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       if(s.cotaEd&&s.cotaEd.id===l.id){const c=s.cotaEd,fixa=tela(l.pontos[c.fixa==='a'?c.i-1:c.i]),anda=tela(l.pontos[c.fixa==='a'?c.i:c.i-1])
         h+=`<circle cx="${fixa[0]}" cy="${fixa[1]}" r="7" fill="#16a34a" stroke="white" stroke-width="2"/><circle cx="${anda[0]}" cy="${anda[1]}" r="7" fill="#ea580c" stroke="white" stroke-width="2"/>`}
     }
+    if(s.ferramenta==='medir'&&s.regua){const a=s.regua.a,b=s.regua.b||s.mouse
+      if(b&&G.len(G.sub(b,a))>1e-6){const qa=tela(a),qb=tela(b),m=G.mul(G.add(qa,qb),.5)
+        h+=`<g pointer-events="none"><line x1="${qa[0]}" y1="${qa[1]}" x2="${qb[0]}" y2="${qb[1]}" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 4"/><circle cx="${qa[0]}" cy="${qa[1]}" r="4" fill="#7c3aed"/><circle cx="${qb[0]}" cy="${qb[1]}" r="4" fill="${s.regua.b?'#7c3aed':'none'}" stroke="#7c3aed"/><text class="pc-regua" x="${m[0]}" y="${m[1]-10}" text-anchor="middle">${fmtMed(G.len(G.sub(b,a)))} m</text></g>`}}
     if(s.esq){const q=s.esq,l=s.linhas.find(x=>x.id===q.id)
       // O contorno mudou por baixo (desfazer, outra ferramenta): a prévia sai.
       if(!l||JSON.stringify(l.pontos)!==q.chave){s.esq=null;$('pc-esq').hidden=true}
-      else{h+=`<path d="${path(q.r.pontos)}" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="7 4" pointer-events="none"/>`
-        const v=q.r.base.slice(0,-1),cx=v.reduce((a,p)=>a+p[0],0)/v.length,cy=v.reduce((a,p)=>a+p[1],0)/v.length,cen=tela([cx,cy])
+      else{if(q.r)h+=`<path d="${path(q.r.pontos)}" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="7 4" pointer-events="none"/>`
+        const v=q.base.slice(0,-1),cx=v.reduce((a,p)=>a+p[0],0)/v.length,cy=v.reduce((a,p)=>a+p[1],0)/v.length,cen=tela([cx,cy])
         // Diferença pequena (menos de 0,01°) sai com 4 casas, senão "90,00° → 90°" não diria nada.
         const grau=(a,c=2)=>Math.abs(a-Math.round(a))<1e-7?Math.round(a)+'°':a.toLocaleString('pt-BR',{minimumFractionDigits:c,maximumFractionDigits:c})+'°'
         // Cantos próximos: o rótulo seguinte desce até não encostar no anterior.
@@ -594,7 +608,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // "Feche o contorno" é orientação, não erro: fica fora do rodapé.
     $('pc-resumo').classList.toggle('erro',!!s.resultado?.erro&&!s.resultado?.orientacao)
     $('pc-resumo').textContent=s.resultado?.erro||(livre()?(partes[0]?`Contorno fechado · ${fmtNum(Math.abs(G.area(partes[0])))} m²${alvoTxt(Math.abs(G.area(partes[0])))}`:"Carregando…"):`${s.linhas.length} linha(s) · ${partes.length} ${s.tipo==='unificacao'?'resultado(s)':'parte(s)'}`)
-    if(!s.operacao)dica(s.leitura?'Visualização salva do ato.':s.ferramenta==='concordancia'?(s.fillet?.erro||`Concordância · raio ${fmtNum(s.raio)} m · clique no ${s.fillet?.primeiro?"2º":"1º"} lado. Raio 0 estende até o encontro — com um arco entre os dois lados, fecha em ponta; digite outro raio e Enter.`):s.ferramenta==='linha'&&livre()?`Clique nos cantos ${edif()?'da construção':'do lote'} · digite a medida · clique no primeiro vértice para fechar`:s.ferramenta==='linha'?'Clique para desenhar · digite a medida · Enter encerra · novo clique inicia outra linha':s.ferramenta==='perpendicular'?'Clique na face à qual a nova linha será perpendicular.':s.ferramenta==='alinhar'?'Clique na face que deseja deixar horizontal.':s.ferramenta==='anotar'?'Clique na posição da identificação do confronto.':'Selecione e arraste uma linha ou um vértice · Shift+clique no lado insere vértice · M mover · O offset · F concordância')
+    if(!s.operacao)dica(s.leitura?'Visualização salva do ato.':s.ferramenta==='concordancia'?(s.fillet?.erro||`Concordância · raio ${fmtNum(s.raio)} m · clique no ${s.fillet?.primeiro?"2º":"1º"} lado. Raio 0 estende até o encontro — com um arco entre os dois lados, fecha em ponta; digite outro raio e Enter.`):s.ferramenta==='linha'&&livre()?`Clique nos cantos ${edif()?'da construção':'do lote'} · digite a medida · clique no primeiro vértice para fechar`:s.ferramenta==='linha'?'Clique para desenhar · digite a medida · Enter encerra · novo clique inicia outra linha':s.ferramenta==='perpendicular'?'Clique na face à qual a nova linha será perpendicular.':s.ferramenta==='alinhar'?'Clique na face que deseja deixar horizontal.':s.ferramenta==='anotar'?'Clique na posição da identificação do confronto.':s.ferramenta==='medir'?(s.regua?.b?`Distância: ${fmtMed(G.len(G.sub(s.regua.b,s.regua.a)))} m · clique de novo para outra medida · Esc sai`:s.regua?'Clique no 2º ponto (encaixa em ponta, meio, face e perpendicular).':'Régua: clique no 1º ponto (encaixa em ponta, meio, face e perpendicular).'):'Selecione e arraste uma linha ou um vértice · Shift+clique no lado insere vértice · M mover · O offset · F concordância')
     // Fillet ativo: o raio e o passo no rodapé; trocou de ferramenta, some.
     {const fl=s.ferramenta==='concordancia'&&!s.leitura;$('pc-fillet').hidden=!fl;if(fl){if(document.activeElement!==$('pc-raio'))$('pc-raio').value=String(s.raio).replace('.',',');$('pc-fillet-passo').textContent=s.fillet?.erro||(s.fillet?.primeiro?'clique no 2º lado':'clique no 1º lado · raio 0 = canto vivo')}}
   }
@@ -726,7 +740,7 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
     // mapa vem com 8 casas (~1 mm), e só esse arredondamento já muda a área em
     // ~0,01 m² — a diferença contra o cadastro que não se achava. As
     // propriedades (quadra, número) continuam as do mapa, quando ele tem o lote.
-    const originais=salva?.originais||(tipo==='novo'?[]:await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok){if(f)return f;throw new Error('Não foi possível ler o contorno do imóvel.')}const d=await r.json();const g=d.type==='Feature'?d.geometry:(d.geometry||d);return {type:'Feature',geometry:g,properties:f?.properties||{id,bairro:d.bairro,quadra:d.quadra,numero_lote:d.numero_lote}}})))
+    const originais=salva?.originais||(tipo==='novo'?[]:await Promise.all(ids.map(async id=>{const f=state.lotes.get(id);const r=await fetch(`/api/imoveis/${id}/geometria`,{headers:{Accept:'application/json'}});if(!r.ok){if(f)return f;throw new Error('Não foi possível ler o contorno do imóvel.')}const d=await r.json();const g=d.type==='Feature'?d.geometry:(d.geometry||d);return {type:'Feature',geometry:g,properties:{...(f?.properties||{id,bairro:d.bairro,quadra:d.quadra,numero_lote:d.numero_lote}),caixa_quadra:d.caixa_quadra}}})))
     if(token!==geracao)return
     // VAZIO INTERNO DE ÁREA ZERO sai sozinho: é resto da conversão do desenho
     // (triângulo achatado, 0,001 m² no Cond. Esplendore, Q01 L11) e é ele que
@@ -778,7 +792,9 @@ ${botaoAcao('esquadrejar','Esquadrejar','PranchetaCad.esquadrejar()','cantos a a
       const cx=await caixaDaQuadra(originais);if(token!==geracao)return
       // Só os vizinhos: a vista continua no lote (31/10/2026: sem enquadrar a quadra).
       if(cx){const c=cx.caixa;b=[Math.min(b[0],c[0]),Math.min(b[1],c[1]),Math.max(b[2],c[2]),Math.max(b[3],c[3])]}
-      try{const r=await fetch(`/api/mapa/lotes?bbox=${[b[0]-m,b[1]-m,b[2]+m,b[3]+m].map(x=>x.toFixed(8)).join(',')}&revisao=1`,{headers:{Accept:'application/json'}});if(r.ok){const d=await r.json();if(token!==geracao)return;s.contexto=(d.features||[]).filter(f=>!s.ids.includes(Number(f.properties.id)))}}catch{}
+      try{const r=await fetch(`/api/mapa/lotes?bbox=${[b[0]-m,b[1]-m,b[2]+m,b[3]+m].map(x=>x.toFixed(8)).join(',')}&revisao=1`,{headers:{Accept:'application/json'}});if(r.ok){const d=await r.json();if(token!==geracao)return;s.contexto=(d.features||[]).filter(f=>!s.ids.includes(Number(f.properties.id)))
+        // ABRE VENDO A QUADRA INTEIRA (03/11/2026): o enquadramento inclui os lotes da mesma quadra.
+        const p0=originais[0]?.properties;if(p0&&tipo!=='novo'){s.quadraAneis=s.contexto.filter(f=>f.properties?.bairro===p0.bairro&&String(f.properties?.quadra)===String(p0.quadra)&&f.geometry?.coordinates?.[0]).map(f=>f.geometry.coordinates[0]);if(s.quadraAneis.length)enquadrar()}}}catch{}
       if(tipo==='unificacao')try{const d=await request(rota(true),{ids:s.ids});if(token!==geracao)return;s.erroUniao=d.impedimento||d.retrato?.erro_identidade;s.uniao=!s.erroUniao&&d.retrato?.geometry?.type==='Polygon'?d.retrato.geometry:null;s.numero=d.retrato?.sugestao_lote||'';s.numeroUniao=s.numero;s.inscricaoUniao=d.retrato?.inscricao||'';if(s.erroUniao)$('pc-salvo').textContent=s.erroUniao}catch(err){s.erroUniao=err.message;$('pc-salvo').textContent=err.message}
       if(token!==geracao)return;
       // Lote novo não recupera cópia local: sem lote de origem, a chave não diz
