@@ -2182,3 +2182,20 @@ async function confirmarExclusaoLote() {
   }
 }
 
+
+/**
+ * MOVER LOTES (31/10/2026): abre a prancheta com os lotes marcados, que andam
+ * juntos (prancheta-cadastral.js, modo "mover"; App\Services\MoverLotes).
+ * Na pré-curadoria, como as outras ferramentas, só os lotes daquela importação.
+ */
+function moverLotesDaMesa() {
+  const ids = [...selState.ids].map(Number)
+  if (!ids.length) { toast('Marque os lotes que vão andar juntos.', 'err'); return }
+  const pre = typeof impState !== 'undefined' ? impState.preCuradoria : null
+  if (pre && ids.some(id => Number(mapaState.porId.get(id)?.feature?.properties?.importacao_id) !== pre.id)) {
+    toast('Só entram lotes da importação em pré-curadoria.', 'err'); return
+  }
+  PranchetaCad.abrir('mover', ids, null, null, {
+    aoSalvar: () => { if (typeof impState !== 'undefined' && impState.atual) abrirImportacaoSilenciosa(impState.atual.id) },
+  }).catch(e => toast(e.message, 'err'))
+}

@@ -221,8 +221,11 @@ class DesenhoDeLote
      * pré-curadoria): ele não pode acusar a si mesmo de ocupar o mesmo chão
      * nem de já ter o mesmo número. Ver EdicaoDeLote.
      */
-    public function impedimento(array $d, ?int $ignorar = null): ?string
+    public function impedimento(array $d, int|array|null $ignorar = null): ?string
     {
+        // Um lote só (Editar lote) ou vários (Mover lotes: os que mudam juntos
+        // não acusam o desenho ANTIGO uns dos outros).
+        $ignorar = is_array($ignorar) ? array_map('intval', $ignorar) : ($ignorar ? [$ignorar] : []);
         $g = $d['geometry'] ?? null;
 
         // ── formato, antes de tocar no banco ──
@@ -288,7 +291,7 @@ class DesenhoDeLote
         $existe = DB::table('lotes')->where('bairro', $d['bairro'])
             ->where('quadra', $d['quadra'])->where('numero_lote', $d['numero_lote'])
             ->where('situacao', 'ativo')
-            ->when($ignorar, fn ($q) => $q->where('id', '<>', $ignorar))->exists();
+            ->when($ignorar, fn ($q) => $q->whereNotIn('id', $ignorar))->exists();
 
         if ($existe) {
             return "A quadra {$d['quadra']} do {$d['bairro']} já tem o lote {$d['numero_lote']}.";
@@ -430,7 +433,7 @@ class DesenhoDeLote
      *
      * @return list<array<string,mixed>>
      */
-    private function vizinhos(string $geojson, string $bairro, ?int $ignorar = null): array
+    private function vizinhos(string $geojson, string $bairro, int|array|null $ignorar = null): array
     {
         $anel = json_decode($geojson, true)['coordinates'][0] ?? [];
         if (! $anel) {
@@ -442,7 +445,7 @@ class DesenhoDeLote
         $meu = GeometriaPlana::projetar($anel, $lat, $lon);
 
         $saida = [];
-        foreach ($this->lotes->candidatosASobrepor($geojson, $bairro, $ignorar ? [$ignorar] : []) as $c) {
+        foreach ($this->lotes->candidatosASobrepor($geojson, $bairro, is_array($ignorar) ? $ignorar : ($ignorar ? [$ignorar] : [])) as $c) {
             if (! $c->anel) {
                 continue;
             }

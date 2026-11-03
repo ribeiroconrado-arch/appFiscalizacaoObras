@@ -802,6 +802,47 @@ class CadastroLoteController extends Controller
         ], 403);
     }
 
+    /** POST /api/lotes/mover/previa — Mover lotes: confere o conjunto, sem gravar. */
+    public function previaMover(Request $request, \App\Services\MoverLotes $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+        $itens = $this->validarMover($request);
+
+        return response()->json(['impedimento' => $svc->impedimento($itens), 'lotes' => $svc->retrato($itens)]);
+    }
+
+    /** POST /api/lotes/mover — grava os contornos novos, todos ou nenhum. */
+    public function mover(Request $request, \App\Services\MoverLotes $svc): JsonResponse
+    {
+        if ($erro = $this->recusarSemCuradoria($request)) {
+            return $erro;
+        }
+        $itens = $this->validarMover($request);
+        if ($impedimento = $svc->impedimento($itens)) {
+            return response()->json(['message' => $impedimento], 422);
+        }
+        $lotes = $svc->aplicar($itens);
+
+        return response()->json([
+            'ids'     => array_map(fn ($l) => $l->id, $lotes),
+            'message' => count($lotes) === 1 ? '1 lote salvo.' : count($lotes) . ' lotes salvos.',
+        ]);
+    }
+
+    /** @return list<array{id:int, geometry:array}> */
+    private function validarMover(Request $request): array
+    {
+        return $request->validate([
+            'lotes'                          => ['required', 'array', 'min:1', 'max:60'],
+            'lotes.*.id'                     => ['required', 'integer'],
+            'lotes.*.geometry'               => ['required', 'array'],
+            'lotes.*.geometry.type'          => ['required', 'string'],
+            'lotes.*.geometry.coordinates'   => ['required', 'array'],
+        ])['lotes'];
+    }
+
     /** @return array<string,mixed> */
     /** POST /api/lotes/{lote}/edicao/previa — Editar lote (em revisão ou publicado), sem gravar. */
     public function previaEdicao(Request $request, Lote $lote, \App\Services\EdicaoDeLote $svc): JsonResponse

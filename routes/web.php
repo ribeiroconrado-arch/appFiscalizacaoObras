@@ -185,6 +185,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Editar lote — só na pré-curadoria (lote de importação em revisão).
         Route::post('/lotes/{lote}/edicao/previa', [CadastroLoteController::class, 'previaEdicao']);
         Route::post('/lotes/{lote}/edicao', [CadastroLoteController::class, 'editar']);
+        // Mover lotes: vários contornos gravados de uma vez (MoverLotes).
+        Route::post('/lotes/mover/previa', [CadastroLoteController::class, 'previaMover']);
+        Route::post('/lotes/mover', [CadastroLoteController::class, 'mover']);
 
         // O histórico do lote: para o externo sai só O QUE houve e QUANDO, sem
         // o conteúdo — a redação é feita em VistoriaController::historico.

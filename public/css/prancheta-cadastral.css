@@ -175,3 +175,16 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 #pc-esq .pc-esq-acoes{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
 .pc-esq-ang{font:600 11px Inter,Arial,sans-serif;fill:#64748b;paint-order:stroke;stroke:#fff;stroke-width:3px;pointer-events:none}
 .pc-esq-ang.muda{fill:#c2410c;font-size:12px}
+
+/* Mover lotes (31/10/2026): o painel dos três passos, nas cores das tarjas da prancheta. */
+#pc-mov{position:absolute;top:12px;left:12px;max-width:330px;display:flex;flex-direction:column;gap:7px;background:#eef5fd;border:1px solid #70a4dc;border-radius:8px;padding:9px 11px;color:#144d8a;font-size:12px;z-index:4}
+#pc-mov[hidden]{display:none}
+#pc-mov b{font-size:13px}
+.pc-mov-linha{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.pc-mov-linha small{color:#3f6a96}
+#pc-mov-dir{color:#3f6a96}
+#pc-mov-dist{width:70px;border:1px solid #9cbfe3;border-radius:5px;padding:4px 6px;font:13px monospace;background:#fff}
+.pc-mov-junto{display:flex;align-items:center;gap:5px;cursor:pointer}
+.pc-mov-tab{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 10px}
+.pc-mov-tab th,.pc-mov-tab td{padding:4px 6px;border-bottom:1px solid #e3e8ec;text-align:left}
+.pc-mov-tab td:nth-child(n+2),.pc-mov-tab th:nth-child(n+2){text-align:right}

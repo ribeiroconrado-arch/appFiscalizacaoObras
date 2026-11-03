@@ -552,6 +552,21 @@
           </span>
         </button>
 
+        {{-- MOVER LOTES (31/10/2026) — os marcados andam juntos na prancheta, e
+             o vizinho de lado colado estica ou encolhe na divisa comum. Ver
+             prancheta-cadastral.js (modo "mover") e App\Services\MoverLotes. --}}
+        <button type="button" class="btn sm cad-lanca" id="cad-mover-lotes"
+                data-fer="mover" data-tecla="M" data-min="1" data-exige="1 lote ou mais"
+                onclick="moverLotesDaMesa()">
+          <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>
+          </svg>
+          <span class="cad-lanca-txt">Mover lotes
+            <span class="cad-lanca-obs">Os marcados andam juntos; os lados colados acompanham.</span>
+          </span>
+        </button>
+
         {{-- INFORMAR NÚMERO e EXCLUIR LOTES — também só na pré-curadoria
              (PreCuradoriaDeLotes): o número que a conversão do DWG errou e o
              polígono que sobrou. Lote publicado tem caminho próprio. --}}

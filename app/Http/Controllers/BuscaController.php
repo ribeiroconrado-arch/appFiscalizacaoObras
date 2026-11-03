@@ -480,6 +480,10 @@ class BuscaController extends Controller
             'id'         => $lote->id,
             'situacao'   => $lote->situacao,
             'inativado_em' => $lote->inativado_em?->format('d/m/Y'),
+            // A prancheta acha a quadra inteira do lote por aqui (31/10/2026).
+            'bairro'      => $lote->bairro,
+            'quadra'      => $lote->quadra,
+            'numero_lote' => $lote->numero_lote,
             'geometry'   => json_decode($geojson),
         ]);
     }
