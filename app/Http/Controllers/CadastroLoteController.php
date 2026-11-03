@@ -802,7 +802,7 @@ class CadastroLoteController extends Controller
         ], 403);
     }
 
-    /** POST /api/lotes/mover/previa — Mover lotes: confere o conjunto, sem gravar. */
+    /** POST /api/lotes/mover/previa — Mover lotes: confere o deslocamento, sem gravar; invasão de vizinho vem como aviso. */
     public function previaMover(Request $request, \App\Services\MoverLotes $svc): JsonResponse
     {
         if ($erro = $this->recusarSemCuradoria($request)) {
@@ -810,7 +810,9 @@ class CadastroLoteController extends Controller
         }
         $itens = $this->validarMover($request);
 
-        return response()->json(['impedimento' => $svc->impedimento($itens), 'lotes' => $svc->retrato($itens)]);
+        $impedimento = $svc->impedimento($itens);
+
+        return response()->json(['impedimento' => $impedimento, 'avisos' => $impedimento ? [] : $svc->avisos($itens)]);
     }
 
     /** POST /api/lotes/mover — grava os contornos novos, todos ou nenhum. */

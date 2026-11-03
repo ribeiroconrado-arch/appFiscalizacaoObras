@@ -168,7 +168,7 @@ class DesenhoDeLote
      *
      * @return array<string,mixed>
      */
-    public function retrato(array $d, ?int $ignorar = null): array
+    public function retrato(array $d, int|array|null $ignorar = null): array
     {
         $geojson = json_encode($d['geometry']);
         $area = $this->lotes->areaDoGeoJson($geojson);
@@ -221,7 +221,8 @@ class DesenhoDeLote
      * pré-curadoria): ele não pode acusar a si mesmo de ocupar o mesmo chão
      * nem de já ter o mesmo número. Ver EdicaoDeLote.
      */
-    public function impedimento(array $d, int|array|null $ignorar = null): ?string
+    /** `$sobreposicao` false: a invasão de lote vizinho não recusa (Mover lotes avisa em vez disso). */
+    public function impedimento(array $d, int|array|null $ignorar = null, bool $sobreposicao = true): ?string
     {
         // Um lote só (Editar lote) ou vários (Mover lotes: os que mudam juntos
         // não acusam o desenho ANTIGO uns dos outros).
@@ -310,6 +311,9 @@ class DesenhoDeLote
         }
 
         // ── não invade lote existente ──
+        if (! $sobreposicao) {
+            return null;
+        }
         $sobre = $this->vizinhos($geojson, $d['bairro'], $ignorar);
         $invadidos = array_filter($sobre, fn ($v) => $v['area_comum'] > $this->toleradoM2());
 

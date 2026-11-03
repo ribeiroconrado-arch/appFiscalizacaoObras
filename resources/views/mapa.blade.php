@@ -552,9 +552,9 @@
           </span>
         </button>
 
-        {{-- MOVER LOTES (31/10/2026) — os marcados andam juntos na prancheta, e
-             o vizinho de lado colado estica ou encolhe na divisa comum. Ver
-             prancheta-cadastral.js (modo "mover") e App\Services\MoverLotes. --}}
+        {{-- MOVER LOTES — desloca os marcados no próprio mapa, como o MOVER do
+             AutoCAD: ponto de base e destino, ou a medida. Ver mover-lotes.js e
+             App\Services\MoverLotes. --}}
         <button type="button" class="btn sm cad-lanca" id="cad-mover-lotes"
                 data-fer="mover" data-tecla="M" data-min="1" data-exige="1 lote ou mais"
                 onclick="moverLotesDaMesa()">
@@ -563,7 +563,7 @@
             <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>
           </svg>
           <span class="cad-lanca-txt">Mover lotes
-            <span class="cad-lanca-obs">Os marcados andam juntos; os lados colados acompanham.</span>
+            <span class="cad-lanca-obs">Como o Mover do AutoCAD: ponto de base e destino, ou a medida.</span>
           </span>
         </button>
 
@@ -4408,6 +4408,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/fundo-cidade.js')"></script>
 <script src="@assetv('js/ruas-manuais.js')"></script>
 <script src="@assetv('js/prancheta-cadastral.js')"></script>
+{{-- Mover lotes no mapa: usa planoLocal e o encaixe de desenho.js. --}}
+<script src="@assetv('js/mover-lotes.js')"></script>
 <script src="@assetv('js/cadastro-imobiliario.js')"></script>
 <script src="@assetv('js/painel.js')"></script>
 <script src="@assetv('js/busca.js')"></script>

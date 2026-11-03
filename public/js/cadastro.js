@@ -2184,9 +2184,9 @@ async function confirmarExclusaoLote() {
 
 
 /**
- * MOVER LOTES (31/10/2026): abre a prancheta com os lotes marcados, que andam
- * juntos (prancheta-cadastral.js, modo "mover"; App\Services\MoverLotes).
- * Na pré-curadoria, como as outras ferramentas, só os lotes daquela importação.
+ * MOVER LOTES: desloca os lotes marcados no próprio mapa, como o MOVER do
+ * AutoCAD (mover-lotes.js; App\Services\MoverLotes). Na pré-curadoria, como
+ * as outras ferramentas, só os lotes daquela importação.
  */
 function moverLotesDaMesa() {
   const ids = [...selState.ids].map(Number)
@@ -2195,7 +2195,5 @@ function moverLotesDaMesa() {
   if (pre && ids.some(id => Number(mapaState.porId.get(id)?.feature?.properties?.importacao_id) !== pre.id)) {
     toast('Só entram lotes da importação em pré-curadoria.', 'err'); return
   }
-  PranchetaCad.abrir('mover', ids, null, null, {
-    aoSalvar: () => { if (typeof impState !== 'undefined' && impState.atual) abrirImportacaoSilenciosa(impState.atual.id) },
-  }).catch(e => toast(e.message, 'err'))
+  moverLotesNoMapa(ids)
 }

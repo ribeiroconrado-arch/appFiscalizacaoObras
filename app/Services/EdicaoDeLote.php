@@ -32,7 +32,7 @@ class EdicaoDeLote
 
     /** @param array<string,mixed> $d geometry, quadra, numero_lote */
     /** @param list<int> $tambem outros lotes que mudam junto (Mover lotes) */
-    public function impedimento(Lote $lote, array $d, array $tambem = []): ?string
+    public function impedimento(Lote $lote, array $d, array $tambem = [], bool $sobreposicao = true): ?string
     {
         if ($lote->situacao !== 'ativo') {
             return 'Este lote já foi inativado e não pode mais ser editado.';
@@ -49,7 +49,7 @@ class EdicaoDeLote
             return $fracao;
         }
 
-        return $this->desenho->impedimento($this->dados($lote, $d), $tambem ? array_merge([$lote->id], $tambem) : $lote->id);
+        return $this->desenho->impedimento($this->dados($lote, $d), $tambem ? array_merge([$lote->id], $tambem) : $lote->id, $sobreposicao);
     }
 
     /** @return list<string> o que a tela mostra e pede para confirmar (lote do tamanho de gleba) */

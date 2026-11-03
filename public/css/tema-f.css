@@ -4140,3 +4140,15 @@ body.prancheta-aberta .mapa-fundo-seletor{display:none}
 .met-erro .met-ico{border:0;background:var(--red);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/16px no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/16px no-repeat;border-radius:0}
 @keyframes met-gira{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.met-vai .met-ico{animation:none}}
+
+/* Mover lotes no mapa (mover-lotes.js): a barra do passo, como a da mesa, e o cursor de mira. */
+.mov-cursor, .mov-cursor .leaflet-interactive{cursor:crosshair!important}
+.mov-barra{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1100;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  max-width:calc(100% - 24px);background:var(--sur);border:1.5px solid var(--bord);border-radius:12px;box-shadow:var(--shl);padding:7px 12px;font-size:12.5px;color:var(--tx)}
+.mov-barra b{color:var(--gd)}
+.mov-barra #mov-passo{color:var(--tx2)}
+.mov-barra label{display:flex;align-items:center;gap:5px;font-weight:600}
+.mov-barra input{width:72px;padding:4px 6px;border:1.5px solid var(--bord);border-radius:7px;font:13px monospace}
+.mov-ortho{font-size:11px;color:var(--tx3)}
+.mov-ortho.lig{color:var(--gd);font-weight:700}
+.leaflet-tooltip.mov-dica{background:var(--sur);border:1px solid var(--bord);color:var(--tx);font-size:11px;font-weight:600;padding:1px 6px;box-shadow:none}

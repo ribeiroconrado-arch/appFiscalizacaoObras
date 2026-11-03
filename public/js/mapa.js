@@ -735,6 +735,8 @@ function adicionarAoMapa(geojson, aoClicar) {
         // Desenhando um trecho de rua (ruas-manuais.js), o toque é ponto do
         // trecho — quem o trata é o clique no mapa, não o lote embaixo.
         if (typeof ruaState !== 'undefined' && ruaState.desenhando) return
+        // Movendo lotes (mover-lotes.js): o clique é ponto de base ou destino.
+        if (typeof movLoteState !== 'undefined' && movLoteState.ativo) return
         if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
           alternarSelecao(feicao, camada)
           return
