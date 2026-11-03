@@ -127,7 +127,7 @@ function _confCorpo(html) {
   document.getElementById('conf-corpo').innerHTML = html
 }
 
-async function _confCarregar(bairro, { janela = true } = {}) {
+async function _confCarregar(bairro, { janela = true, avisar = toast } = {}) {
   let d = await _confPedir('/api/conferencias/bairro?bairro=' + encodeURIComponent(bairro))
   // Lote do bairro corrigido depois da conferência: ela se refaz sozinha, com
   // a MESMA fonte (planilha guardada ou cadastro carregado), sem anexar nada.
@@ -139,7 +139,7 @@ async function _confCarregar(bairro, { janela = true } = {}) {
       const antes = _confAbertas(d.resultado, d.justificativas || {})
       d = { ...d, ...(await _confPedir('/api/conferencias/bairro', { method: 'POST', body: fd })) }
       const depois = _confAbertas(d.resultado, d.justificativas || {})
-      toast(antes - depois > 0
+      avisar(antes - depois > 0
         ? `Conferência refeita: ${antes - depois} pendência(s) resolvida(s), ${depois} em aberto.`
         : `Conferência refeita: ${depois} pendência(s) em aberto.`)
     } catch { /* fica a última conferência guardada */ }
@@ -624,15 +624,20 @@ function _confCorrigirDesenho(loteId) {
   if (!it) return
   PranchetaCad.abrir('edicao', [Number(loteId)], null, null, {
     quadra: it.quadra, numero_lote: it.lote, areaAlvo: Number(it.area_cadastro),
+    // O resultado volta para o modal de etapas da prancheta, que o mostra na
+    // última linha — nada de aviso solto depois que ele fecha. Um erro aqui
+    // vira a etapa "Refazendo a conferência" em vermelho.
     aoSalvar: async () => {
-      try { await _confCarregar(confState.bairro, { janela: false }) } catch (e) { toast(e.message, 'err'); return }
+      await _confCarregar(confState.bairro, { janela: false, avisar: () => {} })
       const resolvida = !confState.itens.some(x => x.tipo === 'area_diferente' && Number(x.lote_id) === Number(loteId))
-      if (!resolvida) { toast('O lote foi salvo, mas a área ainda não é a do cadastro.', 'aviso'); return }
+      if (!resolvida) return { tipo: 'aviso', texto: 'O lote foi salvo, mas a área ainda não é a do cadastro.' }
+      const fim = { tipo: 'ok', texto: `Pendência resolvida · ${confState.itens.length} em aberto no bairro` }
       // Vendo só esta pendência (ou era a última): volta para a lista.
-      if (confState.soFoco || !_confVisiveis().length) { voltarAListaDaConferencia(); return }
+      if (confState.soFoco || !_confVisiveis().length) { voltarAListaDaConferencia(); return fim }
       confState.idx = Math.min(confState.idx, _confVisiveis().length - 1)
       repintarConferencia(); pintarBarraConferencia()
       _confLevarMapa(_confVisiveis()[confState.idx])
+      return fim
     },
   }).catch(e => toast(e.message, 'err'))
 }

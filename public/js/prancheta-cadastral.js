@@ -937,7 +937,7 @@ const PranchetaCad = (() => {
         if(!d){et.erro(0,'O lote não foi criado. Confira a mensagem e tente de novo.');return}
         et.ok(0,`Lote gravado${areaDaMensagem(d.message)}`);if(s)s.entregue=true;await fechar(true)
         try{et.vai(1);await cb?.();et.ok(1,'Mapa atualizado')}catch{et.erro(1,'O lote foi criado, mas o mapa não atualizou. Recarregue a página.');return}
-        await et.fechar();toast(d.message)}})
+        et.concluir(d.message)}})
   }
   // A área que o contorno tem de ter (a do cadastro), quando quem abriu a
   // edição foi a pendência de área da conferência: diz quanto falta ou sobra.
@@ -978,8 +978,11 @@ const PranchetaCad = (() => {
     s.busy=false;await fechar(true)
     try{et.vai(1);limparLotesDoMapa();await carregarLotesVisiveis();et.ok(1,'Mapa atualizado')}
     catch{et.erro(1,'O lote foi salvo, mas o mapa não atualizou. Recarregue a página.');return}
-    if(cb){try{et.vai(2);await cb();et.ok(2,'Conferência refeita')}catch(err){et.erro(2,`O lote foi salvo, mas a conferência não foi refeita: ${err.message||'erro'}`);return}}
-    await et.fechar();toast(d.message)
+    // Quem chamou pode devolver o resultado ({texto, tipo}) — a conferência
+    // diz se a pendência saiu —, e ele fecha a lista no lugar do "salvo".
+    let fim=null
+    if(cb){try{et.vai(2);fim=await cb();et.ok(2,'Conferência refeita')}catch(err){et.erro(2,`O lote foi salvo, mas a conferência não foi refeita: ${err.message||'erro'}`);return}}
+    et.concluir(fim?.texto||d.message,fim?.tipo||'ok')
   }
   // ── FRAÇÃO IDEAL: as unidades, a fração de cada uma e a soma ──
   function unidadesFrac(){const d=s.dados;d.semDesenho||=[];return [...s.resultado.partes.map(r=>({r,d:(d[parteKey(r)]||={})})),...d.semDesenho.map(u=>({r:null,d:u}))]}

@@ -285,8 +285,12 @@ function esconderCarregandoTela() {
  * Feito para os segundos depois de "Salvar" em que o lote já foi gravado mas
  * o mapa e a conferência ainda estão mudando (31/10/2026): com o aviso de
  * "salvo" já na tela, parecia possível clicar em outra coisa. O modal cobre a
- * tela inteira até a última etapa; quem chama mostra o aviso DEPOIS de
- * `fechar()`.
+ * tela inteira até a última etapa.
+ *
+ * O RESULTADO TAMBÉM FICA NELE (03/11/2026): `concluir(texto, tipo)` põe a
+ * linha final — "Lote salvo", "2 pendências resolvidas" — no próprio modal,
+ * em vez de um aviso solto na tela depois que ele fecha. Deu certo: fecha
+ * sozinho em 2,5 s. Ficou um porém (`'aviso'`): fica aberto até "Fechar".
  *
  * @param {string} titulo @param {string[]} rotulos
  */
@@ -297,7 +301,7 @@ function abrirEtapas(titulo, rotulos) {
   lista.innerHTML = rotulos.map((r, i) =>
     `<li class="met-pend" data-i="${i}"><span class="met-ico" aria-hidden="true"></span><span class="met-txt">${esc(r)}</span></li>`).join('')
   openModal('m-etapas')
-  const desde = Date.now()
+  const desde = Date.now(), vez = abrirEtapas.vez = (abrirEtapas.vez || 0) + 1
   const marca = (i, cls, txt) => {
     const li = lista.querySelector(`[data-i="${i}"]`)
     if (!li) return
@@ -309,6 +313,14 @@ function abrirEtapas(titulo, rotulos) {
     ok: (i, txt) => marca(i, 'met-ok', txt),
     /** Falhou: a etapa fica em vermelho e o modal ganha "Fechar". */
     erro: (i, txt) => { marca(i, 'met-erro', txt); document.getElementById('met-acoes').hidden = false },
+    /** A linha do resultado, no fim da lista. @param {string} texto @param {'ok'|'aviso'} tipo */
+    concluir(texto, tipo = 'ok') {
+      lista.insertAdjacentHTML('beforeend',
+        `<li class="met-fim ${tipo === 'aviso' ? 'met-aviso' : 'met-ok'}"><span class="met-ico" aria-hidden="true"></span><span class="met-txt">${esc(texto)}</span></li>`)
+      document.getElementById('met-acoes').hidden = false
+      // Fecha sozinho só se ninguém abriu OUTRO salvamento nesse meio-tempo.
+      if (tipo !== 'aviso') setTimeout(() => { if (abrirEtapas.vez === vez) fModalBtn('m-etapas') }, 2500)
+    },
     /** Fecha — no mínimo 600 ms depois de abrir, para não piscar. */
     async fechar() {
       const falta = 600 - (Date.now() - desde)

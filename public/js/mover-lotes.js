@@ -250,6 +250,5 @@ async function _movGravar(itens) {
   sairMoverLotes()
   try { et.vai(1); limparLotesDoMapa(); await carregarLotesVisiveis(); et.ok(1, 'Mapa atualizado') }
   catch { et.erro(1, 'Os lotes foram movidos, mas o mapa não atualizou. Recarregue a página.'); return }
-  await et.fechar()
-  toast(d.message)
+  et.concluir(d.message)
 }
