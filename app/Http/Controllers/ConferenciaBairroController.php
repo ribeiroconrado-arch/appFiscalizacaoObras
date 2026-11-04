@@ -48,6 +48,8 @@ class ConferenciaBairroController extends Controller
             ->map(function ($nome) use ($b, $codigos, $ultimas, $justif) {
                 $u = $ultimas[$nome] ?? null;
                 $res = $u ? json_decode($u->resultado, true) : null;
+                // Linha só com o levantamento de 2022: o bairro não foi conferido.
+                if (! ConferenciaComCadastro::foiConferido($res)) { $u = $res = null; }
 
                 return [
                     'bairro'       => $nome,
@@ -68,16 +70,38 @@ class ConferenciaBairroController extends Controller
 
         $u = DB::table('conferencias_bairro')->where('bairro', $bairro)->first();
         $res = $u ? json_decode($u->resultado, true) : null;
+        $levantamento = $this->levantamento($res['levantamento'] ?? null);
+        if (! ConferenciaComCadastro::foiConferido($res)) { $res = null; }
 
         return response()->json([
             'bairro'         => $bairro,
             'oficial'        => (new BairrosDoDesenho())->oficial($bairro),
             'resultado'      => $res,
+            'levantamento'   => $levantamento,
             // Algum lote mudou depois da conferência? A tela reconfere sozinha
             // (com a mesma fonte) e a pendência resolvida sai da lista.
-            'em_dia'         => $res ? app(ConferenciaComCadastro::class)->bairroEmDia($res, $u->conferido_em) : null,
+            'em_dia'         => $res && $u->conferido_em ? app(ConferenciaComCadastro::class)->bairroEmDia($res, $u->conferido_em) : null,
             'justificativas' => $this->justificativas($bairro),
         ]);
+    }
+
+    /**
+     * Os casos do levantamento de 2022, com o que aconteceu DEPOIS: o ato
+     * desfeito pela curadoria some de `lote_atos`, e o caso passa a "desfeito".
+     *
+     * @param  array<string,mixed>|null  $lev
+     * @return array<string,mixed>|null
+     */
+    private function levantamento(?array $lev): ?array
+    {
+        if (! $lev || empty($lev['itens'])) return null;
+        $atos = array_filter(array_column($lev['itens'], 'ato_id'));
+        $existem = $atos ? DB::table('lote_atos')->whereIn('id', $atos)->pluck('id')->flip() : collect();
+        foreach ($lev['itens'] as &$it) {
+            $it['desfeito'] = ($it['situacao'] ?? null) === 'aplicado' && ! empty($it['ato_id']) && ! isset($existem[$it['ato_id']]);
+        }
+
+        return $lev;
     }
 
     public function conferir(Request $r, ConferenciaComCadastro $conferencia): JsonResponse
@@ -133,7 +157,8 @@ class ConferenciaBairroController extends Controller
             'tipo'   => ['nullable', 'in:' . implode(',', self::TIPOS)],
         ]);
         $guardado = DB::table('conferencias_bairro')->where('bairro', $d['bairro'])->value('resultado');
-        abort_unless($guardado, 404, 'Este bairro ainda não foi conferido com o cadastro.');
+        abort_unless($guardado && ConferenciaComCadastro::foiConferido(json_decode($guardado, true)), 404,
+            'Este bairro ainda não foi conferido com o cadastro.');
 
         $oficial = (new BairrosDoDesenho())->oficial($d['bairro']) ?: $d['bairro'];
 

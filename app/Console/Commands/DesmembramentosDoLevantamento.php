@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Cadastro\SequenciaDoDesmembramento;
 use App\Models\Lote;
 use App\Models\User;
+use App\Services\ConferenciaComCadastro;
 use App\Services\DesmembramentoDeLote;
+use App\Services\UnificacaoDeLotes;
 use App\Support\GeometriaPlana;
 use App\Support\InscricaoImobiliaria;
 use Illuminate\Console\Command;
@@ -13,315 +15,328 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Aplica os desmembramentos achados no levantamento de 2022 — USO ÚNICO.
+ * Desmembramentos e unificações do levantamento de 2022 — USO ÚNICO.
  *
- * O arquivo vem do conversor (`tools/levantamento_desmembrados.py`): para cada
- * lote-mãe, as partes já recortadas pelo contorno dele. Este comando não
- * decide nada sozinho; são duas passadas:
+ * O arquivo vem do conversor (`tools/levantamento_desmembrados.py`): os lotes
+ * do mapa que o levantamento mostra divididos em PARTES IGUAIS (±20 % da média)
+ * e os grupos de lotes que ele mostra num polígono só. Do levantamento vem só
+ * o QUE aconteceu: contorno, posição e área continuam os do lote importado —
+ * as partes são o próprio lote cortado nas linhas do levantamento, e a
+ * unificação é a união exata dos lotes do mapa (UnificacaoDeLotes).
  *
- *   1. simulação (padrão): confere cada mãe contra a produção, numera as
- *      partes pelo cadastro da prefeitura e escreve uma planilha de revisão;
- *   2. `--aplicar --planilha=...`: desmembra só as mães com TODAS as partes
- *      marcadas `aplicar = sim` na planilha revisada.
+ * Quem decide é o CADASTRO da prefeitura (regra de 03/11/2026). Inscrição
+ * inativa é imóvel alterado lá; lotes separados e ATIVOS são loteamento que o
+ * desenho de 2022 ainda não tinha.
+ *   desmembrado  a inscrição do lote está inativa, ou a família dela já tem
+ *                2+ inscrições ativas. A numeração é a do sistema
+ *                (App\Cadastro\SequenciaDoDesmembramento); parte sem inscrição
+ *                ativa livre deixa o caso de fora;
+ *   unificado    existe ativa a inscrição dos números juntados (0708 = 07 +
+ *                08), ou as dos lotes estão inativas — todas (o número sai pela
+ *                sugestão do sistema), ou todas menos uma, que é a do lote novo.
  *
- * O desmembramento é o direto da curadoria (DesmembramentoDeLote, sem
- * protocolo): a mãe fica inativa, as partes nascem com `origem =
- * desmembramento`, e o ato vai para o Histórico com o usuário e a
- * justificativa — desfazer é pela tela, como qualquer outro.
- *
- * Numeração pelo cadastro: as candidatas são as inscrições ATIVAS do cadastro
- * carregado com os mesmos 12 primeiros dígitos da mãe e sufixo ainda livre, e
- * a distribuição é a regra do sistema (App\Cadastro\SequenciaDoDesmembramento):
- * .000 ativa para a primeira parte, depois em sequência, trocadas quando a
- * área diz que o desenho está invertido; empate fica com a sequência. Parte
- * a mais que as inscrições fica em branco.
+ * Duas passadas:
+ *   1. simulação (padrão): não grava nada; escreve a planilha-relatório;
+ *   2. `--aplicar --usuario=...`: aplica TODOS os confirmados, pelos serviços
+ *      da curadoria sem protocolo. Cada ato vai para o Histórico com o usuário e
+ *      a justificativa, e desfazer é pela tela. Cada caso, aplicado ou não, fica
+ *      na aba "Levantamento" da conferência do bairro
+ *      (ConferenciaComCadastro::gravarLevantamento).
  */
 class DesmembramentosDoLevantamento extends Command
 {
     protected $signature = 'gis:desmembramentos-levantamento
-                            {arquivo : GeoJSON do conversor (desmembramentos-2022.geojson)}
-                            {--planilha= : CSV de revisão (gerado na simulação; lido no --aplicar)}
-                            {--aplicar : desmembra as mães marcadas "sim" na planilha}
-                            {--usuario= : e-mail do curador que assina o ato (obrigatório no --aplicar)}
-                            {--tolerancia=10 : diferença máxima de área, em %, para sugerir a inscrição}
-                            {--max-partes=4 : acima disso a mãe sai como "não" na planilha (quadra inteira gravada como lote?)}';
+                            {arquivo : GeoJSON do conversor (levantamento-2022.geojson)}
+                            {--aplicar : aplica os casos que o cadastro confirma}
+                            {--usuario= : e-mail do curador que assina os atos (obrigatório no --aplicar)}
+                            {--planilha= : onde escrever a planilha-relatório (padrão: ao lado do arquivo)}
+                            {--tolerancia=20 : diferença de área, em %, acima da qual o caso sai com aviso}';
 
-    protected $description = 'Desmembramentos do levantamento de 2022: simula (planilha) ou aplica';
+    protected $description = 'Levantamento de 2022: desmembramentos e unificações confirmados pelo cadastro (simula ou aplica)';
 
-    private const JUSTIFICATIVA = 'Levantamento cadastral de 2022: lote já desmembrado no levantamento e inteiro no mapa.';
+    private const JUSTIFICATIVA = 'Levantamento cadastral de 2022, confirmado pelo cadastro da prefeitura.';
 
     /** IoU mínimo entre a mãe do arquivo e a da produção. */
     private const IOU_MESMA_MAE = 0.95;
 
-    private const COLUNAS = ['chave_mae', 'lote_id', 'inscricao_mae', 'ordem', 'derivada', 'area_desenho_m2',
-        'inscricao_sugerida', 'area_cadastro_m2', 'diferenca_pct', 'numero_resultante', 'situacao',
-        'observacao', 'aplicar'];
+    private const COLUNAS = ['tipo', 'bairro', 'quadra', 'lotes', 'inscricoes', 'cadastro', 'resultado', 'situacao', 'motivo', 'aviso'];
 
-    public function handle(DesmembramentoDeLote $svc): int
+    public function handle(DesmembramentoDeLote $desm, UnificacaoDeLotes $unif): int
     {
         $arquivo = $this->argument('arquivo');
         if (! is_file($arquivo)) {
             $this->error("Arquivo não encontrado: {$arquivo}");
             return self::FAILURE;
         }
-        $maes = $this->lerArquivo($arquivo);
-        $this->info(sprintf('Arquivo: %d lotes-mãe, %d partes.', count($maes),
-            array_sum(array_map(fn ($m) => count($m['partes']), $maes))));
+        $aplicar = (bool) $this->option('aplicar');
+        if ($aplicar) {
+            $usuario = User::where('email', $this->option('usuario'))->first();
+            if (! $usuario || ! $usuario->podeCurarCadastro()) {
+                $this->error('Informe --usuario= com o e-mail de um curador do cadastro ativo.');
+                return self::FAILURE;
+            }
+            Auth::login($usuario);
+        }
 
-        return $this->option('aplicar') ? $this->aplicar($svc, $maes) : $this->simular($svc, $maes);
-    }
+        [$desmembrados, $unificados] = $this->lerArquivo($arquivo);
+        $this->info(sprintf('Arquivo: %d desmembrados, %d unificados.', count($desmembrados), count($unificados)));
 
-    // ── simulação ────────────────────────────────────────────────
-
-    private function simular(DesmembramentoDeLote $svc, array $maes): int
-    {
-        $planilha = $this->option('planilha') ?: preg_replace('/\.geojson$/i', '', $this->argument('arquivo')) . '-revisao.csv';
-        $tolerancia = (float) $this->option('tolerancia');
-        $maxPartes = (int) $this->option('max-partes');
-
-        $linhas = [];
-        $resumo = [];
-        $barra = $this->output->createProgressBar(count($maes));
-        foreach ($maes as $chave => $m) {
+        $casos = [];
+        $barra = $this->output->createProgressBar(count($desmembrados) + count($unificados));
+        foreach ($desmembrados as $chave => $m) {
             $barra->advance();
-            $r = $this->conferir($svc, $chave, $m, $tolerancia);
-            $situacao = $r['situacao'];
-            $obs = $r['observacao'];
-            if ($situacao === 'pronta' && count($m['partes']) > $maxPartes) {
-                $situacao = 'conferir';
-                $obs = count($m['partes']) . ' partes: a mãe pode ser uma quadra inteira gravada como lote.';
-            }
-            $resumo[$situacao] = ($resumo[$situacao] ?? 0) + 1;
-            // Uma parte com a .000: as letras começam nela (A), como no serviço.
-            $zero = (bool) array_filter($r['inscricoes'], fn ($s) => $s && (int) substr($s['inscricao'], 12) === 0);
-            foreach ($m['partes'] as $i => $p) {
-                $s = $r['inscricoes'][$i] ?? null;
-                $linhas[] = [
-                    'chave_mae'          => $chave,
-                    'lote_id'            => $r['lote']?->id,
-                    'inscricao_mae'      => InscricaoImobiliaria::formatar($r['lote']?->inscricao()),
-                    'ordem'              => $p['ordem'],
-                    'derivada'           => $p['derivada'] ? 'sim' : 'não',
-                    'area_desenho_m2'    => $this->num($p['area']),
-                    'inscricao_sugerida' => $s ? InscricaoImobiliaria::formatar($s['inscricao']) : '',
-                    'area_cadastro_m2'   => $s && $s['area'] !== null ? $this->num($s['area']) : '',
-                    'diferenca_pct'      => $s && $s['area'] ? $this->num(100 * ($p['area'] - $s['area']) / $s['area'], 1) : '',
-                    'numero_resultante'  => $s ? InscricaoImobiliaria::apelidoDesmembrado($s['inscricao'], (int) substr($s['inscricao'], 12), $zero) : '',
-                    'situacao'           => $situacao,
-                    'observacao'         => $obs,
-                    'aplicar'            => $situacao === 'pronta' ? 'sim' : 'não',
-                ];
-            }
+            $casos[] = $this->casoDesmembrado($desm, $chave, $m);
+        }
+        foreach ($unificados as $u) {
+            $barra->advance();
+            $casos[] = $this->casoUnificado($unif, $u);
         }
         $barra->finish();
         $this->newLine(2);
 
-        $this->gravarCsv($planilha, $linhas);
+        if ($aplicar) {
+            foreach ($casos as $k => $c) {
+                if ($c['situacao'] === 'pronto') {
+                    $casos[$k] = $this->aplicarCaso($desm, $unif, $c);
+                }
+            }
+        }
+
+        $planilha = $this->option('planilha') ?: preg_replace('/\.geojson$/i', '', $arquivo) . '-relatorio.csv';
+        $this->gravarCsv($planilha, $casos);
+
+        $resumo = [];
+        foreach ($casos as $c) {
+            $resumo[$c['tipo'] . '|' . $c['situacao']] = ($resumo[$c['tipo'] . '|' . $c['situacao']] ?? 0) + 1;
+        }
         ksort($resumo);
-        $this->table(['Situação', 'Lotes-mãe'], array_map(fn ($k, $v) => [$k, $v], array_keys($resumo), $resumo));
-        $this->info("Planilha: {$planilha}");
-        $this->line('Revise a coluna "aplicar" (sim/não) e a "inscricao_sugerida"; depois rode com --aplicar --planilha=... --usuario=...');
+        $this->table(['Tipo', 'Situação', 'Casos'],
+            array_map(fn ($k, $n) => [...explode('|', $k), $n], array_keys($resumo), $resumo));
+        $this->info("Relatório: {$planilha}");
+
+        if ($aplicar) {
+            $porBairro = [];
+            foreach ($casos as $c) {
+                $porBairro[$c['bairro']][] = array_filter($c, fn ($k) => $k[0] !== '_', ARRAY_FILTER_USE_KEY);
+            }
+            foreach ($porBairro as $bairro => $itens) {
+                ConferenciaComCadastro::gravarLevantamento($bairro, $itens);
+            }
+            $this->info('Os casos estão na aba "Levantamento" da conferência de cada bairro (' . count($porBairro) . ' bairros).');
+        } else {
+            $this->line('Nada foi gravado. Para aplicar os confirmados: --aplicar --usuario=e-mail-do-curador');
+        }
 
         return self::SUCCESS;
     }
 
-    /**
-     * A mãe ainda é a mesma da produção? E qual inscrição do cadastro cada
-     * parte recebe? Não grava nada.
-     *
-     * @return array{lote:?Lote, situacao:string, observacao:string, inscricoes:array<int,?array>}
-     */
-    private function conferir(DesmembramentoDeLote $svc, string $chave, array $m, float $tolerancia): array
-    {
-        $saida = fn ($situacao, $obs, $lote = null, $insc = []) =>
-            ['lote' => $lote, 'situacao' => $situacao, 'observacao' => $obs, 'inscricoes' => $insc];
+    // ── os casos ─────────────────────────────────────────────────
 
-        $candidatos = Lote::query()->where('chave', $chave)->get();
-        $ativos = $candidatos->where('situacao', 'ativo');
-        if ($ativos->isEmpty()) {
-            return $saida('desatualizada', $candidatos->isEmpty()
-                ? 'Lote não encontrado no sistema por esta chave.'
-                : 'O lote já foi inativado (desmembrado ou unificado depois da base).');
-        }
-        if ($ativos->count() > 1) {
-            return $saida('desatualizada', 'Mais de um lote ativo com esta chave.');
+    private function novoCaso(string $tipo, string $chave, string $bairro, string $quadra, array $lotes): array
+    {
+        return ['chave' => $tipo . '|' . $chave, 'tipo' => $tipo, 'bairro' => $bairro, 'quadra' => $quadra,
+            'lotes' => $lotes, 'lote_ids' => [], 'inscricoes' => [], 'cadastro' => '', 'previsto' => [],
+            'situacao' => 'nao_aplicado', 'motivo' => null, 'aviso' => null, 'novos' => [], 'ato_id' => null];
+    }
+
+    /**
+     * Desmembrado: a mãe ainda é a da produção? O cadastro confirma? Cada parte
+     * tem inscrição? Não grava nada.
+     */
+    private function casoDesmembrado(DesmembramentoDeLote $svc, string $chave, array $m): array
+    {
+        [$bairro, $quadra, $numero] = array_pad(explode('|', $chave), 3, '');
+        $c = $this->novoCaso('desmembrado', $chave, $bairro, $quadra, [$numero]);
+        $nao = function (string $motivo) use (&$c) { return ['motivo' => $motivo] + $c; };
+
+        $ativos = Lote::query()->where('chave', $chave)->where('situacao', 'ativo')->get();
+        if ($ativos->count() !== 1) {
+            return $nao($ativos->isEmpty()
+                ? 'O lote não está ativo no sistema (já mudou depois da base, ou foi desmembrado aqui).'
+                : 'Mais de um lote ativo com esta chave.');
         }
         /** @var Lote $lote */
         $lote = $ativos->first();
+        $c['lote_ids'] = [$lote->id];
         if ($lote->em_revisao) {
-            return $saida('desatualizada', 'O bairro ainda está em revisão (não publicado).', $lote);
+            return $nao('O bairro ainda está em revisão (não publicado).');
         }
-
         $iou = $this->iouComProducao($lote, $m['mae']);
         if ($iou === null || $iou < self::IOU_MESMA_MAE) {
-            return $saida('desatualizada', $iou === null
-                ? 'Não deu para medir a mãe da produção contra a do arquivo.'
-                : sprintf('A mãe mudou no sistema depois da base (IoU %s).', $this->num($iou, 3)), $lote);
+            return $nao($iou === null ? 'Não deu para medir o lote do sistema contra o do arquivo.'
+                : sprintf('O lote mudou no sistema depois da base (IoU %s).', $this->num($iou, 3)));
         }
-
-        $inscricaoMae = $lote->inscricao();
-        if (! $inscricaoMae) {
-            return $saida('sem_inscricao', 'A mãe não tem inscrição: o desmembramento precisa dela.', $lote);
+        $inscricao = $lote->inscricao();
+        if (! $inscricao) {
+            return $nao('O lote não tem inscrição: o desmembramento precisa dela.');
         }
+        $c['inscricoes'] = [InscricaoImobiliaria::formatar($inscricao)];
 
-        [$inscricoes, $longe] = $this->numerarPeloCadastro($svc, $lote, $m['partes'], $tolerancia);
-        $faltam = count(array_filter($m['partes'], fn ($p, $i) => empty($inscricoes[$i]), ARRAY_FILTER_USE_BOTH));
-        if ($faltam) {
-            return $saida('sem_numero', "{$faltam} parte(s) a mais que as inscrições ativas livres no cadastro. Preencha, ou deixe \"não\".",
-                $lote, $inscricoes);
-        }
-
-        $partes = $this->partesParaOServico($m['partes'], array_map(fn ($s) => (int) substr($s['inscricao'], 12), $inscricoes));
-        if ($erro = $svc->impedimento(null, $lote, $partes, false, direto: true)) {
-            return $saida('impedida', $erro, $lote, $inscricoes);
-        }
-
-        // Área longe da do cadastro não impede (regra de 03/11/2026): a
-        // conferência marca a divergência depois.
-        return $saida('pronta', $longe
-            ? "Área difere mais de {$this->num($tolerancia, 0)} % do cadastro em {$longe}: vai aparecer como divergência na conferência."
-            : '', $lote, $inscricoes);
-    }
-
-    /**
-     * Inscrições ativas do cadastro na família da mãe, casadas parte a parte
-     * pela área. Atribuição única pela menor diferença.
-     *
-     * @return array{0: array<int,array{inscricao:string, area:?float}|null>, 1: string}
-     *         as inscrições por parte, e as candidatas que empataram (formatadas)
-     */
-    private function numerarPeloCadastro(DesmembramentoDeLote $svc, Lote $lote, array $partes, float $tolerancia): array
-    {
+        // ── o cadastro confirma? ──
         $identidade = $svc->identidade($lote);
-        $prefixo = $identidade['prefixo'];
-        // `usados` já deixa livre a .000 da própria mãe, que é inativada no
-        // mesmo ato: pela regra, se ela está ativa no cadastro, é a da parte A.
-        $usados = $identidade['usados'];
-
-        $cadastro = [];   // final => área, só as ativas e livres
-        $linhas = DB::table('cadastro_externo_imoveis')
-            ->whereRaw("REPLACE(REPLACE(REPLACE(inscricao, '.', ''), '-', ''), ' ', '') LIKE ?", [$prefixo . '%'])
-            ->whereNull('ausente_desde_carga_id')
-            ->get(['inscricao', 'isencao', 'area_terreno_m2']);
-        foreach ($linhas as $l) {
-            $n = InscricaoImobiliaria::normalizar($l->inscricao);
-            if (! $n || substr($n, 0, 12) !== $prefixo) continue;
-            if (\App\Cadastro\RetratoBci::isencaoAtiva($l->isencao) === false) continue;
-            $sufixo = (int) substr($n, 12);
-            if (in_array($sufixo, $usados, true) || array_key_exists($sufixo, $cadastro)) continue;
-            $cadastro[$sufixo] = $l->area_terreno_m2 !== null ? (float) $l->area_terreno_m2 : null;
+        $familia = $this->cadastro($identidade['prefixo']);
+        $c['cadastro'] = $this->descrever($familia, 12);
+        if (! $familia) {
+            return $nao('O cadastro não tem este imóvel: não há como confirmar.');
+        }
+        $propria = $familia[$inscricao] ?? null;
+        $ativas = array_filter($familia, fn ($x) => $x['ativa']);
+        if (! (($propria && ! $propria['ativa']) || count($ativas) >= 2)) {
+            return $nao('No cadastro o lote continua inteiro.');
         }
 
-        // A regra do sistema (SequenciaDoDesmembramento): em sequência, trocada
-        // pela área; empate fica com a sequência.
-        $chaves = array_keys($partes);
-        $finais = SequenciaDoDesmembramento::atribuir(array_map(fn ($p) => (float) $p['area'], array_values($partes)), $cadastro);
+        // ── a numeração (SequenciaDoDesmembramento), entre as ativas livres ──
+        $livres = [];
+        foreach ($ativas as $insc => $x) {
+            $final = (int) substr($insc, 12);
+            if (! in_array($final, $identidade['usados'], true)) $livres[$final] = $x['area'];
+        }
+        $finais = SequenciaDoDesmembramento::atribuir(array_map(fn ($p) => (float) $p['area'], $m['partes']), $livres);
+        if (in_array(null, $finais, true)) {
+            return $nao(sprintf('O cadastro tem %d inscrição(ões) ativa(s) livre(s) para %d partes.', count($livres), count($m['partes'])));
+        }
+        $partes = $this->partesParaOServico($m['partes'], $finais);
+        if ($erro = $svc->impedimento(null, $lote, $partes, false, direto: true)) {
+            return $nao($erro);
+        }
 
-        $resultado = [];
+        $zero = in_array(0, $finais, true);
         $longe = [];
-        foreach ($chaves as $k => $i) {
-            $final = $finais[$k];
-            if ($final === null) { $resultado[$i] = null; continue; }
-            $area = $cadastro[$final];
-            $resultado[$i] = ['inscricao' => $prefixo . sprintf('%03d', $final), 'area' => $area];
-            if ($area && 100 * abs($partes[$i]['area'] - $area) / $area > $tolerancia) {
-                $longe[] = sprintf('.%03d', $final);
-            }
+        foreach ($m['partes'] as $i => $p) {
+            $insc = $identidade['prefixo'] . sprintf('%03d', $finais[$i]);
+            $c['previsto'][] = InscricaoImobiliaria::apelidoDesmembrado($insc, $finais[$i], $zero) . ' (' . InscricaoImobiliaria::formatar($insc) . ')';
+            $area = $livres[$finais[$i]];
+            if ($area && 100 * abs($p['area'] - $area) / $area > (float) $this->option('tolerancia')) $longe[] = sprintf('.%03d', $finais[$i]);
+        }
+        if ($longe) {
+            $c['aviso'] = 'Área longe da do cadastro em ' . implode(', ', $longe) . ': vai aparecer como divergência na conferência.';
         }
 
-        return [$resultado, implode(', ', $longe)];
+        return ['situacao' => 'pronto', '_lote' => $lote, '_partes' => $partes] + $c;
     }
 
-    // ── aplicação ────────────────────────────────────────────────
-
-    private function aplicar(DesmembramentoDeLote $svc, array $maes): int
+    /** Unificado: os lotes ainda estão ativos? O cadastro confirma? Não grava nada. */
+    private function casoUnificado(UnificacaoDeLotes $svc, array $u): array
     {
-        $planilha = $this->option('planilha');
-        if (! $planilha || ! is_file($planilha)) {
-            $this->error('Informe a planilha revisada: --planilha=caminho.csv');
-            return self::FAILURE;
+        $c = $this->novoCaso('unificado', implode('+', $u['chaves']), $u['bairro'], $u['quadra'], $u['lotes']);
+        $nao = function (string $motivo) use (&$c) { return ['motivo' => $motivo] + $c; };
+
+        $lotes = [];
+        foreach ($u['chaves'] as $ch) {
+            $a = Lote::query()->where('chave', $ch)->where('situacao', 'ativo')->get();
+            if ($a->count() !== 1) {
+                return $nao($a->isEmpty() ? "O lote {$ch} não está ativo no sistema (já mudou depois da base)." : "Mais de um lote ativo com a chave {$ch}.");
+            }
+            $lotes[] = $a->first();
         }
-        $usuario = User::where('email', $this->option('usuario'))->first();
-        if (! $usuario || ! $usuario->podeCurarCadastro()) {
-            $this->error('Informe --usuario= com o e-mail de um curador do cadastro ativo.');
-            return self::FAILURE;
+        $c['lote_ids'] = array_map(fn ($l) => $l->id, $lotes);
+        if (collect($lotes)->contains(fn ($l) => $l->em_revisao)) {
+            return $nao('O bairro ainda está em revisão (não publicado).');
         }
-        Auth::login($usuario);
-
-        $porMae = [];
-        foreach ($this->lerCsv($planilha) as $l) {
-            $porMae[$l['chave_mae']][(int) $l['ordem']] = $l;
+        $inscricoes = array_map(fn ($l) => $l->inscricao(), $lotes);
+        if (in_array(null, $inscricoes, true)) {
+            return $nao('Algum lote não tem inscrição: a unificação precisa dela.');
         }
-
-        $feitos = $pulados = 0;
-        $falhas = [];
-        foreach ($porMae as $chave => $linhas) {
-            $sim = array_filter($linhas, fn ($l) => $this->ehSim($l['aplicar'] ?? ''));
-            if (! $sim) { $pulados++; continue; }
-            if (count($sim) !== count($linhas)) {
-                $falhas[] = [$chave, 'Só parte das partes marcada "sim": marque todas ou nenhuma.'];
-                continue;
-            }
-            if (! isset($maes[$chave])) {
-                $falhas[] = [$chave, 'A mãe não está no arquivo GeoJSON.'];
-                continue;
-            }
-            $m = $maes[$chave];
-            $lote = Lote::find((int) reset($linhas)['lote_id']);
-            if (! $lote || $lote->chave !== $chave) {
-                $falhas[] = [$chave, 'O lote_id da planilha não é mais deste lote.'];
-                continue;
-            }
-
-            $sufixos = [];
-            foreach ($m['partes'] as $i => $p) {
-                $insc = InscricaoImobiliaria::normalizar($linhas[$p['ordem']]['inscricao_sugerida'] ?? null);
-                if (! $insc || substr($insc, 0, 12) !== substr($lote->inscricao() ?? '', 0, 12)) {
-                    $falhas[] = [$chave, "Parte {$p['ordem']}: inscrição vazia ou de outro lote."];
-                    continue 2;
-                }
-                $sufixos[$i] = (int) substr($insc, 12);
-            }
-
-            $partes = $this->partesParaOServico($m['partes'], $sufixos);
-            try {
-                $novos = $svc->aplicar(null, $lote, $partes, false, 'poligonos',
-                    self::JUSTIFICATIVA . ' Arquivo: ' . basename($this->argument('arquivo')) . '.');
-                $feitos++;
-                $this->line(sprintf('  %s → %s', $chave, implode(', ', array_map(fn ($l) => $l->numero_lote, $novos))));
-            } catch (\Throwable $e) {
-                $falhas[] = [$chave, $e instanceof \Illuminate\Validation\ValidationException
-                    ? implode(' ', $e->validator->errors()->all()) : $e->getMessage()];
-            }
+        $c['inscricoes'] = array_map(fn ($i) => InscricaoImobiliaria::formatar($i), $inscricoes);
+        $prefixos = array_unique(array_map(fn ($i) => substr($i, 0, 8), $inscricoes));
+        if (count($prefixos) !== 1) {
+            return $nao('As inscrições dos lotes são de quadras diferentes.');
         }
 
-        $this->newLine();
-        $this->info("Desmembrados: {$feitos}. Não marcados: {$pulados}. Com problema: " . count($falhas) . '.');
-        if ($falhas) {
-            $this->table(['Chave', 'Problema'], $falhas);
+        // ── o cadastro confirma? ──
+        $quadra = $this->cadastro(reset($prefixos));
+        $numeros = array_map(fn ($i) => (int) substr($i, 8, 4), $inscricoes);
+        $juntada = null;   // a inscrição dos números juntados: 0708 = 07 + 08
+        foreach ($quadra as $insc => $x) {
+            $n = substr($insc, 8, 4);
+            [$a, $b] = [(int) substr($n, 0, 2), (int) substr($n, 2, 2)];
+            if ($x['ativa'] && (int) substr($insc, 12) === 0 && $a !== $b && in_array($a, $numeros, true)
+                && in_array($b, $numeros, true) && ! in_array((int) $n, $numeros, true)) {
+                $juntada = $insc;
+                break;
+            }
+        }
+        $dos = array_intersect_key($quadra, array_flip($inscricoes));
+        $c['cadastro'] = $this->descrever($dos + ($juntada ? [$juntada => $quadra[$juntada]] : []), 8);
+        $ativas = array_keys(array_filter($dos, fn ($x) => $x['ativa']));
+        $inativas = count($dos) - count($ativas);
+
+        if ($juntada) {
+            $numero = substr($juntada, 8, 4);
+            $areaCadastro = $quadra[$juntada]['area'];
+        } elseif ($inativas === count($lotes)) {
+            $numero = '';   // a sugestão do sistema (o menor e o maior número)
+            $areaCadastro = null;
+        } elseif (count($ativas) === 1 && $inativas === count($lotes) - 1) {
+            $numero = substr($ativas[0], 8, 4);
+            $areaCadastro = $quadra[$ativas[0]]['area'];
+        } else {
+            return $nao(count($ativas) >= 2 ? 'No cadastro os lotes continuam separados e ativos.'
+                : 'O cadastro não tem todos estes imóveis: não há como confirmar.');
+        }
+        $ids = $c['lote_ids'];
+        if ($erro = $svc->impedimento(null, $ids, $numero, true)) {
+            return $nao($erro);
+        }
+        $retrato = $svc->retrato($ids);
+        $numeroNovo = $numero !== '' ? $numero : (string) $retrato['sugestao_lote'];
+        $c['previsto'] = [$numeroNovo . ' (' . InscricaoImobiliaria::formatar(reset($prefixos) . str_pad($numeroNovo, 4, '0', STR_PAD_LEFT) . '000') . ')'];
+        $soma = (float) $retrato['soma_area'];
+        if ($areaCadastro && 100 * abs($soma - $areaCadastro) / $areaCadastro > (float) $this->option('tolerancia')) {
+            $c['aviso'] = sprintf('Os lotes somam %s m² e o cadastro tem %s m²: vai aparecer como divergência na conferência.',
+                $this->num($soma), $this->num($areaCadastro));
         }
 
-        return $falhas ? self::FAILURE : self::SUCCESS;
+        return ['situacao' => 'pronto', '_ids' => $ids, '_numero' => $numero] + $c;
+    }
+
+    /** Aplica um caso confirmado, pelo serviço da curadoria, na sua própria transação. */
+    private function aplicarCaso(DesmembramentoDeLote $desm, UnificacaoDeLotes $unif, array $c): array
+    {
+        $justificativa = self::JUSTIFICATIVA . ' Arquivo: ' . basename($this->argument('arquivo')) . '.';
+        try {
+            $novos = DB::transaction(fn () => $c['tipo'] === 'desmembrado'
+                ? $desm->aplicar(null, $c['_lote'], $c['_partes'], false, 'poligonos', $justificativa)
+                : [$unif->aplicar(null, $c['_ids'], $c['_numero'], null, $justificativa)]);
+        } catch (\Throwable $e) {
+            return ['situacao' => 'nao_aplicado', 'motivo' => 'O serviço recusou: ' . ($e instanceof \Illuminate\Validation\ValidationException
+                ? implode(' ', $e->validator->errors()->all()) : $e->getMessage())] + $c;
+        }
+        $c['situacao'] = 'aplicado';
+        $c['novos'] = array_map(fn (Lote $l) => ['lote_id' => $l->id, 'lote' => $l->numero_lote,
+            'inscricao' => InscricaoImobiliaria::formatar($l->inscricao())], array_values($novos));
+        $c['ato_id'] = DB::table('lote_ato_lotes')->where('lote_id', $c['novos'][0]['lote_id'])
+            ->where('papel', 'posterior')->value('ato_id');
+
+        return $c;
     }
 
     // ── apoio ────────────────────────────────────────────────────
 
     /**
-     * Lê o GeoJSON do conversor: mãe + partes em ordem (a derivada é a última).
+     * Lê o GeoJSON do conversor: as mães com as partes em ordem (a derivada é
+     * a última), e os grupos unificados.
      *
-     * @return array<string,array{mae:array, partes:list<array{ordem:int, derivada:bool, area:float, geometry:array}>}>
+     * @return array{0: array<string,array>, 1: list<array>}
      */
     private function lerArquivo(string $arquivo): array
     {
         $fc = json_decode(file_get_contents($arquivo), true);
         $maes = [];
+        $unificados = [];
         foreach ($fc['features'] ?? [] as $f) {
             $p = $f['properties'] ?? [];
+            $tipo = $p['tipo'] ?? '';
+            if ($tipo === 'unificado' && count($p['chaves'] ?? []) >= 2) {
+                $unificados[] = ['chaves' => $p['chaves'], 'bairro' => (string) $p['bairro'], 'quadra' => (string) $p['quadra'],
+                    'lotes' => $p['lotes'] ?? []];
+                continue;
+            }
             $chave = $p['chave_mae'] ?? null;
             if (! $chave) continue;
-            if (($p['tipo'] ?? '') === 'mae') {
+            if ($tipo === 'mae') {
                 $maes[$chave]['mae'] = $f['geometry'];
-            } elseif (($p['tipo'] ?? '') === 'parte') {
+            } elseif ($tipo === 'parte') {
                 $maes[$chave]['partes'][] = ['ordem' => (int) $p['ordem'], 'derivada' => (bool) ($p['derivada'] ?? false),
                     'area' => (float) $p['area_m2'], 'geometry' => $f['geometry']];
             }
@@ -330,7 +345,42 @@ class DesmembramentosDoLevantamento extends Command
             if (empty($m['mae']) || count($m['partes'] ?? []) < 2) { unset($maes[$k]); continue; }
             usort($m['partes'], fn ($a, $b) => $a['ordem'] <=> $b['ordem']);
         }
-        return $maes;
+
+        return [$maes, $unificados];
+    }
+
+    /**
+     * O cadastro carregado sob um prefixo de inscrição (12 dígitos = a família
+     * de um lote; 8 = a quadra).
+     *
+     * @return array<string, array{ativa:bool, area:?float}>  inscrição (15 dígitos) => situação
+     */
+    private function cadastro(string $prefixo): array
+    {
+        $saida = [];
+        $linhas = DB::table('cadastro_externo_imoveis')
+            ->whereRaw("REPLACE(REPLACE(REPLACE(inscricao, '.', ''), '-', ''), ' ', '') LIKE ?", [$prefixo . '%'])
+            ->whereNull('ausente_desde_carga_id')
+            ->get(['inscricao', 'isencao', 'area_terreno_m2']);
+        foreach ($linhas as $l) {
+            $n = InscricaoImobiliaria::normalizar($l->inscricao);
+            if (! $n || ! str_starts_with($n, $prefixo) || isset($saida[$n])) continue;
+            $saida[$n] = ['ativa' => \App\Cadastro\RetratoBci::isencaoAtiva($l->isencao) !== false,
+                'area' => $l->area_terreno_m2 !== null ? (float) $l->area_terreno_m2 : null];
+        }
+        ksort($saida);
+
+        return $saida;
+    }
+
+    /** ".000 inativa · .001 ativa 225,00 m²" — o que o cadastro diz, para a aba e a planilha. */
+    private function descrever(array $itens, int $corte): string
+    {
+        if (! $itens) return 'sem registro no cadastro';
+
+        return implode(' · ', array_map(fn ($insc, $x) => ($corte === 12 ? '.' . substr($insc, 12) : substr($insc, 8, 4) . '.' . substr($insc, 12))
+            . ' ' . ($x['ativa'] ? 'ativa' : 'inativa') . ($x['area'] !== null ? ' ' . $this->num($x['area']) . ' m²' : ''),
+            array_keys($itens), $itens));
     }
 
     /**
@@ -378,40 +428,20 @@ class DesmembramentosDoLevantamento extends Command
 
     private function num(float $v, int $casas = 2): string
     {
-        return number_format($v, $casas, ',', '');
+        return number_format($v, $casas, ',', '.');
     }
 
-    private function ehSim(string $v): bool
-    {
-        return in_array(mb_strtolower(trim($v)), ['sim', 's', 'x', '1'], true);
-    }
-
-    /** CSV para o Excel brasileiro: `;`, UTF-8 com BOM. */
-    private function gravarCsv(string $caminho, array $linhas): void
+    /** A planilha-relatório, para o Excel brasileiro: `;`, UTF-8 com BOM, uma linha por caso. */
+    private function gravarCsv(string $caminho, array $casos): void
     {
         $f = fopen($caminho, 'w');
         fwrite($f, "\xEF\xBB\xBF");
         fputcsv($f, self::COLUNAS, ';');
-        foreach ($linhas as $l) {
-            fputcsv($f, array_map(fn ($c) => $l[$c] ?? '', self::COLUNAS), ';');
+        foreach ($casos as $c) {
+            $resultado = $c['novos'] ? array_map(fn ($n) => $n['lote'] . ' (' . $n['inscricao'] . ')', $c['novos']) : $c['previsto'];
+            fputcsv($f, [$c['tipo'], $c['bairro'], $c['quadra'], implode(' + ', $c['lotes']), implode(' + ', $c['inscricoes']),
+                $c['cadastro'], implode(' · ', $resultado), $c['situacao'], $c['motivo'] ?? '', $c['aviso'] ?? ''], ';');
         }
         fclose($f);
-    }
-
-    /** Lê a planilha devolvida pelo Excel (`;` ou `,`, com ou sem BOM). */
-    private function lerCsv(string $caminho): array
-    {
-        $texto = preg_replace('/^\xEF\xBB\xBF/', '', file_get_contents($caminho));
-        $sep = substr_count(strtok($texto, "\n"), ';') >= substr_count(strtok($texto, "\n"), ',') ? ';' : ',';
-        $f = fopen('php://memory', 'r+');
-        fwrite($f, $texto);
-        rewind($f);
-        $cab = array_map('trim', fgetcsv($f, null, $sep));
-        $saida = [];
-        while (($l = fgetcsv($f, null, $sep)) !== false) {
-            if (count($l) === count($cab)) $saida[] = array_combine($cab, $l);
-        }
-        fclose($f);
-        return $saida;
     }
 }
