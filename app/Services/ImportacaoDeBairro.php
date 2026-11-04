@@ -538,7 +538,7 @@ class ImportacaoDeBairro
             if ($imp->conferencia_cadastro && (! $atual || strtotime($atual) < strtotime((string) $imp->conferido_em))) {
                 DB::table('conferencias_bairro')->updateOrInsert(['bairro' => $imp->bairro], [
                     'codigo_bairro' => $imp->conferencia_cadastro['codigo_bairro'] ?? null,
-                    'resultado'     => json_encode(ConferenciaComCadastro::manterLevantamento($imp->bairro, $imp->conferencia_cadastro), JSON_UNESCAPED_UNICODE),
+                    'resultado'     => json_encode($imp->conferencia_cadastro, JSON_UNESCAPED_UNICODE),
                     'user_id'       => $admin->id,
                     'conferido_em'  => $imp->conferido_em,
                     'updated_at'    => now(),

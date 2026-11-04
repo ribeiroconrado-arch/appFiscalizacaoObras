@@ -84,12 +84,43 @@ trait RegistraAuditoria
         return null;
     }
 
+    /** Ligado só dentro de semTrilha(). */
+    private static bool $semTrilhaLigado = false;
+
+    /**
+     * Roda $fn SEM gravar na auditoria deste modelo.
+     *
+     * Existe para UMA coisa: corrigir a CARGA INICIAL pelo levantamento
+     * cadastral de 2022 (gis:desmembramentos-levantamento). Os desmembramentos
+     * e unificações que ele põe no mapa aconteceram há anos, sem autor nem
+     * documento que se possa nomear — registrá-los no Histórico como ato de
+     * alguém seria inventar responsável. A sucessão (lote_atos) continua: é
+     * ela que liga o lote novo ao inativo, com a inscrição e o BCI dele.
+     *
+     * @template T
+     * @param  callable(): T  $fn
+     * @return T
+     */
+    public static function semTrilha(callable $fn): mixed
+    {
+        $antes = self::$semTrilhaLigado;
+        self::$semTrilhaLigado = true;
+        try {
+            return $fn();
+        } finally {
+            self::$semTrilhaLigado = $antes;
+        }
+    }
+
     /**
      * @param  array<string,mixed>|null  $anteriores
      * @param  array<string,mixed>|null  $novos
      */
     public function registrarAuditoria(string $acao, ?array $anteriores, ?array $novos): void
     {
+        if (self::$semTrilhaLigado) {
+            return;
+        }
         $u = Auth::user();
 
         DB::table('auditoria')->insert([

@@ -102,6 +102,8 @@ class ImportacaoController extends Controller
             'vinculos'             => $importacao->status === 'excluida' ? [] : $this->importacao->vinculos($importacao),
             'extensao'             => $this->lotes->extensaoDaImportacao($importacao->id),
             'pre_curadoria'        => $this->preCuradoria($importacao),
+            // Os casos do levantamento de 2022 (aba "Levantamento" da ficha).
+            'levantamento'         => app(\App\Services\LevantamentoDaImportacao::class)->daImportacao($importacao),
             // Contorno inválido e número repetido: o que ainda falta acertar
             // no desenho, lido da base agora.
             'pendencias_desenho'   => $importacao->emAndamento()
@@ -463,6 +465,25 @@ class ImportacaoController extends Controller
 
         try {
             $msg = $svc->executar($a, $r->user()->id, $r->user()->name);
+        } catch (RuntimeException $ex) {
+            return $this->recusa($ex);
+        }
+
+        return response()->json(['message' => $msg]);
+    }
+
+    /**
+     * POST /api/importacoes/{importacao}/levantamento/desfazer — desfaz um caso
+     * do levantamento de 2022, sem trilha, como ele entrou
+     * (LevantamentoDaImportacao::desfazer). Vale também para bairro publicado.
+     */
+    public function desfazerLevantamento(Request $r, ImportacaoLote $importacao, \App\Services\LevantamentoDaImportacao $svc): JsonResponse
+    {
+        if ($e = $this->exigirCuradorDe($r, $importacao)) { return $e; }
+        $d = $r->validate(['chave' => ['required', 'string', 'max:2000']]);
+
+        try {
+            $msg = $svc->desfazer($importacao, $d['chave']);
         } catch (RuntimeException $ex) {
             return $this->recusa($ex);
         }

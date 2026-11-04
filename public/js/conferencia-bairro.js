@@ -44,24 +44,7 @@ const confState = {
   soFoco: false,
   /** @type {number} rolagem da lista, para o ✕ do cartão voltar ao mesmo ponto */
   rolagem: 0,
-  /** @type {'cadastro'|'levantamento'} a aba da janela */
-  aba: 'cadastro',
-  /** @type {Object|null} os casos do levantamento de 2022 no bairro ({itens, em}) */
-  levantamento: null,
-  /** @type {string|null} o cartão ligado na aba Levantamento */
-  levFiltro: null,
 }
-
-// O LEVANTAMENTO DE 2022 (gis:desmembramentos-levantamento): o que o comando
-// aplicou pela curadoria, e o que deixou de fora com o motivo. Desfeito é o
-// ato que a curadoria desfez depois (ConferenciaBairroController::levantamento).
-const LEV_TIPOS = {
-  desm:     { rotulo: 'Desmembrados',           cor: '#1D9E75' },
-  unif:     { rotulo: 'Unificados',             cor: '#378ADD' },
-  nao:      { rotulo: 'Não aplicados',          cor: '#EF9F27' },
-  desfeito: { rotulo: 'Desfeitos',              cor: '#6B7280' },
-}
-const _levTipo = it => it.desfeito ? 'desfeito' : it.situacao !== 'aplicado' ? 'nao' : it.tipo === 'desmembrado' ? 'desm' : 'unif'
 
 const CONF_TIPOS = {
   // NÃO É A MESMA COISA: "não está no cadastro" é inscrição que a prefeitura
@@ -165,8 +148,6 @@ async function _confCarregar(bairro, { janela = true, avisar = toast } = {}) {
   confState.oficial = d.oficial ?? confState.oficial
   confState.resultado = d.resultado
   confState.justificativas = d.justificativas || {}
-  if ('levantamento' in d) confState.levantamento = d.levantamento
-  if (!confState.levantamento) confState.aba = 'cadastro'
   _confMontarItens()
   if (janela && document.getElementById('m-conferencia')?.classList.contains('open')) pintarJanelaConferencia()
   if (confState.noMapa) { repintarConferencia(); pintarBarraConferencia() }
@@ -215,31 +196,13 @@ function _confMontarItens() {
   if (confState.idx >= confState.itens.length) confState.idx = 0
 }
 
-/** O seletor de bairro, igual nas duas abas. */
-function _confSeletor() {
+function pintarJanelaConferencia() {
+  const r = confState.resultado
   const lista = confState.bairros || []
-  return `<select id="conf-bairro" data-combo onchange="_confCarregar(this.value).catch(e => toast(e.message, 'err'))">
+  const sel = `<select id="conf-bairro" data-combo onchange="_confCarregar(this.value).catch(e => toast(e.message, 'err'))">
       ${lista.map(b => `<option value="${esc(b.bairro)}" ${b.bairro === confState.bairro ? 'selected' : ''}>
         ${esc(b.oficial || b.bairro)}${b.divergencias !== null ? ` · ${b.divergencias} pendência(s)` : ' · não conferido'}${b.ligado ? '' : ' · sem vínculo'}</option>`).join('')}
     </select>`
-}
-
-/** As abas da janela — "Levantamento" só aparece no bairro que tem casos do levantamento de 2022. */
-function _confAbas() {
-  if (!confState.levantamento?.itens?.length) return ''
-  const b = (id, rotulo) => `<button type="button" class="${confState.aba === id ? 'at' : ''}" onclick="trocarAbaConferencia('${id}')">${rotulo}</button>`
-  return `<div class="sub-abas imp-abas">${b('cadastro', 'Cadastro')}${b('levantamento', `Levantamento · ${confState.levantamento.itens.length}`)}</div>`
-}
-
-function trocarAbaConferencia(aba) {
-  confState.aba = aba
-  pintarJanelaConferencia()
-}
-
-function pintarJanelaConferencia() {
-  if (confState.aba === 'levantamento' && confState.levantamento?.itens?.length) { _confPintarLevantamento(); return }
-  const r = confState.resultado
-  const sel = _confSeletor()
 
   const kpi = (rot, n, cls = '') => `<div class="imp-kpi kpi-${cls}" style="--kpi-cor:#1D9E75"><small><i></i>${rot}</small><b>${Number(n).toLocaleString('pt-BR')}</b></div>`
   const conta = t => confState.itens.filter(i => i.tipo === t).length
@@ -311,7 +274,6 @@ function pintarJanelaConferencia() {
   _confCorpo(`
    <div class="jt imp-ficha">
     <div class="jt-topo imp-ficha-topo">
-      ${_confAbas()}
       <div class="imp-cabeca">
         <span class="badge ${r ? 'bd-ok' : 'bd-pe'}">${r ? 'Conferido' : 'Não conferido'}</span>
         <b>${esc(confState.oficial || confState.bairro || '')}</b>
@@ -378,89 +340,6 @@ function pintarJanelaConferencia() {
   _prepararAreaDeSoltar('conf-soltar', 'conf-planilha', /\.xlsx$/i, 'A planilha precisa ser .xlsx.',
     () => _mostrarEscolhido('conf-soltar', document.getElementById('conf-planilha').files[0],
       'Solte a planilha .xlsx aqui', 'ou clique para escolher · exportação do cadastro imobiliário'))
-}
-
-/**
- * A ABA LEVANTAMENTO: os casos do levantamento de 2022 no bairro. Os cartões
- * filtram (como os da conferência); "Ver no mapa" leva ao lote — o novo, se o
- * caso foi aplicado; o de antes, se não foi ou se foi desfeito —, e dali a
- * ficha e o Histórico desfazem ou alteram como qualquer ato da curadoria.
- */
-function _confPintarLevantamento() {
-  const lev = confState.levantamento
-  const itens = lev.itens
-  const conta = t => itens.filter(i => _levTipo(i) === t).length
-  const cartao = t => {
-    const n = conta(t), ativo = confState.levFiltro === t
-    return `<button type="button" class="imp-kpi conf-kpi${n ? '' : ' zero'}${ativo ? ' ativo' : ''}" style="--kpi-cor:${LEV_TIPOS[t].cor}" aria-pressed="${ativo}" ${n || ativo ? '' : 'disabled'}
-      title="${ativo ? 'Mostrar todos' : 'Mostrar só estes'}" onclick="_levFiltrar('${t}')"><small><i></i>${LEV_TIPOS[t].rotulo}</small><b>${Number(n).toLocaleString('pt-BR')}</b></button>`
-  }
-  const num = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0
-  const linha = it => {
-    const t = _levTipo(it)
-    const lotes = (it.lotes || []).join(' + ')
-    const novos = (it.novos || []).map(n => `<b>${esc(n.lote)}</b> <span class="mono">${esc(n.inscricao || '')}</span>`).join(' · ')
-    const oQue = t === 'nao' ? esc(it.motivo || '—')
-      : (it.tipo === 'desmembrado' ? `Dividido em ${(it.novos || []).length}: ` : 'Unificados em ') + novos
-        + (it.desfeito ? ' <span class="imp-sub">(desfeito pela curadoria)</span>' : '')
-    const detalhe = [
-      it.cadastro ? `<span class="imp-sub">Cadastro: ${esc(it.cadastro)}</span>` : '',
-      it.aviso ? `<span class="badge bd-pe" title="${esc(it.aviso)}">área diferente</span>` : '',
-    ].filter(Boolean).join(' ')
-    const alvo = t === 'desm' || t === 'unif' ? it.novos?.[0]?.lote_id : it.lote_ids?.[0]
-    return `<tr>
-      <td><span class="conf-cor" style="background:${LEV_TIPOS[t].cor}"></span> ${it.tipo === 'desmembrado' ? 'Desmembrado' : 'Unificado'}</td>
-      <td>Q ${esc(it.quadra ?? '—')} · L ${esc(lotes || '—')}<div class="imp-sub mono">${(it.inscricoes || []).map(esc).join('<br>')}</div></td>
-      <td class="jt-quebra">${oQue}${detalhe ? `<div>${detalhe}</div>` : ''}</td>
-      <td class="jt-acoes">${alvo ? `<button type="button" class="btn sm" onclick="_levVer(${Number(alvo)})">Ver no mapa</button>` : ''}</td></tr>`
-  }
-  const visiveis = itens.filter(i => !confState.levFiltro || _levTipo(i) === confState.levFiltro)
-    .sort((a, b) => Object.keys(LEV_TIPOS).indexOf(_levTipo(a)) - Object.keys(LEV_TIPOS).indexOf(_levTipo(b))
-      || num(a.quadra) - num(b.quadra) || num(a.lotes?.[0]) - num(b.lotes?.[0]))
-
-  _confCorpo(`
-   <div class="jt imp-ficha">
-    <div class="jt-topo imp-ficha-topo">
-      ${_confAbas()}
-      <div class="imp-cabeca">
-        <span class="badge bd-in">Levantamento</span>
-        <b>${esc(confState.oficial || confState.bairro || '')}</b>
-        ${lev.em ? `<span class="imp-sub">· gravado em ${esc(lev.em)}</span>` : ''}
-      </div>
-      <div class="sec-title">Bairro</div>
-      <div class="conf-topo">${_confSeletor()}</div>
-      <p class="imp-expl">Lotes que o levantamento mostra desmembrados em partes iguais ou unificados, aplicados só quando o
-        cadastro da prefeitura confirma. O desenho é sempre o do lote importado. Para desfazer ou alterar, abra o lote no mapa e use o Histórico.</p>
-      <div class="imp-kpis conf-kpis">${Object.keys(LEV_TIPOS).map(cartao).join('')}</div>
-      <div class="jt-linha">${jtBusca('lev-busca', 'Pesquisar por quadra, lote, inscrição ou motivo')}</div>
-    </div>
-    <div class="jt-rolagem">
-      ${confState.levFiltro ? `<div class="conf-filtro-aviso">Mostrando só <b>${esc(LEV_TIPOS[confState.levFiltro].rotulo)}</b>. <a href="#" onclick="event.preventDefault(); _levFiltrar(null)">Mostrar todos</a></div>` : ''}
-      <section class="jt-grupo">
-        <table class="imp-tabela jt-tabela">
-          <thead><tr><th>Caso</th><th>Quadra · Lote</th><th>O que foi feito</th><th></th></tr></thead>
-          <tbody>${visiveis.map(linha).join('')}</tbody></table>
-      </section>
-      <div class="jt-nada" hidden>Nenhum caso com o que foi pesquisado.</div>
-    </div>
-    <div class="jt-rodape jt-rodape-col">
-      <div class="btn-row imp-acoes"><button class="btn" onclick="fModalBtn('m-conferencia')">Fechar</button></div>
-    </div>
-   </div>`)
-  jtAplicar('lev-busca')
-}
-
-/** Cartão da aba Levantamento: liga o filtro daquele tipo, ou desliga. */
-function _levFiltrar(t) {
-  confState.levFiltro = t && confState.levFiltro !== t ? t : null
-  _confPintarLevantamento()
-}
-
-/** "Ver no mapa" de um caso do levantamento: fecha a janela e leva ao lote. */
-function _levVer(loteId) {
-  fModalBtn('m-conferencia')
-  if (typeof irPara === 'function') irPara('mapa')
-  irAoLoteNoMapa(Number(loteId))
 }
 
 /**

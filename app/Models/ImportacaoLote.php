@@ -27,6 +27,7 @@ class ImportacaoLote extends Model
         return [
             'conferencia'          => 'array',
             'conferencia_cadastro' => 'array',
+            'levantamento'         => 'array',
             'conferido_em'         => 'datetime',
             'salvo_em'             => 'datetime',
             'publicado_em'         => 'datetime',

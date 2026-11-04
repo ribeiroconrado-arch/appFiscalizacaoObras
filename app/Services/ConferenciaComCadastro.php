@@ -386,7 +386,6 @@ class ConferenciaComCadastro
             'Faça a ligação em Parâmetros → Bairros (ou na ficha de uma importação do bairro) e confira de novo.');
         $resultado['centros_quadras'] = app(\App\Repositories\LoteRepository::class)
             ->centrosDasQuadras($resultado['nomes_do_desenho']);
-        $resultado = self::manterLevantamento($bairro, $resultado);
 
         DB::table('conferencias_bairro')->updateOrInsert(['bairro' => $bairro], [
             'codigo_bairro' => $resultado['codigo_bairro'],
@@ -398,62 +397,6 @@ class ConferenciaComCadastro
         ]);
 
         return $resultado;
-    }
-
-    /**
-     * LEVANTAMENTO DE 2022 — os desmembramentos e unificações que o comando
-     * `gis:desmembramentos-levantamento` achou no bairro, aplicados ou não,
-     * guardados como mais uma lista do resultado da conferência (`levantamento`),
-     * sem tabela própria. A aba "Levantamento" da janela lê dali.
-     *
-     * Junta por `chave` do caso: o que já foi APLICADO não é sobrescrito por
-     * uma rodada nova (que o veria como "lote já inativado"). O bairro sem
-     * conferência ganha a linha só com o levantamento (conferido_em vazio).
-     *
-     * @param  list<array<string,mixed>>  $itens
-     */
-    public static function gravarLevantamento(string $bairro, array $itens): void
-    {
-        $linha = DB::table('conferencias_bairro')->where('bairro', $bairro)->first();
-        $resultado = $linha ? (json_decode($linha->resultado, true) ?: []) : [];
-        $porChave = [];
-        foreach ($resultado['levantamento']['itens'] ?? [] as $it) {
-            $porChave[$it['chave']] = $it;
-        }
-        foreach ($itens as $it) {
-            if (($porChave[$it['chave']]['situacao'] ?? null) === 'aplicado') continue;
-            $porChave[$it['chave']] = $it;
-        }
-        $resultado['levantamento'] = ['itens' => array_values($porChave), 'em' => now()->format('d/m/Y H:i')];
-
-        $json = json_encode($resultado, JSON_UNESCAPED_UNICODE);
-        if ($linha) {
-            DB::table('conferencias_bairro')->where('id', $linha->id)->update(['resultado' => $json, 'updated_at' => now()]);
-        } else {
-            DB::table('conferencias_bairro')->insert(['bairro' => $bairro, 'resultado' => $json,
-                'conferido_em' => null, 'created_at' => now(), 'updated_at' => now()]);
-        }
-    }
-
-    /**
-     * A conferência nova é refeita do zero: a lista do levantamento, que não
-     * sai dela, vem do registro anterior.
-     *
-     * @param  array<string,mixed>  $novo
-     * @return array<string,mixed>
-     */
-    public static function manterLevantamento(string $bairro, array $novo): array
-    {
-        $antes = DB::table('conferencias_bairro')->where('bairro', $bairro)->value('resultado');
-        $lev = $antes ? (json_decode($antes, true)['levantamento'] ?? null) : null;
-
-        return $lev ? $novo + ['levantamento' => $lev] : $novo;
-    }
-
-    /** O resultado guardado é de uma conferência de verdade (e não só o levantamento)? */
-    public static function foiConferido(?array $resultado): bool
-    {
-        return isset($resultado['total_divergencias']);
     }
 
     /**

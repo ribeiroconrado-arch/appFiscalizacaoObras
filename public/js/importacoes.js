@@ -525,7 +525,16 @@ function _impAplicarFiltroConf() {
 
 function renderFichaImportacao(i) {
   // O filtro dos cartões é da importação aberta: outra importação começa sem ele.
-  if (impState.filtroConfId !== i.id) { impState.filtroConf = null; impState.filtroConfId = i.id }
+  if (impState.filtroConfId !== i.id) {
+    impState.filtroConf = null; impState.filtroConfId = i.id
+    impState.abaFicha = 'cadastro'; impState.levFiltro = null
+  }
+  const temLev = !!i.levantamento?.itens?.length
+  if (!temLev) impState.abaFicha = 'cadastro'
+  const abaLev = temLev && impState.abaFicha === 'levantamento'
+  const lev = abaLev ? _htmlLevantamento(i) : null
+  const abaBtn = (id, rotulo) => `<button type="button" class="${impState.abaFicha === id ? 'at' : ''}" onclick="trocarAbaDaFicha('${id}')">${rotulo}</button>`
+  const abas = temLev ? `<div class="sub-abas imp-abas">${abaBtn('cadastro', 'Cadastro')}${abaBtn('levantamento', `Levantamento · ${i.levantamento.itens.length}`)}</div>` : ''
   const emRevisao = i.status === 'revisao'
   const rascunho = i.status === 'rascunho'
   const andamento = _impEmAndamento(i)
@@ -589,25 +598,118 @@ function renderFichaImportacao(i) {
           <span class="imp-sub">· ${esc(i.arquivo)} · ${rascunho ? 'carregado' : 'enviado'} por ${esc(i.enviado_por || '—')} em ${esc(i.enviado_em || '')}${i.salvo_em && i.salvo_em !== i.enviado_em ? ` · salvo em ${esc(i.salvo_em)}` : ''}</span>
         </div>
         ${i.vinculo ? _htmlVinculoBairro(i.bairro, i.vinculo, andamento ? 'ficha' : 'fixo') : ''}
-        ${controles}
+        ${abas}
+        ${lev ? lev.topo : controles}
       </div>
       <div class="jt-rolagem">
+        ${lev ? lev.corpo : `
         ${publicada}${excluida}
         ${vinc.length ? `<div class="cad-nota cad-aviso"><b>Lotes com vínculo</b> — a importação não pode ser excluída:
             ${vinc.map(([k, n]) => `${rotVinc[k] || k}: ${n}`).join(' · ')}</div>` : ''}
         ${_htmlPendenciasDoDesenho(i)}
         <div id="imp-resultado">${conf ? conf.corpo : naoConferida}</div>
-        ${_htmlPreCuradoria(i.pre_curadoria, i.id)}
+        ${_htmlPreCuradoria(i.pre_curadoria, i.id)}`}
         <div class="jt-nada" hidden>Nenhuma linha com o que foi pesquisado.</div>
       </div>
       <div class="jt-rodape jt-rodape-col">
-        ${conf ? conf.rodape : ''}
+        ${conf && !lev ? conf.rodape : ''}
         <div id="imp-acao"></div>
         <div class="btn-row imp-acoes">${acoes}</div>
       </div>
     </div>`, rascunho ? `Rascunho de importação · ${i.bairro}` : `Importação nº ${i.id}`)
-  jtAplicar('ficha-busca')
-  _impAplicarFiltroConf()
+  jtAplicar(lev ? 'lev-busca' : 'ficha-busca')
+  if (!lev) _impAplicarFiltroConf()
+}
+
+function trocarAbaDaFicha(aba) {
+  impState.abaFicha = aba
+  if (impState.atual) renderFichaImportacao(impState.atual)
+}
+
+// O LEVANTAMENTO DE 2022 (gis:desmembramentos-levantamento): corrige a carga
+// inicial, SEM histórico. O lote de antes fica inativo, ligado ao novo pela
+// sucessão; "Desfazer" o devolve e tira o que o levantamento criou.
+const LEV_TIPOS = {
+  desm:     { rotulo: 'Desmembrados',  cor: '#1D9E75' },
+  unif:     { rotulo: 'Unificados',    cor: '#378ADD' },
+  nao:      { rotulo: 'Não aplicados', cor: '#EF9F27' },
+  desfeito: { rotulo: 'Desfeitos',     cor: '#6B7280' },
+}
+const _levTipo = it => it.situacao === 'desfeito' ? 'desfeito' : it.situacao !== 'aplicado' ? 'nao' : it.tipo === 'desmembrado' ? 'desm' : 'unif'
+
+/** A aba Levantamento da ficha: cartões e busca em cima, a tabela no meio. @returns {{topo:string, corpo:string}} */
+function _htmlLevantamento(i) {
+  const itens = i.levantamento.itens
+  const conta = t => itens.filter(x => _levTipo(x) === t).length
+  const cartao = t => {
+    const n = conta(t), ativo = impState.levFiltro === t
+    return `<button type="button" class="imp-kpi conf-kpi${n ? '' : ' zero'}${ativo ? ' ativo' : ''}" style="--kpi-cor:${LEV_TIPOS[t].cor}" aria-pressed="${ativo}" ${n || ativo ? '' : 'disabled'}
+      title="${ativo ? 'Mostrar todos' : 'Mostrar só estes'}" onclick="_levFiltrar('${t}')"><small><i></i>${LEV_TIPOS[t].rotulo}</small><b>${Number(n).toLocaleString('pt-BR')}</b></button>`
+  }
+  const num = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0
+  const linha = it => {
+    const t = _levTipo(it)
+    const lotes = (it.lotes || []).join(' + ')
+    const novos = (it.novos || []).map(n => `<b>${esc(n.lote)}</b> <span class="mono">${esc(n.inscricao || '')}</span>`).join(' · ')
+    const oQue = t === 'nao' ? esc(it.motivo || '—')
+      : (it.tipo === 'desmembrado' ? `Dividido em ${(it.novos || []).length}: ` : 'Unificados em ') + novos
+        + (t === 'desfeito' ? ` <span class="imp-sub">(desfeito${it.desfeito_em ? ' em ' + esc(it.desfeito_em) : ''})</span>` : '')
+    const detalhe = [
+      it.cadastro ? `<span class="imp-sub">Cadastro: ${esc(it.cadastro)}</span>` : '',
+      it.aviso ? `<span class="badge bd-pe" title="${esc(it.aviso)}">área diferente</span>` : '',
+    ].filter(Boolean).join(' ')
+    const alvo = t === 'desm' || t === 'unif' ? it.novos?.[0]?.lote_id : it.lote_ids?.[0]
+    const rot = `Q ${it.quadra ?? '—'} · L ${lotes || '—'}`
+    return `<tr>
+      <td><span class="conf-cor" style="background:${LEV_TIPOS[t].cor}"></span> ${it.tipo === 'desmembrado' ? 'Desmembrado' : 'Unificado'}</td>
+      <td>${esc(rot)}<div class="imp-sub mono">${(it.inscricoes || []).map(esc).join('<br>')}</div></td>
+      <td class="jt-quebra">${oQue}${detalhe ? `<div>${detalhe}</div>` : ''}</td>
+      <td class="jt-acoes">${alvo ? `<button type="button" class="btn sm" onclick="irAoLoteDaImportacao(${Number(alvo)})">Ver no mapa</button>` : ''}
+        ${t === 'desm' || t === 'unif' ? `<button type="button" class="btn sm" onclick="desfazerLevantamento(${Number(i.id)}, ${jsArg(it.chave)}, ${jsArg(rot)})">Desfazer</button>` : ''}</td></tr>`
+  }
+  const ordem = Object.keys(LEV_TIPOS)
+  const visiveis = itens.filter(x => !impState.levFiltro || _levTipo(x) === impState.levFiltro)
+    .sort((a, b) => ordem.indexOf(_levTipo(a)) - ordem.indexOf(_levTipo(b)) || num(a.quadra) - num(b.quadra) || num(a.lotes?.[0]) - num(b.lotes?.[0]))
+
+  return {
+    topo: `
+      <p class="imp-expl">Lotes que o levantamento de 2022 mostra desmembrados em partes iguais ou unificados, aplicados só quando o
+        cadastro da prefeitura confirma. O desenho é o do lote importado; o lote de antes fica inativo, com a inscrição e o BCI dele.
+        É correção da carga inicial: não entra no Histórico. ${i.levantamento.em ? `<span class="imp-sub">Gravado em ${esc(i.levantamento.em)}.</span>` : ''}</p>
+      <div class="imp-kpis conf-kpis">${ordem.map(cartao).join('')}</div>
+      <div class="jt-linha">${jtBusca('lev-busca', 'Pesquisar por quadra, lote, inscrição ou motivo')}</div>`,
+    corpo: `
+      ${impState.levFiltro ? `<div class="conf-filtro-aviso">Mostrando só <b>${esc(LEV_TIPOS[impState.levFiltro].rotulo)}</b>. <a href="#" onclick="event.preventDefault(); _levFiltrar(null)">Mostrar todos</a></div>` : ''}
+      <section class="jt-grupo">
+        <table class="imp-tabela jt-tabela">
+          <thead><tr><th>Caso</th><th>Quadra · Lote</th><th>O que foi feito</th><th></th></tr></thead>
+          <tbody>${visiveis.map(linha).join('')}</tbody></table>
+      </section>`,
+  }
+}
+
+/** Cartão da aba Levantamento: liga o filtro daquele tipo, ou desliga. */
+function _levFiltrar(t) {
+  impState.levFiltro = t && impState.levFiltro !== t ? t : null
+  if (impState.atual) renderFichaImportacao(impState.atual)
+}
+
+/** Desfaz um caso do levantamento: o lote de antes volta, sem histórico, como entrou. */
+function desfazerLevantamento(impId, chave, rotulo) {
+  confirmarAcao({
+    titulo: 'Desfazer o caso do levantamento',
+    mensagem: `${rotulo} volta a ser como veio na importação: o lote de antes fica ativo de novo e o que o levantamento criou sai. Nada vai para o Histórico.`,
+    textoBtn: 'Desfazer',
+    onConfirm: async () => {
+      try {
+        const d = await _impPedir(`/api/importacoes/${Number(impId)}/levantamento/desfazer`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chave }) })
+        toast(d.message, 'ok')
+        if (typeof recarregarLotesDoMapa === 'function') recarregarLotesDoMapa()
+        abrirImportacao(impId)
+      } catch (e) { toast(e.message, 'err') }
+    },
+  })
 }
 
 /**

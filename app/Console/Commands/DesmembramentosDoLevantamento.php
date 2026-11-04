@@ -4,14 +4,12 @@ namespace App\Console\Commands;
 
 use App\Cadastro\SequenciaDoDesmembramento;
 use App\Models\Lote;
-use App\Models\User;
-use App\Services\ConferenciaComCadastro;
 use App\Services\DesmembramentoDeLote;
+use App\Services\LevantamentoDaImportacao;
 use App\Services\UnificacaoDeLotes;
 use App\Support\GeometriaPlana;
 use App\Support\InscricaoImobiliaria;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,26 +33,32 @@ use Illuminate\Support\Facades\DB;
  *                08), ou as dos lotes estão inativas — todas (o número sai pela
  *                sugestão do sistema), ou todas menos uma, que é a do lote novo.
  *
+ * É CORREÇÃO DA CARGA INICIAL (decisão de 04/11/2026): vale para bairro em
+ * revisão e para bairro publicado, e entra SEM trilha de auditoria — nada no
+ * Histórico do cadastro nem na pré-curadoria, sem curador nem justificativa,
+ * porque não há como dizer quem fez nem por quê. O lote de antes fica inativo
+ * (com a inscrição e o BCI dele), ligado ao novo pela sucessão.
+ *
  * Duas passadas:
  *   1. simulação (padrão): não grava nada; escreve a planilha-relatório;
- *   2. `--aplicar --usuario=...`: aplica TODOS os confirmados, pelos serviços
- *      da curadoria sem protocolo. Cada ato vai para o Histórico com o usuário e
- *      a justificativa, e desfazer é pela tela. Cada caso, aplicado ou não, fica
- *      na aba "Levantamento" da conferência do bairro
- *      (ConferenciaComCadastro::gravarLevantamento).
+ *   2. `--aplicar`: aplica TODOS os confirmados, pelos serviços de
+ *      desmembramento e unificação, sem protocolo. Cada caso, aplicado ou não,
+ *      fica na aba "Levantamento" da ficha da importação do bairro
+ *      (LevantamentoDaImportacao), de onde também se desfaz. Caso já aplicado
+ *      ou desfeito não é aplicado de novo.
  */
 class DesmembramentosDoLevantamento extends Command
 {
     protected $signature = 'gis:desmembramentos-levantamento
                             {arquivo : GeoJSON do conversor (levantamento-2022.geojson)}
                             {--aplicar : aplica os casos que o cadastro confirma}
-                            {--usuario= : e-mail do curador que assina os atos (obrigatório no --aplicar)}
                             {--planilha= : onde escrever a planilha-relatório (padrão: ao lado do arquivo)}
                             {--tolerancia=20 : diferença de área, em %, acima da qual o caso sai com aviso}';
 
     protected $description = 'Levantamento de 2022: desmembramentos e unificações confirmados pelo cadastro (simula ou aplica)';
 
-    private const JUSTIFICATIVA = 'Levantamento cadastral de 2022, confirmado pelo cadastro da prefeitura.';
+    /** Vai na sucessão (lote_atos.observacao) e na fonte dos lotes novos. */
+    public const ORIGEM = 'Levantamento cadastral de 2022';
 
     /** IoU mínimo entre a mãe do arquivo e a da produção. */
     private const IOU_MESMA_MAE = 0.95;
@@ -69,14 +73,7 @@ class DesmembramentosDoLevantamento extends Command
             return self::FAILURE;
         }
         $aplicar = (bool) $this->option('aplicar');
-        if ($aplicar) {
-            $usuario = User::where('email', $this->option('usuario'))->first();
-            if (! $usuario || ! $usuario->podeCurarCadastro()) {
-                $this->error('Informe --usuario= com o e-mail de um curador do cadastro ativo.');
-                return self::FAILURE;
-            }
-            Auth::login($usuario);
-        }
+        $guardados = LevantamentoDaImportacao::situacoes();
 
         [$desmembrados, $unificados] = $this->lerArquivo($arquivo);
         $this->info(sprintf('Arquivo: %d desmembrados, %d unificados.', count($desmembrados), count($unificados)));
@@ -94,6 +91,13 @@ class DesmembramentosDoLevantamento extends Command
         $barra->finish();
         $this->newLine(2);
 
+        // Caso já aplicado ou desfeito numa rodada anterior: fica como está
+        // (o desfeito foi decisão de quem conferiu; o aplicado já não acha a mãe).
+        foreach ($casos as $k => $c) {
+            if (in_array($guardados[$c['chave']] ?? null, LevantamentoDaImportacao::SITUACOES_FIXAS, true)) {
+                $casos[$k] = ['situacao' => $guardados[$c['chave']], 'motivo' => 'Já tratado numa rodada anterior.'] + $c;
+            }
+        }
         if ($aplicar) {
             foreach ($casos as $k => $c) {
                 if ($c['situacao'] === 'pronto') {
@@ -115,16 +119,14 @@ class DesmembramentosDoLevantamento extends Command
         $this->info("Relatório: {$planilha}");
 
         if ($aplicar) {
-            $porBairro = [];
-            foreach ($casos as $c) {
-                $porBairro[$c['bairro']][] = array_filter($c, fn ($k) => $k[0] !== '_', ARRAY_FILTER_USE_KEY);
+            $g = app(LevantamentoDaImportacao::class)->gravar(array_map(
+                fn ($c) => array_filter($c, fn ($k) => $k[0] !== '_', ARRAY_FILTER_USE_KEY), $casos));
+            $this->info("Os casos estão na aba \"Levantamento\" da ficha de importação de cada bairro ({$g['importacoes']} importações).");
+            if ($g['sem_importacao']) {
+                $this->warn("{$g['sem_importacao']} caso(s) de bairro sem importação pela tela: ficam só na planilha.");
             }
-            foreach ($porBairro as $bairro => $itens) {
-                ConferenciaComCadastro::gravarLevantamento($bairro, $itens);
-            }
-            $this->info('Os casos estão na aba "Levantamento" da conferência de cada bairro (' . count($porBairro) . ' bairros).');
         } else {
-            $this->line('Nada foi gravado. Para aplicar os confirmados: --aplicar --usuario=e-mail-do-curador');
+            $this->line('Nada foi gravado. Para aplicar os confirmados: --aplicar');
         }
 
         return self::SUCCESS;
@@ -158,9 +160,6 @@ class DesmembramentosDoLevantamento extends Command
         /** @var Lote $lote */
         $lote = $ativos->first();
         $c['lote_ids'] = [$lote->id];
-        if ($lote->em_revisao) {
-            return $nao('O bairro ainda está em revisão (não publicado).');
-        }
         $iou = $this->iouComProducao($lote, $m['mae']);
         if ($iou === null || $iou < self::IOU_MESMA_MAE) {
             return $nao($iou === null ? 'Não deu para medir o lote do sistema contra o do arquivo.'
@@ -230,9 +229,6 @@ class DesmembramentosDoLevantamento extends Command
             $lotes[] = $a->first();
         }
         $c['lote_ids'] = array_map(fn ($l) => $l->id, $lotes);
-        if (collect($lotes)->contains(fn ($l) => $l->em_revisao)) {
-            return $nao('O bairro ainda está em revisão (não publicado).');
-        }
         $inscricoes = array_map(fn ($l) => $l->inscricao(), $lotes);
         if (in_array(null, $inscricoes, true)) {
             return $nao('Algum lote não tem inscrição: a unificação precisa dela.');
@@ -290,14 +286,21 @@ class DesmembramentosDoLevantamento extends Command
         return ['situacao' => 'pronto', '_ids' => $ids, '_numero' => $numero] + $c;
     }
 
-    /** Aplica um caso confirmado, pelo serviço da curadoria, na sua própria transação. */
+    /**
+     * Aplica um caso confirmado, pelo serviço de desmembramento ou unificação,
+     * na sua própria transação e SEM trilha de auditoria (ver o cabeçalho).
+     */
     private function aplicarCaso(DesmembramentoDeLote $desm, UnificacaoDeLotes $unif, array $c): array
     {
-        $justificativa = self::JUSTIFICATIVA . ' Arquivo: ' . basename($this->argument('arquivo')) . '.';
         try {
-            $novos = DB::transaction(fn () => $c['tipo'] === 'desmembrado'
-                ? $desm->aplicar(null, $c['_lote'], $c['_partes'], false, 'poligonos', $justificativa)
-                : [$unif->aplicar(null, $c['_ids'], $c['_numero'], null, $justificativa)]);
+            $novos = Lote::semTrilha(fn () => DB::transaction(function () use ($desm, $unif, $c) {
+                $novos = $c['tipo'] === 'desmembrado'
+                    ? $desm->aplicar(null, $c['_lote'], $c['_partes'], false, 'poligonos', self::ORIGEM)
+                    : [$unif->aplicar(null, $c['_ids'], $c['_numero'], null, self::ORIGEM)];
+                DB::table('lotes')->whereIn('id', array_map(fn (Lote $l) => $l->id, $novos))->update(['fonte' => self::ORIGEM]);
+
+                return $novos;
+            }));
         } catch (\Throwable $e) {
             return ['situacao' => 'nao_aplicado', 'motivo' => 'O serviço recusou: ' . ($e instanceof \Illuminate\Validation\ValidationException
                 ? implode(' ', $e->validator->errors()->all()) : $e->getMessage())] + $c;
