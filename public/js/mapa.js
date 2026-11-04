@@ -71,7 +71,12 @@ function aplicarNivelDoMapa() {
   // Na cidade inteira, o CONTORNO dos loteamentos, e não as quadras (03/11/2026):
   // de tão longe a silhueta das quadras vira mancha e o contorno é o que diz
   // onde está cada loteamento. As quadras entram no nível dos bairros.
-  mostrar('contornos', true)
+  // No satélite, no nível dos lotes, o contorno sai: a foto e o lote bastam.
+  const cad = typeof fundoCadastral !== 'function' || fundoCadastral()
+  mostrar('contornos', cad || nivel !== 'lotes')
+  // O estilo do bairro e do contorno muda com o nível, não só com o zoom.
+  if (typeof fundoState !== 'undefined' && typeof estiloBairroDoFundo === 'function') fundoState.bairros?.setStyle(estiloBairroDoFundo())
+  if (typeof contornoState !== 'undefined' && typeof _estiloContorno === 'function') contornoState.camada?.setStyle(_estiloContorno())
   mostrar('quadras', nivel === 'quadras')
   // No nível dos bairros, a silhueta de todas as quadras (bairros-contorno.js); de perto, a de cada bairro.
   mostrar('silhuetas', nivel === 'bairros' && (typeof camadaLigada !== 'function' || camadaLigada('quadras-silhueta')))
@@ -846,9 +851,11 @@ function desenharNumerosDosLotes() {
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
   ctx.lineWidth = 3
-  // Halo branco sob o texto escuro: o número cai sobre telhado, grama e asfalto.
-  ctx.strokeStyle = 'rgba(255,255,255,.92)'
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--chumbo').trim() || '#37413F'
+  // Cadastral: halo branco sob o texto escuro. Satélite: o contrário — número
+  // branco com sombra escura, que é o que se lê sobre telhado, grama e asfalto.
+  const sat = typeof fundoCadastral === 'function' && !fundoCadastral()
+  ctx.strokeStyle = sat ? 'rgba(15,23,42,.8)' : 'rgba(255,255,255,.92)'
+  ctx.fillStyle = sat ? '#ffffff' : (getComputedStyle(document.documentElement).getPropertyValue('--chumbo').trim() || '#37413F')
 
   const vista = mapa.getBounds().pad(NUMEROS_FOLGA)
   for (const camada of mapaState.camadas) {

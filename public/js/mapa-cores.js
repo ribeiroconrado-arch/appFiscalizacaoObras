@@ -199,9 +199,9 @@ function _estiloColoridoBase(f) {
   // com a divisa fina: não há telhado a mostrar por baixo.
   if (typeof fundoCadastral === 'function' && fundoCadastral()) return estiloLoteCadastral()
 
-  // Contorno branco fino com preenchimento quase transparente: marca o limite
-  // do lote sem cobrir o telhado, que é o que o fiscal precisa enxergar.
-  return { color: COR_UNIFORME, weight: 1, opacity: .9, fillColor: COR_UNIFORME, fillOpacity: .08 }
+  // Satélite: só a linha branca. O preenchimento fica, mas transparente — é
+  // ele que recebe o clique dentro do lote — para o telhado aparecer inteiro.
+  return { color: COR_UNIFORME, weight: 1, opacity: .9, fillColor: COR_UNIFORME, fillOpacity: 0 }
 }
 
 /**

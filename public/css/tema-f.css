@@ -772,6 +772,14 @@ body.z-bairro .leaflet-tooltip.rot.rot-bairro{display:block}
 .leaflet-tooltip.rot.rot-cidade{font-family:'Manrope',sans-serif;font-weight:800;font-size:17px;
   color:var(--chumbo);text-transform:uppercase;letter-spacing:.12em;display:none;
   text-shadow:0 0 5px #fff,0 0 5px #fff,0 0 10px #fff}
+/* SATÉLITE (#map.fundo-sat, fundo-cadastral.js): sobre a foto, texto branco
+   com sombra escura, e sombra também no contorno dos bairros — o halo branco
+   do cadastral some no telhado claro e no asfalto. */
+#map.fundo-sat .leaflet-contornos-pane{filter:drop-shadow(0 0 1.5px rgba(0,0,0,.85))}
+#map.fundo-sat .leaflet-tooltip.rot.rot-bairro,
+#map.fundo-sat .leaflet-tooltip.rot.rot-cidade,
+#map.fundo-sat .rot-rua span{color:#fff;
+  text-shadow:0 0 3px rgba(0,0,0,.9),0 0 3px rgba(0,0,0,.9),0 0 6px rgba(0,0,0,.7)}
 /* NÍVEL DE DETALHE (aplicarNivelDoMapa, mapa.js): no do município só o nome
    da cidade; os bairros aparecem a partir do nível seguinte. */
 body.nivel-municipio .leaflet-tooltip.rot.rot-cidade{display:block}

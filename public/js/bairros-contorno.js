@@ -76,13 +76,22 @@ const CONTORNO_QUINA_AREA_MAX_M2 = 150
  * Amarelo, e não branco: os lotes já são brancos, e com o mapa afastado eles
  * viram uma mancha branca que engolia um contorno da mesma cor.
  */
+/**
+ * O contorno do bairro em cada nível do mapa (04/11/2026). Longe ele é o que
+ * diz onde está cada loteamento; de perto quem importa é o lote, e ele perde
+ * peso. No cadastral (claro), dourado fechado e, na cidade inteira, linha
+ * contínua sobre o tom do bairro; no satélite, amarelo com sombra (CSS
+ * `.fundo-sat`), e no nível dos lotes ele sai (aplicarNivelDoMapa).
+ */
 function _estiloContorno() {
-  const z = mapaState.obj?.getZoom() ?? 12
-  const longe = z < 16
-  // No fundo cadastral (claro) o amarelo puro some: um tom mais fechado.
+  const nivel = typeof nivelDoMapa === 'function' && mapaState.obj ? nivelDoMapa(mapaState.obj) : 'municipio'
   const cad = typeof fundoCadastral === 'function' && fundoCadastral()
-  return { color: cad ? '#C99A06' : '#facc15', weight: longe ? 3 : 1.6, opacity: longe ? 1 : .85,
-           dashArray: longe ? '10 6' : '6 6', fill: false, interactive: false, pane: 'contornos' }
+  const porNivel = cad
+    ? { municipio: [2, 1, null], bairros: [1.6, .9, '6 5'], quadras: [1.2, .55, '6 5'], lotes: [1, .3, '4 4'] }
+    : { municipio: [3, 1, '10 6'], bairros: [2, .95, '8 6'], quadras: [1.4, .85, '6 6'], lotes: [1, .6, '6 6'] }
+  const [weight, opacity, dashArray] = porNivel[nivel] || porNivel.municipio
+  return { color: cad ? '#C99A06' : '#facc15', weight, opacity, dashArray,
+           fill: false, interactive: false, pane: 'contornos' }
 }
 
 async function carregarContornosDosBairros() {

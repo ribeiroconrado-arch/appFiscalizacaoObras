@@ -39,6 +39,9 @@ function aplicarFundoDoMapa() {
   const m = mapaState.obj
   if (!m) return
   const cad = fundoCadastral()
+  // A classe diz ao CSS qual fundo está na tela: no satélite os rótulos são
+  // brancos com sombra, e o contorno ganha sombra para destacar da foto.
+  m.getContainer().classList.toggle('fundo-sat', !cad)
   // A ordem de empilhamento é a de entrada: satélite, Google por cima, ortofoto no topo.
   const imagens = [mapaState.satelite, mapaState.googleTiles, mapaState.ortofoto].filter(Boolean)
   imagens.forEach(t => m.removeLayer(t))
@@ -60,6 +63,20 @@ function aplicarFundoDoMapa() {
     if (quadraState.silhueta && quadraState.silhueta !== 'carregando') quadraState.silhueta.setStyle(estiloSilhuetaDaQuadra())
   }
   if (typeof contornoState !== 'undefined') contornoState.camada?.setStyle(_estiloContorno())
+  if (typeof desenharNumerosDosLotes === 'function') desenharNumerosDosLotes()
+}
+
+/**
+ * O bairro no fundo cadastral, conforme o zoom (04/11/2026). De perto é
+ * BRANCO, porque o branco que sobra entre as quadras cinza é a rua. Na cidade
+ * inteira as quadras não aparecem, e o branco virava um bloco liso dentro de
+ * cada contorno: lá o bairro é só um tom leve do dourado do contorno.
+ */
+function estiloBairroDoFundo() {
+  const longe = typeof nivelDoMapa === 'function' && nivelDoMapa(mapaState.obj) === 'municipio'
+  return longe
+    ? { stroke: false, fill: true, fillColor: '#C99A06', fillOpacity: .1 }
+    : { stroke: true, color: FUNDO_COR.ruaBorda, weight: 1, fillColor: FUNDO_COR.rua, fillOpacity: 1 }
 }
 
 /** Os bairros em branco, por baixo de tudo. Refeito quando os contornos chegam ou mudam. */
@@ -75,7 +92,7 @@ function desenharBairrosDoFundo() {
   }
   fundoState.bairros = L.geoJSON(contornoState.dados, {
     pane: 'fundoCadastral', interactive: false,
-    style: { stroke: true, color: FUNDO_COR.ruaBorda, weight: 1, fillColor: FUNDO_COR.rua, fillOpacity: 1 },
+    style: estiloBairroDoFundo,
   }).addTo(m)
 }
 
