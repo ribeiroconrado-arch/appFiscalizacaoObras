@@ -3663,17 +3663,26 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
    Coluna estreita: três linhas por registro, e não colunas lado a lado. O que
    manda é o ato e o alvo; quem e quando ficam menores, embaixo. */
 .hc-filtros{display:flex;gap:7px;margin-bottom:10px}
+/* Os dois filtros dividem a largura — o combo não crescia e o texto cortava. */
+.hc-filtros > *{flex:1 1 0;min-width:0}
 .hc-filtros select{
   flex:1;min-width:0;padding:7px 9px;border:1.5px solid var(--bord);
   border-radius:8px;background:var(--sur);color:var(--tx);font:inherit;font-size:12.5px;
 }
-.hc-linha{padding:9px 0;border-bottom:1px solid var(--blt)}
+.hc-linha{padding:11px 0;border-bottom:1px solid var(--blt)}
 .hc-linha:last-child{border-bottom:none}
-.hc-l1{display:flex;align-items:baseline;gap:8px}
-.hc-acao{font-size:12.5px;font-weight:800;color:var(--tx2);text-transform:lowercase}
-.hc-acao.perigosa{color:var(--red)}
-.hc-quando{margin-left:auto;font-family:ui-monospace,monospace;font-size:11.3px;color:var(--tx3)}
-.hc-l2{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;margin:3px 0}
+.hc-l1{display:flex;align-items:center;gap:8px}
+/* O ato num selo: a lista se lê de relance pelo tipo. */
+.hc-acao{font-size:11px;font-weight:700;color:var(--tx2);background:var(--blt);
+  border-radius:999px;padding:2px 9px;letter-spacing:.01em}
+.hc-acao.hc-azul{color:#2F6FB8;background:color-mix(in srgb, currentColor 13%, transparent)}
+.hc-acao.hc-verde{color:var(--gd);background:color-mix(in srgb, currentColor 13%, transparent)}
+.hc-acao.perigosa{color:var(--red);background:color-mix(in srgb, currentColor 13%, transparent)}
+.hc-quando{margin-left:auto;font-family:ui-monospace,monospace;font-size:11.3px;color:var(--tx3);white-space:nowrap}
+.hc-l2{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:5px 0 2px}
+.hc-alvo{font-size:13px;font-weight:700;color:var(--tx)}
+.hc-bairro{font-size:11.5px;color:var(--tx3)}
+.hc-resumo{font-size:12.5px;color:var(--tx2);line-height:1.45;margin:0 0 6px;overflow-wrap:anywhere}
 /* O lote é botão porque leva o mapa até ele — registro de alteração sem poder
    olhar o desenho é metade da resposta. */
 .hc-ir{
@@ -3688,10 +3697,12 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 }
 .hc-delta b{color:var(--tx);font-weight:600}
 .hc-seta{color:var(--tx3)}
-.hc-l3{display:flex;align-items:center;gap:8px}
-.hc-quem{font-size:11.8px;color:var(--tx3)}
-.hc-l3 .btn{margin-left:auto}
-.hc-sem-volta{margin-left:auto;font-size:11.3px;color:var(--tx3);cursor:help}
+/* Quem à esquerda; os botões juntos à direita, e descem de linha se não
+   couberem — antes o segundo botão saía do painel. */
+.hc-l3{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}
+.hc-quem{font-size:11.8px;color:var(--tx3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hc-botoes{margin-left:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.hc-sem-volta{font-size:11.3px;color:var(--tx3);cursor:help;align-self:center}
 
 /* ── SELETOR DE TEMA (Meu perfil) ── */
 .tema-opcoes{display:flex;gap:10px;flex-wrap:wrap}

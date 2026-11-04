@@ -76,39 +76,52 @@ function renderHistoricoCadastral(truncou) {
     : ''
 
   alvo.innerHTML = aviso + hcState.linhas.map(l => {
-    // O que mudou, de quê para quê. Numa coluna estreita cabe pouco, então só
-    // o primeiro campo — que na prática é sempre o que interessa: a quadra que
-    // mudou, o número que mudou.
+    // O QUE O ATO FEZ, numa frase do servidor ("Lotes 12 + 13 → 1213 ·
+    // 600,00 m²"). Sem ela, o primeiro campo que mudou, de quê para quê.
     const m = (l.mudou ?? [])[0]
-    const delta = m
-      ? `<span class="hc-delta"><b>${esc(m.campo)}</b> ${esc(hcValor(m.de))}
-           <span class="hc-seta">→</span> ${esc(hcValor(m.para))}</span>`
-      : ''
+    const oQue = l.resumo
+      ? `<div class="hc-resumo">${esc(l.resumo)}</div>`
+      : m ? `<div class="hc-resumo"><span class="hc-delta"><b>${esc(m.campo)}</b> ${esc(hcValor(m.de))}
+           <span class="hc-seta">→</span> ${esc(hcValor(m.para))}</span></div>` : ''
 
-    const acao = l.desfazer?.pode
+    const desfazer = l.desfazer?.pode
       ? `<button type="button" class="btn out-vermelho sm" onclick="desfazerNoCadastro(${l.id})">Desfazer</button>`
       : l.desfazer?.motivo
         ? `<span class="hc-sem-volta" title="${esc(l.desfazer.motivo)}">sem volta</span>`
         : ''
+    const prancha = ['desmembrou', 'unificou', 'instituiu frações'].includes(l.acao) && l.registro
+      ? `<button type="button" class="btn sm" onclick="PranchetaCad.verSalvas(${Number(l.registro)})">Ver prancha</button>` : ''
 
     // O lote é clicável: leva o mapa até ele. Ver um registro de alteração sem
     // poder olhar o desenho é metade da resposta.
     const alvoTxt = l.registro
       ? `<button type="button" class="hc-ir" onclick="irAoLoteDoHistorico(${l.registro})"
            title="Ver no mapa">${esc(l.alvo)}</button>`
-      : `<span>${esc(l.alvo)}</span>`
+      : `<span class="hc-alvo">${esc(l.alvo)}</span>`
+    const tipo = HC_ACOES[l.acao] || { rotulo: l.acao, cls: '' }
 
     return `
       <div class="hc-linha">
         <div class="hc-l1">
-          <span class="hc-acao ${l.acao === 'excluiu' ? 'perigosa' : ''}">${esc(l.acao)}</span>
+          <span class="hc-acao ${tipo.cls}">${esc(tipo.rotulo)}</span>
           <span class="hc-quando">${esc(l.quando)}</span>
         </div>
-        <div class="hc-l2">${alvoTxt}${delta}</div>
-        <div class="hc-l3"><span class="hc-quem">${esc(l.quem)}</span>${acao}
-          ${['desmembrou','unificou','instituiu frações'].includes(l.acao)&&l.registro?`<button class="btn sm" onclick="PranchetaCad.verSalvas(${Number(l.registro)})">Ver prancha</button>`:''}</div>
+        <div class="hc-l2">${alvoTxt}${l.bairro ? `<span class="hc-bairro">${esc(l.bairro)}</span>` : ''}</div>
+        ${oQue}
+        <div class="hc-l3"><span class="hc-quem">${esc(l.quem)}</span>
+          <span class="hc-botoes">${prancha}${desfazer}</span></div>
       </div>`
   }).join('')
+}
+
+/** O nome de cada ato na lista, e a cor do selo. */
+const HC_ACOES = {
+  unificou:            { rotulo: 'Unificação',      cls: 'hc-azul' },
+  desmembrou:          { rotulo: 'Desmembramento',  cls: 'hc-verde' },
+  'instituiu frações': { rotulo: 'Fração ideal',    cls: 'hc-verde' },
+  'corrigiu quadra':   { rotulo: 'Quadra corrigida', cls: '' },
+  renumerou:           { rotulo: 'Renumeração',     cls: '' },
+  excluiu:             { rotulo: 'Exclusão',        cls: 'perigosa' },
 }
 
 function hcValor(v) {

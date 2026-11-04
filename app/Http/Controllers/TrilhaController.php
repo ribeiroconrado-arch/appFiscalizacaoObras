@@ -127,19 +127,54 @@ class TrilhaController extends Controller
             ];
         }
 
+        // Lote que já não existe (apagado): a descrição guardada é a chave
+        // "BAIRRO|QUADRA|LOTE" — lida como o rótulo de sempre, e não crua.
+        $chave = ! $lote && $a->tabela === 'lotes' && substr_count((string) $a->descricao, '|') === 2
+            ? explode('|', $a->descricao) : null;
+
         return [
             'id'       => $a->id,
             'quando'   => date('d/m/Y H:i', strtotime($a->created_at)),
             'acao'     => $a->acao,
             'tabela'   => $a->tabela,
             'registro' => $a->registro_id,
-            'alvo'     => $lote?->rotulo() ?? ($a->descricao ?: '—'),
-            'bairro'   => $lote?->bairro,
+            'alvo'     => $lote?->rotulo()
+                ?? ($chave ? sprintf('Quadra %s · Lote %s', $chave[1] !== '?' ? $chave[1] : '—', $chave[2] !== '?' ? $chave[2] : '—') : null)
+                ?? ($a->descricao ?: '—'),
+            'bairro'   => $lote?->bairro ?? $chave[0] ?? null,
             'quem'     => $a->usuario_nome ?? 'sistema',
             'matricula' => $a->matricula,
             'mudou'    => array_slice($mudou, 0, 4),
             'desfazer' => $this->podeDesfazer($a),
         ];
+    }
+
+    /**
+     * O que o ato fez, numa frase curta para o Histórico do cadastro — em vez
+     * do primeiro campo cru que mudou (que, na unificação, era a "fonte").
+     *
+     * @param  array<int, list<string>>  $juntou  lote novo => números juntados
+     */
+    private function resumo(object $a, array $juntou): ?string
+    {
+        $antes = json_decode($a->dados_anteriores ?? 'null', true) ?: [];
+        $novos = json_decode($a->dados_novos ?? 'null', true) ?: [];
+        $m2 = fn ($v) => is_numeric($v) ? number_format((float) $v, 2, ',', '.') . ' m²' : null;
+
+        return match ($a->acao) {
+            'unificou' => implode(' · ', array_filter([
+                ($juntou[$a->registro_id] ?? [])
+                    ? 'Lotes ' . implode(' + ', $juntou[$a->registro_id]) . ' → ' . ($novos['numero_lote'] ?? '?')
+                    : 'Lote novo ' . ($novos['numero_lote'] ?? '?'),
+                $m2($novos['area_gis_m2'] ?? null),
+            ])),
+            'desmembrou' => sprintf('Em %d parte%s: %s', (int) ($novos['partes'] ?? 0),
+                (int) ($novos['partes'] ?? 0) === 1 ? '' : 's', $novos['numeros'] ?? '—'),
+            'corrigiu quadra' => 'Quadra ' . ($antes['quadra'] ?? '—') . ' → ' . ($novos['quadra'] ?? '—'),
+            'renumerou' => 'Lote ' . ($antes['numero_lote'] ?? '—') . ' → ' . ($novos['numero_lote'] ?? '—'),
+            'excluiu' => 'Lote apagado do desenho',
+            default => null,
+        };
     }
 
     /**
@@ -298,8 +333,23 @@ class TrilhaController extends Controller
             ? collect()
             : Lote::whereIn('id', $idsLote)->get()->keyBy('id');
 
+        // Os números dos lotes que cada unificação juntou, para a frase
+        // "Lotes 12 + 13 → 1213" (o registro dela é o lote NOVO).
+        $unificados = $linhas->where('acao', 'unificou')->pluck('registro_id')->filter()->all();
+        $juntou = [];
+        if ($unificados) {
+            $atos = DB::table('lote_ato_lotes')->whereIn('lote_id', $unificados)->where('papel', 'posterior')->pluck('ato_id', 'lote_id');
+            $antes = DB::table('lote_ato_lotes as al')->join('lotes as l', 'l.id', '=', 'al.lote_id')
+                ->whereIn('al.ato_id', $atos->values())->where('al.papel', 'anterior')
+                ->orderByRaw('CAST(l.numero_lote AS UNSIGNED), l.numero_lote')
+                ->get(['al.ato_id', 'l.numero_lote'])->groupBy('ato_id');
+            foreach ($atos as $loteId => $ato) {
+                $juntou[$loteId] = ($antes[$ato] ?? collect())->pluck('numero_lote')->all();
+            }
+        }
+
         return response()->json([
-            'linhas'  => $linhas->map(fn ($a) => $this->linha($a, $lotes))->values(),
+            'linhas'  => $linhas->map(fn ($a) => $this->linha($a, $lotes) + ['resumo' => $this->resumo($a, $juntou)])->values(),
             'truncou' => $linhas->count() === 120,
         ]);
     }
