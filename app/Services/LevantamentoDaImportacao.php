@@ -24,7 +24,8 @@ use RuntimeException;
  */
 class LevantamentoDaImportacao
 {
-    public const SITUACOES_FIXAS = ['aplicado', 'desfeito'];
+    /** Situações que uma nova rodada do comando não mexe. Descartado some da aba. */
+    public const SITUACOES_FIXAS = ['aplicado', 'desfeito', 'descartado'];
 
     /**
      * Situação guardada de cada caso, em todas as importações.
@@ -81,8 +82,35 @@ class LevantamentoDaImportacao
     public function daImportacao(ImportacaoLote $imp): ?array
     {
         $lev = $imp->levantamento;
+        if ($lev) {
+            $lev['itens'] = array_values(array_filter($lev['itens'] ?? [], fn ($it) => $it['situacao'] !== 'descartado'));
+        }
 
-        return $lev && ! empty($lev['itens']) ? $lev : null;
+        return $lev && $lev['itens'] ? $lev : null;
+    }
+
+    /**
+     * Descarta um caso NÃO aplicado: ele sai da aba, e o comando não o traz de
+     * volta. Nenhum lote muda — o caso só dizia que não havia o que fazer.
+     */
+    public function descartar(ImportacaoLote $imp, string $chave): string
+    {
+        return DB::transaction(function () use ($imp, $chave) {
+            $imp = ImportacaoLote::whereKey($imp->id)->lockForUpdate()->firstOrFail();
+            $itens = $imp->levantamento['itens'] ?? [];
+            $k = array_search($chave, array_column($itens, 'chave'), true);
+            if ($k === false) {
+                throw new RuntimeException('Este caso não é desta importação.');
+            }
+            if ($itens[$k]['situacao'] !== 'nao_aplicado') {
+                throw new RuntimeException('Só se descarta caso não aplicado. O aplicado se desfaz.');
+            }
+            $itens[$k]['situacao'] = 'descartado';
+            $itens[$k]['descartado_em'] = now()->format('d/m/Y H:i');
+            $imp->update(['levantamento' => ['itens' => $itens] + $imp->levantamento]);
+
+            return 'Descartado: Q ' . $itens[$k]['quadra'] . ' · L ' . implode(' + ', $itens[$k]['lotes']) . ' saiu da lista.';
+        });
     }
 
     /**

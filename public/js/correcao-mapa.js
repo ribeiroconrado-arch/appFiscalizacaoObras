@@ -65,26 +65,44 @@ function _corrChave(tipo, l) {
   return tipo + '|' + (l.lote_id ? 'l' + l.lote_id : 'i' + (l.inscricao || '') + '|' + (l.quadra ?? '') + '|' + (l.lote ?? ''))
 }
 
-const _corrTipo = t => (typeof CONF_TIPOS !== 'undefined' && CONF_TIPOS[t]) || CORR_TIPOS_DESENHO[t] || { rotulo: t, curto: t, cor: '#888' }
+/**
+ * O painel também mostra os casos do LEVANTAMENTO DE 2022 da importação
+ * (origem 'levantamento'): só para ver e, no aplicado, desfazer — não há o
+ * que corrigir, nem "resolvidas". Os tipos são os da aba (LEV_TIPOS, importacoes.js).
+ */
+const _corrLev = () => correcaoState.origem === 'levantamento'
+/** A origem é uma importação (a conferência dela ou o levantamento dela). */
+const _corrDaImp = () => correcaoState.origem === 'importacao' || _corrLev()
+
+const _corrTipo = t => (typeof CONF_TIPOS !== 'undefined' && CONF_TIPOS[t]) || CORR_TIPOS_DESENHO[t]
+  || (t.startsWith('lev_') && typeof LEV_TIPOS !== 'undefined' && LEV_TIPOS[t.slice(4)]
+    ? { rotulo: LEV_TIPOS[t.slice(4)].rotulo, curto: LEV_TIPOS[t.slice(4)].rotulo.toLowerCase(), cor: LEV_TIPOS[t.slice(4)].cor } : null)
+  || { rotulo: t, curto: t, cor: '#888' }
 
 // ── AS PENDÊNCIAS, DE ONDE ELAS VÊM ──────────────────────────
 
 function _corrMontar() {
-  const num = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0
-  const porLote = (a, b) => num(a.quadra) - num(b.quadra) || num(a.lote) - num(b.lote)
-  const porArea = (a, b) => Math.abs(b.diferenca ?? 0) - Math.abs(a.diferenca ?? 0) || porLote(a, b)
   const lista = []
-  const junta = (tipo, itens, ordem = porLote) => [...(itens || [])].sort(ordem)
-    .forEach(l => lista.push({ ...l, tipo, chave: _corrChave(tipo, l) }))
+  const junta = (tipo, itens) => (itens || []).forEach(l => lista.push({ ...l, tipo, chave: _corrChave(tipo, l) }))
 
-  if (correcaoState.origem === 'importacao') {
+  if (_corrLev()) {
+    // Cada caso aponta para o lote novo (aplicado) ou para o de antes (os demais).
+    const i = correcaoState.imp || impState.atual
+    ;(i?.levantamento?.itens || [])
+      .forEach(c => {
+        const t = _levTipo(c)
+        lista.push({ tipo: 'lev_' + t, chave: c.chave, caso: c, quadra: c.quadra, lote: (c.lotes || []).join(' + '),
+          inscricao: (c.inscricoes || [])[0] || '',
+          lote_id: (t === 'desm' || t === 'unif' ? c.novos?.[0]?.lote_id : c.lote_ids?.[0]) || null })
+      })
+  } else if (correcaoState.origem === 'importacao') {
     // A cópia do painel: outra ferramenta abrindo larga a importação (sairDaCuradoria).
     const i = correcaoState.imp || impState.atual
     const c = i?.conferencia_cadastro || {}
     const p = i?.pendencias_desenho || { invalidos: [], repetidos: [] }
     junta('invalido', p.invalidos)
     junta('repetido', p.repetidos)
-    junta('area_diferente', c.area_diferente, porArea)
+    junta('area_diferente', c.area_diferente)
     junta('nao_encontrados', c.nao_encontrados)
     junta('inativos', c.inativos)
     junta('sem_inscricao', c.sem_inscricao)
@@ -92,10 +110,24 @@ function _corrMontar() {
   } else {
     const r = confState.resultado || {}
     const aberta = (tipo, l) => !_confJustificada(tipo, l)
-    junta('area_diferente', (r.area_diferente || []).filter(l => aberta('area_diferente', l)), porArea)
+    junta('area_diferente', (r.area_diferente || []).filter(l => aberta('area_diferente', l)))
     for (const t of ['nao_encontrados', 'inativos', 'sem_inscricao', 'sem_lote']) junta(t, (r[t] || []).filter(l => aberta(t, l)))
   }
-  return lista
+  // A LISTA TODA em ordem de quadra e, dentro dela, de lote — sem separar por
+  // tipo (pedido dele, 04/11/2026): o filtro de cima é que separa. O sort é
+  // estável, então o mesmo lote com duas pendências mantém a ordem dos tipos.
+  return lista.sort(_corrPorQuadraELote)
+}
+
+/** Quadra, depois lote: pelo número (12 antes de 100) e, empatado, pelo texto (80 antes de 80A; 4 antes de 4A). */
+function _corrPorQuadraELote(a, b) {
+  const num = v => parseInt(String(v ?? '').match(/\d+/)?.[0] ?? '', 10)
+  const cmp = (x, y) => {
+    const nx = num(x), ny = num(y)
+    if (Number.isNaN(nx) !== Number.isNaN(ny)) return Number.isNaN(nx) ? 1 : -1   // sem número vai para o fim
+    return (nx - ny || 0) || String(x ?? '').localeCompare(String(y ?? ''), 'pt-BR', { numeric: true })
+  }
+  return cmp(a.quadra, b.quadra) || cmp(a.lote, b.lote)
 }
 
 /** As pendências que o filtro e a pesquisa deixam à vista. */
@@ -106,7 +138,7 @@ function _corrVisiveis(incluirResolvidas = false) {
   return (resolvidas ? correcaoState.resolvidas : correcaoState.itens).filter(it => {
     if (!resolvidas && correcaoState.filtro && it.tipo !== correcaoState.filtro) return false
     if (!termos.length) return true
-    const texto = _jtNorm(`${it.inscricao || ''} q ${it.quadra ?? ''} l ${it.lote ?? ''} ${_corrTipo(it.tipo).curto}`)
+    const texto = _jtNorm(`${it.inscricao || ''} q ${it.quadra ?? ''} l ${it.lote ?? ''} ${_corrTipo(it.tipo).curto} ${(it.caso?.inscricoes || []).join(" ")} ${it.caso?.motivo || ""}`)
     return termos.every(t => texto.includes(t))
   })
 }
@@ -162,12 +194,13 @@ function _corrSugestoes(it) {
  * @param {string} [chave]
  */
 async function abrirCorrecao(origem, chave) {
+  const daImp = origem === 'importacao' || origem === 'levantamento'
   const mudou = correcaoState.origem !== origem
-    || (origem === 'importacao' && correcaoState.impId !== impState.atual?.id)
+    || (daImp && correcaoState.impId !== impState.atual?.id)
     || (origem === 'bairro' && correcaoState.bairro !== confState.bairro)
   correcaoState.origem = origem
-  correcaoState.impId = origem === 'importacao' ? impState.atual?.id : null
-  correcaoState.imp = origem === 'importacao' ? impState.atual : null
+  correcaoState.impId = daImp ? impState.atual?.id : null
+  correcaoState.imp = daImp ? impState.atual : null
   correcaoState.bairro = origem === 'bairro' ? confState.bairro : null
   if (mudou) { correcaoState.resolvidas = []; correcaoState.filtro = null; correcaoState.busca = ''; correcaoState.posicoes.clear() }
   correcaoState.itens = _corrMontar()
@@ -178,10 +211,10 @@ async function abrirCorrecao(origem, chave) {
   correcaoState.conferindo = false
   correcaoState.esperaUnificar = false
 
-  const rolavel = document.querySelector(origem === 'importacao' ? '#m-importacoes .jt-rolagem' : '#m-conferencia .jt-rolagem')
+  const rolavel = document.querySelector(daImp ? '#m-importacoes .jt-rolagem' : '#m-conferencia .jt-rolagem')
   if (rolavel) correcaoState.rolagemFicha = rolavel.scrollTop
 
-  if (origem === 'importacao') {
+  if (daImp) {
     fecharImportacoes()
     // Os lotes da importação só existem no mapa com a camada de revisão ligada.
     if (!camadaLigada('nao-publicados')) ligarCamada('nao-publicados', true)
@@ -198,7 +231,7 @@ async function abrirCorrecao(origem, chave) {
   document.body.classList.add('com-correcao')
   _corrIsolar()
   _corrRepintar()
-  if (origem === 'importacao') pintarBarraImportacao()
+  if (daImp) pintarBarraImportacao()
   else pintarBarraConferencia()
   _corrPintar()
   const it = _corrItem()
@@ -236,7 +269,8 @@ function fecharCorrecao(semBarra = false) {
 async function voltarAFichaDaCorrecao() {
   const origem = correcaoState.origem
   fecharCorrecao(true)
-  if (origem === 'importacao') {
+  const daImp = origem === 'importacao' || origem === 'levantamento'
+  if (daImp) {
     if (impState.preCuradoria) sairPreCuradoria()
     impState.noMapa = false
     pintarBarraImportacao()
@@ -246,7 +280,7 @@ async function voltarAFichaDaCorrecao() {
   }
   const rolagem = correcaoState.rolagemFicha || 0
   setTimeout(() => {
-    const q = document.querySelector(origem === 'importacao' ? '#m-importacoes .jt-rolagem' : '#m-conferencia .jt-rolagem')
+    const q = document.querySelector(daImp ? '#m-importacoes .jt-rolagem' : '#m-conferencia .jt-rolagem')
     if (q) q.scrollTop = rolagem
   }, 60)
 }
@@ -257,9 +291,12 @@ async function _corrIr(it) {
   correcaoState.esperaUnificar = false
   _corrPintar()
   _corrRepintar()
-  const imp = correcaoState.origem === 'importacao'
-  // A alteração cadastral aberta: é dela que saem as ferramentas.
-  if (imp) {
+  const imp = _corrDaImp()
+  // A alteração cadastral aberta: é dela que saem as ferramentas. O
+  // levantamento só mostra — e a importação dele pode já estar publicada.
+  if (_corrLev()) {
+    if (!impState.atual && correcaoState.imp) impState.atual = correcaoState.imp
+  } else if (imp) {
     // Outra ferramenta pode ter largado a importação no caminho: o painel a devolve.
     if (!impState.atual && correcaoState.imp) impState.atual = correcaoState.imp
     _ligarPreCuradoria(impState.atual)
@@ -301,7 +338,7 @@ async function _corrIr(it) {
     await destacarLoteQuandoCarregar(id)
     if (correcaoState.atual !== it.chave) return   // já se foi para outra
     const camada = mapaState.porId?.get(id)
-    if (camada && typeof alternarSelecao === 'function') {
+    if (camada && typeof alternarSelecao === 'function' && !_corrLev()) {
       limparSelecaoCadastral()
       alternarSelecao(camada.feature, camada)
     }
@@ -495,13 +532,14 @@ function _corrPintar() {
   const it = _corrItem()
   const total = correcaoState.itens.length + correcaoState.resolvidas.length
   const feitas = correcaoState.resolvidas.length
-  const nome = correcaoState.origem === 'importacao'
+  const nome = _corrDaImp()
     ? (correcaoState.imp?.bairro || 'Importação') : (confState.oficial || confState.bairro || 'Bairro')
+  const lev = _corrLev()
   p.classList.toggle('recolhido', correcaoState.emFerramenta)
 
   const cabeca = `
     <div class="corr-cab">
-      <div class="corr-tit"><b>Correção cadastral</b>
+      <div class="corr-tit"><b>${lev ? 'Levantamento de 2022' : 'Correção cadastral'}</b>
         <button type="button" class="corr-x" onclick="voltarAFichaDaCorrecao()" title="Fechar e voltar à lista" aria-label="Fechar e voltar à lista">&#10005;</button></div>
     </div><div class="corr-nome">${esc(nome)}</div>`
 
@@ -521,14 +559,15 @@ function _corrPintar() {
     return `<button type="button" class="corr-filtro-btn" aria-pressed="${at}"
       title="${at ? 'Mostrar todas' : 'Mostrar só estas'}" onclick="_corrFiltrar(${jsArg(t)})">${esc(t === 'resolvidas' ? 'Resolvidas' : _corrTipo(t).curto)}<b>${n}</b></button>`
   }
-  const cartoes = Object.entries(contaTipo).map(([t, n]) => cartao(t, n)).join('') + cartao('resolvidas', feitas)
+  const cartoes = Object.entries(contaTipo).map(([t, n]) => cartao(t, n)).join('') + (lev ? '' : cartao('resolvidas', feitas))
 
   p.innerHTML = `${cabeca}
     <div class="corr-progresso">
+      ${lev ? `<span><b>${correcaoState.itens.length}</b> caso${correcaoState.itens.length === 1 ? '' : 's'} nesta importação</span>` : `
       <span>${correcaoState.conferindo ? 'Conferindo de novo…' : `<b>${feitas}</b> de ${total} resolvida${total === 1 ? '' : 's'}`}</span>
-      <div class="corr-barra" role="progressbar" aria-label="Pendências resolvidas" aria-valuemin="0" aria-valuemax="${total || 1}" aria-valuenow="${feitas}"><i style="width:${total ? Math.round(feitas * 100 / total) : 0}%"></i></div>
-      <label class="corr-cores" title="Pinta no mapa as pendências do filtro atual, com uma cor por tipo">
-        <input type="checkbox" id="corr-cores" ${correcaoState.cores ? 'checked' : ''} onchange="_corrAlternarCores(this.checked)"> Cores das pendências no mapa</label>
+      <div class="corr-barra" role="progressbar" aria-label="Pendências resolvidas" aria-valuemin="0" aria-valuemax="${total || 1}" aria-valuenow="${feitas}"><i style="width:${total ? Math.round(feitas * 100 / total) : 0}%"></i></div>`}
+      <label class="corr-cores" title="Pinta no mapa os ${lev ? 'casos' : 'pendências'} do filtro atual, com uma cor por tipo">
+        <input type="checkbox" id="corr-cores" ${correcaoState.cores ? 'checked' : ''} onchange="_corrAlternarCores(this.checked)"> Cores ${lev ? 'dos casos' : 'das pendências'} no mapa</label>
     </div>
     <div class="corr-filtros" aria-label="Tipos de pendência">${cartoes}</div>
     <label class="jt-busca corr-busca" for="corr-busca">
@@ -568,7 +607,21 @@ function _corrPintarLista() {
   if (detalhe) {
     detalhe.hidden = !it
     detalhe.innerHTML = ''
-    if (it) {
+    if (it && it.caso) {
+      // Um caso do levantamento: o que o cadastro diz e o que foi feito.
+      const c = it.caso, tl = it.tipo.slice(4)
+      const novos = (c.novos || []).map(n => `<b>${esc(n.lote)}</b> <span class="mono">${esc(n.inscricao || '')}</span>`).join(' · ')
+      const feito = tl === 'nao' ? esc(c.motivo || '—')
+        : (c.tipo === 'desmembrado' ? `Dividido em ${(c.novos || []).length}: ` : 'Unificados em ') + novos
+          + (tl === 'desfeito' ? ` <span class="imp-sub">(desfeito${c.desfeito_em ? ' em ' + esc(c.desfeito_em) : ''})</span>` : '')
+      detalhe.innerHTML = `<div class="corr-item-topo"><b>Q ${esc(it.quadra ?? '—')} · Lote ${esc(it.lote || '—')}</b></div>
+      <div class="corr-tipo">${c.tipo === 'desmembrado' ? 'Desmembrado' : 'Unificado'} · ${esc(_corrTipo(it.tipo).rotulo)}</div>
+      ${(c.inscricoes || []).length ? `<div class="imp-sub mono">${c.inscricoes.map(esc).join('<br>')}</div>` : ''}
+      <p class="corr-frase">${feito}</p>
+      ${c.cadastro ? `<p class="corr-frase imp-sub">Cadastro: ${esc(c.cadastro)}</p>` : ''}
+      ${c.aviso ? `<p class="corr-dica">${esc(c.aviso)}</p>` : ''}
+      ${tl === 'desm' || tl === 'unif' || tl === 'nao' ? `<div class="corr-acoes"><button type="button" class="btn sm" onclick="${tl === 'nao' ? 'descartarLevantamento' : 'desfazerLevantamento'}(${Number(correcaoState.impId)}, ${jsArg(c.chave)}, ${jsArg(`Q ${it.quadra ?? '—'} · L ${it.lote || '—'}`)})">${tl === 'nao' ? 'Descartar' : 'Desfazer'}</button></div>` : ''}`
+    } else if (it) {
       const t = _corrTipo(it.tipo), sug = _corrSugestoes(it)
       const m2 = v => v == null || !Number.isFinite(Number(v)) ? '—' : `${fmtNum(Number(v))} m²`
       const areas = it.tipo === 'area_diferente' ? `<div class="corr-medidas"><div><span>No desenho</span><b>${m2(it.area_desenho)}</b></div><div><span>No cadastro</span><b>${m2(it.area_cadastro)}</b></div><div><span>Diferença</span><b>${it.diferenca > 0 ? '+' : ''}${m2(it.diferenca)}</b></div></div>` : ''
@@ -596,7 +649,7 @@ function _corrIsolar() {
   _corrSoltar()
   const mapa = mapaState.obj
   if (!mapa) return
-  const imp = correcaoState.origem === 'importacao'
+  const imp = _corrDaImp()
   const nome = imp ? correcaoState.imp?.bairro : correcaoState.bairro
   const f = typeof contornoState !== 'undefined' ? contornoState.dados?.features?.find(x => x.properties?.nome === nome) : null
   let aneis = null

@@ -646,7 +646,6 @@ function _htmlLevantamento(i) {
     return `<button type="button" class="imp-kpi conf-kpi${n ? '' : ' zero'}${ativo ? ' ativo' : ''}" style="--kpi-cor:${LEV_TIPOS[t].cor}" aria-pressed="${ativo}" ${n || ativo ? '' : 'disabled'}
       title="${ativo ? 'Mostrar todos' : 'Mostrar só estes'}" onclick="_levFiltrar('${t}')"><small><i></i>${LEV_TIPOS[t].rotulo}</small><b>${Number(n).toLocaleString('pt-BR')}</b></button>`
   }
-  const num = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0
   const linha = it => {
     const t = _levTipo(it)
     const lotes = (it.lotes || []).join(' + ')
@@ -664,12 +663,13 @@ function _htmlLevantamento(i) {
       <td><span class="conf-cor" style="background:${LEV_TIPOS[t].cor}"></span> ${it.tipo === 'desmembrado' ? 'Desmembrado' : 'Unificado'}</td>
       <td>${esc(rot)}<div class="imp-sub mono">${(it.inscricoes || []).map(esc).join('<br>')}</div></td>
       <td class="jt-quebra">${oQue}${detalhe ? `<div>${detalhe}</div>` : ''}</td>
-      <td class="jt-acoes">${alvo ? `<button type="button" class="btn sm" onclick="irAoLoteDaImportacao(${Number(alvo)})">Ver no mapa</button>` : ''}
-        ${t === 'desm' || t === 'unif' ? `<button type="button" class="btn sm" onclick="desfazerLevantamento(${Number(i.id)}, ${jsArg(it.chave)}, ${jsArg(rot)})">Desfazer</button>` : ''}</td></tr>`
+      <td class="jt-acoes">${alvo ? `<button type="button" class="btn sm" onclick="abrirCorrecao('levantamento', ${jsArg(it.chave)})">Ver no mapa</button>` : ''}
+        ${t === 'desm' || t === 'unif' ? `<button type="button" class="btn sm" onclick="desfazerLevantamento(${Number(i.id)}, ${jsArg(it.chave)}, ${jsArg(rot)})">Desfazer</button>` : ''}
+        ${t === 'nao' ? `<button type="button" class="btn sm" onclick="descartarLevantamento(${Number(i.id)}, ${jsArg(it.chave)}, ${jsArg(rot)})">Descartar</button>` : ''}</td></tr>`
   }
   const ordem = Object.keys(LEV_TIPOS)
   const visiveis = itens.filter(x => !impState.levFiltro || _levTipo(x) === impState.levFiltro)
-    .sort((a, b) => ordem.indexOf(_levTipo(a)) - ordem.indexOf(_levTipo(b)) || num(a.quadra) - num(b.quadra) || num(a.lotes?.[0]) - num(b.lotes?.[0]))
+    .sort((a, b) => _corrPorQuadraELote({ quadra: a.quadra, lote: a.lotes?.[0] }, { quadra: b.quadra, lote: b.lotes?.[0] }))
 
   return {
     topo: `
@@ -681,6 +681,7 @@ function _htmlLevantamento(i) {
     corpo: `
       ${impState.levFiltro ? `<div class="conf-filtro-aviso">Mostrando só <b>${esc(LEV_TIPOS[impState.levFiltro].rotulo)}</b>. <a href="#" onclick="event.preventDefault(); _levFiltrar(null)">Mostrar todos</a></div>` : ''}
       <section class="jt-grupo">
+        <div class="jt-grupo-tit"><span class="badge bd-in">${visiveis.length}</span> <b>Casos do levantamento</b></div>
         <table class="imp-tabela jt-tabela">
           <thead><tr><th>Caso</th><th>Quadra · Lote</th><th>O que foi feito</th><th></th></tr></thead>
           <tbody>${visiveis.map(linha).join('')}</tbody></table>
@@ -700,16 +701,45 @@ function desfazerLevantamento(impId, chave, rotulo) {
     titulo: 'Desfazer o caso do levantamento',
     mensagem: `${rotulo} volta a ser como veio na importação: o lote de antes fica ativo de novo e o que o levantamento criou sai. Nada vai para o Histórico.`,
     textoBtn: 'Desfazer',
-    onConfirm: async () => {
-      try {
-        const d = await _impPedir(`/api/importacoes/${Number(impId)}/levantamento/desfazer`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chave }) })
-        toast(d.message, 'ok')
-        if (typeof recarregarLotesDoMapa === 'function') recarregarLotesDoMapa()
-        abrirImportacao(impId)
-      } catch (e) { toast(e.message, 'err') }
-    },
+    onConfirm: () => _levAcao(impId, chave, 'desfazer', true),
   })
+}
+
+/** Descarta um caso não aplicado: sai da lista, e nenhum lote muda. */
+function descartarLevantamento(impId, chave, rotulo) {
+  confirmarAcao({
+    titulo: 'Descartar o caso do levantamento',
+    mensagem: `${rotulo} sai da lista do levantamento. Nenhum lote é alterado: os lotes continuam como estão no sistema.`,
+    textoBtn: 'Descartar',
+    onConfirm: () => _levAcao(impId, chave, 'descartar', false),
+  })
+}
+
+/** Manda desfazer ou descartar e refaz a lista onde ela estiver: no painel lateral ou na ficha. */
+async function _levAcao(impId, chave, acao, mexeuNoMapa) {
+  try {
+    const d = await _impPedir(`/api/importacoes/${Number(impId)}/levantamento/${acao}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chave }) })
+    toast(d.message, 'ok')
+    if (mexeuNoMapa && typeof recarregarLotesDoMapa === 'function') recarregarLotesDoMapa()
+    // Do painel lateral: a lista se refaz ali, e o mapa continua onde estava.
+    if (typeof correcaoState !== 'undefined' && correcaoState.aberto && correcaoState.origem === 'levantamento') {
+      const pos = Math.max(0, _corrVisiveis().findIndex(it => it.chave === correcaoState.atual))
+      const i = await _impPedir('/api/importacoes/' + Number(impId))
+      impState.atual = correcaoState.imp = i
+      correcaoState.itens = _corrMontar()
+      correcaoState.posicoes.clear()
+      // O caso descartado saiu: vai para o que ficou no lugar dele.
+      const vis = _corrVisiveis()
+      const it = _corrItem() || vis[Math.min(pos, vis.length - 1)]
+      correcaoState.atual = it?.chave ?? null
+      _corrPintar()
+      _corrRepintar()
+      if (it) _corrIr(it)
+      return
+    }
+    abrirImportacao(impId)
+  } catch (e) { toast(e.message, 'err') }
 }
 
 /**

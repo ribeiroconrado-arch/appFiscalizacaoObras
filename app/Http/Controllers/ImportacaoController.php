@@ -491,6 +491,21 @@ class ImportacaoController extends Controller
         return response()->json(['message' => $msg]);
     }
 
+    /** POST /api/importacoes/{importacao}/levantamento/descartar — tira da aba um caso não aplicado. */
+    public function descartarLevantamento(Request $r, ImportacaoLote $importacao, \App\Services\LevantamentoDaImportacao $svc): JsonResponse
+    {
+        if ($e = $this->exigirCuradorDe($r, $importacao)) { return $e; }
+        $d = $r->validate(['chave' => ['required', 'string', 'max:2000']]);
+
+        try {
+            $msg = $svc->descartar($importacao, $d['chave']);
+        } catch (RuntimeException $ex) {
+            return $this->recusa($ex);
+        }
+
+        return response()->json(['message' => $msg]);
+    }
+
     /** @return array<string,mixed> */
     private function resumo(ImportacaoLote $i): array
     {

@@ -159,6 +159,14 @@ try {
     $ok(DB::table('auditoria')->where('id', '>', $auditoriaAntes)->whereIn('tabela', ['lotes', 'lotes_em_revisao'])->doesntExist(), 'Desfazer deixou registro na auditoria.');
     try { $svc->desfazer($impP, 'desmembrado|PRIMAVERA II|13|4'); $ok(false, 'Desfez duas vezes.'); } catch (RuntimeException $e) { /* esperado */ }
 
+    // ── descartar um não aplicado: sai da aba, nenhum lote muda ──
+    $impE = App\Models\ImportacaoLote::find($imps['PQ. ELDORADO']['id']);
+    $ativosAntes = DB::table('lotes')->where('situacao', 'ativo')->count();
+    try { $svc->descartar($impE, 'unificado|PQ. ELDORADO|90|01+PQ. ELDORADO|90|02'); $ok(false, 'Descartou caso aplicado.'); } catch (RuntimeException $e) { /* esperado */ }
+    $svc->descartar($impE, 'desmembrado|PQ. ELDORADO|37|13');
+    $ok(! isset($aba('PQ. ELDORADO')['desmembrado|PQ. ELDORADO|37|13']), 'O descartado continua na aba.');
+    $ok(DB::table('lotes')->where('situacao', 'ativo')->count() === $ativosAntes, 'Descartar mexeu em lote.');
+
     // ── aplicar de novo: o desfeito não volta, o aplicado continua ──
     $antes = DB::table('lotes')->count();
     Artisan::call('gis:desmembramentos-levantamento', ['arquivo' => $arquivo, '--planilha' => $csv, '--aplicar' => true]);
@@ -167,6 +175,7 @@ try {
     $prim = $aba('PRIMAVERA II');
     $ok($prim['desmembrado|PRIMAVERA II|71|9']['situacao'] === 'aplicado' && $prim['desmembrado|PRIMAVERA II|13|4']['situacao'] === 'desfeito',
         'Segunda aplicação mudou o registro do que já foi tratado.');
+    $ok(! isset($aba('PQ. ELDORADO')['desmembrado|PQ. ELDORADO|37|13']), 'Segunda aplicação trouxe de volta o descartado.');
 
     echo "OK: simulação, revisão e publicado, sem trilha, aba na importação, desfazer e reaplicação.\n";
 } finally {
