@@ -124,6 +124,53 @@ const HC_ACOES = {
   excluiu:             { rotulo: 'Exclusão',        cls: 'perigosa' },
 }
 
+// ── A LARGURA DA MESA NO HISTÓRICO ──
+// Por padrão ela cresce com a tela (CSS: body.mesa-historico); a alça na borda
+// direita estica até 70% da janela, e a largura escolhida fica guardada neste
+// navegador. Duplo clique na alça volta ao padrão.
+const HC_LARGURA_CHAVE = 'hc-largura-mesa'
+
+function _hcAplicarLargura(px) {
+  if (px) document.body.style.setProperty('--mesa-hist-w', px + 'px')
+  else document.body.style.removeProperty('--mesa-hist-w')
+}
+try { const v = Number(localStorage.getItem(HC_LARGURA_CHAVE)); if (v) _hcAplicarLargura(v) } catch { /* sem armazenamento */ }
+
+/** Põe a alça na mesa, uma vez só. @param {HTMLElement} mesa */
+function montarAlcaDaMesa(mesa) {
+  if (!mesa || mesa.querySelector('.mesa-alca')) return
+  const alca = document.createElement('div')
+  alca.className = 'mesa-alca'
+  alca.title = 'Arraste para alargar o histórico · duplo clique volta ao padrão'
+  alca.setAttribute('role', 'separator')
+  alca.setAttribute('aria-orientation', 'vertical')
+  mesa.appendChild(alca)
+
+  alca.addEventListener('pointerdown', e => {
+    e.preventDefault()
+    alca.setPointerCapture(e.pointerId)
+    const esquerda = mesa.getBoundingClientRect().left
+    const mover = ev => {
+      const w = Math.round(Math.min(Math.max(ev.clientX - esquerda, 348), window.innerWidth * 0.7))
+      _hcAplicarLargura(w)
+    }
+    const soltar = () => {
+      alca.removeEventListener('pointermove', mover)
+      alca.removeEventListener('pointerup', soltar)
+      alca.removeEventListener('pointercancel', soltar)
+      const w = parseInt(document.body.style.getPropertyValue('--mesa-hist-w'), 10)
+      try { if (w) localStorage.setItem(HC_LARGURA_CHAVE, String(w)) } catch { /* sem armazenamento */ }
+    }
+    alca.addEventListener('pointermove', mover)
+    alca.addEventListener('pointerup', soltar)
+    alca.addEventListener('pointercancel', soltar)
+  })
+  alca.addEventListener('dblclick', () => {
+    _hcAplicarLargura(null)
+    try { localStorage.removeItem(HC_LARGURA_CHAVE) } catch { /* sem armazenamento */ }
+  })
+}
+
 function hcValor(v) {
   if (v === null || v === undefined || v === '') { return '—' }
   return String(v)

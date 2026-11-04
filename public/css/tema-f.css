@@ -3183,7 +3183,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   /* `mesa-larga`, e não `com-mesa`: o deslocamento existe para não cobrir a
      COLUNA. Com a mesa encolhida para a régua não há coluna a evitar, e
      deslocar mandaria a barra para fora do centro sem motivo. */
-  body.mesa-larga .des-barra{left:calc(50% + 170px)}
+  body.mesa-larga .des-barra{left:calc(50% + var(--mesa-w, 348px) / 2 - 4px)}
 }
 /* No celular ela vira uma faixa colada ao topo do mapa: não há largura para
    uma pílula centralizada com cinco controles. */
@@ -3212,7 +3212,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   position:static;transform:none;top:auto;left:auto;right:auto;max-width:100%}
 @media (min-width:1000px){
   /* Com a mesa larga aberta, centraliza no que sobra do mapa (ver .des-barra). */
-  body.mesa-larga .mapa-barras{left:calc(50% + 170px);max-width:calc(100% - 460px)}
+  body.mesa-larga .mapa-barras{left:calc(50% + var(--mesa-w, 348px) / 2 - 4px);max-width:calc(100% - var(--mesa-w, 348px) - 112px)}
 }
 /* No celular a faixa ocupa a largura, desce para baixo do chip de contagem e
    para antes da coluna de controles da direita (34px + margens). */
@@ -3609,7 +3609,7 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
    lotes vive escondido. Ele se desloca o quanto a mesa estiver ocupando. */
 @media (min-width:1000px){
   body.com-mesa .chip-estado{left:102px}    /* 12 + 22 do título + 56 da régua + 12 */
-  body.mesa-larga .chip-estado{left:372px}  /* 12 + 348 da mesa + 12 */
+  body.mesa-larga .chip-estado{left:calc(var(--mesa-w, 348px) + 24px)}  /* 12 + a mesa + 12 */
 }
 
 /* Carimbo de procedência na ficha do documento. Menor e mais apagado que o
@@ -3986,8 +3986,16 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
   text-transform:uppercase; letter-spacing:.12em; white-space:nowrap; user-select:none;
 }
 @media (min-width:600px){
-  .cad-mesa{width:348px}
+  .cad-mesa{width:var(--mesa-w, 348px)}
   .cad-mesa.so-regua{width:78px}
+  /* HISTÓRICO: lista de leitura, a mesa cresce com a tela e estica pela alça
+     da borda (historico-cadastro.js). As outras ferramentas ficam nos 348px.
+     --mesa-w também desloca o que se posiciona ao lado da mesa. */
+  body.mesa-historico{--mesa-w:var(--mesa-hist-w, clamp(348px, 30vw, 560px))}
+  .mesa-alca{display:none}
+  body.mesa-historico .cad-mesa:not(.so-regua) .mesa-alca{display:block;position:absolute;top:0;right:0;bottom:0;
+    width:8px;cursor:ew-resize;z-index:2;touch-action:none}
+  body.mesa-historico .mesa-alca:hover{background:color-mix(in srgb, var(--gd) 22%, transparent)}
 }
 
 /* ── ÍCONES 15% MAIORES nas duas réguas (21px → 24px) ── */

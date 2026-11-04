@@ -411,6 +411,10 @@ function pintarMesaCadastral() {
   // encolhida, deslocar 170px a jogaria para fora do centro sem motivo.
   document.body.classList.add('com-mesa')
   document.body.classList.toggle('mesa-larga', emFerramenta && !tracando)
+  // O Histórico é lista de leitura: a mesa cresce com a tela e se estica pela
+  // alça da borda (historico-cadastro.js). As outras ferramentas ficam nos 348px.
+  document.body.classList.toggle('mesa-historico', cadModo === 'historico' && emFerramenta && !tracando)
+  if (typeof montarAlcaDaMesa === 'function') montarAlcaDaMesa(mesa)
 
   // O painel do modo corrente, e só ele. São TRÊS agora: sem isto, sair de
   // "corrigir quadra" para "desenhar lote" deixava os dois formulários na
@@ -790,6 +794,7 @@ function fecharMesaCadastral() {
   mesa.hidden = true
   document.body.classList.remove('com-mesa')
   document.body.classList.remove('mesa-larga')
+  document.body.classList.remove('mesa-historico')
 
   // Fechada a mesa, o clique no lote volta a ser o balão. Deixar a marcação
   // armada por baixo faria o mapa continuar marcando lotes sem nada na tela

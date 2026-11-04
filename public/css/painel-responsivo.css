@@ -98,9 +98,9 @@
   .cad-mesa,.desm-mesa:not([hidden]){left:calc(var(--menu-largura) + 12px)}
   .chip-estado{left:calc(var(--menu-largura) + 12px);max-width:calc(100vw - var(--menu-largura) - 24px)}
   body.com-mesa .chip-estado,body.com-base .chip-estado{left:calc(var(--menu-largura) + 102px)}
-  body.mesa-larga .chip-estado{left:calc(var(--menu-largura) + 372px)}
+  body.mesa-larga .chip-estado{left:calc(var(--menu-largura) + var(--mesa-w, 348px) + 24px)}
   .des-barra,.inativo-sair,.cad-barra{left:calc(50% + var(--menu-largura) / 2)}
-  body.mesa-larga .des-barra{left:calc(50% + var(--menu-largura) / 2 + 170px)}
+  body.mesa-larga .des-barra{left:calc(50% + var(--menu-largura) / 2 + var(--mesa-w, 348px) / 2 - 4px)}
 }
 
 /* ☰ RECOLHER O MENU LATERAL — só ícones (alternarMenuLateral, ui.js).
