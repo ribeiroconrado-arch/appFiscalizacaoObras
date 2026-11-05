@@ -128,13 +128,16 @@ function _perLigarDica(mapa) {
   })
 }
 
-// O mapa nasce depois deste arquivo: espera ele estar pronto.
+// O mapa nasce no carregamento da página, mas só fica PRONTO (centro e zoom)
+// quando a aba Mapa é aberta — e o app abre no Painel. Antes esperava 30 s e
+// desistia: quem demorava mais no Painel via o mapa sem o perímetro (05/11/2026).
+// `whenReady` do Leaflet espera o tempo que for.
 document.addEventListener('DOMContentLoaded', () => {
-  let tentativas = 0
   const t = setInterval(() => {
-    if (mapaState?.obj?._loaded) { clearInterval(t); carregarPerimetroDoMapa(); _perLigarDica(mapaState.obj) }
-    else if (++tentativas > 60) clearInterval(t)
-  }, 500)
+    if (!mapaState?.obj) return
+    clearInterval(t)
+    mapaState.obj.whenReady(() => { carregarPerimetroDoMapa(); _perLigarDica(mapaState.obj) })
+  }, 200)
 })
 
 // ── NA LISTA DE IMPORTAÇÕES ─────────────────────────────────────
