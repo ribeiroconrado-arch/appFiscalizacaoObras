@@ -52,6 +52,7 @@ class DesmembramentosDoLevantamento extends Command
     protected $signature = 'gis:desmembramentos-levantamento
                             {arquivo : GeoJSON do conversor (levantamento-2022.geojson)}
                             {--aplicar : aplica os casos que o cadastro confirma}
+                            {--redesenhar : redesenha as partes dos desmembramentos JÁ aplicados pelas áreas do cadastro (com --aplicar grava; sem, só simula)}
                             {--planilha= : onde escrever a planilha-relatório (padrão: ao lado do arquivo)}
                             {--tolerancia=20 : diferença de área, em %, acima da qual o caso sai com aviso}';
 
@@ -76,6 +77,9 @@ class DesmembramentosDoLevantamento extends Command
         $guardados = LevantamentoDaImportacao::situacoes();
 
         [$desmembrados, $unificados] = $this->lerArquivo($arquivo);
+        if ($this->option('redesenhar')) {
+            return $this->redesenhar($desm, $desmembrados, $aplicar);
+        }
         $this->info(sprintf('Arquivo: %d desmembrados, %d unificados.', count($desmembrados), count($unificados)));
 
         $casos = [];
@@ -194,21 +198,28 @@ class DesmembramentosDoLevantamento extends Command
         if (in_array(null, $finais, true)) {
             return $nao(sprintf('O cadastro tem %d inscrição(ões) ativa(s) livre(s) para %d partes.', count($livres), count($m['partes'])));
         }
-        $partes = $this->partesParaOServico($m['partes'], $finais);
+        // O levantamento dá a direção e a ordem; o corte sai da área do cadastro.
+        $faixas = $this->faixas($lote, $m['partes'], array_map(fn ($f) => $livres[$f] ?? null, $finais));
+        if (isset($faixas['motivo'])) {
+            return $nao($faixas['motivo']);
+        }
+        $partes = $this->partesParaOServico($faixas['aneis'], $finais);
         if ($erro = $svc->impedimento(null, $lote, $partes, false, direto: true)) {
             return $nao($erro);
         }
 
         $zero = in_array(0, $finais, true);
-        $longe = [];
         foreach ($m['partes'] as $i => $p) {
             $insc = $identidade['prefixo'] . sprintf('%03d', $finais[$i]);
             $c['previsto'][] = InscricaoImobiliaria::apelidoDesmembrado($insc, $finais[$i], $zero) . ' (' . InscricaoImobiliaria::formatar($insc) . ')';
-            $area = $livres[$finais[$i]];
-            if ($area && 100 * abs($p['area'] - $area) / $area > (float) $this->option('tolerancia')) $longe[] = sprintf('.%03d', $finais[$i]);
         }
-        if ($longe) {
-            $c['aviso'] = 'Área longe da do cadastro em ' . implode(', ', $longe) . ': vai aparecer como divergência na conferência.';
+        // As partes seguem a proporção do cadastro; se o LOTE importado não tem
+        // a soma das áreas do cadastro, cada parte vai sair diferente dele.
+        $somaCadastro = array_sum(array_map(fn ($f) => (float) ($livres[$f] ?? 0), $finais));
+        $areaLote = (float) $lote->area_gis_m2;
+        if ($somaCadastro > 0 && $areaLote > 0 && 100 * abs($areaLote - $somaCadastro) / $somaCadastro > (float) $this->option('tolerancia')) {
+            $c['aviso'] = sprintf('O lote tem %s m² e as partes no cadastro somam %s m²: vai aparecer como divergência na conferência.',
+                $this->num($areaLote), $this->num($somaCadastro));
         }
 
         return ['situacao' => 'pronto', '_lote' => $lote, '_partes' => $partes] + $c;
@@ -314,6 +325,90 @@ class DesmembramentosDoLevantamento extends Command
         return $c;
     }
 
+    /**
+     * --redesenhar: as partes dos desmembramentos JÁ aplicados, cortadas de
+     * novo pelas áreas do cadastro (RecorteEmFaixas). Antes de 04/11/2026 o
+     * corte seguia a linha do levantamento, que vem deslocada do lote
+     * importado. Só mexe na parte que ninguém tocou depois (sem registro na
+     * auditoria, ativa, sem outro ato), e sem trilha, como a aplicação.
+     *
+     * @param  array<string,array>  $maes  as do arquivo, por chave
+     */
+    private function redesenhar(DesmembramentoDeLote $desm, array $maes, bool $aplicar): int
+    {
+        $repo = app(\App\Repositories\LoteRepository::class);
+        $contas = [];
+        $linhas = [];
+        foreach (\App\Models\ImportacaoLote::whereNotNull('levantamento')->where('status', '<>', 'excluida')->get() as $imp) {
+            foreach ($imp->levantamento['itens'] ?? [] as $it) {
+                if ($it['tipo'] !== 'desmembrado' || $it['situacao'] !== 'aplicado') continue;
+                $res = $this->redesenharCaso($desm, $repo, $it, $maes[substr($it['chave'], strlen('desmembrado|'))] ?? null, $aplicar);
+                $contas[$res[0]] = ($contas[$res[0]] ?? 0) + 1;
+                if ($res[0] !== 'já certo') {
+                    $linhas[] = [$it['bairro'], $it['quadra'], implode(' + ', $it['lotes']), $res[0], $res[1]];
+                }
+            }
+        }
+        if ($linhas) $this->table(['Bairro', 'Quadra', 'Lote', 'Situação', 'Detalhe'], $linhas);
+        $this->table(['Situação', 'Casos'], array_map(fn ($k, $n) => [$k, $n], array_keys($contas), $contas));
+        $this->line($aplicar ? 'Redesenho gravado, sem histórico.' : 'Nada foi gravado. Para gravar: --redesenhar --aplicar');
+
+        return self::SUCCESS;
+    }
+
+    /** @return array{0:string, 1:string} situação e detalhe */
+    private function redesenharCaso(DesmembramentoDeLote $desm, \App\Repositories\LoteRepository $repo, array $it, ?array $m, bool $aplicar): array
+    {
+        $ids = array_map('intval', array_column($it['novos'] ?? [], 'lote_id'));
+        $mae = Lote::find((int) ($it['lote_ids'][0] ?? 0));
+        if (! $m || ! $mae || count($ids) !== count($m['partes'])) {
+            return ['pulado', 'O caso não está no arquivo ou não guardou os lotes.'];
+        }
+        $filhos = Lote::whereIn('id', $ids)->get()->keyBy('id');
+        if ($filhos->count() !== count($ids) || $filhos->contains(fn ($l) => $l->situacao !== 'ativo')) {
+            return ['pulado', 'Alguma parte já não está ativa.'];
+        }
+        if (DB::table('auditoria')->whereIn('registro_id', $ids)->whereIn('tabela', ['lotes', 'lotes_em_revisao'])->exists()) {
+            return ['pulado', 'Alguma parte foi alterada depois do levantamento.'];
+        }
+        if (DB::table('lote_ato_lotes')->whereIn('lote_id', $ids)->where('ato_id', '<>', (int) $it['ato_id'])->exists()) {
+            return ['pulado', 'Alguma parte entrou em outro desmembramento ou unificação.'];
+        }
+
+        // As áreas do cadastro de cada parte, pelo final da inscrição dela.
+        $familia = $this->cadastro($desm->identidade($mae)['prefixo']);
+        $prefixo = $desm->identidade($mae)['prefixo'];
+        $areas = array_map(fn ($id) => $familia[$prefixo . sprintf('%03d', (int) $filhos[$id]->desmembramento)]['area'] ?? null, $ids);
+        $anelMae = $repo->anel($mae->id);
+        $r = \App\Cadastro\RecorteEmFaixas::dividir($anelMae ?? [], array_map(fn ($p) => $p['geometry']['coordinates'][0] ?? [], $m['partes']), $areas);
+        if (isset($r['motivo'])) {
+            return ['pulado', $r['motivo']];
+        }
+
+        $novos = [];
+        foreach ($ids as $k => $id) {
+            $gj = json_encode(['type' => 'Polygon', 'coordinates' => [$r['aneis'][$k]]]);
+            if (! $repo->ehValido($gj)) return ['pulado', 'A divisão saiu com contorno inválido.'];
+            $novos[$id] = [$gj, $repo->areaDoGeoJson($gj)];
+        }
+        $muda = collect($novos)->contains(fn ($n, $id) => abs($n[1] - (float) $filhos[$id]->area_gis_m2) > 0.5);
+        if (! $muda) {
+            return ['já certo', ''];
+        }
+        $antes = implode(' + ', array_map(fn ($id) => $this->num((float) $filhos[$id]->area_gis_m2), $ids));
+        $depois = implode(' + ', array_map(fn ($n) => $this->num($n[1]), $novos));
+        if ($aplicar) {
+            DB::transaction(function () use ($repo, $novos, $it) {
+                foreach ($novos as $id => [$gj]) {
+                    $area = $repo->trocarGeometriaSemTrilha($id, $gj);
+                    DB::table('lote_ato_lotes')->where('ato_id', (int) $it['ato_id'])->where('lote_id', $id)->update(['area_m2' => $area]);
+                }
+            });
+        }
+
+        return [$aplicar ? 'redesenhado' : 'a redesenhar', "{$antes} m² → {$depois} m²"];
+    }
+
     // ── apoio ────────────────────────────────────────────────────
 
     /**
@@ -389,16 +484,44 @@ class DesmembramentosDoLevantamento extends Command
     /**
      * No formato do serviço, TODAS as partes desenhadas (sem derivar a última).
      *
-     * O conversor já entrega a partição exata (a última parte é "mãe menos as
-     * outras", feita no GEOS). Derivar de novo aqui passaria pelo
-     * `ST_Difference` do MySQL em 4326, que neste arquivo devolveu um fiapo de
-     * 0,00001 m² no lugar de um resto de 266 m² — com as N partes, o serviço
-     * só mede, e mede no plano (GeometriaPlana).
+     * As faixas já são a partição exata do lote (RecorteEmFaixas). Derivar de
+     * novo aqui passaria pelo `ST_Difference` do MySQL em 4326, que neste
+     * arquivo devolveu um fiapo de 0,00001 m² no lugar de um resto de 266 m² —
+     * com as N partes, o serviço só mede, e mede no plano (GeometriaPlana).
+     *
+     * @param  list<list<array{0:float,1:float}>>  $aneis
      */
-    private function partesParaOServico(array $partes, array $sufixos): array
+    private function partesParaOServico(array $aneis, array $sufixos): array
     {
-        return array_map(fn ($p, $i) => ['geometry' => $p['geometry'], 'desmembramento' => $sufixos[$i] ?? null],
-            $partes, array_keys($partes));
+        return array_map(fn ($anel, $i) => ['geometry' => ['type' => 'Polygon', 'coordinates' => [$anel]], 'desmembramento' => $sufixos[$i] ?? null],
+            $aneis, array_keys($aneis));
+    }
+
+    /**
+     * O lote do sistema dividido em faixas com as áreas do cadastro, na direção
+     * das partes do levantamento (RecorteEmFaixas, decisão de 04/11/2026).
+     *
+     * @param  list<array<string,mixed>>  $partes  as do arquivo, com 'geometry'
+     * @param  list<float|null>           $areas   a do cadastro de cada parte
+     * @return array{aneis?: list<list<array{0:float,1:float}>>, motivo?: string}
+     */
+    private function faixas(Lote $lote, array $partes, array $areas): array
+    {
+        $anel = app(\App\Repositories\LoteRepository::class)->anel($lote->id);
+        if (! $anel) {
+            return ['motivo' => 'Não deu para ler o desenho do lote no sistema.'];
+        }
+        $r = \App\Cadastro\RecorteEmFaixas::dividir($anel, array_map(fn ($p) => $p['geometry']['coordinates'][0] ?? [], $partes), $areas);
+        if (isset($r['aneis'])) {
+            $repo = app(\App\Repositories\LoteRepository::class);
+            foreach ($r['aneis'] as $a) {
+                if (! $repo->ehValido(json_encode(['type' => 'Polygon', 'coordinates' => [$a]]))) {
+                    return ['motivo' => 'A divisão em faixas saiu com contorno inválido: o corte tem de ser feito à mão.'];
+                }
+            }
+        }
+
+        return $r;
     }
 
     /** IoU entre a mãe da produção e a do arquivo, medido no plano. */

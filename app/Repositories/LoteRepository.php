@@ -863,4 +863,20 @@ class LoteRepository
 
         return (int) DB::getPdo()->lastInsertId();
     }
+
+    /**
+     * Troca o desenho de um lote, com a área de grade dele, SEM auditoria —
+     * quem chama responde por isso. Hoje é só a correção da carga inicial pelo
+     * levantamento de 2022 (gis:desmembramentos-levantamento --redesenhar).
+     *
+     * @return float a área nova, em m² de grade
+     */
+    public function trocarGeometriaSemTrilha(int $id, string $geojson): float
+    {
+        $area = round($this->areaDoGeoJson($geojson), 2);
+        DB::update('UPDATE lotes SET geom = ST_GeomFromGeoJSON(?, 1, 4326), area_gis_m2 = ?, updated_at = ? WHERE id = ?',
+            [$geojson, $area, now(), $id]);
+
+        return $area;
+    }
 }

@@ -128,6 +128,13 @@ try {
         $ok(abs(Lote::whereIn('id', $filhos)->sum('area_gis_m2') - array_sum($casos[$c]['partes'])) < 1.0, "{$c}: as partes não somam a mãe.");
         $ok(Lote::whereIn('id', $filhos)->where('em_revisao', 1)->where('importacao_id', $imps['PRIMAVERA II']['id'])
             ->where('fonte', 'Levantamento cadastral de 2022')->count() === $filhos->count(), "{$c}: as partes não ficaram na importação em revisão.");
+        // O corte sai da área do cadastro, não da linha do levantamento.
+        $alvos = $c === 'PRIMAVERA II|71|9' ? [225.0, 225.0] : array_map(fn ($a) => round($a * 1.003, 2), $casos[$c]['partes']);
+        $areasFilhos = Lote::whereIn('id', $filhos)->orderBy('desmembramento')->pluck('area_gis_m2')->map(fn ($v) => (float) $v)->all();
+        $somaAlvo = array_sum($alvos); $somaF = array_sum($areasFilhos);
+        foreach ($areasFilhos as $k => $af) {
+            $ok(abs($af / $somaF - $alvos[$k] / $somaAlvo) < 0.006, "{$c}: a parte {$k} não tem a proporção do cadastro (" . json_encode($areasFilhos) . ').');
+        }
         $ato = DB::table('lote_atos')->whereIn('id', DB::table('lote_ato_lotes')->where('lote_id', $pai->id)->pluck('ato_id'))->first();
         $ok($ato && $ato->observacao === 'Levantamento cadastral de 2022' && $ato->user_id === null, "{$c}: a sucessão tem autor ou outra observação.");
     }
@@ -148,6 +155,26 @@ try {
     $ok(($eld['desmembrado|PQ. ELDORADO|37|13']['situacao'] ?? null) === 'nao_aplicado', 'Caso não aplicado fora da aba.');
     $it = $aba('PRIMAVERA II')['desmembrado|PRIMAVERA II|13|4'];
     $ok($it['situacao'] === 'aplicado' && count($it['novos']) === 2 && $it['ato_id'], 'Desmembramento aplicado sem os lotes novos ou o ato.');
+
+    // ── --redesenhar: uma parte aplicada torta (pela linha do levantamento) volta às áreas do cadastro ──
+    $it71 = $aba('PRIMAVERA II')['desmembrado|PRIMAVERA II|71|9'];
+    $ids71 = array_column($it71['novos'], 'lote_id');
+    // Torto de propósito: 1/3 e 2/3 do lote, como se o corte tivesse seguido uma linha deslocada.
+    $torta = App\Cadastro\RecorteEmFaixas::dividir($repo->anel($casos['PRIMAVERA II|71|9']['id']),
+        array_map(fn ($f) => $f['geometry']['coordinates'][0], $partesGeo['PRIMAVERA II|71|9']), [150.0, 300.0]);
+    $ok(isset($torta['aneis']), 'Não deu para montar a divisão torta do teste: ' . ($torta['motivo'] ?? ''));
+    foreach ($ids71 as $k => $id) {
+        $repo->trocarGeometriaSemTrilha($id, json_encode(['type' => 'Polygon', 'coordinates' => [$torta['aneis'][$k]]]));
+    }
+    $torto = Lote::whereIn('id', $ids71)->pluck('area_gis_m2')->map(fn ($v) => (float) $v)->all();
+    Artisan::call('gis:desmembramentos-levantamento', ['arquivo' => $arquivo, '--redesenhar' => true]);
+    $saidaR = Artisan::output();
+    $ok(Lote::whereIn('id', $ids71)->pluck('area_gis_m2')->map(fn ($v) => (float) $v)->all() == $torto, 'O --redesenhar sem --aplicar gravou.');
+    $ok(str_contains($saidaR, 'a redesenhar'), "O --redesenhar não achou a parte torta:\n" . $saidaR . json_encode($torto));
+    Artisan::call('gis:desmembramentos-levantamento', ['arquivo' => $arquivo, '--redesenhar' => true, '--aplicar' => true]);
+    $certo = Lote::whereIn('id', $ids71)->pluck('area_gis_m2')->map(fn ($v) => (float) $v)->all();
+    $ok(abs($certo[0] - $certo[1]) < 0.01 * $certo[0], 'O --redesenhar não deixou as metades iguais: ' . json_encode([$torto, $certo]));
+    $ok(DB::table('auditoria')->where('id', '>', $auditoriaAntes)->whereIn('tabela', ['lotes', 'lotes_em_revisao'])->doesntExist(), 'O --redesenhar deixou trilha.');
 
     // ── desfazer pela aba: a mãe volta, as partes e a sucessão saem, sem trilha ──
     $impP = App\Models\ImportacaoLote::find($imps['PRIMAVERA II']['id']);
