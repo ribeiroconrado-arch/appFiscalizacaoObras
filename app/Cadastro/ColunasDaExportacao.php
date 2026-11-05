@@ -106,7 +106,10 @@ final class ColunasDaExportacao
      * a repetição (ver `CarregarCadastro`).
      */
     public const PROPRIETARIO = [
-        'nome'      => ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Contribuinte', 'Nome'],
+        // "Nome" antes de "Contribuinte": no relatório "Imobiliário Urbano" a
+        // coluna Contribuinte traz o CÓDIGO (9 dígitos) e o nome vem em "Nome"
+        // (04/11/2026). Ver também `proprietario()`: número não é nome.
+        'nome'      => ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Nome', 'Contribuinte'],
         'documento' => ['CPF/CNPJ do Proprietário', 'CPF/CNPJ', 'CPF/CNPJ do Contribuinte', 'CPF', 'CNPJ'],
         'endereco'  => ['Endereço de Correspondência', 'Endereço do Proprietário', 'Endereço do Contribuinte'],
     ];
@@ -122,7 +125,8 @@ final class ColunasDaExportacao
         $campo = function (string $qual) use ($ler): ?string {
             foreach (self::PROPRIETARIO[$qual] as $coluna) {
                 $v = trim($ler($coluna));
-                if ($v !== '' && $v !== '-') {
+                // Nome sem nenhuma letra é código, não nome.
+                if ($v !== '' && $v !== '-' && ($qual !== 'nome' || preg_match('/\p{L}/u', $v))) {
                     return $v;
                 }
             }
@@ -272,19 +276,81 @@ final class ColunasDaExportacao
     }
 
     /**
+     * Os CAMPOS que a planilha não traz — e que, por isso, a carga MANTÉM como
+     * estão no sistema, em vez de apagar. Planilha sem a coluna não diz que o
+     * dado sumiu; diz que este relatório não o tem. Sem isso, o "Imobiliário
+     * Urbano" (sem SETOR, testada, lados) apagava o setor de 56 mil imóveis
+     * (04/11/2026). Inclui `caracteristicas` quando nenhuma coluna delas veio.
+     *
+     * @param  array<string,int>  $cabecalho
+     * @return list<string>  nomes de campo (colunas de cadastro_externo_imoveis)
+     */
+    public static function camposAusentes(array $cabecalho): array
+    {
+        $campos = array_map(fn ($c) => $c === 'Logradouro' ? 'logradouro' : self::CAMPOS[$c], self::faltando($cabecalho));
+        if (! array_filter(self::CARACTERISTICAS, fn ($c) => isset($cabecalho[$c]))) {
+            $campos[] = 'caracteristicas';
+        }
+
+        return $campos;
+    }
+
+    /**
+     * A forma COMPARÁVEL do título de uma coluna: sem caixa, sem acento e com
+     * os espaços colapsados. O mesmo relatório já veio com "Logradouro
+     * (cadastro)" e com "Logradouro (Cadastro)" (04/11/2026), e a diferença de
+     * uma letra fazia a coluna "sumir". ESPELHO de chaveDaColuna (nucleo.js).
+     */
+    public static function chaveDaColuna(string $nome): string
+    {
+        $s = trim($nome);
+        $d = \Normalizer::normalize($s, \Normalizer::FORM_D);
+        $s = preg_replace('/\p{Mn}+/u', '', $d === false ? $s : $d);
+
+        return mb_strtolower(preg_replace('/[ \t\n\r\f\v]+/', ' ', $s));
+    }
+
+    /** @return list<string> todos os títulos que a leitura procura, na grafia daqui */
+    public static function colunasConhecidas(): array
+    {
+        return array_values(array_unique(array_merge(
+            array_keys(self::CAMPOS),
+            array_merge(...array_values(self::SINONIMOS)),
+            [self::LOGRADOURO_UNICO, 'Tipo de Logradouro', 'Nome do Logradouro'],
+            self::CARACTERISTICAS,
+            array_merge(...array_values(self::PROPRIETARIO)),
+        )));
+    }
+
+    /**
      * A linha de cabeçalho, ou null se esta não for ela.
      *
      * O cabeçalho não é necessariamente a primeira linha: estas exportações
      * abrem com o nome do relatório. É a linha que traz "Inscrição", a coluna
      * que sempre existe.
      *
+     * O título que só difere de um conhecido em caixa, acento ou espaço volta
+     * na grafia conhecida ("Bairro (Cadastro)" → "Bairro (cadastro)"): quem lê
+     * a planilha continua procurando pelo nome de sempre.
+     *
      * @param  list<string>  $celulas
      * @return array<string,int>|null  nome da coluna => posição
      */
     public static function cabecalho(array $celulas): ?array
     {
-        $nomes = array_map('trim', $celulas);
+        $exatas = array_flip(self::colunasConhecidas());
+        $conhecidas = [];
+        foreach (array_keys($exatas) as $c) {
+            $conhecidas[self::chaveDaColuna($c)] ??= $c;
+        }
+        $posicao = [];
+        foreach ($celulas as $i => $celula) {
+            $nome = trim((string) $celula);
+            // O título exato vale primeiro: "Situação" (isenção) e "SITUACAO"
+            // (característica) são colunas diferentes com a mesma forma comparável.
+            $posicao[isset($exatas[$nome]) ? $nome : ($conhecidas[self::chaveDaColuna($nome)] ?? $nome)] = $i;
+        }
 
-        return in_array('Inscrição', $nomes, true) ? array_flip($nomes) : null;
+        return isset($posicao['Inscrição']) ? $posicao : null;
     }
 }

@@ -88,4 +88,33 @@ class RelatorioImobiliarioUrbanoTest extends TestCase
         $this->assertNotContains('Logradouro', $falta);
         $this->assertContains('Testada Principal', $falta);
     }
+
+    /**
+     * O relatório como veio em 04/11/2026: "(Cadastro)" em maiúscula, o CÓDIGO
+     * do contribuinte em "Contribuinte" e o nome em "Nome". Antes, as colunas
+     * "sumiam" e o nome virava o código — e a carga apagaria bairro, logradouro
+     * e setor de 56 mil imóveis. Mesmo caso em tests/cadastro-desktop.test.cjs.
+     */
+    public function test_titulo_com_outra_caixa_e_a_mesma_coluna_e_numero_nao_e_nome(): void
+    {
+        $cab = ['Inscrição', 'Contribuinte', 'Nome', 'Logradouro (Cadastro)', 'Bairro (Cadastro)', 'Lote (Cadastro)', 'Situação', 'SITUACAO'];
+        $linha = ['010010080019000', '123456789', 'FULANO DE TAL', 'CUIABA', 'CIDADE PRIMAVERA I', '0019A', 'Ativo', 'TERRENO'];
+        $pos = ColunasDaExportacao::cabecalho($cab);
+        $ler = fn (string $col) => isset($pos[$col]) ? trim($linha[$pos[$col]] ?? '') : '';
+
+        $r = ColunasDaExportacao::linha($ler);
+        $this->assertSame('CIDADE PRIMAVERA I', $r['nome_bairro']);
+        $this->assertSame('CUIABA', $r['logradouro']);
+        $this->assertSame('0019A', $r['lote']);
+        // "Situação" (isenção) e "SITUACAO" (característica) continuam colunas diferentes.
+        $this->assertSame('Ativo', $r['isencao']);
+        $this->assertSame('{"SITUACAO":"TERRENO"}', $r['caracteristicas']);
+        $this->assertSame('FULANO DE TAL', ColunasDaExportacao::proprietario($ler)['nome']);
+
+        $ausentes = ColunasDaExportacao::camposAusentes($pos);
+        $this->assertContains('setor', $ausentes);
+        $this->assertContains('testada_m', $ausentes);
+        $this->assertNotContains('nome_bairro', $ausentes);
+        $this->assertNotContains('caracteristicas', $ausentes);
+    }
 }

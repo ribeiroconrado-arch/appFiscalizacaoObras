@@ -61,6 +61,9 @@ final class CargaDoCadastro
     /** JSON do app: registros cujo código de conferência não bateu com o calculado aqui. */
     private int $divergentes = 0;
 
+    /** @var list<string> campos que a planilha não traz: ficam como estão (ColunasDaExportacao::camposAusentes) */
+    private array $ausentes = [];
+
     public function processar(CadastroCarga $carga, string $arquivo, bool $confirmarAusencias = false): CadastroCarga
     {
         @set_time_limit(0);
@@ -73,6 +76,7 @@ final class CargaDoCadastro
             $this->conferirReferencia($carga, $this->lerJson($carga, $arquivo));
         } else {
             $this->ler($carga, $arquivo);
+            $this->manterAusentes();
         }
 
         $atuais = $this->atuais();
@@ -133,6 +137,9 @@ final class CargaDoCadastro
         foreach ($leitor->linhas() as $celulas) {
             if ($posicao === null) {
                 $posicao = ColunasDaExportacao::cabecalho($celulas);
+                if ($posicao !== null) {
+                    $this->ausentes = ColunasDaExportacao::camposAusentes($posicao);
+                }
                 continue;
             }
 
@@ -167,6 +174,32 @@ final class CargaDoCadastro
         $this->exigirLocalizacao();
 
         $carga->update(['linhas_lidas' => $lidas]);
+    }
+
+    /**
+     * O que a planilha NÃO traz fica como está: cada imóvel que o sistema já
+     * tem recebe, nos campos ausentes, o valor gravado — antes do código de
+     * conferência ser calculado. Assim a coluna que este relatório não tem não
+     * vira "alterado" nem apaga nada (ver ColunasDaExportacao::camposAusentes).
+     * O app desktop faz o mesmo com os valores da referência.
+     */
+    private function manterAusentes(): void
+    {
+        if (! $this->ausentes || ! $this->registros) {
+            return;
+        }
+        foreach (array_chunk(array_keys($this->registros), 1000) as $parte) {
+            $linhas = DB::table(self::TABELA)->whereIn('inscricao', array_map('strval', $parte))
+                ->get(['inscricao', ...$this->ausentes]);
+            foreach ($linhas as $l) {
+                $r = json_decode($this->registros[$l->inscricao], true);
+                foreach ($this->ausentes as $campo) {
+                    $r[$campo] = $campo === 'caracteristicas' ? $l->caracteristicas
+                        : ColunasDaExportacao::canonico($campo, $l->{$campo});
+                }
+                $this->registros[$l->inscricao] = json_encode($r, JSON_UNESCAPED_UNICODE);
+            }
+        }
     }
 
     // ── leitura do JSON do app desktop ──────────────────────────

@@ -76,7 +76,7 @@ $('b-gerar').addEventListener('click', async () => {
       vão inteiros desta vez — é normal na primeira vez com o app.</div>`)
   }
   if (s.faltando.length) {
-    avisos.push(`<div class="aviso">Colunas que a planilha não tem (o campo fica em branco no sistema):
+    avisos.push(`<div class="aviso">Colunas que a planilha não tem (o sistema mantém o que já tem nesses campos):
       ${s.faltando.map(esc).join(', ')}.</div>`)
   }
   if (!s.novos && !s.alterados && !s.sem_codigo && !s.ausentes && !s.reaparecidos) {

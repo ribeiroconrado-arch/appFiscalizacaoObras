@@ -7,13 +7,13 @@ sistema e salva um `.json` só com o que mudou.
 
 ## Baixar
 
-[FiscObras-Cadastro-win-x64.zip](https://github.com/ribeiroconrado-arch/appFiscalizacaoObras/releases/download/cadastro-desktop-v1.0.1/FiscObras-Cadastro-win-x64.zip)
+[FiscObras-Cadastro-win-x64.zip](https://github.com/ribeiroconrado-arch/appFiscalizacaoObras/releases/download/cadastro-desktop-v1.0.2/FiscObras-Cadastro-win-x64.zip)
 — extraia e abra `FiscObras Cadastro.exe`. Não precisa instalar.
 
 ## Uso (todo mês)
 
 1. No sistema: **Parâmetros › Cadastro municipal › Baixar referência**.
-   A referência tem só inscrições e códigos de conferência — nenhum nome ou CPF.
+   A referência tem inscrições, códigos de conferência e dados do imóvel — nenhum nome ou CPF.
 2. No app: escolha a referência e a planilha `.xlsx` da prefeitura, clique em
    **Gerar** e confira os números (novos, alterados, iguais, que sumiram).
 3. **Salvar arquivo…** e, no sistema, anexe o `.json` em
@@ -48,6 +48,15 @@ manda inteiro só o imóvel cujo código difere da referência. Para isso,
 contra valores calculados pelo PHP — **se mudar a regra de um lado, mude do
 outro**, ou todo imóvel vai parecer alterado todo mês.
 
+### Coluna que a planilha não tem
+
+A prefeitura exporta mais de um relatório, e nem todos têm as mesmas colunas
+(o "Imobiliário Urbano" não traz Setor, Testada nem os lados). Coluna ausente
+**não apaga** o campo: o app preenche com o valor que o sistema já tem — a
+referência (versão 2) traz os dados do imóvel, nunca os do proprietário — e o
+sistema faz o mesmo quando recebe a planilha direto. O título da coluna é
+comparado sem caixa e sem acento ("Bairro (Cadastro)" = "Bairro (cadastro)").
+
 ## Desenvolvimento
 
 ```
@@ -60,5 +69,5 @@ npm run empacotar            # dist/FiscObras Cadastro-win32-x64
 O `.exe` oficial sai do workflow **App do cadastro (Windows)**, que testa e
 empacota num Windows a cada mudança nesta pasta e publica o zip no release
 `cadastro-desktop-v<versão>` (aba Releases), com link direto, sem login:
-`https://github.com/ribeiroconrado-arch/appFiscalizacaoObras/releases/download/cadastro-desktop-v1.0.1/FiscObras-Cadastro-win-x64.zip`.
+`https://github.com/ribeiroconrado-arch/appFiscalizacaoObras/releases/download/cadastro-desktop-v1.0.2/FiscObras-Cadastro-win-x64.zip`.
 Para publicar uma versão nova, suba `version` no `package.json`.

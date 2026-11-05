@@ -1296,7 +1296,7 @@
          A planilha .xlsx direta continua aceita. --}}
     <div class="btn-row" style="margin-bottom:8px;justify-content:flex-start;align-items:center">
       <a class="btn out-verde sm" style="text-decoration:none" href="/api/cadastro/referencia" download>Baixar referência</a>
-      <span class="imp-sub">Só inscrições e códigos de conferência — sem nome nem CPF.</span>
+      <span class="imp-sub">Inscrições, códigos de conferência e dados do imóvel — sem nome nem CPF.</span>
     </div>
     <label class="imp-soltar" id="cm-soltar" for="cm-arquivo">
       <input type="file" id="cm-arquivo" accept=".json,.xlsx" onchange="cmArquivoEscolhido()">

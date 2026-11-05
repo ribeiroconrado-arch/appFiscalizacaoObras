@@ -108,7 +108,7 @@ test('diferença: novo, alterado, sem código, igual, reaparecido e ausente', ()
   const cad = N.lerCadastro(N.linhasDaPlanilha(xlsxMinimo(xml)))
   const h = insc => N.codigoDeConferencia(cad.registros.get(insc), [...(cad.donos.get(insc)?.values() ?? [])])
   const ref = N.lerReferencia(JSON.stringify({
-    formato: N.FORMATO_REFERENCIA, versao: 1, base_carga_id: 7, conferencia: 'abc', gerada_em: 'x',
+    formato: N.FORMATO_REFERENCIA, versao: 2, base_carga_id: 7, conferencia: 'abc', gerada_em: 'x', campos: [],
     imoveis: [['A1', h('A1'), '900', 0], ['A2', 'velho', '900', 0], ['A3', null, '900', 0], ['A4', h('A4'), '900', 1],
       ['A9', 'z', '900', 0], ['A8', 'z', '900', 1], ['C1', 'z', '902', 0]],
   }))
@@ -181,5 +181,47 @@ test('planilha que não localiza os imóveis (sem bairro, quadra e lote) é recu
 test('referência: recusa arquivo que não é a referência do sistema', () => {
   assert.throws(() => N.lerReferencia('{'), /JSON válido/)
   assert.throws(() => N.lerReferencia(JSON.stringify({ formato: 'outro' })), /referência do cadastro/)
-  assert.throws(() => N.lerReferencia(JSON.stringify({ formato: N.FORMATO_REFERENCIA, versao: 2 })), /versão/)
+  assert.throws(() => N.lerReferencia(JSON.stringify({ formato: N.FORMATO_REFERENCIA, versao: 3 })), /Atualize o app/)
+  // A referência 1 não tem os dados do imóvel: com ela, coluna ausente apagaria o campo.
+  assert.throws(() => N.lerReferencia(JSON.stringify({ formato: N.FORMATO_REFERENCIA, versao: 1 })), /Baixe-a de novo/)
+})
+
+// O "Imobiliário Urbano" de 04/11/2026: títulos com "(Cadastro)" em maiúscula,
+// "Contribuinte" com o CÓDIGO e o nome em "Nome", e sem SETOR. O app via todo
+// imóvel como alterado e o arquivo apagaria bairro, logradouro e setor de 56 mil.
+test('coluna com outra caixa é a mesma; número não é nome; coluna ausente mantém o valor do sistema', () => {
+  const cab = ['Inscrição', 'Contribuinte', 'Nome', 'Área m²', 'Tipo Logradouro (Cadastro)', 'Logradouro (Cadastro)',
+    'Bairro (Cadastro)', 'Quadra (Cadastro)', 'Lote (Cadastro)', 'Situação']
+  const xml = '<sheetData>' + [cab,
+    ['010010080019000', '123456789', 'FULANO DE TAL', '600', 'RUA', 'CUIABA', 'CIDADE PRIMAVERA I', '008', '0019A', 'Ativo'],
+    ['010010080020000', '987654321', 'BELTRANA', '410', 'RUA', 'CUIABA', 'CIDADE PRIMAVERA I', '008', '0020', 'Ativo'],
+  ].map((l, i) => linha(i + 1, l)).join('') + '</sheetData>'
+  const cad = N.lerCadastro(N.linhasDaPlanilha(xlsxMinimo(xml)))
+
+  const a = cad.registros.get('010010080019000')
+  assert.equal(a.nome_bairro, 'CIDADE PRIMAVERA I')   // "Bairro (Cadastro)" = "Bairro (cadastro)"
+  assert.equal(a.logradouro, 'CUIABA')
+  assert.equal(a.lote, '0019A')                        // da coluna, com a letra (não da inscrição)
+  assert.equal(a.isencao, 'Ativo')                     // "Situação" não vira a característica SITUACAO
+  assert.deepEqual([...cad.donos.get('010010080019000').values()].map(d => d.nome), ['FULANO DE TAL'])
+  assert.ok(cad.ausentes.includes('setor') && cad.ausentes.includes('testada_m') && cad.ausentes.includes('caracteristicas'))
+  assert.ok(!cad.ausentes.includes('nome_bairro') && !cad.ausentes.includes('logradouro'))
+
+  // O sistema tem o setor "05" nos dois. A: nada mudou. B: a área mudou (410 → era 400).
+  const campos = ['codigo_cadastro', 'inscricao_alternativa', 'codigo_bairro', 'nome_bairro', 'quadra', 'lote', 'numero_predial',
+    'complemento', 'isencao', 'area_terreno_m2', 'area_edificada_m2', 'testada_m', 'medida_lado_direito', 'medida_lado_esquerdo',
+    'medida_fundo', 'setor', 'regiao_fiscal', 'unidade_area_m2', 'unidade_ano', 'unidade_pontos', 'logradouro', 'caracteristicas']
+  const noSistema = (insc, mudar = {}) => {
+    const r = { ...cad.registros.get(insc), setor: '05', ...mudar }
+    return [insc, N.codigoDeConferencia(r, [...cad.donos.get(insc).values()]), '1', 0, campos.map(c => r[c] ?? null)]
+  }
+  const ref = N.lerReferencia(JSON.stringify({ formato: N.FORMATO_REFERENCIA, versao: 2, base_carga_id: 1, conferencia: 'c',
+    gerada_em: 'x', campos, imoveis: [noSistema('010010080019000'), noSistema('010010080020000', { area_terreno_m2: '400.00' })] }))
+  const { json, resumo } = N.gerarDiferenca(cad, ref, { nome: 'p.xlsx', bytes: 1, sha256: 's' })
+  assert.deepEqual(json.iguais, ['010010080019000'])
+  assert.equal(resumo.alterados, 1)
+  const b = json.registros[0]
+  assert.equal(b.inscricao, '010010080020000')
+  assert.equal(b.dados.area_terreno_m2, '410.00')   // a mudança de verdade
+  assert.equal(b.dados.setor, '05')                 // e o setor, que a planilha não tem, fica
 })

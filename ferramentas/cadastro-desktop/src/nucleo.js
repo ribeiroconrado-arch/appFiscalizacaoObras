@@ -26,10 +26,13 @@
 const zlib = require('node:zlib')
 const crypto = require('node:crypto')
 
-const VERSAO_APP = '1.0.1'
+const VERSAO_APP = '1.0.2'
 const FORMATO_REFERENCIA = 'fiscobras-cadastro-referencia'
 const FORMATO_DIFERENCA = 'fiscobras-cadastro-diferenca'
+/** Versão do JSON de diferenças (CargaDoCadastro::VERSAO_JSON). */
 const VERSAO_FORMATO = 1
+/** Versão da referência (ReferenciaDoCadastro::VERSAO): a 2 traz os dados do imóvel. */
+const VERSAO_REFERENCIA = 2
 
 /** LeitorXlsx::TETO_DESCOMPACTADO — o mesmo limite contra "zip bomb". */
 const TETO_DESCOMPACTADO = 200 * 1024 * 1024
@@ -92,7 +95,8 @@ const CARACTERISTICAS = [
 ]
 
 const PROPRIETARIO = {
-  nome: ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Contribuinte', 'Nome'],
+  // "Nome" antes de "Contribuinte": no "Imobiliário Urbano", Contribuinte é o CÓDIGO.
+  nome: ['Nome do Proprietário', 'Proprietário', 'Nome do Contribuinte', 'Nome', 'Contribuinte'],
   documento: ['CPF/CNPJ do Proprietário', 'CPF/CNPJ', 'CPF/CNPJ do Contribuinte', 'CPF', 'CNPJ'],
   endereco: ['Endereço de Correspondência', 'Endereço do Proprietário', 'Endereço do Contribuinte'],
 }
@@ -431,12 +435,32 @@ function* linhasDaPlanilha(buf) {
 // ── CargaDoCadastro::ler ──────────────────────────────────────────────
 
 /** ColunasDaExportacao::cabecalho — nome da coluna → posição (a última, se repetir). */
+/** ColunasDaExportacao::chaveDaColuna — sem caixa, sem acento, espaços colapsados. */
+function chaveDaColuna(nome) {
+  return trimPhp(nome).normalize('NFD').replace(/\p{Mn}+/gu, '').replace(/[ \t\n\r\f\v]+/g, ' ').toLowerCase()
+}
+
+/** ColunasDaExportacao::colunasConhecidas */
+function colunasConhecidas() {
+  return [...new Set([
+    ...CAMPOS.map(c => c[0]), ...Object.values(SINONIMOS).flat(),
+    LOGRADOURO_UNICO, 'Tipo de Logradouro', 'Nome do Logradouro',
+    ...CARACTERISTICAS, ...Object.values(PROPRIETARIO).flat(),
+  ])]
+}
+
+/**
+ * ColunasDaExportacao::cabecalho — o título que só difere de um conhecido em
+ * caixa, acento ou espaço volta na grafia conhecida ("Bairro (Cadastro)").
+ */
 function cabecalho(celulas) {
-  const nomes = celulas.map(trimPhp)
-  if (!nomes.includes('Inscrição')) return null
+  const exatas = new Set(colunasConhecidas())
+  const conhecidas = new Map()
+  for (const c of exatas) if (!conhecidas.has(chaveDaColuna(c))) conhecidas.set(chaveDaColuna(c), c)
   const pos = new Map()
-  nomes.forEach((n, i) => pos.set(n, i))
-  return pos
+  // O título exato vale primeiro: "Situação" (isenção) ≠ "SITUACAO" (característica).
+  celulas.forEach((c, i) => { const n = trimPhp(c); pos.set(exatas.has(n) ? n : (conhecidas.get(chaveDaColuna(n)) ?? n), i) })
+  return pos.has('Inscrição') ? pos : null
 }
 
 /** ColunasDaExportacao::linha */
@@ -479,7 +503,8 @@ function proprietarioDaLinha(lerCol) {
   const campo = qual => {
     for (const col of PROPRIETARIO[qual]) {
       const v = trimPhp(lerCol(col))
-      if (v !== '' && v !== '-') return v
+      // Nome sem nenhuma letra é código, não nome.
+      if (v !== '' && v !== '-' && (qual !== 'nome' || /\p{L}/u.test(v))) return v
     }
     return null
   }
@@ -542,10 +567,14 @@ function lerCadastro(linhas, progresso) {
   const faltando = CAMPOS.map(c => c[0]).filter(c =>
     !colunas.has(c) && !(SINONIMOS[c] || []).some(o => colunas.has(o)) && !daInscricao.includes(c))
   if (!['Tipo de Logradouro', 'Nome do Logradouro', LOGRADOURO_UNICO].some(c => colunas.has(c))) faltando.push('Logradouro')
+  // ColunasDaExportacao::camposAusentes — o que a planilha não traz fica como
+  // está no sistema (preenchido pela referência em gerarDiferenca).
+  const ausentes = faltando.map(c => c === 'Logradouro' ? 'logradouro' : CAMPOS.find(x => x[0] === c)?.[1]).filter(Boolean)
+  if (!CARACTERISTICAS.some(c => colunas.has(c))) ausentes.push('caracteristicas')
   if (!PROPRIETARIO.nome.some(c => colunas.has(c))) faltando.push('proprietário (nome)')
   if (!PROPRIETARIO.documento.some(c => colunas.has(c))) faltando.push('proprietário (CPF/CNPJ)')
 
-  return { registros, donos, bairros, lidas, faltando }
+  return { registros, donos, bairros, lidas, faltando, ausentes }
 }
 
 // ── referência e diferença ────────────────────────────────────────────
@@ -557,10 +586,18 @@ function lerReferencia(texto) {
   if (!d || d.formato !== FORMATO_REFERENCIA) {
     throw new Error('Este arquivo não é a referência do cadastro. Baixe-a em Parâmetros › Cadastro municipal.')
   }
-  if (d.versao !== VERSAO_FORMATO) throw new Error('A referência é de outra versão do sistema. Atualize o app.')
-  if (typeof d.conferencia !== 'string' || !Array.isArray(d.imoveis)) throw new Error('A referência está incompleta.')
+  if (d.versao !== VERSAO_REFERENCIA) {
+    throw new Error(d.versao < VERSAO_REFERENCIA
+      ? 'Esta referência é de uma versão anterior do sistema. Baixe-a de novo em Parâmetros › Cadastro municipal.'
+      : 'A referência é de outra versão do sistema. Atualize o app.')
+  }
+  if (typeof d.conferencia !== 'string' || !Array.isArray(d.imoveis) || !Array.isArray(d.campos)) throw new Error('A referência está incompleta.')
   const imoveis = new Map()
-  for (const i of d.imoveis) imoveis.set(String(i[0]), { hash: i[1] ?? null, bairro: String(i[2] ?? ''), ausente: !!i[3] })
+  for (const i of d.imoveis) {
+    // Os dados do imóvel (ReferenciaDoCadastro::campos): o que o sistema já tem.
+    const dados = Array.isArray(i[4]) ? Object.fromEntries(d.campos.map((c, k) => [c, i[4][k] ?? null])) : null
+    imoveis.set(String(i[0]), { hash: i[1] ?? null, bairro: String(i[2] ?? ''), ausente: !!i[3], dados })
+  }
   return { baseCargaId: d.base_carga_id ?? null, conferencia: d.conferencia, geradaEm: d.gerada_em ?? null, imoveis }
 }
 
@@ -580,10 +617,13 @@ function gerarDiferenca(cad, ref, planilha) {
   const iguais = []
   const r = { novos: 0, alterados: 0, sem_codigo: 0, iguais: 0, reaparecidos: 0, ausentes: 0, universo: 0 }
 
-  for (const [insc, reg] of cad.registros) {
+  for (const [insc, lido] of cad.registros) {
     const donos = [...(cad.donos.get(insc)?.values() ?? [])]
-    const hash = codigoDeConferencia(reg, donos)
     const atual = ref.imoveis.get(insc)
+    // Coluna que a planilha não traz: vale o que o sistema já tem (CargaDoCadastro::manterAusentes).
+    const reg = { ...lido }
+    if (atual?.dados) for (const c of cad.ausentes ?? []) reg[c] = atual.dados[c] ?? null
+    const hash = codigoDeConferencia(reg, donos)
     if (atual?.ausente) r.reaparecidos++
     if (atual && atual.hash === hash) { iguais.push(insc); r.iguais++; continue }
     if (!atual) r.novos++
@@ -629,7 +669,7 @@ function gerarDiferenca(cad, ref, planilha) {
 }
 
 module.exports = {
-  VERSAO_APP, FORMATO_DIFERENCA, FORMATO_REFERENCIA,
-  trimPhp, numberFormat, numero, canonico, jsonPhp, codigoDeConferencia,
+  VERSAO_APP, FORMATO_DIFERENCA, FORMATO_REFERENCIA, VERSAO_REFERENCIA,
+  trimPhp, numberFormat, numero, canonico, jsonPhp, codigoDeConferencia, chaveDaColuna,
   linhasDaPlanilha, lerCadastro, lerReferencia, gerarDiferenca,
 }

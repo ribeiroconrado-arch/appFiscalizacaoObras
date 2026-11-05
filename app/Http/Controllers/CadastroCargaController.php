@@ -52,8 +52,8 @@ class CadastroCargaController extends Controller
 
     /**
      * GET /api/cadastro/referencia — o arquivo que o app desktop usa para saber
-     * o que o sistema já tem. Só inscrição, código de conferência, bairro e
-     * ausência: nenhum dado pessoal (ver ReferenciaDoCadastro).
+     * o que o sistema já tem: inscrição, código de conferência e os dados do
+     * imóvel — nada do proprietário (ver ReferenciaDoCadastro).
      */
     public function referencia(Request $r)
     {
