@@ -1114,19 +1114,34 @@ function destacarPorId(id) {
  * mostrar o raio é o que faz o fiscal entender por que o sistema às vezes
  * pergunta em vez de afirmar.
  *
- * @param {number} lat @param {number} lon @param {number} accuracy
+ * Com o GPS ao vivo (app.js, gpsVivo) é chamada a cada leitura: o marcador é
+ * MOVIDO, não recriado, para o ponto andar sem piscar. `rumo` (graus, norte = 0)
+ * acende o cone de direção; null o apaga (parado o aparelho não sabe o rumo).
+ *
+ * @param {number} lat @param {number} lon @param {number} accuracy @param {?number} [rumo]
  */
-function marcarMinhaPosicao(lat, lon, accuracy) {
-  limparMinhaPosicao()
-  mapaState.precisaoEu = L.circle([lat, lon], {
-    radius: Math.max(accuracy || 0, 5),
-    color: '#1565C0', weight: 1, opacity: .5, fillColor: '#1565C0', fillOpacity: .12,
-  }).addTo(mapaState.obj)
-  mapaState.marcadorEu = L.marker([lat, lon], {
-    icon: L.divIcon({ className: '', html: '<div class="eu-pin"></div>',
-                      iconSize: [16, 16], iconAnchor: [8, 8] }),
-    zIndexOffset: 1000,
-  }).addTo(mapaState.obj)
+function marcarMinhaPosicao(lat, lon, accuracy, rumo = null) {
+  const ll = [lat, lon], raio = Math.max(accuracy || 0, 5)
+  if (mapaState.marcadorEu && mapaState.precisaoEu) {
+    mapaState.precisaoEu.setLatLng(ll).setRadius(raio)
+    mapaState.marcadorEu.setLatLng(ll)
+  } else {
+    limparMinhaPosicao()
+    mapaState.precisaoEu = L.circle(ll, {
+      radius: raio, interactive: false,
+      color: '#1565C0', weight: 1, opacity: .5, fillColor: '#1565C0', fillOpacity: .12,
+    }).addTo(mapaState.obj)
+    mapaState.marcadorEu = L.marker(ll, {
+      icon: L.divIcon({ className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+        html: '<div class="eu-pos"><div class="eu-rumo"></div><div class="eu-pulso"></div><div class="eu-pin"></div></div>' }),
+      zIndexOffset: 1000, interactive: false, keyboard: false,
+    }).addTo(mapaState.obj)
+  }
+  const cone = mapaState.marcadorEu.getElement()?.querySelector('.eu-rumo')
+  if (cone) {
+    cone.style.display = rumo == null ? 'none' : ''
+    if (rumo != null) cone.style.transform = `rotate(${Math.round(rumo)}deg)`
+  }
 }
 
 /** Remove o marcador de posição do fiscal. */

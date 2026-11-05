@@ -1679,10 +1679,21 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    GPS e "Ver tudo" são botões soltos (sem painel), então não estão dentro de
    .ctrl-grupo — mas herdam a mesma caixa dos demais por .ctrl-btn. */
 .ctrl-mapa > .ctrl-btn{align-self:flex-end}
-/* Posição capturada: o botão fica verde. Sem rótulo visível, a cor é o aviso
-   imediato de que há GPS ativo — o texto foi para o title. */
-.ctrl-btn.gps-ativo{background:var(--gd);border-color:var(--gd)}
-.ctrl-btn.gps-ativo svg{color:#fff}
+/* GPS ao vivo (gpsVivo, app.js). Seguindo: mira azul cheia. Ligado mas o mapa
+   saiu de você: só o contorno azul. Ponto fora da tela: a mira vira seta para
+   ele, e o selo embaixo diz a distância. Azul = a cor do ponto azul. */
+.ctrl-btn.gps-seguindo{background:var(--blue);border-color:var(--blue)}
+.ctrl-btn.gps-seguindo svg{color:#fff}
+.ctrl-btn.gps-ligado{border-color:var(--blue)}
+.ctrl-btn.gps-ligado svg{color:var(--blue)}
+#btn-gps .gps-seta{display:none;transition:transform .2s}
+#btn-gps.gps-fora .gps-mira{display:none}
+#btn-gps.gps-fora .gps-seta{display:block;width:18px;height:18px}
+#btn-gps .gps-dist{display:none;position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);
+  padding:0 5px;border-radius:999px;background:var(--blue);color:#fff;
+  font:700 9.5px/15px Inter,sans-serif;white-space:nowrap;pointer-events:none;
+  box-shadow:0 0 0 2px #fff;z-index:1}
+#btn-gps.gps-fora .gps-dist{display:block}
 
 
 

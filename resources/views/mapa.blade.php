@@ -417,11 +417,18 @@
        ocupavam na base da tela, e as ações do mapa passam a estar todas no
        mesmo lugar em vez de espalhadas por dois cantos.
        Ação direta, sem painel — por isso ficam fora de .ctrl-grupo. --}}
-  <button class="ctrl-btn" id="btn-gps" onclick="usarMinhaLocalizacao()" title="Usar minha localização">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  {{-- A mira faz toda a localização ao vivo (gpsVivo, app.js): liga, segue,
+       volta para você e desliga. Fora da tela, a mira dá lugar à SETA que
+       aponta para o ponto azul, com a distância no selo embaixo. --}}
+  <button class="ctrl-btn" id="btn-gps" onclick="usarMinhaLocalizacao()" title="Usar minha localização"
+          aria-label="Usar minha localização">
+    <svg class="gps-mira" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
       <circle cx="12" cy="12" r="8"/></svg>
+    <svg class="gps-seta" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"
+         stroke-linejoin="round" aria-hidden="true"><path d="M12 3 19 20 12 16 5 20Z"/></svg>
+    <span class="gps-dist" aria-hidden="true"></span>
   </button>
 
   <button class="ctrl-btn" onclick="verTudo()" title="Ver tudo">

@@ -770,62 +770,233 @@ function abrirFichaPorLote(lote) {
 
 // ── GPS → LOTE (resolvido no servidor) ───────────────────────
 
-/** Handler do botão "Usar minha localização". Toggle, como em geolocalizacao.js. */
+/**
+ * LOCALIZAÇÃO AO VIVO — tudo num botão só, a mira (#btn-gps).
+ *
+ * Antes o botão capturava UMA posição e, para localizar de novo, era preciso
+ * "Remover" (com confirmação) e tocar outra vez. Agora o GPS fica ligado e o
+ * ponto azul anda com o fiscal (watchPosition do navegador: grátis, sem API
+ * de terceiros). Três estados, um toque cada:
+ *
+ *   desligado  (mira cinza)          → liga, centraliza e identifica o lote
+ *   seguindo   (mira azul cheia)     → desliga, sem perguntar
+ *   em volta   (mira de contorno)    → volta para você e identifica o lote de novo
+ *
+ * "Em volta" é quando o mapa saiu de você: arrastou, tocou em Ver tudo ou outra
+ * ferramenta enquadrou outro lugar. O ponto continua andando. Se ele sair da
+ * tela, a mira vira uma SETA que aponta para onde você está, com a distância
+ * embaixo — é a busca pelo ponto azul, sem botão nem etiqueta a mais no mapa.
+ *
+ * Com a aba escondida (tela bloqueada, outro app) o GPS para, e volta ao
+ * reabrir: é o que poupa a bateria num dia inteiro de campo.
+ */
+const gpsVivo = {
+  /** id do watchPosition, ou null quando não está vigiando. */
+  vigia: null,
+  ligado: false,
+  seguindo: false,
+  /** O lote desta ligada já foi pedido ao servidor. */
+  identificado: false,
+  /** Melhor leitura até identificar (a primeira é quase sempre a pior). */
+  melhor: null,
+  /** Última leitura: {lat, lon, prec, rumo}. */
+  ultimo: null,
+  relogio: null,
+  /** O próprio GPS está movendo o mapa — o moveend disso não é "saiu de você". */
+  movendo: false,
+  ouvindoMapa: false,
+}
+
+/** Handler da mira. */
 function usarMinhaLocalizacao() {
-  const btn = document.getElementById('btn-gps')
-  if (btn.dataset.gpsCapturado) { removerGPS(); return }
+  if (!gpsVivo.ligado) { ligarGpsAoVivo(); return }
+  // Seguindo, ou ainda sem a primeira leitura: o toque desliga.
+  if (gpsVivo.seguindo || !gpsVivo.ultimo) { desligarGpsAoVivo(); return }
+  voltarParaMim()
+}
 
+function ligarGpsAoVivo() {
   if (!navigator.geolocation) { toast('GPS não disponível neste aparelho', 'err'); return }
-  btn.disabled = true
+  Object.assign(gpsVivo, { ligado: true, seguindo: true, identificado: false, melhor: null, ultimo: null })
+  ouvirMapaDoGps()
   rotuloGps('Localizando…')
+  pintarBotaoGps()
+  vigiarGps()
 
-  // O ponto aparece na primeira leitura e vai se ajustando enquanto o GPS
-  // firma (melhorPosicaoGps, ui.js): a primeira leitura é quase sempre a pior.
-  let centrado = false
-  melhorPosicaoGps({
-    aCadaMelhora: ({ lat, lon, prec }) => {
-      marcarMinhaPosicao(lat, lon, prec)
-      rotuloGps(`Afinando… ±${Math.round(prec)} m`)
-      if (!centrado) { mapaState.obj.setView([lat, lon], ZOOM_DO_LOTE); centrado = true }
-    },
-  }).then(async ({ lat, lon, prec }) => {
-    btn.disabled = false
-    state.pos = { lat, lon, prec }
-    marcarMinhaPosicao(lat, lon, prec)
-    btn.classList.add('gps-ativo')
-    btn.dataset.gpsCapturado = '1'
-    rotuloGps('Remover GPS')
-    mapaState.obj.setView([lat, lon], ZOOM_DO_LOTE)
-    // Sinal fraco: o lote sugerido pode ser o vizinho. O fiscal fica sabendo
-    // ANTES de confirmar — o círculo azul no mapa mostra o tamanho da dúvida.
-    if (prec > GPS_FRACO_M) {
-      toast(`Sinal de GPS fraco (±${Math.round(prec)} m). Confira o lote no mapa antes de confirmar.`, 'aviso')
-    }
-    await identificarNoServidor(lat, lon, prec)
-  }).catch(err => {
-    btn.disabled = false
-    rotuloGps('Usar minha localização')
-    limparMinhaPosicao()
+  // O lote é pedido quando a leitura firma (GPS_ALVO_M) ou, no mais tardar,
+  // em GPS_ESPERA_MS com a melhor que veio — a mesma regra de melhorPosicaoGps.
+  clearTimeout(gpsVivo.relogio)
+  gpsVivo.relogio = setTimeout(() => {
+    if (!gpsVivo.ligado || gpsVivo.identificado) return
+    if (gpsVivo.melhor) { identificarMinhaPosicao(gpsVivo.melhor); return }
+    desligarGpsAoVivo(true)
+    toast('O GPS demorou demais para responder. Tente de novo.', 'err')
+  }, GPS_ESPERA_MS)
+}
 
-    // Permissão negada não é um aviso passageiro: é uma trava que só o
-    // usuário destrava, e num lugar que ele não vai adivinhar. Por isso vai
-    // para um modal com o caminho exato, e não para um toast que some em
-    // dois segundos deixando o fiscal sem saber o que fazer.
-    if (err?.code === 1) {
-      confirmarAcao({
-        titulo: 'Localização bloqueada',
-        mensagem: comoLiberarLocalizacao(),
-        textoBtn: 'Entendi',
-        onConfirm: () => {},
-      })
+/** @param {boolean} [calado] sem o aviso "Localização desligada" */
+function desligarGpsAoVivo(calado = false) {
+  pararDeVigiarGps()
+  clearTimeout(gpsVivo.relogio)
+  Object.assign(gpsVivo, { ligado: false, seguindo: false, identificado: false, melhor: null, ultimo: null })
+  state.pos = null
+  limparMinhaPosicao()
+  rotuloGps('Usar minha localização')
+  pintarBotaoGps()
+  if (!calado) toast('Localização desligada')
+}
 
-      return
-    }
+/** Volta o mapa para o ponto azul, volta a segui-lo e identifica o lote de novo. */
+function voltarParaMim() {
+  const p = gpsVivo.ultimo
+  gpsVivo.seguindo = true
+  moverMapaDoGps(() => mapaState.obj.setView([p.lat, p.lon], Math.max(mapaState.obj.getZoom(), ZOOM_DO_LOTE)))
+  pintarBotaoGps()
+  identificarMinhaPosicao(p)
+}
 
-    toast({ 2: 'Sinal de GPS fraco. Tente a céu aberto.',
-            3: 'O GPS demorou demais para responder. Tente de novo.' }[err?.code]
-          || 'Erro ao obter GPS', 'err')
+/** Para de seguir sem desligar — o ponto continua andando. */
+function pararDeSeguirGps() {
+  if (!gpsVivo.ligado || !gpsVivo.seguindo) return
+  gpsVivo.seguindo = false
+  pintarBotaoGps()
+}
+
+function vigiarGps() {
+  if (gpsVivo.vigia !== null) return
+  gpsVivo.vigia = navigator.geolocation.watchPosition(chegouPosicaoGps, erroDoGps,
+    // Sem `timeout`: parado, o aparelho não manda leitura nova, e isso não é erro.
+    { enableHighAccuracy: true, maximumAge: 2000 })
+}
+
+function pararDeVigiarGps() {
+  if (gpsVivo.vigia === null) return
+  navigator.geolocation.clearWatch(gpsVivo.vigia)
+  gpsVivo.vigia = null
+}
+
+/** @param {GeolocationPosition} pos */
+function chegouPosicaoGps(pos) {
+  if (!gpsVivo.ligado) return
+  const c = pos.coords
+  // O rumo só vale andando: parado, o aparelho devolve NaN ou um valor velho.
+  const rumo = Number.isFinite(c.heading) && (c.speed ?? 0) > 0.5 ? c.heading : null
+  const p = { lat: c.latitude, lon: c.longitude, prec: c.accuracy, rumo }
+  const primeira = !gpsVivo.ultimo
+  gpsVivo.ultimo = p
+  state.pos = { lat: p.lat, lon: p.lon, prec: p.prec }
+  marcarMinhaPosicao(p.lat, p.lon, p.prec, rumo)
+
+  if (!gpsVivo.identificado) {
+    if (!gpsVivo.melhor || p.prec < gpsVivo.melhor.prec) gpsVivo.melhor = p
+    rotuloGps(`Afinando… ±${Math.round(p.prec)} m`)
+  }
+  if (gpsVivo.seguindo) {
+    const mapa = mapaState.obj
+    moverMapaDoGps(() => primeira || mapa.getZoom() < ZOOM_DO_LOTE - 2
+      ? mapa.setView([p.lat, p.lon], ZOOM_DO_LOTE)
+      : mapa.panTo([p.lat, p.lon], { animate: true, duration: 0.5 }))
+  }
+  if (!gpsVivo.identificado && p.prec <= GPS_ALVO_M) identificarMinhaPosicao(p)
+  pintarBotaoGps()
+}
+
+/** @param {GeolocationPositionError} err */
+function erroDoGps(err) {
+  if (err?.code !== 1) return   // sinal fraco/demora: o relógio da ligada decide
+  desligarGpsAoVivo(true)
+  // Permissão negada não é aviso passageiro: é uma trava que só o usuário
+  // destrava, num lugar que ele não vai adivinhar — vai para um modal com o
+  // caminho exato, e não para um toast que some em dois segundos.
+  confirmarAcao({
+    titulo: 'Localização bloqueada',
+    mensagem: comoLiberarLocalizacao(),
+    textoBtn: 'Entendi',
+    onConfirm: () => {},
   })
+}
+
+/** @param {{lat:number, lon:number, prec:number}} p */
+function identificarMinhaPosicao(p) {
+  gpsVivo.identificado = true
+  clearTimeout(gpsVivo.relogio)
+  pintarBotaoGps()
+  // Sinal fraco: o lote sugerido pode ser o vizinho. O fiscal fica sabendo
+  // ANTES de confirmar — o círculo azul no mapa mostra o tamanho da dúvida.
+  if (p.prec > GPS_FRACO_M) {
+    toast(`Sinal de GPS fraco (±${Math.round(p.prec)} m). Confira o lote no mapa antes de confirmar.`, 'aviso')
+  }
+  identificarNoServidor(p.lat, p.lon, p.prec)
+}
+
+/** Move o mapa marcando que fui eu (GPS), para o moveend não parar de seguir. */
+function moverMapaDoGps(mover) {
+  gpsVivo.movendo = true
+  mover()
+  mapaState.obj.once('moveend', () => { gpsVivo.movendo = false })
+}
+
+/**
+ * Quando o mapa sai de você: arrastar para de seguir na hora; qualquer outro
+ * movimento que deixe o ponto fora da tela (pesquisa, outro lote enquadrado)
+ * também. E a cada movimento a seta da mira se reorienta.
+ */
+function ouvirMapaDoGps() {
+  if (gpsVivo.ouvindoMapa || !mapaState.obj) return
+  gpsVivo.ouvindoMapa = true
+  const mapa = mapaState.obj
+  mapa.on('dragstart', pararDeSeguirGps)
+  mapa.on('moveend', () => {
+    const p = gpsVivo.ultimo
+    if (gpsVivo.seguindo && !gpsVivo.movendo && p && !mapa.getBounds().contains([p.lat, p.lon])) pararDeSeguirGps()
+  })
+  let pedido = 0
+  mapa.on('move zoom', () => {
+    if (!gpsVivo.ligado || gpsVivo.seguindo || pedido) return
+    pedido = requestAnimationFrame(() => { pedido = 0; pintarBotaoGps() })
+  })
+  document.addEventListener('visibilitychange', () => {
+    if (!gpsVivo.ligado) return
+    if (document.hidden) pararDeVigiarGps()
+    else vigiarGps()
+  })
+}
+
+/** Cor da mira, seta para o ponto fora da tela e o texto do title. */
+function pintarBotaoGps() {
+  const btn = document.getElementById('btn-gps')
+  if (!btn) return
+  const g = gpsVivo, mapa = mapaState.obj
+  btn.classList.toggle('gps-seguindo', g.ligado && g.seguindo)
+  btn.classList.toggle('gps-ligado', g.ligado && !g.seguindo)
+
+  let fora = false
+  if (g.ligado && !g.seguindo && g.ultimo && mapa) {
+    const ll = L.latLng(g.ultimo.lat, g.ultimo.lon)
+    fora = !mapa.getBounds().contains(ll)
+    if (fora) {
+      const tam = mapa.getSize(), pt = mapa.latLngToContainerPoint(ll)
+      const ang = Math.atan2(pt.y - tam.y / 2, pt.x - tam.x / 2) * 180 / Math.PI + 90
+      const c = mapa.getCenter()
+      const seta = btn.querySelector('.gps-seta'), dist = btn.querySelector('.gps-dist')
+      if (seta) seta.style.transform = `rotate(${ang.toFixed(1)}deg)`
+      if (dist) dist.textContent = textoDistancia(distanciaM(c.lat, c.lng, ll.lat, ll.lng))
+    }
+  }
+  btn.classList.toggle('gps-fora', fora)
+
+  if (g.ligado && g.identificado) {
+    rotuloGps(g.seguindo ? 'Seguindo você — toque para desligar'
+      : fora ? 'Você está fora da tela — toque para voltar' : 'Voltar para minha posição')
+  } else if (g.ligado && !g.ultimo) {
+    rotuloGps('Localizando… — toque para cancelar')
+  }
+}
+
+/** 850 m · 1,2 km — a precisão que serve para "para que lado e quão longe". */
+function textoDistancia(m) {
+  if (m < 1000) return `${Math.max(10, Math.round(m / 10) * 10)} m`
+  return `${(m / 1000).toLocaleString('pt-BR', { maximumFractionDigits: m < 10000 ? 1 : 0 })} km`
 }
 
 /** Quebra de linha das instruções — ver o `white-space` de #mcg-msg. */
@@ -873,25 +1044,6 @@ function comoLiberarLocalizacao() {
     'Toque no cadeado ao lado do endereço, encontre "Localização" e mude para'
       + ' Permitir. Depois recarregue a página.',
   ].join(SALTO + SALTO)
-}
-
-/** Limpa a posição capturada. */
-function removerGPS() {
-  confirmarAcao({
-    titulo: 'Remover localização',
-    mensagem: 'Deseja limpar a sua posição do mapa?',
-    textoBtn: 'Remover',
-    perigo: true,
-    onConfirm: () => {
-      state.pos = null
-      limparMinhaPosicao()
-      const btn = document.getElementById('btn-gps')
-      btn.classList.remove('gps-ativo')
-      btn.dataset.gpsCapturado = ''
-      rotuloGps('Usar minha localização')
-      toast('Localização removida')
-    },
-  })
 }
 
 /**
@@ -987,6 +1139,8 @@ function confirmarLote() {
  */
 function verTudo() {
   const mapa = mapaState.obj
+  // Com o GPS ligado, ver a cidade é sair de você: o ponto continua andando, a mira volta.
+  pararDeSeguirGps()
 
   if (typeof PERIMETRO_URBANO !== 'undefined' && PERIMETRO_URBANO?.length === 4) {
     const [oeste, sul, leste, norte] = PERIMETRO_URBANO
@@ -1075,8 +1229,8 @@ function irPara(destino) {
  * O botão virou ícone quadrado na coluna de controles — não há mais rótulo
  * visível para trocar. O estado passa a viver no `title`, que é o que o
  * usuário lê ao pousar o ponteiro e o que o leitor de tela anuncia. A cor do
- * botão (.gps-ativo) continua sendo o aviso imediato de que há posição
- * capturada.
+ * botão (.gps-seguindo / .gps-ligado) continua sendo o aviso imediato de que
+ * o GPS está ligado.
  *
  * @param {string} texto
  */
