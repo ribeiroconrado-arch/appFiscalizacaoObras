@@ -112,7 +112,7 @@ function _dnTabela(rodape) {
       <td><span class="tl-cod">${esc(d.protocolo || '—')}</span></td>
       <td>${esc(d.data || '')}</td>
       <td title="${esc(d.endereco)}">${esc(d.endereco)}${d.lat ? ' <span class="den-gps-marca" title="Tem GPS">●</span>' : ''}</td>
-      <td class="tl-cinza" title="${esc(d.bairro || '')}">${esc(bairroCurto(d.bairro) || '—')}</td>
+      <td class="tl-cinza">${esc(d.bairro || '—')}</td>
       <td>${esc(d.fonte || '—')}</td>
       <td title="${esc(d.responsavel || '')}">${esc(d.responsavel || '—')}</td>
       <td class="tl-cinza" title="${esc(d.agente || '')}">${esc(d.agente || '—')}</td>
@@ -140,7 +140,7 @@ function _dnCartoes(rodape) {
         ${seloDaTratativa(d.tratativa)}
       </div>
       <div class="den-card-end">${esc(d.endereco)}</div>
-      <div class="den-card-sub">${esc(bairroCurto(d.bairro))}${d.responsavel ? ' · ' + esc(d.responsavel) : ''}</div>
+      <div class="den-card-sub">${esc(d.bairro || '')}${d.responsavel ? ' · ' + esc(d.responsavel) : ''}</div>
       <div class="den-card-rodape">
         <span>${esc(d.data || '')}</span>
         <span>${esc(d.fonte || '')}</span>
@@ -342,7 +342,7 @@ function renderPainelDen(d) {
       <div class="bloco den-bloco-largo"><div class="sec-title">Por mês</div><div class="den-colunas">${colunas}</div></div>
       <div class="bloco"><div class="sec-title">Como foram tratadas</div>
         ${barras(d.por_tratativa, i => i.valor || 'Pendente', i => corDaTratativa(i.valor).cor)}</div>
-      <div class="bloco"><div class="sec-title">Bairros com mais denúncias</div>${barras(d.por_bairro, i => bairroCurto(i.valor) || 'Sem bairro')}</div>
+      <div class="bloco"><div class="sec-title">Bairros com mais denúncias</div>${barras(d.por_bairro, i => i.valor || 'Sem bairro')}</div>
       <div class="bloco"><div class="sec-title">Fonte do barulho</div>${barras(d.por_fonte, i => i.valor || 'Não informada')}</div>
     </div>`
 }

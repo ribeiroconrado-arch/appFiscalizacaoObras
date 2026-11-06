@@ -168,7 +168,7 @@ function tabelaDocumentos() {
         <td><span class="tl-cod">${esc(d.numero || '—')}</span></td>
         <td title="${esc(dica)}">${esc(tipo)}</td>
         <td>${esc(d.lote_curto ?? d.imovel)}</td>
-        <td class="tl-cinza" title="${esc(d.bairro ?? '')}">${esc(bairroCurto(d.bairro) || '—')}</td>
+        <td class="tl-cinza" title="${esc(d.bairro ?? '')}">${esc(d.bairro ?? '—')}</td>
         <td title="${esc(d.autuado)}">${esc(d.autuado)}</td>
         <td class="tl-cinza" title="${esc(d.agente ?? '')}">${esc(d.agente ?? '—')}</td>
         <td>${esc((d.data || '').slice(0, 5))}</td>

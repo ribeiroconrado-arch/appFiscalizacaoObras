@@ -106,7 +106,7 @@ function renderHistoricoCadastral(truncou) {
           <span class="hc-acao ${tipo.cls}">${esc(tipo.rotulo)}</span>
           <span class="hc-quando">${esc(l.quando)}</span>
         </div>
-        <div class="hc-l2">${alvoTxt}${l.bairro ? `<span class="hc-bairro" title="${esc(l.bairro)}">${esc(bairroCurto(l.bairro))}</span>` : ''}</div>
+        <div class="hc-l2">${alvoTxt}${l.bairro ? `<span class="hc-bairro">${esc(l.bairro)}</span>` : ''}</div>
         ${oQue}
         <div class="hc-l3"><span class="hc-quem">${esc(l.quem)}</span>
           <span class="hc-botoes">${prancha}${desfazer}</span></div>

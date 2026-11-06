@@ -264,7 +264,8 @@ class MapaController extends Controller
                 // do município chama o lugar.
                 'bairro'      => $l->bairro,
                 'bairro_oficial' => $bairros->oficial($l->bairro),
-                // E o APELIDO, só para o rótulo do mapa (Parâmetros › Bairros).
+                // E o APELIDO (ou null): rótulo do mapa e linhas curtas, como o
+                // resumo da vistoria e do protocolo (Parâmetros › Bairros).
                 'apelido'     => $bairros->apelido($l->bairro),
                 'quadra'      => $l->quadra,
                 'numero_lote' => $l->numero_lote,

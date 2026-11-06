@@ -199,8 +199,9 @@ class BairrosDoDesenho
     private ?array $apelidos = null;
 
     /**
-     * Como o bairro aparece no MAPA: o apelido cadastrado, ou o próprio nome
-     * do desenho. É só rótulo — nunca serve de chave para achar lote.
+     * O apelido cadastrado (Parâmetros › Bairros), ou null se não houver: quem
+     * mostra cai no nome que já tinha. Só rótulo (mapa e linhas curtas); nunca
+     * é chave de lote, e documento oficial sai sempre com o nome completo.
      */
     public function apelido(?string $nomeDoDesenho): ?string
     {
@@ -217,6 +218,6 @@ class BairrosDoDesenho
             }
         }
 
-        return $this->apelidos[self::chave($nomeDoDesenho)] ?? $nomeDoDesenho;
+        return $this->apelidos[self::chave($nomeDoDesenho)] ?? null;
     }
 }

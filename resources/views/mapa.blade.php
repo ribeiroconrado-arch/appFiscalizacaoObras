@@ -4378,7 +4378,6 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 </script>
 <script src="{{ asset('vendor/leaflet-1.9.4/leaflet.js') }}"></script>
 <script src="@assetv('js/ui.js')"></script>
-<script src="@assetv('js/nome-do-bairro.js')"></script>
 {{-- O registro das camadas vem cedo: os módulos seguintes registram as suas. --}}
 <script src="@assetv('js/camadas-mapa.js')"></script>
 <script src="@assetv('js/pesquisa-mapa.js')"></script>

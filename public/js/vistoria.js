@@ -387,11 +387,9 @@ function pintarImovelDaVistoria() {
   const l = vState.lote
   const escolha = document.getElementById('nv-imovel-escolha')
 
-  const nvLote = document.getElementById('nv-lote')
-  nvLote.textContent = l
-    ? `${bairroCurto(bairroDe(l))} · Quadra ${l.quadra ?? '—'} · Lote ${l.numero_lote ?? '—'}`
+  document.getElementById('nv-lote').textContent = l
+    ? `${l.apelido || bairroDe(l)} · Quadra ${l.quadra ?? '—'} · Lote ${l.numero_lote ?? '—'}`
     : 'Imóvel não identificado'
-  nvLote.title = l ? bairroDe(l) : ''
 
   if (escolha) { escolha.hidden = !!l }
 }

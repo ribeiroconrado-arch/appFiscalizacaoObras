@@ -215,8 +215,7 @@
 @endif
 <div class="campo">
   <div class="lbl">Bairro / Quadra / Lote</div>
-  {{-- A linha junta três coisas na bobina de 58 mm: o bairro longo vai abreviado (NomeDoBairro). --}}
-  <div class="val">{{ \App\Cadastro\NomeDoBairro::curto($imovel['bairro']) ?: '—' }} · Q {{ $imovel['quadra'] ?? '—' }} · Lt {{ $imovel['lote'] ?? '—' }}</div>
+  <div class="val">{{ $imovel['bairro'] ?: '—' }} · Q {{ $imovel['quadra'] ?? '—' }} · Lt {{ $imovel['lote'] ?? '—' }}</div>
 </div>
 @if ($doc->area_terreno_m2 || $doc->area_construida_m2)
   <div class="campo">
