@@ -444,8 +444,8 @@ class LoteRepository
      * que a coluna `geom POLYGON` recusaria no INSERT — melhor devolver o tipo
      * e deixar o serviço dar a mensagem do que colher uma exceção de banco.
      *
-     * A ÁREA daqui é a do MySQL e serve só de referência cruzada. Quem decide
-     * é GeometriaPlana: em SRID 4326 as operações booleanas do MySQL já se
+     * A ÁREA daqui é a de GeometriaPlana (a mesma do lote gravado). A do MySQL
+     * não serve: em SRID 4326 as operações booleanas do MySQL já se
      * mostraram erradas (o `ST_Intersection` reportou 215,5 m² entre dois lotes
      * de 214,47 m² que não se sobrepõem).
      *
@@ -459,20 +459,41 @@ class LoteRepository
             return null;
         }
 
-        $acumulado = DB::scalar('SELECT ST_AsGeoJSON(geom) FROM lotes WHERE id = ?', [array_shift($ids)]);
+        // NO PLANO (SRID 0) e COM FOLGA: cada lote cresce 5 cm (cantos em
+        // esquadro), une, e a união encolhe os mesmos 5 cm no fim.
+        //
+        // Em SRID 4326 o ST_Union perde pedaços e o resultado muda com a ORDEM
+        // dos lotes: na Q28 do Buritis I (24 lotes, 5.880 m²) deu 5.640, 5.400
+        // ou 1.200 m² conforme a ordem — sempre "um polígono só", sem aviso. E
+        // os lotes do desenho não se encostam com exatidão: frestas de
+        // milímetros (que `desencostado` aceita até 10 cm) partiam a união.
+        // A folga fecha frestas menores que 10 cm e não mexe no contorno de
+        // fora; sobreposição de verdade continua aparecendo na conta de área.
+        // Conferido nas 1.866 quadras de produção em 06/11/2026.
+        $folga = self::FOLGA_GRAUS;
+        $esquadro = "ST_Buffer_Strategy('join_miter', 10)";
+        $acumulado = DB::scalar(
+            "SELECT ST_AsWKB(ST_Buffer(ST_GeomFromGeoJSON(ST_AsGeoJSON(geom), 1, 0), {$folga}, {$esquadro})) FROM lotes WHERE id = ?",
+            [array_shift($ids)]
+        );
         if (! $acumulado) {
             return null;
         }
 
         foreach ($ids as $id) {
             $acumulado = DB::scalar(
-                'SELECT ST_AsGeoJSON(ST_Union(ST_GeomFromGeoJSON(?, 1, 4326), geom))
-                   FROM lotes WHERE id = ?',
+                "SELECT ST_AsWKB(ST_Union(ST_GeomFromWKB(?, 0),
+                        ST_Buffer(ST_GeomFromGeoJSON(ST_AsGeoJSON(geom), 1, 0), {$folga}, {$esquadro})))
+                   FROM lotes WHERE id = ?",
                 [$acumulado, $id]
             );
             if (! $acumulado) {
                 return null;
             }
+        }
+        $acumulado = DB::scalar("SELECT ST_AsGeoJSON(ST_Buffer(ST_GeomFromWKB(?, 0), -{$folga}, {$esquadro}))", [$acumulado]);
+        if (! $acumulado) {
+            return null;
         }
         $acumulado = self::semLascas($acumulado);
 
@@ -486,10 +507,17 @@ class LoteRepository
         return [
             'geojson' => $acumulado,
             'tipo'    => (string) $r->tipo,
-            'area_m2' => (float) $r->area,
+            // Na régua de GRADE, a mesma de todo lote gravado (areaDoGeoJson).
+            // O ST_Area é geodésico e dá ~0,13% a menos: o lote unificado
+            // nascia com área divergente do cadastro, e só um "Salvar" na
+            // edição — que remede na grade — a acertava (06/11/2026).
+            'area_m2' => (string) $r->tipo === 'POLYGON' ? $this->areaDoGeoJson($acumulado) : (float) $r->area,
             'furos'   => (int) $r->furos,
         ];
     }
+
+    /** 5 cm em graus: a folga da união (metade dos 10 cm de `desencostado`). */
+    private const FOLGA_GRAUS = 0.05 / 111320;
 
     /** Abaixo disto (m²) uma parte ou um furo da união é resíduo de arredondamento. */
     private const LASCA_M2 = 0.01;
