@@ -1312,7 +1312,8 @@ function numerarLoteDaPreCuradoria() {
   pedirTexto({
     titulo: 'Número do lote',
     rotulo: `Quadra ${p.quadra ?? '—'} · número atual: ${p.numero_lote ?? 'sem número'}`,
-    dica: 'A quadra continua a mesma. Para mudar a quadra, use "Corrigir quadra".',
+    dica: `Inscrição atual: ${p.inscricao || 'sem inscrição'}. Ela muda junto com o número e, se já for de outro lote, `
+      + 'nada é gravado. A quadra continua a mesma; para mudá-la, use "Corrigir quadra".',
     minimo: 1, linhas: 1, valor: p.numero_lote ?? '', textoBtn: 'Gravar número',
     onOk: async numero => {
       try {

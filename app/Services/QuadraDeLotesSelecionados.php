@@ -84,6 +84,10 @@ class QuadraDeLotesSelecionados
                 'lote' => $l->numero_lote,
                 'de'   => $l->quadra,
                 'para' => $quadra,
+                // A inscrição acompanha: a tela mostra a de antes e a nova.
+                'inscricao_de'   => (new \App\Cadastro\BairrosDoDesenho())->inscricaoDe($l),
+                'inscricao_para' => \App\Support\InscricaoImobiliaria::formatar(
+                    app(\App\Cadastro\InscricaoQueAcompanha::class)->nova($l, $quadra, $l->numero_lote)),
             ])->values()->all(),
             'origens'        => $comQuadra->pluck('quadra')->unique()->sort()->values()->all(),
         ];
@@ -154,6 +158,11 @@ class QuadraDeLotesSelecionados
                 . '. Gravar criaria duas identificações iguais.';
         }
 
+        // A inscrição acompanha a quadra e não pode ser a de outro lote.
+        if ($erro = app(\App\Cadastro\InscricaoQueAcompanha::class)->impedimentoNaQuadra($lotes, $quadra)) {
+            return $erro;
+        }
+
         return null;
     }
 
@@ -222,6 +231,7 @@ class QuadraDeLotesSelecionados
     {
         return DB::transaction(function () use ($ids, $quadra) {
             $n = 0;
+            $insc = app(\App\Cadastro\InscricaoQueAcompanha::class);
             foreach (Lote::whereIn('id', $ids)->lockForUpdate()->get() as $lote) {
                 if ((string) $lote->quadra === $quadra) {
                     continue;   // já está lá: não é alteração, e não vira linha de auditoria
@@ -229,7 +239,7 @@ class QuadraDeLotesSelecionados
                 $lote->update([
                     'quadra' => $quadra,
                     'chave'  => $lote->bairro . '|' . $quadra . '|' . ($lote->numero_lote ?: '?'),
-                ]);
+                ] + $insc->campos($lote, $insc->nova($lote, $quadra, $lote->numero_lote)));
                 $n++;
             }
 
@@ -291,6 +301,6 @@ class QuadraDeLotesSelecionados
     {
         return DB::table('lotes')->whereIn('id', $ids)->where('situacao', 'ativo')
             ->orderByRaw('CAST(numero_lote AS UNSIGNED)')
-            ->get(['id', 'bairro', 'quadra', 'numero_lote']);
+            ->get(['id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'inscricao_imobiliaria', 'inscricao_montada']);
     }
 }

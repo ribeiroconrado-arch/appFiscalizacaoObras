@@ -46,10 +46,17 @@ class PreCuradoriaDeLotes
             throw new RuntimeException("Já existe o lote {$numero} na quadra {$lote->quadra} de {$lote->bairro}.");
         }
 
+        // A inscrição acompanha o número — e não pode ser a de outro lote.
+        $insc = app(\App\Cadastro\InscricaoQueAcompanha::class);
+        $nova = $insc->nova($lote, $lote->quadra, $numero);
+        if ($erro = $insc->impedimento($nova, [$lote->id])) {
+            throw new RuntimeException($erro);
+        }
+
         $lote->update([
             'numero_lote' => $numero,
             'chave'       => $lote->bairro . '|' . ($lote->quadra ?? '?') . '|' . $numero,
-        ]);
+        ] + $insc->campos($lote, $nova));
 
         return $lote;
     }

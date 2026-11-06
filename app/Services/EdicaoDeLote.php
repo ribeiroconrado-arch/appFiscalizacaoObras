@@ -48,6 +48,14 @@ class EdicaoDeLote
         if ($mudaIdentidade && ($fracao = FracaoIdealDeLote::impedimentoDeCurar([$lote->id], 'trocar a quadra ou o número'))) {
             return $fracao;
         }
+        // A inscrição acompanha a quadra e o número, e não pode ser a de outro lote.
+        if ($mudaIdentidade) {
+            $novos = $this->dados($lote, $d);
+            $insc = app(\App\Cadastro\InscricaoQueAcompanha::class);
+            if ($erro = $insc->impedimento($insc->nova($lote, $novos['quadra'], $novos['numero_lote']), array_merge([$lote->id], $tambem))) {
+                return $erro;
+            }
+        }
 
         return $this->desenho->impedimento($this->dados($lote, $d), $tambem ? array_merge([$lote->id], $tambem) : $lote->id, $sobreposicao);
     }
@@ -77,7 +85,7 @@ class EdicaoDeLote
         $area = round($this->lotes->areaDoGeoJson($geojson), 2);
 
         return DB::transaction(function () use ($lote, $dados, $geojson, $area) {
-            $antes = $lote->only(['quadra', 'numero_lote', 'chave', 'area_gis_m2']);
+            $antes = $lote->only(['quadra', 'numero_lote', 'chave', 'area_gis_m2', 'inscricao_imobiliaria', 'inscricao_montada']);
             // O contorno de antes fica na trilha — também na pré-curadoria, onde
             // é dele que o "Desfazer" do ajuste tira o desenho (DesfazerAlteracao).
             $antes['contorno'] = DB::table('lotes')->where('id', $lote->id)->selectRaw('ST_AsGeoJSON(geom) g')->value('g');
@@ -87,6 +95,10 @@ class EdicaoDeLote
                 'chave'       => $lote->bairro . '|' . $dados['quadra'] . '|' . $dados['numero_lote'],
                 'area_gis_m2' => $area,
             ];
+            // A inscrição acompanha (a prova de que não é de outro lote está em impedimento()).
+            $insc = app(\App\Cadastro\InscricaoQueAcompanha::class);
+            $inscricao = ((string) $dados['quadra'] !== (string) $lote->quadra || (string) $dados['numero_lote'] !== (string) $lote->numero_lote)
+                ? $insc->campos($lote, $insc->nova($lote, $dados['quadra'], $dados['numero_lote'])) : [];
 
             // UPDATE cru: `geom` só se escreve por expressão SQL. O evento do
             // Eloquent não dispara, e a trilha é gravada à mão logo abaixo
@@ -96,6 +108,12 @@ class EdicaoDeLote
                          WHERE id = ?',
                 [$depois['quadra'], $depois['numero_lote'], $depois['chave'], $area,
                  $geojson, now(), $lote->id]);
+
+            if ($inscricao) {
+                DB::table('lotes')->where('id', $lote->id)->update($inscricao);
+                unset($inscricao['inscricao_montada_em']);
+                $depois += $inscricao;
+            }
 
             $novo = Lote::findOrFail($lote->id);
             $novo->registrarAuditoria('editou', $antes, $depois + ['contorno' => 'redesenhado']);

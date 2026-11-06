@@ -213,7 +213,10 @@ class ImportacaoController extends Controller
             return $this->recusa($ex);
         }
 
-        return response()->json(['message' => 'Quadra ' . ($l->quadra ?? '—') . ": lote agora é o nº {$l->numero_lote}."]);
+        $insc = $l->inscricaoFormatada();
+
+        return response()->json(['message' => 'Quadra ' . ($l->quadra ?? '—') . ": lote agora é o nº {$l->numero_lote}"
+            . ($insc ? ", inscrição {$insc}." : '.')]);
     }
 
     /** POST /api/importacoes/{importacao}/lotes/excluir — só na pré-curadoria. */

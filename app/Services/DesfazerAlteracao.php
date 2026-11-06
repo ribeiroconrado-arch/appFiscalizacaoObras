@@ -181,6 +181,15 @@ class DesfazerAlteracao
                                geom = ST_GeomFromGeoJSON(?, 1, 4326), updated_at = ? WHERE id = ?',
                 [$volta['quadra'], $volta['numero_lote'], $volta['chave'], $volta['area_gis_m2'],
                  $antes['contorno'], now(), $lote->id]);
+            // A inscrição volta com a quadra e o número.
+            if ((string) $volta['quadra'] !== (string) $lote->quadra || (string) $volta['numero_lote'] !== (string) $lote->numero_lote) {
+                $insc = app(\App\Cadastro\InscricaoQueAcompanha::class);
+                $nova = $insc->nova($lote, $volta['quadra'], $volta['numero_lote']);
+                if ($erro = $insc->impedimento($nova, [$lote->id])) {
+                    throw new \RuntimeException($erro);
+                }
+                DB::table('lotes')->where('id', $lote->id)->update($insc->campos($lote, $nova));
+            }
             Lote::findOrFail($lote->id)->registrarAuditoria('editou', $de, $volta + ['contorno' => 'desfeito: voltou o anterior']);
 
             return 'Edição desfeita: o contorno de antes voltou (' . number_format((float) $volta['area_gis_m2'], 2, ',', '.') . ' m²).';

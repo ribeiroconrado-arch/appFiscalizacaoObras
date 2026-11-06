@@ -240,7 +240,9 @@ class QuadraDoQuarteirao
                 . '. Gravar criaria duas identificações iguais — confira o número da quadra.';
         }
 
-        return null;
+        // A inscrição acompanha a quadra e não pode ser a de outro lote.
+        return app(\App\Cadastro\InscricaoQueAcompanha::class)
+            ->impedimentoNaQuadra(Lote::whereIn('id', $ids)->get(), $quadra);
     }
 
     /**
@@ -261,11 +263,12 @@ class QuadraDoQuarteirao
     {
         return DB::transaction(function () use ($bairro, $ids, $quadra) {
             $n = 0;
+            $insc = app(\App\Cadastro\InscricaoQueAcompanha::class);
             foreach (Lote::whereIn('id', $ids)->get() as $lote) {
                 $lote->update([
                     'quadra' => $quadra,
                     'chave'  => $bairro . '|' . $quadra . '|' . ($lote->numero_lote ?: '?'),
-                ]);
+                ] + $insc->campos($lote, $insc->nova($lote, $quadra, $lote->numero_lote)));
                 $n++;
             }
 

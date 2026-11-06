@@ -1092,7 +1092,8 @@ async function conferirQuadraSelecao() {
     const avisos = d.avisos.map(a => `<div class="cad-nota cad-aviso">${esc(a)}</div>`).join('')
     const dePara = r.de_para.length
       ? `<div class="cad-lista">${r.de_para.map(x =>
-          `<span>Lote ${esc(x.lote)} · Q${esc(x.de)} → <b>Q${esc(x.para)}</b></span>`).join('')}</div>`
+          `<span>Lote ${esc(x.lote)} · Q${esc(x.de)} → <b>Q${esc(x.para)}</b>${x.inscricao_para && x.inscricao_para !== x.inscricao_de
+            ? ` · inscrição ${esc(x.inscricao_de || '—')} → <b>${esc(x.inscricao_para)}</b>` : ''}</span>`).join('')}</div>`
       : ''
     const resto = r.sobrescreve > r.de_para.length
       ? `<div class="cad-nota">… e mais ${r.sobrescreve - r.de_para.length}.</div>` : ''
