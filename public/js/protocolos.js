@@ -179,9 +179,11 @@ async function salvarProtocolo(dados, id = protoState.atual?.id) {
 function novoProtocolo() {
   const sel = state.selecionado?.properties
   document.getElementById('np-lote').value = sel?.id ?? ''
-  document.getElementById('np-imovel').textContent = sel
-    ? `${sel.bairro} · Quadra ${sel.quadra ?? '—'} · Lote ${sel.numero_lote ?? '—'}`
+  const npImovel = document.getElementById('np-imovel')
+  npImovel.textContent = sel
+    ? `${bairroCurto(sel.bairro)} · Quadra ${sel.quadra ?? '—'} · Lote ${sel.numero_lote ?? '—'}`
     : 'Nenhum lote selecionado no mapa (opcional)'
+  npImovel.title = sel?.bairro ?? ''
 
   document.getElementById('np-numero').value = ''
   document.getElementById('np-requerente').value = ''
