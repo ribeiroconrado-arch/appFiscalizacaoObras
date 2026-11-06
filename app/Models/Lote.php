@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Cadastro\BairrosDoDesenho;
 use App\Models\Concerns\RegistraAuditoria;
 use App\Support\InscricaoImobiliaria;
+use App\Support\NumeroDoLote;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -84,6 +85,21 @@ class Lote extends Model
         static::addGlobalScope('sem_geometria', function (Builder $q) {
             $q->select(array_map(fn ($c) => 'lotes.' . $c, self::COLUNAS));
         });
+    }
+
+    /**
+     * "4" e "04" são o mesmo lote: o que passa pelo Eloquent é gravado numa
+     * grafia só (App\Support\NumeroDoLote). Os INSERT/UPDATE crus normalizam
+     * por conta própria, e o índice único compara pela mesma regra.
+     */
+    public function setNumeroLoteAttribute($valor): void
+    {
+        $this->attributes['numero_lote'] = NumeroDoLote::normalizar($valor === null ? null : (string) $valor);
+    }
+
+    public function setChaveAttribute($valor): void
+    {
+        $this->attributes['chave'] = NumeroDoLote::naChave($valor === null ? null : (string) $valor);
     }
 
     /**

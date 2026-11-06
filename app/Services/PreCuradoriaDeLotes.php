@@ -30,7 +30,7 @@ class PreCuradoriaDeLotes
     {
         $this->exigirDaImportacao($imp, [$lote->id]);
 
-        $numero = trim($numero);
+        $numero = \App\Support\NumeroDoLote::normalizar($numero);
         if ($numero === '') {
             throw new RuntimeException('Informe o número do lote.');
         }
@@ -40,7 +40,7 @@ class PreCuradoriaDeLotes
 
         // A mesma prova do índice único, dita antes dele e em português.
         $repetido = Lote::where('situacao', 'ativo')->where('bairro', $lote->bairro)
-            ->where('quadra', $lote->quadra)->where('numero_lote', $numero)
+            ->where('quadra', $lote->quadra)->whereRaw(\App\Support\NumeroDoLote::SQL . ' = ?', [$numero])
             ->where('id', '<>', $lote->id)->exists();
         if ($repetido && $lote->quadra !== null) {
             throw new RuntimeException("Já existe o lote {$numero} na quadra {$lote->quadra} de {$lote->bairro}.");

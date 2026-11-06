@@ -44,6 +44,28 @@ class CadastroImobiliarioController extends Controller
     }
 
     /**
+     * GET /api/imoveis/{lote}/resumo — o proprietário para o BALÃO do mapa.
+     *
+     * Só o nome do primeiro e quantos mais há: o balão é olhado de passagem,
+     * e CPF ou endereço ali seriam dado pessoal exposto sem necessidade (estão
+     * na aba Cadastro da ficha). Uma consulta indexada pela inscrição — ~8 ms
+     * no servidor. Externo recebe `visivel: false` (ProprietariosVisiveis).
+     */
+    public function resumo(Lote $lote): JsonResponse
+    {
+        $donos = ProprietariosVisiveis::para(request()->user(), $this->fonte->proprietarios($lote));
+        if ($donos === null) {
+            return response()->json(['visivel' => false]);
+        }
+
+        return response()->json([
+            'visivel'      => true,
+            'proprietario' => $donos[0]['nome'] ?? null,
+            'outros'       => max(0, count($donos) - 1),
+        ]);
+    }
+
+    /**
      * PUT /api/imoveis/{lote}/progressividade
      *
      * O único dado desta aba que NÃO vem do cadastro municipal: é lançado pela

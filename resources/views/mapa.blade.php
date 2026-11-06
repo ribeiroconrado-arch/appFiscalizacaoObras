@@ -1461,7 +1461,7 @@
       <div class="fi-fixo-dados">
         <span><span class="fi-rot">Insc. Imob.</span><span class="mono" id="fi-inscricao">—</span></span>
         <span><span class="fi-rot">Coord.</span><span class="mono" id="fi-coord">—</span></span>
-        <span><span class="fi-rot">Área GIS</span><span id="fi-area">—</span></span>
+        <span><span class="fi-rot" id="fi-area-rot">Área</span><span id="fi-area">—</span></span>
       </div>
     </div>
 
@@ -4371,6 +4371,9 @@ window.USUARIO_ADMIN = {{ Js::from(auth()->user()->isAdmin()) }}
 window.PODE_VER_DOCUMENTOS = {{ Js::from(auth()->user()->podeVerDocumentos()) }}
 {{-- Curador do cadastro: vê lotes não publicados e a conferência com o cadastro. --}}
 window.USUARIO_CURADOR = {{ Js::from(auth()->user()->podeCurarCadastro()) }}
+{{-- O balão só reserva a linha do proprietário para quem pode vê-lo; quem
+     decide o que vai junto é ProprietariosVisiveis, no servidor. --}}
+window.VE_PROPRIETARIO = {{ Js::from(! auth()->user()->isExterno()) }}
 window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 </script>
 <script src="{{ asset('vendor/leaflet-1.9.4/leaflet.js') }}"></script>

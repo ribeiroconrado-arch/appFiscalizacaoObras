@@ -852,6 +852,13 @@ class LoteRepository
 
     public function criarComGeometria(array $atributos, string $geojson): int
     {
+        // "4" e "04" são o mesmo lote: grava numa grafia só (NumeroDoLote).
+        if (array_key_exists('numero_lote', $atributos)) {
+            $atributos['numero_lote'] = \App\Support\NumeroDoLote::normalizar($atributos['numero_lote']);
+        }
+        if (array_key_exists('chave', $atributos)) {
+            $atributos['chave'] = \App\Support\NumeroDoLote::naChave($atributos['chave']);
+        }
         $colunas = array_keys($atributos);
         $marcas  = array_fill(0, count($colunas), '?');
 

@@ -155,7 +155,10 @@ class DesmembramentosDoLevantamento extends Command
         $c = $this->novoCaso('desmembrado', $chave, $bairro, $quadra, [$numero]);
         $nao = function (string $motivo) use (&$c) { return ['motivo' => $motivo] + $c; };
 
-        $ativos = Lote::query()->where('chave', $chave)->where('situacao', 'ativo')->get();
+        // O arquivo do conversor escreve "|04"; o banco, "|4" (NumeroDoLote). A
+        // chave do CASO continua a do arquivo: é ela que reconhece o caso já
+        // aplicado ou descartado.
+        $ativos = Lote::query()->where('chave', \App\Support\NumeroDoLote::naChave($chave))->where('situacao', 'ativo')->get();
         if ($ativos->count() !== 1) {
             return $nao($ativos->isEmpty()
                 ? 'O lote não está ativo no sistema (já mudou depois da base, ou foi desmembrado aqui).'
@@ -233,7 +236,7 @@ class DesmembramentosDoLevantamento extends Command
 
         $lotes = [];
         foreach ($u['chaves'] as $ch) {
-            $a = Lote::query()->where('chave', $ch)->where('situacao', 'ativo')->get();
+            $a = Lote::query()->where('chave', \App\Support\NumeroDoLote::naChave($ch))->where('situacao', 'ativo')->get();
             if ($a->count() !== 1) {
                 return $nao($a->isEmpty() ? "O lote {$ch} não está ativo no sistema (já mudou depois da base)." : "Mais de um lote ativo com a chave {$ch}.");
             }

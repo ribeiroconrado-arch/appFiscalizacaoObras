@@ -970,10 +970,16 @@ function abrirBalao(feicao, camada) {
   const p = feicao.properties
   state.selecionado = feicao
 
-  const areaTerreno = p.area_m2 ?? p.area_gis_m2   // a do cadastro oficial, quando há
-  const area = areaTerreno
-    ? Number(areaTerreno).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' m²'
-    : 'área não informada'
+  // AS DUAS ÁREAS, lado a lado (05/11/2026): não houve levantamento
+  // georreferenciado, então não há "área GIS" — há a do MAPA (o desenho) e a
+  // do CADASTRO municipal. Diferença acima do arredondamento (0,02 m², a mesma
+  // folga da conferência) pinta o quadro do cadastro e diz quanto.
+  const m2 = n => n == null || n === '' ? '—' : fmtBR(n) + ' m²'
+  const areaMapa = p.area_gis_m2 ? Number(p.area_gis_m2) : null
+  const areaCad = p.area_oficial && p.area_m2 != null ? Number(p.area_m2) : null
+  const dif = areaMapa != null && areaCad != null ? areaMapa - areaCad : 0
+  const difere = Math.abs(dif) > 0.02
+  const situacao = p.em_revisao ? ['EM REVISÃO', 'sit-rev'] : ['ATIVO', 'sit-ativo']
 
   // O chip só aparece quando existe inscrição imobiliária — o código pelo
   // qual a prefeitura conhece o imóvel. Cair para a chave interna aqui
@@ -1006,10 +1012,16 @@ function abrirBalao(feicao, camada) {
         <table class="balao4-tab">
           <tr><td>Bairro</td><td>${esc(bairroDe(p))}</td></tr>
           <tr><td>Inscrição</td><td class="balao4-mono">${esc(p.inscricao || '—')}</td></tr>
-          <tr><td>Área GIS</td><td><b>${area}</b></td></tr>
+          ${window.VE_PROPRIETARIO ? `<tr><td>Proprietário</td><td class="balao4-dono" id="balao-dono"><span class="balao4-sk"></span></td></tr>` : ''}
           ${medidas ? `<tr><td>Frente × fundos</td><td>${medidas}</td></tr>` : ''}
-          <tr><td>Origem</td><td><span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span></td></tr>
         </table>
+        <div class="balao4-grade">
+          <div class="balao4-cel"><span>A. mapa</span><b>${m2(areaMapa)}</b></div>
+          <div class="balao4-cel${difere ? ' difere' : ''}"><span>A. BCI</span><b>${m2(areaCad)}</b></div>
+          ${difere ? `<div class="balao4-dif">Diferença de ${fmtBR(Math.abs(dif))} m² entre o mapa e o BCI</div>` : ''}
+          <div class="balao4-cel"><span>Origem</span><b><span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span></b></div>
+          <div class="balao4-cel"><span>Sit.</span><b><span class="balao4-sit ${situacao[1]}">${situacao[0]}</span></b></div>
+        </div>
         ${typeof htmlFracaoNoBalao === 'function' ? htmlFracaoNoBalao(p) : ''}
         <div class="balao4-acoes" style="grid-template-columns:repeat(${atalhos.length},1fr)">${atalhos.join('')}</div>
         <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Abrir ficha</button>
@@ -1020,6 +1032,46 @@ function abrirBalao(feicao, camada) {
     className: 'popup-lote', closeButton: true, maxWidth: 300, minWidth: 270, autoPan: true,
   }).openPopup()
   if (typeof preencherFracaoNoBalao === 'function') preencherFracaoNoBalao(p)
+  if (window.VE_PROPRIETARIO) preencherDonoNoBalao(p.id, camada.getPopup()?.getElement())
+}
+
+/** O proprietário de cada lote já aberto: não se pergunta duas vezes. */
+const _donosDoBalao = new Map()
+
+/**
+ * Pede o proprietário (GET /api/imoveis/{id}/resumo). O balão abre na hora
+ * com o que o mapa já tem, e a barra cinza vira o nome quando ele chega — em
+ * geral uma fração de segundo. Não vai junto dos lotes do mapa: seria peso em
+ * toda carga e os nomes da cidade inteira entregues de uma vez.
+ * @param {number} id
+ * @returns {Promise<{visivel:boolean, proprietario?:?string, outros?:number}|null>}
+ */
+function pedirDonoDoLote(id) {
+  if (!id || !window.VE_PROPRIETARIO) return Promise.resolve(null)
+  if (!_donosDoBalao.has(id)) {
+    _donosDoBalao.set(id, fetch(`/api/imoveis/${id}/resumo`, { headers: { Accept: 'application/json' } })
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then(d => { if (!d) _donosDoBalao.delete(id); return d }))
+  }
+  return _donosDoBalao.get(id)
+}
+
+/**
+ * Preenche DENTRO do balão que pediu (`raiz`), e não pelo id na página: o
+ * balão anterior some com animação, e por um instante os dois existem — o
+ * nome caía no que estava saindo.
+ * @param {number} id @param {?HTMLElement} raiz
+ */
+async function preencherDonoNoBalao(id, raiz) {
+  const d = await pedirDonoDoLote(id)
+  const cel = (raiz || document).querySelector('#balao-dono')
+  if (!cel || state.selecionado?.properties?.id !== id) return
+  if (!d) { cel.innerHTML = '<span class="balao4-fraco">não carregou</span>'; return }
+  if (!d.visivel) { cel.closest('tr')?.remove(); return }
+  cel.innerHTML = d.proprietario
+    ? esc(d.proprietario) + (d.outros ? `<span class="balao4-fraco"> e mais ${d.outros}</span>` : '')
+    : '<span class="balao4-fraco">sem imóvel no cadastro</span>'
 }
 
 /** Atalhos do balão: o lote já está em `state.selecionado`. */

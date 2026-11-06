@@ -20,6 +20,30 @@
 .balao4-tab tr+tr td{border-top:1px solid var(--blt)}
 .balao4-mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px}
 .balao4-quebra{white-space:normal}
+/* Modelo A (05/11/2026): rótulo e valor na mesma linha, em quadros dois a dois —
+   A. mapa | A. cadastro, Origem | Sit. */
+.balao4-tab:has(+ .balao4-grade){margin-bottom:0}
+/* minmax(0,1fr): sem ele, "12.010,00 m²" alarga a coluna e empurra o quadro
+   para fora do balão. Área de gleba que não cabe ao lado do rótulo desce
+   para baixo dele (flex-wrap); a de lote comum fica na mesma linha. */
+.balao4-grade{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;margin:8px 0 10px}
+.balao4-cel{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;column-gap:4px;min-height:28px;
+  padding:4px 5px;border-radius:7px;background:var(--bg,#F5F7F4);min-width:0}
+/* 20px a mais no balão do lote: é o que faz "A. BCI 1.234,56 m²" caber numa linha. */
+.balao4:has(.balao4-grade){width:300px}
+.balao4-cel > span{color:var(--tx3);font-size:10.5px;white-space:nowrap}
+.balao4-cel > b{font-weight:600;white-space:nowrap}
+.balao4-cel .lote-tag-origem{padding:1px 6px;font-size:10px}
+.balao4-cel.difere{background:var(--wlt,#FFF4E0);box-shadow:inset 0 0 0 1px var(--warn,#E8B04A)}
+.balao4-dif{grid-column:1/-1;font-size:11px;color:#8A5300;padding:0 2px}
+.balao4-sit{display:inline-block;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.03em;border:1px solid}
+.balao4-sit.sit-ativo{background:#e7f3e9;color:#006c16;border-color:#b6d5bd}
+.balao4-sit.sit-rev{background:#FFF6DD;color:#8A5300;border-color:#F2DE9C}
+.balao4-dono{font-weight:600;white-space:normal}
+.balao4-fraco{color:var(--tx3);font-weight:400}
+.balao4-sk{display:inline-block;width:130px;height:10px;border-radius:4px;vertical-align:middle;
+  background:linear-gradient(90deg,#ECEFEB,#F7F8F6,#ECEFEB);background-size:200% 100%;animation:balao4-sk 1s linear infinite}
+@keyframes balao4-sk{to{background-position:-200% 0}}
 .balao4-acoes{display:grid;gap:6px;margin-bottom:8px}
 .balao-q{border:1px solid var(--bord);border-radius:8px;background:var(--sur);color:var(--gd);
   font:inherit;font-size:11px;padding:6px 0 5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}

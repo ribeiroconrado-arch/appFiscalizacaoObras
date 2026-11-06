@@ -172,7 +172,7 @@ class DesfazerAlteracao
         return DB::transaction(function () use ($antes, $lote) {
             $volta = [
                 'quadra'      => $antes['quadra'] ?? $lote->quadra,
-                'numero_lote' => $antes['numero_lote'] ?? $lote->numero_lote,
+                'numero_lote' => \App\Support\NumeroDoLote::normalizar($antes['numero_lote'] ?? $lote->numero_lote),
                 'area_gis_m2' => $antes['area_gis_m2'] ?? $lote->area_gis_m2,
             ];
             $volta['chave'] = $lote->bairro . '|' . ($volta['quadra'] ?? '?') . '|' . ($volta['numero_lote'] ?? '?');

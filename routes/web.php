@@ -104,6 +104,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // O contorno de um imóvel, sob demanda — ver BuscaController::geometria.
         Route::get('/imoveis/{lote}/geometria', [BuscaController::class, 'geometria']);
         Route::get('/imoveis/{lote}/bci', [CadastroImobiliarioController::class, 'mostrar']);
+        // O proprietário do balão do mapa: só o nome (CadastroImobiliarioController::resumo).
+        Route::get('/imoveis/{lote}/resumo', [CadastroImobiliarioController::class, 'resumo']);
         // As unidades de fração ideal do terreno (ou o terreno e as irmãs, vista da unidade).
         Route::get('/imoveis/{lote}/unidades', [\App\Http\Controllers\UnidadesDoTerrenoController::class, 'mostrar']);
         // Edificações desenhadas dentro do lote — o croqui e a área construída.

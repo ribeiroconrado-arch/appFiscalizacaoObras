@@ -189,7 +189,8 @@ class UnificacaoDeLotes
         // Pelo VALOR: "0102" e "102" são o mesmo lote na quadra.
         $choque = DB::table('lotes')->where('bairro', $lotes->first()->bairro)
             ->where('quadra', $lotes->first()->quadra)
-            ->where(fn ($q) => $q->where('numero_lote', $numeroLote)
+            ->where(fn ($q) => $q->whereRaw(\App\Support\NumeroDoLote::SQL . ' = ?',
+                    [\App\Support\NumeroDoLote::normalizar((string) $numeroLote)])
                 ->orWhereRaw("numero_lote REGEXP '^[0-9]+$' AND CAST(numero_lote AS UNSIGNED) = ?", [(int) $numeroLote]))
             ->where('situacao', 'ativo')->whereNotIn('id', $ids)->exists();
 

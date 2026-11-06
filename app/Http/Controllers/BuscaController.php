@@ -364,7 +364,8 @@ class BuscaController extends Controller
                 // "24 9" e "quadra 24 lote 9" caem aqui: dois números soltos
                 // são quadra e lote, na ordem em que se fala.
                 if (count($numeros) >= 2) {
-                    $s->orWhere(fn ($x) => $x->where('quadra', $numeros[0])->where('numero_lote', $numeros[1]));
+                    $s->orWhere(fn ($x) => $x->where('quadra', $numeros[0])
+                        ->where('numero_lote', \App\Support\NumeroDoLote::normalizar((string) $numeros[1])));
                 }
             });
             $usou = true;
@@ -379,7 +380,7 @@ class BuscaController extends Controller
             $usou = true;
         }
         if (! empty($d['quadra'])) { $q->where('quadra', $d['quadra']); $usou = true; }
-        if (! empty($d['lote']))   { $q->where('numero_lote', $d['lote']); $usou = true; }
+        if (! empty($d['lote']))   { $q->where('numero_lote', \App\Support\NumeroDoLote::normalizar((string) $d['lote'])); $usou = true; }
 
         // ── LOGRADOURO E NÚMERO ──
         //

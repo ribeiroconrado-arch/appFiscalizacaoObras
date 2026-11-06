@@ -106,6 +106,9 @@ class ImportacaoDeBairro
                 if (! preg_match('/^\?+$/', $numero)) $nomeDaArea = $numero;
                 $numero = null;
             }
+            // "04" do DWG é o lote 4 (NumeroDoLote): normalizado AQUI, antes de
+            // contar repetidos — "4" e "04" no mesmo arquivo são repetidos.
+            $numero = \App\Support\NumeroDoLote::normalizar($numero);
             $fonte = $p['fonte'] ?? ($nome ?? basename($caminho));
 
             $bairros[$bairro] = true;
@@ -113,7 +116,7 @@ class ImportacaoDeBairro
                 'bairro'      => $bairro,
                 'quadra'      => $quadra,
                 'numero_lote' => $numero,
-                'chave'       => mb_substr($p['chave'] ?? ($bairro . '|?|?'), 0, 180),
+                'chave'       => \App\Support\NumeroDoLote::naChave(mb_substr($p['chave'] ?? ($bairro . '|?|?'), 0, 180)),
                 'area_gis_m2' => $p['area_gis_m2'] ?? null,
                 'fonte'       => mb_substr($nomeDaArea ? "{$fonte} · {$nomeDaArea}" : (string) $fonte, 0, 180),
                 'geojson'     => json_encode($geom),

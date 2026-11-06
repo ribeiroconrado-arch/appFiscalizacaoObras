@@ -17,14 +17,15 @@ try {
     $loaded = $controller->carregar($request)->getData(true);
     if (($loaded['estado']['teste_transacional'] ?? null) !== true) throw new RuntimeException('Falha ao recuperar.');
     $inscricao = '01.105.035.0001.000';
-    foreach ([0=>'0001', 1=>'0001A', 2=>'0001B', 26=>'0001Z', 27=>'0001AA', 28=>'0001AB'] as $sufixo=>$apelido) {
+    // Sem zero à esquerda desde 05/11/2026: o lote 0001 da inscrição é o "1" (NumeroDoLote).
+    foreach ([0=>'1', 1=>'1A', 2=>'1B', 26=>'1Z', 27=>'1AA', 28=>'1AB'] as $sufixo=>$apelido) {
         if (App\Support\InscricaoImobiliaria::apelidoDesmembrado($inscricao, $sufixo) !== $apelido) throw new RuntimeException('Apelido incorreto.');
     }
     foreach ([-1,1000] as $invalido) {
         try { App\Support\InscricaoImobiliaria::apelidoDesmembrado($inscricao, $invalido); throw new RuntimeException('Sufixo inválido aceito.'); }
         catch (InvalidArgumentException $e) {}
     }
-    foreach ([0=>'0001A', 1=>'0001B', 2=>'0001C', 25=>'0001Z', 26=>'0001AA'] as $sufixo=>$apelido) {
+    foreach ([0=>'1A', 1=>'1B', 2=>'1C', 25=>'1Z', 26=>'1AA'] as $sufixo=>$apelido) {
         if (App\Support\InscricaoImobiliaria::apelidoDesmembrado($inscricao, $sufixo, true) !== $apelido) throw new RuntimeException('Sequência iniciada em zero incorreta.');
     }
     foreach (['importacao'=>'ORIGINAL','desmembramento'=>'DESMEMBRADO','unificacao'=>'UNIFICADO'] as $origem=>$tag) {

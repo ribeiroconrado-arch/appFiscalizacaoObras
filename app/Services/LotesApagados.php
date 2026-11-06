@@ -128,6 +128,9 @@ class LotesApagados
             // O lote apagado na PRÉ-CURADORIA volta para dentro da importação,
             // ainda em revisão (importacao_id, em_revisao) — ver DesfazerAlteracao.
             ] + $extras;
+            // O apagado pode ter saído com "04": volta com a grafia de hoje.
+            $atributos['numero_lote'] = \App\Support\NumeroDoLote::normalizar($atributos['numero_lote']);
+            $atributos['chave'] = \App\Support\NumeroDoLote::naChave($atributos['chave']);
 
             $colunas = implode(', ', array_keys($atributos));
             $marcas  = implode(', ', array_fill(0, count($atributos), '?'));

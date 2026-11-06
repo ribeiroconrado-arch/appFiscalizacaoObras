@@ -48,7 +48,8 @@ final class InscricaoImobiliaria
         for ($i = $sufixo + ($iniciaEmZero ? 1 : 0); $i > 0; $i = intdiv($i, 26)) {
             $i--; $letras = chr(65 + $i % 26) . $letras;
         }
-        return substr($n, 8, 4) . $letras;
+        // Sem zero à esquerda: "0004" + "A" é o lote 4A (NumeroDoLote).
+        return NumeroDoLote::normalizar(substr($n, 8, 4) . $letras);
     }
 
     /** Quantos dígitos cada parte ocupa, na ordem. */
