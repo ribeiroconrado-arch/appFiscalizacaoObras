@@ -1083,7 +1083,8 @@ async function abrirContornosDosBairros() {
     : (p.desatualizado ? '<span class="badge bd-pe">desatualizado</span>' : '<span class="badge bd-ok">em dia</span>')
       + (p.editado_manual ? ` <span class="badge bd-num" title="Editado à mão em ${esc(p.editado_em || '')}">editado à mão</span>` : '')
 
-  const nDesat = linhas.filter(l => !l.p || l.p.desatualizado).length
+  const nDesat = linhas.filter(l => l.p?.desatualizado).length
+  const nSem = linhas.filter(l => !l.p).length
   _impCorpo(`
     <div class="jt">
       <div class="jt-topo">
@@ -1118,9 +1119,9 @@ async function abrirContornosDosBairros() {
         <div class="jt-nada" hidden>Nenhum bairro com o que foi pesquisado.</div>
       </div>
       <div class="jt-rodape">
-        <span class="imp-sub">${linhas.length} bairro(s)${nDesat ? ` · ${nDesat} sem contorno ou desatualizado(s)` : ' · todos em dia'}</span>
+        <span class="imp-sub">${linhas.length} bairro(s)${nDesat ? ` · ${nDesat} desatualizado(s)` : ''}${nSem ? ` · ${nSem} sem contorno` : ''}${!nDesat && !nSem ? ' · todos em dia' : ''}</span>
         <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button>
-          ${linhas.length > 1 ? `<button class="btn primary" onclick="gerarTodosOsContornos(this)">Gerar todos (${linhas.length})</button>` : ''}</div>
+          ${nDesat ? `<button class="btn primary" onclick="atualizarContornosDesatualizados(this)">Atualizar desatualizados (${nDesat})</button>` : ''}</div>
       </div>
     </div>`,
     'Contorno dos bairros')
@@ -1168,39 +1169,40 @@ async function gerarDaLista(btn, bairro) {
 }
 
 /**
- * Gera de novo o contorno e as quadras de TODOS os bairros, um por vez. É o
- * caminho para os contornos feitos antes das quadras existirem, e para os
- * bairros que nunca tiveram contorno.
+ * Atualiza, um por vez, só os contornos DESATUALIZADOS (a curadoria mexeu nos
+ * lotes depois de gerados). No geral não há "Gerar todos": o que está em dia
+ * fica como está, e bairro sem contorno se gera pela própria linha. Cada um
+ * mantém o raio com que foi gerado; o editado à mão fica como estava.
  * @param {HTMLButtonElement} btn
  */
-function gerarTodosOsContornos(btn) {
-  const d = contornoState.dados || { features: [], sem_contorno: [] }
-  const nomes = [...d.features.map(f => f.properties.nome), ...(d.sem_contorno || [])]
-  if (!nomes.length) return
+function atualizarContornosDesatualizados(btn) {
+  const fs = (contornoState.dados?.features || []).filter(f => f.properties?.desatualizado)
+  if (!fs.length) return
+  const raios = Object.fromEntries(fs.map(f => [f.properties.nome, Number(f.properties.raio_m) || CONTORNO_RAIO_PADRAO]))
   confirmarAcao({
-    titulo: 'Gerar todos os contornos',
-    mensagem: `Calcula de novo o contorno e as quadras dos ${nomes.length} bairros, um por vez. `
-      + 'Pode levar alguns minutos; deixe esta janela aberta até terminar.',
-    textoBtn: 'Gerar todos',
+    titulo: 'Atualizar contornos desatualizados',
+    mensagem: `Calcula de novo o contorno e as quadras dos ${fs.length} bairro(s) desatualizado(s), um por vez, `
+      + 'cada um com o raio com que foi gerado. Pode levar alguns minutos; deixe esta janela aberta até terminar.',
+    textoBtn: 'Atualizar',
     // Sem await: a confirmação fecha na hora, e o andamento aparece no botão.
-    onConfirm: () => { _gerarEmSequencia(btn, nomes) },
+    onConfirm: () => { _gerarEmSequencia(btn, Object.keys(raios), raios) },
   })
 }
 
-/** @param {HTMLButtonElement} btn @param {string[]} nomes */
-async function _gerarEmSequencia(btn, nomes) {
-  const raio = Number(document.getElementById('ctn-raio')?.value) || CONTORNO_RAIO_PADRAO
+/** @param {HTMLButtonElement} btn @param {string[]} nomes @param {Record<string, number>} raios */
+async function _gerarEmSequencia(btn, nomes, raios = {}) {
+  const raioCampo = Number(document.getElementById('ctn-raio')?.value) || CONTORNO_RAIO_PADRAO
   btn.disabled = true
   const falhas = [], mantidos = []
   for (const [i, nome] of nomes.entries()) {
-    btn.textContent = `Gerando ${i + 1} de ${nomes.length}…`
-    const r = await gerarContornoDoBairro(nome, raio, { silencioso: true })
+    btn.textContent = `Atualizando ${i + 1} de ${nomes.length}…`
+    const r = await gerarContornoDoBairro(nome, raios[nome] || raioCampo, { silencioso: true })
     if (!r) falhas.push(nome)
     else if (r.mantido) mantidos.push(nome)
   }
   toast(falhas.length
-    ? `${nomes.length - falhas.length} bairro(s) gerado(s). ${falhas.length} falharam — use "Gerar" na linha para ver o motivo: ${falhas.join(', ')}.`
-    : `${nomes.length - mantidos.length} bairros gerados, com as quadras.`
+    ? `${nomes.length - falhas.length} bairro(s) atualizado(s). ${falhas.length} falharam — use "Gerar de novo" na linha para ver o motivo: ${falhas.join(', ')}.`
+    : `${nomes.length - mantidos.length} bairro(s) atualizado(s), com as quadras.`
       + (mantidos.length ? ` ${mantidos.length} editado(s) à mão ficaram como estavam: ${mantidos.join(', ')}.` : ''), falhas.length ? 'aviso' : 'ok')
   // Só refaz a lista se ela ainda estiver aberta.
   if (document.getElementById('m-importacoes')?.classList.contains('open') && document.getElementById('ctn-raio')) {
