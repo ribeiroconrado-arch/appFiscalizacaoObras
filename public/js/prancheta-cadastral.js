@@ -74,9 +74,9 @@ const PranchetaCad = (() => {
       <div id="pc-prox" class="pc-prox" hidden></div>
       <div id="pc-entrada" hidden><label id="pc-entrada-label" for="pc-valor">Comprimento</label><input id="pc-valor" inputmode="decimal" autocomplete="off" aria-label="Medida em metros"><span>m · Enter</span></div>
       <div id="pc-esq" hidden role="dialog" aria-label="Esquadrejar"></div><div id="pc-cota-ed" hidden><label for="pc-cota-valor">Medida do lado</label><input id="pc-cota-valor" inputmode="decimal" autocomplete="off" aria-label="Nova medida do lado, em metros"><span>m</span>
-        <button type="button" class="pc-cota-troca" title="Trocar a ponta que fica parada (Tab)" onclick="PranchetaCad.cotaTrocarPonta()">⇄ ponta</button>
+        <button type="button" class="pc-cota-troca" title="Trocar a ponta que fica parada (Espaço ou Tab)" onclick="PranchetaCad.cotaTrocarPonta()">⇄ ponta</button>
         <label class="pc-cota-junto" title="O lado da ponta que anda desliza paralelo: os ângulos ficam como estão"><input type="checkbox" id="pc-cota-junto" onchange="PranchetaCad.cotaJunto(this.checked)"> levar o lado vizinho junto</label>
-        <small><b class="pc-cota-fica">● verde fica</b> · <b class="pc-cota-anda">● laranja anda</b> · Enter aplica · Esc cancela</small></div>
+        <small><b class="pc-cota-fica">● azul fica</b> · <b class="pc-cota-anda">● magenta anda</b> · Espaço troca · Enter aplica · Esc cancela</small></div>
       <section id="pc-dados" hidden aria-label="Dados e conferência"><header><b>Dados dos imóveis</b><button type="button" class="modal-x pc-fechar-dados" onclick="PranchetaCad.dados(false)" aria-label="Fechar dados">✕</button></header><div id="pc-form"></div><div id="pc-conferencia" role="status" tabindex="-1"></div></section>
       <div class="pc-credito">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · Referência cartográfica</div></main>
       <footer class="pc-rodape"><button type="button" class="btn sm" onclick="PranchetaCad.salvar().catch(()=>{})" id="pc-save">Salvar rascunho</button>
@@ -101,7 +101,7 @@ const PranchetaCad = (() => {
     svg.addEventListener('mousedown',ev=>{if(ev.button===1)ev.preventDefault()});svg.addEventListener('auxclick',ev=>{if(ev.button===1)ev.preventDefault()})
     svg.addEventListener('pointercancel',()=>{if(s?.drag){s.linhas=s.drag.antes.linhas;s.drag=null;recalcular();render()}})
     svg.addEventListener('dblclick',ev=>{ev.preventDefault();const c=ev.target.closest?.('[data-cota-line]');if(c){editarCota(c.dataset.cotaLine,Number(c.dataset.cotaI));return}terminar()})
-    $('pc-cota-valor').addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter'){ev.preventDefault();aplicarCota()}if(ev.key==='Escape'){ev.preventDefault();fecharCota()}if(ev.key==='Tab'){ev.preventDefault();trocarPontaCota()}})
+    $('pc-cota-valor').addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter'){ev.preventDefault();aplicarCota()}if(ev.key==='Escape'){ev.preventDefault();fecharCota()}if(ev.key==='Tab'||ev.key===' '){ev.preventDefault();trocarPontaCota()}})
     svg.addEventListener('contextmenu',ev=>{ev.preventDefault();terminar()})
     svg.addEventListener('wheel',wheel,{passive:false})
     modal.addEventListener('keydown',ev=>{ev.stopPropagation();tecla(ev)})
@@ -365,8 +365,8 @@ const PranchetaCad = (() => {
   function wheel(ev){if(!s)return;ev.preventDefault();const b=svg.getBoundingClientRect(),p=[ev.clientX-b.left,ev.clientY-b.top],w=mundo(p);s.escala=Math.max(.01,Math.min(ESCALA_MAX,s.escala*Math.exp(-ev.deltaY*.001)));const q=G.rot(w,s.angulo);s.centro=[q[0]-(p[0]-larguraDesenho()/2)/s.escala,q[1]+(p[1]-s.h/2)/s.escala];renderLogo()}
   /**
    * EDITAR A MEDIDA DE UM LADO (duplo clique na cota). O lado passa a ter a
-   * medida digitada, na MESMA DIREÇÃO: uma ponta fica parada (verde) e a outra
-   * anda (laranja) — Tab troca. "Levar o lado vizinho junto" desliza também o
+   * medida digitada, na MESMA DIREÇÃO: uma ponta fica parada (azul) e a outra
+   * anda (magenta) — Espaço ou Tab troca. "Levar o lado vizinho junto" desliza também o
    * vértice seguinte, paralelo: os ângulos ficam (retângulo continua
    * retângulo). Sem ele, só a ponta anda e o lado vizinho gira um pouco.
    */
@@ -376,7 +376,7 @@ const PranchetaCad = (() => {
     el.style.left=`${Math.max(8,Math.min(s.w-430,q[0]-120))}px`;el.style.top=`${Math.max(8,Math.min(s.h-45,q[1]+18))}px`
     $('pc-cota-valor').value=fmtMed(G.len(G.sub(l.pontos[i],l.pontos[i-1])));$('pc-cota-junto').checked=s.cotaEd.junto
     render();$('pc-cota-valor').focus();$('pc-cota-valor').select()
-    dica('Digite a medida certa do lado. A ponta verde fica parada; Tab troca a ponta.')}
+    dica('Digite a medida certa do lado. A ponta azul fica parada; Espaço troca a ponta.')}
   function fecharCota(){if(!s)return;s.cotaEd=null;$('pc-cota-ed').hidden=true;render();svg.focus()}
   function trocarPontaCota(){if(!s?.cotaEd)return;s.cotaEd.fixa=s.cotaEd.fixa==='a'?'b':'a';render();$('pc-cota-valor').focus()}
   function aplicarCota(){const c=s?.cotaEd;if(!c)return;const l=s.linhas.find(x=>x.id===c.id);if(!l)return fecharCota()
@@ -553,9 +553,11 @@ const PranchetaCad = (() => {
       const fech=G.fechada(l.pontos),lado=fech&&G.area(l.pontos)>0?1:fech?-1:1
       for(let i=1;i<l.pontos.length;i++){const m=G.len(G.sub(l.pontos[i],l.pontos[i-1]));if(!sel&&m*s.escala<70)continue;const ed=s.cotaEd&&s.cotaEd.id===l.id&&s.cotaEd.i===i
         h+=cota(l.pontos[i-1],l.pontos[i],`${fmtMed(m)} m`,lado,s.leitura?'pc-cota':'pc-cota pc-cota-edit'+(ed?' pc-cota-ativa':''),s.leitura?'':`data-cota-line="${e(l.id)}" data-cota-i="${i}"`)}
-      // MEDIDA EM EDIÇÃO: a ponta que fica parada em verde, a que anda em laranja.
+      // MEDIDA EM EDIÇÃO: a ponta que fica parada em azul, a que anda em magenta —
+      // as duas longe do laranja do lote em edição, com halo e borda branca.
       if(s.cotaEd&&s.cotaEd.id===l.id){const c=s.cotaEd,fixa=tela(l.pontos[c.fixa==='a'?c.i-1:c.i]),anda=tela(l.pontos[c.fixa==='a'?c.i:c.i-1])
-        h+=`<circle cx="${fixa[0]}" cy="${fixa[1]}" r="7" fill="#16a34a" stroke="white" stroke-width="2"/><circle cx="${anda[0]}" cy="${anda[1]}" r="7" fill="#ea580c" stroke="white" stroke-width="2"/>`}
+        const ponto=(p,cor)=>`<circle cx="${p[0]}" cy="${p[1]}" r="13" fill="${cor}" fill-opacity=".22" pointer-events="none"/><circle cx="${p[0]}" cy="${p[1]}" r="8" fill="${cor}" stroke="white" stroke-width="2.5" pointer-events="none"/>`
+        h+=ponto(fixa,'#2563eb')+ponto(anda,'#c026d3')}
     }
     if(s.ferramenta==='medir'&&s.regua){const a=s.regua.a,b=s.regua.b||s.mouse
       if(b&&G.len(G.sub(b,a))>1e-6){const qa=tela(a),qb=tela(b),m=G.mul(G.add(qa,qb),.5)

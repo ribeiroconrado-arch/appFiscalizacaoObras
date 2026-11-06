@@ -139,8 +139,8 @@ body.prancheta-aberta #pc-modal .cad-regua{visibility:visible;pointer-events:aut
 #pc-cota-ed .pc-cota-troca{border:1px solid #d3dad5;background:#fff;border-radius:5px;padding:2px 7px;font-size:11px;cursor:pointer}
 #pc-cota-ed .pc-cota-junto{display:flex;align-items:center;gap:4px;cursor:pointer}
 #pc-cota-ed small{color:#6b7280;width:100%}
-#pc-cota-ed .pc-cota-fica{color:#16a34a}
-#pc-cota-ed .pc-cota-anda{color:#ea580c}
+#pc-cota-ed .pc-cota-fica{color:#2563eb}
+#pc-cota-ed .pc-cota-anda{color:#c026d3}
 /* PROXIMIDADES (prancheta-cadastral.js): lista dos lados a menos de 5 cm, sobre o desenho. */
 .pc-prox{position:absolute;top:12px;left:12px;z-index:3;width:330px;max-width:calc(100% - 24px);max-height:60%;overflow:auto;background:#fff;border:1px solid #f3c79b;border-radius:10px;box-shadow:0 6px 24px #0002;font-size:12px;color:#243b4b}
 .pc-prox[hidden]{display:none}
