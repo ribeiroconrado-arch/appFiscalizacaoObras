@@ -109,7 +109,7 @@ class EdicaoDeLote
     {
         return [
             'bairro'      => $lote->bairro,
-            'quadra'      => $d['quadra'],
+            'quadra'      => \App\Support\NumeroDoLote::normalizar($d['quadra']),
             'numero_lote' => \App\Support\NumeroDoLote::normalizar($d['numero_lote']),
             'geometry'    => $d['geometry'],
         ];

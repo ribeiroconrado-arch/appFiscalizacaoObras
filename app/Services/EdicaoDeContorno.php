@@ -52,11 +52,11 @@ class EdicaoDeContorno
             DB::select("SELECT id, quadra, numero_lote FROM lotes
                          WHERE situacao = 'ativo' AND bairro = ? AND terreno_id IS NULL
                            AND NOT ST_Within(ST_SRID(geom, 0), {$comFolga})
-                         ORDER BY quadra, numero_lote LIMIT 200", [$bairro, $gj]));
+                         ORDER BY " . \App\Support\NumeroDoLote::ORDEM . " LIMIT 200", [$bairro, $gj]));
 
         $res['quadras_fora'] = array_map(fn ($q) => (string) $q->numero,
             DB::select("SELECT numero FROM quadras WHERE bairro = ? AND NOT ST_Within(ST_SRID(geom, 0), {$comFolga})
-                         ORDER BY numero LIMIT 200", [$bairro, $gj]));
+                         ORDER BY CAST(numero AS UNSIGNED), numero LIMIT 200", [$bairro, $gj]));
 
         // Graus² → m², na latitude do bairro.
         $fator = 111320.0 ** 2 * cos(deg2rad((float) $g->lat));

@@ -34,11 +34,9 @@
 .balao4-cel > span{color:var(--tx3);font-size:10.5px;white-space:nowrap}
 .balao4-cel > b{font-weight:600;white-space:nowrap}
 .balao4-cel .lote-tag-origem{padding:1px 6px;font-size:10px}
-.balao4-cel.difere{background:var(--wlt,#FFF4E0);box-shadow:inset 0 0 0 1px var(--warn,#E8B04A)}
-.balao4-dif{grid-column:1/-1;font-size:11px;color:#8A5300;padding:0 2px}
-.balao4-sit{display:inline-block;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.03em;border:1px solid}
-.balao4-sit.sit-ativo{background:#e7f3e9;color:#006c16;border-color:#b6d5bd}
-.balao4-sit.sit-rev{background:#FFF6DD;color:#8A5300;border-color:#F2DE9C}
+/* Área do mapa diferente da do BCI: só o texto muda de cor (06/11/2026). */
+.balao4-cel > b.balao4-difere{color:var(--warn,#B45309)}
+#balao-sit .balao4-sk{width:44px}
 .balao4-dono{font-weight:600;white-space:normal}
 .balao4-fraco{color:var(--tx3);font-weight:400}
 .balao4-sk{display:inline-block;width:130px;height:10px;border-radius:4px;vertical-align:middle;

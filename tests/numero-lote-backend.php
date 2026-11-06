@@ -34,6 +34,8 @@ foreach (['04' => '4', '4' => '4', '0004A' => '4A', '00' => '0', '0' => '0', ' 0
 }
 confere(NumeroDoLote::normalizar(null) === null, 'sem número continua sem número');
 confere(NumeroDoLote::naChave('Buritis I|66|04') === 'Buritis I|66|4', 'a chave acompanha o número');
+confere(NumeroDoLote::naChave('Buritis I|07|04') === 'Buritis I|7|4', 'a chave acompanha a quadra');
+confere(app(\App\Services\QuadraDoQuarteirao::class)->normalizar('07') === '7', 'troca de quadra grava "07" como "7"');
 confere(NumeroDoLote::naChave('Buritis I|?|?') === 'Buritis I|?|?', 'chave de lote sem número fica igual');
 confere(InscricaoImobiliaria::apelidoDesmembrado('010710100004000', 1) === '4A', 'desmembrado do lote 0004 é o 4A, não 0004A');
 
@@ -42,6 +44,9 @@ try {
     // O banco: nenhum número gravado com zero à esquerda depois da migração.
     confere(DB::table('lotes')->where('numero_lote', 'REGEXP', '^0+[0-9]')->count() === 0,
         'nenhum lote do banco ficou com zero à esquerda');
+    confere(DB::table('lotes')->where('quadra', 'REGEXP', '^0+[0-9]')->count() === 0
+        && DB::table('quadras')->where('numero', 'REGEXP', '^0+[0-9]')->count() === 0,
+        'nenhuma quadra do banco ficou com zero à esquerda');
 
     $l = DB::table('lotes')->where('situacao', 'ativo')->where('em_revisao', 0)
         ->whereNotNull('quadra')->where('numero_lote', 'REGEXP', '^[1-9][0-9]*$')->first();
@@ -73,6 +78,20 @@ try {
         $recusou = str_contains($e->getMessage(), 'Duplicate');
     }
     confere($recusou, 'o banco recusa "0' . $l->numero_lote . '" na quadra que já tem o "' . $l->numero_lote . '"');
+
+    // A quadra: Eloquent grava sem zero, e o banco recusa o mesmo lote em "0Q".
+    $lote->refresh()->update(['quadra' => '0' . $l->quadra]);
+    confere(DB::table('lotes')->where('id', $l->id)->value('quadra') === NumeroDoLote::normalizar($l->quadra),
+        'Eloquent: quadra "0' . $l->quadra . '" gravada sem zero');
+    $recusou = false;
+    try {
+        DB::insert('INSERT INTO lotes (bairro, quadra, numero_lote, chave, situacao, geom, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, "ativo", ST_GeomFromGeoJSON(?, 1, 4326), NOW(), NOW())',
+            [$l->bairro, '00' . $l->quadra, $l->numero_lote, 'teste', $geo]);
+    } catch (QueryException $e) {
+        $recusou = str_contains($e->getMessage(), 'Duplicate');
+    }
+    confere($recusou, 'o banco recusa o mesmo lote na quadra "00' . $l->quadra . '"');
 } finally {
     DB::rollBack();
 }

@@ -109,6 +109,7 @@ class ImportacaoDeBairro
             // "04" do DWG é o lote 4 (NumeroDoLote): normalizado AQUI, antes de
             // contar repetidos — "4" e "04" no mesmo arquivo são repetidos.
             $numero = \App\Support\NumeroDoLote::normalizar($numero);
+            $quadra = \App\Support\NumeroDoLote::normalizar($quadra);
             $fonte = $p['fonte'] ?? ($nome ?? basename($caminho));
 
             $bairros[$bairro] = true;
@@ -365,7 +366,7 @@ class ImportacaoDeBairro
     {
         $invalidos = DB::select('SELECT id, quadra, numero_lote FROM lotes
                                   WHERE importacao_id = ? AND situacao = "ativo" AND NOT ST_IsValid(geom)
-                                  ORDER BY quadra, numero_lote LIMIT 200', [$imp->id]);
+                                  ORDER BY ' . \App\Support\NumeroDoLote::ORDEM . ' LIMIT 200', [$imp->id]);
 
         $anotados = collect($imp->conferencia['repetidos_lotes'] ?? []);
         $semNumero = $anotados->isEmpty() ? collect() : DB::table('lotes')

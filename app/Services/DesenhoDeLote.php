@@ -170,6 +170,7 @@ class DesenhoDeLote
      */
     public function retrato(array $d, int|array|null $ignorar = null): array
     {
+        $d = self::grafia($d);
         $geojson = json_encode($d['geometry']);
         $area = $this->lotes->areaDoGeoJson($geojson);
 
@@ -224,6 +225,7 @@ class DesenhoDeLote
     /** `$sobreposicao` false: a invasão de lote vizinho não recusa (Mover lotes avisa em vez disso). */
     public function impedimento(array $d, int|array|null $ignorar = null, bool $sobreposicao = true): ?string
     {
+        $d = self::grafia($d);
         // Um lote só (Editar lote) ou vários (Mover lotes: os que mudam juntos
         // não acusam o desenho ANTIGO uns dos outros).
         $ignorar = is_array($ignorar) ? array_map('intval', $ignorar) : ($ignorar ? [$ignorar] : []);
@@ -332,6 +334,7 @@ class DesenhoDeLote
     /** @return list<string> */
     public function avisos(array $d): array
     {
+        $d = self::grafia($d);
         $avisos = [];
         $geojson = json_encode($d['geometry']);
 
@@ -366,6 +369,7 @@ class DesenhoDeLote
      */
     public function avisoDeArea(array $d): ?string
     {
+        $d = self::grafia($d);
         $area = $this->lotes->areaDoGeoJson(json_encode($d['geometry']));
         $max = (float) config('gis.lote_area_max_m2', 20000);
         if ($area <= $max) {
@@ -392,6 +396,7 @@ class DesenhoDeLote
      */
     public function aplicar(array $d, int $usuarioId, string $usuarioNome): Lote
     {
+        $d = self::grafia($d);
         $geojson = json_encode($d['geometry']);
         $area = $this->lotes->areaDoGeoJson($geojson);
 
@@ -466,5 +471,20 @@ class DesenhoDeLote
         usort($saida, fn ($a, $b) => $b['area_comum'] <=> $a['area_comum']);
 
         return $saida;
+    }
+
+    /**
+     * Quadra e número numa grafia só ("05" → "5", "04" → "4"), antes de
+     * conferir ou gravar: é a mesma regra do índice único (NumeroDoLote).
+     */
+    private static function grafia(array $d): array
+    {
+        foreach (['quadra', 'numero_lote'] as $c) {
+            if (array_key_exists($c, $d) && $d[$c] !== null) {
+                $d[$c] = \App\Support\NumeroDoLote::normalizar((string) $d[$c]);
+            }
+        }
+
+        return $d;
     }
 }

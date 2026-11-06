@@ -194,22 +194,21 @@ class QuadraDoQuarteirao
 
         foreach (range($nums->first(), $nums->last()) as $n) {
             if (! $nums->contains($n)) {
-                return sprintf('%02d', $n);
+                return (string) $n;
             }
         }
 
-        return sprintf('%02d', $nums->last() + 1);
+        return (string) ($nums->last() + 1);
     }
 
     /**
      * Duas grafias da mesma quadra ("7" e "07") quebrariam a chave de
-     * integração. A base grava sempre com dois dígitos.
+     * integração. Desde 06/11/2026 a base grava SEM zero à esquerda ("07" → "7"),
+     * a mesma regra do número do lote (NumeroDoLote).
      */
     public function normalizar(string $quadra): string
     {
-        $quadra = trim($quadra);
-
-        return ctype_digit($quadra) ? sprintf('%02d', (int) $quadra) : $quadra;
+        return (string) \App\Support\NumeroDoLote::normalizar($quadra);
     }
 
     /**

@@ -474,6 +474,7 @@ class LoteRepository
                 return null;
             }
         }
+        $acumulado = self::semLascas($acumulado);
 
         $r = DB::selectOne(
             'SELECT ST_GeometryType(g) tipo, ST_Area(g) area,
@@ -488,6 +489,97 @@ class LoteRepository
             'area_m2' => (float) $r->area,
             'furos'   => (int) $r->furos,
         ];
+    }
+
+    /** Abaixo disto (m²) uma parte ou um furo da união é resíduo de arredondamento. */
+    private const LASCA_M2 = 0.01;
+
+    /**
+     * Tira da união as LASCAS: partes e furos de área desprezível.
+     *
+     * O `ST_Union` em SRID 4326 devolve, às vezes, um polígono de área zero
+     * (4 vértices quase alinhados) onde dois lotes dividem um lado. Foi o que
+     * acontecia na Q06 do Lot Belvedere (06/11/2026): dez lotes encostados
+     * davam "MULTIPOLYGON" com uma parte de 6.064 m² e outra de 0 m², e a
+     * unificação não aparecia. A lasca não é terreno; o que decide se os lotes
+     * se encostam continua sendo `desencostado`, com a folga de 10 cm.
+     */
+    private static function semLascas(string $geojson): string
+    {
+        $g = json_decode($geojson, true);
+        $poligonos = match ($g['type'] ?? null) {
+            'Polygon' => [$g['coordinates']],
+            'MultiPolygon' => $g['coordinates'],
+            default => null,
+        };
+        if ($poligonos === null) {
+            return $geojson;
+        }
+        $area = function (array $anel): float {
+            $pts = array_map(fn ($p) => [(float) $p[0], (float) $p[1]], $anel);
+            return abs(GeometriaPlana::area(GeometriaPlana::projetar($pts)));
+        };
+        $limpos = [];
+        foreach ($poligonos as $aneis) {
+            if (! $aneis || $area($aneis[0]) < self::LASCA_M2) {
+                continue;
+            }
+            $furos = array_values(array_filter(array_slice($aneis, 1), fn ($a) => $area($a) >= self::LASCA_M2));
+            $limpos[] = array_map([self::class, 'semVerticeAlinhado'], [$aneis[0], ...$furos]);
+        }
+        if (! $limpos || $limpos == $poligonos) {
+            return $geojson;
+        }
+
+        return json_encode(count($limpos) === 1
+            ? ['type' => 'Polygon', 'coordinates' => $limpos[0]]
+            : ['type' => 'MultiPolygon', 'coordinates' => $limpos]);
+    }
+
+    /** Até quanto (m) um vértice pode sair da reta dos vizinhos e ainda ser "alinhado". */
+    private const ALINHADO_M = 0.001;
+
+    /**
+     * Tira do anel os vértices ALINHADOS: o canto que sobrou de dois lotes
+     * unificados, no meio de uma face reta (06/11/2026, pedido dele). A face
+     * 16,50 + 18,00 vira uma só, de 34,50 m, no mapa, na prancheta e na ficha.
+     *
+     * Só sai o vértice que está a até 1 mm da reta entre o anterior e o
+     * seguinte, e no caminho entre eles (não um bico que volta): a área muda
+     * menos que o arredondamento, e o vizinho, que tem aquele ponto, continua
+     * encostado na face.
+     *
+     * @param  list<array{0:float,1:float}>  $anel  lon/lat, fechado
+     * @return list<array{0:float,1:float}>
+     */
+    private static function semVerticeAlinhado(array $anel): array
+    {
+        $pts = array_slice($anel, 0, -1);
+        $plano = GeometriaPlana::projetar(array_map(fn ($p) => [(float) $p[0], (float) $p[1]], $pts));
+        $mudou = true;
+        while ($mudou && count($pts) > 3) {
+            $mudou = false;
+            $n = count($pts);
+            for ($i = 0; $i < $n; $i++) {
+                [$a, $b, $c] = [$plano[($i - 1 + $n) % $n], $plano[$i], $plano[($i + 1) % $n]];
+                $ac = [$c[0] - $a[0], $c[1] - $a[1]];
+                $ab = [$b[0] - $a[0], $b[1] - $a[1]];
+                $bc = [$c[0] - $b[0], $c[1] - $b[1]];
+                $comp = hypot($ac[0], $ac[1]);
+                if ($comp < 1e-6 || $ab[0] * $bc[0] + $ab[1] * $bc[1] <= 0) {
+                    continue;
+                }
+                if (abs($ac[0] * $ab[1] - $ac[1] * $ab[0]) / $comp <= self::ALINHADO_M) {
+                    array_splice($pts, $i, 1);
+                    array_splice($plano, $i, 1);
+                    $mudou = true;
+                    break;
+                }
+            }
+        }
+        $pts[] = $pts[0];
+
+        return $pts;
     }
 
     /**
@@ -721,7 +813,7 @@ class LoteRepository
             DB::select('SELECT id, quadra, numero_lote FROM lotes
                          WHERE ' . self::SO_ATIVOS . ' AND bairro = ?
                            AND NOT ' . self::TOCA_O_CONTORNO . '
-                         ORDER BY quadra, numero_lote LIMIT ' . max(1, $limite), [$bairro, $geojson]));
+                         ORDER BY ' . \App\Support\NumeroDoLote::ORDEM . ' LIMIT ' . max(1, $limite), [$bairro, $geojson]));
     }
 
     /**
@@ -773,7 +865,7 @@ class LoteRepository
             }
             DB::insert('INSERT INTO quadras (bairro_id, bairro, numero, geom, rotulo_lat, rotulo_lon, lotes_contados, created_at, updated_at)
                         VALUES (?, ?, ?, ST_GeomFromGeoJSON(?, 1, 4326), ?, ?, ?, ?, ?)',
-                [$bairroId, $bairro, $q['numero'], $q['geojson'], $q['lat'], $q['lon'], $q['lotes'], $agora, $agora]);
+                [$bairroId, $bairro, \App\Support\NumeroDoLote::normalizar((string) $q['numero']), $q['geojson'], $q['lat'], $q['lon'], $q['lotes'], $agora, $agora]);
         }
 
         return ['gravadas' => count($quadras) - count($invalidas), 'invalidas' => $invalidas];
@@ -788,7 +880,7 @@ class LoteRepository
     public function quadrasDoBairro(string $bairro): array
     {
         return DB::select('SELECT numero, rotulo_lat AS lat, rotulo_lon AS lon, ST_AsGeoJSON(geom, 7) AS geojson
-                             FROM quadras WHERE bairro = ? ORDER BY numero', [$bairro]);
+                             FROM quadras WHERE bairro = ? ORDER BY CAST(numero AS UNSIGNED), numero', [$bairro]);
     }
 
     /**
@@ -853,6 +945,9 @@ class LoteRepository
     public function criarComGeometria(array $atributos, string $geojson): int
     {
         // "4" e "04" são o mesmo lote: grava numa grafia só (NumeroDoLote).
+        if (array_key_exists('quadra', $atributos)) {
+            $atributos['quadra'] = \App\Support\NumeroDoLote::normalizar($atributos['quadra']);
+        }
         if (array_key_exists('numero_lote', $atributos)) {
             $atributos['numero_lote'] = \App\Support\NumeroDoLote::normalizar($atributos['numero_lote']);
         }

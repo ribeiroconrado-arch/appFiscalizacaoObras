@@ -581,7 +581,7 @@ function abrirFicha(feicao) {
   // O rótulo diz DE ONDE é a área: não houve levantamento georreferenciado,
   // então "área GIS" não existe — é a do cadastro ou, sem ele, a do mapa.
   document.getElementById('fi-area').textContent = fmtNum(p.area_m2 ?? p.area_gis_m2) + ' m²'
-  document.getElementById('fi-area-rot').textContent = p.terreno_id ? 'Fração ideal' : p.area_oficial ? 'Área cadastro' : 'Área mapa'
+  document.getElementById('fi-area-rot').textContent = p.terreno_id ? 'Fração ideal' : p.area_oficial ? 'Área BCI' : 'Área mapa'
 
   // SEM GEOMETRIA A FICHA AINDA ABRE.
   //

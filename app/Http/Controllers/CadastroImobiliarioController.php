@@ -53,12 +53,21 @@ class CadastroImobiliarioController extends Controller
      */
     public function resumo(Lote $lote): JsonResponse
     {
+        // A SITUAÇÃO do imóvel no cadastro municipal (06/11/2026): Ativo,
+        // Inativo, ou null ("Sem Info.") quando a inscrição não está no
+        // cadastro ou ele não diz. Mesma regra da ficha (RetratoBci). Não é
+        // dado pessoal: vai para todos, inclusive o externo.
+        $retrato = $this->fonte->consultar($lote);
+        $ativo = $retrato ? RetratoBci::isencaoAtiva($retrato->imovel['isencao'] ?? null) : null;
+        $situacao = $ativo === null ? null : ($ativo ? 'Ativo' : 'Inativo');
+
         $donos = ProprietariosVisiveis::para(request()->user(), $this->fonte->proprietarios($lote));
         if ($donos === null) {
-            return response()->json(['visivel' => false]);
+            return response()->json(['visivel' => false, 'situacao' => $situacao]);
         }
 
         return response()->json([
+            'situacao'     => $situacao,
             'visivel'      => true,
             'proprietario' => $donos[0]['nome'] ?? null,
             'outros'       => max(0, count($donos) - 1),

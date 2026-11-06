@@ -129,6 +129,7 @@ class LotesApagados
             // ainda em revisão (importacao_id, em_revisao) — ver DesfazerAlteracao.
             ] + $extras;
             // O apagado pode ter saído com "04": volta com a grafia de hoje.
+            $atributos['quadra'] = \App\Support\NumeroDoLote::normalizar($atributos['quadra']);
             $atributos['numero_lote'] = \App\Support\NumeroDoLote::normalizar($atributos['numero_lote']);
             $atributos['chave'] = \App\Support\NumeroDoLote::naChave($atributos['chave']);
 

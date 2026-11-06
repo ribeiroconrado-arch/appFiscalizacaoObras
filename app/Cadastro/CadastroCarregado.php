@@ -145,9 +145,12 @@ class CadastroCarregado implements FonteDoCadastro
         }
 
         return DB::table('cadastro_externo_imoveis')
-            ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim((string) $codigo, '0')])
-            ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [ltrim((string) $lote->quadra, '0')])
-            ->whereRaw("TRIM(LEADING '0' FROM lote) = ?", [ltrim((string) $numero, '0')])
+            // As colunas sz_* são as mesmas três SEM os zeros, geradas e
+            // indexadas (migration 2026_11_06_000200): o TRIM direto na coluna
+            // varria a tabela, ~320 ms por balão.
+            ->where('sz_bairro', ltrim((string) $codigo, '0'))
+            ->where('sz_quadra', ltrim((string) $lote->quadra, '0'))
+            ->where('sz_lote', ltrim((string) $numero, '0'))
             ->when($variacao !== null, fn ($q) => $q->whereRaw("RIGHT(REPLACE(inscricao, '.', ''), 3) = ?", [$variacao]))
             ->orderBy('inscricao')
             ->get()

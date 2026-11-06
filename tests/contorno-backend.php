@@ -83,12 +83,13 @@ try {
     $f = collect(json_decode($chama('index', $admin)->getContent(), true)['features'])->firstWhere('properties.nome', $bairro);
     confere($f['properties']['quadras'] === 2, 'o mapa sabe quantas quadras o bairro tem');
     $q = json_decode($chama('quadras', $admin, ['bairro' => $bairro])->getContent(), true);
-    confere(count($q['features']) === 2 && $q['features'][0]['properties']['numero'] === '01'
+    // Gravada sem zero à esquerda desde 06/11/2026: "01" → "1" (NumeroDoLote).
+    confere(count($q['features']) === 2 && $q['features'][0]['properties']['numero'] === '1'
         && $q['features'][0]['geometry']['type'] === 'MultiPolygon', 'o mapa recebe contorno e número das quadras');
     $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total]);
     confere(DB::table('quadras')->where('bairro', $bairro)->count() === 2, 'envio sem quadras (página antiga em cache) não apaga as gravadas');
     $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total, 'quadras' => [$quadras[1]]]);
-    confere(DB::table('quadras')->where('bairro', $bairro)->pluck('numero')->all() === ['02'], 'gerar de novo substitui as quadras do bairro');
+    confere(DB::table('quadras')->where('bairro', $bairro)->pluck('numero')->all() === ['2'],'gerar de novo substitui as quadras do bairro');
 
     echo "Nomes de rua\n";
     $trecho = ['nome' => 'RUA TESTE', 'de' => [$e['sul'], $e['oeste']], 'ate' => [$e['sul'], $e['leste']]];

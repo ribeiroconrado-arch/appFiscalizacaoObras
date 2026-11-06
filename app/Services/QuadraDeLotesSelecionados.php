@@ -49,7 +49,7 @@ class QuadraDeLotesSelecionados
 
     /**
      * Duas grafias da mesma quadra ("7" e "07") quebrariam a chave de
-     * integração. A base grava sempre com dois dígitos.
+     * integração. A base grava sem zero à esquerda (NumeroDoLote).
      */
     public function normalizar(string $quadra): string
     {

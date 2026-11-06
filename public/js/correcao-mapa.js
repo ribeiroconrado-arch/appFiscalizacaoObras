@@ -267,7 +267,19 @@ function fecharCorrecao(semBarra = false) {
  * a mesma pesquisa, e sem barra nenhuma sobrando no mapa.
  */
 async function voltarAFichaDaCorrecao() {
+  // A régua da alteração cadastral foi aberta pela correção: sai junto. Um
+  // lote desenhado e não gravado é perguntado antes (fecharMesaPeloUsuario).
+  if (typeof desenhoPendente !== 'undefined' && desenhoPendente) {
+    confirmarAcao({
+      titulo: 'Descartar o lote desenhado?',
+      mensagem: 'O contorno desenhado ainda não foi gravado. Voltar à lista descarta o desenho.',
+      textoBtn: 'Descartar e voltar', perigo: true,
+      onConfirm: () => { desenhoPendente = null; voltarAFichaDaCorrecao() },
+    })
+    return
+  }
   const origem = correcaoState.origem
+  _corrFecharMesa()
   fecharCorrecao(true)
   const daImp = origem === 'importacao' || origem === 'levantamento'
   if (daImp) {
@@ -283,6 +295,16 @@ async function voltarAFichaDaCorrecao() {
     const q = document.querySelector(daImp ? '#m-importacoes .jt-rolagem' : '#m-conferencia .jt-rolagem')
     if (q) q.scrollTop = rolagem
   }, 60)
+}
+
+/** Fecha a mesa (tela grande) ou o painel de cadastro (celular) que a correção abriu. */
+function _corrFecharMesa() {
+  const mesa = document.getElementById('cad-mesa')
+  if (typeof ehMesaCadastral === 'function' && ehMesaCadastral()) {
+    if (mesa && !mesa.hidden && typeof fecharMesaPeloUsuario === 'function') fecharMesaPeloUsuario()
+  } else if (document.getElementById('grupo-cadastro')?.classList.contains('aberto') && typeof fecharPaineisMapa === 'function') {
+    fecharPaineisMapa()
+  }
 }
 
 /** Leva o mapa até a pendência e deixa o lote marcado, pronto para a ferramenta. */
@@ -304,6 +326,10 @@ async function _corrIr(it) {
   } else if (typeof garantirPainelCadastroAberto === 'function') {
     garantirPainelCadastroAberto()
   }
+  // Com a mesa já aberta de antes, a marcação podia estar desarmada: o clique
+  // no vizinho abria o balão em vez de juntá-lo à seleção.
+  if (!_corrLev() && typeof selecaoLivreNaMesa === 'function' && !selecaoAtiva()
+      && !cadModo && !atoState.tipo) selecaoLivreNaMesa()
   if (!imp) {
     // As cores da conferência acendem a pendência em que se está.
     const i = confState.itens.findIndex(x => _corrChave(x.tipo, x) === it.chave)

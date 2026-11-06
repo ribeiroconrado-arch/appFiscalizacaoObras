@@ -88,10 +88,15 @@ class Lote extends Model
     }
 
     /**
-     * "4" e "04" são o mesmo lote: o que passa pelo Eloquent é gravado numa
+     * "4" e "04" são o mesmo lote, e "5" e "05" a mesma quadra: o que passa pelo Eloquent é gravado numa
      * grafia só (App\Support\NumeroDoLote). Os INSERT/UPDATE crus normalizam
      * por conta própria, e o índice único compara pela mesma regra.
      */
+    public function setQuadraAttribute($valor): void
+    {
+        $this->attributes['quadra'] = NumeroDoLote::normalizar($valor === null ? null : (string) $valor);
+    }
+
     public function setNumeroLoteAttribute($valor): void
     {
         $this->attributes['numero_lote'] = NumeroDoLote::normalizar($valor === null ? null : (string) $valor);

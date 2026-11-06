@@ -739,12 +739,24 @@ function adicionarAoMapa(geojson, aoClicar) {
       //
       // Em modo de alteração cadastral o clique MARCA o lote em vez de abrir o
       // balão — ver cadastro.js. Fora dele, nada muda.
-      camada.on('click', () => {
+      camada.on('click', ev => {
         // Desenhando um trecho de rua (ruas-manuais.js), o toque é ponto do
         // trecho — quem o trata é o clique no mapa, não o lote embaixo.
         if (typeof ruaState !== 'undefined' && ruaState.desenhando) return
         // Movendo lotes (mover-lotes.js): o clique é ponto de base ou destino.
         if (typeof movLoteState !== 'undefined' && movLoteState.ativo) return
+        // Shift (ou Ctrl) + clique com a mesa cadastral aberta é SEMPRE marcar:
+        // quem segura a tecla está juntando lotes, e um balão a cada clique
+        // atrapalha a marcação de vários (pedido dele, 06/11/2026).
+        const oe = ev?.originalEvent
+        if ((oe?.shiftKey || oe?.ctrlKey || oe?.metaKey) && typeof marcacaoEhDoOperador === 'function' && marcacaoEhDoOperador()) {
+          if (!selecaoAtiva()) selecaoLivreNaMesa()
+          if (selecaoAtiva()) {
+            mapaState.obj?.closePopup()
+            alternarSelecao(feicao, camada)
+            return
+          }
+        }
         if (typeof selecaoAtiva === 'function' && selecaoAtiva()) {
           alternarSelecao(feicao, camada)
           return
@@ -973,13 +985,16 @@ function abrirBalao(feicao, camada) {
   // AS DUAS ÁREAS, lado a lado (05/11/2026): não houve levantamento
   // georreferenciado, então não há "área GIS" — há a do MAPA (o desenho) e a
   // do CADASTRO municipal. Diferença acima do arredondamento (0,02 m², a mesma
-  // folga da conferência) pinta o quadro do cadastro e diz quanto.
+  // folga da conferência) pinta SÓ o texto da área do mapa (06/11/2026: menos
+  // cor no balão; o quanto fica no title).
+  //
+  // "Sit." é a situação do imóvel no CADASTRO MUNICIPAL (Ativo, Inativo, ou
+  // Sem Info. quando a inscrição não está lá), e chega com o proprietário.
   const m2 = n => n == null || n === '' ? '—' : fmtBR(n) + ' m²'
   const areaMapa = p.area_gis_m2 ? Number(p.area_gis_m2) : null
   const areaCad = p.area_oficial && p.area_m2 != null ? Number(p.area_m2) : null
   const dif = areaMapa != null && areaCad != null ? areaMapa - areaCad : 0
   const difere = Math.abs(dif) > 0.02
-  const situacao = p.em_revisao ? ['EM REVISÃO', 'sit-rev'] : ['ATIVO', 'sit-ativo']
 
   // O chip só aparece quando existe inscrição imobiliária — o código pelo
   // qual a prefeitura conhece o imóvel. Cair para a chave interna aqui
@@ -1016,11 +1031,10 @@ function abrirBalao(feicao, camada) {
           ${medidas ? `<tr><td>Frente × fundos</td><td>${medidas}</td></tr>` : ''}
         </table>
         <div class="balao4-grade">
-          <div class="balao4-cel"><span>A. mapa</span><b>${m2(areaMapa)}</b></div>
-          <div class="balao4-cel${difere ? ' difere' : ''}"><span>A. BCI</span><b>${m2(areaCad)}</b></div>
-          ${difere ? `<div class="balao4-dif">Diferença de ${fmtBR(Math.abs(dif))} m² entre o mapa e o BCI</div>` : ''}
+          <div class="balao4-cel"><span>A. mapa</span><b${difere ? ` class="balao4-difere" title="Diferente do BCI em ${fmtBR(Math.abs(dif))} m²"` : ''}>${m2(areaMapa)}</b></div>
+          <div class="balao4-cel"><span>A. BCI</span><b>${m2(areaCad)}</b></div>
           <div class="balao4-cel"><span>Origem</span><b><span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span></b></div>
-          <div class="balao4-cel"><span>Sit.</span><b><span class="balao4-sit ${situacao[1]}">${situacao[0]}</span></b></div>
+          <div class="balao4-cel"><span>Sit.</span><b id="balao-sit"><span class="balao4-sk"></span></b></div>
         </div>
         ${typeof htmlFracaoNoBalao === 'function' ? htmlFracaoNoBalao(p) : ''}
         <div class="balao4-acoes" style="grid-template-columns:repeat(${atalhos.length},1fr)">${atalhos.join('')}</div>
@@ -1032,7 +1046,7 @@ function abrirBalao(feicao, camada) {
     className: 'popup-lote', closeButton: true, maxWidth: 300, minWidth: 270, autoPan: true,
   }).openPopup()
   if (typeof preencherFracaoNoBalao === 'function') preencherFracaoNoBalao(p)
-  if (window.VE_PROPRIETARIO) preencherDonoNoBalao(p.id, camada.getPopup()?.getElement())
+  preencherDonoNoBalao(p.id, camada.getPopup()?.getElement())
 }
 
 /** O proprietário de cada lote já aberto: não se pergunta duas vezes. */
@@ -1047,7 +1061,7 @@ const _donosDoBalao = new Map()
  * @returns {Promise<{visivel:boolean, proprietario?:?string, outros?:number}|null>}
  */
 function pedirDonoDoLote(id) {
-  if (!id || !window.VE_PROPRIETARIO) return Promise.resolve(null)
+  if (!id) return Promise.resolve(null)
   if (!_donosDoBalao.has(id)) {
     _donosDoBalao.set(id, fetch(`/api/imoveis/${id}/resumo`, { headers: { Accept: 'application/json' } })
       .then(r => (r.ok ? r.json() : null))
@@ -1065,8 +1079,11 @@ function pedirDonoDoLote(id) {
  */
 async function preencherDonoNoBalao(id, raiz) {
   const d = await pedirDonoDoLote(id)
+  if (state.selecionado?.properties?.id !== id) return
+  const sit = (raiz || document).querySelector('#balao-sit')
+  if (sit) sit.textContent = d ? (d.situacao || 'Sem Info.') : '—'
   const cel = (raiz || document).querySelector('#balao-dono')
-  if (!cel || state.selecionado?.properties?.id !== id) return
+  if (!cel) return
   if (!d) { cel.innerHTML = '<span class="balao4-fraco">não carregou</span>'; return }
   if (!d.visivel) { cel.closest('tr')?.remove(); return }
   cel.innerHTML = d.proprietario
