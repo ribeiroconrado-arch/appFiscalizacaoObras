@@ -1091,8 +1091,10 @@ async function carregarOrigensDoc() {
     origens.unshift({ id: Number(atual), rotulo: fdState.origemRotulo, data: '' })
   }
   sel.innerHTML = '<option value="">Direta — sem documento de origem</option>' + origens.map(o =>
-    `<option value="${o.id}">${esc(o.rotulo)}${o.data ? ' · ' + esc(o.data) : ''}</option>`).join('')
+    `<option value="${o.id}" data-tipo="${esc(o.tipo || '')}">${esc(o.rotulo)}${o.data ? ' · ' + esc(o.data) : ''}</option>`).join('')
   sel.value = origens.some(o => String(o.id) === atual) ? atual : ''
+  // Posturas: a lavratura imediata depende de a origem ser uma notificação.
+  if (typeof aplicarPosturasDoc === 'function') aplicarPosturasDoc()
 }
 
 /** O auto anterior escolhido como base da reincidência (só em Auto de Infração). */

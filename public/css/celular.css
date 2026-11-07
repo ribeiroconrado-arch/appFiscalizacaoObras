@@ -45,6 +45,9 @@
    ficar fora da tela, rolando. */
 @media (max-width:640px){
   .doc-tab{flex:1 1 0;min-width:0;white-space:normal;line-height:1.15;padding:6px 4px;font-size:11.5px}
+  /* Posturas tem CINCO abas, e "Contribuinte" é uma palavra só: cada aba fica
+     com a largura do seu texto (e "Local/Origem" quebra na barra). */
+  #fd-tabs:has(> [data-aba="local"]) .doc-tab{flex:1 1 auto;padding:6px 3px;font-size:11px}
 }
 
 /* CABEÇALHO DO DOCUMENTO: título, número, datas e abas tomavam 186px — quase

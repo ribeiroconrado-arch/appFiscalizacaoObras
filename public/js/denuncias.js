@@ -469,6 +469,10 @@ async function gerarNotificacaoDaDenuncia() {
   poe('nd-im-logradouro', d.logradouro)
   poe('nd-im-numero', d.numero)
   poe('nd-im-bairro', d.bairro)
+  // O GPS marcado na denúncia é a posição do local da infração.
+  if (d.lat != null && d.lng != null && typeof _marcarGpsDoc === 'function') {
+    _marcarGpsDoc({ lat: Number(d.lat), lon: Number(d.lng), prec: d.gps_precisao })
+  }
   if (d.data_iso) {
     poe('nd-data', d.data_iso.slice(0, 10))
     poe('nd-hora', d.data_iso.slice(11, 16))

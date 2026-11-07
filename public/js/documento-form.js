@@ -19,7 +19,12 @@
 // ══════════════════════════════════════════════
 
 /** Ordem das abas. É ela que define o que «/‹/›/» percorrem. */
-const ABAS_DOC = ['autuado', 'infracao', 'anexos', 'resumo']
+/**
+ * As abas da peça, na ordem da tela: Obras tem quatro; Posturas, cinco (o
+ * Contribuinte e, à parte, o Local/Origem, como no AppPOSTURAS). Lidas do
+ * cabeçalho do formulário, que o servidor monta conforme o módulo.
+ */
+const abasDoc = () => [...document.querySelectorAll('#fd-tabs .doc-tab')].map(b => b.dataset.aba)
 
 const fdState = {
   // O CICLO DA PEÇA (o mesmo do AppPOSTURAS):
@@ -658,7 +663,7 @@ function renderAnexosDoc() {
 
 /** @param {string} nome */
 function irAbaDoc(nome) {
-  if (!ABAS_DOC.includes(nome)) return
+  if (!abasDoc().includes(nome)) return
   if (typeof fecharBalaoDataHora === 'function') fecharBalaoDataHora()   // o calendário não segue para outra aba
   // A lavratura acontece no Resumo: sair dele é desistir dela.
   if (fdState.lavrando && nome !== 'resumo') cancelarLavraturaDoc()
@@ -682,8 +687,8 @@ function irAbaDoc(nome) {
 
 /** @param {number} passo -1 volta, +1 avança */
 function passoAbaDoc(passo) {
-  const i = ABAS_DOC.indexOf(fdState.aba)
-  const alvo = ABAS_DOC[i + passo]
+  const abas = abasDoc()
+  const alvo = abas[abas.indexOf(fdState.aba) + passo]
   if (alvo) irAbaDoc(alvo)
 }
 
@@ -708,8 +713,11 @@ function renderFichaConsultaDoc() {
   const leitura = fdState.estado === 'lavrado' && !fdState.editando
   const tipo = document.getElementById('nd-tipo').value
   const destinatario = ['notificacao', 'notificacao_embargo'].includes(tipo) ? 'notificado' : tipo === 'vistoria' ? 'interessado' : 'autuado'
-  document.getElementById('fd-destinatario-titulo').textContent = 'Dados do ' + destinatario
-  document.querySelector('#fd-tabs [data-aba="autuado"]').textContent = destinatario.charAt(0).toUpperCase() + destinatario.slice(1) + ' / Imóvel'
+  const posturas = window.MODULO === 'posturas'
+  // Posturas: "Contribuinte" em qualquer peça, como no AppPOSTURAS.
+  document.getElementById('fd-destinatario-titulo').textContent = posturas ? 'Dados do contribuinte' : 'Dados do ' + destinatario
+  document.querySelector('#fd-tabs [data-aba="autuado"]').textContent = posturas ? 'Contribuinte'
+    : destinatario.charAt(0).toUpperCase() + destinatario.slice(1) + ' / Imóvel'
   const alvo = document.getElementById('fd-ficha-consulta')
   alvo.hidden = !leitura
   document.getElementById('fd-identificacao-campos').hidden = leitura
@@ -721,6 +729,16 @@ function renderFichaConsultaDoc() {
   const cidade = [valor('nd-aut-cidade'), valor('nd-aut-uf')].filter(Boolean).join('/')
   const endereco = [rua, valor('nd-aut-bairro'), cidade].filter(Boolean).join(' — ')
   const area = valor('nd-area-construida')
+  if (posturas) {
+    alvo.innerHTML = `<section><h3 class="sec-title">Dados do contribuinte</h3><dl class="doc-ficha-grade doc-ficha-pessoa">
+        ${campo('Nome / Razão social', valor('nd-autuado'))}
+        ${campo('CPF / CNPJ', valor('nd-autuado-doc'))}
+        ${campo('Inscrição municipal', valor('nd-aut-inscricao'))}
+        ${campo('E-mail', valor('nd-aut-email'))}
+        ${campo('Domicílio fiscal', endereco, 'doc-ficha-largo')}
+      </dl></section>`
+    return
+  }
   alvo.innerHTML = `<section><h3 class="sec-title">Dados do ${destinatario}</h3><dl class="doc-ficha-grade doc-ficha-pessoa">
       ${campo('Nome / Razão social', valor('nd-autuado'))}
       ${campo('CPF / CNPJ', valor('nd-autuado-doc'))}
@@ -810,15 +828,17 @@ function renderCabecalhoDoc(d) {
  * simplesmente sumir), e as ações conforme o estado.
  */
 function renderRodapeDoc() {
-  const i = ABAS_DOC.indexOf(fdState.aba)
-  const nomesAbas = { autuado: 'Identificação', infracao: 'Infração', anexos: 'Anexos', resumo: 'Resumo' }
+  const abas = abasDoc()
+  const i = abas.indexOf(fdState.aba)
+  const nomesAbas = { autuado: window.MODULO === 'posturas' ? 'Contribuinte' : 'Identificação', local: 'Local/Origem',
+    infracao: 'Infração', anexos: 'Anexos', resumo: 'Resumo' }
   document.getElementById('fd-voltar').textContent = fdState.estado === 'lavrado' ? 'Anterior' : '‹'
   document.getElementById('fd-avancar').textContent = fdState.estado === 'lavrado'
-    ? (i < ABAS_DOC.length - 1 ? 'Próximo: ' + nomesAbas[ABAS_DOC[i + 1]] : 'Próximo') : '›'
+    ? (i < abas.length - 1 ? 'Próximo: ' + nomesAbas[abas[i + 1]] : 'Próximo') : '›'
   document.getElementById('fd-primeira').disabled = i <= 0
   document.getElementById('fd-voltar').disabled = i <= 0
-  document.getElementById('fd-avancar').disabled = i >= ABAS_DOC.length - 1
-  document.getElementById('fd-ultima').disabled = i >= ABAS_DOC.length - 1
+  document.getElementById('fd-avancar').disabled = i >= abas.length - 1
+  document.getElementById('fd-ultima').disabled = i >= abas.length - 1
 
   const mostrar = (id, v) => { document.getElementById(id).hidden = !v }
 
@@ -1000,6 +1020,13 @@ async function salvarRascunhoDoc() {
 function gravarDoc() {
   if (fdState.editando && fdState.estado === 'gravado') { salvarEdicaoDoc(); return }
 
+  // Posturas: os obrigatórios do AppPOSTURAS (os campos com *), aba a aba.
+  const faltaPosturas = window.MODULO === 'posturas' && typeof pendenciaPosturasDoc === 'function' ? pendenciaPosturasDoc() : null
+  if (faltaPosturas) {
+    irAbaDoc(faltaPosturas.aba)
+    exigirCampo(faltaPosturas.id, faltaPosturas.msg)
+    return
+  }
   if (!document.getElementById('nd-autuado').value.trim()) {
     irAbaDoc('autuado')
     exigirCampo('nd-autuado', 'Informe o nome do autuado: o documento gravado já recebe número.')
@@ -1070,7 +1097,12 @@ function lavrarDocumento() {
   // conferidas aqui só para não gastar uma ida ao servidor e voltar com erro.
   // A aba entra em cena ANTES do aviso: o campo que falta pode estar noutra
   // aba, e marcar um campo escondido não ajuda ninguém.
-  if (!fdState.lote?.id) {
+  // Posturas: o ato é do LOCAL — basta o que o Gravar já cobrou (contribuinte
+  // e local da infração), sem lote.
+  if (window.MODULO === 'posturas') {
+    const falta = typeof pendenciaPosturasDoc === 'function' ? pendenciaPosturasDoc() : null
+    if (falta) { irAbaDoc(falta.aba); exigirCampo(falta.id, falta.msg); return }
+  } else if (!fdState.lote?.id) {
     irAbaDoc('autuado')
     exigirCampo('nd-imovel-termo', 'Informe o imóvel: a lavratura exige o lote identificado.')
     return

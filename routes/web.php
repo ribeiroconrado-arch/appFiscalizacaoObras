@@ -308,6 +308,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Os autos de que um auto novo pode ser reincidência (antes da rota curinga).
         Route::get('/documentos/autos-anteriores', [DocumentoController::class, 'autosAnteriores']);
         Route::get('/documentos/origens', [DocumentoController::class, 'origens']);
+        // O contribuinte pelo CPF/CNPJ (aba Contribuinte das peças de Posturas).
+        Route::get('/contribuintes/{documento}', [DocumentoController::class, 'contribuinte'])->where('documento', '[0-9./-]+');
         Route::get('/documentos/testemunhas', [DocumentoController::class, 'testemunhas']);
         Route::get('/documentos/ordens-de-servico', [DocumentoController::class, 'ordensParaOrigem']);
         // Anexos próprios do documento (aba Anexos do formulário).

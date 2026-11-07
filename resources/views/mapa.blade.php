@@ -2265,7 +2265,14 @@
     <div class="doc-tabs" id="fd-tabs">
       {{-- Autuado e imóvel numa aba só: são as duas metades de "contra quem e
            sobre o quê", e em campo se preenche uma olhando a outra. --}}
-      <button class="doc-tab ativa" data-aba="autuado"  onclick="irAbaDoc('autuado')">Autuado/Imóvel</button>
+      @if ($modulo === 'posturas')
+        {{-- POSTURAS: as abas do AppPOSTURAS — o contribuinte e, à parte, o
+             LOCAL da infração com a origem (07/11/2026). --}}
+        <button class="doc-tab ativa" data-aba="autuado"  onclick="irAbaDoc('autuado')">Contribuinte</button>
+        <button class="doc-tab" data-aba="local"    onclick="irAbaDoc('local')">Local/<wbr>Origem</button>
+      @else
+        <button class="doc-tab ativa" data-aba="autuado"  onclick="irAbaDoc('autuado')">Autuado/Imóvel</button>
+      @endif
       <button class="doc-tab" data-aba="infracao" onclick="irAbaDoc('infracao')">Infração</button>
       <button class="doc-tab" data-aba="anexos"   onclick="irAbaDoc('anexos')">Anexos</button>
       <button class="doc-tab" data-aba="resumo"   onclick="irAbaDoc('resumo')">Resumo</button>
@@ -2282,6 +2289,71 @@
     <div class="doc-painel ativa" id="fdp-autuado">
       <div id="fd-ficha-consulta" hidden></div>
       <div id="fd-identificacao-campos">
+      @if ($modulo === 'posturas')
+      {{-- ══ CONTRIBUINTE (Posturas) — como no AppPOSTURAS: o CPF/CNPJ é a
+           chave; ao sair do campo, o cadastro de contribuintes preenche o que
+           estiver vazio (e, sem cadastro, a consulta do CNPJ). Ao gravar, o
+           contribuinte entra ou é atualizado no cadastro. ══ --}}
+      <div class="sec-title" id="fd-destinatario-titulo">Dados do contribuinte</div>
+      <div class="doc-lin doc-lin-autuado">
+        <div class="field">
+          <label for="nd-autuado-doc">CPF / CNPJ *</label>
+          <input type="text" id="nd-autuado-doc" class="mono" maxlength="18" data-lock inputmode="numeric"
+                 placeholder="000.000.000-00" autocomplete="off"
+                 oninput="mascararCpfCnpjDoc(this)" onblur="conferirCpfCnpjCampo(this) && buscarContribuinteDoc(this)">
+        </div>
+        <div class="field">
+          <label for="nd-autuado">Nome do contribuinte *</label>
+          <input type="text" id="nd-autuado" maxlength="160" data-lock placeholder="Nome completo / Razão social">
+        </div>
+      </div>
+      <div class="g2">
+        <div class="field">
+          <label for="nd-aut-inscricao">Inscrição municipal <small class="doc-rot-obs">(só CNPJ)</small></label>
+          <input type="text" id="nd-aut-inscricao" maxlength="40" data-lock placeholder="—">
+        </div>
+        <div class="field">
+          <label for="nd-aut-email">E-mail <small class="doc-rot-obs">(opcional)</small></label>
+          <input type="email" id="nd-aut-email" maxlength="160" data-lock placeholder="email@exemplo.com" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="sec-title">Domicílio fiscal</div>
+      <div class="field">
+        <label for="nd-aut-logradouro">Logradouro *</label>
+        <input type="text" id="nd-aut-logradouro" maxlength="160" data-lock list="nd-lista-ruas-aut" autocomplete="off"
+               placeholder="Digite para buscar…" oninput="ruaDigitadaDoc('aut')" onchange="ruaEscolhidaDoc('aut')">
+        <datalist id="nd-lista-ruas-aut"></datalist>
+      </div>
+      <div class="doc-lin doc-lin-num-bairro">
+        <div class="field">
+          <label for="nd-aut-numero">Número *</label>
+          <input type="text" id="nd-aut-numero" class="mono" maxlength="20" data-lock placeholder="Nº">
+        </div>
+        <div class="field">
+          <label for="nd-aut-bairro">Bairro *</label>
+          <div class="den-sugestao" id="nd-aut-sugestao" hidden></div>
+          <input type="text" id="nd-aut-bairro" maxlength="120" data-lock list="nd-lista-bairros-aut" autocomplete="off"
+                 placeholder="Digite para buscar…" onfocus="carregarBairrosDoc('aut')">
+          <datalist id="nd-lista-bairros-aut"></datalist>
+        </div>
+      </div>
+      <div class="doc-lin doc-lin-cidade-uf">
+        <div class="field">
+          <label for="nd-aut-cidade">Cidade *</label>
+          <input type="text" id="nd-aut-cidade" maxlength="120" data-lock placeholder="Cidade">
+        </div>
+        <div class="field">
+          <label for="nd-aut-uf">Estado *</label>
+          <select data-combo id="nd-aut-uf" data-lock>
+            <option value="">UF</option>
+            @foreach (['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] as $uf)
+              <option value="{{ $uf }}">{{ $uf }}</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
+      @else
       <div class="sec-title" id="fd-destinatario-titulo">Dados do autuado</div>
       {{-- LINHA 1: o documento na largura de um CNPJ, e o nome com o resto.
            Saindo do campo com um CNPJ válido, o sistema consulta a empresa e
@@ -2334,11 +2406,24 @@
           </select>
         </div>
       </div>
+      @endif
       {{-- CARIMBO DE PROCEDÊNCIA. Só em peça lavrada: no rascunho ainda não há
            carimbo, porque o dado ainda pode mudar. Discreto de propósito — é
            conferência, e quem abre a peça quase nunca está atrás dele. --}}
       <p class="doc-carimbo" id="nd-carimbo" hidden></p>
 
+      @if ($modulo === 'posturas')
+      {{-- Em Posturas o objeto do ato é o LOCAL (aba Local/Origem), não o
+           imóvel de obras: os campos de Obras ficam escondidos, só para o
+           formulário (que é um só) continuar achando cada um. --}}
+      <div hidden>
+        <div id="nd-imovel-dados"></div>
+        <input id="nd-im-inscricao"><input id="nd-im-quadra"><input id="nd-im-lote">
+        <input id="nd-area-construida" type="number">
+        <input type="radio" name="nd-area-origem" value="aferida" checked><input type="radio" name="nd-area-origem" value="projeto">
+        <p id="nd-area-fracao"></p>
+      </div>
+      @else
       <div class="sec-title">Imóvel</div>
       {{-- O localizador, quando a peça ainda não tem imóvel (renderImovelDoc). --}}
       <div id="nd-imovel-dados"></div>
@@ -2394,14 +2479,56 @@
       </div>
       {{-- Fração ideal: qual área vale para a multa (fracao-ideal.js). --}}
       <p class="doc-fracao-nota" id="nd-area-fracao" hidden></p>
+      @endif
 
       {{-- O RESTO DO CADASTRO MUNICIPAL (BCI) deste imóvel — só aparece quando
            o imóvel está no cadastro. Desenhado por renderBciDoc. --}}
       </div>
+      @if ($modulo === 'posturas')
+    </div>
+
+    {{-- LOCAL / ORIGEM (Posturas) — o "Local da infração" do AppPOSTURAS: a
+         rua e o bairro (com a relação rua↔bairro), o número e o GPS. O mesmo
+         endereço do domicílio fiscal vem com um toque. A origem fica aqui
+         embaixo, como lá. --}}
+    <div class="doc-painel" id="fdp-local">
+      <div class="sec-title">Local da infração</div>
+      <label class="doc-mesmo-endereco">
+        <input type="checkbox" id="nd-mesmo-endereco" data-lock onchange="mesmoEnderecoDoc(this.checked)">
+        Mesmo endereço do domicílio fiscal
+      </label>
+      <div class="field">
+        <label for="nd-im-logradouro">Logradouro *</label>
+        <input type="text" id="nd-im-logradouro" maxlength="160" data-lock list="nd-lista-ruas-local" autocomplete="off"
+               placeholder="Digite para buscar…" oninput="ruaDigitadaDoc('local')" onchange="ruaEscolhidaDoc('local')">
+        <datalist id="nd-lista-ruas-local"></datalist>
+      </div>
+      <div class="den-num-local doc-num-gps-bairro">
+        <div class="field">
+          <label for="nd-im-numero">Número *</label>
+          <input type="text" id="nd-im-numero" class="mono" maxlength="20" data-lock placeholder="Nº">
+        </div>
+        <button type="button" class="btn den-gps" id="nd-gps" data-lock onclick="gpsDoLocalDoc()" title="Marcar a posição do local pelo GPS">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9"/></svg>
+          <span id="nd-gps-txt">GPS</span>
+        </button>
+        <div class="field">
+          <label for="nd-im-bairro">Bairro *</label>
+          <div class="den-sugestao" id="nd-local-sugestao" hidden></div>
+          <input type="text" id="nd-im-bairro" maxlength="160" data-lock list="nd-lista-bairros-local" autocomplete="off"
+                 placeholder="Digite para buscar…" onfocus="carregarBairrosDoc('local')">
+          <datalist id="nd-lista-bairros-local"></datalist>
+        </div>
+      </div>
+      <div class="den-gps-info" id="nd-gps-info" hidden></div>
+      <input type="hidden" id="nd-gps-lat"><input type="hidden" id="nd-gps-lng"><input type="hidden" id="nd-gps-prec">
+      <details id="nd-bci-bloco" hidden><summary><span id="nd-bci-sintese"></span></summary><div id="nd-bci"></div></details>
+      @else
       <details id="nd-bci-bloco" class="doc-bci-expansivel" hidden>
         <summary><span class="doc-bci-cabecalho">Cadastro municipal <small>BCI</small><span id="nd-bci-sintese"></span></span><span class="doc-bci-abrir">Ver detalhes <span aria-hidden="true">⌄</span></span></summary>
         <div id="nd-bci"></div>
       </details>
+      @endif
 
       {{-- DE ONDE VEIO A NOTIFICAÇÃO: direta (vistoria em campo), ordem de
            serviço ou denúncia da ouvidoria. Só nas notificações. SEM data-lock
@@ -2616,6 +2743,20 @@
               <input id="nd-veic-condutor" type="text" maxlength="160" data-lock></div>
           </div>
         </div>
+
+        {{-- LAVRATURA IMEDIATA (art. 16 da Lei 723): só no auto de infração
+             lavrado sem notificação antes — com notificação, o infrator já foi
+             cientificado e a lavratura deixa de ser imediata. O combo mostra o
+             inciso; a peça imprime o texto inteiro (documento-posturas.js). --}}
+        <div id="nd-bloco-lavratura" style="display:none">
+          <div class="sec-title">Lavratura imediata</div>
+          <div class="field">
+            <label for="nd-lavratura-item">Lavratura imediata conforme o art. 16 *</label>
+            <select id="nd-lavratura-item" data-lock>
+              <option value="">Selecione…</option>
+            </select>
+          </div>
+        </div>
         @endif
 
         {{-- Áreas: a base da multa em obras. Aparece só quando algum artigo
@@ -2666,6 +2807,22 @@
         <div id="nd-memoria-calculo"></div>
       </div>
 
+      @if ($modulo === 'posturas')
+      {{-- POSTURAS: "Prazo e observações", como no AppPOSTURAS — prazo livre
+           em dias na notificação (0 = imediato) e, no auto, o de defesa da lei. --}}
+      <div class="sec-title">Prazo e observações</div>
+      <div id="bloco-prazo">
+        <div class="field">
+          <label for="nd-prazo">Prazo (dias) *</label>
+          <input id="nd-prazo" type="number" min="0" max="365" placeholder="Ex.: 15" data-lock
+                 oninput="document.getElementById('nd-prazo-imediato').hidden = this.value.trim() !== '0'">
+          <small class="doc-prazo-imediato" id="nd-prazo-imediato" hidden>0 = Imediato</small>
+        </div>
+      </div>
+      <div id="nd-aviso-prazo" class="aviso-legal" style="display:none"></div>
+      <div class="field">
+        <label for="nd-descricao">Observações</label>
+      @else
       <div id="bloco-prazo">
         <div class="sec-title">Prazo para cumprimento</div>
         <div class="field">
@@ -2678,6 +2835,7 @@
       <div class="sec-title">Constatação</div>
       <div class="field">
         <label for="nd-descricao">Descrição do fato</label>
+      @endif
         <textarea id="nd-descricao" rows="4" maxlength="5000" data-lock
                   style="width:100%;border:none;background:none;font-family:inherit;font-size:14px;resize:vertical"
                   placeholder="O que foi constatado e está sendo imputado"></textarea>

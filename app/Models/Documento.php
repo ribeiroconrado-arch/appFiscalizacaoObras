@@ -58,6 +58,8 @@ class Documento extends Model
             'upf_valor'          => 'float',
             'ruido'              => 'array',
             'veiculo'            => 'array',
+            'local_gps'          => 'array',
+            'lavratura_imediata' => 'array',
         ];
     }
 
@@ -349,6 +351,20 @@ class Documento extends Model
     }
 
     /**
+     * A peça pede o inciso da LAVRATURA IMEDIATA (art. 16 da Lei 723): é o
+     * auto de infração lavrado sem notificação antes. Com notificação na
+     * origem o infrator já foi cientificado e teve prazo — a lavratura deixa
+     * de ser imediata (a regra do AppPOSTURAS). Lei sem incisos cadastrados
+     * não pede nada.
+     */
+    public function pedeLavraturaImediata(): bool
+    {
+        return $this->tipo === 'auto_infracao' && $this->ehLeiDoRuido()
+            && ! empty($this->legislacao?->lavratura_imediata_itens)
+            && $this->origem?->tipo !== 'notificacao';
+    }
+
+    /**
      * O que a multa pela diferença de decibéis precisa da peça: a zona, a
      * hora do fato (que decide diurno ou noturno) e o dB aferido. Nulo
      * enquanto faltar qualquer um — e a multa fica pendente.
@@ -385,6 +401,9 @@ class Documento extends Model
             if (($r['fonte_causadora'] ?? null) === 'Veículo' && empty($this->veiculo['placa'])) {
                 $faltam[] = 'a placa do veículo';
             }
+        }
+        if ($this->pedeLavraturaImediata() && empty($this->lavratura_imediata['texto'])) {
+            $faltam[] = 'o inciso da lavratura imediata (art. 16)';
         }
         if ($this->tipo === 'auto_apreensao') {
             if (! in_array($this->apreensao_subtipo, ['apreensao', 'retencao'], true)) {

@@ -3830,7 +3830,20 @@ select.combo-oculto{display:none !important}
 .doc-obra-origem label{display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:500}
 .doc-obra-origem input{appearance:auto;-webkit-appearance:radio;width:16px;height:16px;margin:0;flex:none;accent-color:var(--g)}
 .doc-obra-origem input:disabled+*,.doc-obra-origem label:has(input:disabled){cursor:default;opacity:.75}
+/* POSTURAS (Contribuinte e Local/Origem): número curto ao lado do bairro, e a
+   cidade com a UF; no local, número · GPS · bairro numa linha, como no AppPOSTURAS. */
+.doc-lin-num-bairro{grid-template-columns:110px minmax(0,1fr)}
+.doc-lin-cidade-uf{grid-template-columns:minmax(0,1fr) 110px}
+.doc-num-gps-bairro{grid-template-columns:110px auto minmax(0,1fr);align-items:end;margin-bottom:9px}
+.doc-num-gps-bairro .field{margin-bottom:0;min-width:0}
+.doc-rot-obs{font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx3);font-size:10.5px}
+.doc-mesmo-endereco{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--tx2);margin:-2px 0 10px;cursor:pointer}
+.doc-mesmo-endereco input{appearance:auto;-webkit-appearance:checkbox;width:16px;height:16px;margin:0;accent-color:var(--g)}
+.doc-prazo-imediato{display:block;margin-top:3px;font-size:11.5px;font-weight:700;color:var(--gd)}
+#fdp-local .den-gps-info{margin:0 0 10px}
 @media (max-width:560px){
+  .doc-num-gps-bairro{grid-template-columns:110px minmax(0,1fr)}
+  .doc-num-gps-bairro .field:last-child{grid-column:1 / -1}
   /* No celular o documento e a inscrição ganham a linha inteira; os curtos
      continuam ao lado do campo que acompanham. */
   .doc-lin-autuado{grid-template-columns:minmax(0,1fr)}

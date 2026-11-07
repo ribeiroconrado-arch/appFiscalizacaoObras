@@ -197,6 +197,13 @@
             <td style="width:56%"><span class="lbl">Nome / Razão social</span>{{ $doc->autuado_nome ?: '—' }}</td>
             <td><span class="lbl">CPF / CNPJ</span>{{ $doc->autuado_documento ?: '—' }}</td>
           </tr>
+          {{-- Posturas: a inscrição municipal (CNPJ) e o e-mail do contribuinte, quando informados. --}}
+          @if ($doc->autuado_inscricao_municipal || $doc->autuado_email)
+            <tr>
+              <td style="width:56%"><span class="lbl">Inscrição municipal</span>{{ $doc->autuado_inscricao_municipal ?: '—' }}</td>
+              <td><span class="lbl">E-mail</span>{{ $doc->autuado_email ?: '—' }}</td>
+            </tr>
+          @endif
           <tr>
             <td colspan="2"><span class="lbl">Endereço:</span>{{ \App\Services\DocumentoImpressao::enderecoDestinatario($doc) }}</td>
           </tr>
@@ -216,6 +223,9 @@
           </tr>
           @if ($imovel['inscricao'])
             <tr><td colspan="2"><span class="lbl">Inscrição imobiliária</span>{{ $imovel['inscricao'] }}</td></tr>
+          @endif
+          @if (! empty($doc->local_gps['lat']))
+            <tr><td colspan="2"><span class="lbl">Coordenadas (GPS)</span>{{ number_format($doc->local_gps['lat'], 6, '.', '') }}, {{ number_format($doc->local_gps['lng'], 6, '.', '') }}@if (! empty($doc->local_gps['precisao'])) (±{{ $doc->local_gps['precisao'] }} m)@endif</td></tr>
           @endif
         </table>
       </div>
@@ -275,6 +285,15 @@
               @endforelse
             </tbody>
           </table>
+        </div>
+      @endif
+
+      {{-- LAVRATURA IMEDIATA (art. 16 da Lei 723): o texto do inciso, copiado
+           da lei na gravação — por que o auto saiu sem notificação antes. --}}
+      @if ($doc->tipo === 'auto_infracao' && ! empty($doc->lavratura_imediata['texto']))
+        <div class="sec">
+          <div class="sec-tit">{{ $sec('Lavratura imediata') }}</div>
+          <p>{!! \App\Services\DocumentoImpressao::negrito($doc->lavratura_imediata['texto']) !!}</p>
         </div>
       @endif
       @else

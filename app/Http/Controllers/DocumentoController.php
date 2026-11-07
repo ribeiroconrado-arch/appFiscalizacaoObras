@@ -301,6 +301,9 @@ class DocumentoController extends Controller
                     // limites diurno e noturno) — o formulário mostra o dB
                     // permitido; a multa é conta do servidor.
                     'areas_db'           => $l->areas_db,
+                    // Os incisos do art. 16 (lavratura imediata) — o select do
+                    // auto de infração sem notificação antes.
+                    'lavratura_imediata_itens' => $l->lavratura_imediata_itens ?? [],
                     'prazo_defesa_dias'  => $l->prazo_defesa_dias,
                     'prazo_cumpr_dias'   => $l->prazo_cumprimento_dias,
                     'artigos'            => $l->artigos->sortBy(fn ($a) => $a->ordem())->values()->map(fn ($a) => [
@@ -500,6 +503,7 @@ class DocumentoController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
         $this->gravarItens($doc, $d);
+        $this->guardarContribuinte($doc);
 
         if (! empty($d['artigos'])) {
             $this->lavratura->fixarArtigos($doc, $d['artigos'], $d['multiplicadores'] ?? []);
@@ -556,6 +560,15 @@ class DocumentoController extends Controller
         'itens.*.descricao'      => ['required', 'string', 'max:300'],
         'itens.*.quantidade'     => ['nullable', 'numeric', 'min:0.01', 'max:99999999'],
         'itens.*.unidade'        => ['nullable', 'string', 'max:20'],
+        // O formulário do AppPOSTURAS (07/11/2026): inscrição municipal e
+        // e-mail do contribuinte, a posição do local e o inciso da lavratura
+        // imediata (art. 16 da Lei 723).
+        'autuado_inscricao_municipal' => ['nullable', 'string', 'max:40'],
+        'autuado_email'          => ['nullable', 'email', 'max:160'],
+        'local_lat'              => ['nullable', 'numeric', 'between:-90,90'],
+        'local_lng'              => ['nullable', 'numeric', 'between:-180,180'],
+        'local_precisao'         => ['nullable', 'numeric', 'min:0', 'max:100000'],
+        'lavratura_imediata_item' => ['nullable', 'integer', 'min:1', 'max:99'],
     ];
 
     /**
@@ -570,7 +583,8 @@ class DocumentoController extends Controller
      */
     private function dadosDePosturas(string $modulo, array $d): array
     {
-        $nada = ['ruido' => null, 'veiculo' => null, 'apreensao_subtipo' => null];
+        $nada = ['ruido' => null, 'veiculo' => null, 'apreensao_subtipo' => null,
+            'autuado_inscricao_municipal' => null, 'autuado_email' => null, 'local_gps' => null, 'lavratura_imediata' => null];
         if ($modulo !== 'posturas') {
             return $nada;
         }
@@ -607,11 +621,77 @@ class DocumentoController extends Controller
             $v['placa'] = strtoupper(str_replace(['-', ' '], '', $v['placa']));
         }
 
+        // O inciso da lavratura imediata vai COPIADO da lei (número e texto):
+        // a peça imprime o que valia no dia. Só no auto de infração.
+        $lavratura = null;
+        if ($d['tipo'] === 'auto_infracao' && ! empty($d['lavratura_imediata_item'])) {
+            $lei ??= isset($d['legislacao_id']) ? Legislacao::find($d['legislacao_id']) : null;
+            $item = collect($lei?->lavratura_imediata_itens ?? [])->first(fn ($i) => (int) ($i['numero'] ?? 0) === (int) $d['lavratura_imediata_item']);
+            $lavratura = $item ? ['numero' => (int) $item['numero'], 'texto' => (string) ($item['texto'] ?? '')] : null;
+        }
+        $gps = isset($d['local_lat'], $d['local_lng'])
+            ? ['lat' => round((float) $d['local_lat'], 7), 'lng' => round((float) $d['local_lng'], 7),
+               'precisao' => isset($d['local_precisao']) ? (int) round((float) $d['local_precisao']) : null]
+            : null;
+        $texto = fn ($v) => ($v = trim((string) $v)) === '' ? null : $v;
+
         return [
             'ruido'   => $ruido,
             'veiculo' => $v ?: null,
             'apreensao_subtipo' => $d['tipo'] === 'auto_apreensao' ? ($d['apreensao_subtipo'] ?? null) : null,
+            'autuado_inscricao_municipal' => $texto($d['autuado_inscricao_municipal'] ?? null),
+            'autuado_email'      => ($e = $texto($d['autuado_email'] ?? null)) ? mb_strtolower($e) : null,
+            'local_gps'          => $gps,
+            'lavratura_imediata' => $lavratura,
         ];
+    }
+
+    /**
+     * O CADASTRO DE CONTRIBUINTES do Posturas: gravada a peça, o contribuinte
+     * dela entra (ou é atualizado) pelo CPF/CNPJ — e a próxima peça para o
+     * mesmo documento já abre preenchida (contribuinte()). Só Posturas; só
+     * com documento e nome. O campo vazio na peça não apaga o do cadastro.
+     */
+    private function guardarContribuinte(Documento $doc): void
+    {
+        if (($doc->modulo ?? 'obras') !== 'posturas' || ! $doc->autuado_documento || ! trim((string) $doc->autuado_nome)) {
+            return;
+        }
+        $p = $doc->autuado_endereco_partes ?? [];
+        $dados = array_filter([
+            'nome'                => $doc->autuado_nome,
+            'inscricao_municipal' => $doc->autuado_inscricao_municipal,
+            'email'               => $doc->autuado_email,
+            'logradouro'          => $p['logradouro'] ?? null,
+            'numero'              => $p['numero'] ?? null,
+            'bairro'              => $p['bairro'] ?? null,
+            'cidade'              => $p['cidade'] ?? null,
+            'estado'              => $p['uf'] ?? null,
+        ], fn ($v) => $v !== null && trim((string) $v) !== '');
+        $c = \App\Models\Contribuinte::firstOrNew(['cpf_cnpj' => $doc->autuado_documento]);
+        $c->fill($dados);
+        if ($c->isDirty() || ! $c->exists) {
+            $c->save();
+        }
+    }
+
+    /**
+     * GET /api/contribuintes/{documento} — o contribuinte pelo CPF/CNPJ, para
+     * o formulário preencher o que estiver vazio (aba Contribuinte, Posturas).
+     * 404 quando não há: aí o formulário tenta a consulta do CNPJ.
+     */
+    public function contribuinte(string $documento): JsonResponse
+    {
+        $digitos = preg_replace('/\D/', '', $documento);
+        $c = \App\Models\Contribuinte::query()
+            ->whereRaw("REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') = ?", [$digitos])
+            ->first();
+        if (! $c) {
+            return response()->json(['message' => 'Contribuinte não cadastrado.'], 404);
+        }
+
+        return response()->json(['contribuinte' => $c->only(['nome', 'inscricao_municipal', 'email',
+            'logradouro', 'numero', 'bairro', 'cidade', 'estado'])]);
     }
 
     /**
@@ -749,6 +829,7 @@ class DocumentoController extends Controller
 
         return response()->json(['origens' => $pecas->map(fn (Documento $p) => [
             'id'     => $p->id,
+            'tipo'   => $p->tipo,
             'rotulo' => $p->rotuloTipo() . ' nº ' . $p->numeroFormatado(),
             'data'   => $p->data_lavratura?->format('d/m/Y'),
         ])]);
@@ -1029,7 +1110,12 @@ class DocumentoController extends Controller
                 'bairro'     => $documento->autuado_endereco_partes['bairro'] ?? null,
                 'cidade'     => $documento->autuado_endereco_partes['cidade'] ?? null,
                 'uf'         => $documento->autuado_endereco_partes['uf'] ?? null,
+                'inscricao_municipal' => $documento->autuado_inscricao_municipal,
+                'email'      => $documento->autuado_email,
             ],
+            // Posturas: a posição do local e o inciso da lavratura imediata.
+            'local_gps'  => $documento->local_gps,
+            'lavratura_imediata' => $documento->lavratura_imediata,
 
             // De quando é o dado cadastral que esta peça usou. Vai para a ficha
             // e para o PDF, e para lugar nenhum mais: é dado de conferência,
@@ -1080,6 +1166,7 @@ class DocumentoController extends Controller
                 ? $documento->valor_upf * $documento->upf_valor
                 : null,
 
+            'prazo_dias' => $documento->prazo_dias,
             'prazo_ate'  => $documento->prazo_ate?->format('d/m/Y'),
             'defesa_ate' => $documento->defesa_ate?->format('d/m/Y'),
 
@@ -1270,9 +1357,11 @@ class DocumentoController extends Controller
 
         $documento->update(array_merge(
             collect($d)->except(['artigos', 'multiplicadores', 'reincidencia_de_id', 'itens', 'ruido', 'veiculo',
-                'apreensao_subtipo', 'denuncia_id', ...self::PARTES_DE_ENDERECO])->all(),
+                'apreensao_subtipo', 'denuncia_id', 'local_lat', 'local_lng', 'local_precisao', 'lavratura_imediata_item',
+                ...self::PARTES_DE_ENDERECO])->all(),
             $this->enderecosDaPeca($d), $motivo, $this->dadosDePosturas($documento->modulo ?? 'obras', $d)));
         $this->gravarItens($documento, $d);
+        $this->guardarContribuinte($documento);
 
         // Os artigos são refixados por inteiro: manter os antigos e somar os
         // novos deixaria no documento um enquadramento que o fiscal removeu

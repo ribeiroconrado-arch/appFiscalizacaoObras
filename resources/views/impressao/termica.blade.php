@@ -167,6 +167,9 @@
   <div class="lbl">CPF / CNPJ</div>
   <div class="val">{{ $doc->autuado_documento ?: '—' }}</div>
 </div>
+@if ($doc->autuado_inscricao_municipal)
+  <div class="campo"><div class="lbl">Inscrição municipal</div><div class="val">{{ $doc->autuado_inscricao_municipal }}</div></div>
+@endif
 <div class="campo">
   <div class="lbl">Endereço</div>
   <div class="val">{{ \App\Services\DocumentoImpressao::enderecoDestinatario($doc) }}</div>
@@ -180,6 +183,9 @@
   <div class="campo"><div class="lbl">Bairro</div><div class="val">{{ $imovel['bairro'] ?: '—' }}</div></div>
   @if ($imovel['inscricao'])
     <div class="campo"><div class="lbl">Inscrição imobiliária</div><div class="val">{{ $imovel['inscricao'] }}</div></div>
+  @endif
+  @if (! empty($doc->local_gps['lat']))
+    <div class="campo"><div class="lbl">GPS</div><div class="val">{{ number_format($doc->local_gps['lat'], 6, '.', '') }}, {{ number_format($doc->local_gps['lng'], 6, '.', '') }}</div></div>
   @endif
   @if ($doc->ruido)
     @php $rd = $doc->ruido; @endphp
@@ -201,6 +207,10 @@
     @foreach ($doc->itens as $i => $item)
       <div class="par">{{ $i + 1 }}. {{ $item->descricao }} — {{ $item->quantidadeTexto() }}</div>
     @endforeach
+  @endif
+  @if ($doc->tipo === 'auto_infracao' && ! empty($doc->lavratura_imediata['texto']))
+    <div class="faixa">{{ $sec('Lavratura imediata') }}</div>
+    <div class="par">{!! \App\Services\DocumentoImpressao::negrito($doc->lavratura_imediata['texto']) !!}</div>
   @endif
 @else
 <div class="campo">
