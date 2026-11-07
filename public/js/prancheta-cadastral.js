@@ -551,6 +551,9 @@ const PranchetaCad = (() => {
     // filete escuro, e nenhum preenchimento por cima da imagem.
     for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
+    // Trecho que não fecha parte (G.dividir): em vermelho, com as pontas, para
+    // achar o toco ou a linha esquecida que trava o desmembramento.
+    for(const [a,b] of s.resultado?.soltos||[]){const qa=tela(a),qb=tela(b);h+=`<g pointer-events="none"><line x1="${qa[0]}" y1="${qa[1]}" x2="${qb[0]}" y2="${qb[1]}" stroke="#dc2626" stroke-width="9" stroke-opacity=".35" stroke-linecap="round"/><circle cx="${qa[0]}" cy="${qa[1]}" r="7" fill="none" stroke="#dc2626" stroke-width="2"/><circle cx="${qb[0]}" cy="${qb[1]}" r="7" fill="none" stroke="#dc2626" stroke-width="2"/></g>`}
     // Os do servidor entram também: o banco recusa até o que a conta daqui não pegou.
     s.cruzamentos=[...partes.flatMap(cruzamentosDe),...(s.cruzServidor||[])]
     partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(G.miolo(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtMed(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})

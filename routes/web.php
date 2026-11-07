@@ -184,7 +184,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/lotes/previa', [CadastroLoteController::class, 'previaDesenho']);
         Route::post('/lotes', [CadastroLoteController::class, 'criarDesenho']);
 
-        // Editar lote — só na pré-curadoria (lote de importação em revisão).
+        // Editar lote — qualquer lote ativo, publicado ou não; só curador
+        // (CadastroLoteController::recusarSemCuradoria).
         Route::post('/lotes/{lote}/edicao/previa', [CadastroLoteController::class, 'previaEdicao']);
         Route::post('/lotes/{lote}/edicao', [CadastroLoteController::class, 'editar']);
         // Mover lotes: vários contornos gravados de uma vez (MoverLotes).

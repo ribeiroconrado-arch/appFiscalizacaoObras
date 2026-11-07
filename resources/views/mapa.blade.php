@@ -543,9 +543,10 @@
           </span>
         </button>
 
-        {{-- EDITAR LOTE — só na pré-curadoria: lote publicado muda por
-             unificação, desmembramento ou correção de quadra, com prova e
-             histórico. Aparece quando importacoes.js entra no modo. --}}
+        {{-- EDITAR LOTE — contorno, quadra e número de 1 lote, publicado ou
+             não. Só o curador vê (está dentro do @if de podeCurarCadastro) e
+             o servidor confere de novo (recusarSemCuradoria). Na pré-curadoria
+             aberta, só alcança os lotes daquela importação. --}}
         <button type="button" class="btn sm cad-lanca" id="cad-editar-lote"
                 data-fer="editar" data-tecla="L" data-min="1" data-max="1" data-exige="exatamente 1 lote"
                 onclick="editarLoteDaPreCuradoria()">

@@ -172,6 +172,16 @@ const PranchetaGeo = (() => {
     let r=anel.map(p=>[...p]); if(len(sub(r[0],r.at(-1)))<EPS) r.pop()
     if(r.length<3) return {erro:'O lote não tem contorno válido.',partes:[]}
     if(area(r)<0) r.reverse()
+    // PONTO A MENOS DE 1 MM DA DIVISA VAI PARA A DIVISA (07/11/2026). O lote
+    // gravado com 11 casas decimais e o vizinho com 15 diferem ~1 µm na mesma
+    // divisa; o Midpoint do lado do vizinho deixava a ponta da linha a frações
+    // de µm do lote e o encontro (EPS de 0,1 µm) não acontecia: "trecho
+    // solto" numa linha de meio a meio. Vértice primeiro, depois o lado.
+    const TOL=1e-3
+    linhas=linhas.map(l=>l.map(p=>{let m=null,d=TOL
+      for(const v of r){const k=len(sub(v,p));if(k<d){d=k;m=v}}
+      if(!m)for(let i=0;i<r.length;i++){const q=pe(p,r[i],r[(i+1)%r.length]),k=len(sub(q,p));if(k<d){d=k;m=q}}
+      return m?[...m]:p}))
     const seg=[]
     for(let i=0;i<r.length;i++) seg.push({a:r[i],b:r[(i+1)%r.length],borda:true,cortes:[0,1]})
     for(const [li,l] of linhas.entries()) for(let j=1;j<l.length;j++) {
@@ -222,10 +232,12 @@ const PranchetaGeo = (() => {
     }
     const soma=faces.reduce((s,p)=>s+area(p),0)
     if(Math.abs(soma-area(r))>Math.max(.0001,area(r)*1e-7)) return {erro:'A divisão não cobre o lote. Verifique linhas fechadas no interior.',partes:[]}
-    const pendentes=[...edges.entries()].filter(([k,e])=>!e.borda&&(uses.get(k)||0)!==2).length
+    const soltas=[...edges.entries()].filter(([k,e])=>!e.borda&&(uses.get(k)||0)!==2).map(([,e])=>[nodes[e.u].p,nodes[e.v].p]), pendentes=soltas.length
     // Um ramo solto pode percorrer a mesma aresta nos dois sentidos. Não é
     // polígono cadastral; a prévia fica indisponível até terminar a ligação.
-    if(pendentes) return {erro:`Há ${pendentes} trecho(s) solto(s). Ligue-os a uma divisa ou exclua-os.`,partes:[],pendentes}
+    // Os trechos voltam em `soltos` para a prancheta pintá-los de vermelho:
+    // só a mensagem não dizia ONDE estava o toco (07/11/2026).
+    if(pendentes) return {erro:`${pendentes===1?'Um trecho em vermelho não fecha':`${pendentes} trechos em vermelho não fecham`} uma parte: ligue a ponta a uma divisa ou exclua.`,partes:[],pendentes,soltos:soltas}
     if(faces.length>20) return {erro:'Limite de 20 partes.',partes:[]}
     return {partes:faces.map(p=>[...p,p[0]]),erro:null}
   }

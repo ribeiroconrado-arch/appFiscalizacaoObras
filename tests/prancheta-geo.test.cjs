@@ -123,3 +123,15 @@ test('esquadrejar descarta vértice repetido e recusa ponta que volta sobre si',
   // Ponta: o contorno vai e volta no mesmo vértice.
   const e=G.esquadrejar([[0,0],[12,0],[12,24],[6,24],[6,30],[6.01,24],[0,24],[0,0]]);assert.ok(e.erro&&/volta sobre si/.test(e.erro))
 });
+test('ponta a frações de µm da divisa (vizinho com mais casas decimais) fecha a divisão',()=>{
+  // Q4 lote 20 do Jardim Riva II (11 casas) e o lote 19 (15 casas): o Midpoint
+  // do lado do vizinho caía 0,14 µm dentro do lote e virava "trecho solto".
+  const l20=[[-54.3070824215,-15.54938009783],[-54.30722015308,-15.5494030085],[-54.3072752973,-15.54909146049],[-54.30713756572,-15.54906854981],[-54.3070824215,-15.54938009783]]
+  const l19=[[-54.30727529730517,-15.5490914604485],[-54.30722015308449,-15.54940300850176]]
+  const P=G.plano(l20[0]),r=l20.map(P.para),v=l19.map(P.para),mid=(a,b)=>G.mul(G.add(a,b),.5)
+  const d=G.dividir(r,[[mid(v[0],v[1]),mid(r[3],r[0])]])
+  assert.equal(d.erro,null,d.erro);assert.equal(d.partes.length,2)
+  // Toco de 22 cm continua sendo apontado, com o trecho para pintar.
+  const e=G.dividir(r,[[mid(v[0],v[1]),mid(r[3],r[0]),G.add(mid(r[3],r[0]),[-.2,.1])]])
+  assert.ok(e.erro&&e.soltos.length===1)
+})
