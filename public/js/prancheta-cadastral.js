@@ -311,6 +311,10 @@ const PranchetaCad = (() => {
       const sg=segmentoPerto(p);s.fillet.erro=null
       if(!sg){s.fillet.erro='Clique sobre um lado.';render();return}
       if(!s.fillet.primeiro){s.fillet.primeiro=sg;render();return}
+      // Dois lados do contorno no desmembramento: o contorno é o do lote de
+      // origem e as partes têm de somar exatamente ele — mudar a esquina é
+      // corrigir o lote, que vem ANTES, pelo "Editar lote" (L).
+      if(s.tipo==='desmembramento'&&s.fillet.primeiro.id==null&&sg.id==null){s.fillet.primeiro=null;s.fillet.erro='O contorno do lote não muda no desmembramento.';dica('Para tirar ou fazer o arco da esquina, feche aqui, corrija o contorno em "Editar lote" (L) — Fillet nos dois lados retos, raio 0 tira o arco — e depois desmembre.');render();return}
       const r=G.concordancia(s.linhas,s.fillet.primeiro,sg,s.raio),primeiro=s.fillet.primeiro;s.fillet.primeiro=null
       if(r.erro){s.fillet.erro=r.erro;render();return}
       antes();s.linhas=r.linhas;s.sel=r.unida||primeiro.id||sg.id;mudou();return
@@ -511,6 +515,23 @@ const PranchetaCad = (() => {
   function texto(p,t,cls='pc-label'){const q=tela(p);return `<text class="${cls}" x="${q[0]}" y="${q[1]}" text-anchor="middle">${e(t)}</text>`}
   function cota(a,b,t,lado=1,cls='pc-cota',attrs=''){const mid=G.mul(G.add(a,b),.5),q=tela(G.add(mid,G.mul(G.normal(a,b),lado*30/s.escala)));return `<text class="${cls}" ${attrs} x="${q[0]}" y="${q[1]}" text-anchor="middle" dominant-baseline="middle">${e(t)}</text>`}
   function centro(r){const a=r.slice(0,-1);const m=G.mul(a.reduce(G.add,[0,0]),1/a.length);if(G.dentro(m,r))return m;for(let i=1;i<r.length;i++){const mid=G.mul(G.add(r[i-1],r[i]),.5),n=G.normal(r[i-1],r[i]);for(const sign of [1,-1]){const q=G.add(mid,G.mul(n,sign*.1));if(G.dentro(q,r))return q}}return m}
+  // TEXTO EM CIMA DE TEXTO (07/11/2026). Depois de desenhar, os rótulos são
+  // conferidos por ordem de importância: as medidas do que se desenha e as do
+  // contorno ficam onde estão; o nome da parte com a área vem depois e, se
+  // cair em cima de uma delas, sobe ou desce uma ou duas linhas (sem lugar
+  // livre, fica onde estava). Depois as medidas "antes" da edição, o nome dos
+  // vizinhos e as medidas deles: o que bate num mais importante some —
+  // aproximando, volta.
+  function desencavalar(){
+    const ordem=['.pc-cota-edit','.pc-cota:not(.pc-cota-edit):not(.pc-cota-antes):not(.pc-cota-viz),.pc-confronto','.pc-label','.pc-cota-antes','.pc-vizinho','.pc-cota-viz']
+    const caixas=[],folga=2,bate=b=>caixas.some(c=>b.x<c.x+c.width+folga&&b.x+b.width+folga>c.x&&b.y<c.y+c.height+folga&&b.y+b.height+folga>c.y)
+    for(const sel of ordem)for(const t of svg.querySelectorAll(':scope > text'+sel.split(',').join(',:scope > text'))){
+      if(t.dataset.visto)continue;t.dataset.visto='1';let b;try{b=t.getBBox()}catch{continue}
+      if(!b.width)continue
+      if(bate(b)&&sel==='.pc-label'){const y0=+t.getAttribute('y');for(const dy of [-b.height-2,b.height+2,-2*(b.height+2),2*(b.height+2)]){t.setAttribute('y',y0+dy);const n={...b,y:b.y+dy,x:b.x,width:b.width,height:b.height};if(!bate(n)){b=n;break}t.setAttribute('y',y0)}}
+      if(bate(b)&&sel!=='.pc-label'){t.style.display='none';continue}
+      caixas.push({x:b.x,y:b.y,width:b.width,height:b.height})}
+  }
   function render(){if(!s||!svg)return
     // A caixinha da medida só existe enquanto há uma medida em edição.
     if(!s.cotaEd&&$('pc-cota-ed'))$('pc-cota-ed').hidden=true
@@ -532,7 +553,7 @@ const PranchetaCad = (() => {
     const partes=s.resultado?.partes||[]
     // Os do servidor entram também: o banco recusa até o que a conta daqui não pegou.
     s.cruzamentos=[...partes.flatMap(cruzamentosDe),...(s.cruzServidor||[])]
-    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(centro(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtMed(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
+    partes.forEach((r,i)=>{h+=`<path d="${path(r,true)}" fill="${cores[i%cores.length]}" fill-opacity=".11" stroke="${cores[i%cores.length]}" stroke-width="1.5"/>`;h+=texto(G.miolo(r),`${frac()?'Unidade '+(pad3(s.dados[parteKey(r)]?.variacao)||i+1):s.tipo==='unificacao'?'Unificação':s.tipo==='novo'?'Lote novo':s.tipo==='edificacao'?'Edificação':s.tipo==='edicao'?'Contorno editado':s.leitura?'Lote '+(s.finalFeatures?.[i]?.properties?.numero_lote||i+1):'Parte '+(i+1)} · ${fmtMed(Math.abs(G.area(r)))} m²${s.tipo==='edicao'?alvoTxt(Math.abs(G.area(r))):''}`)})
     // Cotas das faces de origem, na mesma escala métrica usada nas ferramentas.
     // Na EDIÇÃO, o contorno de origem mostra a medida (em cinza) só dos lados
     // que mudaram: é ali que está a diferença contra o cadastro. Lado igual
@@ -603,6 +624,7 @@ const PranchetaCad = (() => {
     const north=G.rot([0,1],s.angulo);h+=`<g transform="translate(${s.w-38} 42)"><path d="M0 0L${north[0]*22} ${-north[1]*22}" stroke="#243b4b" stroke-width="2"/><text x="${north[0]*32}" y="${-north[1]*32}" text-anchor="middle" font-size="12">N</text></g>`
     const passo=10**Math.floor(Math.log10(120/s.escala)), px=passo*s.escala;h+=`<path d="M25 ${s.h-35}v7h${px}v-7" fill="none" stroke="#243b4b"/><text x="25" y="${s.h-40}" font-size="11">${passo>=1?fmtNum(passo)+' m':passo>=.01?Math.round(passo*100)+' cm':Math.round(passo*1000)+' mm'}</text>`
     svg.innerHTML=h
+    desencavalar()
     for(const b of modal.querySelectorAll('[data-tool]')){b.classList.toggle('ativo',b.dataset.tool===s.ferramenta);b.setAttribute('aria-pressed',String(b.dataset.tool===s.ferramenta));b.disabled=(s.leitura&&!['selecionar','alinhar'].includes(b.dataset.tool))||(s.tipo==='unificacao'&&['linha','perpendicular','mover','offset','concordancia'].includes(b.dataset.tool))}
     {const b=$('pc-sat');if(b){b.classList.toggle('ativo',!!s.sat);b.setAttribute('aria-pressed',String(!!s.sat))}}
     $('pc-ref').textContent=s.ref?'⊥ Face de referência fixada · 90°':''

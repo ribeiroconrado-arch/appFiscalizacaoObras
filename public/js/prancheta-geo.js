@@ -330,5 +330,22 @@ const PranchetaGeo = (() => {
       return {linhas,unida:l1.id}
     } catch(e) { return {erro:e.message} }
   }
-  return {EPS,add,sub,mul,dot,cross,len,unit,normal,plano,escalaUTM,rot,pe,area,dentro,inter,offset,dividir,juntarFaces,agruparFaces,esquadrejar,fechada,arcoNoCanto,arredondar,concordancia}
+  // ── ONDE ESCREVER O NOME DE UMA PARTE ───────────────────────────
+  // O ponto de dentro mais LONGE das divisas (o "polo de inacessibilidade").
+  // A média dos vértices caía colada num lado quando a união trazia vários
+  // vértices de um lado só (lotes vizinhos somados), e o rótulo da área ia
+  // parar em cima da cota daquela divisa. Busca em grade, refinada 4 vezes.
+  function miolo(r) {
+    const a=r.slice(0,-1); if(a.length<3) return a[0]||[0,0]
+    const dist=p=>{let m=Infinity;for(let i=1;i<r.length;i++){const A=r[i-1],B=r[i],ab=sub(B,A),L=dot(ab,ab),t=L?Math.max(0,Math.min(1,dot(sub(p,A),ab)/L)):0;m=Math.min(m,len(sub(p,add(A,mul(ab,t)))))}return m}
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity; for(const p of a){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1])}
+    // Empate (o meio de um retângulo é uma faixa): fica o mais perto do centro.
+    const c0=[(x0+x1)/2,(y0+y1)/2],nota=p=>dist(p)-.1*len(sub(p,c0))
+    let melhor=null,d=-Infinity,cx=c0[0],cy=c0[1],wx=x1-x0,wy=y1-y0
+    for(let volta=0;volta<5;volta++){const N=volta?8:24
+      for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const p=[cx-wx/2+wx*i/N,cy-wy/2+wy*j/N];if(!dentro(p,r))continue;const k=nota(p);if(k>d){d=k;melhor=p}}
+      if(!melhor) break; cx=melhor[0];cy=melhor[1];wx/=volta?4:8;wy/=volta?4:8}
+    return melhor||a.reduce(add,[0,0]).map(v=>v/a.length)
+  }
+  return {EPS,add,sub,mul,dot,cross,len,unit,normal,plano,escalaUTM,rot,pe,area,dentro,inter,offset,dividir,juntarFaces,agruparFaces,esquadrejar,fechada,arcoNoCanto,arredondar,concordancia,miolo}
 })()
