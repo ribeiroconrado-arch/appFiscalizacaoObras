@@ -3611,17 +3611,14 @@
     <div class="mt-corpo">
       <input type="hidden" id="dn-id">
 
-      <div class="den-topo">
-        <div class="field">
-          <label for="dn-data">Data e hora do atendimento *</label>
-          <div class="den-datahora">
-            <input type="date" id="dn-data" onfocus="preencherDataHojeSeVazio(this)">
-            <input type="time" id="dn-hora" onfocus="preencherHoraAgoraSeVazio(this)">
-          </div>
-        </div>
-        <div class="field den-agente">
-          <label>Agente</label>
-          <div class="valor" id="dn-agente">—</div>
+      {{-- Data, hora e agente numa linha só (06/11/2026): o nome quebra se
+           não couber, mas não ganha uma caixa à parte empurrando o Local. --}}
+      <div class="field den-topo">
+        <label for="dn-data">Data e hora do atendimento *</label>
+        <div class="den-datahora">
+          <input type="date" id="dn-data" onfocus="preencherDataHojeSeVazio(this)">
+          <input type="time" id="dn-hora" onfocus="preencherHoraAgoraSeVazio(this)">
+          <span class="den-agente" id="dn-agente" title="Agente">—</span>
         </div>
       </div>
 

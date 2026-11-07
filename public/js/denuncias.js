@@ -776,7 +776,7 @@ function _dnMarcarGps(p) {
   document.getElementById('dn-lat').value = p.lat
   document.getElementById('dn-lng').value = p.lon
   document.getElementById('dn-prec').value = p.prec ?? ''
-  document.getElementById('dn-gps-txt').textContent = 'Tirar GPS'
+  document.getElementById('dn-gps-txt').textContent = 'Remover GPS'
   document.getElementById('dn-gps').classList.add('marcado')
   const info = document.getElementById('dn-gps-info')
   info.hidden = false
