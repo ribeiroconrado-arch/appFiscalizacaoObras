@@ -459,7 +459,13 @@ for (const ev of ['mouseover', 'focusin']) {
     if (!dica) { return }
     const r = b.getBoundingClientRect()
     dica.style.setProperty('--dica-x', (r.right + 12) + 'px')
-    dica.style.setProperty('--dica-y', (r.top + r.height / 2) + 'px')
+    // Centrada no botão, mas sem subir acima do topo da mesa (o primeiro botão,
+    // Corrigir quadra, jogava a metade de cima para trás do menu superior) nem
+    // descer abaixo da janela. A altura já existe: oculta, a dica ocupa lugar.
+    const h = dica.offsetHeight
+    const teto = (b.closest('.cad-mesa')?.getBoundingClientRect().top ?? 0) + 4
+    const topo = Math.max(teto, Math.min(r.top + r.height / 2 - h / 2, window.innerHeight - h - 8))
+    dica.style.setProperty('--dica-y', topo + 'px')
   })
 }
 

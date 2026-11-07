@@ -3481,9 +3481,10 @@ body.prancheta-aberta .mapa-barras{visibility:hidden}
 
 /* A dica sai POR FORA da mesa, à direita. Agora que a régua ROLA (e recorta o
    que transborda), a dica é `fixed`: a posição vem do botão sob o ponteiro
-   (cadastro.js, "dica da régua"), e nenhum overflow a corta. */
+   (cadastro.js, "dica da régua"), e nenhum overflow a corta. O `top` já vem
+   centrado e preso entre o topo da mesa e o pé da janela. */
 .cad-dica-fer{
-  position:fixed;left:var(--dica-x,-9999px);top:var(--dica-y,0);transform:translateY(-50%);
+  position:fixed;left:var(--dica-x,-9999px);top:var(--dica-y,0);
   width:236px;background:var(--tx);color:var(--sur);padding:9px 12px;
   border-radius:9px;box-shadow:0 8px 26px rgba(0,0,0,.22);text-align:left;
   opacity:0;visibility:hidden;transition:opacity .13s;pointer-events:none;z-index:60;
