@@ -1005,10 +1005,10 @@ function abrirBalao(feicao, camada) {
   // e a inscrição logo abaixo é oficial. Os dois têm de concordar. O nome do
   // desenho fica para o rótulo escrito sobre o mapa.
   // MODELO D4: cabeçalho verde com quadra e lote; tabela de rótulo e valor;
-  // três atalhos quadrados; "Abrir ficha". Frente × fundos só quando o lote
-  // tem as medidas (os vindos do DWG não têm); Vistoria só para quem registra.
-  const m = n => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
-  const medidas = p.frente_m && p.fundos_m ? `${m(p.frente_m)} × ${m(p.fundos_m)} m` : null
+  // três atalhos quadrados; "Abrir ficha". Vistoria só para quem registra.
+  // Frente × fundos saiu do balão (07/11/2026): fica na ficha. Na célula
+  // pequena da Origem, DESMEMBRADO vai abreviado; o rótulo "Situação", inteiro.
+  const origem = String(p.tag_origem || 'ORIGINAL').replace(/^DESMEMBRADO$/i, 'DESMEMB.')
   const ico = d => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`
   const atalhos = [
     `<button type="button" class="balao-q" onclick="sinalizarDoBalao()">${ico('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>')}Sinalizar</button>`,
@@ -1028,13 +1028,12 @@ function abrirBalao(feicao, camada) {
           <tr><td>Bairro</td><td>${esc(bairroDe(p))}</td></tr>
           <tr><td>Inscrição</td><td class="balao4-mono">${esc(p.inscricao || '—')}</td></tr>
           ${window.VE_PROPRIETARIO ? `<tr><td>Proprietário</td><td class="balao4-dono" id="balao-dono"><span class="balao4-sk"></span></td></tr>` : ''}
-          ${medidas ? `<tr><td>Frente × fundos</td><td>${medidas}</td></tr>` : ''}
         </table>
         <div class="balao4-grade">
           <div class="balao4-cel"><span>A. mapa</span><b${difere ? ` class="balao4-difere" title="Diferente do BCI em ${fmtBR(Math.abs(dif))} m²"` : ''}>${m2(areaMapa)}</b></div>
           <div class="balao4-cel"><span>A. BCI</span><b>${m2(areaCad)}</b></div>
-          <div class="balao4-cel"><span>Origem</span><b><span class="lote-tag-origem">${esc(p.tag_origem || 'ORIGINAL')}</span></b></div>
-          <div class="balao4-cel"><span>Sit.</span><b id="balao-sit"><span class="balao4-sk"></span></b></div>
+          <div class="balao4-cel"><span>Origem</span><b><span class="lote-tag-origem" title="${esc(p.tag_origem || 'ORIGINAL')}">${esc(origem)}</span></b></div>
+          <div class="balao4-cel"><span>Situação</span><b id="balao-sit"><span class="balao4-sk"></span></b></div>
         </div>
         ${typeof htmlFracaoNoBalao === 'function' ? htmlFracaoNoBalao(p) : ''}
         <div class="balao4-acoes" style="grid-template-columns:repeat(${atalhos.length},1fr)">${atalhos.join('')}</div>
