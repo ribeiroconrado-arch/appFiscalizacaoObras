@@ -745,6 +745,9 @@ function adicionarAoMapa(geojson, aoClicar) {
         if (typeof ruaState !== 'undefined' && ruaState.desenhando) return
         // Movendo lotes (mover-lotes.js): o clique é ponto de base ou destino.
         if (typeof movLoteState !== 'undefined' && movLoteState.ativo) return
+        // Editando o contorno do bairro (contorno-editor.js): o lote é só
+        // referência por baixo — nada de balão nem de marcar (07/11/2026).
+        if (typeof ceState !== 'undefined' && ceState.ativo) return
         // Shift (ou Ctrl) + clique com a mesa cadastral aberta é SEMPRE marcar:
         // quem segura a tecla está juntando lotes, e um balão a cada clique
         // atrapalha a marcação de vários (pedido dele, 06/11/2026).

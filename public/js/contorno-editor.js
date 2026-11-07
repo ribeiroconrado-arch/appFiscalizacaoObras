@@ -164,6 +164,7 @@ function _ceAbrir(nome, f) {
   m.on('layeradd', _ceZoomDaCamadaNova)
   ceState.alcas = L.layerGroup().addTo(m)
   ceState.invasoes = L.layerGroup().addTo(m)
+  _ceDesenharVizinhos(m)
   _ceDesenhar()
   m.fitBounds(ceState.camada.getBounds(), { padding: [40, 40] })
   m.on('moveend', _ceDesenharAlcas)
@@ -188,8 +189,8 @@ function sairDaEdicaoDoContorno(semPerguntar = false, voltar = true) {
   const m = mapaState.obj, bairro = ceState.bairro, daLista = ceState.daLista
   clearTimeout(ceState.timer)
   _ceLimparPrevia()
-  ceState.camada?.remove(); ceState.alcas?.remove(); ceState.invasoes?.remove(); ceState.ima?.remove(); ceState.linha?.remove()
-  ceState.camada = ceState.alcas = ceState.invasoes = ceState.ima = ceState.linha = null
+  ceState.camada?.remove(); ceState.alcas?.remove(); ceState.invasoes?.remove(); ceState.ima?.remove(); ceState.linha?.remove(); ceState.vizCamada?.remove()
+  ceState.camada = ceState.alcas = ceState.invasoes = ceState.ima = ceState.linha = ceState.vizCamada = null
   m.off('moveend', _ceDesenharAlcas)
   m.off('layeradd', _ceZoomDaCamadaNova)
   m.getContainer().classList.remove('ce-inserindo', 'ce-removendo')
@@ -208,6 +209,30 @@ function sairDaEdicaoDoContorno(semPerguntar = false, voltar = true) {
 }
 
 // ── desenho ─────────────────────────────────────────────────────
+
+/**
+ * OS BAIRROS VIZINHOS EM DESTAQUE (07/11/2026). O contorno de bairro do mapa
+ * é tracejado e, de perto, se confunde com o das quadras. Na edição, os
+ * vizinhos a até ~500 m entram em magenta contínuo, com o nome no meio — é
+ * neles que o contorno encosta. Surdos ao clique, como o resto do editor.
+ */
+function _ceDesenharVizinhos(m) {
+  const k = ceState.polis.flat(2), folga = .005
+  const x0 = Math.min(...k.map(c => c[0])) - folga, x1 = Math.max(...k.map(c => c[0])) + folga
+  const y0 = Math.min(...k.map(c => c[1])) - folga, y1 = Math.max(...k.map(c => c[1])) + folga
+  ceState.vizCamada = L.layerGroup().addTo(m)
+  const nomes = new Set()
+  for (const v of ceState.vizinhos) {
+    const [a0, b0, a1, b1] = v.caixa
+    if (a1 < x0 || a0 > x1 || b1 < y0 || b0 > y1) continue
+    const pol = L.polygon(v.anel.map(c => [c[1], c[0]]), { pane: 'ceContorno', interactive: false,
+      color: '#C026D3', weight: 2.6, opacity: .95, fillColor: '#C026D3', fillOpacity: .06 }).addTo(ceState.vizCamada)
+    if (!nomes.has(v.nome)) {
+      nomes.add(v.nome)
+      pol.bindTooltip(v.nome, { permanent: true, direction: 'center', className: 'rot ce-viz-nome', interactive: false }).openTooltip()
+    }
+  }
+}
 
 function _ceDesenhar() {
   const lls = ceState.polis.map(p => p.map(r => r.map(c => [c[1], c[0]])))

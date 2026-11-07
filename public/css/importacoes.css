@@ -606,3 +606,6 @@ table.per-mem tr.ruim td{background:rgba(217,119,6,.12)}
 /* Dica do perímetro urbano no mapa (perimetro-urbano.js) */
 .leaflet-tooltip.per-dica{border:0;border-left:3px solid #7C3AED;border-radius:6px;padding:5px 9px;font-size:12px;line-height:1.35;box-shadow:0 2px 8px rgba(0,0,0,.18);white-space:nowrap}
 .leaflet-tooltip.per-dica small{display:block;color:var(--tx3,#6B7280);font-size:11px}
+/* Edição de contorno: o nome dos bairros vizinhos (magenta, como o traço deles). */
+.leaflet-tooltip.rot.ce-viz-nome{display:block;font-family:'Manrope',sans-serif;font-weight:800;font-size:12px;color:#86198F;background:#ffffffe6;border:1px solid #F0ABFC;border-radius:4px;padding:1px 6px;box-shadow:none;white-space:nowrap}
+.leaflet-tooltip.rot.ce-viz-nome::before{display:none}
