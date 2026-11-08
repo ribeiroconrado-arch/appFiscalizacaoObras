@@ -961,15 +961,31 @@ function _encostarNosVizinhos(geom, proprios, outros, fabrica, lotes = []) {
     const tirou = _sobreporComSeguranca(novo, simples, 'difference')
     const pontas = tirou ? lotesEm(tirou).map(l => _sobreporComSeguranca(l, tirou, 'intersection')).filter(g => g && g.getArea() > 0.001) : []
     novo = pontas.length ? _unirComSeguranca(fabrica, [simples, ...pontas]) : simples
+    // Grade de 1 cm e sem farelo: a fresta e as pontas deixam vértices a
+    // milímetros um do outro, que no arredondamento para lon/lat se cruzavam
+    // ("linhas se cruzando" no servidor, Primavera I, 08/11/2026).
+    novo = _limparContorno(novo, fabrica)
     if (!novo || !novo.isValid() || novo.isEmpty()) return null
     // Conferência: o encosto não deixa MAIS lote daqui de fora do que o
     // contorno já deixava (a simplificação de 0,5 m já tira pontas de lote).
-    const cortado = _sobreporComSeguranca(geom, novo, 'difference')
-    if (!cortado) return null
-    if (cortado.getArea() > 0.01) {
-      let perdido = 0
-      for (const l of lotesEm(cortado)) { const x = _sobreporComSeguranca(l, cortado, 'intersection'); perdido += x ? x.getArea() : Infinity }
-      if (perdido > 0.5) return null
+    // Recorte de menos de 5 cm de largura é a grade de 1 cm e a abertura de
+    // 2 cm (_limparContorno), não lote perdido. Lote cortado de verdade volta
+    // (a ponta é devolvida e o contorno limpo de novo); só recusa se, ainda
+    // assim, faltar lote.
+    const perdas = () => {
+      const bruto = _sobreporComSeguranca(geom, novo, 'difference')
+      if (!bruto) return null
+      const cortado = bruto.buffer(-0.025).buffer(0.025)
+      if (cortado.getArea() <= 0.01) return []
+      return lotesEm(cortado).map(l => _sobreporComSeguranca(l, cortado, 'intersection')).filter(x => x && x.getArea() > 0.001)
+    }
+    let perdidas = perdas()
+    if (!perdidas) return null
+    if (perdidas.reduce((s, x) => s + x.getArea(), 0) > 0.5) {
+      novo = _limparContorno(_unirComSeguranca(fabrica, [novo, ...perdidas]), fabrica)
+      if (!novo || !novo.isValid()) return null
+      perdidas = perdas()
+      if (!perdidas || perdidas.reduce((s, x) => s + x.getArea(), 0) > 0.5) return null
     }
     return novo
   } catch (e) {
@@ -1074,8 +1090,59 @@ function calcularContorno(lotes, raio, vizinhos = []) {
     }
   }
 
-  const geometry = _multiPoligonoLonLat(ficam.map(p => escritor.write(p).coordinates), plano)
+  let geometry = _multiPoligonoLonLat(ficam.map(p => escritor.write(p).coordinates), plano)
+  // Conferência JÁ EM LON/LAT, como o servidor confere: o arredondamento da
+  // conversão pode cruzar vértices que em metros não se cruzavam. Inválido,
+  // passa pela grade de 1 cm (e, se preciso, de 10 cm) e converte de novo.
+  for (const escala of [100, 10]) {
+    if (new J.operation.valid.IsValidOp(leitor.read(geometry)).isValid()) break
+    const limpos = ficam.map(p => _limparContorno(p, fabrica, escala)).filter(Boolean)
+    const partes = []
+    for (const g of limpos) for (let i = 0; i < g.getNumGeometries(); i++) partes.push(escritor.write(g.getGeometryN(i)).coordinates)
+    geometry = _multiPoligonoLonLat(partes, plano)
+  }
   return { geometry, isolados, pedacos: ficam.length }
+}
+
+/**
+ * Prende o contorno a uma grade (1 cm por padrão), o que desfaz cruzamento
+ * de vértices quase coincidentes, e tira o farelo: furo e pedaço com menos de
+ * 1 m². Devolve null se não sobrar nada válido.
+ */
+function _limparContorno(g, fabrica, escala = 100) {
+  const J = window.jsts
+  let r
+  // Abertura de 2 cm (encolhe e devolve, quina em esquadro): some gargalo e
+  // espinho mais finos que isso — bordas quase encostadas que no plano são
+  // válidas e que o MySQL, conferindo sobre o elipsoide (SRID 4326), dá como
+  // cruzadas (São Cristóvão, 08/11/2026).
+  const P = J.operation.buffer.BufferParameters, par = new P()
+  par.setJoinStyle(P.JOIN_MITRE); par.setMitreLimit(3)
+  const buf = (x, d) => J.operation.buffer.BufferOp.bufferOp(x, d, par)
+  // Antes, o FECHAMENTO de 2 cm: junta pedaço que só encosta no corpo (ponta
+  // de lote devolvida tocando num ponto — multipolígono inválido).
+  let aberto = g
+  try { aberto = buf(buf(buf(buf(g, 0.02), -0.02), -0.02), 0.02) } catch { /* fica como estava */ }
+  if (aberto.isEmpty()) aberto = g
+  // Zigue-zague de lados de 1 a 4 cm (pontas devolvidas + grade): sai com a
+  // simplificação de 5 cm, que preserva a topologia (Primavera II, 08/11/2026).
+  try { aberto = J.simplify.TopologyPreservingSimplifier.simplify(aberto, 0.05) } catch { /* fica */ }
+  try { r = J.precision.GeometryPrecisionReducer.reduce(aberto, new J.geom.PrecisionModel(escala)) } catch { r = aberto.buffer(0) }
+  if (!r.isValid()) r = r.buffer(0)
+  const polis = []
+  for (let k = 0; k < r.getNumGeometries(); k++) {
+    const p = r.getGeometryN(k)
+    if (p.getGeometryType() !== 'Polygon' || p.getArea() < 1) continue
+    const furos = []
+    for (let h = 0; h < p.getNumInteriorRing(); h++) {
+      const anel = p.getInteriorRingN(h)
+      if (fabrica.createPolygon(fabrica.createLinearRing(anel.getCoordinates()), []).getArea() >= 1) furos.push(fabrica.createLinearRing(anel.getCoordinates()))
+    }
+    polis.push(fabrica.createPolygon(fabrica.createLinearRing(p.getExteriorRing().getCoordinates()), furos))
+  }
+  if (!polis.length) return null
+  const out = polis.length === 1 ? polis[0] : fabrica.createMultiPolygon(polis)
+  return out.isValid() ? out : out.buffer(0)
 }
 
 /**
