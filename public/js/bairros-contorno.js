@@ -42,6 +42,22 @@ const CONTORNO_RAIO_FUSAO = 75
  */
 const QUADRA_RAIO = 1
 
+/**
+ * PONTE (08/11/2026): bairro que ainda sai em pedaços grandes — o Primavera I,
+ * cortado pela rodovia — é ligado por fechamentos maiores, até este raio. Só
+ * entra o trecho que liga dois pedaços e não toca lote de outro bairro.
+ */
+const CONTORNO_PONTE_RAIOS = [100, 150, 200]
+
+/**
+ * ENCOSTAR NO VIZINHO (08/11/2026): o vão entre o bairro e o vizinho, de até
+ * 2 × isto, é repartido pela LINHA DO MEIO entre os lotes de um e os do outro
+ * (Voronoi das bordas). Os dois lados calculam a mesma linha, então os
+ * contornos se encostam sem sobra, em qualquer ordem de geração.
+ */
+const CONTORNO_ENCOSTO_M = 60
+const CONTORNO_ENCOSTO_PASSO_M = 4
+
 /** Pedaço com até isso de lotes, longe do corpo do bairro, é lote ISOLADO (ex.: coordenada corrompida). */
 const CONTORNO_ISOLADO_LOTES = 2
 const CONTORNO_ISOLADO_M = 200
@@ -742,6 +758,212 @@ function _encontroDasRetas(a, b, c, d) {
 }
 
 /**
+ * PONTE entre pedaços do mesmo bairro (CONTORNO_PONTE_RAIOS). Pedaço é o que
+ * tem lote do bairro dentro; o trecho que um fechamento maior acrescenta só
+ * entra se encosta em DOIS pedaços (liga, não engorda) e não toca lote de
+ * outro bairro. Para no primeiro raio que deixa um pedaço só.
+ */
+function _ligarPedacos(geom, fechar, livre, fabrica, lotes) {
+  const partes = g => { const ps = []; for (let i = 0; i < g.getNumGeometries(); i++) ps.push(g.getGeometryN(i)); return ps }
+  const comLote = g => partes(g).filter(p => lotes.some(l => p.intersects(l)))
+  let atual = geom
+  for (const raio of CONTORNO_PONTE_RAIOS) {
+    const pedacos = comLote(atual)
+    if (pedacos.length < 2) break
+    const maior = fechar(atual, raio)
+    const novo = maior && _sobreporComSeguranca(maior, atual, 'difference')
+    if (!novo) continue
+    const pontes = partes(novo).filter(t => {
+      if (t.getArea() < 1 || !livre(t)) return false
+      const perto = t.buffer(0.1)
+      return pedacos.filter(p => p.intersects(perto)).length >= 2
+    })
+    if (!pontes.length) continue
+    const unido = _unirComSeguranca(fabrica, [atual, ...pontes])
+    if (unido && unido.isValid()) atual = unido
+  }
+  return atual
+}
+
+/**
+ * ENCOSTAR NO VIZINHO (CONTORNO_ENCOSTO_M): o vão entre os lotes do bairro e
+ * os de outro bairro vai até a LINHA DO MEIO entre eles — o diagrama de
+ * Voronoi dos pontos das duas bordas, a cada CONTORNO_ENCOSTO_PASSO_M.
+ *
+ * O vão é o que o fechamento de lotes daqui + lotes de lá (raio D) preenche e
+ * nenhum dos dois ocupa: só o espaço ENTRE eles — rua, canteiro, avenida de
+ * até 2D —, nunca uma orelha para fora. Do vão, fica com este bairro a parte
+ * mais perto dos lotes dele; e o contorno que já avançava além da linha do
+ * meio recua até ela. Lote do bairro nunca é cortado.
+ *
+ * Os dois bairros calculam com os mesmos lotes (os vizinhos de um são os
+ * lotes do outro), então a linha sai a mesma dos dois lados.
+ * Devolve null se algo falhar — o contorno fica como estava.
+ */
+function _encostarNosVizinhos(geom, proprios, outros, fabrica, lotes = []) {
+  const J = window.jsts
+  const D = CONTORNO_ENCOSTO_M, passo = CONTORNO_ENCOSTO_PASSO_M
+  try {
+    const P = J.operation.buffer.BufferParameters
+    const par = new P(); par.setJoinStyle(P.JOIN_MITRE); par.setMitreLimit(3)
+    const buf = (g, d) => J.operation.buffer.BufferOp.bufferOp(g, d, par)
+    // Os vizinhos em BLOCOS simplificados (quadras de lá, 1 m): as contas de
+    // área (vão, faixa perto) ficam leves. A linha do meio usa os lotes exatos.
+    const blocosLa = J.simplify.TopologyPreservingSimplifier.simplify(buf(buf(outros, 3), -3), 1)
+    // "Perto" por índice espacial, sem buffer de milhares de lotes.
+    const indice = g => {
+      const t = new J.index.strtree.STRtree()
+      for (let k = 0; k < g.getNumGeometries(); k++) { const p = g.getGeometryN(k); t.insert(p.getEnvelopeInternal(), p) }
+      return t
+    }
+    const iLa = indice(blocosLa), iAqui = indice(geom)
+    const ponto = c => fabrica.createPoint(c)
+    const pertoDe = (arvore, c, d) => {
+      const e = new J.geom.Envelope(c); e.expandBy(d)
+      return arvore.query(e).toArray().some(p => p.isWithinDistance(ponto(c), d))
+    }
+    const lOutros = { locate: c => pertoDe(iLa, c, 2 * D) }, lAqui = { locate: c => pertoDe(iAqui, c, 2 * D) }
+    const EXT = false
+    const sitios = [], deQuem = new Map()
+    const amostrar = (g, quem, filtro) => {
+      for (let k = 0; k < g.getNumGeometries(); k++) {
+        const p = g.getGeometryN(k)
+        const aneis = [p.getExteriorRing()]
+        for (let h = 0; h < p.getNumInteriorRing(); h++) aneis.push(p.getInteriorRingN(h))
+        for (const anel of aneis) {
+          const cs = anel.getCoordinates()
+          for (let i = 1; i < cs.length; i++) {
+            const a = cs[i - 1], b = cs[i], L = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.ceil(L / passo))
+            for (let t = 0; t < n; t++) {
+              const c = new J.geom.Coordinate(a.x + (b.x - a.x) * t / n, a.y + (b.y - a.y) * t / n)
+              if (filtro.locate(c) === EXT) continue
+              const chave = c.x.toFixed(3) + ',' + c.y.toFixed(3)
+              if (deQuem.has(chave)) continue
+              deQuem.set(chave, quem); sitios.push(c)
+            }
+          }
+        }
+      }
+    }
+    amostrar(proprios, 'aqui', lOutros)
+    amostrar(outros, 'la', lAqui)
+    if (!sitios.length || ![...deQuem.values()].includes('la') || ![...deQuem.values()].includes('aqui')) return geom
+
+    // O vão: só o espaço entre os dois (fechamento do conjunto, menos os dois).
+    // Feito com o contorno daqui e os blocos de lá — os lotes daqui estão
+    // dentro do contorno, e o vão de lá até a linha do meio é o do vizinho.
+    const juntos = _unirComSeguranca(fabrica, [geom, blocosLa])
+    const vaoTodo = _sobreporComSeguranca(buf(buf(juntos, D), -D), juntos, 'difference')
+    // Do vão, só o que está a até D do contorno daqui: a linha do meio de um
+    // vão de até 2D nunca fica mais longe que isso. Área cercada e grande
+    // (centenas de metros de tudo) não é rua entre bairros.
+    const vao = vaoTodo && _sobreporComSeguranca(vaoTodo, buf(geom, D + 1), 'intersection')
+    if (!vao) return geom
+
+    // Zona dos vizinhos: as células de Voronoi dos pontos da borda de lá.
+    const vb = new J.triangulate.VoronoiDiagramBuilder()
+    vb.setSites(fabrica.createMultiPointFromCoords(sitios))
+    const env = geom.getEnvelopeInternal(); env.expandBy(3 * D)
+    vb.setClipEnvelope(env)
+    const celulas = vb.getDiagram(fabrica)
+    // Faixa onde a linha do meio importa: o vão e o contorno a até D dos
+    // lotes de lá. Só as células de lá que tocam essa faixa entram na união.
+    // A LINHA DO MEIO: os lados que uma célula daqui divide com uma de lá
+    // (células vizinhas do Voronoi têm o lado comum com as mesmas coordenadas).
+    // Unir milhares de células, ou recortar cada uma, levava mais de um minuto;
+    // cortar as áreas por esta linha uma vez só leva segundos.
+    const ladoDe = new Map()
+    const ch = (a, b) => { const p = a.x.toFixed(4) + ',' + a.y.toFixed(4), q = b.x.toFixed(4) + ',' + b.y.toFixed(4); return p < q ? p + '|' + q : q + '|' + p }
+    const sitiosDe = { aqui: new J.index.strtree.STRtree(), la: new J.index.strtree.STRtree() }
+    for (let k = 0; k < celulas.getNumGeometries(); k++) {
+      const c = celulas.getGeometryN(k), s = c.getUserData()
+      const dono = s && deQuem.get(s.x.toFixed(3) + ',' + s.y.toFixed(3))
+      if (!dono) continue
+      sitiosDe[dono].insert(new J.geom.Envelope(s), s)
+      const cs = c.getExteriorRing().getCoordinates()
+      for (let i = 1; i < cs.length; i++) {
+        const k2 = ch(cs[i - 1], cs[i]), v = ladoDe.get(k2)
+        if (!v) ladoDe.set(k2, { a: cs[i - 1], b: cs[i], donos: new Set([dono]) })
+        else v.donos.add(dono)
+      }
+    }
+    const meio = [...ladoDe.values()].filter(v => v.donos.size === 2)
+      .map(v => fabrica.createLineString([new J.geom.Coordinate(v.a.x, v.a.y), new J.geom.Coordinate(v.b.x, v.b.y)]))
+    if (!meio.length) return geom
+    const linhaDoMeio = J.operation.union.UnaryUnionOp.union(fabrica.createMultiLineString(meio))
+    // O sítio mais perto de um ponto: busca em caixas crescentes no índice.
+    const maisPerto = (arvore, c) => {
+      for (let r = passo * 2; r < 8 * D; r *= 2) {
+        const e = new J.geom.Envelope(c); e.expandBy(r)
+        const ss = arvore.query(e).toArray()
+        if (ss.length) return Math.min(...ss.map(s => s.distance(c)))
+      }
+      return Infinity
+    }
+    const deQuemE = g => {
+      const c = g.getInteriorPoint().getCoordinate()
+      const a = maisPerto(sitiosDe.aqui, c), l = maisPerto(sitiosDe.la, c)
+      return a < Infinity && a <= l ? 'aqui' : 'la'   // sem ponto perto: não é daqui
+    }
+    // Corta a área pela linha do meio e devolve as faces de um dono.
+    // O corte é uma fresta de 2 cm ao longo da linha (a costura de 5 cm, no
+    // fim, a fecha): mais robusto que poligonizar, que deixava o vão inteiro.
+    const fresta = linhaDoMeio.buffer(0.01, 1)
+    const facesDe = (area, dono) => {
+      if (!area || area.isEmpty()) return []
+      const cortada = _sobreporComSeguranca(area, fresta, 'difference')
+      if (!cortada) return []
+      const fs = []
+      for (let k = 0; k < cortada.getNumGeometries(); k++) {
+        const f = cortada.getGeometryN(k)
+        if (f.getArea() > 0.01 && deQuemE(f) === dono) fs.push(f)
+      }
+      return fs
+    }
+    const pertoLa = _sobreporComSeguranca(geom, buf(blocosLa, D), 'intersection')
+    const ganhos = facesDe(vao, 'aqui'), passou = facesDe(pertoLa, 'la')
+
+    // Ganha a parte do vão do lado de cá que encosta no contorno (sem ilhas).
+    let novo = geom
+    if (ganhos.length) {
+      const ganho = _unirComSeguranca(fabrica, ganhos)
+      const encostados = []
+      for (let k = 0; k < ganho.getNumGeometries(); k++) {
+        const p = ganho.getGeometryN(k)
+        if (p.getArea() > 0.5 && p.isWithinDistance(geom, 0.5)) encostados.push(p)
+      }
+      if (encostados.length) novo = _unirComSeguranca(fabrica, [geom, ...encostados])
+    }
+    // Recua o que passava da linha do meio — nunca sobre lote daqui.
+    // Os lotes daqui por índice: contas contra a união de milhares de lotes
+    // levavam dezenas de segundos; só os de perto do trecho importam.
+    const iLotes = new J.index.strtree.STRtree()
+    for (const l of lotes) iLotes.insert(l.getEnvelopeInternal(), l)
+    const lotesEm = g => iLotes.query(g.getEnvelopeInternal()).toArray().filter(l => l.intersects(g))
+    const semLotes = g => { const ls = lotesEm(g); return ls.length ? _sobreporComSeguranca(g, _unirComSeguranca(fabrica, ls), 'difference') : g }
+    const passouU = passou.length ? _unirComSeguranca(fabrica, passou) : null
+    const alemDaLinha = passouU ? semLotes(passouU) : null
+    if (alemDaLinha && alemDaLinha.getArea() > 0.01) novo = _sobreporComSeguranca(novo, alemDaLinha, 'difference') || novo
+    // Costura de 5 cm: os recortes encostam no contorno por arredondamento.
+    novo = buf(buf(novo, 0.05), -0.05)
+    if (!novo || !novo.isValid() || novo.isEmpty()) return null
+    // Conferência: o encosto não deixa MAIS lote daqui de fora do que o
+    // contorno já deixava (a simplificação de 0,5 m já tira pontas de lote).
+    const cortado = _sobreporComSeguranca(geom, novo, 'difference')
+    if (!cortado) return null
+    if (cortado.getArea() > 0.01) {
+      let perdido = 0
+      for (const l of lotesEm(cortado)) { const x = _sobreporComSeguranca(l, cortado, 'intersection'); perdido += x ? x.getArea() : Infinity }
+      if (perdido > 0.5) return null
+    }
+    return novo
+  } catch (e) {
+    console.warn('Encostar no vizinho:', e)
+    return null
+  }
+}
+
+/**
  * A geometria em si. Função pura: lotes [{id, geometry(Polygon, lon/lat)}] e
  * os lotes de outros bairros em volta (Polygons) →
  * {geometry: MultiPolygon lon/lat, isolados: [ids], pedacos}.
@@ -774,10 +996,11 @@ function calcularContorno(lotes, raio, vizinhos = []) {
   const partesDe = g => { const ps = []; for (let i = 0; i < g.getNumGeometries(); i++) ps.push(g.getGeometryN(i)); return ps }
 
   // O que a fusão não pode engolir: os lotes dos outros bairros (com 2 m de folga).
-  const outros = vizinhos.length
+  const outrosCru = vizinhos.length
     ? _unirComSeguranca(fabrica, vizinhos.map(v =>
-        leitor.read({ type: 'Polygon', coordinates: v.coordinates.map(anel => anel.map(c => plano.para(c))) }))).buffer(2)
+        leitor.read({ type: 'Polygon', coordinates: v.coordinates.map(anel => anel.map(c => plano.para(c))) })))
     : null
+  const outros = outrosCru ? outrosCru.buffer(2) : null
   const livre = g => !outros || !g.intersects(outros)
 
   // 1 e 2: fechamento comum, e a fusão só onde não há vizinho.
@@ -803,12 +1026,17 @@ function calcularContorno(lotes, raio, vizinhos = []) {
     }
     return fabrica.createPolygon(fabrica.createLinearRing(p.getExteriorRing().getCoordinates()), furos)
   }))
+  // 3b: PONTE — pedaços grandes separados por via larga (rodovia) viram um só.
+  fechado = _ligarPedacos(fechado, fechar, livre, fabrica, emMetros.map(x => x.g))
   // Simplificação que preserva a topologia: Douglas-Peucker puro pode cruzar
   // anéis e entregar um polígono inválido.
   fechado = J.simplify.TopologyPreservingSimplifier.simplify(fechado, 0.5)
   // 4: borda retilínea — quina arredondada vira canto vivo e dobra de rua
   // vira reta, sem deixar lote de fora nem encostar em lote de outro bairro.
   fechado = _endireitarReentrancias(fechado, livre, fabrica, emMetros.map(x => x.g))
+  // 5: ENCOSTAR — o vão até o vizinho, repartido pela linha do meio. Por
+  // último e sem simplificar depois: a linha tem de sair igual nos dois lados.
+  if (outrosCru) fechado = _encostarNosVizinhos(fechado, uniao, outrosCru, fabrica, emMetros.map(x => x.g)) || fechado
 
   // Pedaços: o maior é o bairro; pedaço pequeno e longe é lote isolado.
   // Pedaço SEM ÁREA fica de fora: a simplificação de 0,5 m achata lasca
