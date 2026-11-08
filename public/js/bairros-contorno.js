@@ -57,6 +57,8 @@ const CONTORNO_PONTE_RAIOS = [100, 150, 200]
  */
 const CONTORNO_ENCOSTO_M = 60
 const CONTORNO_ENCOSTO_PASSO_M = 4
+/** Tolerância da simplificação da linha do meio (m); o contorno final usa a metade. */
+const CONTORNO_ENCOSTO_SIMPLIFICA_M = 1
 
 /** Pedaço com até isso de lotes, longe do corpo do bairro, é lote ISOLADO (ex.: coordenada corrompida). */
 const CONTORNO_ISOLADO_LOTES = 2
@@ -890,7 +892,14 @@ function _encostarNosVizinhos(geom, proprios, outros, fabrica, lotes = []) {
     const meio = [...ladoDe.values()].filter(v => v.donos.size === 2)
       .map(v => fabrica.createLineString([new J.geom.Coordinate(v.a.x, v.a.y), new J.geom.Coordinate(v.b.x, v.b.y)]))
     if (!meio.length) return geom
-    const linhaDoMeio = J.operation.union.UnaryUnionOp.union(fabrica.createMultiLineString(meio))
+    // A linha do Voronoi sai em zigue-zague (um vértice a cada passo): emendada
+    // e simplificada em 1 m. Com milhares de vértices o servidor estourava o
+    // tempo ao conferir o contorno (504). A simplificação é a mesma dos dois
+    // lados, porque a linha de entrada é a mesma.
+    const juntar = new J.operation.linemerge.LineMerger()
+    juntar.add(J.operation.union.UnaryUnionOp.union(fabrica.createMultiLineString(meio)))
+    const linhaDoMeio = fabrica.createMultiLineString(juntar.getMergedLineStrings().toArray()
+      .map(l => J.simplify.DouglasPeuckerSimplifier.simplify(l, CONTORNO_ENCOSTO_SIMPLIFICA_M)))
     // O sítio mais perto de um ponto: busca em caixas crescentes no índice.
     const maisPerto = (arvore, c) => {
       for (let r = passo * 2; r < 8 * D; r *= 2) {
@@ -946,6 +955,12 @@ function _encostarNosVizinhos(geom, proprios, outros, fabrica, lotes = []) {
     if (alemDaLinha && alemDaLinha.getArea() > 0.01) novo = _sobreporComSeguranca(novo, alemDaLinha, 'difference') || novo
     // Costura de 5 cm: os recortes encostam no contorno por arredondamento.
     novo = buf(buf(novo, 0.05), -0.05)
+    // Sem os vértices dos arcos do buffer e das frestas (meio metro não aparece).
+    const simples = J.simplify.TopologyPreservingSimplifier.simplify(novo, CONTORNO_ENCOSTO_SIMPLIFICA_M / 2)
+    // A simplificação não pode cortar lote: a ponta que ela tirou volta.
+    const tirou = _sobreporComSeguranca(novo, simples, 'difference')
+    const pontas = tirou ? lotesEm(tirou).map(l => _sobreporComSeguranca(l, tirou, 'intersection')).filter(g => g && g.getArea() > 0.001) : []
+    novo = pontas.length ? _unirComSeguranca(fabrica, [simples, ...pontas]) : simples
     if (!novo || !novo.isValid() || novo.isEmpty()) return null
     // Conferência: o encosto não deixa MAIS lote daqui de fora do que o
     // contorno já deixava (a simplificação de 0,5 m já tira pontas de lote).
