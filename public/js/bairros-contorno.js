@@ -1090,6 +1090,8 @@ function calcularContorno(lotes, raio, vizinhos = []) {
     }
   }
 
+  _juntarQuaseEncostados(ficam, fabrica)
+
   let geometry = _multiPoligonoLonLat(ficam.map(p => escritor.write(p).coordinates), plano)
   // Conferência JÁ EM LON/LAT, como o servidor confere: o arredondamento da
   // conversão pode cruzar vértices que em metros não se cruzavam. Inválido,
@@ -1102,6 +1104,44 @@ function calcularContorno(lotes, raio, vizinhos = []) {
     geometry = _multiPoligonoLonLat(partes, plano)
   }
   return { geometry, isolados, pedacos: ficam.length }
+}
+
+/**
+ * PEDAÇOS QUASE ENCOSTADOS viram um só. A ponta de lote devolvida pelo encosto
+ * pode ficar a 2 cm do corpo do contorno: no plano, em metros, os dois não se
+ * tocam e o JSTS dá válido; o MySQL confere sobre o elipsoide (SRID 4326) e os
+ * vê se tocando — "linhas se cruzando" (Jd. Esperança e Lot. Três Américas,
+ * 09/11/2026). O MENOR de dois pedaços a menos de 10 cm um do outro cresce a
+ * fresta e mais 2 cm (em esquadro) e é unido ao maior. Não se encolhe depois:
+ * o fechamento (cresce e encolhe) refazia o gargalo e separava os dois de novo.
+ * Mexe na lista no lugar.
+ *
+ * @param {Object[]} ficam  polígonos JSTS em metros
+ */
+function _juntarQuaseEncostados(ficam, fabrica) {
+  const J = window.jsts
+  const P = J.operation.buffer.BufferParameters, par = new P()
+  par.setJoinStyle(P.JOIN_MITRE); par.setMitreLimit(3)
+  for (let volta = 0; volta < 50; volta++) {
+    let achou = null
+    for (let i = 0; i < ficam.length && !achou; i++) {
+      for (let j = i + 1; j < ficam.length; j++) {
+        const d = ficam[i].distance(ficam[j])
+        if (d < 0.10) { achou = [i, j, d]; break }
+      }
+    }
+    if (!achou) return
+    let [i, j, d] = achou
+    if (ficam[j].getArea() > ficam[i].getArea()) [i, j] = [j, i]   // i é o maior
+    let junto
+    try {
+      const crescido = J.operation.buffer.BufferOp.bufferOp(ficam[j], d + 0.02, par)
+      junto = _unirComSeguranca(fabrica, [ficam[i], crescido])
+    } catch { return }
+    if (!junto || junto.isEmpty() || !junto.isValid() || junto.getNumGeometries() !== 1) return   // não juntou: fica como estava
+    ficam[i] = junto.getGeometryN(0)
+    ficam.splice(j, 1)
+  }
 }
 
 /**
