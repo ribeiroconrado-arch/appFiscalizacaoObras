@@ -1068,24 +1068,52 @@ function pedirExclusaoImportacao() {
   alvo.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
+/**
+ * Excluir (importação salva) e descartar (rascunho) levam segundos — milhares
+ * de lotes apagados, mapa e contornos refeitos — e antes não mostravam nada:
+ * o botão continuava clicável e a tela parada (09/11/2026). Agora correm no
+ * modal de etapas, que cobre a tela e diz o que está fazendo; o resultado
+ * fica na última linha.
+ *
+ * @param {string} titulo @param {string} acao rótulo da 1ª etapa
+ * @param {() => Promise<{message:string}>} pedir o pedido ao servidor
+ * @param {() => Promise<void>} depois o que refazer na tela (a lista, a ficha)
+ */
+async function _apagarImportacaoComEtapas(titulo, acao, pedir, depois) {
+  const i = impState.atual
+  const et = abrirEtapas(titulo, [acao, 'Atualizando os lotes no mapa', 'Atualizando os contornos dos bairros', 'Atualizando a lista de importações'])
+  let etapa = 0
+  try {
+    et.vai(0)
+    const d = await pedir()
+    et.ok(0)
+    if (impState.preCuradoria?.id === i.id) sairPreCuradoria()
+    etapa = 1; et.vai(1)
+    await recarregarLotesDoMapa()
+    et.ok(1)
+    // O loteamento saiu: a linha dele, o nome e as quadras saem do mapa junto.
+    etapa = 2; et.vai(2)
+    if (typeof recarregarContornosDoMapa === 'function') await recarregarContornosDoMapa()
+    et.ok(2)
+    etapa = 3; et.vai(3)
+    await depois()
+    et.ok(3)
+    et.concluir(d.message)
+  } catch (e) {
+    et.erro(etapa, e.message)
+  }
+}
+
 async function excluirImportacao() {
   const i = impState.atual
   const motivo = document.getElementById('imp-motivo').value.trim()
   if (motivo.length < 10) { exigirCampo('imp-motivo', 'Descreva o motivo em ao menos 10 caracteres.'); return }
-  try {
-    const d = await _impPedir(`/api/importacoes/${i.id}/excluir`, {
+  await _apagarImportacaoComEtapas(`Excluindo a importação de ${i.bairro}`, `Excluindo os ${i.lotes} lotes`,
+    () => _impPedir(`/api/importacoes/${i.id}/excluir`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ motivo }),
-    })
-    toast(d.message)
-    if (impState.preCuradoria?.id === i.id) sairPreCuradoria()
-    recarregarLotesDoMapa()
-    // O loteamento saiu: a linha dele, o nome e as quadras saem do mapa junto.
-    if (typeof recarregarContornosDoMapa === 'function') recarregarContornosDoMapa()
-    await abrirImportacao(i.id)
-  } catch (e) {
-    toast(e.message, 'err')
-  }
+    }),
+    () => abrirImportacao(i.id))
 }
 
 // ── SALVAR / DESCARTAR O RASCUNHO ────────────────────────────
@@ -1165,19 +1193,17 @@ function pedirDescarteImportacao() {
 
 async function descartarImportacao() {
   const i = impState.atual
-  try {
-    const d = await _impPedir(`/api/importacoes/${i.id}/descartar`, { method: 'POST' })
-    toast(d.message)
-    if (impState.preCuradoria?.id === i.id) sairPreCuradoria()
-    impState.atual = null
-    pintarBarraImportacao()
-    recarregarLotesDoMapa()
-    if (typeof recarregarContornosDoMapa === 'function') recarregarContornosDoMapa()
-    if (!document.getElementById('m-importacoes').classList.contains('open')) openModal('m-importacoes')
-    await carregarListaImportacoes()
-  } catch (e) {
-    toast(e.message, 'err')
-  }
+  await _apagarImportacaoComEtapas(`Descartando o rascunho de ${i.bairro}`, 'Apagando os lotes do rascunho',
+    async () => {
+      const d = await _impPedir(`/api/importacoes/${i.id}/descartar`, { method: 'POST' })
+      impState.atual = null
+      pintarBarraImportacao()
+      return d
+    },
+    async () => {
+      if (!document.getElementById('m-importacoes').classList.contains('open')) openModal('m-importacoes')
+      await carregarListaImportacoes()
+    })
 }
 
 // ── PRÉ-CURADORIA ────────────────────────────────────────────
@@ -1416,10 +1442,11 @@ function alternarLotesEmRevisao() {
   pintarBarraImportacao()
 }
 
+/** @returns {Promise<void>} a carga dos lotes — quem quiser, espera o mapa. */
 function recarregarLotesDoMapa() {
-  if (typeof limparLotesDoMapa !== 'function') return
+  if (typeof limparLotesDoMapa !== 'function') return Promise.resolve()
   limparLotesDoMapa()
-  carregarLotesVisiveis()
+  return Promise.resolve(carregarLotesVisiveis())
 }
 
 /** A barra sobre o mapa: a importação que se está revisando. */
