@@ -137,7 +137,8 @@ const PranchetaCad = (() => {
     // abre com cerca de 60 m de largura em volta do ponto escolhido no mapa.
     let pts=s.originais.flatMap(f=>ring(f).map(p=>G.rot(p,s.angulo)))
     if(s.quadraAneis?.length)pts=pts.concat(s.quadraAneis.flatMap(a=>a.map(c=>G.rot(s.plano.para(c),s.angulo))))
-    if(!pts.length)pts=s.linhas.flatMap(l=>l.pontos.map(p=>G.rot(p,s.angulo)))
+    // O que já foi desenhado entra sempre (no lote novo, junto da quadra).
+    pts=pts.concat(s.linhas.flatMap(l=>l.pontos.map(p=>G.rot(p,s.angulo))))
     if(!pts.length){s.centro=[0,0];s.escala=Math.max(1,larguraDesenho()/60);render();return}
     const b=bounds(pts);s.centro=[(b[0]+b[2])/2,(b[1]+b[3])/2];s.escala=Math.min((larguraDesenho()-100)/Math.max(1,b[2]-b[0]),(s.h-150)/Math.max(1,b[3]-b[1]));render()}
   function snap(p,ev,base=null,ignorar=null){
@@ -830,6 +831,22 @@ const PranchetaCad = (() => {
       try{const r=await fetch(`/api/mapa/lotes?bbox=${[b[0]-m,b[1]-m,b[2]+m,b[3]+m].map(x=>x.toFixed(8)).join(',')}&revisao=1`,{headers:{Accept:'application/json'}});if(r.ok){const d=await r.json();if(token!==geracao)return;s.contexto=(d.features||[]).filter(f=>!s.ids.includes(Number(f.properties.id)))
         // ABRE VENDO A QUADRA INTEIRA (03/11/2026): o enquadramento inclui os lotes da mesma quadra.
         const p0=originais[0]?.properties;if(p0&&tipo!=='novo'){s.quadraAneis=s.contexto.filter(f=>f.properties?.bairro===p0.bairro&&String(f.properties?.quadra)===String(p0.quadra)&&f.geometry?.coordinates?.[0]).map(f=>f.geometry.coordinates[0]);if(s.quadraAneis.length)enquadrar()}}}catch{}
+      // LOTE NOVO VÊ A QUADRA INTEIRA, como o Editar lote (09/11/2026): a quadra é
+      // a do lote mais perto de onde se clicou; a caixa dela entra no entorno e a
+      // vista abre enquadrando-a. Bairro e quadra já vêm sugeridos nos dados.
+      if(tipo==='novo'&&opts.centro&&s.contexto.length)try{
+        const c=s.plano.para(opts.centro)
+        const dist=f=>{const r=f.geometry?.coordinates?.[0];if(!r)return Infinity;const pl=r.map(s.plano.para);if(G.dentro(c,pl))return 0;return Math.min(...pl.map(p=>Math.hypot(p[0]-c[0],p[1]-c[1])))}
+        const perto=s.contexto.reduce((a,f)=>{const d=dist(f);return d<a[0]?[d,f]:a},[Infinity,null])[1],pq=perto?.properties
+        if(pq?.bairro&&pq.quadra!=null){
+          s.quadraSugerida={bairro:pq.bairro,quadra:String(pq.quadra)}
+          const cq=await caixaDaQuadra([perto]);if(token!==geracao)return
+          if(cq){const k=cq.caixa,mq=.00035,bb=[Math.min(b[0],k[0]),Math.min(b[1],k[1]),Math.max(b[2],k[2]),Math.max(b[3],k[3])]
+            const r=await fetch(`/api/mapa/lotes?bbox=${[bb[0]-mq,bb[1]-mq,bb[2]+mq,bb[3]+mq].map(x=>x.toFixed(8)).join(',')}&revisao=1`,{headers:{Accept:'application/json'}})
+            if(r.ok){const d=await r.json();if(token!==geracao)return;s.contexto=d.features||s.contexto}}
+          s.quadraAneis=s.contexto.filter(f=>f.properties?.bairro===pq.bairro&&String(f.properties?.quadra)===String(pq.quadra)&&f.geometry?.coordinates?.[0]).map(f=>f.geometry.coordinates[0])
+          if(s.quadraAneis.length)enquadrar()
+        }}catch{}
       if(tipo==='unificacao')try{const d=await request(rota(true),{ids:s.ids});if(token!==geracao)return;s.erroUniao=d.impedimento||d.retrato?.erro_identidade;s.uniao=!s.erroUniao&&d.retrato?.geometry?.type==='Polygon'?d.retrato.geometry:null;s.numero=d.retrato?.sugestao_lote||'';s.numeroUniao=s.numero;s.inscricaoUniao=d.retrato?.inscricao||'';if(s.erroUniao)$('pc-salvo').textContent=s.erroUniao}catch(err){s.erroUniao=err.message;$('pc-salvo').textContent=err.message}
       if(token!==geracao)return;
       // Lote novo não recupera cópia local: sem lote de origem, a chave não diz
@@ -905,19 +922,27 @@ const PranchetaCad = (() => {
   // desmembramento — bairro, quadra e lote à vista; as medidas da matrícula no
   // "Mostrar mais". Antes a prancheta fechava e o formulário ia para a mesa, que
   // ficava com o lote pendente quando a pessoa largava a ferramenta.
-  const MEDIDAS_NOVO=[['frente_m','Frente (m)'],['fundos_m','Fundos (m)'],['lado_direito_m','Lado direito (m)'],['lado_esquerdo_m','Lado esquerdo (m)'],['area_matricula_m2','Área da matrícula (m²)']]
+  // Os MESMOS campos e nomes do cartão do desmembramento (09/11/2026).
+  const MEDIDAS_NOVO=[['frente_m','Frente (m)'],['fundos_m','Fundos (m)'],['lado_direito_m','Lado direito (m)'],['lado_esquerdo_m','Lado esquerdo (m)'],['area_matricula_m2','Área (m²) · desenho']]
   let bairrosNovo=null
   async function formLoteNovo(){
-    s.dados.novo??={bairro:s.opts.bairroPadrao||'',quadra:'',numero_lote:''}
-    const d=s.dados.novo,area=Math.abs(G.area(s.resultado.partes[0]))
+    // Bairro e quadra sugeridos pelo lote mais perto de onde se clicou.
+    const sug=s.quadraSugerida||{}
+    s.dados.novo??={bairro:s.opts.bairroPadrao||sug.bairro||'',quadra:sug.quadra||'',numero_lote:''}
+    const d=s.dados.novo,r0=s.resultado.partes[0],area=Math.abs(G.area(r0))
+    // "Calcular medidas pelas faces" (classificarFaces) grava no cartão da parte: traz para cá.
+    const pelasFaces=s.dados[parteKey(r0)]
+    if(pelasFaces)for(const [k] of MEDIDAS_NOVO)if(pelasFaces[k]!=null){d[k]=pelasFaces[k];delete pelasFaces[k]}
+    if(d.area_matricula_m2==null)d.area_matricula_m2=Number(area.toFixed(2))
     const titulo=()=>d.quadra||d.numero_lote?`Q ${d.quadra||'—'} · Lote ${d.numero_lote||'—'}`:'Lote novo'
     $('pc-dados').hidden=false
     $('pc-form').innerHTML=`<fieldset class="pc-parte-card" style="--parte-cor:${cores[0]}"><legend>Lote novo</legend>
       <header class="pc-parte-topo"><div><b id="pc-nv-tit">${e(titulo())}</b><small>${fmtNum(area)} m² · NOVO</small></div></header>
       <label>Bairro<select id="pc-nv-bairro"><option value="">— escolha —</option></select></label>
       <div class="pc-campos"><label>Quadra<input id="pc-nv-quadra" maxlength="20" value="${e(d.quadra)}"></label><label>Lote<input id="pc-nv-lote" maxlength="20" value="${e(d.numero_lote)}"></label></div>
-      ${botaoMais()}<div class="pc-parte-mais" hidden><div class="pc-medidas"><b class="pc-medidas-tit">Medidas da matrícula</b>
-        <small class="pc-inscricao-ajuda">Opcional. Preencha o que a matrícula trouxer; o desenho confere.</small>
+      <small class="pc-inscricao-ajuda">A inscrição sai do bairro, da quadra e do lote, e aparece ao conferir, com o que o cadastro diz dela.</small>
+      ${botaoMais()}<div class="pc-parte-mais" hidden>
+        <div class="pc-medidas"><b class="pc-medidas-tit">Dimensões e área</b><button class="btn sm out-verde" type="button" onclick="PranchetaCad.classificarFaces(0)">Calcular medidas pelas faces</button>
         <div class="pc-campos">${MEDIDAS_NOVO.map(([k,t])=>`<label>${t}<input data-medida="${k}" type="number" step="0.01" min="0" value="${e(d[k])}"></label>`).join('')}</div></div></div>
       </fieldset>
       <div class="pc-form-acoes"><button type="button" class="btn primary" onclick="PranchetaCad.conferirLoteNovo()">Conferir e continuar</button></div>`
@@ -945,8 +970,12 @@ const PranchetaCad = (() => {
       const r=await postCadastro('/api/lotes/previa',corpoLoteNovo());if(!r){$('pc-conferencia').replaceChildren();return}
       if(r.impedimento){mostrarCruzamentos(r);$('pc-conferencia').innerHTML=`<div class="pc-erro-resumo" role="alert"><b>${e(comCruzamentos(r.impedimento))}</b></div>`;return}
       const t=r.retrato,dv=t.divergencia,encosta=(t.vizinhos||[]).filter(v=>v.area_comum===0).length
+      // Como o UNIFICADO e o DESMEMBRADO: a etiqueta, a inscrição e a área.
+      const cad=t.cadastro
       $('pc-conferencia').innerHTML=`<div class="pc-identidade"><span class="lote-tag-origem">NOVO</span>
-        <p>Lote de <b>${fmtNum(t.area_m2)} m²</b> com ${t.vertices} canto(s), em ${e(t.bairro)} · quadra ${e(t.quadra)} · lote ${e(t.lote)}.${encosta?` Encosta em ${encosta} lote(s) vizinho(s).`:''}</p>
+        <p>Inscrição: <b>${t.inscricao?e(t.inscricao):'sem inscrição (bairro sem código no cadastro)'}</b></p>
+        ${t.inscricao?`<p>No cadastro: ${cad?`<b>${cad.ativa?'ativa':'inativa'}</b>${cad.area_m2!=null?` · ${fmtNum(cad.area_m2)} m²`:''}`:'<b>não existe</b> — confira a quadra e o número'}</p>`:''}
+        <p>Área: <b>${fmtNum(t.area_m2)} m²</b> · ${t.vertices} canto(s)${encosta?` · encosta em ${encosta} lote(s) vizinho(s)`:''}</p>
         ${dv===null||dv===undefined?'':`<p>Matrícula × desenho: <b>${dv>0?'+':''}${fmtNum(dv)}%</b>${Math.abs(dv)>5?' — diferença grande; o lote é gravado assim mesmo, com as duas medidas.':''}</p>`}
         ${(r.avisos||[]).map(a=>`<p>⚠ ${e(a)}</p>`).join('')}</div>
         <div class="pc-form-acoes"><button type="button" class="btn primary" onclick="PranchetaCad.criarLoteNovo()">Criar lote</button></div>`

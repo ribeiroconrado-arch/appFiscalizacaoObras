@@ -185,6 +185,34 @@ class DesenhoDeLote
             'lote'      => $d['numero_lote'],
             'vizinhos'  => $this->vizinhos($geojson, $d['bairro'], $ignorar),
             'divergencia' => $this->divergencia($d, $area),
+        ] + $this->noCadastro($d);
+    }
+
+    /**
+     * A inscrição que o lote novo terá (bairro amarrado + quadra + lote) e o que
+     * o cadastro da prefeitura diz dela — o mesmo que o cartão do desmembramento
+     * e da unificação mostra antes de gravar (09/11/2026).
+     *
+     * @return array{inscricao: ?string, cadastro: ?array{ativa: bool, area_m2: ?float}}
+     */
+    private function noCadastro(array $d): array
+    {
+        $insc = (new \App\Cadastro\BairrosDoDesenho())->montadaAgora((object) [
+            'bairro' => $d['bairro'] ?? null, 'quadra' => $d['quadra'] ?? null, 'numero_lote' => $d['numero_lote'] ?? null,
+        ]);
+        if (! $insc) {
+            return ['inscricao' => null, 'cadastro' => null];
+        }
+        $linha = DB::table('cadastro_externo_imoveis')
+            ->whereRaw("REPLACE(REPLACE(REPLACE(inscricao, '.', ''), '-', ''), ' ', '') = ?", [$insc])
+            ->whereNull('ausente_desde_carga_id')->first(['isencao', 'area_terreno_m2']);
+
+        return [
+            'inscricao' => \App\Support\InscricaoImobiliaria::formatar($insc),
+            'cadastro'  => $linha ? [
+                'ativa'   => \App\Cadastro\RetratoBci::isencaoAtiva($linha->isencao) !== false,
+                'area_m2' => $linha->area_terreno_m2 !== null ? (float) $linha->area_terreno_m2 : null,
+            ] : null,
         ];
     }
 
