@@ -18,6 +18,15 @@ return [
     'default' => env('CACHE_STORE', 'database'),
 
     /*
+    | O CONTADOR DOS LIMITES DE PEDIDOS (throttle) fica em ARQUIVO, e não no
+    | banco. Com a tabela `cache`, pedidos simultâneos (o "Gerar todos" dos
+    | contornos) gravavam o mesmo contador ao mesmo tempo, e o MySQL derrubava
+    | um deles com deadlock — erro 500 na tela (09/11/2026). O servidor é um
+    | só, então o arquivo conta igual e não trava.
+    */
+    'limiter' => env('CACHE_LIMITER', 'file'),
+
+    /*
     |--------------------------------------------------------------------------
     | Cache Stores
     |--------------------------------------------------------------------------
