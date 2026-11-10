@@ -1144,31 +1144,54 @@ function pedirSalvamentoImportacao() {
   alvo.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
+/**
+ * Salvar leva dezenas de segundos — gravar, gerar o contorno do bairro e
+ * refazer os dos vizinhos — e só mostrava "Salvando…" no botão (09/11/2026).
+ * Corre no modal de etapas, como excluir e descartar.
+ */
 async function salvarImportacao() {
   const i = impState.atual
   const btn = document.getElementById('imp-btn-salvar')
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando…' }
+  const comContorno = typeof gerarContornoDoBairro === 'function'
+  const et = abrirEtapas(`Salvando a importação de ${i.bairro}`, [
+    `Salvando os ${i.lotes ?? ''} lotes`.replace('os  lotes', 'os lotes'),
+    ...(comContorno ? ['Gerando o contorno do bairro', 'Refazendo o contorno dos bairros vizinhos'] : []),
+    'Atualizando a importação e a lista',
+  ])
+  let etapa = 0, aviso = null
   try {
+    et.vai(0)
     const d = await _impPedir(`/api/importacoes/${i.id}/salvar`, { method: 'POST' })
-    toast(d.message)
+    et.ok(0)
     // SALVOU, JÁ TEM CONTORNO — mesmo sem publicar. É o que isola o bairro no
     // painel de correção e mostra o nome dele no mapa afastado. Se falhar, a
     // importação continua salva; "Contorno dos bairros" gera depois.
-    if (typeof gerarContornoDoBairro === 'function') {
+    if (comContorno) {
+      etapa = 1; et.vai(1)
       const c = await gerarContornoDoBairro(i.bairro, CONTORNO_RAIO_PADRAO, { silencioso: true })
-      if (c?.mantido) toast(c.message, 'aviso')
-      else if (c) toast(`Contorno de ${i.bairro} gerado: ${c.area_ha.toLocaleString('pt-BR')} ha.`)
-      else toast(`O contorno de ${i.bairro} não pôde ser gerado agora. Gere em "Contorno dos bairros".`, 'aviso')
+      if (c?.mantido) { et.ok(1, c.message) }
+      else if (c) { et.ok(1, `Contorno gerado: ${c.area_ha.toLocaleString('pt-BR')} ha`) }
+      else {
+        aviso = `O contorno de ${i.bairro} não pôde ser gerado agora. Gere em "Contorno dos bairros".`
+        et.ok(1, 'Contorno não gerado agora — fica para "Contorno dos bairros"')
+      }
       // Os VIZINHOS também: o contorno de um bairro gerado antes deste existir
       // não conhecia a divisa, e ficava com fresta (Atlântico Sul × Parque das
       // Águas, 19/10/2026). Editado à mão fica como está.
+      etapa = 2; et.vai(2)
       if (c && !c.mantido && typeof gerarContornosVizinhos === 'function') await gerarContornosVizinhos(i.bairro)
+      et.ok(2)
     }
+    etapa = comContorno ? 3 : 1; et.vai(etapa)
     await abrirImportacao(i.id)
-    { const d = await _impPedir("/api/importacoes"); atualizarContadorImportacoes(d.em_revisao, _impPendentes(d)) }
+    { const l = await _impPedir("/api/importacoes"); atualizarContadorImportacoes(l.em_revisao, _impPendentes(l)) }
+    et.ok(etapa)
+    et.concluir(aviso ? `${d.message} ${aviso}` : d.message, aviso ? 'aviso' : 'ok')
   } catch (e) {
-    toast(e.message, 'err')
-    if (btn) { btn.disabled = false; btn.textContent = 'Salvar importação' }
+    et.erro(etapa, e.message)
+    // Só a gravação falhou: o botão volta para tentar de novo.
+    if (etapa === 0 && btn) { btn.disabled = false; btn.textContent = 'Salvar importação' }
   }
 }
 
