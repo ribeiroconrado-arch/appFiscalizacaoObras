@@ -4198,6 +4198,7 @@ body.prancheta-aberta .mapa-fundo-seletor{display:none}
 
 /* Mover lotes no mapa (mover-lotes.js): a barra do passo, como a da mesa, e o cursor de mira. */
 .mov-cursor, .mov-cursor .leaflet-interactive{cursor:crosshair!important}
+.mov-espera, .mov-espera .leaflet-interactive{cursor:progress!important}
 .mov-barra{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1100;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   max-width:calc(100% - 24px);background:var(--sur);border:1.5px solid var(--bord);border-radius:12px;box-shadow:var(--shl);padding:7px 12px;font-size:12.5px;color:var(--tx)}
 .mov-barra b{color:var(--gd)}

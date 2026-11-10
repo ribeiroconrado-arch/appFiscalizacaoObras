@@ -764,6 +764,20 @@ function adicionarAoMapa(geojson, aoClicar) {
           alternarSelecao(feicao, camada)
           return
         }
+        // FERRAMENTA ACIONADA NÃO ABRE BALÃO (pedido dele, 10/11/2026): com
+        // qualquer ferramenta em uso, o clique no lote é dela — o balão por
+        // cima atrapalhava. Medir e desenhar ficam com o clique; as de
+        // alteração cadastral, com a mesa aberta, marcam o lote. Sem
+        // ferramenta (mesa aberta ou não) nada muda.
+        const dona = _ferramentaComOClique()
+        if (dona === 'marca') {
+          if (typeof marcacaoEhDoOperador === 'function' && marcacaoEhDoOperador()) {
+            if (!selecaoAtiva()) selecaoLivreNaMesa()
+            if (selecaoAtiva()) { mapaState.obj?.closePopup(); alternarSelecao(feicao, camada) }
+          }
+          return
+        }
+        if (dona) return
         destacar(camada)
         abrirBalao(feicao, camada)
       })
@@ -973,6 +987,28 @@ function sincronizarMedidas() {
       }).addTo(mapaState.camadaMedidas)
     }
   }
+}
+
+/**
+ * Há uma ferramenta em uso que fica com o clique no lote? (ver o clique em
+ * desenharLotes). Num lugar só, para a ferramenta nova já nascer sem balão.
+ *
+ * @returns {'marca'|'propria'|null}
+ *   'marca'   alteração cadastral (régua da mesa, ato, prancheta, painel de
+ *             correção com ferramenta lançada): o clique marca o lote;
+ *   'propria' medir e desenhar: o clique é ponto da própria ferramenta;
+ *   null      nenhuma — o clique abre o balão, como sempre.
+ */
+function _ferramentaComOClique() {
+  if (typeof medState !== 'undefined' && medState.modo) return 'propria'
+  if (typeof desenhoState !== 'undefined' && desenhoState.ativo) return 'propria'
+  if (typeof estaDesenhando === 'function' && estaDesenhando()) return 'propria'
+  if (typeof ferramentaAtiva === 'function' && ferramentaAtiva()) return 'marca'
+  if (typeof atoState !== 'undefined' && atoState.tipo) return 'marca'
+  if (typeof PranchetaCad !== 'undefined' && PranchetaCad.ativa?.()) return 'marca'
+  if (typeof desmMesa !== 'undefined' && desmMesa.ativa) return 'marca'
+  if (typeof correcaoState !== 'undefined' && correcaoState.emFerramenta) return 'marca'
+  return null
 }
 
 /**

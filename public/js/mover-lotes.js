@@ -50,7 +50,7 @@ function moverLotesNoMapa(ids) {
 function _abrirMover(feicoes) {
   const m = mapaState.obj
   const [lon, lat] = feicoes[0].geometry.coordinates[0][0]
-  Object.assign(movLoteState, { ativo: true, feicoes, passo: 'base', base: null, v: null, dir: null, ortho: false, plano: planoLocal(lat, lon) })
+  Object.assign(movLoteState, { ativo: true, feicoes, passo: 'base', base: null, v: null, dir: null, ortho: false, travado: false, conferindo: false, gravando: false, plano: planoLocal(lat, lon) })
   // As direções de cada lado (e a perpendicular), para a trava F8.
   movLoteState.dirs = feicoes.flatMap(f => {
     const r = f.geometry.coordinates[0].map(([x, y]) => _movM(x, y))
@@ -71,6 +71,8 @@ function sairMoverLotes() {
   const m = mapaState.obj
   if (!movLoteState.ativo) return
   movLoteState.ativo = false
+  movLoteState.travado = movLoteState.conferindo = movLoteState.gravando = false
+  m?.getContainer().classList.remove('mov-espera')
   movLoteState.camada?.remove()
   movLoteState.camada = movLoteState.marca = movLoteState.guia = null
   m?.getContainer().classList.remove('mov-cursor')
@@ -139,9 +141,35 @@ function _movEncaixe(ll) {
 
 // ── MOUSE E TECLADO ─────────────────────────────────────────────
 
+/**
+ * TRAVADO depois do destino (10/11/2026): da conferência no servidor até a
+ * resposta da confirmação, o mover não aceita mais cursor, clique nem tecla —
+ * com vários lotes a prévia demora um pouco, e nesse meio tempo dava para
+ * mexer o fantasma e clicar num segundo destino. Fechada a confirmação sem
+ * mover, a trava sai e o destino pode ser escolhido de novo.
+ */
+function _movTravado() {
+  const s = movLoteState
+  if (!s.travado) return false
+  if (s.gravando || document.getElementById('m-confirm')?.classList.contains('open') || s.conferindo) return true
+  s.travado = false
+  mapaState.obj?.getContainer().classList.remove('mov-espera')
+  _movBarra()
+  return false
+}
+
+function _movTravar(sim) {
+  const s = movLoteState
+  s.travado = sim
+  mapaState.obj?.getContainer().classList.toggle('mov-espera', sim)
+  const passo = document.getElementById('mov-passo')
+  if (sim && passo) passo.textContent = 'Conferindo o movimento…'
+  if (!sim) _movBarra()
+}
+
 function _movMove(ev) {
   const s = movLoteState
-  if (!s.ativo) return
+  if (!s.ativo || _movTravado()) return
   s.ultimo = ev.latlng
   const enc = _movEncaixe(ev.latlng)
   let alvo = enc?.ll || ev.latlng
@@ -183,7 +211,7 @@ function _movFantasma(v, alvo) {
 
 function _movClique(ev) {
   const s = movLoteState
-  if (!s.ativo) return
+  if (!s.ativo || _movTravado()) return
   const enc = _movEncaixe(ev.latlng)
   if (s.passo === 'base') {
     s.base = enc?.ll || ev.latlng
@@ -198,6 +226,11 @@ function _movClique(ev) {
 
 function _movTecla(ev) {
   if (!movLoteState.ativo) return
+  // Travado: só o Esc (sair) vale, e só enquanto nada está sendo gravado.
+  if (_movTravado()) {
+    if (ev.key === 'Escape' && !movLoteState.gravando && !document.getElementById('m-confirm')?.classList.contains('open')) { ev.preventDefault(); sairMoverLotes() }
+    return
+  }
   if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); sairMoverLotes(); return }
   if (ev.key === 'F8') { ev.preventDefault(); ev.stopPropagation(); _movOrtho(); return }
   // Começou a digitar a medida com o foco no mapa: vai para o campo.
@@ -226,12 +259,18 @@ function _movItens(v) {
 }
 
 async function _movConcluir(v) {
+  const s = movLoteState
+  if (s.travado) return
   const itens = _movItens(v), dist = fmtMed(Math.hypot(...v))
+  s.conferindo = true
+  _movTravar(true)
   let previa
-  try { previa = await requisicaoCadastro('/api/lotes/mover/previa', 'POST', { lotes: itens }) } catch { return }
-  if (!previa) return
-  if (previa.impedimento) { toast(previa.impedimento, 'err'); return }
+  try { previa = await requisicaoCadastro('/api/lotes/mover/previa', 'POST', { lotes: itens }) } catch { previa = null }
+  s.conferindo = false
+  if (!previa) { _movTravar(false); return }
+  if (previa.impedimento) { toast(previa.impedimento, 'err'); _movTravar(false); return }
   const n = itens.length
+  // A trava segue até a confirmação ser respondida (ver _movTravado).
   confirmarAcao({
     titulo: 'Mover lotes',
     mensagem: `Desloca ${n} lote(s) ${dist} m, sem mudar forma nem área.`
@@ -242,10 +281,12 @@ async function _movConcluir(v) {
 }
 
 async function _movGravar(itens) {
+  movLoteState.gravando = true
   const et = abrirEtapas(`Movendo ${itens.length} lote(s)`, ['Gravando os lotes', 'Atualizando o mapa'])
   et.vai(0)
   const d = await requisicaoCadastro('/api/lotes/mover', 'POST', { lotes: itens }).catch(() => null)
-  if (!d) { et.erro(0, 'Não foi possível mover os lotes. Confira a mensagem e tente de novo.'); return }
+  movLoteState.gravando = false
+  if (!d) { et.erro(0, 'Não foi possível mover os lotes. Confira a mensagem e tente de novo.'); _movTravar(false); return }
   et.ok(0, d.message.replace(/\.$/, ''))
   sairMoverLotes()
   try { et.vai(1); limparLotesDoMapa(); await carregarLotesVisiveis(); et.ok(1, 'Mapa atualizado') }
