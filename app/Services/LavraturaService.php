@@ -320,11 +320,11 @@ class LavraturaService
     {
         $doc->artigos()->delete();
 
-        $artigos = Artigo::whereIn('id', $artigoIds)->get();
+        $artigos = $this->naOrdemDoCumulado($doc, Artigo::with(['legislacao', 'cumulados'])->whereIn('id', $artigoIds)->get(), $artigoIds);
         $upf = Upf::vigente($doc->data_fato ?? now())?->valor;
         $total = 0.0;
 
-        foreach ($artigos as $a) {
+        foreach ($artigos as [$a, $principal]) {
             $mult = $multiplicadores[$a->id] ?? null;
             $calc = $a->calcularMulta($doc->area_terreno_m2, $doc->area_construida_m2,
                 $doc->alvara_valor, $mult !== null ? (float) $mult : null, $upf ? (float) $upf : null,
@@ -334,6 +334,9 @@ class LavraturaService
                 'documento_id' => $doc->id,
                 'artigo_id'    => $a->id,
                 'numero'       => $a->numero,
+                // A lei do artigo e de quem ele é c/c, copiadas como o resto.
+                'legislacao_rotulo' => $a->legislacao?->rotulo(),
+                'cumulado_de_artigo_id' => $principal,
                 'conduta'      => $a->conduta,
                 'sancao'       => $a->sancao,
                 'base_multa'   => $a->base_multa,
@@ -398,6 +401,70 @@ class LavraturaService
      * @param  array<int,int>  $artigoIds
      * @throws RuntimeException dizendo quais artigos, e por quê
      */
+    /**
+     * UMA LEI POR DOCUMENTO (decisão de 11/11/2026). Artigo de outra lei só
+     * entra como c/c de um artigo da lei do documento, pelo vínculo cadastrado
+     * em Parâmetros (Artigo::cumulados). Sem lei escolhida, os artigos têm de
+     * ser todos da mesma lei.
+     *
+     * @param  list<int>  $artigoIds
+     */
+    public function conferirArtigosDaLei(?int $legislacaoId, array $artigoIds): void
+    {
+        if (! $artigoIds) {
+            return;
+        }
+        $artigos = Artigo::with('cumulados')->whereIn('id', $artigoIds)->get();
+        if ($legislacaoId === null) {
+            if ($artigos->pluck('legislacao_id')->unique()->count() > 1) {
+                throw new RuntimeException('Os artigos são de leis diferentes: escolha a lei do documento.');
+            }
+            return;
+        }
+        $daLei = $artigos->where('legislacao_id', $legislacaoId);
+        $permitidos = $daLei->flatMap(fn (Artigo $a) => $a->cumulados->pluck('id'))->flip();
+        $fora = $artigos->reject(fn (Artigo $a) => (int) $a->legislacao_id === (int) $legislacaoId || isset($permitidos[$a->id]))
+            ->map(fn (Artigo $a) => $a->numero)->values()->all();
+        if ($fora) {
+            throw new RuntimeException(implode(', ', $fora) . ' é de outra lei e não está cadastrado como c/c de nenhum artigo deste documento. '
+                . 'O c/c é cadastrado em Parâmetros › Legislação › Artigos.');
+        }
+    }
+
+    /**
+     * Os artigos na ordem da peça: cada artigo da lei do documento seguido dos
+     * seus c/c. Devolve pares [artigo, id do artigo de quem é c/c (ou null)].
+     *
+     * @param  \Illuminate\Support\Collection<int, Artigo>  $artigos
+     * @param  list<int>  $ordem  a ordem que a tela mandou
+     * @return list<array{0: Artigo, 1: ?int}>
+     */
+    private function naOrdemDoCumulado(Documento $doc, \Illuminate\Support\Collection $artigos, array $ordem): array
+    {
+        $pos = array_flip(array_map('intval', $ordem));
+        $artigos = $artigos->sortBy(fn (Artigo $a) => $pos[$a->id] ?? PHP_INT_MAX)->values();
+        $lei = $doc->legislacao_id;
+        $principais = $lei ? $artigos->where('legislacao_id', $lei) : $artigos;
+        $saida = [];
+        $usados = [];
+        foreach ($principais as $p) {
+            $saida[] = [$p, null];
+            $usados[$p->id] = true;
+            foreach ($artigos as $c) {
+                if (! isset($usados[$c->id]) && $p->cumulados->contains('id', $c->id)) {
+                    $saida[] = [$c, $p->id];
+                    $usados[$c->id] = true;
+                }
+            }
+        }
+        // O que sobrar (peça antiga, de antes do c/c) vai no fim, como estava.
+        foreach ($artigos as $a) {
+            if (! isset($usados[$a->id])) $saida[] = [$a, null];
+        }
+
+        return $saida;
+    }
+
     public function conferirArtigosDoTipo(string $tipo, array $artigoIds): void
     {
         if (! $artigoIds) {

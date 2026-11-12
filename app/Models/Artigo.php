@@ -349,6 +349,16 @@ class Artigo extends Model
     }
 
     /**
+     * Os artigos de OUTRAS leis cumulados com este (c/c), cadastrados em
+     * Parâmetros. É a única porta para um documento citar mais de uma lei.
+     */
+    public function cumulados(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Artigo::class, 'artigo_cumulados', 'artigo_id', 'cumulado_id')
+            ->withPivot('obrigatorio')->withTimestamps();
+    }
+
+    /**
      * O artigo que trata do que o fiscal viu, pelo que ele digita.
      *
      * Os TERMOS DE BUSCA são o vocabulário de campo do artigo ("escavação",

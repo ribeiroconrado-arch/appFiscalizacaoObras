@@ -329,7 +329,7 @@
       @if ($doc->exigeFundamentacao())
         <div class="sec">
           <div class="sec-tit">{{ $sec($memoria['total'] !== null ? 'Infração / legislação infringida / multa e penalidade' : 'Infração / legislação infringida') }}</div>
-          <div class="lei-cab"><span class="lbl">LEI INFRINGIDA:</span> <strong>{{ $doc->legislacao?->rotulo() ?: '—' }}</strong></div>
+          <div class="lei-cab"><span class="lbl">LEI INFRINGIDA:</span> <strong>{{ $memoria['lei'] ?? ($doc->legislacao?->rotulo() ?: '—') }}</strong></div>
           <table class="multa">
             <thead>
               <tr>
@@ -344,8 +344,8 @@
             <tbody>
               @forelse ($memoria['linhas'] as $l)
                 <tr>
-                  <td><strong>{{ preg_replace('/^Art\.?\s*/i', '', $l['numero']) }}</strong></td>
-                  <td>{{ $l['conduta'] ?: '—' }}@if ($l['sancao']) {{ $l['sancao'] }}@endif</td>
+                  <td>@if ($l['cc'] ?? false)<span style="font-size:7pt">c/c</span> @endif<strong>{{ preg_replace('/^Art\.?\s*/i', '', $l['numero']) }}</strong></td>
+                  <td>@if ($l['cc'] ?? false)<em>({{ $l['lei'] }})</em> @endif{{ $l['conduta'] ?: '—' }}@if ($l['sancao']) {{ $l['sancao'] }}@endif</td>
                   @if ($memoria['total'] !== null)
                     <td class="calculo">
                       {{ $l['base'] === 'Valor fixo' ? $l['base'] : $l['conta'] }}

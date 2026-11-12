@@ -618,7 +618,8 @@ function renderDetalheLei(l) {
       <div class="par-linha${a.ativo ? '' : ' par-linha-inativa'}">
         ${parPrincipal('artigos', a.id)}
           <b>${esc(a.numero)}${a.apelido && a.apelido !== a.numero ? ' - ' + esc(a.apelido) : ''}</b>
-          <span>${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'}${a.documentos_rotulo ? ` · <span class="art-embargo">${esc(a.documentos_rotulo)}</span>` : ''} · ${a.termos?.length
+          <span>${rotuloBaseMulta(a)}${a.ativo ? '' : ' · inativo'}${a.documentos_rotulo ? ` · <span class="art-embargo">${esc(a.documentos_rotulo)}</span>` : ''}${a.cumulados?.length
+            ? ' · <span class="art-cc-resumo">c/c ' + a.cumulados.map(c => esc(c.rotulo) + ' (' + esc(c.lei || '') + ')').join(', ') + '</span>' : ''} · ${a.termos?.length
             ? 'busca: ' + a.termos.map(t => esc(t)).join(', ')
             : '<span class="art-sem-termos">sem termos de busca</span>'}</span>
         </div>
@@ -707,7 +708,49 @@ function formArtigo(a) {
         </div>
         <small class="art-termos-dica">Como o fiscal chama o problema em campo. Na vistoria, digitar
           um destes termos mostra este artigo.</small>
-      </div>`) + '</div>', 'salvarArtigo()')
+      </div>`) + '</div>'
+    + grupo('Cumulado com (c/c)', `
+      <div class="art-cc">${(a.cumulados || []).map(linhaDeCumulado).join('')}</div>
+      <div class="cad-row">${parRot('Adicionar artigo de outra lei', `<select class="art-cc-novo" onchange="adicionarCumulado(this)">
+        <option value="">— escolha o artigo —</option>${opcoesDeCumulado(a)}</select>`, 'flex:2')}</div>
+      <small class="art-termos-dica">Artigo de OUTRA lei que acompanha este no documento ("Art. 42 da LC 1/2023 c/c Art. 10 da
+        Lei 500/2010"). Ao adicionar este artigo numa peça, o sistema pergunta se quer o c/c junto — ou o põe sozinho, se
+        marcado como obrigatório. É a única forma de um documento citar mais de uma lei.</small>`), 'salvarArtigo()')
+}
+
+/** Os artigos das OUTRAS leis do módulo, agrupados por lei, para o c/c. @param {Object} a */
+function opcoesDeCumulado(a) {
+  const ja = new Set((a.cumulados || []).map(c => c.id))
+  const rot = x => x.numero + (x.apelido && x.apelido !== x.numero ? ' - ' + x.apelido : '')
+  return parState.leis.filter(l => l.id !== parState.leiAberta && l.artigos?.length).map(l =>
+    `<optgroup label="${esc(l.numero + ' — ' + l.nome)}">${l.artigos.filter(x => x.ativo && !ja.has(x.id)).map(x =>
+      `<option value="${x.id}" data-rotulo="${esc(rot(x))}" data-lei="${esc(l.numero + ' — ' + l.nome)}">${esc(rot(x))}</option>`).join('')}</optgroup>`).join('')
+}
+
+/** Uma linha do c/c no cartão. @param {{id:number, rotulo:string, lei:string, obrigatorio:boolean}} c */
+function linhaDeCumulado(c) {
+  return `<div class="art-cc-linha" data-id="${Number(c.id)}"><span><b>${esc(c.rotulo)}</b> · ${esc(c.lei || '')}</span>
+    <select class="art-cc-modo" aria-label="Como o c/c entra"><option value="0" ${c.obrigatorio ? '' : 'selected'}>Perguntar</option><option value="1" ${c.obrigatorio ? 'selected' : ''}>Obrigatório</option></select>
+    <button type="button" class="fx-x" title="Tirar o c/c" onclick="this.parentElement.remove()">&times;</button></div>`
+}
+
+/** @param {HTMLSelectElement} sel */
+function adicionarCumulado(sel) {
+  const op = sel.selectedOptions[0]
+  if (!op?.value) return
+  const caixa = sel.closest('.par-linha').querySelector('.art-cc')
+  if (!caixa.querySelector(`[data-id="${op.value}"]`)) {
+    caixa.insertAdjacentHTML('beforeend', linhaDeCumulado({ id: op.value, rotulo: op.dataset.rotulo, lei: op.dataset.lei, obrigatorio: false }))
+  }
+  op.remove()
+  sel.value = ''
+}
+
+/** Os c/c do cartão aberto. */
+function cumuladosDoCartao() {
+  return [...document.querySelectorAll('#m-parametros .par-linha.editando .art-cc-linha')].map(el => ({
+    id: Number(el.dataset.id), obrigatorio: el.querySelector('.art-cc-modo').value === '1',
+  }))
 }
 
 /** @param {string} t */
@@ -857,6 +900,7 @@ async function salvarArtigo() {
     prazo_notificacao_dias: parCampo('prazo_notificacao_dias') || null,
     multa_dobra_reincidencia: base !== 'sem_multa' && !!parCampo('multa_dobra_reincidencia'),
     termos: termosDoCartao(),
+    cumulados: cumuladosDoCartao(),
   }, recarregarLegislacao)
 }
 

@@ -35,7 +35,7 @@ class LegislacaoController extends Controller
     {
         // As leis do módulo ativo: o administrador cuida das de cada
         // fiscalização trocando de módulo no cabeçalho.
-        $leis = Legislacao::doModulo()->with(['artigos' => fn ($q) => $q->orderBy('numero')])
+        $leis = Legislacao::doModulo()->with(['artigos' => fn ($q) => $q->orderBy('numero'), 'artigos.cumulados.legislacao'])
             ->orderBy('nome')
             ->get()
             ->map(fn (Legislacao $l) => [
@@ -87,6 +87,11 @@ class LegislacaoController extends Controller
                     'documentos_rotulo'      => $a->rotuloDocumentos(),
                     'prazo_notificacao_dias' => $a->prazo_notificacao_dias,
                     'multa_dobra_reincidencia' => $a->multa_dobra_reincidencia,
+                    // c/c: os artigos de outras leis que acompanham este.
+                    'cumulados' => $a->cumulados->map(fn (Artigo $c) => [
+                        'id' => $c->id, 'obrigatorio' => (bool) $c->pivot->obrigatorio,
+                        'rotulo' => $c->rotulo(), 'lei' => $c->legislacao?->rotulo(),
+                    ])->values(),
                 ]),
             ]);
 
@@ -175,6 +180,10 @@ class LegislacaoController extends Controller
             // O prazo que a notificação sugere quando este artigo entra nela.
             'prazo_notificacao_dias' => ['nullable', 'integer', 'min:1', 'max:365'],
             'multa_dobra_reincidencia' => ['nullable', 'boolean'],
+            // c/c: artigos de OUTRAS leis do mesmo módulo (conferido abaixo).
+            'cumulados'               => ['nullable', 'array', 'max:10'],
+            'cumulados.*.id'          => ['required', 'integer', 'exists:artigos,id'],
+            'cumulados.*.obrigatorio' => ['nullable', 'boolean'],
         ], [
             'multa_area.required_if'         => 'Diga sobre qual área a multa é calculada.',
             'multa_faixas.required_if'       => 'Informe as faixas de área e o valor de cada uma.',
@@ -240,11 +249,28 @@ class LegislacaoController extends Controller
             }
         }
 
+        // c/c: só artigo de OUTRA lei do MESMO módulo — o da mesma lei já se
+        // adiciona pela busca, e outro módulo é outra fiscalização.
+        $cumulados = [];
+        if (array_key_exists('cumulados', $d)) {
+            $modulo = Legislacao::find($d['legislacao_id'])?->modulo;
+            foreach ($d['cumulados'] ?? [] as $c) {
+                $alvo = Artigo::with('legislacao')->find($c['id']);
+                if (! $alvo || (int) $alvo->legislacao_id === (int) $d['legislacao_id'] || $alvo->legislacao?->modulo !== $modulo) {
+                    return response()->json(['message' => 'O c/c tem de ser um artigo de outra lei da mesma fiscalização.'], 422);
+                }
+                $cumulados[$alvo->id] = ['obrigatorio' => (bool) ($c['obrigatorio'] ?? false)];
+            }
+        }
+
         $artigo = Artigo::updateOrCreate(
             ['id' => $d['id'] ?? null],
-            collect($d)->except(['id', 'termos'])->all()
+            collect($d)->except(['id', 'termos', 'cumulados'])->all()
                 + ['ativo' => $d['ativo'] ?? true, 'termos' => $termos ? array_values($termos) : null]
         );
+        if (array_key_exists('cumulados', $d)) {
+            $artigo->cumulados()->sync($cumulados);
+        }
 
         return response()->json([
             'message' => 'Artigo gravado.',

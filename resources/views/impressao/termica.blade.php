@@ -244,10 +244,10 @@
 
 @if ($doc->exigeFundamentacao())
   <div class="faixa">{{ $sec('Legislação infringida') }}</div>
-  <div class="par"><b>Lei infringida:</b> {{ $doc->legislacao?->rotulo() ?: '—' }}</div>
+  <div class="par"><b>Lei infringida:</b> {{ $memoria['lei'] ?? ($doc->legislacao?->rotulo() ?: '—') }}</div>
   @forelse ($memoria['linhas'] as $l)
     <div class="infracao">
-      <div class="par"><b>Art. {{ preg_replace('/^Art\.?\s*/i', '', $l['numero']) }}.</b> {{ $l['conduta'] ?: '—' }}@if ($l['sancao']) {{ $l['sancao'] }}@endif</div>
+      <div class="par">@if ($l['cc'] ?? false)c/c @endif<b>Art. {{ preg_replace('/^Art\.?\s*/i', '', $l['numero']) }}.</b>@if ($l['cc'] ?? false) <i>({{ $l['lei'] }})</i>@endif {{ $l['conduta'] ?: '—' }}@if ($l['sancao']) {{ $l['sancao'] }}@endif</div>
       @if ($memoria['total'] !== null)
         <div class="calculo">
           <span>{{ $l['base'] === 'Valor fixo' ? $l['base'] : $l['conta'] }}@if ($l['limite']) · {{ $l['limite'] }}@endif</span>

@@ -831,8 +831,42 @@ function addArtigoDoc() {
   if (!atual) document.getElementById('nd-lei').value = lei.id
   if (!fdState.artigos.includes(id)) fdState.artigos.push(id)
   limparArtigoBuscaDoc()
+  // c/c (Parâmetros › Legislação › Artigos): o obrigatório entra junto; o
+  // outro é perguntado. É a única porta para artigo de outra lei.
+  const a = artigoDoc(id)
+  const novos = (a?.cumulados || []).filter(c => !fdState.artigos.includes(c.id) && artigoDoc(c.id) && artigoServeAoDoc(artigoDoc(c.id)))
+  for (const c of novos.filter(c => c.obrigatorio)) {
+    fdState.artigos.push(c.id)
+    toast(`${rotuloArtigoDoc(artigoDoc(c.id))} (${leiDoArtigoDoc(c.id)?.rotulo || ''}) entrou junto: é c/c obrigatório.`, 'ok')
+  }
   trocarLeiDoc()
   sugerirPrazoDoEmbargo()
+  const perguntar = novos.filter(c => !c.obrigatorio)
+  if (perguntar.length) {
+    const lista = perguntar.map(c => `${rotuloArtigoDoc(artigoDoc(c.id))} da ${leiDoArtigoDoc(c.id)?.rotulo || 'outra lei'}`).join('; ')
+    confirmarAcao({
+      titulo: 'Este artigo é cumulado com outro (c/c)',
+      mensagem: `${rotuloArtigoDoc(a)} já entrou. Adicionar também, como c/c: ${lista}?`,
+      textoBtn: 'Adicionar também',
+      onConfirm: () => {
+        for (const c of perguntar) if (!fdState.artigos.includes(c.id)) fdState.artigos.push(c.id)
+        trocarLeiDoc()
+        sugerirPrazoDoEmbargo()
+      },
+    })
+  }
+}
+
+/**
+ * De qual artigo da lista este é c/c — o id do artigo da lei do documento
+ * que o tem como cumulado —, ou null se ele é da própria lei.
+ * @param {number} id
+ */
+function principalDoCc(id) {
+  const lei = document.getElementById('nd-lei').value
+  if (!lei || String(leiDoArtigoDoc(id)?.id) === lei) return null
+  return fdState.artigos.find(p => String(leiDoArtigoDoc(p)?.id) === lei
+    && (artigoDoc(p)?.cumulados || []).some(c => c.id === id)) ?? null
 }
 
 /**
@@ -851,7 +885,10 @@ function sugerirPrazoDoEmbargo() {
 /** @param {number} id */
 function removerArtigoDoc(id) {
   if (docTravado()) return
+  // Tirar o artigo leva junto os c/c dele que não sejam de outro artigo da lista.
+  const ccs = fdState.artigos.filter(x => principalDoCc(x) === id)
   fdState.artigos = fdState.artigos.filter(a => a !== id)
+  for (const c of ccs) if (principalDoCc(c) === null) fdState.artigos = fdState.artigos.filter(a => a !== c)
   trocarLeiDoc()
 }
 
@@ -869,18 +906,25 @@ function trocarLeiDoc() {
   busca.readOnly = fdState.artigos.length > 0
   document.getElementById('nd-lei-trava').hidden = !fdState.artigos.length || travado
 
-  document.getElementById('nd-artigos').innerHTML = fdState.artigos.length
-    ? fdState.artigos.map(id => {
-        const a = artigoDoc(id)
-        if (!a) return ''
-        return `<div class="artigo-tag">
+  // Cada artigo da lei seguido dos c/c dele (pendurados, com a etiqueta).
+  const ccs = new Map(fdState.artigos.map(id => [id, principalDoCc(id)]))
+  const ordem = fdState.artigos.filter(id => ccs.get(id) === null)
+    .flatMap(p => [p, ...fdState.artigos.filter(id => ccs.get(id) === p)])
+  const quadro = id => {
+    const a = artigoDoc(id)
+    if (!a) return ''
+    const cc = ccs.get(id) !== null
+    const obrigatorio = cc && (artigoDoc(ccs.get(id))?.cumulados || []).some(c => c.id === id && c.obrigatorio)
+    return `<div class="artigo-tag${cc ? ' artigo-tag-cc' : ''}">
           <div class="artigo-tag-topo">
-            <span><strong>${esc(rotuloArtigoDoc(a))}</strong> · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}</span>
-            ${travado ? '' : `<button type="button" class="artigo-tag-x" title="Remover" onclick="removerArtigoDoc(${a.id})">&times;</button>`}
+            <span>${cc ? `<span class="artigo-cc">c/c · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}</span> ` : ''}<strong>${esc(rotuloArtigoDoc(a))}</strong>${cc ? '' : ` · ${esc(leiDoArtigoDoc(a.id)?.rotulo || '')}`}</span>
+            ${travado || obrigatorio ? '' : `<button type="button" class="artigo-tag-x" title="Remover" onclick="removerArtigoDoc(${a.id})">&times;</button>`}
           </div>
           ${a.conduta ? `<div class="artigo-tag-texto">${esc(a.conduta)}</div>` : ''}
         </div>`
-      }).join('')
+  }
+  document.getElementById('nd-artigos').innerHTML = fdState.artigos.length
+    ? ordem.map(quadro).join('')
     : '<div class="ac-dica">Nenhum artigo adicionado.</div>'
 
   trocarTipoDoc()

@@ -144,11 +144,13 @@ class DocumentoImpressao
     {
         $linhas = [];
 
-        foreach ($doc->artigos as $a) {
+        foreach ($doc->artigos->sortBy('id') as $a) {
+            // c/c: o artigo de outra lei sai logo abaixo do dele, com a lei.
+            $cc = $a->cumulado_de_artigo_id !== null ? ['cc' => true, 'lei' => $a->legislacao_rotulo] : ['cc' => false, 'lei' => null];
             // Peça gravada depois das formas novas de multa traz a memória
             // CONGELADA: é ela que sai, sem refazer conta nenhuma aqui.
             if ($a->memoria !== null && $a->memoria !== '') {
-                $linhas[] = [
+                $linhas[] = $cc + [
                     'numero'  => $a->numero,
                     'conduta' => $a->conduta,
                     'sancao'  => $a->sancao,
@@ -186,7 +188,7 @@ class DocumentoImpressao
                 $limite = $bruto > (float) $a->valor_upf ? 'teto da lei aplicado' : 'piso da lei aplicado';
             }
 
-            $linhas[] = [
+            $linhas[] = $cc + [
                 'numero'  => $a->numero,
                 'conduta' => $a->conduta,
                 'sancao'  => $a->sancao,
@@ -197,8 +199,14 @@ class DocumentoImpressao
             ];
         }
 
+        // "LC 1/2023 — Código de Obras c/c Lei 500/2010 — Código de Posturas".
+        $principal = $doc->legislacao?->rotulo();
+        $leisCc = $doc->artigos->whereNotNull('cumulado_de_artigo_id')->pluck('legislacao_rotulo')
+            ->filter()->unique()->reject(fn ($l) => $l === $principal)->values()->all();
+
         return [
             'linhas'  => $linhas,
+            'lei'     => $principal ? implode(' c/c ', array_merge([$principal], $leisCc)) : null,
             'total'   => $doc->valor_upf,
             'upf'     => $doc->upf_valor,
             'emReais' => $doc->valor_upf && $doc->upf_valor ? $doc->valor_upf * $doc->upf_valor : null,

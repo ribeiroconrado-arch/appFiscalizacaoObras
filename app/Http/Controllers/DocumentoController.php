@@ -290,7 +290,7 @@ class DocumentoController extends Controller
                     default                                        => null,
                 },
             ])->values(),
-            'leis' => Legislacao::ativas()->doModulo($modulo)->with(['artigos' => fn ($q) => $q->ativos()])->get()
+            'leis' => Legislacao::ativas()->doModulo($modulo)->with(['artigos' => fn ($q) => $q->ativos(), 'artigos.cumulados'])->get()
                 ->map(fn (Legislacao $l) => [
                     'id'                 => $l->id,
                     'rotulo'             => $l->rotulo(),
@@ -327,6 +327,9 @@ class DocumentoController extends Controller
                         'multa_mult_min' => $a->multa_mult_min,
                         'multa_mult_max' => $a->multa_mult_max,
                         'multa_rotulo'   => $a->rotuloMulta(),
+                        // c/c: o que entra junto (obrigatório) ou é oferecido (Parâmetros).
+                        'cumulados'      => $a->cumulados->filter(fn ($c) => $c->ativo)->map(fn ($c) => [
+                            'id' => $c->id, 'obrigatorio' => (bool) $c->pivot->obrigatorio])->values(),
                     ]),
                 ]),
         ]);
@@ -449,7 +452,7 @@ class DocumentoController extends Controller
             'artigos.*'      => ['integer', 'exists:artigos,id'],
         ]);
 
-        if ($recusa = $this->recusarArtigosForaDoTipo($d['tipo'], $d['artigos'] ?? [])) {
+        if ($recusa = $this->recusarArtigosForaDoTipo($d['tipo'], $d['artigos'] ?? [], $d['legislacao_id'] ?? null)) {
             return $recusa;
         }
         if ($msg = $this->recusaDaOrigem($d['tipo'], $d['origem_id'] ?? null)) {
@@ -946,10 +949,12 @@ class DocumentoController extends Controller
      *
      * @param  array<int,int>  $artigos
      */
-    private function recusarArtigosForaDoTipo(string $tipo, array $artigos): ?JsonResponse
+    private function recusarArtigosForaDoTipo(string $tipo, array $artigos, ?int $legislacaoId = null): ?JsonResponse
     {
         try {
             $this->lavratura->conferirArtigosDoTipo($tipo, $artigos);
+            // Uma lei por documento; outra lei só pelo c/c cadastrado.
+            $this->lavratura->conferirArtigosDaLei($legislacaoId, $artigos);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -1322,7 +1327,7 @@ class DocumentoController extends Controller
             'artigos.*'          => ['integer', 'exists:artigos,id'],
         ]);
 
-        if ($recusa = $this->recusarArtigosForaDoTipo($d['tipo'], $d['artigos'] ?? [])) {
+        if ($recusa = $this->recusarArtigosForaDoTipo($d['tipo'], $d['artigos'] ?? [], $d['legislacao_id'] ?? $documento->legislacao_id)) {
             return $recusa;
         }
 
