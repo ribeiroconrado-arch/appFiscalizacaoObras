@@ -713,7 +713,7 @@ function formArtigo(a) {
       </div>`) + '</div>'
     + grupo('Cumulado com (c/c)', `
       <div class="art-cc">${(a.cumulados || []).map(linhaDeCumulado).join('')}</div>
-      <div class="cad-row">${parRot('Adicionar artigo de outra lei', `<select class="art-cc-novo" onchange="adicionarCumulado(this)">
+      <div class="cad-row">${parRot('Adicionar artigo de outra lei', `<select class="art-cc-novo" data-combo onchange="adicionarCumulado(this)">
         <option value="">— escolha o artigo —</option>${opcoesDeCumulado(a)}</select>`, 'flex:2')}</div>
       <small class="art-termos-dica">Artigo de OUTRA lei que acompanha este no documento ("Art. 42 da LC 1/2023 c/c Art. 10 da
         Lei 500/2010"). Ao adicionar este artigo numa peça, o sistema pergunta se quer o c/c junto — ou o põe sozinho, se
@@ -733,15 +733,18 @@ function opcoesDeCumulado(a) {
     ...(parState.leisCc || []).map(l => ({ l, grupo: `${l.modulo_rotulo}: ${l.numero} — ${l.nome}` })),
   ]
   return leis.map(({ l, grupo }) =>
-    `<optgroup label="${esc(grupo)}">${l.artigos.filter(x => x.ativo && !ja.has(x.id)).map(x =>
-      `<option value="${x.id}" data-rotulo="${esc(rot(x))}" data-lei="${esc(l.numero + ' — ' + l.nome)}">${esc(rot(x))}</option>`).join('')}</optgroup>`).join('')
+    `<optgroup label="${esc(grupo)}">${l.artigos.filter(x => x.ativo).map(x =>
+      // O que já está no cartão fica desativado (some da lista) e volta ao ser tirado.
+      `<option value="${x.id}"${ja.has(x.id) ? ' disabled' : ''} data-rotulo="${esc(rot(x))}" data-lei="${esc(l.numero + ' — ' + l.nome)}">${esc(rot(x))}</option>`).join('')}</optgroup>`).join('')
 }
 
 /** Uma linha do c/c no cartão. @param {{id:number, rotulo:string, lei:string, obrigatorio:boolean}} c */
 function linhaDeCumulado(c) {
-  return `<div class="art-cc-linha" data-id="${Number(c.id)}"><span><b>${esc(c.rotulo)}</b> · ${esc(c.lei || '')}</span>
-    <select class="art-cc-modo" aria-label="Como o c/c entra"><option value="0" ${c.obrigatorio ? '' : 'selected'}>Perguntar</option><option value="1" ${c.obrigatorio ? 'selected' : ''}>Obrigatório</option></select>
-    <button type="button" class="fx-x" title="Tirar o c/c" onclick="this.parentElement.remove()">&times;</button></div>`
+  // O balão do sistema (.vsi-cartao, × vermelho sem moldura) e o combobox padrão.
+  return `<div class="vsi-cartao art-cc-linha" data-id="${Number(c.id)}">
+    <div class="vsi-cartao-corpo"><b>${esc(c.rotulo)}</b> <span class="vsi-cartao-sub">${esc(c.lei || '')}</span></div>
+    <select class="art-cc-modo" data-combo aria-label="Como o c/c entra"><option value="0" ${c.obrigatorio ? '' : 'selected'}>Perguntar</option><option value="1" ${c.obrigatorio ? 'selected' : ''}>Obrigatório</option></select>
+    <button type="button" class="cartao-x" title="Tirar o c/c" onclick="tirarCumulado(this)">&times;</button></div>`
 }
 
 /** @param {HTMLSelectElement} sel */
@@ -752,8 +755,17 @@ function adicionarCumulado(sel) {
   if (!caixa.querySelector(`[data-id="${op.value}"]`)) {
     caixa.insertAdjacentHTML('beforeend', linhaDeCumulado({ id: op.value, rotulo: op.dataset.rotulo, lei: op.dataset.lei, obrigatorio: false }))
   }
-  op.remove()
+  // Some da lista enquanto está no cartão; volta se for tirado.
+  op.disabled = true
   sel.value = ''
+}
+
+/** @param {HTMLButtonElement} bt */
+function tirarCumulado(bt) {
+  const linha = bt.closest('.art-cc-linha')
+  const op = linha.closest('.par-linha')?.querySelector(`.art-cc-novo option[value="${linha.dataset.id}"]`)
+  if (op) op.disabled = false
+  linha.remove()
 }
 
 /** Os c/c do cartão aberto. */

@@ -375,9 +375,12 @@
   background:var(--blt);border:1.5px solid var(--bord);border-radius:20px;padding:2px 4px 2px 10px}
 /* Parâmetros › artigo: as linhas do c/c (artigo de outra lei). */
 .art-cc{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
-.art-cc-linha{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px dashed var(--bord);border-radius:var(--r);font-size:13px}
-.art-cc-linha > span{flex:1;min-width:0}
-.art-cc-linha select{width:auto;padding:4px 8px;font-size:12.5px}
+/* A linha do c/c é o balão do sistema (.vsi-cartao); o "Perguntar /
+   Obrigatório" é o combobox padrão, estreito, antes do × vermelho. */
+.art-cc-linha{align-items:center}
+.art-cc-linha .combo-solto{flex:0 0 150px;min-width:0}
+.art-cc-linha .combo-solto > input{font-size:12.5px;padding:6px 28px 6px 9px;background:var(--sur)}
+fieldset[disabled] .art-cc-linha .cartao-x{display:none}
 .art-cc-resumo{color:#5b21b6}
 .art-termo button{border:0;background:none;color:var(--tx3);font-size:15px;line-height:1;
   cursor:pointer;padding:0 4px;min-height:0}
