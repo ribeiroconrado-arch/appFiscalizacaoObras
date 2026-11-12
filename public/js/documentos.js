@@ -729,7 +729,8 @@ function buscarLeiDoc(inp) {
   const lista = document.getElementById('ac-nd-lei')
   if (docTravado() || fdState.artigos.length) { lista.classList.remove('open'); return }
   const q = semAcentoDoc(inp.value.trim())
-  const leis = dState.opcoes.leis.filter(l => !q || semAcentoDoc(l.rotulo).includes(q))
+  // A lei da outra fiscalização (so_cc) só entra como c/c, nunca como a do documento.
+  const leis = dState.opcoes.leis.filter(l => !l.so_cc && (!q || semAcentoDoc(l.rotulo).includes(q)))
   lista.innerHTML = leis.length
     ? leis.map(l => `<div class="ac-item" onmousedown="event.preventDefault(); selLeiDoc(${l.id})">${esc(l.rotulo)}</div>`).join('')
     : '<div class="ac-empty">Nenhuma lei encontrada</div>'
@@ -760,7 +761,7 @@ function buscarArtigoDoc(inp) {
   const lei = leiDoDoc()
   const q = semAcentoDoc(inp.value.trim())
   // SÓ OS ARTIGOS MARCADOS PARA ESTA PEÇA (Parâmetros › Legislação › Artigos).
-  const daPeca = (lei ? [lei] : dState.opcoes.leis)
+  const daPeca = (lei ? [lei] : dState.opcoes.leis.filter(l => !l.so_cc))
     .flatMap(l => l.artigos.map(a => ({ a, lei: lei ? '' : l.rotulo })))
     .filter(({ a }) => artigoServeAoDoc(a))
   const pool = daPeca

@@ -290,49 +290,73 @@ class DocumentoController extends Controller
                     default                                        => null,
                 },
             ])->values(),
-            'leis' => Legislacao::ativas()->doModulo($modulo)->with(['artigos' => fn ($q) => $q->ativos(), 'artigos.cumulados'])->get()
-                ->map(fn (Legislacao $l) => [
-                    'id'                 => $l->id,
-                    'rotulo'             => $l->rotulo(),
-                    // Posturas: a Lei 723 (ruído) é a que a notificação de
-                    // denúncia já traz escolhida (denuncias.js).
-                    'formulario_tipo'    => $l->formulario_tipo,
-                    // As zonas da Lei 723 (o "Local" da medição, com os
-                    // limites diurno e noturno) — o formulário mostra o dB
-                    // permitido; a multa é conta do servidor.
-                    'areas_db'           => $l->areas_db,
-                    // Os incisos do art. 16 (lavratura imediata) — o select do
-                    // auto de infração sem notificação antes.
-                    'lavratura_imediata_itens' => $l->lavratura_imediata_itens ?? [],
-                    'prazo_defesa_dias'  => $l->prazo_defesa_dias,
-                    'prazo_cumpr_dias'   => $l->prazo_cumprimento_dias,
-                    'artigos'            => $l->artigos->sortBy(fn ($a) => $a->ordem())->values()->map(fn ($a) => [
-                        'id' => $a->id, 'numero' => $a->numero, 'rotulo' => $a->rotulo(),
-                        'conduta' => $a->conduta,
-                        // Os termos de busca do artigo: o campo de artigo do
-                        // documento também acha por eles.
-                        'termos'  => $a->termos ?? [],
-                        // É com isto que o formulário filtra a lista de artigos
-                        // pelo tipo da peça (a regra é Artigo::serveA).
-                        'documentos'             => $a->documentos ?: Artigo::DOCUMENTOS,
-                        'prazo_notificacao_dias' => $a->prazo_notificacao_dias,
-                        // Para o campo do valor que o fiscal informa (multa "de X a Y UPF").
-                        'multa_min_upf'  => $a->multa_min_upf,
-                        'multa_max_upf'  => $a->multa_max_upf,
-                        'multa_dobra_reincidencia' => $a->multa_dobra_reincidencia,
-                        // A tela NÃO calcula multa (pede a /api/multas/simular);
-                        // isto é só para ela saber que campos mostrar.
-                        'base_multa'     => $a->base_multa,
-                        'multa_area'     => $a->multa_area,
-                        'multa_mult_min' => $a->multa_mult_min,
-                        'multa_mult_max' => $a->multa_mult_max,
-                        'multa_rotulo'   => $a->rotuloMulta(),
-                        // c/c: o que entra junto (obrigatório) ou é oferecido (Parâmetros).
-                        'cumulados'      => $a->cumulados->filter(fn ($c) => $c->ativo)->map(fn ($c) => [
-                            'id' => $c->id, 'obrigatorio' => (bool) $c->pivot->obrigatorio])->values(),
-                    ]),
-                ]),
+            'leis' => $this->leisDoFormulario($modulo),
         ]);
+    }
+
+    /**
+     * As leis do formulário: as do módulo, e depois — marcadas `so_cc` — as
+     * da outra fiscalização que algum artigo daqui tem como c/c, só com esses
+     * artigos. A tela não as oferece como lei do documento nem na busca.
+     */
+    private function leisDoFormulario(string $modulo): \Illuminate\Support\Collection
+    {
+        $doModulo = Legislacao::ativas()->doModulo($modulo)->with(['artigos' => fn ($q) => $q->ativos(), 'artigos.cumulados'])->get();
+        $ccIds = $doModulo->flatMap(fn (Legislacao $l) => $l->artigos->flatMap(fn ($a) => $a->cumulados->pluck('id')))->unique()->all();
+        $soCc = $ccIds
+            ? Legislacao::ativas()->where('modulo', '!=', $modulo)
+                ->with(['artigos' => fn ($q) => $q->ativos()->whereIn('id', $ccIds), 'artigos.cumulados'])->get()
+                ->filter(fn (Legislacao $l) => $l->artigos->isNotEmpty())
+            : collect();
+
+        return $doModulo->map(fn ($l) => [$l, false])->concat($soCc->map(fn ($l) => [$l, true]))
+                ->map(fn (array $par) => [...$this->leiDoFormulario($par[0]), 'so_cc' => $par[1]])->values();
+    }
+
+    /** Uma lei do formulário, com os artigos ativos. */
+    private function leiDoFormulario(Legislacao $l): array
+    {
+        return [
+            'id'                 => $l->id,
+            'rotulo'             => $l->rotulo(),
+            // Posturas: a Lei 723 (ruído) é a que a notificação de
+            // denúncia já traz escolhida (denuncias.js).
+            'formulario_tipo'    => $l->formulario_tipo,
+            // As zonas da Lei 723 (o "Local" da medição, com os
+            // limites diurno e noturno) — o formulário mostra o dB
+            // permitido; a multa é conta do servidor.
+            'areas_db'           => $l->areas_db,
+            // Os incisos do art. 16 (lavratura imediata) — o select do
+            // auto de infração sem notificação antes.
+            'lavratura_imediata_itens' => $l->lavratura_imediata_itens ?? [],
+            'prazo_defesa_dias'  => $l->prazo_defesa_dias,
+            'prazo_cumpr_dias'   => $l->prazo_cumprimento_dias,
+            'artigos'            => $l->artigos->sortBy(fn ($a) => $a->ordem())->values()->map(fn ($a) => [
+                'id' => $a->id, 'numero' => $a->numero, 'rotulo' => $a->rotulo(),
+                'conduta' => $a->conduta,
+                // Os termos de busca do artigo: o campo de artigo do
+                // documento também acha por eles.
+                'termos'  => $a->termos ?? [],
+                // É com isto que o formulário filtra a lista de artigos
+                // pelo tipo da peça (a regra é Artigo::serveA).
+                'documentos'             => $a->documentos ?: Artigo::DOCUMENTOS,
+                'prazo_notificacao_dias' => $a->prazo_notificacao_dias,
+                // Para o campo do valor que o fiscal informa (multa "de X a Y UPF").
+                'multa_min_upf'  => $a->multa_min_upf,
+                'multa_max_upf'  => $a->multa_max_upf,
+                'multa_dobra_reincidencia' => $a->multa_dobra_reincidencia,
+                // A tela NÃO calcula multa (pede a /api/multas/simular);
+                // isto é só para ela saber que campos mostrar.
+                'base_multa'     => $a->base_multa,
+                'multa_area'     => $a->multa_area,
+                'multa_mult_min' => $a->multa_mult_min,
+                'multa_mult_max' => $a->multa_mult_max,
+                'multa_rotulo'   => $a->rotuloMulta(),
+                // c/c: o que entra junto (obrigatório) ou é oferecido (Parâmetros).
+                'cumulados'      => $a->cumulados->filter(fn ($c) => $c->ativo)->map(fn ($c) => [
+                    'id' => $c->id, 'obrigatorio' => (bool) $c->pivot->obrigatorio])->values(),
+            ]),
+        ];
     }
 
     /**

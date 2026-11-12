@@ -51,11 +51,12 @@ if (! $lote) { throw new RuntimeException('Sem lote para o teste local.'); }
 
 DB::beginTransaction();
 try {
-    $novaLei = fn (string $numero, string $nome) => Legislacao::create(['numero' => $numero, 'nome' => $nome, 'ano' => 2099,
-        'prazo_defesa_dias' => 5, 'prazo_cumprimento_dias' => 10, 'ativa' => true]);
+    $novaLei = fn (string $numero, string $nome, string $modulo = 'obras') => Legislacao::create(['numero' => $numero, 'nome' => $nome, 'ano' => 2099,
+        'prazo_defesa_dias' => 5, 'prazo_cumprimento_dias' => 10, 'ativa' => true, 'modulo' => $modulo]);
     $obras = $novaLei('TESTE LC 1/2099', 'Código de teste');
     $outra = $novaLei('TESTE L 500/2099', 'Posturas de teste');
     $terceira = $novaLei('TESTE L 9/2099', 'Lei sem vínculo');
+    $posturas = $novaLei('TESTE CP 7/2099', 'Código de Posturas de teste', 'posturas');
     $art = fn (Legislacao $l, string $n) => Artigo::create(['legislacao_id' => $l->id, 'numero' => $n, 'apelido' => $n,
         'conduta' => "conduta {$n}", 'base_multa' => 'sem_multa', 'ativo' => true, 'documentos' => ['notificacao', 'auto_infracao']]);
     $a42 = $art($obras, 'Art. 42');
@@ -63,6 +64,8 @@ try {
     $a10 = $art($outra, 'Art. 10');
     $a11 = $art($outra, 'Art. 11');
     $a90 = $art($terceira, 'Art. 90');
+    $p200 = $art($posturas, 'Art. 200');
+    $p201 = $art($posturas, 'Art. 201');
 
     echo "Parâmetros: o vínculo c/c\n";
     $base = ['legislacao_id' => $obras->id, 'numero' => 'Art. 42', 'base_multa' => 'sem_multa', 'documentos' => ['notificacao', 'auto_infracao'], 'termos' => ['x']];
@@ -108,6 +111,25 @@ try {
     $m = $mem->invoke(app(App\Services\DocumentoImpressao::class), $doc->fresh(['artigos', 'legislacao']));
     confere($m['lei'] === 'TESTE LC 1/2099 — Código de teste c/c TESTE L 500/2099 — Posturas de teste', 'o cabeçalho junta as leis com "c/c"');
     confere($m['linhas'][1]['cc'] === true && $m['linhas'][0]['cc'] === false, 'a linha do c/c sai marcada');
+
+    echo "c/c com a outra fiscalização (Obras c/c Posturas)\n";
+    [, $d] = chamar($admin, LegislacaoController::class, 'index');
+    confere(collect($d['leis'])->doesntContain('id', $posturas->id) && collect($d['leis_cc'])->contains('id', $posturas->id),
+        'Parâmetros de Obras não lista a lei de Posturas, mas a oferece para o c/c');
+    [$s] = chamar($admin, LegislacaoController::class, 'salvarArtigo', ['id' => $a43->id, 'numero' => 'Art. 43',
+        'cumulados' => [['id' => $p200->id, 'obrigatorio' => false]]] + $base);
+    confere($s === 200 && $a43->fresh()->cumulados->pluck('id')->all() === [$p200->id], 'artigo de Obras aceita c/c de Posturas');
+    [, $d] = chamar($admin, DocumentoController::class, 'opcoes');
+    $soCc = collect($d['leis'])->firstWhere('id', $posturas->id);
+    confere($soCc && $soCc['so_cc'] === true && collect($soCc['artigos'])->pluck('id')->all() === [$p200->id]
+        && collect($d['leis'])->firstWhere('id', $obras->id)['so_cc'] === false,
+        'o formulário traz a lei de Posturas marcada só-c/c, só com o artigo vinculado');
+    [$s] = $peca([$a43->id, $p201->id], $obras->id);
+    confere($s === 422, 'artigo de Posturas sem vínculo é recusado');
+    [$s] = $peca([$a43->id, $p200->id], $obras->id);
+    confere($s === 201, 'artigo de Obras + o c/c de Posturas são aceitos');
+    [$s] = $peca([$p200->id], $posturas->id);
+    confere($s === 422, 'o agente de Obras não usa a lei de Posturas como a do documento');
 
     echo "\n{$ok} verificações passaram.\n";
 } finally {

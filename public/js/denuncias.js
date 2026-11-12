@@ -486,7 +486,7 @@ async function gerarNotificacaoDaDenuncia() {
   document.getElementById('nd-origem-motivo').value = 'denuncia'
   aplicarOrigemNotifDoc()
 
-  const leis = dState.opcoes?.leis || []
+  const leis = (dState.opcoes?.leis || []).filter(l => !l.so_cc)
   const lei = leis.find(l => l.formulario_tipo === 'lei_723_2002') || leis.find(l => /723/.test(l.rotulo || ''))
   if (lei) selLeiDoc(lei.id)
 

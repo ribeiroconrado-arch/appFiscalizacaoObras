@@ -411,6 +411,8 @@ async function recarregarLegislacao() {
   const r = await fetch('/api/legislacao', { headers: { Accept: 'application/json' } })
   const d = await r.json()
   parState.leis = d.leis
+  // As leis da outra fiscalização: só servem de c/c.
+  parState.leisCc = d.leis_cc || []
   if (parState.leiAberta && !parState.leis.some(l => l.id === parState.leiAberta)) parState.leiAberta = null
   renderLeis()
 }
@@ -718,12 +720,20 @@ function formArtigo(a) {
         marcado como obrigatório. É a única forma de um documento citar mais de uma lei.</small>`), 'salvarArtigo()')
 }
 
-/** Os artigos das OUTRAS leis do módulo, agrupados por lei, para o c/c. @param {Object} a */
+/**
+ * Os artigos das OUTRAS leis, agrupados por lei, para o c/c: primeiro as do
+ * módulo, depois as da outra fiscalização (com o nome dela no grupo).
+ * @param {Object} a
+ */
 function opcoesDeCumulado(a) {
   const ja = new Set((a.cumulados || []).map(c => c.id))
   const rot = x => x.numero + (x.apelido && x.apelido !== x.numero ? ' - ' + x.apelido : '')
-  return parState.leis.filter(l => l.id !== parState.leiAberta && l.artigos?.length).map(l =>
-    `<optgroup label="${esc(l.numero + ' — ' + l.nome)}">${l.artigos.filter(x => x.ativo && !ja.has(x.id)).map(x =>
+  const leis = [
+    ...parState.leis.filter(l => l.id !== parState.leiAberta && l.artigos?.length).map(l => ({ l, grupo: l.numero + ' — ' + l.nome })),
+    ...(parState.leisCc || []).map(l => ({ l, grupo: `${l.modulo_rotulo}: ${l.numero} — ${l.nome}` })),
+  ]
+  return leis.map(({ l, grupo }) =>
+    `<optgroup label="${esc(grupo)}">${l.artigos.filter(x => x.ativo && !ja.has(x.id)).map(x =>
       `<option value="${x.id}" data-rotulo="${esc(rot(x))}" data-lei="${esc(l.numero + ' — ' + l.nome)}">${esc(rot(x))}</option>`).join('')}</optgroup>`).join('')
 }
 

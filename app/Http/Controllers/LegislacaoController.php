@@ -95,7 +95,24 @@ class LegislacaoController extends Controller
                 ]),
             ]);
 
-        return response()->json(['leis' => $leis]);
+        // Só para o c/c: as leis da OUTRA fiscalização. O artigo de Obras pode
+        // ser cumulado com o de Posturas (onde está a penalidade), mas a lei de
+        // Posturas continua fora da lista do agente de Obras.
+        $ativo = \App\Support\Modulo::ativo();
+        $leisCc = Legislacao::ativas()->where('modulo', '!=', $ativo)
+            ->with(['artigos' => fn ($q) => $q->ativos()])->orderBy('nome')->get()
+            ->filter(fn (Legislacao $l) => $l->artigos->isNotEmpty())
+            ->map(fn (Legislacao $l) => [
+                'id'      => $l->id,
+                'numero'  => $l->numero,
+                'nome'    => $l->nome,
+                'modulo_rotulo' => config("modulos.{$l->modulo}.rotulo", $l->modulo),
+                'artigos' => $l->artigos->sortBy(fn (Artigo $a) => $a->ordem())->values()->map(fn (Artigo $a) => [
+                    'id' => $a->id, 'numero' => $a->numero, 'apelido' => $a->apelido, 'ativo' => true,
+                ]),
+            ])->values();
+
+        return response()->json(['leis' => $leis, 'leis_cc' => $leisCc]);
     }
 
     /** POST /api/legislacao — cria ou atualiza uma lei. */
@@ -180,7 +197,7 @@ class LegislacaoController extends Controller
             // O prazo que a notificação sugere quando este artigo entra nela.
             'prazo_notificacao_dias' => ['nullable', 'integer', 'min:1', 'max:365'],
             'multa_dobra_reincidencia' => ['nullable', 'boolean'],
-            // c/c: artigos de OUTRAS leis do mesmo módulo (conferido abaixo).
+            // c/c: artigos de OUTRAS leis, de qualquer módulo (conferido abaixo).
             'cumulados'               => ['nullable', 'array', 'max:10'],
             'cumulados.*.id'          => ['required', 'integer', 'exists:artigos,id'],
             'cumulados.*.obrigatorio' => ['nullable', 'boolean'],
@@ -249,15 +266,15 @@ class LegislacaoController extends Controller
             }
         }
 
-        // c/c: só artigo de OUTRA lei do MESMO módulo — o da mesma lei já se
-        // adiciona pela busca, e outro módulo é outra fiscalização.
+        // c/c: só artigo de OUTRA lei — o da mesma lei já se adiciona pela
+        // busca. Pode ser de outra fiscalização (Obras c/c Posturas, onde está
+        // a penalidade): o vínculo é a única porta, o agente não escolhe a lei.
         $cumulados = [];
         if (array_key_exists('cumulados', $d)) {
-            $modulo = Legislacao::find($d['legislacao_id'])?->modulo;
             foreach ($d['cumulados'] ?? [] as $c) {
-                $alvo = Artigo::with('legislacao')->find($c['id']);
-                if (! $alvo || (int) $alvo->legislacao_id === (int) $d['legislacao_id'] || $alvo->legislacao?->modulo !== $modulo) {
-                    return response()->json(['message' => 'O c/c tem de ser um artigo de outra lei da mesma fiscalização.'], 422);
+                $alvo = Artigo::find($c['id']);
+                if (! $alvo || (int) $alvo->legislacao_id === (int) $d['legislacao_id']) {
+                    return response()->json(['message' => 'O c/c tem de ser um artigo de outra lei.'], 422);
                 }
                 $cumulados[$alvo->id] = ['obrigatorio' => (bool) ($c['obrigatorio'] ?? false)];
             }
