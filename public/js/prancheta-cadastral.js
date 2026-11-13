@@ -549,8 +549,10 @@ const PranchetaCad = (() => {
     }
     // No Editar lote o contorno de origem é só referência: tracejado, por baixo.
     // Na edificação o lote é a referência em destaque: contorno amarelo com
-    // filete escuro, e nenhum preenchimento por cima da imagem.
-    for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
+    // filete escuro, e nenhum preenchimento por cima da imagem. Na fração,
+    // no desmembramento e na unificação, com o satélite ligado, o lote também
+    // fica sem o branco (13/11/2026): contorno branco com filete escuro.
+    for(const f of contornos())h+=edif()?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="#facc15" fill-opacity=".07" stroke="#facc15" stroke-width="3"/>`:s.tipo==='edicao'?`<path d="${path(ring(f),true)}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4"/>`:s.sat?`<path d="${path(ring(f),true)}" fill="none" stroke="#1b2a27" stroke-width="5.5" stroke-opacity=".55"/><path d="${path(ring(f),true)}" fill="none" stroke="#ffffff" stroke-width="2.5"/>`:`<path d="${path(ring(f),true)}" fill="white" fill-opacity=".93" stroke="#243b4b" stroke-width="2.5"/>`
     const partes=s.resultado?.partes||[]
     // Trecho que não fecha parte (G.dividir): em vermelho, com as pontas, para
     // achar o toco ou a linha esquecida que trava o desmembramento.
