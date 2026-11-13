@@ -836,7 +836,19 @@ const PranchetaCad = (() => {
       // LOTE NOVO VÊ A QUADRA INTEIRA, como o Editar lote (09/11/2026): a quadra é
       // a do lote mais perto de onde se clicou; a caixa dela entra no entorno e a
       // vista abre enquadrando-a. Bairro e quadra já vêm sugeridos nos dados.
-      if(tipo==='novo'&&opts.centro&&s.contexto.length)try{
+      // QUADRA PEDIDA (13/11/2026): o Desenhar lote da correção diz qual quadra falta;
+      // ela vale no lugar da do lote mais perto do centro do mapa.
+      const sem0q=v=>String(v??'').replace(/^0+(?=.)/,'')
+      if(tipo==='novo'&&opts.quadraAlvo)try{
+        const qa=opts.quadraAlvo,cq=await caixaDaQuadra([{properties:{bairro:qa.bairro,quadra:qa.quadra}}]);if(token!==geracao)return
+        if(cq){const k=cq.caixa,mq=.00035
+          const r=await fetch(`/api/mapa/lotes?bbox=${[k[0]-mq,k[1]-mq,k[2]+mq,k[3]+mq].map(x=>x.toFixed(8)).join(',')}&revisao=1`,{headers:{Accept:'application/json'}})
+          if(r.ok){const d=await r.json();if(token!==geracao)return;s.contexto=d.features||s.contexto}
+          const daQuadra=s.contexto.filter(f=>f.properties?.bairro===qa.bairro&&sem0q(f.properties?.quadra)===sem0q(qa.quadra)&&f.geometry?.coordinates?.[0])
+          s.quadraSugerida={bairro:qa.bairro,quadra:String(daQuadra[0]?.properties?.quadra??sem0q(qa.quadra)),numero_lote:qa.numero_lote!=null?sem0q(qa.numero_lote):''}
+          s.quadraAneis=daQuadra.map(f=>f.geometry.coordinates[0])
+          if(s.quadraAneis.length)enquadrar()}}catch{}
+      if(tipo==='novo'&&opts.centro&&s.contexto.length&&!s.quadraSugerida)try{
         const c=s.plano.para(opts.centro)
         const dist=f=>{const r=f.geometry?.coordinates?.[0];if(!r)return Infinity;const pl=r.map(s.plano.para);if(G.dentro(c,pl))return 0;return Math.min(...pl.map(p=>Math.hypot(p[0]-c[0],p[1]-c[1])))}
         const perto=s.contexto.reduce((a,f)=>{const d=dist(f);return d<a[0]?[d,f]:a},[Infinity,null])[1],pq=perto?.properties
@@ -930,7 +942,7 @@ const PranchetaCad = (() => {
   async function formLoteNovo(){
     // Bairro e quadra sugeridos pelo lote mais perto de onde se clicou.
     const sug=s.quadraSugerida||{}
-    s.dados.novo??={bairro:s.opts.bairroPadrao||sug.bairro||'',quadra:sug.quadra||'',numero_lote:''}
+    s.dados.novo??={bairro:s.opts.bairroPadrao||sug.bairro||'',quadra:sug.quadra||'',numero_lote:sug.numero_lote||''}
     const d=s.dados.novo,r0=s.resultado.partes[0],area=Math.abs(G.area(r0))
     // "Calcular medidas pelas faces" (classificarFaces) grava no cartão da parte: traz para cá.
     const pelasFaces=s.dados[parteKey(r0)]

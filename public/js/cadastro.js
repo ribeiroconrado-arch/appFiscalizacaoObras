@@ -201,14 +201,15 @@ let cadModo = null
  *
  * @param {'quadra'|'desenho'|'coordenadas'} modo
  */
-function modoCadastral(modo) {
+/** @param {{bairro?:string, quadra?:string, numero_lote?:string}} [alvo] o lote que falta (Desenhar lote da correção) */
+function modoCadastral(modo, alvo) {
   // A alteração cadastral pede a vez: busca, pinos ou cores abertos fecham, e
   // um contorno começado em outro desenho pergunta antes (ferramentas-mapa.js).
-  pedirFerramenta('curadoria', () => _entrarModoCadastral(modo))
+  pedirFerramenta('curadoria', () => _entrarModoCadastral(modo, alvo))
 }
 
 /** @param {'quadra'|'apagar'|'desenho'|'coordenadas'} modo */
-function _entrarModoCadastral(modo) {
+function _entrarModoCadastral(modo, alvo) {
   sairModoCadastral(true)
   cadModo = modo
 
@@ -223,7 +224,7 @@ function _entrarModoCadastral(modo) {
   } else if (modo === 'apagar') {
     ligarSelecao('apagar')
   } else if (modo === 'desenho') {
-    iniciarDesenhoDeLote()
+    iniciarDesenhoDeLote(undefined, alvo)
   } else if (modo === 'coordenadas') {
     document.getElementById('coo-caixa').hidden = false
     abrirModalCad()
@@ -1700,12 +1701,12 @@ let desenhoPendente = null
  *
  * @param {Object} [contorno] geometria já desenhada, para reabrir e corrigir
  */
-function iniciarDesenhoDeLote(contorno) {
+function iniciarDesenhoDeLote(contorno, alvo) {
   // Seleção e desenho disputariam o mesmo clique.
   if (selState.ativa) { desligarSelecao() }
 
   const f = state.selecionado
-  const bairro = f?.bairro || f?.properties?.bairro || ''
+  const bairro = alvo?.bairro || f?.bairro || f?.properties?.bairro || ''
   const c = contorno?.coordinates?.[0]?.[0]
     || (mapaState.obj ? [mapaState.obj.getCenter().lng, mapaState.obj.getCenter().lat] : null)
   if (!c) { toast('Abra o mapa antes de desenhar.', 'aviso'); return }
@@ -1716,6 +1717,9 @@ function iniciarDesenhoDeLote(contorno) {
     // O bairro já vem escolhido no cartão de finalização (o do lote ao lado).
     bairroPadrao: bairro,
     contorno,
+    // Lote que falta numa quadra conhecida: a prancheta abre nela, e não na do
+    // lote mais perto do centro do mapa.
+    quadraAlvo: alvo?.quadra != null && bairro ? { bairro, quadra: String(alvo.quadra), numero_lote: alvo.numero_lote } : null,
     // O lote é gravado DENTRO da prancheta (cartão "Lote novo"): aqui só se
     // larga a ferramenta e se traz o lote novo para o mapa.
     aoGravar: () => {

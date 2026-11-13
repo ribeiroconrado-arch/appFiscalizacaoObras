@@ -423,7 +423,9 @@ function corrigirCom(acao) {
       return
     case 'desenho':
       lancar()
-      modoCadastral('desenho')
+      // A prancheta abre NA QUADRA da pendência, com quadra e lote já preenchidos
+      // (sem isto valia o lote mais perto do centro do mapa — uma quadra qualquer).
+      modoCadastral('desenho', { bairro: imp ? correcaoState.imp?.bairro : correcaoState.bairro, quadra: it.quadra, numero_lote: it.lote })
       toast('Desenhe o lote que falta. Ao gravar, a conferência se refaz sozinha.', 'aviso')
       return
     case 'numero':
