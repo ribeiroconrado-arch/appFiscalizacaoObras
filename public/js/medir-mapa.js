@@ -65,7 +65,10 @@ const medState = {
   pontos: [],
   /** @type {[number,number]|null} onde o cursor está (já com ímã) */
   cursor: null,
-  ima: true,
+  /** @type {Object<string,boolean>} os encaixes ligados (OSNAP) — ver _medSnapsSalvos */
+  snaps: {},
+  /** @type {string|null} o tipo do encaixe em imaEm */
+  imaTipo: null,
   /** @type {L.LatLng|null} canto em que o ímã pegou */
   imaEm: null,
   /** @type {L.LayerGroup|null} medidas prontas */
@@ -189,6 +192,8 @@ function sairDeMedir() {
   medState.pontos = []
   medState.cursor = null
   medState.imaEm = null
+  medState.imaTipo = null
+  opcoesSnapDaMedida(false)
   medState.viva?.clearLayers()
   _medSelecionar(null)
   document.getElementById('map').classList.remove('med-sobre')
@@ -214,39 +219,93 @@ function desfazerPontoDaMedida() {
   _medPintar()
 }
 
-function alternarImaDaMedida() {
-  medState.ima = !medState.ima
+// ── O OSNAP ──────────────────────────────────────────────────
+//
+// Como o da prancheta (13/11/2026): extremidade, ponto médio, interseção,
+// na face e perpendicular, cada um ligado na janelinha do botão do ímã.
+// A escolha fica guardada neste navegador. Segurar Alt solta num toque.
+
+const MED_SNAP_TIPOS = {
+  end:  { nome: 'Extremidade',   simbolo: '□' },
+  mid:  { nome: 'Ponto médio',   simbolo: '△' },
+  int:  { nome: 'Interseção',    simbolo: '⊠' },
+  near: { nome: 'Na face',       simbolo: '×' },
+  perp: { nome: 'Perpendicular', simbolo: '∟' },
+}
+
+/** @returns {{end:boolean, mid:boolean, int:boolean, near:boolean, perp:boolean}} */
+function _medSnapsSalvos() {
+  const padrao = { end: true, mid: true, int: true, near: false, perp: true }
+  try { return { ...padrao, ...JSON.parse(localStorage.getItem('med-snaps') || '{}') } } catch { return padrao }
+}
+medState.snaps = _medSnapsSalvos()
+
+/** Algum encaixe ligado? */
+function _medSnapLigado() { return Object.values(medState.snaps).some(Boolean) }
+
+/** Abre ou fecha a janelinha do OSNAP, debaixo do botão do ímã. @param {boolean} [abrir] */
+function opcoesSnapDaMedida(abrir) {
+  const pop = document.getElementById('med-snap-pop')
+  const botao = document.getElementById('med-barra-ima')
+  if (!pop || !botao) return
+  pop.hidden = abrir === undefined ? !pop.hidden : !abrir
+  botao.setAttribute('aria-expanded', String(!pop.hidden))
+  botao.classList.toggle('aberto', !pop.hidden)
+  if (pop.hidden) return
+  Object.keys(MED_SNAP_TIPOS).forEach(k => {
+    const c = document.getElementById('med-snap-' + k)
+    if (c) c.checked = !!medState.snaps[k]
+  })
+  const r = botao.getBoundingClientRect()
+  const w = pop.offsetWidth || 300
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px'
+  pop.style.top = (r.bottom + 8) + 'px'
+  pop.style.maxHeight = Math.max(120, window.innerHeight - r.bottom - 16) + 'px'
+}
+
+/** Liga ou desliga um tipo de encaixe. @param {string} k @param {boolean} ligado */
+function marcarSnapDaMedida(k, ligado) {
+  medState.snaps[k] = ligado
+  try { localStorage.setItem('med-snaps', JSON.stringify(medState.snaps)) } catch {}
   medState.imaEm = null
   _medPintar()
 }
 
-// ── O ÍMÃ ────────────────────────────────────────────────────
+// Fecha a janelinha ao tocar fora dela e com Esc.
+document.addEventListener('pointerdown', ev => {
+  const pop = document.getElementById('med-snap-pop')
+  if (!pop || pop.hidden) return
+  if (pop.contains(ev.target) || ev.target.closest?.('#med-barra-ima')) return
+  opcoesSnapDaMedida(false)
+}, true)
+document.addEventListener('keydown', ev => {
+  const pop = document.getElementById('med-snap-pop')
+  if (ev.key === 'Escape' && pop && !pop.hidden) { opcoesSnapDaMedida(false); ev.stopPropagation() }
+}, true)
+window.addEventListener('resize', () => { if (document.getElementById('med-snap-pop')?.hidden === false) opcoesSnapDaMedida(true) })
 
-/**
- * O canto desenhado mais perto do toque, dentro do raio do ímã — de lote,
- * edificação, quadra, contorno ou de outra medida. Segurar Alt solta.
- *
- * @param {L.LatLng} ll @param {MouseEvent} [ev] @returns {L.LatLng}
- */
-function _medIma(ll, ev) {
-  medState.imaEm = null
-  if (!medState.ima || ev?.altKey) return ll
+/** Os trechos desenhados perto do toque, em pixels de tela, com os LatLng das pontas. */
+function _medTrechosPerto(ll, folgaPx) {
   const mapa = mapaState.obj
   const alvo = mapa.latLngToContainerPoint(ll)
-  let melhor = null, dMelhor = MED_IMA_PX
-
-  const testar = c => {
-    const p = mapa.latLngToContainerPoint(c)
-    const d = Math.hypot(p.x - alvo.x, p.y - alvo.y)
-    if (d < dMelhor) { dMelhor = d; melhor = c }
+  const canto = mapa.containerPointToLatLng([alvo.x + folgaPx, alvo.y - folgaPx])
+  const dLat = Math.abs(canto.lat - ll.lat), dLng = Math.abs(canto.lng - ll.lng)
+  const trechos = []
+  const anel = (lista, fechado) => {
+    const n = lista.length
+    for (let i = 0; i < (fechado ? n : n - 1); i++) {
+      const a = lista[i], b = lista[(i + 1) % n]
+      if (a.equals(b)) continue
+      const pa = mapa.latLngToContainerPoint(a), pb = mapa.latLngToContainerPoint(b)
+      if (_medDistAoTrecho(alvo, pa, pb) > folgaPx) continue
+      trechos.push({ a, b, pa, pb })
+    }
   }
-  const varrer = lista => {
-    for (const c of lista) { if (Array.isArray(c)) varrer(c); else testar(c) }
+  const varrer = (lista, fechado) => {
+    if (!lista.length) return
+    if (Array.isArray(lista[0])) lista.forEach(l => varrer(l, fechado))
+    else anel(lista, fechado)
   }
-  // Só o que está perto: a caixa do traçado, com uma folga do tamanho do ímã.
-  const folga = mapa.containerPointToLatLng([alvo.x + MED_IMA_PX, alvo.y - MED_IMA_PX])
-  const dLat = Math.abs(folga.lat - ll.lat), dLng = Math.abs(folga.lng - ll.lng)
-
   mapa.eachLayer(l => {
     if (!(l instanceof L.Polyline) || l === medState.captura || l.options.pane === 'medir') return
     if (medState.viva?.hasLayer(l)) return
@@ -254,12 +313,87 @@ function _medIma(ll, ev) {
     if (!b || !b.isValid()) return
     if (ll.lat < b.getSouth() - dLat || ll.lat > b.getNorth() + dLat
       || ll.lng < b.getWest() - dLng || ll.lng > b.getEast() + dLng) return
-    varrer(l.getLatLngs())
+    varrer(l.getLatLngs(), l instanceof L.Polygon)
   })
-  // Os pontos da própria medida em curso: fechar em cima do primeiro, por exemplo.
-  medState.pontos.slice(0, -1).forEach(c => testar(L.latLng(c[1], c[0])))
+  // A própria medida em curso, menos o trecho que vai até o cursor.
+  const proprios = medState.pontos.map(c => L.latLng(c[1], c[0]))
+  if (proprios.length >= 2) anel(proprios, false)
+  return { alvo, trechos, proprios }
+}
 
-  if (melhor) { medState.imaEm = melhor; return melhor }
+/** O ponto do trecho a t (0 = a, 1 = b). */
+function _medNoTrecho(tr, t) {
+  return L.latLng(tr.a.lat + (tr.b.lat - tr.a.lat) * t, tr.a.lng + (tr.b.lng - tr.a.lng) * t)
+}
+
+/** t da projeção do ponto p (tela) sobre o trecho. */
+function _medT(p, tr) {
+  const dx = tr.pb.x - tr.pa.x, dy = tr.pb.y - tr.pa.y
+  return ((p.x - tr.pa.x) * dx + (p.y - tr.pa.y) * dy) / (dx * dx + dy * dy)
+}
+
+/**
+ * O encaixe mais perto do toque, dentro do raio do ímã — em lote, edificação,
+ * quadra, contorno ou outra medida. A extremidade ganha no empate; a "na face"
+ * só vale quando nenhum outro pegou.
+ *
+ * @param {L.LatLng} ll @param {MouseEvent} [ev] @returns {L.LatLng}
+ */
+function _medIma(ll, ev) {
+  medState.imaEm = null
+  medState.imaTipo = null
+  const s = medState.snaps
+  if (!_medSnapLigado() || ev?.altKey) return ll
+  const mapa = mapaState.obj
+  const { alvo, trechos, proprios } = _medTrechosPerto(ll, MED_IMA_PX * 2)
+  const ORDEM = { end: 0, int: 1, mid: 2, perp: 3, near: 4 }
+  let melhor = null, dMelhor = MED_IMA_PX, tipo = null
+
+  const testar = (c, k) => {
+    const p = mapa.latLngToContainerPoint(c)
+    const d = Math.hypot(p.x - alvo.x, p.y - alvo.y)
+    if (d < dMelhor - 1e-6 || (Math.abs(d - dMelhor) <= 1e-6 && tipo && ORDEM[k] < ORDEM[tipo])) {
+      dMelhor = d; melhor = c; tipo = k
+    }
+  }
+
+  for (const tr of trechos) {
+    if (s.end) { testar(tr.a, 'end'); testar(tr.b, 'end') }
+    if (s.mid) testar(_medNoTrecho(tr, 0.5), 'mid')
+  }
+  // Fechar em cima do primeiro ponto da medida em curso.
+  if (s.end) proprios.slice(0, -1).forEach(c => testar(c, 'end'))
+
+  if (s.int) {
+    for (let i = 0; i < trechos.length; i++) for (let j = i + 1; j < trechos.length; j++) {
+      const A = trechos[i], B = trechos[j]
+      const rx = A.pb.x - A.pa.x, ry = A.pb.y - A.pa.y, sx = B.pb.x - B.pa.x, sy = B.pb.y - B.pa.y
+      const den = rx * sy - ry * sx
+      if (Math.abs(den) < 1e-9) continue
+      const qx = B.pa.x - A.pa.x, qy = B.pa.y - A.pa.y
+      const t = (qx * sy - qy * sx) / den, u = (qx * ry - qy * rx) / den
+      // Ponta com ponta já é extremidade: aqui só o cruzamento no meio.
+      if (t <= 1e-6 || t >= 1 - 1e-6 || u < -1e-6 || u > 1 + 1e-6) continue
+      testar(_medNoTrecho(A, t), 'int')
+    }
+  }
+
+  const base = proprios.length ? proprios[proprios.length - 1] : null
+  if (s.perp && base) {
+    const pBase = mapa.latLngToContainerPoint(base)
+    for (const tr of trechos) {
+      const t = _medT(pBase, tr)
+      if (t < 0 || t > 1) continue
+      const q = _medNoTrecho(tr, t)
+      if (mapa.latLngToContainerPoint(q).distanceTo(pBase) > 0.5) testar(q, 'perp')
+    }
+  }
+
+  if (!melhor && s.near) {
+    for (const tr of trechos) testar(_medNoTrecho(tr, Math.max(0, Math.min(1, _medT(alvo, tr)))), 'near')
+  }
+
+  if (melhor) { medState.imaEm = melhor; medState.imaTipo = tipo; return melhor }
   return ll
 }
 
@@ -588,10 +722,12 @@ function _medPintar() {
     g.clearLayers()
     if (medState.modo) {
       _medDesenhar(g, medState.modo, medState.pontos, medState.pontos.length ? medState.cursor : null)
-      // Onde o ímã pegou: um anel no canto, antes de tocar.
+      // Onde o encaixe pegou, com o símbolo do tipo (□ △ ⊠ × ∟), antes de tocar.
       if (medState.imaEm) {
-        L.circleMarker(medState.imaEm, { pane: 'medidas', interactive: false, radius: 8,
-          color: _medCores().linha, weight: 2.5, fill: false }).addTo(g)
+        const t = MED_SNAP_TIPOS[medState.imaTipo] || MED_SNAP_TIPOS.end
+        L.marker(medState.imaEm, { pane: 'medidas', interactive: false, keyboard: false,
+          icon: L.divIcon({ className: 'med-snap-marca', iconSize: [22, 22], iconAnchor: [11, 11],
+            html: `<span title="${t.nome}">${t.simbolo}</span>` }) }).addTo(g)
       }
     }
   }
@@ -632,8 +768,10 @@ function _medPintarBarra() {
         }
       }
       const ima = document.getElementById('med-barra-ima')
-      ima.classList.toggle('at', medState.ima)
-      ima.setAttribute('aria-pressed', String(medState.ima))
+      ima.classList.toggle('at', _medSnapLigado())
+      if (medState.imaEm && medState.imaTipo) {
+        document.getElementById('med-barra-passo').textContent += ` · Snap: ${MED_SNAP_TIPOS[medState.imaTipo].nome}`
+      }
     }
     barra.querySelectorAll('.med-limpar').forEach(b => { b.disabled = !medState.quantas && !medState.pontos.length })
   }

@@ -357,16 +357,30 @@
     <button type="button" class="btn sm" id="med-barra-concluir" disabled onclick="concluirMedida()" title="Concluir (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Concluir</button>
     <button type="button" class="btn sm" id="med-barra-apagar" hidden onclick="apagarMedidaSelecionada()" title="Delete">Apagar medida</button>
     <button type="button" class="btn sm med-limpar" disabled onclick="limparMedidas()" aria-label="Limpar todas as medidas"
-            title="Limpar todas as medidas temporárias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 3-7 9M9 10l6 5-5 6H3l1-7zM8 15l-3 6M11 17l-3 4"/></svg></button>
+            title="Limpar todas as medidas temporárias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
   </div>
   <div class="med-pe">
-    <button type="button" class="cad-fer at" id="med-barra-ima" aria-pressed="true" onclick="alternarImaDaMedida()" aria-label="Ímã"
-            title="Ímã — gruda o ponto no canto desenhado mais próximo. Segure Alt para soltar num toque.">
+    <button type="button" class="cad-fer at" id="med-barra-ima" aria-haspopup="true" aria-expanded="false" aria-controls="med-snap-pop"
+            onclick="opcoesSnapDaMedida()" aria-label="Snap (OSNAP)"
+            title="Snap (OSNAP) — onde o ponto encaixa: extremidade, meio, interseção, na face, perpendicular">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v9a6 6 0 0 0 12 0V3h-4v9a2 2 0 0 1-4 0V3z"/><path d="M6 7h4M14 7h4"/></svg></button>
     <button type="button" class="cad-fer cad-fechar" onclick="sairDeMedir()" aria-label="Fechar a medição" title="Fechar a medição (Esc)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div class="med-info"><span class="med-passo" id="med-barra-passo">Toque no ponto de partida.</span><output id="med-barra-resultado" aria-label="Resultado da medição"></output></div>
+</div>
+{{-- O OSNAP da medição: a mesma janelinha da prancheta (pc-snap-pop), fora da
+     barra porque ela corta o que transborda. --}}
+<div class="pc-snap-pop med-snap-pop" id="med-snap-pop" hidden aria-label="Encaixe do ponto">
+  <div class="pc-snap-heading">Encaixe do ponto <span>OSNAP</span></div>
+  <div class="pc-snap-options">
+    <label><span class="pc-snap-symbol" aria-hidden="true">□</span><span class="pc-snap-text">Extremidade <small>Endpoint · ponta da linha</small></span><input id="med-snap-end" type="checkbox" role="switch" onchange="marcarSnapDaMedida('end', this.checked)"></label>
+    <label><span class="pc-snap-symbol" aria-hidden="true">△</span><span class="pc-snap-text">Ponto médio <small>Midpoint · centro da linha</small></span><input id="med-snap-mid" type="checkbox" role="switch" onchange="marcarSnapDaMedida('mid', this.checked)"></label>
+    <label><span class="pc-snap-symbol" aria-hidden="true">⊠</span><span class="pc-snap-text">Interseção <small>Cruzamento entre duas linhas</small></span><input id="med-snap-int" type="checkbox" role="switch" onchange="marcarSnapDaMedida('int', this.checked)"></label>
+    <label><span class="pc-snap-symbol" aria-hidden="true">×</span><span class="pc-snap-text">Na face <small>Qualquer ponto sobre a linha</small></span><input id="med-snap-near" type="checkbox" role="switch" onchange="marcarSnapDaMedida('near', this.checked)"></label>
+    <label><span class="pc-snap-symbol" aria-hidden="true">∟</span><span class="pc-snap-text">Perpendicular <small>Projeção a 90° a partir do último ponto</small></span><input id="med-snap-perp" type="checkbox" role="switch" onchange="marcarSnapDaMedida('perp', this.checked)"></label>
+  </div>
+  <div class="pc-snap-alt">Segure <kbd>Alt</kbd> para soltar o ponto num toque.</div>
 </div>
 
 {{-- ══════ ALTERAÇÃO CADASTRAL — BARRA DE MODO ══════

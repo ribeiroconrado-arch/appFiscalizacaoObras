@@ -3965,6 +3965,11 @@ select.combo-oculto{display:none !important}
 @media(max-width:999px){#med-barra{grid-template-columns:1fr auto}#med-barra .med-meio{grid-row:3;grid-column:1/-1;border-left:0;border-top:1px solid var(--bord)}#med-barra .med-info{grid-row:4}#med-barra .med-modos{min-width:0}#med-barra button{padding:6px}}
 @media(max-width:620px){.mapa-barras > #med-barra{position:fixed;z-index:920;box-sizing:border-box;max-width:none;border-radius:5px 5px 0 0}}
 #ctrl-mapa .ctrl-btn.med-ativo{color:var(--gd);background:var(--gl)}
+/* O OSNAP da medição: a janelinha da prancheta, presa ao botão do ímã. */
+.med-snap-pop{position:fixed;top:0;left:0;z-index:1100}
+#med-barra #med-barra-ima.aberto{border-color:var(--gd);color:var(--gd)}
+.med-snap-marca{display:grid;place-items:center;pointer-events:none}
+.med-snap-marca span{font:700 18px/1 monospace;color:var(--gd);text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff}
 
 .med-marca{background:none;border:none;overflow:visible;pointer-events:none}
 /* CHUMBO E COR DO TEMA. A etiqueta é o chumbo dos ícones e das dicas das

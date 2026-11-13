@@ -119,13 +119,15 @@ const AREA_MAX_CURADORIA_GRAUS2 = 0.0012
  *   celular (até 620 px)   ¼ nas quadras — um zoom MAIS PERTO; os lotes, como
  *                          no tablet (31/10/2026: no ¼ eles só apareciam perto
  *                          demais, e o fiscal aproximava um zoom a mais à toa)
- *   computador (≥ 1000 px) 4× nos lotes — eles aparecem um zoom MAIS LONGE
+ *   computador (≥ 1000 px) 16× nos lotes — eles aparecem DOIS zooms mais longe
+ *                          (13/11/2026: no 4× entravam só no zoom 19; agora no 18,
+ *                          o mesmo do número do lote, ZOOM_ROTULO_LOTE)
  * Entre os dois (tablet) e fora do navegador (testes), fica como era.
  */
 function fatorDaTela(nivel) {
   if (typeof window === 'undefined' || !window.innerWidth) return 1
   if (window.innerWidth <= 620) return nivel === 'lotes' ? 1 : 0.25
-  if (window.innerWidth >= 1000 && nivel === 'lotes') return 4
+  if (window.innerWidth >= 1000 && nivel === 'lotes') return 16
   return 1
 }
 
