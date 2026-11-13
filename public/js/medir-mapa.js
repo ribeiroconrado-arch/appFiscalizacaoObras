@@ -447,6 +447,35 @@ function _medAngulo(a, b) {
 const _meio = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
 
 /**
+ * O deslocamento que tira a etiqueta de cima do trecho a→b: ela anda na
+ * perpendicular da linha (na tela) o bastante para a caixa inteira ficar de
+ * um lado só, com uma folga. O lado é o de cima (ou a direita, na vertical);
+ * com `longe` (o miolo do contorno), o lado de fora.
+ *
+ * O ângulo na tela não muda com o zoom (o mapa não gira), então o
+ * deslocamento em pixels vale em qualquer zoom.
+ *
+ * @param {[number,number]} a @param {[number,number]} b @param {string} texto
+ * @param {L.Point|null} [longe] ponto da tela do qual a etiqueta foge
+ * @returns {string} o transform da etiqueta
+ */
+function _medAoLado(a, b, texto, longe = null) {
+  const pa = mapaState.obj.latLngToContainerPoint(_ll(a))
+  const pb = mapaState.obj.latLngToContainerPoint(_ll(b))
+  const len = Math.hypot(pb.x - pa.x, pb.y - pa.y)
+  if (len < 1) return 'translate(-50%,-50%)'
+  let nx = -(pb.y - pa.y) / len, ny = (pb.x - pa.x) / len
+  if (longe) {
+    const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2
+    if (nx * (longe.x - mx) + ny * (longe.y - my) > 0) { nx = -nx; ny = -ny }
+  } else if (ny > 0.001 || (Math.abs(ny) <= 0.001 && nx < 0)) { nx = -nx; ny = -ny }
+  // O tamanho da caixa (.med-rot: mono 11,5px, 6px de respiro e 1px de borda).
+  const w = texto.length * 7 + 14, h = 20
+  const d = (w / 2) * Math.abs(nx) + (h / 2) * Math.abs(ny) + 5
+  return `translate(-50%,-50%) translate(${(nx * d).toFixed(1)}px,${(ny * d).toFixed(1)}px)`
+}
+
+/**
  * O lote que contém um ponto do mapa — "Q 17 · Lote 12" —, ou '' se nenhum.
  *
  * A etiqueta da área fica no miolo do contorno, que é onde o mapa escreve o
@@ -529,10 +558,14 @@ function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
     L.polyline(linha, { ...traco, dashArray: viva ? '6 5' : null }).addTo(grupo)
   }
 
-  // A medida de cada lado, no meio dele.
+  // A medida de cada lado, no meio dele — AO LADO da linha, e não em cima
+  // dela: acima na régua; no contorno, do lado de fora.
+  const centro = fechado ? mapaState.obj.latLngToContainerPoint(L.latLng(
+    todos.reduce((s, c) => s + c[1], 0) / todos.length, todos.reduce((s, c) => s + c[0], 0) / todos.length)) : null
   m.lados.forEach((d, i) => {
     if (d < 0.00005) return
-    _medEtiqueta(grupo, _meio(todos[i], todos[(i + 1) % todos.length]), fmtMed(d) + ' m', cssSel)
+    const a = todos[i], b = todos[(i + 1) % todos.length], texto = fmtMed(d) + ' m'
+    _medEtiqueta(grupo, _meio(a, b), texto, cssSel, _medAoLado(a, b, texto, centro))
   })
 
   if (fechado) {
@@ -627,9 +660,21 @@ function posicionarBarraMedicao() {
   const dockTop = window.innerWidth < 1280 ? document.querySelector('.abas')?.getBoundingClientRect().top : Infinity
   const limiteInferior = Math.min(r.bottom, dockTop ?? Infinity)
   if (medBarraPosicao) {
-    barra.style.width = Math.min(570, Math.max(0, r.width - 16)) + 'px'
+    // A área livre do mapa: sem os painéis altos encostados nas laterais (a
+    // mesa do lote, a do desmembramento, a correção, a pesquisa) — a barra
+    // não passa por cima deles.
+    let esq = r.left, dir = r.right
+    for (const p of document.querySelectorAll('#t-mapa .cad-mesa, #t-mapa .desm-mesa, .base-mesa, #t-mapa .corr-painel, #t-mapa > #pesq-barra')) {
+      if (p.hidden || p.contains(barra)) continue
+      const q = p.getBoundingClientRect()
+      if (!q.width || q.height < r.height / 2 || q.bottom <= r.top || q.top >= r.bottom) continue
+      if (q.left <= r.left + 24 && q.right < r.left + r.width / 2) esq = Math.max(esq, q.right)
+      else if (q.right >= r.right - 24 && q.left > r.left + r.width / 2) dir = Math.min(dir, q.left)
+    }
+    if (dir - esq < 260) { esq = r.left; dir = r.right }   // sem espaço: vale o mapa inteiro
+    barra.style.width = Math.min(570, Math.max(0, dir - esq - 16)) + 'px'
     const b = barra.getBoundingClientRect()
-    medBarraPosicao.x = Math.max(r.left + 8, Math.min(medBarraPosicao.x, r.right - b.width - 8))
+    medBarraPosicao.x = Math.max(esq + 8, Math.min(medBarraPosicao.x, dir - b.width - 8))
     medBarraPosicao.y = Math.max(r.top + 8, Math.min(medBarraPosicao.y, limiteInferior - b.height - 8))
     barra.style.left = medBarraPosicao.x + 'px'
     barra.style.top = medBarraPosicao.y + 'px'
@@ -645,6 +690,9 @@ window.addEventListener('resize', posicionarBarraMedicao)
 document.addEventListener('DOMContentLoaded', () => {
   const mapa = document.getElementById('map')
   if (mapa) new ResizeObserver(posicionarBarraMedicao).observe(mapa)
+  // Mesa do lote abrindo ou fechando (classe no body): a barra solta sai de baixo dela.
+  new MutationObserver(() => { if (medBarraPosicao && !document.getElementById('med-barra')?.hidden) posicionarBarraMedicao() })
+    .observe(document.body, { attributes: true, attributeFilter: ['class'] })
   const barra = document.getElementById('med-barra')
   const cab = barra?.querySelector('.med-titulo')
   if (!cab) return
