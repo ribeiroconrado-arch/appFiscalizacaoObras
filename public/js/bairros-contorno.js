@@ -125,6 +125,7 @@ async function carregarContornosDosBairros() {
     mapa.createPane('quadras').style.zIndex = 440
     mapa.getPane('quadras').style.pointerEvents = 'none'
     mapa.on('zoomend', () => contornoState.camada?.setStyle(_estiloContorno()))
+    mapa.on('click', _cliqueNoBairro)
   }
   // Da pré-carga, na primeira vez (app.js, jsonDoFundo); depois, pedido novo.
   const dados = await jsonDoFundo('/api/mapa/bairros')
@@ -442,6 +443,59 @@ function _caixaDosAneis(aneis) {
     if (y > c[3]) c[3] = y
   }
   return c
+}
+
+// ── BALÃO DO BAIRRO (15/11/2026) ─────────────────────────────
+//
+// Com o mapa afastado (bairros e quadras, sem lote na tela), tocar dentro do
+// contorno abre o balão do bairro: nome oficial, código do cadastro e o ato
+// que o aprovou (Parâmetros › Bairros). De perto, o toque é do lote. O
+// contorno continua sem clique (pane `contornos`): o balão sai do clique no
+// mapa, achando o bairro pelo ponto.
+
+/** O bairro (feição do contorno) que contém o ponto, ou null. @param {L.LatLng} ll */
+function bairroNoPonto(ll) {
+  for (const f of contornoState.dados?.features || []) {
+    const g = f.geometry
+    if (!g) continue
+    const poligonos = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []
+    for (const p of poligonos) {
+      if (!p[0] || !_pontoNoAnel(ll.lng, ll.lat, p[0])) continue
+      // Dentro do furo não é do bairro.
+      if (p.slice(1).some(furo => _pontoNoAnel(ll.lng, ll.lat, furo))) continue
+      return f
+    }
+  }
+  return null
+}
+
+/** @param {L.LeafletMouseEvent} ev */
+function _cliqueNoBairro(ev) {
+  const mapa = mapaState.obj
+  if (!mapa || typeof nivelDoMapa !== 'function' || nivelDoMapa(mapa) === 'lotes') return
+  // Ferramenta aberta (medir, desenhar, pesquisa, curadoria) é dona do clique.
+  if (typeof FERRAMENTAS_MAPA !== 'undefined' && Object.values(FERRAMENTAS_MAPA).some(f => f.aberta())) return
+  const f = bairroNoPonto(ev.latlng)
+  if (!f) return
+  const p = f.properties || {}
+  const ato = p.ato_aprovacao
+    ? esc(p.ato_aprovacao) + (p.data_aprovacao ? `<br><span class="balao4-sub">de ${esc(p.data_aprovacao)}</span>` : '')
+    : '<span class="balao4-sub">não informado</span>'
+  L.popup({ className: 'popup-lote', closeButton: true, maxWidth: 300, minWidth: 250, autoPan: true })
+    .setLatLng(ev.latlng)
+    .setContent(`
+      <div class="balao4">
+        <div class="balao4-cab"><b>${esc(p.nome_oficial || p.nome || 'Bairro')}</b></div>
+        <div class="balao4-corpo">
+          <table class="balao4-tab">
+            ${p.codigo ? `<tr><td>Código</td><td>${esc(p.codigo)}</td></tr>` : ''}
+            ${p.apelido || (p.nome && p.nome !== p.nome_oficial) ? `<tr><td>No mapa</td><td>${esc(p.apelido || p.nome)}</td></tr>` : ''}
+            <tr><td>Aprovação</td><td>${ato}</td></tr>
+            ${p.area_ha ? `<tr><td>Área</td><td>${fmtBR(p.area_ha)} ha</td></tr>` : ''}
+          </table>
+        </div>
+      </div>`)
+    .openOn(mapa)
 }
 
 /** Ponto dentro do anel (regra par-ímpar). @param {number} x @param {number} y @param {number[][]} anel */

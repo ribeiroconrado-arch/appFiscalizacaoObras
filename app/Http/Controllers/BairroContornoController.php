@@ -83,6 +83,10 @@ class BairroContornoController extends Controller
                     'nome_oficial'  => $nomes->oficial($b->nome),
                     // Só rótulo do mapa; `nome` continua sendo a chave.
                     'apelido'       => $nomes->apelido($b->nome),
+                    // Para o balão do bairro: o código do cadastro e o ato que o aprovou.
+                    'codigo'        => $nomes->codigos()[BairrosDoDesenho::chave($b->nome)] ?? null,
+                    'ato_aprovacao' => $nomes->aprovacao($b->nome)['ato'],
+                    'data_aprovacao' => $nomes->aprovacao($b->nome)['data'],
                     'area_ha'       => round((float) $b->area_m2 / 10000, 2),
                     'desatualizado' => $desatualizado,
                     'contorno_em'   => $b->contorno_em ? date('d/m/Y H:i', strtotime($b->contorno_em)) : null,

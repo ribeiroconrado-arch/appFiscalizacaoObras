@@ -220,4 +220,28 @@ class BairrosDoDesenho
 
         return $this->apelidos[self::chave($nomeDoDesenho)] ?? null;
     }
+
+    /** @var array<string,array{ato:?string,data:?string}>|null chave normalizada => aprovação */
+    private ?array $aprovacoes = null;
+
+    /**
+     * O ato que aprovou o bairro (Parâmetros › Bairros) e a data em dd/mm/aaaa,
+     * pelo nome do desenho. Para o balão do bairro no mapa.
+     *
+     * @return array{ato:?string,data:?string}
+     */
+    public function aprovacao(?string $nomeDoDesenho): array
+    {
+        if ($this->aprovacoes === null) {
+            $this->aprovacoes = [];
+            foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->get(['nome_gis', 'ato_aprovacao', 'data_aprovacao']) as $b) {
+                $this->aprovacoes[self::chave($b->nome_gis)] = [
+                    'ato'  => trim((string) $b->ato_aprovacao) ?: null,
+                    'data' => $b->data_aprovacao ? date('d/m/Y', strtotime($b->data_aprovacao)) : null,
+                ];
+            }
+        }
+
+        return $this->aprovacoes[self::chave((string) $nomeDoDesenho)] ?? ['ato' => null, 'data' => null];
+    }
 }
