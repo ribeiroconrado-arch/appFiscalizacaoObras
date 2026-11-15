@@ -1314,6 +1314,9 @@ function renderBairros() {
             ? 'No desenho: ' + esc(b.nome_gis) + (b.apelido ? ' · no mapa: ' + esc(b.apelido) : '')
               + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
             : 'Ainda sem desenho convertido'}</span>
+          <span>${b.ato_aprovacao
+            ? 'Aprovado por ' + esc(b.ato_aprovacao) + (b.data_aprovacao ? ' de ' + b.data_aprovacao.split('-').reverse().join('/') : '')
+            : 'Ato de aprovação não informado'}</span>
         </div>
         ${parAcoes('bairros', b.id)}
       </div>`).join('')
@@ -1338,6 +1341,10 @@ function formBairro(b) {
           ? 'readonly title="Liga os lotes ao código do bairro e não pode mudar. Para o mapa, use o apelido."'
           : 'placeholder="opcional"'), 'flex:2')}
       ${parRot('Apelido no mapa', parInp('apelido', b.apelido, 'maxlength="160" placeholder="opcional — ex.: BURITIS V"'), 'flex:2')}
+    </div>
+    <div class="cad-row">
+      ${parRot('Lei ou decreto de aprovação', parInp('ato_aprovacao', b.ato_aprovacao, 'maxlength="160" placeholder="ex.: Decreto 462/1996"'), 'flex:2')}
+      ${parRot('Data da aprovação', parInp('data_aprovacao', b.data_aprovacao, `type="date" max="${new Date().toISOString().slice(0, 10)}"`), 'max-width:180px')}
     </div>`, 'salvarBairro()')
 }
 
@@ -1352,6 +1359,8 @@ async function salvarBairro() {
     // de GIS, e string vazia colidiria com a próxima no índice único.
     nome_gis: parCampo('nome_gis') || null,
     apelido: parCampo('apelido') || null,
+    ato_aprovacao: parCampo('ato_aprovacao') || null,
+    data_aprovacao: parCampo('data_aprovacao') || null,
   }, carregarParametros)
 }
 

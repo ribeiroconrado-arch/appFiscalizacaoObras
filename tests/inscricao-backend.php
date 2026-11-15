@@ -116,6 +116,20 @@ try {
     confere((new BairrosDoDesenho())->apelido($nome) === 'APELIDO NOVO', 'o mapa rotula pelo apelido');
     confere((new BairrosDoDesenho())->oficial($nome) === 'BAIRRO TESTE INSCRICAO', 'documentos continuam com o nome oficial');
 
+    echo "Ato de aprovação do bairro\n";
+    $base = ['id' => $cb->id, 'codigo' => '987', 'nome_cadastro' => 'BAIRRO TESTE INSCRICAO', 'nome_gis' => $nome, 'apelido' => 'APELIDO NOVO'];
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['ato_aprovacao' => '  Decreto 462/1996 ', 'data_aprovacao' => '1996-12-16']);
+    $g = CadastroBairro::find($cb->id);
+    confere($r->getStatusCode() === 200 && $g->ato_aprovacao === 'Decreto 462/1996' && $g->data_aprovacao?->format('Y-m-d') === '1996-12-16', 'grava o ato e a data');
+    $lista = json_decode(pedir($admin, 'GET', '/api/parametros')->getContent(), true);
+    $linha = collect($lista['bairros'] ?? [])->firstWhere('id', $cb->id);
+    confere(($linha['ato_aprovacao'] ?? null) === 'Decreto 462/1996' && ($linha['data_aprovacao'] ?? null) === '1996-12-16', 'a lista de Parâmetros devolve os dois');
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['ato_aprovacao' => 'Decreto 1/2099', 'data_aprovacao' => now()->addDay()->format('Y-m-d')]);
+    confere($r->getStatusCode() === 422 && str_contains(json_encode(json_decode($r->getContent(), true), JSON_UNESCAPED_UNICODE), 'data da aprovação'), 'data futura é recusada');
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['ato_aprovacao' => '', 'data_aprovacao' => '']);
+    $g = CadastroBairro::find($cb->id);
+    confere($r->getStatusCode() === 200 && $g->ato_aprovacao === null && $g->data_aprovacao === null, 'em branco volta a ficar vazio');
+
     echo "Busca pela inscrição gravada\n";
     DB::table('cadastro_bairros')->where('id', $cb->id)->update(['nome_gis' => null]);   // amarração caída
     $r = json_decode(pedir($admin, 'GET', '/api/imoveis/busca?inscricao=01.987.003.0012.000')->getContent(), true);

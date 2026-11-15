@@ -79,6 +79,8 @@ class ParametroController extends Controller
                     'id' => $b->id, 'codigo' => $b->codigo,
                     'nome_cadastro' => $b->nome_cadastro, 'nome_gis' => $b->nome_gis,
                     'apelido' => $b->apelido,
+                    'ato_aprovacao' => $b->ato_aprovacao,
+                    'data_aprovacao' => $b->data_aprovacao?->format('Y-m-d'),
                     'lotes' => $b->lotesEmUso(),
                 ]),
             'perfis' => User::PERFIS,
@@ -426,12 +428,20 @@ class ParametroController extends Controller
             'nome_gis'      => ['nullable', 'string', 'max:160',
                 Rule::unique('cadastro_bairros', 'nome_gis')->ignore($r->input('id'))],
             'apelido'       => ['nullable', 'string', 'max:160'],
-        ], [], [
+            'ato_aprovacao' => ['nullable', 'string', 'max:160'],
+            'data_aprovacao' => ['nullable', 'date', 'before_or_equal:today'],
+        ], [
+            // A tradução do sistema não tem esta regra: sem isto a tela mostra
+            // "validation.before_or_equal".
+            'data_aprovacao.before_or_equal' => 'A data da aprovação não pode ser no futuro.',
+        ], [
             // Sem isto o erro sai como "Este nome gis já está cadastrado", com
             // o nome da COLUNA no lugar do nome do campo que a pessoa vê.
             'codigo'        => 'código',
             'nome_cadastro' => 'nome no cadastro',
             'nome_gis'      => 'nome no desenho',
+            'ato_aprovacao' => 'lei ou decreto de aprovação',
+            'data_aprovacao' => 'data da aprovação',
         ]);
 
         $bairro = CadastroBairro::find($d['id'] ?? null) ?? new CadastroBairro();
@@ -458,6 +468,8 @@ class ParametroController extends Controller
             'nome_cadastro' => $d['nome_cadastro'],
             'nome_gis'      => $novo,
             'apelido'       => trim((string) ($d['apelido'] ?? '')) ?: null,
+            'ato_aprovacao' => trim((string) ($d['ato_aprovacao'] ?? '')) ?: null,
+            'data_aprovacao' => ($d['data_aprovacao'] ?? null) ?: null,
         ])->save();
 
         // Código novo ou amarração nova mudam a inscrição dos lotes do bairro:

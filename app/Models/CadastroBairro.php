@@ -27,7 +27,10 @@ class CadastroBairro extends Model
 
     protected $table = 'cadastro_bairros';
 
-    protected $fillable = ['nome_gis', 'apelido', 'codigo', 'nome_cadastro'];
+    protected $fillable = ['nome_gis', 'apelido', 'codigo', 'nome_cadastro', 'ato_aprovacao', 'data_aprovacao'];
+
+    /** O ato que aprovou o bairro ("Decreto 462/1996") e a data dele. */
+    protected $casts = ['data_aprovacao' => 'date'];
 
     /** Quantos lotes do desenho estão neste bairro. */
     public function lotesEmUso(): int
