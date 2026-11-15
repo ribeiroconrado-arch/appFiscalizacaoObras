@@ -126,6 +126,8 @@ async function carregarContornosDosBairros() {
     mapa.getPane('quadras').style.pointerEvents = 'none'
     mapa.on('zoomend', () => contornoState.camada?.setStyle(_estiloContorno()))
     mapa.on('click', _cliqueNoBairro)
+    mapa.on('mousemove', _cursorNoBairro)
+    mapa.on('mouseout zoomstart', () => mapa.getContainer().classList.remove('bairro-sob-cursor'))
   }
   // Da pré-carga, na primeira vez (app.js, jsonDoFundo); depois, pedido novo.
   const dados = await jsonDoFundo('/api/mapa/bairros')
@@ -469,13 +471,65 @@ function bairroNoPonto(ll) {
   return null
 }
 
+/** Distância, em pixels de tela, do ponto à LINHA do bairro mais perto: [feição, px]. */
+function _bairroPertoDaLinha(ll) {
+  const mapa = mapaState.obj
+  const p = mapa.latLngToContainerPoint(ll)
+  let melhor = null, dMin = Infinity
+  for (const f of contornoState.dados?.features || []) {
+    const g = f.geometry
+    const poligonos = g?.type === 'Polygon' ? [g.coordinates] : g?.type === 'MultiPolygon' ? g.coordinates : []
+    for (const anel of poligonos.flat()) {
+      let a = mapa.latLngToContainerPoint([anel[0][1], anel[0][0]])
+      for (let i = 1; i < anel.length; i++) {
+        const b = mapa.latLngToContainerPoint([anel[i][1], anel[i][0]])
+        const dx = b.x - a.x, dy = b.y - a.y
+        const t = dx || dy ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy))) : 0
+        const d = Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+        if (d < dMin) { dMin = d; melhor = f }
+        a = b
+      }
+    }
+  }
+  return [melhor, dMin]
+}
+
+/** Folga, em pixels, para o mouse "estar na linha" do bairro por fora dela. */
+const BAIRRO_LINHA_PX = 8
+
+/**
+ * O bairro sob o cursor quando o toque é do bairro — mapa afastado e nenhuma
+ * ferramenta aberta —, ou null. Dentro do contorno (o nome fica ali) ou a até
+ * BAIRRO_LINHA_PX da linha.
+ * @param {L.LatLng} ll
+ */
+function bairroSobOCursor(ll) {
+  const mapa = mapaState.obj
+  if (!mapa || typeof nivelDoMapa !== 'function' || nivelDoMapa(mapa) === 'lotes') return null
+  // Ferramenta aberta (medir, desenhar, pesquisa, curadoria) é dona do clique.
+  if (typeof FERRAMENTAS_MAPA !== 'undefined' && Object.values(FERRAMENTAS_MAPA).some(f => f.aberta())) return null
+  const dentro = bairroNoPonto(ll)
+  if (dentro) return dentro
+  const [perto, d] = _bairroPertoDaLinha(ll)
+  return d <= BAIRRO_LINHA_PX ? perto : null
+}
+
+// O MESMO AVISO DO LOTE ao passar o mouse: a mãozinha de "clicável" (o lote,
+// em canvas, ganha a classe leaflet-interactive do Leaflet). Um quadro por vez.
+let _bairroCursorQuadro = 0
+function _cursorNoBairro(ev) {
+  if (_bairroCursorQuadro) return
+  _bairroCursorQuadro = requestAnimationFrame(() => {
+    _bairroCursorQuadro = 0
+    const el = mapaState.obj?.getContainer()
+    el?.classList.toggle('bairro-sob-cursor', !!bairroSobOCursor(ev.latlng))
+  })
+}
+
 /** @param {L.LeafletMouseEvent} ev */
 function _cliqueNoBairro(ev) {
   const mapa = mapaState.obj
-  if (!mapa || typeof nivelDoMapa !== 'function' || nivelDoMapa(mapa) === 'lotes') return
-  // Ferramenta aberta (medir, desenhar, pesquisa, curadoria) é dona do clique.
-  if (typeof FERRAMENTAS_MAPA !== 'undefined' && Object.values(FERRAMENTAS_MAPA).some(f => f.aberta())) return
-  const f = bairroNoPonto(ev.latlng)
+  const f = bairroSobOCursor(ev.latlng)
   if (!f) return
   const p = f.properties || {}
   const ato = p.ato_aprovacao

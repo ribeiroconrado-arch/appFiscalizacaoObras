@@ -18,6 +18,8 @@
 .balao4-tab td:first-child{color:var(--tx3);white-space:nowrap;padding-right:10px}
 .balao4-tab td:last-child{text-align:right}
 .balao4-sub{color:var(--tx3);font-size:.92em}
+/* Mouse sobre o bairro com o mapa afastado: a mãozinha, como no lote. */
+.leaflet-container.bairro-sob-cursor{cursor:pointer}
 .balao4-tab tr+tr td{border-top:1px solid var(--blt)}
 .balao4-mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px}
 .balao4-quebra{white-space:normal}
