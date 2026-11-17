@@ -685,10 +685,10 @@ class LoteRepository
      * bairro, das quadras e dos nomes de rua.
      *
      * Com o código do bairro no cadastro, cada lote vem com o LOGRADOURO do
-     * seu endereço — a mesma ligação de CadastroCarregado::linhasDoLote
-     * (bairro, quadra e lote, sem zeros à esquerda), feita de uma vez para o
-     * bairro inteiro. Imóvel ausente da última carga não conta. Lote com
-     * várias unidades leva o logradouro mais frequente entre elas.
+     * seu endereço — a mesma ligação de CadastroCarregado::linhasDoLote: a
+     * INSCRIÇÃO do lote (a informada, ou a gravada), feita de uma vez para o
+     * bairro inteiro (17/11/2026; antes, quadra e número, e o desmembrado
+     * "9B" ficava sem rua). Imóvel ausente da última carga não conta.
      *
      * @return array<int,object> id, quadra, geojson, logradouro
      */
@@ -702,21 +702,18 @@ class LoteRepository
         return DB::select("SELECT l.id, l.quadra, ST_AsGeoJSON(l.geom) AS geojson, c.logradouro
                              FROM lotes l
                              LEFT JOIN (
-                                   SELECT q, n, logradouro FROM (
-                                          SELECT TRIM(LEADING '0' FROM quadra) AS q, TRIM(LEADING '0' FROM lote) AS n, logradouro,
-                                                 ROW_NUMBER() OVER (PARTITION BY TRIM(LEADING '0' FROM quadra), TRIM(LEADING '0' FROM lote)
-                                                                    ORDER BY COUNT(*) DESC, logradouro) AS ordem
-                                            FROM cadastro_externo_imoveis
-                                           WHERE TRIM(LEADING '0' FROM codigo_bairro) = ?
-                                             AND ausente_desde_carga_id IS NULL
-                                             AND logradouro IS NOT NULL AND logradouro <> ''
-                                           GROUP BY q, n, logradouro) t
-                                    WHERE ordem = 1) c
+                                   SELECT REPLACE(inscricao, '.', '') AS inscricao, logradouro
+                                     FROM cadastro_externo_imoveis
+                                    WHERE TRIM(LEADING '0' FROM codigo_bairro) = ?
+                                      AND ausente_desde_carga_id IS NULL
+                                      AND logradouro IS NOT NULL AND logradouro <> '') c
                                 -- COLLATE dos DOIS lados: `lotes` e o cadastro foram criados com
                                 -- collations diferentes (0900_ai_ci e unicode_ci), e o MySQL recusa
                                 -- comparar as duas sem que alguém diga qual vale (erro 1267).
-                                ON c.q COLLATE utf8mb4_unicode_ci = TRIM(LEADING '0' FROM l.quadra) COLLATE utf8mb4_unicode_ci
-                               AND c.n COLLATE utf8mb4_unicode_ci = TRIM(LEADING '0' FROM l.numero_lote) COLLATE utf8mb4_unicode_ci
+                                ON c.inscricao COLLATE utf8mb4_unicode_ci =
+                                   (CASE WHEN COALESCE(l.inscricao_imobiliaria, '') <> ''
+                                         THEN REPLACE(REPLACE(l.inscricao_imobiliaria, '.', ''), ' ', '')
+                                         ELSE l.inscricao_montada END) COLLATE utf8mb4_unicode_ci
                             WHERE l." . self::SO_ATIVOS . ' AND l.bairro = ?', [ltrim($codigoCadastro, '0'), $bairro]);
     }
 

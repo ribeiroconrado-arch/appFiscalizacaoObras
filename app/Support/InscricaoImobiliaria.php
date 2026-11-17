@@ -207,6 +207,30 @@ final class InscricaoImobiliaria
         ];
     }
 
+    /**
+     * Restringe uma consulta de `lotes` aos lotes destas inscrições (17/11/2026):
+     * a INFORMADA, quando o lote tem uma; senão a GRAVADA (`inscricao_montada`,
+     * indexada e mantida em dia por InscricoesGravadas). É a ligação do lote ao
+     * cadastro da prefeitura — por ela, e não por quadra e número, que no
+     * desmembrado com letra ("9B") não casam com o "9" do cadastro.
+     *
+     * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $q
+     * @param  list<string>  $inscricoes  15 dígitos cada
+     */
+    public static function filtrarLotes($q, array $inscricoes): void
+    {
+        $inscricoes = array_values(array_unique(array_filter(array_map([self::class, 'normalizar'], $inscricoes))));
+        if (! $inscricoes) {
+            $q->whereRaw('1 = 0');
+            return;
+        }
+        $marcas = implode(',', array_fill(0, count($inscricoes), '?'));
+        $q->where(fn ($s) => $s
+            ->where(fn ($m) => $m->where(fn ($v) => $v->whereNull('inscricao_imobiliaria')->orWhere('inscricao_imobiliaria', ''))
+                ->whereIn('inscricao_montada', $inscricoes))
+            ->orWhereRaw("REPLACE(REPLACE(inscricao_imobiliaria, '.', ''), ' ', '') IN ({$marcas})", $inscricoes));
+    }
+
     /** @param  int|string|null  $v */
     private static function preenchido($v): bool
     {

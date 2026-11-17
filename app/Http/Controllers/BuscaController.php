@@ -128,18 +128,14 @@ class BuscaController extends Controller
     }
 
     /**
-     * Os imóveis do cadastro que casam com a rua e/ou o número procurados,
-     * traduzidos para o que o LOTE entende.
+     * As INSCRIÇÕES (15 dígitos) dos imóveis do cadastro que casam com a rua
+     * e/ou o número procurados — a chave com que o lote é achado
+     * (InscricaoImobiliaria::filtrarLotes).
      *
-     * Devolve tripas `[nomes-de-desenho-do-bairro, quadra, lote]` — a quadra e
-     * o lote já sem zero à esquerda, que é como o desenho os guarda.
+     * Só considera bairro AMARRADO: sem a amarração nenhum lote tem inscrição
+     * montada com aquele código, e a busca não acharia nada mesmo.
      *
-     * Só considera bairro AMARRADO: sem a amarração não há como saber a que
-     * nome de desenho aquele código corresponde, e o resultado seria um par
-     * (quadra, lote) solto — que existe em mais de um bairro da cidade e
-     * amarraria a busca ao imóvel errado.
-     *
-     * @return array<int, array{0:array<int,string>, 1:string, 2:string}>
+     * @return list<string>
      */
     private function cadastroQueCasa(string $logradouro, string $numero): array
     {
@@ -167,20 +163,8 @@ class BuscaController extends Controller
 
         // Teto de segurança: uma avenida inteira pode ter centenas de imóveis,
         // e cada um vira uma condição OR na consulta do lote.
-        $linhas = $q->limit(600)->get(['codigo_bairro', 'quadra', 'lote']);
-
-        $pares = [];
-        foreach ($linhas as $l) {
-            $cod = ltrim((string) $l->codigo_bairro, '0');
-            if (! isset($porCodigo[$cod])) { continue; }
-            $pares[] = [
-                $porCodigo[$cod],
-                ltrim((string) $l->quadra, '0'),
-                ltrim((string) $l->lote, '0'),
-            ];
-        }
-
-        return $pares;
+        return $q->limit(600)->pluck('inscricao')
+            ->map(fn ($i) => InscricaoImobiliaria::normalizar($i))->filter()->values()->all();
     }
 
     /**
@@ -385,28 +369,12 @@ class BuscaController extends Controller
         // ── LOGRADOURO E NÚMERO ──
         //
         // Vêm do CADASTRO DA PREFEITURA, não do desenho: o DWG não traz nome
-        // de rua. O caminho até o lote é o mesmo casamento de
-        // `CadastroCarregado::linhasDoLote` — bairro + quadra + lote, todos
-        // sem zero à esquerda —, e é por isso que só acha imóvel de bairro
-        // cujo cadastro foi carregado E amarrado.
+        // de rua. O caminho até o lote é o mesmo de
+        // `CadastroCarregado::linhasDoLote`: a INSCRIÇÃO (17/11/2026), e é por
+        // isso que só acha imóvel de bairro cujo cadastro foi carregado E
+        // amarrado.
         if (! empty($d['logradouro']) || ! empty($d['numero'])) {
-            $pares = $this->cadastroQueCasa($d['logradouro'] ?? '', $d['numero'] ?? '');
-
-            if (! $pares) {
-                $q->whereRaw('1 = 0');
-            } else {
-                // Os pares (bairro-do-desenho, quadra, lote) viram uma
-                // condição OR só: são poucos por rua, e assim a comparação
-                // acontece nas colunas do lote, com os índices que já existem.
-                $q->where(function ($s) use ($pares) {
-                    foreach ($pares as [$bairros, $quadra, $lote]) {
-                        $s->orWhere(fn ($x) => $x
-                            ->whereIn('bairro', $bairros)
-                            ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [$quadra])
-                            ->whereRaw("TRIM(LEADING '0' FROM numero_lote) = ?", [$lote]));
-                    }
-                });
-            }
+            InscricaoImobiliaria::filtrarLotes($q, $this->cadastroQueCasa($d['logradouro'] ?? '', $d['numero'] ?? ''));
             $usou = true;
         }
 

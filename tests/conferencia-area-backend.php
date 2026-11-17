@@ -134,18 +134,16 @@ try {
 
     echo "A área que vale para o lote é a do cadastro\n";
     $codigo = ltrim((string) $r0['codigo_bairro'], '0');
-    $doLote = fn () => DB::table('cadastro_externo_imoveis')
-        ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [$codigo])
-        ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [ltrim((string) $maior->quadra, '0')])
-        ->whereRaw("TRIM(LEADING '0' FROM lote) = ?", [ltrim((string) $maior->numero_lote, '0')]);
+    // Pela INSCRIÇÃO do lote (17/11/2026), como a ficha.
     $loteMaior = DB::table('lotes')->where('id', $maior->id)->first();
-    $doLote()->delete();
-    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+    $inscMaior = InscricaoImobiliaria::normalizar((new App\Cadastro\BairrosDoDesenho())->inscricaoDe($loteMaior));
+    DB::table('cadastro_externo_imoveis')->where('inscricao', $inscMaior)->delete();
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas-por-inscricao:' . $codigo);
     $areas = new App\Cadastro\AreaOficial();
     confere($areas->doCadastro($loteMaior) === null && $areas->doLote($loteMaior) === 305.0, 'lote sem imóvel no cadastro: vale a área do desenho');
-    DB::table('cadastro_externo_imoveis')->insert(['inscricao' => '99.999.999.9999.999', 'codigo_bairro' => $r0['codigo_bairro'],
+    DB::table('cadastro_externo_imoveis')->insert(['inscricao' => $inscMaior, 'codigo_bairro' => $r0['codigo_bairro'],
         'quadra' => $maior->quadra, 'lote' => $maior->numero_lote, 'area_terreno_m2' => 312.00, 'created_at' => now(), 'updated_at' => now()]);
-    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas-por-inscricao:' . $codigo);
     $areas = new App\Cadastro\AreaOficial();
     confere($areas->doCadastro($loteMaior) === 312.0 && $areas->doLote($loteMaior) === 312.0, 'com imóvel no cadastro: vale a área do cadastro, e não a do desenho');
 
@@ -153,10 +151,10 @@ try {
     $insc801 = InscricaoImobiliaria::montar($r0['codigo_bairro'], '801', 77);
     DB::table('cadastro_externo_imoveis')->insert(['inscricao' => $insc801, 'codigo_bairro' => $r0['codigo_bairro'],
         'quadra' => '801', 'lote' => '77', 'area_terreno_m2' => 444.44, 'created_at' => now(), 'updated_at' => now()]);
-    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas-por-inscricao:' . $codigo);
     $comLetra = (object) ['bairro' => $loteMaior->bairro, 'quadra' => '80/A', 'numero_lote' => '77', 'area_gis_m2' => 440.0];
     confere((new App\Cadastro\AreaOficial())->doCadastro($comLetra) === 444.44, 'quadra "80/A" do desenho acha o imóvel 801 do cadastro');
-    Illuminate\Support\Facades\Cache::forget('cadastro:areas:' . $codigo);
+    Illuminate\Support\Facades\Cache::forget('cadastro:areas-por-inscricao:' . $codigo);
 
     echo "\n{$ok} verificações passaram.\n";
 } finally {

@@ -19,14 +19,15 @@ use Illuminate\Support\Facades\DB;
  * cadastro (ConferenciaComCadastro), como divergência a corrigir.
  *
  * A correspondência é a mesma da aba BCI (CadastroCarregado::linhasDoLote):
- * código do bairro + quadra + lote, sem os zeros à esquerda.
+ * SEMPRE PELA INSCRIÇÃO (17/11/2026). Por quadra e número, o desmembrado "9B"
+ * não achava o lote 9 · 001 do cadastro e o balão mostrava "A. BCI —".
  *
  * As áreas de um bairro são lidas de uma vez e guardadas por alguns minutos:
  * o mapa pede milhares de lotes por vez, e uma consulta por lote o derrubaria.
  */
 class AreaOficial
 {
-    /** @var array<string, array<string,float>> código do bairro => ["quadra|lote" => área] */
+    /** @var array<string, array<string,float>> código do bairro => [inscrição (15 dígitos) => área] */
     private array $porBairro = [];
 
     public function __construct(private BairrosDoDesenho $bairros = new BairrosDoDesenho()) {}
@@ -35,27 +36,21 @@ class AreaOficial
      * A área do cadastro para o lote, ou null se o lote não tem imóvel
      * correspondente (ou o cadastro não informa a área dele).
      *
-     * @param object $lote qualquer coisa com `bairro`, `quadra` e `numero_lote`
+     * @param object $lote qualquer coisa com o que BairrosDoDesenho::inscricaoDe lê
+     *                     (`bairro`, `quadra`, `numero_lote`, `desmembramento`,
+     *                     `inscricao_imobiliaria`, `inscricao_montada`)
      */
     public function doCadastro(object $lote): ?float
     {
-        if (($lote->quadra ?? null) === null || ($lote->numero_lote ?? null) === null) {
+        $insc = InscricaoImobiliaria::normalizar($this->bairros->inscricaoDe($lote));
+        if ($insc === null) {
             return null;
         }
-        $codigo = $this->bairros->codigos()[BairrosDoDesenho::chave($lote->bairro ?? null)] ?? null;
-        if (! $codigo) {
-            return null;
-        }
-        $codigo = ltrim((string) $codigo, '0');
+        // O código do bairro é o da própria inscrição (dígitos 3 a 5).
+        $codigo = ltrim(substr($insc, 2, 3), '0') ?: '0';
         $this->porBairro[$codigo] ??= $this->areasDoBairro($codigo);
 
-        // Primeiro pela quadra como ela entra na inscrição (82A → 821, ver
-        // InscricaoImobiliaria::numeroDaQuadra); depois pela grafia do desenho.
-        $areas = $this->porBairro[$codigo];
-
-        return $areas[self::chave(InscricaoImobiliaria::numeroDaQuadra($lote->quadra) ?: $lote->quadra, $lote->numero_lote)]
-            ?? $areas[self::chave($lote->quadra, $lote->numero_lote)]
-            ?? null;
+        return $this->porBairro[$codigo][$insc] ?? null;
     }
 
     /** A área que VALE para o lote: a do cadastro, ou a do desenho na falta dela. */
@@ -64,35 +59,22 @@ class AreaOficial
         return $this->doCadastro($lote) ?? (isset($lote->area_gis_m2) ? (float) $lote->area_gis_m2 : null);
     }
 
-    /** @return array<string,float> "quadra|lote" => área do terreno */
+    /** @return array<string,float> inscrição (15 dígitos) => área do terreno */
     private function areasDoBairro(string $codigo): array
     {
-        return Cache::remember('cadastro:areas:' . $codigo, now()->addMinutes(5), function () use ($codigo) {
+        return Cache::remember('cadastro:areas-por-inscricao:' . $codigo, now()->addMinutes(5), function () use ($codigo) {
             $areas = [];
             $linhas = DB::table('cadastro_externo_imoveis')
                 ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [$codigo])
                 ->whereNotNull('area_terreno_m2')
-                // Imóvel que saiu da última carga não é referência: os presentes primeiro.
-                ->orderByRaw('ausente_desde_carga_id IS NOT NULL')
-                ->orderBy('inscricao')
-                ->get(['inscricao', 'quadra', 'lote', 'area_terreno_m2']);
+                ->get(['inscricao', 'area_terreno_m2']);
             foreach ($linhas as $l) {
-                // Várias linhas do mesmo lote são as construções dele, e repetem
-                // o mesmo terreno: vale a primeira.
-                $areas[self::chave($l->quadra, $l->lote)] ??= (float) $l->area_terreno_m2;
-                // E pela quadra da INSCRIÇÃO: o cadastro grava "801" na coluna
-                // quadra do lote que o desenho chama de "80A".
-                if ($p = InscricaoImobiliaria::partes($l->inscricao)) {
-                    $areas[self::chave($p['quadra'], $l->lote)] ??= (float) $l->area_terreno_m2;
+                if ($insc = InscricaoImobiliaria::normalizar($l->inscricao)) {
+                    $areas[$insc] = (float) $l->area_terreno_m2;
                 }
             }
 
             return $areas;
         });
-    }
-
-    private static function chave(mixed $quadra, mixed $lote): string
-    {
-        return (ltrim((string) $quadra, '0') ?: '0') . '|' . (ltrim((string) $lote, '0') ?: '0');
     }
 }

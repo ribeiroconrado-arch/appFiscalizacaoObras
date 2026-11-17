@@ -14,16 +14,16 @@ use Illuminate\Support\Facades\DB;
  * mesma pergunta, mesma resposta, mesmo caminho. O que a troca vai exigir, um
  * dia, é escrever outra implementação de FonteDoCadastro — nada além.
  *
- * ── A chave, e por que ela é o bairro e não a quadra ──
+ * ── A chave é a INSCRIÇÃO (17/11/2026) ──
  *
- * Casa-se por bairro + quadra + lote, nesta ordem de importância. Só quadra e
- * lote NÃO identificam imóvel nenhum: nesta base, 656 pares (quadra, lote) do
- * Buritis existem também no Jardim Europa IV — casar sem o bairro amarraria a
- * ficha de um imóvel ao cadastro de outro, em bairro diferente da cidade.
+ * Casa-se SEMPRE pela inscrição imobiliária do lote (ver linhasDoLote), a
+ * mesma chave da conferência com o cadastro. Ela já carrega o bairro: só
+ * quadra e lote NÃO identificam imóvel nenhum — nesta base, 656 pares
+ * (quadra, lote) do Buritis existem também no Jardim Europa IV.
  *
- * O bairro entra pelo CÓDIGO, que vem de `cadastro_bairros`, preenchido na
- * amarração feita pelo comando de carga. Sem amarração não há consulta, e isso
- * é de propósito.
+ * O bairro entra na inscrição pelo CÓDIGO, que vem de `cadastro_bairros`,
+ * preenchido na amarração feita pelo comando de carga. Sem amarração não há
+ * inscrição montada, e então não há consulta — de propósito.
  */
 class CadastroCarregado implements FonteDoCadastro
 {
@@ -101,57 +101,42 @@ class CadastroCarregado implements FonteDoCadastro
                  . 'da prefeitura, então não há como saber qual imóvel de lá é este daqui.';
         }
 
-        if ($lote->quadra === null || $lote->numero_lote === null) {
-            return 'Este lote está sem quadra ou sem número, e é por eles que o cadastro '
-                 . 'identifica o imóvel. Corrija o lote no mapa.';
+        $insc = InscricaoImobiliaria::normalizar((new BairrosDoDesenho())->inscricaoDe($lote));
+        if ($insc === null) {
+            return 'Este lote está sem quadra ou sem número, e sem eles a inscrição imobiliária '
+                 . 'não se monta — é por ela que o cadastro identifica o imóvel. Corrija o lote no mapa.';
         }
 
-        return sprintf(
-            'O cadastro carregado não tem imóvel na quadra %s, lote %s deste bairro.',
-            $lote->quadra,
-            $lote->numero_lote
-        );
+        return sprintf('O cadastro carregado não tem a inscrição %s.', InscricaoImobiliaria::formatar($insc));
     }
 
-    /** @return list<object> */
+    /**
+     * As linhas do cadastro do lote — SEMPRE PELA INSCRIÇÃO (17/11/2026).
+     *
+     * Antes era por bairro + quadra + número, e isso falhava no desmembrado
+     * com letra: no mapa o lote é "9B", no cadastro é o lote 9 com a variação
+     * 001, e o balão dizia "sem imóvel no cadastro" de um imóvel que está lá
+     * (Q 31 · 9B do Parque Eldorado), enquanto a conferência — que já casava
+     * pela inscrição — dizia que ele casou. E o lote 9 sem letra trazia as
+     * linhas 000 e 001 juntas, os donos dos dois como se fossem um só.
+     *
+     * A inscrição do lote é a de BairrosDoDesenho::inscricaoDe: a informada à
+     * mão (a da unidade de fração ideal, por exemplo) ou a montada com o
+     * código do bairro, a quadra, o número e a variação. A coluna `inscricao`
+     * do cadastro é única e indexada; a busca vai pelos 15 dígitos e pela
+     * forma com pontos, que é como cargas antigas podem tê-la gravado.
+     *
+     * @return list<object>
+     */
     private function linhasDoLote(Lote $lote): array
     {
-        $codigo = $this->codigoDoBairro($lote);
-        if (! $codigo || $lote->quadra === null || $lote->numero_lote === null) {
+        $insc = InscricaoImobiliaria::normalizar((new BairrosDoDesenho())->inscricaoDe($lote));
+        if ($insc === null) {
             return [];
         }
 
-        // Zeros à esquerda são de formatação, não de identidade: o cadastro
-        // grava "001"/"0001" e o GIS, "1"/"1". Comparar sem eles é o que faz
-        // os dois mundos se reconhecerem.
-        //
-        // O CÓDIGO DO BAIRRO ESTAVA FORA DESSA REGRA, e era o pior dos três:
-        // `cadastro_bairros` guarda "124" e a exportação da prefeitura,
-        // "000124" — a comparação direta nunca casava. A aba BCI vinha vazia
-        // mesmo com o bairro amarrado e o cadastro carregado, e vazia com a
-        // MESMA mensagem de quem não tem cadastro nenhum, o que escondia o
-        // defeito atrás de uma explicação plausível.
-        // FRAÇÃO IDEAL: no cadastro, as unidades são as linhas do MESMO lote
-        // com variação 001, 002… Cada unidade lê só a sua (e o seu dono); o
-        // terreno em condomínio, só a 000. Sem isto o terreno mostrava os donos
-        // de todas as unidades juntos, como se fossem coproprietários.
-        $numero = $lote->numero_lote;
-        $variacao = null;
-        if ($lote->terreno_id) {
-            $numero = DB::table('lotes')->where('id', $lote->terreno_id)->value('numero_lote');
-            $variacao = str_pad((string) (int) $lote->desmembramento, 3, '0', STR_PAD_LEFT);
-        } elseif ($lote->condominio) {
-            $variacao = '000';
-        }
-
         return DB::table('cadastro_externo_imoveis')
-            // As colunas sz_* são as mesmas três SEM os zeros, geradas e
-            // indexadas (migration 2026_11_06_000200): o TRIM direto na coluna
-            // varria a tabela, ~320 ms por balão.
-            ->where('sz_bairro', ltrim((string) $codigo, '0'))
-            ->where('sz_quadra', ltrim((string) $lote->quadra, '0'))
-            ->where('sz_lote', ltrim((string) $numero, '0'))
-            ->when($variacao !== null, fn ($q) => $q->whereRaw("RIGHT(REPLACE(inscricao, '.', ''), 3) = ?", [$variacao]))
+            ->whereIn('inscricao', array_unique([$insc, InscricaoImobiliaria::formatar($insc)]))
             ->orderBy('inscricao')
             ->get()
             ->all();

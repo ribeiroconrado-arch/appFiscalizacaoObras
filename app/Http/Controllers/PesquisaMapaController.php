@@ -252,18 +252,9 @@ class PesquisaMapaController extends Controller
         $temNumero = ! empty($d['numero_modo'])
             && (in_array($d['numero_modo'], ['par', 'impar'], true) || isset($d['numero_de']) || isset($d['numero_ate']));
         if (! empty($d['ruas']) || $temNumero) {
-            $pares = $this->imoveisDoEndereco($d['ruas'] ?? [], $temNumero ? $d : []);
-            if (! $pares) {
-                $q->whereRaw('1 = 0');
-            } else {
-                $q->where(function ($s) use ($pares) {
-                    foreach ($pares as [$nomes, $quadra, $lote]) {
-                        $s->orWhere(fn ($x) => $x->whereIn('bairro', $nomes)
-                            ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [$quadra])
-                            ->whereRaw("TRIM(LEADING '0' FROM numero_lote) = ?", [$lote]));
-                    }
-                });
-            }
+            // Pela INSCRIÇÃO (17/11/2026), como a ficha: o "9B" do mapa é o
+            // lote 9 · 001 do cadastro, e por quadra e número ele não aparecia.
+            InscricaoImobiliaria::filtrarLotes($q, $this->imoveisDoEndereco($d['ruas'] ?? [], $temNumero ? $d : []));
             $usou = true;
         }
 
@@ -364,35 +355,48 @@ class PesquisaMapaController extends Controller
         return $saida;
     }
 
-    /** Correlaciona endereço e lote pelo bairro amarrado, quadra e lote. */
+    /**
+     * A inscrição do lote em SQL, para casar com o cadastro: a informada,
+     * quando há; senão a gravada. Em utf8mb4_unicode_ci, a colação do
+     * cadastro (`lotes` foi criada com outra, e o MySQL recusa misturar).
+     */
+    private const INSCRICAO_DO_LOTE = "(CASE WHEN COALESCE(lotes.inscricao_imobiliaria, '') <> ''"
+        . " THEN REPLACE(REPLACE(lotes.inscricao_imobiliaria, '.', ''), ' ', '')"
+        . ' ELSE lotes.inscricao_montada END) COLLATE utf8mb4_unicode_ci';
+
+    /** Correlaciona endereço e lote pela INSCRIÇÃO (17/11/2026; antes, quadra e número). */
     private function cadastroRelacionado($q): void
     {
+        $i = self::INSCRICAO_DO_LOTE;
+        // Os 15 dígitos, ou a forma com pontos (01.124.004.0020.000) que uma
+        // carga pode ter gravado: as duas comparadas direto, e o índice único
+        // da coluna continua valendo.
+        $comPontos = "CONCAT(SUBSTRING({$i},1,2),'.',SUBSTRING({$i},3,3),'.',SUBSTRING({$i},6,3),'.',SUBSTRING({$i},9,4),'.',SUBSTRING({$i},13,3))";
         $q->selectRaw('1')->from('cadastro_externo_imoveis as pmc')
-            ->join('cadastro_bairros as pmb', function ($join) {
+            // O bairro do cadastro vem junto: a busca por texto procura também no nome dele.
+            ->leftJoin('cadastro_bairros as pmb', function ($join) {
                 $join->whereRaw("TRIM(LEADING '0' FROM pmb.codigo) = TRIM(LEADING '0' FROM pmc.codigo_bairro)");
             })
-            ->whereColumn('pmb.nome_gis', 'lotes.bairro')
-            ->whereRaw("TRIM(LEADING '0' FROM pmc.quadra) = TRIM(LEADING '0' FROM lotes.quadra)")
-            ->whereRaw("TRIM(LEADING '0' FROM pmc.lote) = TRIM(LEADING '0' FROM lotes.numero_lote)");
+            ->whereRaw("pmc.inscricao COLLATE utf8mb4_unicode_ci IN ({$i}, {$comPontos})");
     }
 
     /**
+     * As inscrições (15 dígitos) dos imóveis do cadastro neste endereço.
+     *
      * @param array<int,string> $ruas
      * @param array<string,mixed> $numero
-     * @return array<int, array{0:array<int,string>, 1:string, 2:string}>
+     * @return list<string>
      */
     private function imoveisDoEndereco(array $ruas, array $numero): array
     {
-        $porCodigo = [];
-        foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->get() as $b) {
-            $porCodigo[ltrim((string) $b->codigo, '0')][] = $b->nome_gis;
-        }
-        if (! $porCodigo) {
+        $codigos = DB::table('cadastro_bairros')->whereNotNull('nome_gis')->pluck('codigo')
+            ->map(fn ($c) => ltrim((string) $c, '0'))->unique()->values()->all();
+        if (! $codigos) {
             return [];
         }
 
         $q = DB::table('cadastro_externo_imoveis')
-            ->whereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), array_keys($porCodigo));
+            ->whereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), $codigos);
 
         // A rua vem da LISTA do cadastro (seletor), então casa exata.
         if ($ruas) {
@@ -413,16 +417,9 @@ class PesquisaMapaController extends Controller
             };
         }
 
-        // Teto de segurança: cada imóvel vira uma condição OR na consulta do lote.
-        $pares = [];
-        foreach ($q->limit(1500)->get(['codigo_bairro', 'quadra', 'lote']) as $l) {
-            $cod = ltrim((string) $l->codigo_bairro, '0');
-            if (isset($porCodigo[$cod])) {
-                $pares[] = [$porCodigo[$cod], ltrim((string) $l->quadra, '0'), ltrim((string) $l->lote, '0')];
-            }
-        }
-
-        return $pares;
+        // Teto de segurança: cada imóvel vira um valor no IN da consulta do lote.
+        return $q->limit(1500)->pluck('inscricao')
+            ->map(fn ($i) => InscricaoImobiliaria::normalizar($i))->filter()->values()->all();
     }
 
     /**
@@ -436,27 +433,27 @@ class PesquisaMapaController extends Controller
         if ($lotes->isEmpty()) {
             return [];
         }
-        $codigos = $this->bairros()->codigos();
-        $chaves = [];   // "codigo|quadra|lote" => id do lote
+        // Pela INSCRIÇÃO de cada lote (17/11/2026), como a ficha.
+        $porInscricao = [];   // inscrição => ids dos lotes
         foreach ($lotes as $l) {
-            $cod = $codigos[BairrosDoDesenho::chave($l->bairro)] ?? null;
-            if ($cod !== null && $l->quadra !== null && $l->numero_lote !== null) {
-                $chaves[ltrim((string) $cod, '0') . '|' . ltrim((string) $l->quadra, '0') . '|' . ltrim((string) $l->numero_lote, '0')] = $l->id;
+            if ($insc = InscricaoImobiliaria::normalizar($this->bairros()->inscricaoDe($l))) {
+                $porInscricao[$insc][] = $l->id;
             }
         }
-        if (! $chaves) {
+        if (! $porInscricao) {
             return [];
         }
 
         $saida = [];
         $linhas = DB::table('cadastro_externo_imoveis')
-            ->whereIn(DB::raw("CONCAT(TRIM(LEADING '0' FROM codigo_bairro), '|', TRIM(LEADING '0' FROM quadra), '|', TRIM(LEADING '0' FROM lote))"), array_keys($chaves))
+            // Os 15 dígitos e a forma com pontos, como em CadastroCarregado::linhasDoLote.
+            ->whereIn('inscricao', collect(array_keys($porInscricao))
+                ->flatMap(fn ($i) => [(string) $i, InscricaoImobiliaria::formatar((string) $i)])->all())
             ->whereNotNull('logradouro')
-            ->get(['codigo_bairro', 'quadra', 'lote', 'logradouro', 'numero_predial']);
+            ->get(['inscricao', 'logradouro', 'numero_predial']);
         foreach ($linhas as $c) {
-            $k = ltrim((string) $c->codigo_bairro, '0') . '|' . ltrim((string) $c->quadra, '0') . '|' . ltrim((string) $c->lote, '0');
-            if (isset($chaves[$k]) && ! isset($saida[$chaves[$k]])) {
-                $saida[$chaves[$k]] = trim($c->logradouro . ($c->numero_predial ? ', ' . ltrim((string) $c->numero_predial, '0') : ''));
+            foreach ($porInscricao[InscricaoImobiliaria::normalizar($c->inscricao)] ?? [] as $id) {
+                $saida[$id] ??= trim($c->logradouro . ($c->numero_predial ? ', ' . ltrim((string) $c->numero_predial, '0') : ''));
             }
         }
 

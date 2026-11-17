@@ -58,11 +58,11 @@ if (! $lote) { echo "Nenhum bairro amarrado ao cadastro nesta base: nada a confe
 
 DB::beginTransaction();
 try {
-    DB::table('cadastro_externo_imoveis')
-        ->whereRaw("TRIM(LEADING '0' FROM codigo_bairro) = ?", [ltrim($bairro->codigo, '0')])
-        ->whereRaw("TRIM(LEADING '0' FROM quadra) = ?", [ltrim($lote->quadra, '0')])
-        ->whereRaw("TRIM(LEADING '0' FROM lote) = ?", [ltrim($lote->numero_lote, '0')])->delete();
-    $linha = (object) ['inscricao' => '019999990000000', 'nome_bairro' => 'BAIRRO COMO O CADASTRO CHAMA'];
+    // O cadastro casa pela INSCRIÇÃO do lote (17/11/2026): o imóvel de teste
+    // nasce com ela, e o que a base tiver com a mesma inscrição sai antes.
+    $inscDoLote = App\Support\InscricaoImobiliaria::normalizar((new App\Cadastro\BairrosDoDesenho())->inscricaoDe($lote));
+    DB::table('cadastro_externo_imoveis')->where('inscricao', $inscDoLote)->delete();
+    $linha = (object) ['inscricao' => $inscDoLote, 'nome_bairro' => 'BAIRRO COMO O CADASTRO CHAMA'];
     DB::table('cadastro_externo_imoveis')->insert([
         'inscricao' => $linha->inscricao, 'codigo_bairro' => $bairro->codigo, 'nome_bairro' => $linha->nome_bairro,
         'quadra' => $lote->quadra, 'lote' => $lote->numero_lote, 'logradouro' => 'RUA DE TESTE', 'numero_predial' => '10',
