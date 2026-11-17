@@ -532,21 +532,22 @@ function _cliqueNoBairro(ev) {
   const f = bairroSobOCursor(ev.latlng)
   if (!f) return
   const p = f.properties || {}
-  const ato = p.ato_aprovacao
-    ? esc(p.ato_aprovacao) + (p.data_aprovacao ? `<br><span class="balao4-sub">de ${esc(p.data_aprovacao)}</span>` : '')
-    : '<span class="balao4-sub">não informado</span>'
+  // SÓ TRÊS LINHAS (15/11/2026): nome oficial; o ato; a data e, ao lado, o código.
+  const nada = '<span class="balao4-sub">não informado</span>'
   L.popup({ className: 'popup-lote', closeButton: true, maxWidth: 300, minWidth: 250, autoPan: true })
     .setLatLng(ev.latlng)
     .setContent(`
       <div class="balao4">
-        <div class="balao4-cab"><b>${esc(p.nome_oficial || p.nome || 'Bairro')}</b></div>
+        <div class="balao4-cab"><b>Informações do bairro</b></div>
         <div class="balao4-corpo">
           <table class="balao4-tab">
-            ${p.codigo ? `<tr><td>Código</td><td>${esc(p.codigo)}</td></tr>` : ''}
-            ${p.apelido || (p.nome && p.nome !== p.nome_oficial) ? `<tr><td>No mapa</td><td>${esc(p.apelido || p.nome)}</td></tr>` : ''}
-            <tr><td>Aprovação</td><td>${ato}</td></tr>
-            ${p.area_ha ? `<tr><td>Área</td><td>${fmtBR(p.area_ha)} ha</td></tr>` : ''}
+            <tr><td>Nome oficial</td><td>${esc(p.nome_oficial || p.nome || '—')}</td></tr>
+            <tr><td>Aprovação</td><td>${p.ato_aprovacao ? esc(p.ato_aprovacao) : nada}</td></tr>
           </table>
+          <div class="balao4-grade balao-bairro-grade">
+            <div class="balao4-cel"><span>Data</span><b>${p.data_aprovacao ? esc(p.data_aprovacao) : '—'}</b></div>
+            <div class="balao4-cel"><span>Código</span><b>${p.codigo ? esc(p.codigo) : '—'}</b></div>
+          </div>
         </div>
       </div>`)
     .openOn(mapa)
