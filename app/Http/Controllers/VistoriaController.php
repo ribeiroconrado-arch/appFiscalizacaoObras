@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use App\Services\LavraturaService;
+use App\Services\ProcedenciaDoLote;
 use App\Services\SucessaoDeLotes;
 use App\Services\VistoriaImpressao;
 use Illuminate\Http\JsonResponse;
@@ -375,6 +376,9 @@ class VistoriaController extends Controller
             'vistorias' => $vistorias,
             'eventos'   => $eventos,
             'resumo'    => $this->resumoDoImovel($lote),
+            // De onde o lote veio e para onde foi (aba Dados). Também mostra o ato
+            // que o liga, para abrir a tela de identidades do desmembramento.
+            'procedencia' => ProcedenciaDoLote::de($lote, fn ($b) => $b),
             // Para o aviso âmbar da ficha.
             'sinalizacoes_pendentes' => $pendentes,
         ]);

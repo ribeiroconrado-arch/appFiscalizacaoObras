@@ -635,14 +635,19 @@ class LoteRepository
         }
 
         foreach ($geojsons as $g) {
-            $acumulado = DB::scalar(
-                'SELECT ST_AsGeoJSON(ST_Difference(
-                    ST_GeomFromGeoJSON(?, 1, 4326), ST_GeomFromGeoJSON(?, 1, 4326)))',
+            // Em SRID 4326 o MySQL devolve uma GEOMETRYCOLLECTION VAZIA (não NULL)
+            // até para uma diferença válida. Por isso checa ST_IsEmpty: vazio é
+            // "não deu para calcular o resto", e quem chama recusa com mensagem clara.
+            $dif = DB::selectOne(
+                'SELECT ST_IsEmpty(d) vazio, ST_AsGeoJSON(d) g FROM (
+                    SELECT ST_Difference(ST_GeomFromGeoJSON(?, 1, 4326), ST_GeomFromGeoJSON(?, 1, 4326)) d
+                ) t',
                 [$acumulado, $g]
             );
-            if (! $acumulado) {
-                return null;   // a subtração esvaziou: as partes cobrem o pai inteiro
+            if (! $dif || ! $dif->g || $dif->vazio) {
+                return null;
             }
+            $acumulado = $dif->g;
         }
 
         $r = DB::selectOne(

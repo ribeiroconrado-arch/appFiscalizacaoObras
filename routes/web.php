@@ -192,6 +192,13 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::post('/lotes/mover/previa', [CadastroLoteController::class, 'previaMover']);
         Route::post('/lotes/mover', [CadastroLoteController::class, 'mover']);
 
+        // Identidade das partes de um desmembramento (inscrição e número trocados
+        // entre os lotes do ato, sem mexer no desenho). Só curadoria; o ato sai do
+        // lote, não de um id mandado pela tela — ver IdentidadesController.
+        Route::get('/lotes/{lote}/identidades', [\App\Http\Controllers\IdentidadesController::class, 'mostrar']);
+        Route::post('/lotes/{lote}/identidades/previa', [\App\Http\Controllers\IdentidadesController::class, 'previa']);
+        Route::post('/lotes/{lote}/identidades', [\App\Http\Controllers\IdentidadesController::class, 'aplicar']);
+
         // O histórico do lote: para o externo sai só O QUE houve e QUANDO, sem
         // o conteúdo — a redação é feita em VistoriaController::historico.
         Route::get('/lotes/{lote}/historico', [VistoriaController::class, 'historico']);

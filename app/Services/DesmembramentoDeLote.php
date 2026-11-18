@@ -436,7 +436,8 @@ class DesmembramentoDeLote
             $resto = $this->lotes->diferenca($pai->id, array_column($lista, 'geojson'));
 
             if (! $resto) {
-                $erro = 'As partes desenhadas cobrem o lote inteiro: não sobra nada para a última parte.';
+                $erro = 'Não foi possível calcular a última parte pelo que sobrou do lote '
+                    . '(ou as partes cobrem o lote inteiro). Desenhe cada parte explicitamente, sem derivar a última.';
             } elseif ($resto['tipo'] !== 'POLYGON') {
                 $erro = 'O que sobrou do lote ficou partido em pedaços separados. '
                     . 'Desenhe cada parte explicitamente, sem derivar a última.';

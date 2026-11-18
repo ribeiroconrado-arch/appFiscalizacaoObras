@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="@assetv('css/app.css')">
 <link rel="stylesheet" href="@assetv('css/tema-f.css')">
 <link rel="stylesheet" href="@assetv('css/importacoes.css')">
+<link rel="stylesheet" href="@assetv('css/identidades.css')">
 <link rel="stylesheet" href="@assetv('css/painel-responsivo.css')">
 <link rel="stylesheet" href="@assetv('css/prancheta-cadastral.css')">
 {{-- Por último entre as de lista: o padrão de tabela vale por cima dos temas. --}}
@@ -1509,6 +1510,18 @@
             <span class="fi-val" id="fi-qt-vistorias">—</span></div>
           <div class="fi-campo"><span class="fi-rot">Última vistoria</span>
             <span class="fi-val" id="fi-ultima-vistoria">—</span></div>
+        </div>
+      </div>
+
+      {{-- Procedência: de qual lote este veio e para quais foi, com o ato que os
+           liga. Preenchida por renderProcedencia() (identidades.js); some sem dado. --}}
+      <div class="fi-procedencia" id="fi-procedencia" hidden></div>
+
+      {{-- Modal da troca de identidades entre as partes de um desmembramento. --}}
+      <div class="modal-bg" id="m-identidades" onclick="fecharIdentidades()">
+        <div class="modal modal-flex" onclick="event.stopPropagation()">
+          <button class="modal-x" onclick="fecharIdentidades()" aria-label="Fechar">&#10005;</button>
+          <div id="m-identidades-corpo"></div>
         </div>
       </div>
 
@@ -4561,6 +4574,7 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 </script>
 <script src="@assetv('js/mapa.js')"></script>
 <script src="@assetv('js/vistoria.js')"></script>
+<script src="@assetv('js/identidades.js')"></script>
 <script src="@assetv('js/mapa-cores.js')"></script>
 {{-- Depois de mapa-cores.js: `estiloColorido` consulta o `selState` daqui. A
      ordem não é obrigatória (o acesso é sempre em tempo de execução), mas

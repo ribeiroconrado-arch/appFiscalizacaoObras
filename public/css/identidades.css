@@ -1,0 +1,22 @@
+/* Procedência (aba Dados da ficha) e troca de identidades do desmembramento. */
+
+.fi-procedencia { margin: 0 0 12px; padding: 10px 0; border-bottom: 1px solid var(--bord, #e5e5e5); }
+.fi-proc-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 4px 0; }
+.fi-proc-sub { font-size: 12px; opacity: .75; }
+
+.ident-lista { display: grid; gap: 10px; margin: 12px 0; }
+.ident-cartao { border: 1px solid var(--bord, #d8d8d8); border-radius: 8px; padding: 10px 12px; }
+.ident-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ident-pos { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
+.ident-setas { display: flex; gap: 6px; }
+.ident-sub { font-size: 12.5px; margin-top: 6px; opacity: .85; }
+.ident-aviso { font-size: 12px; margin-top: 6px; color: #8a5a00; }
+.ident-titulo { margin: 4px 40px 0 0; font-size: 16px; }
+.ident-explica { font-size: 13px; margin: 8px 0; }
+.ident-campo { display: grid; gap: 4px; font-size: 13px; margin-top: 8px; }
+.ident-campo textarea { width: 100%; font: inherit; padding: 6px 8px; }
+.ident-previa { margin-top: 10px; font-size: 13px; }
+.ident-trocas > div { padding: 2px 0; }
+.ident-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.ident-erro { color: #b42318; font-size: 13px; padding: 6px 0; }
+.ident-ok { color: #1a7f37; font-size: 13px; padding: 6px 0; }

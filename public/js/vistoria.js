@@ -76,6 +76,7 @@ async function carregarHistorico(loteId) {
     const d = await r.json()
     renderHistorico(d.eventos ?? [])
     renderResumo(d.resumo ?? null)
+    if (typeof renderProcedencia === 'function') { renderProcedencia(d.procedencia ?? null, loteId) }
     if (typeof pintarAvisoSinalizacao === 'function') { pintarAvisoSinalizacao(d.sinalizacoes_pendentes ?? []) }
   } catch (e) {
     console.error(e)

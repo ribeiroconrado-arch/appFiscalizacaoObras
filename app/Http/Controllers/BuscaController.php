@@ -6,6 +6,7 @@ use App\Cadastro\BairrosDoDesenho;
 use App\Models\Documento;
 use App\Models\Lote;
 use App\Models\Vistoria;
+use App\Services\ProcedenciaDoLote;
 use App\Support\InscricaoImobiliaria;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -690,38 +691,7 @@ class BuscaController extends Controller
      */
     private function sucessao(Lote $lote): array
     {
-        // Base ainda sem a migração da sucessão: devolve vazio em vez de
-        // estourar. A ficha é a tela mais usada do sistema.
-        if (! Schema::hasTable('lote_ato_lotes')) {
-            return ['origens' => [], 'destinos' => []];
-        }
-
-        $lado = fn (string $euSou, string $procuro) => DB::table('lote_ato_lotes as eu')
-            ->join('lote_ato_lotes as outro', 'outro.ato_id', '=', 'eu.ato_id')
-            ->join('lote_atos as ato', 'ato.id', '=', 'eu.ato_id')
-            ->join('lotes as l', 'l.id', '=', 'outro.lote_id')
-            ->where('eu.lote_id', $lote->id)->where('eu.papel', $euSou)
-            ->where('outro.papel', $procuro)
-            ->orderBy('l.numero_lote')
-            ->get([
-                'l.id', 'l.bairro', 'l.quadra', 'l.numero_lote', 'l.situacao',
-                'ato.tipo', 'ato.protocolo_id', 'ato.created_at',
-                'outro.area_m2',
-            ])
-            ->map(fn ($r) => [
-                'id'        => $r->id,
-                'rotulo'    => 'Quadra ' . ($r->quadra ?? '—') . ' · Lote ' . ($r->numero_lote ?? '—'),
-                'bairro'    => $this->bairroOficial($r->bairro),
-                'situacao'  => $r->situacao,
-                'tipo'      => $r->tipo,
-                'protocolo' => $r->protocolo_id,
-                'area'      => $r->area_m2,
-                'data'      => $r->created_at ? date('d/m/Y', strtotime($r->created_at)) : null,
-            ])->all();
-
-        return [
-            'origens'  => $lado('posterior', 'anterior'),
-            'destinos' => $lado('anterior', 'posterior'),
-        ];
+        // A consulta mora em ProcedenciaDoLote, que a ficha (aba Dados) também usa.
+        return ProcedenciaDoLote::de($lote, fn ($b) => $this->bairroOficial($b));
     }
 }
