@@ -609,3 +609,33 @@ table.per-mem tr.ruim td{background:rgba(217,119,6,.12)}
 /* Edição de contorno: o nome dos bairros vizinhos (magenta, como o traço deles). */
 .leaflet-tooltip.rot.ce-viz-nome{display:block;font-family:'Manrope',sans-serif;font-weight:800;font-size:12px;color:#86198F;background:#ffffffe6;border:1px solid #F0ABFC;border-radius:4px;padding:1px 6px;box-shadow:none;white-space:nowrap}
 .leaflet-tooltip.rot.ce-viz-nome::before{display:none}
+
+/* ── Quadras por decreto (decretos-quadras.js) ── */
+.qd-painel{position:absolute;top:50px;left:12px;z-index:900;width:300px;max-height:calc(100% - 70px);overflow-y:auto;
+  background:var(--sur);color:var(--tx);border:1.5px solid var(--bord);border-radius:10px;
+  box-shadow:0 6px 18px rgba(0,0,0,.18);padding:10px;font-size:12.5px;display:flex;flex-direction:column;gap:8px}
+.qd-painel[hidden]{display:none}
+.qd-topo{display:flex;align-items:flex-start;gap:8px}
+.qd-topo > div{flex:1;min-width:0}
+.qd-topo b{display:block;font-size:13px}
+.qd-topo small{display:block;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qd-abas{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--bord);border-radius:8px;overflow:hidden}
+.qd-abas button{border:0;background:var(--sur);padding:6px 4px;font-size:12px;font-weight:600;color:var(--tx2);cursor:pointer}
+.qd-abas button + button{border-left:1px solid var(--bord)}
+.qd-abas button.on{background:var(--gl);color:var(--gxd)}
+.qd-lista{display:flex;flex-direction:column;gap:6px}
+.qd-ato{display:grid;grid-template-columns:12px minmax(0,1fr);gap:8px;align-items:start;text-align:left;width:100%;
+  border:1px solid var(--bord);border-radius:8px;background:var(--sur);padding:7px 9px;cursor:pointer;font:inherit;color:inherit}
+.qd-ato:hover:not(:disabled){border-color:var(--gm)}
+.qd-ato.sel{border:2px solid var(--gd);padding:6px 8px}
+.qd-ato.padrao{background:var(--blt);cursor:default}
+.qd-ato > i{width:12px;height:12px;border-radius:3px;margin-top:3px}
+.qd-ato-txt b{font-weight:700;margin-right:4px}
+.qd-ato-txt .badge{font-size:10.5px;margin-right:3px}
+.qd-ato-txt small{display:block;color:var(--tx3);margin-top:2px}
+.qd-ok{color:#15803D;font-weight:600}
+.qd-dif{color:var(--warn);font-weight:600}
+.qd-dica{margin:2px 0 0;color:var(--tx3);font-size:11.5px;line-height:1.4}
+.qd-vazio{color:var(--tx3);padding:4px 0}
+.qd-acoes{display:flex;gap:6px;justify-content:flex-end}
+@media (max-width:720px){ .qd-painel{left:8px;right:8px;width:auto;max-height:45%} }

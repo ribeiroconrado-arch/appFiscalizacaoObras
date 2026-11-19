@@ -130,6 +130,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/mapa/quadras-silhueta', [BairroContornoController::class, 'silhuetaDasQuadras'])->middleware('comprimir');
         Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
+        // Quadras por decreto: o balão do lote lê; a curadoria marca (DecretosDasQuadras).
+        Route::get('/bairros/decretos-das-quadras', [\App\Http\Controllers\DecretosDasQuadrasController::class, 'index']);
+        Route::put('/bairros/decretos-das-quadras', [\App\Http\Controllers\DecretosDasQuadrasController::class, 'gravar']);
         // Edição do contorno à mão, vértice a vértice (EdicaoDeContorno).
         Route::post('/bairros/contorno/conferir-edicao', [BairroContornoController::class, 'conferirEdicao']);
         Route::put('/bairros/contorno/edicao', [BairroContornoController::class, 'gravarEdicao']);

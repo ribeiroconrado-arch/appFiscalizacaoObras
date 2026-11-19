@@ -529,6 +529,8 @@ function _cursorNoBairro(ev) {
 /** @param {L.LeafletMouseEvent} ev */
 function _cliqueNoBairro(ev) {
   const mapa = mapaState.obj
+  // Com uma ferramenta dona do clique (quadras por decreto, medir…) o bairro não abre balão.
+  if (typeof _ferramentaComOClique === 'function' && _ferramentaComOClique()) return
   const f = bairroSobOCursor(ev.latlng)
   if (!f) return
   const p = f.properties || {}
@@ -549,6 +551,7 @@ function _cliqueNoBairro(ev) {
             <div class="balao4-cel"><span>Código</span><b>${p.codigo ? esc(p.codigo) : '—'}</b></div>
           </div>
           ${htmlOutrosAtosNoBalao(p.outros_atos || [])}
+          ${typeof htmlQuadrasPorDecretoNoBalao === 'function' ? htmlQuadrasPorDecretoNoBalao(p) : ''}
         </div>
       </div>`)
     .openOn(mapa)
