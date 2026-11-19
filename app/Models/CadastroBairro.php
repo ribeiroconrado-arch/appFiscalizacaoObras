@@ -29,8 +29,26 @@ class CadastroBairro extends Model
 
     protected $fillable = ['nome_gis', 'apelido', 'codigo', 'nome_cadastro', 'ato_aprovacao', 'data_aprovacao'];
 
-    /** O ato que aprovou o bairro ("Decreto 462/1996") e a data dele. */
+    /**
+     * O ato que aprovou o bairro ("Decreto 462/1996") e a data dele —
+     * CALCULADOS desde 18/11/2026: o ato de aprovação mais antigo da lista de
+     * atos (recalcularAprovacao). A lista inteira está em atos().
+     */
     protected $casts = ['data_aprovacao' => 'date'];
+
+    /** Os atos do bairro, em ordem de data (sem data por último). */
+    public function atos(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BairroAto::class, 'cadastro_bairro_id')
+            ->orderByRaw('data IS NULL')->orderBy('data')->orderBy('id');
+    }
+
+    /** O ato e a data do bairro passam a ser os da aprovação mais antiga (ou nada). */
+    public function recalcularAprovacao(): void
+    {
+        $a = $this->atos()->where('tipo', 'aprovacao')->first();
+        $this->forceFill(['ato_aprovacao' => $a?->ato, 'data_aprovacao' => $a?->data])->save();
+    }
 
     /** Quantos lotes do desenho estão neste bairro. */
     public function lotesEmUso(): int

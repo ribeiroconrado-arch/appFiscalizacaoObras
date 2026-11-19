@@ -548,9 +548,40 @@ function _cliqueNoBairro(ev) {
             <div class="balao4-cel"><span>Data</span><b>${p.data_aprovacao ? esc(p.data_aprovacao) : '—'}</b></div>
             <div class="balao4-cel"><span>Código</span><b>${p.codigo ? esc(p.codigo) : '—'}</b></div>
           </div>
+          ${htmlOutrosAtosNoBalao(p.outros_atos || [])}
         </div>
       </div>`)
     .openOn(mapa)
+}
+
+// OS OUTROS ATOS (18/11/2026): as três linhas continuam; só quando o bairro
+// tem mais atos aparece um link discreto ("+ 3 ampliações") que abre a lista.
+const CLASSE_ATO_BALAO = { aprovacao: 'bd-vig', revogacao: 'bd-fim' }
+
+/** O nome do link pelo que a lista tem: ampliações, etapas ou atos. */
+function _nomeDosOutrosAtos(outros) {
+  const n = outros.length
+  if (outros.every(a => a.tipo === 'ampliacao')) return n === 1 ? 'ampliação' : 'ampliações'
+  if (outros.every(a => a.tipo === 'etapa')) return n === 1 ? 'etapa' : 'etapas'
+  return n === 1 ? 'ato' : 'atos'
+}
+
+function htmlOutrosAtosNoBalao(outros) {
+  if (!outros.length) return ''
+  const nome = `${outros.length} ${_nomeDosOutrosAtos(outros)}`
+  return `<button type="button" class="balao-atos-lk" data-nome="${esc(nome)}" onclick="alternarAtosDoBalao(this)">+ ${esc(nome)}</button>
+    <div class="balao-atos" hidden>${outros.map(a => `
+      <div class="balao-ato"><span class="badge ${CLASSE_ATO_BALAO[a.tipo] || 'bd-in'}" title="${esc(a.rotulo)}">${esc(a.observacao || a.rotulo)}</span>
+        <span class="balao-ato-nome">${esc(a.ato)}</span><small>${a.data ? esc(a.data) : 'sem data'}</small></div>`).join('')}</div>`
+}
+
+/** Abre e fecha a lista de atos no balão do bairro. @param {HTMLButtonElement} bt */
+function alternarAtosDoBalao(bt) {
+  const lista = bt.nextElementSibling
+  lista.hidden = !lista.hidden
+  bt.textContent = lista.hidden ? '+ ' + bt.dataset.nome : '− ocultar'
+  // Sem popup.update(): ele refaz o conteúdo a partir do HTML de origem e
+  // fecharia a lista. O balão é ancorado embaixo e cresce para cima sozinho.
 }
 
 /** Ponto dentro do anel (regra par-ímpar). @param {number} x @param {number} y @param {number[][]} anel */

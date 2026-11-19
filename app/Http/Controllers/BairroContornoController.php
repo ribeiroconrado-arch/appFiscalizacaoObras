@@ -87,6 +87,8 @@ class BairroContornoController extends Controller
                     'codigo'        => $nomes->codigos()[BairrosDoDesenho::chave($b->nome)] ?? null,
                     'ato_aprovacao' => $nomes->aprovacao($b->nome)['ato'],
                     'data_aprovacao' => $nomes->aprovacao($b->nome)['data'],
+                    // Os demais atos (ampliações, etapas…), para o "+ 3 ampliações" do balão.
+                    'outros_atos'   => $nomes->aprovacao($b->nome)['outros'],
                     'area_ha'       => round((float) $b->area_m2 / 10000, 2),
                     'desatualizado' => $desatualizado,
                     'contorno_em'   => $b->contorno_em ? date('d/m/Y H:i', strtotime($b->contorno_em)) : null,

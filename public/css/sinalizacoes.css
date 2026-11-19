@@ -20,6 +20,15 @@
 .balao4-sub{color:var(--tx3);font-size:.92em}
 /* Balão do bairro: a grade (data e código) é a última linha. */
 .balao-bairro-grade{margin-bottom:2px}
+/* Balão do bairro: o link discreto dos outros atos e a lista que ele abre. */
+.balao-atos-lk{display:block;border:0;background:none;padding:2px 0 4px;color:var(--gd);font-size:12px;font-weight:600;cursor:pointer}
+.balao-atos-lk:hover{text-decoration:underline}
+.balao-atos{border-top:1px solid var(--blt);padding-top:6px;margin-bottom:2px;display:flex;flex-direction:column;gap:5px}
+.balao-atos[hidden]{display:none}
+.balao-ato{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;font-size:12px}
+.balao-ato .badge{font-size:10.5px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.balao-ato-nome{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.balao-ato small{color:var(--tx3);white-space:nowrap}
 /* Mouse sobre o bairro com o mapa afastado: a mãozinha, como no lote. */
 .leaflet-container.bairro-sob-cursor{cursor:pointer}
 .balao4-tab tr+tr td{border-top:1px solid var(--blt)}

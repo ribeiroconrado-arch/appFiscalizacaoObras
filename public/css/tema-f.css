@@ -406,6 +406,43 @@ fieldset[disabled] .art-cc-linha .cartao-x{display:none}
 .art-docs .lembrar{padding-bottom:0}
 .ed-grupo-tit{font-size:11px;font-weight:700;color:var(--gd);text-transform:uppercase;letter-spacing:.08em}
 .par-linha.vendo .ed-grupo-tit{color:var(--tx3)}
+
+/* ATOS DO BAIRRO (Parâmetros › Bairros, 18/11/2026): lista de leitura, uma
+   linha por ato, e um formulário pequeno de duas colunas para acrescentar ou
+   editar — e não campos espremidos lado a lado. */
+.atos-tit{display:flex;justify-content:space-between;align-items:baseline}
+.atos-tit small{font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--tx3)}
+.atos-lista{border:1px solid var(--f-bord);border-radius:8px;background:var(--sur);overflow:hidden}
+.ato-linha{display:grid;grid-template-columns:118px minmax(0,1fr) auto auto;gap:10px;align-items:center;
+  padding:8px 10px;border-top:1px solid var(--blt)}
+.ato-linha:first-child{border-top:0}
+.ato-linha.editando-ato{background:var(--gl)}
+.ato-linha .badge{justify-self:start;white-space:nowrap}
+.ato-principal{min-width:0}
+.ato-principal b,.ato-data b{display:block;font-weight:600;color:var(--tx)}
+.ato-principal small,.ato-data small{display:block;font-size:11.5px;color:var(--tx3)}
+.ato-principal b,.ato-principal small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ato-data{text-align:right;white-space:nowrap}
+.ato-acoes{display:flex;align-items:center;gap:2px}
+.ato-vazio{padding:10px;color:var(--tx3);font-size:12.5px}
+.ato-mais{align-self:flex-start}
+.ato-form{border:1.5px solid var(--f-bord-foco);border-radius:8px;background:var(--sur);padding:10px 12px;
+  display:flex;flex-direction:column;gap:8px}
+.ato-form .cad-row{margin-bottom:0}
+.ato-form-botoes{display:flex;justify-content:flex-end;gap:8px}
+.ato-soma{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--tx3)}
+.ato-soma b{color:var(--tx);font-weight:600}
+.ato-ok{color:#2E7D32;font-weight:600}
+.ato-dif{color:#B8860B}
+.par-linha .principal span.linha-ato{display:block}
+.par-linha .principal .ato-mais-n{color:var(--gd);font-weight:600}
+/* Visualizando (sem editar): sem os botões. */
+fieldset[disabled] .ato-acoes,fieldset[disabled] .ato-mais{display:none}
+@media (max-width:620px){
+  .ato-linha{grid-template-columns:1fr auto}
+  .ato-linha .badge{grid-column:1/-1}
+  .ato-data{text-align:left}
+}
 #abas-geral{margin-bottom:14px}
 /* As faixas em colunas: cada uma é curta, e uma por linha desperdiçava o cartão. */
 .art-faixas{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:6px 18px;align-items:center}

@@ -116,19 +116,49 @@ try {
     confere((new BairrosDoDesenho())->apelido($nome) === 'APELIDO NOVO', 'o mapa rotula pelo apelido');
     confere((new BairrosDoDesenho())->oficial($nome) === 'BAIRRO TESTE INSCRICAO', 'documentos continuam com o nome oficial');
 
-    echo "Ato de aprovação do bairro\n";
+    echo "Atos do bairro\n";
     $base = ['id' => $cb->id, 'codigo' => '987', 'nome_cadastro' => 'BAIRRO TESTE INSCRICAO', 'nome_gis' => $nome, 'apelido' => 'APELIDO NOVO'];
-    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['ato_aprovacao' => '  Decreto 462/1996 ', 'data_aprovacao' => '1996-12-16']);
+    $atos = fn () => App\Models\BairroAto::where('cadastro_bairro_id', $cb->id)->orderByRaw('data IS NULL')->orderBy('data')->get();
+    // Fora de ordem de propósito: a lista grava na ordem que vier e lê pela data.
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['atos' => [
+        ['tipo' => 'ampliacao', 'ato' => 'Decreto 655/2001', 'data' => '2001-07-20', 'area_m2' => 543490, 'observacao' => 'Ampliação II'],
+        ['tipo' => 'aprovacao', 'ato' => '  Decreto 74/1988 ', 'data' => '1988-12-16', 'area_m2' => 448290],
+        ['tipo' => 'aprovacao', 'ato' => 'Decreto 2325/2023', 'data' => '2023-07-17', 'observacao' => 'Aprovado de novo'],
+    ]]);
     $g = CadastroBairro::find($cb->id);
-    confere($r->getStatusCode() === 200 && $g->ato_aprovacao === 'Decreto 462/1996' && $g->data_aprovacao?->format('Y-m-d') === '1996-12-16', 'grava o ato e a data');
+    confere($r->getStatusCode() === 200 && $atos()->count() === 3, 'grava a lista de atos');
+    confere($g->ato_aprovacao === 'Decreto 74/1988' && $g->data_aprovacao?->format('Y-m-d') === '1988-12-16',
+        '"Aprovado por" é a aprovação mais antiga, e não a primeira da lista');
     $lista = json_decode(pedir($admin, 'GET', '/api/parametros')->getContent(), true);
     $linha = collect($lista['bairros'] ?? [])->firstWhere('id', $cb->id);
-    confere(($linha['ato_aprovacao'] ?? null) === 'Decreto 462/1996' && ($linha['data_aprovacao'] ?? null) === '1996-12-16', 'a lista de Parâmetros devolve os dois');
-    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['ato_aprovacao' => 'Decreto 1/2099', 'data_aprovacao' => now()->addDay()->format('Y-m-d')]);
-    confere($r->getStatusCode() === 422 && str_contains(json_encode(json_decode($r->getContent(), true), JSON_UNESCAPED_UNICODE), 'data da aprovação'), 'data futura é recusada');
-    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['ato_aprovacao' => '', 'data_aprovacao' => '']);
+    confere(array_column($linha['atos'] ?? [], 'ato') === ['Decreto 74/1988', 'Decreto 655/2001', 'Decreto 2325/2023']
+        && ($linha['atos'][1]['area_m2'] ?? null) == 543490 && count($lista['tipos_ato_bairro'] ?? []) === 7,
+        'Parâmetros devolve os atos em ordem de data, com a área, e os tipos');
+    $balao = (new BairrosDoDesenho())->aprovacao($nome);
+    confere($balao['ato'] === 'Decreto 74/1988' && array_column($balao['outros'], 'ato') === ['Decreto 655/2001', 'Decreto 2325/2023']
+        && $balao['outros'][0]['data'] === '20/07/2001', 'o balão recebe os outros atos, sem repetir a aprovação mostrada');
+
+    // Editar um, tirar outro: o que fica guarda o id (e a trilha de auditoria).
+    [$a74, $a655] = [$atos()[0], $atos()[1]];
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['atos' => [
+        ['id' => $a74->id, 'tipo' => 'aprovacao', 'ato' => 'Decreto 74/1988', 'data' => '1988-12-16', 'area_m2' => 448290],
+        ['id' => $a655->id, 'tipo' => 'ampliacao', 'ato' => 'Decreto 655/2001', 'data' => '2001-07-20', 'area_m2' => 543490.5],
+    ]]);
+    confere($r->getStatusCode() === 200 && $atos()->pluck('id')->all() === [$a74->id, $a655->id] && $atos()[1]->area_m2 === 543490.5,
+        'editar mantém o id; o que saiu da lista é tirado');
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base);
+    confere($r->getStatusCode() === 200 && $atos()->count() === 2, 'sem a lista no pedido, os atos não mudam');
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['atos' => [['tipo' => 'ampliacao', 'ato' => 'Decreto 1/2099', 'data' => now()->addDay()->format('Y-m-d')]]]);
+    confere($r->getStatusCode() === 422 && str_contains(json_encode(json_decode($r->getContent(), true), JSON_UNESCAPED_UNICODE), 'não pode ser no futuro')
+        && $atos()->count() === 2, 'data futura é recusada, e nada muda');
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['atos' => [['tipo' => 'ampliacao', 'ato' => '']]]);
+    confere($r->getStatusCode() === 422, 'ato sem lei ou decreto é recusado');
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['atos' => [['tipo' => 'ampliacao', 'ato' => 'Decreto 522/1998', 'data' => '1998-06-10']]]);
     $g = CadastroBairro::find($cb->id);
-    confere($r->getStatusCode() === 200 && $g->ato_aprovacao === null && $g->data_aprovacao === null, 'em branco volta a ficar vazio');
+    confere($r->getStatusCode() === 200 && $g->ato_aprovacao === null && $g->data_aprovacao === null,
+        'sem nenhuma aprovação na lista, "Aprovado por" fica vazio (não se chuta)');
+    $r = pedir($admin, 'POST', '/api/parametros/bairros', $base + ['atos' => []]);
+    confere($r->getStatusCode() === 200 && $atos()->count() === 0, 'lista vazia tira todos');
 
     echo "Busca pela inscrição gravada\n";
     DB::table('cadastro_bairros')->where('id', $cb->id)->update(['nome_gis' => null]);   // amarração caída

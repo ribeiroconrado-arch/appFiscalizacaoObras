@@ -221,27 +221,52 @@ class BairrosDoDesenho
         return $this->apelidos[self::chave($nomeDoDesenho)] ?? null;
     }
 
-    /** @var array<string,array{ato:?string,data:?string}>|null chave normalizada => aprovação */
+    /** @var array<string,array{ato:?string,data:?string,outros:list<array<string,?string>>}>|null chave normalizada => aprovação */
     private ?array $aprovacoes = null;
 
     /**
      * O ato que aprovou o bairro (Parâmetros › Bairros) e a data em dd/mm/aaaa,
      * pelo nome do desenho. Para o balão do bairro no mapa.
      *
-     * @return array{ato:?string,data:?string}
+     * `outros` são os demais atos do bairro (18/11/2026) — ampliações, etapas,
+     * regularizações… —, em ordem de data: tudo menos a aprovação mostrada.
+     *
+     * @return array{ato:?string,data:?string,outros:list<array{tipo:string,rotulo:string,ato:string,data:?string,observacao:?string}>}
      */
     public function aprovacao(?string $nomeDoDesenho): array
     {
         if ($this->aprovacoes === null) {
             $this->aprovacoes = [];
-            foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->get(['nome_gis', 'ato_aprovacao', 'data_aprovacao']) as $b) {
+            $porBairro = [];
+            foreach (DB::table('bairro_atos')->orderByRaw('data IS NULL')->orderBy('data')->orderBy('id')
+                         ->get(['cadastro_bairro_id', 'tipo', 'ato', 'data', 'observacao']) as $a) {
+                $porBairro[$a->cadastro_bairro_id][] = $a;
+            }
+            foreach (DB::table('cadastro_bairros')->whereNotNull('nome_gis')->get(['id', 'nome_gis', 'ato_aprovacao', 'data_aprovacao']) as $b) {
+                $mostrado = false;
+                $outros = [];
+                foreach ($porBairro[$b->id] ?? [] as $a) {
+                    // A aprovação que vai nas três linhas do balão não se repete na lista.
+                    if (! $mostrado && $a->tipo === 'aprovacao' && $a->ato === $b->ato_aprovacao) {
+                        $mostrado = true;
+                        continue;
+                    }
+                    $outros[] = [
+                        'tipo'       => $a->tipo,
+                        'rotulo'     => \App\Models\BairroAto::TIPOS[$a->tipo] ?? $a->tipo,
+                        'ato'        => $a->ato,
+                        'data'       => $a->data ? date('d/m/Y', strtotime($a->data)) : null,
+                        'observacao' => $a->observacao,
+                    ];
+                }
                 $this->aprovacoes[self::chave($b->nome_gis)] = [
-                    'ato'  => trim((string) $b->ato_aprovacao) ?: null,
-                    'data' => $b->data_aprovacao ? date('d/m/Y', strtotime($b->data_aprovacao)) : null,
+                    'ato'    => trim((string) $b->ato_aprovacao) ?: null,
+                    'data'   => $b->data_aprovacao ? date('d/m/Y', strtotime($b->data_aprovacao)) : null,
+                    'outros' => $outros,
                 ];
             }
         }
 
-        return $this->aprovacoes[self::chave((string) $nomeDoDesenho)] ?? ['ato' => null, 'data' => null];
+        return $this->aprovacoes[self::chave((string) $nomeDoDesenho)] ?? ['ato' => null, 'data' => null, 'outros' => []];
     }
 }

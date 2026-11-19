@@ -72,6 +72,7 @@ async function carregarParametros() {
     parState.upfs = d.upfs
     parState.feriados = d.feriados
     parState.bairros = d.bairros
+    parState.tiposAtoBairro = d.tipos_ato_bairro || []
     parState.geral = d.geral
     // Posturas: aparelhos de medição. Ruas e bairros: dos dois módulos.
     parState.decibelimetros = d.decibelimetros || []
@@ -1296,6 +1297,9 @@ function primeiroErroPar(d) {
 // só a lista rola.
 
 function renderBairros() {
+  // A cópia dos atos em edição só vale enquanto o bairro está aberto: fechar
+  // (Cancelar, Salvar) e abrir de novo recomeça do que está gravado.
+  if (!parState.ed || parState.ed.lista !== 'bairros') parState.atosBairro = null
   const termo = parBusca('filtro-bairros')
   const lista = parState.bairros.filter(b => !termo
     || String(b.codigo).includes(termo)
@@ -1314,9 +1318,10 @@ function renderBairros() {
             ? 'No desenho: ' + esc(b.nome_gis) + (b.apelido ? ' · no mapa: ' + esc(b.apelido) : '')
               + (b.lotes ? ` · ${b.lotes} lote(s)` : ' · sem lote ainda')
             : 'Ainda sem desenho convertido'}</span>
-          <span>${b.ato_aprovacao
-            ? 'Aprovado por ' + esc(b.ato_aprovacao) + (b.data_aprovacao ? ' de ' + b.data_aprovacao.split('-').reverse().join('/') : '')
-            : 'Ato de aprovação não informado'}</span>
+          <span class="linha-ato">${b.ato_aprovacao
+            ? 'Aprovado por ' + esc(b.ato_aprovacao) + (b.data_aprovacao ? ' de ' + dataBR(b.data_aprovacao) : '')
+            : 'Ato de aprovação não informado'}${(b.atos || []).length > 1
+            ? ` · <span class="ato-mais-n">+${b.atos.length - 1} ${b.atos.length === 2 ? 'ato' : 'atos'}</span>` : ''}</span>
         </div>
         ${parAcoes('bairros', b.id)}
       </div>`).join('')
@@ -1330,6 +1335,10 @@ function formBairro(b) {
   // código (e daí sai a inscrição), por isso TRAVA quando já há lote nele. O
   // apelido é só o rótulo do mapa, e muda à vontade.
   const travado = !!(b.nome_gis && b.lotes)
+  const chave = b.id ?? 'novo'
+  if (parState.atosBairro?.chave !== chave) {
+    parState.atosBairro = { chave, lista: (b.atos || []).map(a => ({ ...a })), ed: null, contorno: b.area_contorno_m2 ?? null }
+  }
   return parFormLinha(b.id ? 'Editando bairro' : 'Novo bairro', `
     <div class="cad-row">
       ${parRot('Código', parInp('codigo', b.codigo, 'type="number" min="1"'), 'max-width:110px')}
@@ -1342,15 +1351,112 @@ function formBairro(b) {
           : 'placeholder="opcional"'), 'flex:2')}
       ${parRot('Apelido no mapa', parInp('apelido', b.apelido, 'maxlength="160" placeholder="opcional — ex.: BURITIS V"'), 'flex:2')}
     </div>
-    <div class="cad-row">
-      ${parRot('Lei ou decreto de aprovação', parInp('ato_aprovacao', b.ato_aprovacao, 'maxlength="160" placeholder="ex.: Decreto 462/1996"'), 'flex:2')}
-      ${parRot('Data da aprovação', parInp('data_aprovacao', b.data_aprovacao, `type="date" max="${new Date().toISOString().slice(0, 10)}"`), 'max-width:180px')}
+    <div class="ed-grupo">
+      <div class="ed-grupo-tit atos-tit">Atos do bairro <small>em ordem de data</small></div>
+      <div id="atos-bairro">${htmlAtosDoBairro()}</div>
     </div>`, 'salvarBairro()')
+}
+
+// ── ATOS DO BAIRRO (18/11/2026) ──────────────────────────────
+//
+// O loteamento é um bairro só, aprovado em partes: a aprovação, ampliações,
+// etapas, regularizações, retificações, alterações e a revogação. A lista é
+// editada aqui, numa cópia (parState.atosBairro), e vai inteira ao servidor
+// no Salvar do bairro. "Aprovado por…" do bairro é a aprovação mais antiga.
+
+/** A cor de cada tipo, no vocabulário das tags (tema-f.css, "CADA COR DIZ UMA COISA SÓ"). */
+const CLASSE_DO_ATO = { aprovacao: 'bd-vig', revogacao: 'bd-fim' }
+
+const dataBR = d => d ? d.split('-').reverse().join('/') : ''
+
+function htmlAtosDoBairro() {
+  const st = parState.atosBairro
+  if (!st) return ''
+  st.lista.sort((a, b) => (a.data || '9999').localeCompare(b.data || '9999'))
+  const rotulo = t => parState.tiposAtoBairro.find(x => x.valor === t)?.rotulo || t
+  const linhas = st.lista.map((a, i) => `
+    <div class="ato-linha${st.ed === i ? ' editando-ato' : ''}">
+      <span class="badge ${CLASSE_DO_ATO[a.tipo] || 'bd-in'}">${esc(rotulo(a.tipo))}</span>
+      <div class="ato-principal"><b>${esc(a.ato)}</b>${a.observacao ? `<small>${esc(a.observacao)}</small>` : ''}</div>
+      <div class="ato-data"><b>${a.data ? dataBR(a.data) : 'sem data'}</b>${a.area_m2 != null ? `<small>${fmtBR(a.area_m2)} m²</small>` : ''}</div>
+      <div class="ato-acoes">
+        <button type="button" class="ico-circ" aria-label="Editar ato" title="Editar" onclick="editarAtoDoBairro(${i})">${ICO_EDITAR}</button>
+        <button type="button" class="cartao-x" aria-label="Tirar ato" title="Tirar" onclick="tirarAtoDoBairro(${i})">&times;</button>
+      </div>
+    </div>`).join('')
+
+  const soma = st.lista.reduce((t, a) => t + (a.tipo === 'revogacao' ? 0 : Number(a.area_m2) || 0), 0)
+  let conferencia = ''
+  if (soma > 0 || st.contorno) {
+    const bate = st.contorno && soma > 0 && Math.abs(soma - st.contorno) / st.contorno < 0.01
+    conferencia = `<div class="ato-soma"><span>Soma das áreas dos atos</span><b>${soma > 0 ? fmtBR(soma) + ' m²' : '—'}</b></div>
+      <div class="ato-soma"><span>Contorno do bairro no mapa</span><span>${st.contorno ? fmtBR(st.contorno) + ' m²' : 'sem contorno'}${
+        st.contorno && soma > 0 ? (bate ? ' <span class="ato-ok">≈ ✓</span>'
+          : ` <span class="ato-dif">· diferença de ${fmtBR(Math.abs(st.contorno - soma))} m²</span>`) : ''}</span></div>`
+  }
+
+  return `<div class="atos-lista">${linhas || '<div class="ato-vazio">Nenhum ato informado.</div>'}</div>
+    ${st.ed !== null ? formAtoDoBairro(st.ed === 'novo' ? { tipo: st.lista.length ? 'ampliacao' : 'aprovacao' } : st.lista[st.ed])
+      : '<button type="button" class="btn sec sm ato-mais" onclick="novoAtoDoBairro()">+ Ato</button>'}
+    ${conferencia}`
+}
+
+/** O formulário pequeno de um ato: duas colunas largas e a observação embaixo. */
+function formAtoDoBairro(a) {
+  const hoje = new Date().toISOString().slice(0, 10)
+  return `<div class="ato-form">
+    <div class="cad-row">
+      ${parRot('Tipo', `<select data-combo name="ato_f_tipo">${parState.tiposAtoBairro.map(t =>
+        `<option value="${t.valor}"${t.valor === a.tipo ? ' selected' : ''}>${esc(t.rotulo)}</option>`).join('')}</select>`, 'flex:1')}
+      ${parRot('Lei ou decreto', parInp('ato_f_ato', a.ato, 'maxlength="160" placeholder="Decreto 655/2001"'), 'flex:1')}
+    </div>
+    <div class="cad-row">
+      ${parRot('Data', parInp('ato_f_data', a.data, `type="date" max="${hoje}"`), 'flex:1')}
+      ${parRot('Área total (m²)', parInp('ato_f_area', a.area_m2 != null ? fmtBR(a.area_m2) : '', 'inputmode="decimal" placeholder="opcional" style="text-align:right"'), 'flex:1')}
+    </div>
+    <div class="cad-row">${parRot('Observação', parInp('ato_f_obs', a.observacao, 'maxlength="200" placeholder="opcional — ex.: Ampliação II, quadras 41 a 45"'), 'flex:1')}</div>
+    <div class="ato-form-botoes">
+      <button type="button" class="btn sm" onclick="cancelarAtoDoBairro()">Cancelar</button>
+      <button type="button" class="btn primary sm" onclick="confirmarAtoDoBairro()">${parState.atosBairro.ed === 'novo' ? 'Acrescentar' : 'Salvar ato'}</button>
+    </div>
+  </div>`
+}
+
+function pintarAtosDoBairro() {
+  const el = document.getElementById('atos-bairro')
+  if (el) el.innerHTML = htmlAtosDoBairro()
+  el?.querySelector('[name="ato_f_ato"]')?.focus()
+}
+
+function novoAtoDoBairro() { parState.atosBairro.ed = 'novo'; pintarAtosDoBairro() }
+function editarAtoDoBairro(i) { parState.atosBairro.ed = i; pintarAtosDoBairro() }
+function cancelarAtoDoBairro() { parState.atosBairro.ed = null; pintarAtosDoBairro() }
+function tirarAtoDoBairro(i) {
+  parState.atosBairro.lista.splice(i, 1)
+  parState.atosBairro.ed = null
+  pintarAtosDoBairro()
+}
+
+function confirmarAtoDoBairro() {
+  const st = parState.atosBairro
+  const campo = n => document.querySelector(`#atos-bairro [name="${n}"]`)?.value.trim() ?? ''
+  const ato = campo('ato_f_ato'), data = campo('ato_f_data'), areaTxt = campo('ato_f_area')
+  if (!ato) { toast('Informe a lei ou o decreto', 'err'); return }
+  if (data && data > new Date().toISOString().slice(0, 10)) { toast('A data do ato não pode ser no futuro', 'err'); return }
+  const area = areaTxt === '' ? null : lerNumeroBR(areaTxt)
+  if (areaTxt !== '' && !(area >= 0)) { toast('Área inválida — use o formato 1.234,56', 'err'); return }
+  const novo = { tipo: campo('ato_f_tipo') || 'aprovacao', ato, data: data || null, area_m2: area, observacao: campo('ato_f_obs') || null }
+  if (st.ed === 'novo') st.lista.push(novo)
+  else st.lista[st.ed] = { ...st.lista[st.ed], ...novo }
+  st.ed = null
+  pintarAtosDoBairro()
 }
 
 async function salvarBairro() {
   const codigo = parCampo('codigo'), nome = parCampo('nome_cadastro')
   if (!codigo || !nome) { toast('Informe o código e o nome do bairro', 'err'); return }
+  const st = parState.atosBairro
+  if (st?.ed != null) { toast('Conclua ou cancele o ato aberto antes de salvar o bairro', 'err'); return }
   await parGravar('/api/parametros/bairros', {
     id: parState.ed.id === 'novo' ? null : parState.ed.id,
     codigo,
@@ -1359,8 +1465,11 @@ async function salvarBairro() {
     // de GIS, e string vazia colidiria com a próxima no índice único.
     nome_gis: parCampo('nome_gis') || null,
     apelido: parCampo('apelido') || null,
-    ato_aprovacao: parCampo('ato_aprovacao') || null,
-    data_aprovacao: parCampo('data_aprovacao') || null,
+    // A lista inteira de atos, como está na tela (o servidor tira o que saiu).
+    atos: (st?.lista || []).map(a => ({
+      id: a.id || null, tipo: a.tipo, ato: a.ato, data: a.data || null,
+      area_m2: a.area_m2 ?? null, observacao: a.observacao || null,
+    })),
   }, carregarParametros)
 }
 

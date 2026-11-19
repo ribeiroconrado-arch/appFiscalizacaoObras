@@ -40,6 +40,13 @@ class ParametroController extends Controller
     {
         if ($erro = $this->exigirAdmin($r)) { return $erro; }
 
+        // A área do contorno de cada bairro no mapa, pelo nome do desenho:
+        // a tela de Bairros confere com ela a soma das áreas dos atos.
+        $areasDosContornos = [];
+        foreach (DB::select('SELECT nome, ST_Area(geom) AS area FROM bairros') as $c) {
+            $areasDosContornos[\App\Cadastro\BairrosDoDesenho::chave($c->nome)] = round((float) $c->area, 2);
+        }
+
         return response()->json([
             'usuarios' => User::orderBy('name')->get()->map(fn (User $u) => [
                 'id' => $u->id, 'name' => $u->name, 'email' => $u->email,
@@ -74,15 +81,20 @@ class ParametroController extends Controller
             // Ordenados pelo CÓDIGO, que é como a lista da prefeitura vem e
             // como o cadastrador confere: procurar o 47 numa lista alfabética
             // é procurar duas vezes.
-            'bairros' => CadastroBairro::orderByRaw('CAST(codigo AS UNSIGNED)')->get()
+            'bairros' => CadastroBairro::with('atos')->orderByRaw('CAST(codigo AS UNSIGNED)')->get()
                 ->map(fn (CadastroBairro $b) => [
                     'id' => $b->id, 'codigo' => $b->codigo,
                     'nome_cadastro' => $b->nome_cadastro, 'nome_gis' => $b->nome_gis,
                     'apelido' => $b->apelido,
+                    // Calculados: a aprovação mais antiga da lista de atos.
                     'ato_aprovacao' => $b->ato_aprovacao,
                     'data_aprovacao' => $b->data_aprovacao?->format('Y-m-d'),
+                    'atos' => $b->atos->map(fn ($a) => $a->paraTela())->values(),
+                    // Para conferir a soma das áreas dos atos: a do contorno no mapa.
+                    'area_contorno_m2' => $b->nome_gis ? ($areasDosContornos[\App\Cadastro\BairrosDoDesenho::chave($b->nome_gis)] ?? null) : null,
                     'lotes' => $b->lotesEmUso(),
                 ]),
+            'tipos_ato_bairro' => collect(\App\Models\BairroAto::TIPOS)->map(fn ($r, $v) => ['valor' => $v, 'rotulo' => $r])->values(),
             'perfis' => User::PERFIS,
             'cargos' => User::CARGOS,
             'cargos_externos' => User::EXTERNOS,
@@ -428,20 +440,29 @@ class ParametroController extends Controller
             'nome_gis'      => ['nullable', 'string', 'max:160',
                 Rule::unique('cadastro_bairros', 'nome_gis')->ignore($r->input('id'))],
             'apelido'       => ['nullable', 'string', 'max:160'],
-            'ato_aprovacao' => ['nullable', 'string', 'max:160'],
-            'data_aprovacao' => ['nullable', 'date', 'before_or_equal:today'],
+            // OS ATOS DO BAIRRO (18/11/2026): a lista inteira, como está na
+            // tela. Ausente = não mexe nos atos; vazia = tira todos.
+            'atos'              => ['sometimes', 'array', 'max:60'],
+            'atos.*.id'         => ['nullable', 'integer'],
+            'atos.*.tipo'       => ['required', Rule::in(array_keys(\App\Models\BairroAto::TIPOS))],
+            'atos.*.ato'        => ['required', 'string', 'max:160'],
+            'atos.*.data'       => ['nullable', 'date', 'before_or_equal:today'],
+            'atos.*.area_m2'    => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+            'atos.*.observacao' => ['nullable', 'string', 'max:200'],
         ], [
             // A tradução do sistema não tem esta regra: sem isto a tela mostra
             // "validation.before_or_equal".
-            'data_aprovacao.before_or_equal' => 'A data da aprovação não pode ser no futuro.',
+            'atos.*.data.before_or_equal' => 'A data do ato não pode ser no futuro.',
+            'atos.*.ato.required'         => 'Informe a lei ou o decreto de cada ato.',
         ], [
             // Sem isto o erro sai como "Este nome gis já está cadastrado", com
             // o nome da COLUNA no lugar do nome do campo que a pessoa vê.
             'codigo'        => 'código',
             'nome_cadastro' => 'nome no cadastro',
             'nome_gis'      => 'nome no desenho',
-            'ato_aprovacao' => 'lei ou decreto de aprovação',
-            'data_aprovacao' => 'data da aprovação',
+            'atos.*.ato'    => 'lei ou decreto',
+            'atos.*.data'   => 'data do ato',
+            'atos.*.area_m2' => 'área do ato',
         ]);
 
         $bairro = CadastroBairro::find($d['id'] ?? null) ?? new CadastroBairro();
@@ -463,14 +484,40 @@ class ParametroController extends Controller
             }
         }
 
-        $bairro->fill([
-            'codigo'        => $d['codigo'],
-            'nome_cadastro' => $d['nome_cadastro'],
-            'nome_gis'      => $novo,
-            'apelido'       => trim((string) ($d['apelido'] ?? '')) ?: null,
-            'ato_aprovacao' => trim((string) ($d['ato_aprovacao'] ?? '')) ?: null,
-            'data_aprovacao' => ($d['data_aprovacao'] ?? null) ?: null,
-        ])->save();
+        DB::transaction(function () use ($bairro, $d, $novo) {
+            $bairro->fill([
+                'codigo'        => $d['codigo'],
+                'nome_cadastro' => $d['nome_cadastro'],
+                'nome_gis'      => $novo,
+                'apelido'       => trim((string) ($d['apelido'] ?? '')) ?: null,
+            ])->save();
+
+            if (array_key_exists('atos', $d)) {
+                // Linha a linha, e não "apaga tudo e recria": cada ato guarda a
+                // sua trilha de auditoria (quem mudou a data, quem tirou).
+                $existentes = $bairro->atos()->get()->keyBy('id');
+                $ficam = [];
+                foreach ($d['atos'] as $a) {
+                    $ato = isset($a['id']) ? $existentes->get((int) $a['id']) : null;
+                    $ato ??= new \App\Models\BairroAto(['cadastro_bairro_id' => $bairro->id]);
+                    $ato->fill([
+                        'tipo'       => $a['tipo'],
+                        'ato'        => trim($a['ato']),
+                        'data'       => ($a['data'] ?? null) ?: null,
+                        'area_m2'    => isset($a['area_m2']) && $a['area_m2'] !== '' ? round((float) $a['area_m2'], 2) : null,
+                        'observacao' => trim((string) ($a['observacao'] ?? '')) ?: null,
+                    ])->save();
+                    $ficam[] = $ato->id;
+                }
+                foreach ($existentes as $id => $ato) {
+                    if (! in_array($id, $ficam, true)) {
+                        $ato->delete();
+                    }
+                }
+                // O ato e a data do bairro: a aprovação mais antiga.
+                $bairro->recalcularAprovacao();
+            }
+        });
 
         // Código novo ou amarração nova mudam a inscrição dos lotes do bairro:
         // grava já, em vez de esperar alguém abrir o mapa ali.
