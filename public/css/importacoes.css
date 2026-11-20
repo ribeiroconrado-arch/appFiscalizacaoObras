@@ -639,3 +639,26 @@ table.per-mem tr.ruim td{background:rgba(217,119,6,.12)}
 .qd-vazio{color:var(--tx3);padding:4px 0}
 .qd-acoes{display:flex;gap:6px;justify-content:flex-end}
 @media (max-width:720px){ .qd-painel{left:8px;right:8px;width:auto;max-height:45%} }
+
+/* ── Etapas dos loteamentos (etapas-loteamentos.js) ─────────────────── */
+.et-legenda{position:absolute;bottom:28px;left:12px;z-index:900;width:250px;max-height:calc(100% - 120px);overflow-y:auto;overflow-x:hidden;
+  background:var(--sur);color:var(--tx);border:1.5px solid var(--bord);border-radius:10px;
+  box-shadow:0 6px 18px rgba(0,0,0,.18);padding:8px;font-size:12px;display:flex;flex-direction:column;gap:3px}
+.et-legenda[hidden]{display:none}
+.et-topo{padding:2px 4px 4px;font-size:12.5px}
+.et-item{box-sizing:border-box;display:grid;grid-template-columns:14px minmax(0,1fr);gap:8px;align-items:center;text-align:left;width:100%;
+  border:1px solid transparent;border-radius:6px;background:none;padding:4px;cursor:pointer;font:inherit;color:inherit}
+.et-item:hover:not(.et-fixo){background:var(--blt)}
+.et-item.sel{border-color:var(--gd)}
+.et-item.apagado{opacity:.45}
+.et-item.et-fixo{cursor:default}
+.et-item > i{width:14px;height:14px;border-radius:3px;opacity:.75}
+.et-item b{display:block;font-weight:600}
+.et-item small{display:block;color:var(--tx3)}
+.et-item .et-conf{font-size:11px}
+.et-tracejado{border:1.5px dashed #2563EB;background:rgba(37,99,235,.14) !important;opacity:1 !important}
+.et-selo,.et-selo-leg{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;
+  border:1.5px solid #A16207;color:#A16207;font:700 10.5px/1 system-ui,sans-serif;font-style:normal;opacity:1 !important}
+.et-botoes{display:flex;gap:6px;flex-wrap:wrap}
+.et-botoes .btn{flex:1}
+@media (max-width:720px){ .et-legenda{left:8px;width:220px;bottom:70px;max-height:35%} }

@@ -87,6 +87,62 @@ final class DecretosDasQuadras
     }
 
     /**
+     * A camada "Etapas dos loteamentos" (20/11/2026): as quadras de todo
+     * bairro com MAIS DE UM ato que cria quadra, cada uma com quem a criou.
+     * Bairro de decreto único fica de fora: não há etapa a separar.
+     *
+     * @param  callable(string):bool  $visivel  o bairro do desenho vai ao mapa de quem pede?
+     * @return array{bairros:array<string,array<string,mixed>>, type:string, features:list<array<string,mixed>>}
+     */
+    public function etapasDaCidade(callable $visivel): array
+    {
+        $bairros = [];
+        $cadastros = CadastroBairro::whereNotNull('nome_gis')->where('nome_gis', '<>', '')->get();
+        foreach ($cadastros as $b) {
+            if (! $visivel($b->nome_gis)) {
+                continue;
+            }
+            $d = $this->doBairro($b);
+            if (count(array_filter($d['atos'], fn ($a) => $a['papel'] === 'criou')) < 2) {
+                continue;
+            }
+            $bairros[$b->nome_gis] = $d;
+        }
+
+        $features = [];
+        if ($bairros) {
+            $marca = implode(',', array_fill(0, count($bairros), '?'));
+            $quadras = DB::select("SELECT bairro, numero, lotes_contados, rotulo_lat, rotulo_lon,
+                                          ST_Area(geom) AS area, ST_AsGeoJSON(geom, 6) AS geojson
+                                     FROM quadras WHERE bairro IN ({$marca})", array_keys($bairros));
+            foreach ($quadras as $q) {
+                $d = $bairros[$q->bairro];
+                $n = NumeroDoLote::normalizar((string) $q->numero) ?? (string) $q->numero;
+                $marcado = $d['criou'][$n] ?? null;
+                $features[] = [
+                    'type'       => 'Feature',
+                    'geometry'   => json_decode($q->geojson, true),
+                    'properties' => [
+                        'bairro'    => $q->bairro,
+                        'quadra'    => $n,
+                        'criou'     => $marcado ?? $d['padrao'],
+                        'presumido' => $marcado === null,
+                        'alterou'   => $d['alterou'][$n] ?? [],
+                        'area'      => round((float) $q->area, 2),
+                        'lotes'     => (int) $q->lotes_contados,
+                        'rotulo'    => [(float) $q->rotulo_lat, (float) $q->rotulo_lon],
+                    ],
+                ];
+            }
+        }
+
+        // Só o que a camada usa: a lista dos atos e o padrão.
+        $bairros = array_map(fn ($d) => ['padrao' => $d['padrao'], 'atos' => $d['atos']], $bairros);
+
+        return ['bairros' => $bairros, 'type' => 'FeatureCollection', 'features' => $features];
+    }
+
+    /**
      * Substitui as marcações do bairro pelas da tela. `criou` apontando para a
      * aprovação padrão não é gravado (é o próprio padrão). Cada ato precisa ser
      * do bairro e ter o papel certo.

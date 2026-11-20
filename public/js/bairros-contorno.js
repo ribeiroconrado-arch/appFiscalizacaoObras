@@ -531,6 +531,8 @@ function _cliqueNoBairro(ev) {
   const mapa = mapaState.obj
   // Com uma ferramenta dona do clique (quadras por decreto, medir…) o bairro não abre balão.
   if (typeof _ferramentaComOClique === 'function' && _ferramentaComOClique()) return
+  // Com a camada "Etapas dos loteamentos" ligada, a quadra sob o cursor abre o balão dela.
+  if (typeof cliqueNaEtapa === 'function' && cliqueNaEtapa(ev)) return
   const f = bairroSobOCursor(ev.latlng)
   if (!f) return
   const p = f.properties || {}

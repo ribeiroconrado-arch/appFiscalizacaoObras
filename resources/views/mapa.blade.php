@@ -266,6 +266,8 @@
 @if (auth()->user()->podeCurarCadastro() || auth()->user()->isAdmin())
   <div class="qd-painel" id="qd-painel" hidden></div>
 @endif
+{{-- Legenda da camada "Etapas dos loteamentos" (etapas-loteamentos.js): o bairro do centro do mapa. --}}
+<div class="et-legenda" id="et-legenda" hidden></div>
 <details class="mapa-fundo-seletor" aria-label="Fundo do mapa">
   <summary aria-label="Escolher fundo do mapa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 7 9-5 9 5-9 5zM3 12l9 5 9-5M3 17l9 5 9-5"/></svg><span id="fundo-mapa-atual">Cadastral</span><span aria-hidden="true">⌃</span></summary>
   <div class="fundo-mapa-opcoes" role="group" aria-label="Tipo de mapa">
@@ -4608,6 +4610,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/ruas-manuais.js')"></script>
 {{-- Quadras por decreto: a linha "Criado por" do balão do lote e a ferramenta da curadoria. --}}
 <script src="@assetv('js/decretos-quadras.js')"></script>
+{{-- Etapas dos loteamentos: a camada que pinta as quadras pelo decreto que as criou. --}}
+<script src="@assetv('js/etapas-loteamentos.js')"></script>
 <script src="@assetv('js/prancheta-cadastral.js')"></script>
 {{-- Mover lotes no mapa: usa planoLocal e o encaixe de desenho.js. --}}
 <script src="@assetv('js/mover-lotes.js')"></script>

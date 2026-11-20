@@ -106,6 +106,20 @@ try {
     $resp = pedir($admin, 'PUT', '/api/bairros/decretos-das-quadras', ['bairro' => 'Bairro Que Não Existe', 'criou' => []]);
     confere($resp->getStatusCode() === 422, 'bairro sem cadastro é recusado');
 
+    echo "Camada de etapas\n";
+    $e = $d->etapasDaCidade(fn (string $b) => $b === $nome);
+    confere(array_keys($e['bairros']) === [$nome], 'o bairro com ampliação entra na camada');
+    $porQ = array_column(array_column($e['features'], 'properties'), null, 'quadra');
+    confere(count($porQ) === 4, 'com as quatro quadras desenhadas');
+    confere($porQ['2']['criou'] === $amp->id && ! $porQ['2']['presumido'], 'a 2 é da ampliação, marcada');
+    confere($porQ['1']['criou'] === $aprov->id && $porQ['1']['presumido'], 'a 1 é da aprovação, sem marcação');
+    confere($d->etapasDaCidade(fn () => false)['features'] === [], 'bairro fora do mapa de quem pede não entra');
+    $unico = CadastroBairro::create(['codigo' => '984', 'nome_cadastro' => 'UNICO TESTE', 'nome_gis' => 'Unico Teste Decretos']);
+    BairroAto::create(['cadastro_bairro_id' => $unico->id, 'tipo' => 'aprovacao', 'ato' => 'Decreto 2/1990']);
+    confere(! isset($d->etapasDaCidade(fn () => true)['bairros']['Unico Teste Decretos']), 'bairro de decreto único fica de fora');
+    $resp = pedir($admin, 'GET', '/api/mapa/etapas');
+    confere($resp->getStatusCode() === 200 && isset(json_decode($resp->getContent(), true)['features']), 'a rota da camada responde');
+
     echo "Ato excluído\n";
     $amp->delete();
     confere(DB::table('bairro_ato_quadras')->where('bairro_ato_id', $amp->id)->doesntExist(), 'as quadras dele voltam à aprovação');

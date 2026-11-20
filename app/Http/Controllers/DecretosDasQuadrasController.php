@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Cadastro\DecretosDasQuadras;
+use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,23 @@ class DecretosDasQuadrasController extends Controller
         }
 
         return response()->json($saida);
+    }
+
+    /**
+     * GET /api/mapa/etapas — a camada "Etapas dos loteamentos". Segue a regra
+     * do contorno: bairro sem lote não vai ao mapa; só com lotes em revisão,
+     * só para a curadoria.
+     */
+    public function etapas(Request $r, LoteRepository $lotes): JsonResponse
+    {
+        $curador = $r->user()->podeCurarCadastro() || $r->user()->isAdmin();
+        $situacao = $lotes->situacaoDosBairros();
+
+        return response()->json($this->decretos->etapasDaCidade(function (string $bairro) use ($situacao, $curador) {
+            $s = $situacao[$bairro] ?? null;
+
+            return $s && ($curador || (int) $s->publicados > 0);
+        }));
     }
 
     /** PUT /api/bairros/decretos-das-quadras — {bairro, criou:{quadra:id}, alterou:{quadra:[ids]}} */

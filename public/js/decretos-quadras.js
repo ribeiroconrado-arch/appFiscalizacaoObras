@@ -329,6 +329,7 @@ async function gravarQuadrasPorDecreto() {
     qdState.mudou = false
     // O balão dos lotes passa a ler o que acabou de ser gravado.
     _decretosDoBairro.delete(qdState.bairro)
+    if (typeof recarregarEtapas === 'function') recarregarEtapas()
     toast('Quadras dos decretos gravadas.')
   } catch (e) {
     toast(e.message, 'erro')

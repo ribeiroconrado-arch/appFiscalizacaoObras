@@ -128,6 +128,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/mapa/bairros', [BairroContornoController::class, 'index'])->middleware('comprimir');
         Route::get('/mapa/quadras', [BairroContornoController::class, 'quadras'])->middleware('comprimir');
         Route::get('/mapa/quadras-silhueta', [BairroContornoController::class, 'silhuetaDasQuadras'])->middleware('comprimir');
+        // Camada "Etapas dos loteamentos": as quadras pelo decreto que as criou (DecretosDasQuadras).
+        Route::get('/mapa/etapas', [\App\Http\Controllers\DecretosDasQuadrasController::class, 'etapas'])->middleware('comprimir');
         Route::get('/bairros/lotes', [BairroContornoController::class, 'lotes'])->middleware('comprimir');
         Route::post('/bairros/contorno', [BairroContornoController::class, 'gravar']);
         // Quadras por decreto: o balão do lote lê; a curadoria marca (DecretosDasQuadras).
