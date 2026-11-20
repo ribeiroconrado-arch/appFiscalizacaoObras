@@ -1225,6 +1225,8 @@ function irPara(destino) {
     carregarDemandas()
   } else if (destino === 'painel') {
     carregarPainel()
+  } else if (destino === 'historico' && typeof prepararHistorico === 'function') {
+    prepararHistorico()
   }
 }
 

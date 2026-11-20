@@ -203,6 +203,10 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/lotes/{lote}/identidades', [\App\Http\Controllers\IdentidadesController::class, 'mostrar']);
         Route::post('/lotes/{lote}/identidades/previa', [\App\Http\Controllers\IdentidadesController::class, 'previa']);
         Route::post('/lotes/{lote}/identidades', [\App\Http\Controllers\IdentidadesController::class, 'aplicar']);
+        // A tela do ato e a tela "Histórico" (AtosDoCadastro): leitura.
+        Route::get('/lotes/{lote}/ato', [\App\Http\Controllers\AtosDoCadastroController::class, 'doLote']);
+        Route::get('/atos', [\App\Http\Controllers\AtosDoCadastroController::class, 'index']);
+        Route::get('/atos/{ato}', [\App\Http\Controllers\AtosDoCadastroController::class, 'mostrar'])->whereNumber('ato');
 
         // O histórico do lote: para o externo sai só O QUE houve e QUANDO, sem
         // o conteúdo — a redação é feita em VistoriaController::historico.

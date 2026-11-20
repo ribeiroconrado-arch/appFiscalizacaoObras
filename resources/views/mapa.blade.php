@@ -962,6 +962,21 @@
   <div id="busca-resultado"></div>
 </section>
 
+{{-- ══════ ABA: HISTÓRICO — os atos do cadastro (historico-atos.js) ══════ --}}
+@if ($temAba('historico') && ! $externo)
+<section class="tela" id="t-historico">
+  <div class="topo-lista">
+    <div class="sec-simples">Histórico do cadastro</div>
+  </div>
+  <div class="hist-barra">
+    <div class="hist-filtros" id="hist-filtros" role="group" aria-label="Tipo de ato"></div>
+    <input type="search" class="hist-busca" placeholder="Bairro, quadra, lote ou inscrição"
+           aria-label="Buscar no histórico" oninput="buscarNoHistorico(this.value)">
+  </div>
+  <div id="hist-lista" class="hist-lista"></div>
+</section>
+@endif
+
 {{-- ══════ ABA: DENÚNCIAS (Posturas) ══════
      O módulo Perturbação do AppPOSTURAS: a lista do que foi atendido em campo
      e o painel com os números. O mapa é o da aba Mapa, com a camada
@@ -1429,6 +1444,12 @@
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h.01M12 11h4M9 16h.01M12 16h4"/></svg>
     <span class="aba-txt aba-txt-longa">{{ $rotuloFila }}</span><span class="aba-txt aba-txt-curta" aria-hidden="true">{{ $modulo === 'obras' ? 'Prot. & OS' : 'Ordens' }}</span>
   </button>
+  @if ($temAba('historico'))
+  <button class="aba" data-destino="historico" title="Histórico" onclick="irPara('historico')">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/></svg>
+    <span class="aba-txt">Histórico</span>
+  </button>
+  @endif
   @endunless
 </nav>
 
@@ -1524,9 +1545,11 @@
            liga. Preenchida por renderProcedencia() (identidades.js); some sem dado. --}}
       <div class="fi-procedencia" id="fi-procedencia" hidden></div>
 
-      {{-- Modal da troca de identidades entre as partes de um desmembramento. --}}
+      {{-- A tela do ato (identidades.js): desenho, partes, histórico e a troca de
+           identidades. Vai para o corpo da página ao abrir (a tela Histórico
+           abre sem a ficha). --}}
       <div class="modal-bg" id="m-identidades" onclick="fecharIdentidades()">
-        <div class="modal modal-flex" onclick="event.stopPropagation()">
+        <div class="modal modal-ato" onclick="event.stopPropagation()">
           <button class="modal-x" onclick="fecharIdentidades()" aria-label="Fechar">&#10005;</button>
           <div id="m-identidades-corpo"></div>
         </div>
@@ -4582,6 +4605,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 <script src="@assetv('js/mapa.js')"></script>
 <script src="@assetv('js/vistoria.js')"></script>
 <script src="@assetv('js/identidades.js')"></script>
+{{-- A tela Histórico: os atos do cadastro; cada linha abre a tela do ato (identidades.js). --}}
+<script src="@assetv('js/historico-atos.js')"></script>
 <script src="@assetv('js/mapa-cores.js')"></script>
 {{-- Depois de mapa-cores.js: `estiloColorido` consulta o `selState` daqui. A
      ordem não é obrigatória (o acesso é sempre em tempo de execução), mas

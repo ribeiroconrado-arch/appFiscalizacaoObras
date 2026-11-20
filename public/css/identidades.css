@@ -1,22 +1,79 @@
-/* Procedência (aba Dados da ficha) e troca de identidades do desmembramento. */
+/* A origem na ficha, a tela do ato e a tela Histórico (identidades.js, historico-atos.js). */
 
-.fi-procedencia { margin: 0 0 12px; padding: 10px 0; border-bottom: 1px solid var(--bord, #e5e5e5); }
-.fi-proc-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 4px 0; }
-.fi-proc-sub { font-size: 12px; opacity: .75; }
+/* ── Ficha › Dados: o cartão Origem ── */
+.fi-procedencia { margin: 0 0 12px; }
+.ato-origem { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--bord, #e5e5e5);
+  border-radius: 10px; background: var(--sur, #fff); }
+.ato-origem-mini { width: 78px; height: 60px; flex: none; color: var(--tx2, #555); }
+.ato-origem-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ato-origem-txt b { font-size: 14px; }
+.ato-origem-txt small { font-size: 12px; color: var(--tx3, #777); }
+.ato-k { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--tx3, #777); }
 
-.ident-lista { display: grid; gap: 10px; margin: 12px 0; }
-.ident-cartao { border: 1px solid var(--bord, #d8d8d8); border-radius: 8px; padding: 10px 12px; }
-.ident-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ident-pos { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
-.ident-setas { display: flex; gap: 6px; }
-.ident-sub { font-size: 12.5px; margin-top: 6px; opacity: .85; }
-.ident-aviso { font-size: 12px; margin-top: 6px; color: #8a5a00; }
-.ident-titulo { margin: 4px 40px 0 0; font-size: 16px; }
-.ident-explica { font-size: 13px; margin: 8px 0; }
-.ident-campo { display: grid; gap: 4px; font-size: 13px; margin-top: 8px; }
-.ident-campo textarea { width: 100%; font: inherit; padding: 6px 8px; }
-.ident-previa { margin-top: 10px; font-size: 13px; }
-.ident-trocas > div { padding: 2px 0; }
-.ident-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+/* ── O desenho ── */
+.ato-svg { display: block; color: var(--tx2, #555); }
+.ato-svg-num { font: 700 14px/1 system-ui, sans-serif; fill: var(--tx, #222); }
+.ato-svg-num.peq { font-size: 11px; }
+.ato-svg-num.muda { fill: #B45309; }
+.ato-svg-area { font: 11px/1 system-ui, sans-serif; fill: var(--tx3, #777); }
+
+/* ── A tela do ato ── */
+.modal.modal-ato { max-width: 760px; width: calc(100% - 24px); max-height: calc(var(--tela-alt, 100vh) - 28px); overflow-y: auto; }
+.ato-cab { padding-right: 36px; }
+.ident-titulo { margin: 4px 0 0; font-size: 17px; }
+.ident-explica { font-size: 13px; margin: 4px 0 10px; color: var(--tx3, #777); }
+.ato-grade { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+.ato-desenho { background: var(--blt, #f5f7fa); border-radius: 10px; padding: 10px; }
+.ato-desenho small { display: block; font-size: 11.5px; color: var(--tx3, #777); margin-top: 6px; }
+.ato-listas { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ato-listas .ato-k { margin-top: 4px; }
+.ato-lote { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 10px; align-items: start;
+  border: 1px solid var(--bord, #e5e5e5); border-radius: 8px; padding: 8px 10px; }
+.ato-lote.muda { border-color: #D97706; background: #FFFBEB; }
+.ato-lote > i { width: 12px; height: 12px; border-radius: 3px; margin-top: 3px; }
+.ato-tracejado { border: 1.5px dashed var(--tx3, #777); box-sizing: border-box; }
+.ato-lote-txt { font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.ato-lote-txt b { font-weight: 700; }
+.ato-lote-txt small { display: block; font-size: 11.5px; color: var(--tx3, #777); margin-top: 2px; }
+.ato-seta { color: #B45309; font-weight: 700; }
+.ato-escolha { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 6px; color: var(--tx2, #555); }
+.ato-escolha select { font: inherit; padding: 3px 6px; }
+.ato-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.ato-dica { color: var(--tx3, #777); font-size: 12px; }
+.ato-troca { border: 1px solid #F2DE9C; background: #FFF8E6; color: #7A4B00; border-radius: 8px; padding: 9px 11px; font-size: 12.5px; line-height: 1.45; }
+.ato-troca textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; font: inherit; padding: 6px 8px; color: var(--tx, #222); }
+.ato-troca-acoes { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.ato-obs { margin-top: 14px; font-size: 13px; }
+.ato-hist { margin-top: 14px; display: flex; flex-direction: column; gap: 2px; }
+.ato-hist-item { border-left: 2px solid var(--bord, #ddd); padding: 2px 0 8px 12px; margin-left: 4px; font-size: 13px; }
+.ato-hist-item.troca { border-left-color: #D97706; }
+.ato-hist-item small { display: block; font-size: 12px; color: var(--tx3, #777); }
 .ident-erro { color: #b42318; font-size: 13px; padding: 6px 0; }
-.ident-ok { color: #1a7f37; font-size: 13px; padding: 6px 0; }
+.ident-ok { color: #1a7f37; font-size: 13px; padding: 6px 0 10px; font-weight: 600; }
+.ato-realce-rot { background: #fff; border: 1.5px solid #1f2937; font-weight: 700; padding: 1px 6px; }
+@media (max-width: 640px) { .ato-grade { grid-template-columns: 1fr; } .ato-desenho { max-width: 280px; } }
+
+/* ── A tela Histórico ── */
+.hist-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.hist-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.hist-filtros button { border: 1px solid var(--bord, #ddd); background: var(--sur, #fff); border-radius: 8px; padding: 6px 11px;
+  font: inherit; font-size: 12.5px; cursor: pointer; color: var(--tx2, #555); }
+.hist-filtros button[aria-pressed="true"] { background: var(--gl, #e7f3ec); border-color: var(--gd, #1f7a4a); color: var(--gxd, #14532d); font-weight: 600; }
+.hist-busca { flex: 1; min-width: 220px; max-width: 360px; margin-left: auto; padding: 7px 10px; font: inherit; font-size: 13px;
+  border: 1px solid var(--bord, #ddd); border-radius: 8px; }
+.hist-lista { background: var(--sur, #fff); border: 1px solid var(--bord, #e5e5e5); border-radius: 10px; overflow: hidden; }
+.hist-cab, .hist-linha { display: grid; grid-template-columns: 100px minmax(0, 1fr) 160px; gap: 12px; padding: 10px 14px; text-align: left; }
+.hist-cab { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--tx3, #777); border-bottom: 1px solid var(--bord, #e5e5e5); }
+.hist-linha { width: 100%; border: 0; border-bottom: 1px solid var(--bord, #eee); background: none; font: inherit; font-size: 13px; color: inherit; cursor: pointer; }
+.hist-linha:hover { background: var(--blt, #f5f7fa); }
+.hist-linha:last-of-type { border-bottom: 0; }
+.hist-data, .hist-quem { color: var(--tx2, #555); }
+.hist-ato b { font-weight: 700; }
+.hist-ato small { display: block; color: var(--tx3, #777); margin-top: 2px; overflow-wrap: anywhere; }
+.hist-mais { margin: 10px auto; display: block; }
+.hist-lista .vazio-msg { padding: 16px; }
+@media (max-width: 640px) {
+  .hist-cab { display: none; }
+  .hist-linha { grid-template-columns: 1fr; gap: 2px; }
+  .hist-busca { margin-left: 0; max-width: none; }
+}

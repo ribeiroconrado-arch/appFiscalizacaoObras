@@ -26,7 +26,8 @@ return [
         'rotulo' => 'Obras',
         'titulo' => 'Fiscalização de Obras',
         'tipos'  => ['vistoria', 'notificacao', 'notificacao_embargo', 'auto_embargo', 'auto_infracao'],
-        'abas'   => ['painel', 'busca', 'mapa', 'documentos', 'protocolos'],
+        // 'historico': os atos do cadastro (desmembramentos, unificações, trocas).
+        'abas'   => ['painel', 'busca', 'mapa', 'documentos', 'protocolos', 'historico'],
         'parametros' => [],
     ],
 
