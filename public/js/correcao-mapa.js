@@ -19,6 +19,7 @@
 const CORR_TIPOS_DESENHO = {
   invalido: { rotulo: 'Contorno inválido', curto: 'contorno inválido', cor: '#EF9F27' },
   repetido: { rotulo: 'Número repetido no arquivo', curto: 'número repetido', cor: '#EF9F27' },
+  etapa: { rotulo: 'Conflito com o mapa (etapa)', curto: 'conflito da etapa', cor: '#E24B4A' },
 }
 
 /** As correções que o painel sabe lançar, com o nome do botão. */
@@ -102,6 +103,7 @@ function _corrMontar() {
     const p = i?.pendencias_desenho || { invalidos: [], repetidos: [] }
     junta('invalido', p.invalidos)
     junta('repetido', p.repetidos)
+    junta('etapa', p.etapa)
     junta('area_diferente', c.area_diferente)
     junta('nao_encontrados', c.nao_encontrados)
     junta('inativos', c.inativos)
@@ -151,6 +153,7 @@ const _corrItem = () => correcaoState.itens.find(it => it.chave === correcaoStat
 function _corrFrase(it) {
   if (it.tipo === 'invalido') return 'O contorno deste lote se cruza. Corrija os cantos com Editar lote, ou exclua e desenhe de novo.'
   if (it.tipo === 'repetido') return `O arquivo trazia dois lotes ${esc(it.lote)} na quadra ${esc(it.quadra)}: este entrou sem número. Informe o número certo, ou exclua o que sobrou.`
+  if (it.tipo === 'etapa') return `O arquivo da etapa trazia o lote ${esc(it.lote ?? '—')} na quadra ${esc(it.quadra ?? '—')}, mas ${esc(it.detalhe)}: ele entrou sem número. Informe o número certo, ajuste o desenho ou exclua.`
   if (it.tipo === 'area_diferente') {
     const cad = Number(it.area_cadastro) || 0, dif = Number(it.diferenca) || 0
     const rel = cad ? Math.abs(dif) / cad : 0
@@ -180,6 +183,7 @@ function _corrSugestoes(it) {
     case 'sem_lote': return ['desenho', ...justificar]
     case 'invalido': return ['editar', 'excluir']
     case 'repetido': return ['numero', 'excluir']
+    case 'etapa': return ['numero', 'editar', 'excluir']
   }
   return ['editar']
 }

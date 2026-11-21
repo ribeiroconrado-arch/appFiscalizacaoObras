@@ -134,18 +134,66 @@ class ImportacaoDeBairro
     }
 
     /**
+     * A ETAPA (21/11/2026): o arquivo é uma etapa de um bairro que já está no
+     * mapa. Os lotes passam a ter o nome do desenho desse bairro, qualquer
+     * que seja o nome no arquivo ("JARDIM RIVA II" entra como JARDIM RIVA).
+     *
+     * @param  array<string,mixed>  $lido  o de lerArquivo
+     * @return array<string,mixed>
+     */
+    private function comoEtapaDe(array $lido, string $bairro): array
+    {
+        $lido['nome_no_arquivo'] = $lido['bairros'];
+        foreach ($lido['linhas'] as &$l) {
+            $l['bairro'] = $bairro;
+            $l['chave'] = \App\Support\NumeroDoLote::naChave(mb_substr(
+                $bairro . '|' . ($l['quadra'] ?? '?') . '|' . ($l['numero_lote'] ?? '?'), 0, 180));
+        }
+        unset($l);
+        $lido['bairros'] = $lido['linhas'] ? [$bairro] : [];
+
+        return $lido;
+    }
+
+    /** As quadras dos lotes novos (sem os conflitos), em ordem natural. */
+    private function quadrasDosNovos(array $linhas, array $tipos): array
+    {
+        $q = [];
+        foreach ($linhas as $i => $l) {
+            if (($tipos[$i] ?? 'novo') === 'novo' && $l['quadra'] !== null) {
+                $q[$l['quadra']] = true;
+            }
+        }
+        $q = array_keys($q);
+        usort($q, 'strnatcmp');
+
+        return array_map('strval', $q);
+    }
+
+    /**
      * O que o arquivo traz e o que impede gravá-lo. NADA é gravado.
+     *
+     * Com `$etapa` (de, so_novos, ato_id), o arquivo é uma etapa de um bairro
+     * que já existe: os lotes são comparados com o mapa (EtapaDoBairro).
      *
      * É a conferência que faltou quando o Buritis entrou com 105 lotes sem
      * quadra: importação que grava direto só mostra o problema depois, no mapa.
      *
      * @return array<string,mixed>
      */
-    public function conferirArquivo(string $caminho, string $nome): array
+    public function conferirArquivo(string $caminho, string $nome, ?array $etapa = null): array
     {
         $lido = $this->lerArquivo($caminho, $nome);
-        $linhas = $lido['linhas'];
         $impedimentos = [];
+        $etapa = $etapa && ! empty($etapa['de']) ? $etapa : null;
+
+        if ($etapa) {
+            if (! DB::table('lotes')->where('bairro', $etapa['de'])->where('situacao', 'ativo')->exists()) {
+                $impedimentos[] = "O bairro {$etapa['de']} não tem lotes no mapa: importe-o como bairro novo.";
+            }
+            $lido = $this->comoEtapaDe($lido, $etapa['de']);
+        }
+        $linhas = $lido['linhas'];
 
         if (! $linhas) {
             $impedimentos[] = 'O arquivo não tem nenhum polígono com bairro.';
@@ -156,6 +204,25 @@ class ImportacaoDeBairro
                 . 'é o que permite revisar, publicar e desfazer cada um por si.';
         }
         $bairro = $lido['bairros'][0] ?? null;
+
+        // A comparação com o mapa: o que já existe, o que é novo, os conflitos.
+        $comparacao = null;
+        $atoDaEtapa = null;
+        if ($etapa && $linhas) {
+            $comparacao = app(\App\Cadastro\EtapaDoBairro::class)->classificar($linhas, $bairro);
+            if (! empty($etapa['ato_id'])) {
+                $dec = new \App\Cadastro\DecretosDasQuadras();
+                $atoDaEtapa = collect($dec->doBairro($dec->bairro($bairro))['atos'])
+                    ->first(fn ($a) => $a['id'] === (int) $etapa['ato_id'] && $a['papel'] === 'criou');
+                if (! $atoDaEtapa) {
+                    $impedimentos[] = 'O decreto escolhido não é uma aprovação, ampliação ou etapa deste bairro.';
+                }
+            }
+            $c = $comparacao['contagem'];
+            if (! empty($etapa['so_novos']) && $c['novo'] + $c['numero'] + $c['sobre'] === 0) {
+                $impedimentos[] = 'Todos os lotes do arquivo já existem no mapa, com o mesmo desenho: não há o que importar.';
+            }
+        }
 
         // Sem quadra ou sem número não há identidade: entra, e a correção é
         // feita no mapa com as ferramentas de curadoria.
@@ -186,7 +253,9 @@ class ImportacaoDeBairro
         // Lotes que JÁ EXISTEM ativos na base, pela chave de identidade — a
         // coluna gerada que o índice único usa.
         $conflitos = $this->conflitos($linhas);
-        if ($conflitos['total'] > 0) {
+        // Na etapa com "só os novos", o que já existe fica de fora e os
+        // conflitos entram sem número: não barram.
+        if ($conflitos['total'] > 0 && ! ($etapa && ! empty($etapa['so_novos']))) {
             $impedimentos[] = $conflitos['total'] . ' lote(s) do arquivo já existem na base. '
                 . 'Pela tela só se importa lote novo; reconciliar bairro já carregado é pelo comando gis:importar-lotes.';
         }
@@ -238,6 +307,21 @@ class ImportacaoDeBairro
             // A que bairro do cadastro o nome do arquivo está ligado — e, se
             // a nenhum, a lista para ligar já no carregamento.
             'vinculo'        => $bairro ? app(VinculoDoBairro::class)->situacao($bairro) : null,
+            'etapa'          => $etapa ? [
+                'de'              => $bairro,
+                'nome_no_arquivo' => $lido['nome_no_arquivo'] ?? [],
+                'so_novos'        => ! empty($etapa['so_novos']),
+                'ato'             => $atoDaEtapa ? ['id' => $atoDaEtapa['id'], 'ato' => $atoDaEtapa['ato'], 'rotulo' => $atoDaEtapa['rotulo']] : null,
+                'contagem'        => $comparacao['contagem'] ?? null,
+                'numero'          => array_slice($comparacao['numero'] ?? [], 0, self::AMOSTRA),
+                'sobre'           => array_slice($comparacao['sobre'] ?? [], 0, self::AMOSTRA),
+                'quadras_novas'   => $comparacao ? $this->quadrasDosNovos($linhas, $comparacao['tipos']) : [],
+                'desenho'         => $comparacao['desenho'] ?? null,
+                // Internos (o controlador tira antes de responder): a gravação usa.
+                '_tipos'          => $comparacao['tipos'] ?? [],
+                '_numero'         => $comparacao['numero'] ?? [],
+                '_sobre'          => $comparacao['sobre'] ?? [],
+            ] : null,
             'impedimentos'   => $impedimentos,
             'pode_gravar'    => $impedimentos === [],
         ];
@@ -247,14 +331,46 @@ class ImportacaoDeBairro
      * Carrega os lotes como RASCUNHO: existem na base, mas só quem carregou os
      * vê, e a importação ainda não vale — ver salvar() e descartar().
      */
-    public function gravar(string $caminho, string $nome, User $autor, ?int $cadastroBairroId = null): ImportacaoLote
+    public function gravar(string $caminho, string $nome, User $autor, ?int $cadastroBairroId = null, ?array $etapa = null): ImportacaoLote
     {
-        $conf = $this->conferirArquivo($caminho, $nome);
+        $conf = $this->conferirArquivo($caminho, $nome, $etapa);
         if (! $conf['pode_gravar']) {
             throw new RuntimeException(implode(' ', $conf['impedimentos']));
         }
 
-        $linhas = $this->lerArquivo($caminho, $nome)['linhas'];
+        $lido = $this->lerArquivo($caminho, $nome);
+        $et = $conf['etapa'];
+        if ($et) {
+            $lido = $this->comoEtapaDe($lido, $et['de']);
+        }
+        $linhas = $lido['linhas'];
+
+        // ETAPA: o que já existe fica de fora; o que conflita (mesmo número
+        // com outro desenho, ou sobreposto a outro lote) entra SEM número e
+        // vai para as pendências, como o repetido.
+        $conflitoDaEtapa = [];
+        if ($et) {
+            foreach ($et['_numero'] as $n) {
+                $conflitoDaEtapa[$n['indice']] = ['tipo' => 'numero',
+                    'detalhe' => "Q {$n['quadra']} · L {$n['lote']} já existe com outro desenho ({$n['iguais']}% em comum)",
+                    'outro_id' => $n['lote_id']];
+            }
+            foreach ($et['_sobre'] as $s) {
+                $conflitoDaEtapa[$s['indice']] = ['tipo' => 'sobre',
+                    'detalhe' => "cobre {$s['porcento']}% do Q " . ($s['cobre_quadra'] ?? '—') . ' · L ' . ($s['cobre_lote'] ?? '—')
+                        . ($s['cobre_bairro'] !== $et['de'] ? " ({$s['cobre_bairro']})" : ''),
+                    'outro_id' => $s['cobre_id']];
+            }
+            $tipos = $et['_tipos'];
+            foreach ($linhas as $i => &$l) {
+                $l['_etapa'] = $conflitoDaEtapa[$i] ?? null;
+                $l['_fora'] = ($tipos[$i] ?? 'novo') === 'existe';
+            }
+            unset($l);
+            $linhas = array_values(array_filter($linhas, fn ($l) => ! $l['_fora']));
+            $conf['etapa'] = collect($et)->except(['_tipos', '_numero', '_sobre', 'desenho', 'numero', 'sobre'])->all()
+                + ['ato_id' => $et['ato']['id'] ?? null];
+        }
 
         return DB::transaction(function () use ($conf, $linhas, $autor, $cadastroBairroId) {
             $imp = ImportacaoLote::create([
@@ -266,6 +382,22 @@ class ImportacaoDeBairro
                 'total_lotes'  => count($linhas),
                 'conferencia'  => collect($conf)->except(['hash', 'impedimentos', 'pode_gravar', 'vinculo'])->all(),
             ]);
+
+            // Os conflitos da etapa: um a um, sem número, anotados.
+            $conflitosEtapa = [];
+            foreach (array_filter($linhas, fn ($l) => ! empty($l['_etapa'])) as $l) {
+                DB::insert(
+                    'INSERT INTO lotes (bairro, quadra, numero_lote, chave, area_gis_m2, fonte, geom,
+                                        origem, importacao_id, em_revisao, created_at, updated_at)
+                     VALUES (?, ?, NULL, ?, ?, ?, ST_GeomFromGeoJSON(?, 1, 4326), ?, ?, 1, ?, ?)',
+                    [$l['bairro'], $l['quadra'], $l['chave'], $l['area_gis_m2'], $l['fonte'], $l['geojson'],
+                     'importacao', $imp->id, $l['ts'], $l['ts']]
+                );
+                $conflitosEtapa[] = ['lote_id' => (int) DB::getPdo()->lastInsertId(), 'quadra' => $l['quadra'],
+                    'lote' => $l['numero_lote'], 'tipo' => $l['_etapa']['tipo'], 'detalhe' => $l['_etapa']['detalhe'],
+                    'outro_id' => $l['_etapa']['outro_id']];
+            }
+            $linhas = array_values(array_filter($linhas, fn ($l) => empty($l['_etapa'])));
 
             // Quadra+lote que aparece mais de uma vez no arquivo: esses lotes
             // entram um a um, SEM número, e o id de cada um fica anotado na
@@ -338,6 +470,7 @@ class ImportacaoDeBairro
 
             $imp->update(['conferencia' => ($imp->conferencia ?? []) + [
                 'repetidos_lotes'    => $repetidosLotes,
+                'conflitos_etapa'    => $conflitosEtapa,
                 'geometria_invalida' => (int) $d->geometria_invalida,
             ]]);
 
@@ -373,10 +506,17 @@ class ImportacaoDeBairro
             ->whereIn('id', $anotados->pluck('lote_id'))->where('importacao_id', $imp->id)
             ->where('situacao', 'ativo')->whereNull('numero_lote')->pluck('id')->flip();
 
+        // Os conflitos da etapa: saem da lista quando o lote ganha número ou é excluído.
+        $daEtapa = collect($imp->conferencia['conflitos_etapa'] ?? []);
+        $etapaAberta = $daEtapa->isEmpty() ? collect() : DB::table('lotes')
+            ->whereIn('id', $daEtapa->pluck('lote_id'))->where('importacao_id', $imp->id)
+            ->where('situacao', 'ativo')->whereNull('numero_lote')->pluck('id')->flip();
+
         return [
             'invalidos' => array_map(fn ($l) => ['lote_id' => (int) $l->id, 'quadra' => $l->quadra,
                 'lote' => $l->numero_lote], $invalidos),
             'repetidos' => $anotados->filter(fn ($r) => $semNumero->has($r['lote_id']))->values()->all(),
+            'etapa'     => $daEtapa->filter(fn ($r) => $etapaAberta->has($r['lote_id']))->values()->all(),
         ];
     }
 
@@ -538,11 +678,17 @@ class ImportacaoDeBairro
             DB::table('lotes')->where('importacao_id', $imp->id)->update(['em_revisao' => false]);
             // A conferência da importação passa a ser a do bairro (quando é mais
             // nova): é dela que saem os alertas de lote desatualizado no mapa.
-            $atual = DB::table('conferencias_bairro')->where('bairro', $imp->bairro)->value('conferido_em');
+            $linhaAtual = DB::table('conferencias_bairro')->where('bairro', $imp->bairro)->first(['conferido_em', 'resultado']);
+            $atual = $linhaAtual?->conferido_em;
             if ($imp->conferencia_cadastro && (! $atual || strtotime($atual) < strtotime((string) $imp->conferido_em))) {
+                // ETAPA (21/11/2026): a conferência da importação só fala dos
+                // lotes DELA. Sozinha, ela apagaria do mapa os alertas dos lotes
+                // de antes: as listas deles continuam, somadas.
+                $resultado = self::somarConferencia($imp->conferencia_cadastro,
+                    $linhaAtual ? json_decode((string) $linhaAtual->resultado, true) : null, $imp->id);
                 DB::table('conferencias_bairro')->updateOrInsert(['bairro' => $imp->bairro], [
                     'codigo_bairro' => $imp->conferencia_cadastro['codigo_bairro'] ?? null,
-                    'resultado'     => json_encode($imp->conferencia_cadastro, JSON_UNESCAPED_UNICODE),
+                    'resultado'     => json_encode($resultado, JSON_UNESCAPED_UNICODE),
                     'user_id'       => $admin->id,
                     'conferido_em'  => $imp->conferido_em,
                     'updated_at'    => now(),
@@ -555,16 +701,72 @@ class ImportacaoDeBairro
                 'publicado_em'  => now(),
                 'justificativa_publicacao' => $justificativa !== '' ? $justificativa : null,
             ]);
+            // ETAPA: as quadras só desta importação ficam com o decreto escolhido.
+            $etapa = $imp->conferencia['etapa'] ?? null;
+            $quadras = null;
+            if ($etapa) {
+                $quadras = app(\App\Cadastro\EtapaDoBairro::class)->marcarQuadras($imp, $etapa['ato_id'] ?? null);
+                $imp->update(['conferencia' => array_merge($imp->conferencia, ['etapa' => $etapa + ['quadras' => $quadras]])]);
+            }
+
             $this->auditar('publicou', $imp, ['status' => 'revisao'], [
                 'status' => 'publicada', 'divergencias' => $divergencias,
                 'justificativa' => $justificativa !== '' ? $justificativa : null,
-            ]);
+            ] + ($quadras ? ['quadras_do_decreto' => $quadras['marcadas'], 'quadras_mistas' => $quadras['mistas']] : []));
         });
 
         // Publicado, o bairro passa a valer: a inscrição dos lotes fica gravada.
         (new InscricoesGravadas())->gravar(
             DB::table('lotes')->where('importacao_id', $imp->id)->distinct()->pluck('bairro')->all()
         );
+    }
+
+    /**
+     * A conferência da importação somada à do bairro: as divergências dos
+     * lotes que NÃO são desta importação (e continuam ativos) seguem da
+     * conferência anterior. `sem_lote` olha o bairro inteiro e vem da nova.
+     *
+     * @param  array<string,mixed>       $nova
+     * @param  array<string,mixed>|null  $anterior
+     * @return array<string,mixed>
+     */
+    public static function somarConferencia(array $nova, ?array $anterior, int $importacaoId): array
+    {
+        if (! $anterior) {
+            return $nova;
+        }
+        $listas = ['nao_encontrados', 'inativos', 'sem_inscricao', 'area_diferente'];
+        $ids = [];
+        foreach ($listas as $t) {
+            foreach ($anterior[$t] ?? [] as $l) {
+                if (! empty($l['lote_id'])) {
+                    $ids[] = (int) $l['lote_id'];
+                }
+            }
+        }
+        if (! $ids) {
+            return $nova;
+        }
+        // Só os de outras importações, ainda ativos.
+        $vivos = DB::table('lotes')->whereIn('id', array_unique($ids))->where('situacao', 'ativo')
+            ->where(fn ($q) => $q->whereNull('importacao_id')->orWhere('importacao_id', '<>', $importacaoId))
+            ->pluck('id')->flip();
+        $somados = 0;
+        foreach ($listas as $t) {
+            $jaTem = collect($nova[$t] ?? [])->pluck('lote_id')->filter()->map(fn ($x) => (int) $x)->flip();
+            foreach ($anterior[$t] ?? [] as $l) {
+                $id = (int) ($l['lote_id'] ?? 0);
+                if ($id && $vivos->has($id) && ! $jaTem->has($id)) {
+                    $nova[$t][] = $l;
+                    $somados++;
+                }
+            }
+        }
+        $nova['total_divergencias'] = (int) ($nova['total_divergencias'] ?? 0) + $somados;
+        $nova['lotes_conferidos'] = (int) ($nova['lotes_conferidos'] ?? 0) + (int) ($anterior['lotes_conferidos'] ?? 0);
+        $nova['somada_a_anterior'] = $somados;
+
+        return $nova;
     }
 
     /**

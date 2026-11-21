@@ -662,3 +662,26 @@ table.per-mem tr.ruim td{background:rgba(217,119,6,.12)}
 .et-botoes{display:flex;gap:6px;flex-wrap:wrap}
 .et-botoes .btn{flex:1}
 @media (max-width:720px){ .et-legenda{left:8px;width:220px;bottom:70px;max-height:35%} }
+
+/* ── Importação de etapa de um bairro existente (importacoes.js, 21/11/2026) ── */
+.imp-etapa{border:1px solid var(--bord);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:var(--sur)}
+.imp-etapa-campos{display:flex;flex-wrap:wrap;gap:10px}
+.imp-etapa-campos label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--tx2);flex:1;min-width:200px}
+.imp-etapa-campos select{font:inherit;font-size:13px;padding:6px 8px;color:var(--tx)}
+.imp-etapa .imp-expl{margin:8px 0 0}
+.imp-etapa-comp{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:12px;margin:0 0 10px}
+.imp-etapa-mapa{border:1px solid var(--bord);border-radius:10px;padding:6px;background:#F7F7F5}
+.imp-etapa-svg{display:block}
+.imp-etapa-lado{display:flex;flex-direction:column;gap:6px}
+.imp-etapa-g{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left;width:100%;box-sizing:border-box;
+  border:1px solid var(--bord);border-radius:8px;background:var(--sur);padding:7px 9px;cursor:pointer;font:inherit;color:inherit}
+.imp-etapa-g:hover{border-color:var(--gm)}
+.imp-etapa-g.sel{border:2px solid var(--gd);padding:6px 8px}
+.imp-etapa-g.apag{opacity:.5}
+.imp-etapa-g > i{width:14px;height:14px;border-radius:3px}
+.imp-etapa-g b{font-weight:600}
+.imp-etapa-g small{display:block;color:var(--tx3);font-size:11.5px}
+.imp-etapa-g .imp-etapa-n{font-size:15px}
+.imp-etapa-so{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--blt);font-size:12.5px;cursor:pointer}
+.imp-etapa-ficha{margin:6px 0 8px}
+@media (max-width:720px){ .imp-etapa-comp{grid-template-columns:1fr} }

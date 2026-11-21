@@ -141,14 +141,37 @@ class ImportacaoController extends Controller
         if ($e = $this->recusarPerimetro($arquivo)) { return $e; }
 
         try {
-            $conf = $this->importacao->conferirArquivo($arquivo->getRealPath(), $arquivo->getClientOriginalName());
+            $conf = $this->importacao->conferirArquivo($arquivo->getRealPath(), $arquivo->getClientOriginalName(), $this->etapa($r));
         } catch (RuntimeException $ex) {
             return $this->recusa($ex);
         }
 
         unset($conf['hash']);
+        if ($conf['etapa']) {
+            unset($conf['etapa']['_tipos'], $conf['etapa']['_numero'], $conf['etapa']['_sobre']);
+        }
 
         return response()->json($conf);
+    }
+
+    /** A etapa pedida pela tela: "este arquivo é uma etapa de…" (ImportacaoDeBairro::conferirArquivo). */
+    private function etapa(Request $r): ?array
+    {
+        $de = trim((string) $r->input('etapa_de', ''));
+
+        return $de === '' ? null : [
+            'de'       => $de,
+            'so_novos' => $r->boolean('so_novos', true),
+            'ato_id'   => $r->integer('etapa_ato_id') ?: null,
+        ];
+    }
+
+    /** GET /api/importacoes/bairros-com-lotes — os bairros que podem receber uma etapa, com os decretos. */
+    public function bairrosQueRecebemEtapa(Request $r): JsonResponse
+    {
+        if ($e = $this->exigirCurador($r)) { return $e; }
+
+        return response()->json(app(\App\Cadastro\EtapaDoBairro::class)->bairrosQueRecebem());
     }
 
     /** POST /api/importacoes — carrega os lotes como RASCUNHO. */
@@ -160,7 +183,7 @@ class ImportacaoController extends Controller
 
         try {
             $imp = $this->importacao->gravar($arquivo->getRealPath(), $arquivo->getClientOriginalName(), $r->user(),
-                $r->integer('cadastro_bairro_id') ?: null);
+                $r->integer('cadastro_bairro_id') ?: null, $this->etapa($r));
         } catch (RuntimeException $ex) {
             return $this->recusa($ex);
         }
@@ -169,10 +192,13 @@ class ImportacaoController extends Controller
         $pendencias = array_filter([
             $p['invalidos'] ? count($p['invalidos']) . ' com contorno inválido' : null,
             $p['repetidos'] ? count($p['repetidos']) . ' com número repetido (entraram sem número)' : null,
+            $p['etapa'] ? count($p['etapa']) . ' em conflito com o mapa (entraram sem número)' : null,
         ]);
+        $fora = (int) ($imp->conferencia['etapa']['contagem']['existe'] ?? 0);
 
         return response()->json([
-            'message' => "{$imp->bairro} carregado como rascunho: {$imp->total_lotes} lotes. "
+            'message' => ($fora ? "Etapa de {$imp->bairro} carregada como rascunho: {$imp->total_lotes} lotes ({$fora} que já existiam ficaram de fora). "
+                    : "{$imp->bairro} carregado como rascunho: {$imp->total_lotes} lotes. ")
                 . ($pendencias ? 'Pendências do desenho: ' . implode(' e ', $pendencias) . ' — veja na ficha. '
                     : 'Faça a pré-curadoria e a conferência; ')
                 . ($pendencias ? 'A' : 'a') . ' importação só vale depois de salva.',

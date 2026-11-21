@@ -232,6 +232,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
 
         Route::get('/importacoes', [ImportacaoController::class, 'index']);
         Route::post('/importacoes/conferir', [ImportacaoController::class, 'conferirArquivo'])->middleware('throttle:pesado');
+        // Etapa de bairro existente: os bairros que podem receber, com os decretos (EtapaDoBairro).
+        Route::get('/importacoes/bairros-com-lotes', [ImportacaoController::class, 'bairrosQueRecebemEtapa']);
         Route::post('/importacoes', [ImportacaoController::class, 'gravar'])->middleware('throttle:pesado');
         Route::get('/importacoes/{importacao}', [ImportacaoController::class, 'mostrar']);
         Route::post('/importacoes/{importacao}/conferir-cadastro', [ImportacaoController::class, 'conferirCadastro'])->middleware('throttle:pesado');
