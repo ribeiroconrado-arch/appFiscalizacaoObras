@@ -350,7 +350,7 @@ async function conferirArquivoImportacao() {
   }
 
   // Arquivo novo: a escolha da etapa recomeça (o sistema sugere de novo).
-  impState.etapa = { modo: 'novo', de: '', ato: '', soNovos: true, foco: null, sugerida: false }
+  impState.etapa = { modo: 'novo', de: '', ato: '', soNovos: true, foco: null, sugerida: false, grupos: null }
   await _lerArquivoDaImportacao()
 }
 
@@ -368,11 +368,7 @@ async function _lerArquivoDaImportacao() {
   alvo.innerHTML = '<div class="vazio-msg">Lendo o arquivo…</div>'
   const fd = new FormData()
   fd.append('arquivo', arq)
-  if (et.modo === 'etapa' && et.de) {
-    fd.append('etapa_de', et.de)
-    fd.append('so_novos', et.soNovos ? '1' : '0')
-    if (et.ato) fd.append('etapa_ato_id', et.ato)
-  }
+  _impCamposDaEtapa(fd, et)
   try {
     const [c, bairros] = await Promise.all([
       _impPedir('/api/importacoes/conferir', { method: 'POST', body: fd }),
@@ -382,7 +378,19 @@ async function _lerArquivoDaImportacao() {
       et.sugerida = true
       const sugestao = _etapaSugerida(c, bairros)
       if (sugestao) {
-        Object.assign(et, { modo: 'etapa', de: sugestao.nome, ato: '', avisoSugestao: true })
+        Object.assign(et, { modo: 'etapa', de: sugestao.nome, ato: '', avisoSugestao: true, conferirRevisao: true })
+        return _lerArquivoDaImportacao()
+      }
+    }
+    // Lido como etapa, o arquivo mexe mais no que já existe do que acrescenta:
+    // é uma revisão de parte do bairro (mesmo número com outro desenho, ou
+    // sobreposto a lote do mapa, mais que os novos).
+    if (et.conferirRevisao && et.modo === 'etapa' && c.etapa?.contagem) {
+      et.conferirRevisao = false
+      const n = c.etapa.contagem, mexe = (n.numero || 0) + (n.sobre || 0)
+      if (mexe > 0 && mexe >= (n.novo || 0)) {
+        et.modoSugerido = { mexe, lidos: c.lidos }
+        Object.assign(et, { modo: 'revisao', ato: '' })
         return _lerArquivoDaImportacao()
       }
     }
@@ -393,7 +401,8 @@ async function _lerArquivoDaImportacao() {
     const b = document.getElementById('imp-gravar')
     b.disabled = !c.pode_gravar
     const n = c.etapa?.contagem
-    b.textContent = n && et.soNovos ? `Carregar ${(n.novo + n.numero + n.sobre).toLocaleString('pt-BR')} lotes da etapa como rascunho` : 'Carregar como rascunho'
+    b.textContent = c.etapa?.modo === 'revisao' ? 'Carregar a revisão como rascunho'
+      : n && et.soNovos ? `Carregar ${(n.novo + n.numero + n.sobre).toLocaleString('pt-BR')} lotes da etapa como rascunho` : 'Carregar como rascunho'
   } catch (e) {
     alvo.innerHTML = `<div class="cad-nota cad-erro">${esc(e.message)}</div>`
   }
@@ -419,46 +428,180 @@ function _etapaSugerida(c, bairros) {
   return alvo.length >= 5 ? bairros.find(b => _normEtapa(b.nome) === alvo) || null : null
 }
 
+/** Os campos da escolha (etapa ou revisão) que vão junto na leitura e no carregamento. */
+function _impCamposDaEtapa(fd, et) {
+  if (!et || et.modo === 'novo' || !et.de) return
+  fd.append('etapa_de', et.de)
+  fd.append('so_novos', et.soNovos ? '1' : '0')
+  if (et.ato) fd.append('etapa_ato_id', et.ato)
+  if (et.modo === 'revisao') {
+    fd.append('etapa_modo', 'revisao')
+    if (et.grupos) fd.append('revisao_grupos', et.grupos.join(','))
+  }
+}
+
 function _htmlEscolhaDaEtapa(c, bairros) {
   const et = impState.etapa
   const b = (bairros || []).find(x => x.nome === et.de)
-  const atos = b?.atos || []
+  const rev = et.modo === 'revisao'
+  const atos = (rev ? b?.atos_alteram : b?.atos) || []
   const nomeArq = c.etapa?.nome_no_arquivo?.[0] || c.bairro
+  const existente = et.modo === 'etapa' || rev
   return `
     <div class="imp-etapa">
       <div class="imp-etapa-campos">
         <label>Este arquivo é
           <select onchange="mudarEtapaDaImportacao('modo', this.value)">
             <option value="novo" ${et.modo === 'novo' ? 'selected' : ''}>Um bairro novo, ou o bairro inteiro</option>
-            <option value="etapa" ${et.modo === 'etapa' ? 'selected' : ''}>Uma etapa de um bairro que já existe</option>
+            <option value="etapa" ${et.modo === 'etapa' ? 'selected' : ''}>Uma etapa ou ampliação de um bairro que já existe</option>
+            <option value="revisao" ${rev ? 'selected' : ''}>Uma revisão de parte de um bairro que já existe</option>
           </select></label>
-        ${et.modo === 'etapa' ? `
-        <label>Etapa de
+        ${existente ? `
+        <label>${rev ? 'Revisão de' : 'Etapa de'}
           <select onchange="mudarEtapaDaImportacao('de', this.value)">
             <option value="">— escolha o bairro —</option>
             ${(bairros || []).map(x => `<option value="${esc(x.nome)}" ${x.nome === et.de ? 'selected' : ''}>${esc(x.nome)} (${x.lotes.toLocaleString('pt-BR')} lotes)</option>`).join('')}
           </select></label>
-        <label>Decreto da etapa
+        <label>${rev ? 'Ato da revisão' : 'Decreto da etapa'}
           <select onchange="mudarEtapaDaImportacao('ato', this.value)" ${et.de ? '' : 'disabled'}>
-            <option value="">Sem decreto ainda</option>
+            <option value="">${rev ? 'Sem ato: correção do desenho' : 'Sem decreto ainda'}</option>
             ${atos.map(a => `<option value="${a.id}" ${String(a.id) === String(et.ato) ? 'selected' : ''}>${esc(a.ato)} · ${esc(a.rotulo)}${a.area_m2 ? ' · ' + fmtBR(a.area_m2) + ' m²' : ''}</option>`).join('')}
           </select></label>` : ''}
       </div>
-      ${et.modo === 'etapa' && et.avisoSugestao ? `<p class="imp-expl">O sistema reconheceu o arquivo como etapa de <b>${esc(et.de)}</b>, que já tem lotes no mapa. Se não for, troque acima.</p>` : ''}
-      ${et.modo === 'etapa' && et.de && nomeArq && nomeArq !== et.de ? `<p class="imp-expl">O arquivo diz <b>${esc(nomeArq)}</b>: os lotes entram com o nome <b>${esc(et.de)}</b>, o mesmo do desenho do bairro.</p>` : ''}
+      ${rev && et.modoSugerido ? `<p class="imp-expl">O sistema leu o arquivo como <b>revisão</b>: ${et.modoSugerido.mexe.toLocaleString('pt-BR')} dos ${et.modoSugerido.lidos.toLocaleString('pt-BR')} lotes
+        do arquivo mexem em lotes que já estão no mapa de ${esc(et.de)}. Se for só uma etapa, troque acima.</p>`
+        : et.modo === 'etapa' && et.avisoSugestao ? `<p class="imp-expl">O sistema reconheceu o arquivo como etapa de <b>${esc(et.de)}</b>, que já tem lotes no mapa. Se não for, troque acima.</p>` : ''}
+      ${existente && et.de && nomeArq && nomeArq !== et.de ? `<p class="imp-expl">O arquivo diz <b>${esc(nomeArq)}</b>: os lotes entram com o nome <b>${esc(et.de)}</b>, o mesmo do desenho do bairro.</p>` : ''}
       ${et.modo === 'etapa' && et.de && !atos.length ? `<p class="imp-expl">O bairro não tem decretos em Parâmetros › Bairros: as quadras novas ficam sem marcação e valem como da aprovação.</p>` : ''}
+      ${rev && et.de && !atos.length ? `<p class="imp-expl">O bairro não tem decreto de alteração em Parâmetros › Bairros: a revisão entra como correção do desenho, sem marcar quadra.</p>` : ''}
     </div>
-    ${et.modo === 'etapa' && c.etapa ? _htmlComparacaoDaEtapa(c) : ''}`
+    ${et.modo === 'etapa' && c.etapa ? _htmlComparacaoDaEtapa(c) : ''}
+    ${rev && c.etapa ? `<div id="imp-rev">${_htmlComparacaoDaRevisao(c)}</div>` : ''}`
 }
 
 function mudarEtapaDaImportacao(campo, valor) {
   const et = impState.etapa
   et.avisoSugestao = false
-  if (campo === 'modo') { et.modo = valor; if (valor === 'novo') { et.de = ''; et.ato = '' } }
+  if (campo === 'modo') {
+    et.modo = valor; et.ato = ''; et.modoSugerido = null; et.foco = null
+    if (valor === 'novo') et.de = ''
+  }
   else if (campo === 'de') { et.de = valor; et.ato = '' }
   else if (campo === 'ato') et.ato = valor
   else if (campo === 'soNovos') et.soNovos = !!valor
   _lerArquivoDaImportacao()
+}
+
+/* ── REVISÃO DE PARTE DE UM BAIRRO QUE JÁ EXISTE (21/11/2026) ──────── */
+
+const REVISAO_TIPOS = {
+  igual:       { cor: '#888780', rotulo: 'Iguais ao mapa', dica: 'nada muda' },
+  desenho:     { cor: '#378ADD', rotulo: 'Desenho corrigido', dica: 'o mesmo lote, contorno novo', grupo: true },
+  numero:      { cor: '#BA7517', rotulo: 'Número trocado', dica: 'o mesmo lote · a inscrição acompanha', grupo: true },
+  desmembrado: { cor: '#7F77DD', rotulo: 'Desmembrados', dica: 'a mãe fica inativa, as partes entram', grupo: true },
+  unificado:   { cor: '#1D9E75', rotulo: 'Unificados', dica: 'viram um lote só', grupo: true },
+  novo:        { cor: '#639922', rotulo: 'Novos', dica: 'entram, como na etapa', grupo: true },
+  sumiu:       { cor: '#D85A30', rotulo: 'Sumiram no arquivo', dica: 'ficam no mapa, a menos que você marque', grupo: true },
+  duvidoso:    { cor: '#E24B4A', rotulo: 'Duvidosos', dica: 'entram sem número · decidir no mapa' },
+}
+
+function _revisaoGrupos(e) { return impState.etapa.grupos || e.grupos || [] }
+
+/** "3 → 7": do mapa para o arquivo, onde a conta muda. */
+function _revisaoQuantos(t, n) {
+  if (t === 'desmembrado') return `${(n.desmembrado_mapa || 0).toLocaleString('pt-BR')} → ${(n.desmembrado || 0).toLocaleString('pt-BR')}`
+  if (t === 'unificado') return `${(n.unificado_mapa || 0).toLocaleString('pt-BR')} → ${(n.unificado || 0).toLocaleString('pt-BR')}`
+  return Number(n[t] || 0).toLocaleString('pt-BR')
+}
+
+function _svgDaRevisao(d, foco) {
+  if (!d) return '<div class="imp-expl">Arquivo grande demais para o desenho da comparação; os números ao lado valem.</div>'
+  const pts = d.arquivo.flatMap(a => a.c).concat((d.sumiu || []).flat())
+  if (!pts.length) return ''
+  const lat0 = pts.reduce((s, p) => s + p[1], 0) / pts.length
+  const k = Math.cos(lat0 * Math.PI / 180)
+  const xs = pts.map(p => p[0] * k), ys = pts.map(p => -p[1])
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+  const L = 420, A = 280, pad = 10
+  const e = Math.min((L - 2 * pad) / (x1 - x0 || 1e-9), (A - 2 * pad) / (y1 - y0 || 1e-9))
+  const ox = (L - (x1 - x0) * e) / 2, oy = (A - (y1 - y0) * e) / 2
+  const cam = a => 'M' + a.map(p => `${(ox + (p[0] * k - x0) * e).toFixed(1)} ${(oy + (-p[1] - y0) * e).toFixed(1)}`).join('L') + 'Z'
+  const apag = t => foco && foco !== t
+  let s = d.mapa.map(a => `<path d="${cam(a)}" fill="#E7E6E1" stroke="#A9A79F" stroke-width=".8"/>`).join('')
+  s += d.arquivo.filter(a => a.t !== 'igual').map(a => {
+    const t = REVISAO_TIPOS[a.t]
+    return `<path d="${cam(a.c)}" fill="${t.cor}" fill-opacity="${apag(a.t) ? .06 : .4}" stroke="${t.cor}" stroke-opacity="${apag(a.t) ? .2 : 1}" stroke-width="1.2"/>`
+  }).join('')
+  s += (d.sumiu || []).map(a => `<path d="${cam(a)}" fill="none" stroke="${REVISAO_TIPOS.sumiu.cor}" stroke-opacity="${apag('sumiu') ? .2 : 1}" stroke-width="1.6" stroke-dasharray="4 3"/>`).join('')
+  if (foco === 'igual') s += d.arquivo.filter(a => a.t === 'igual').map(a => `<path d="${cam(a.c)}" fill="none" stroke="#444" stroke-width="1.4" stroke-dasharray="3 2"/>`).join('')
+  return `<svg viewBox="0 0 ${L} ${A}" width="100%" class="imp-etapa-svg" role="img" aria-label="A revisão comparada com o mapa">${s}</svg>
+    <small class="imp-expl">Cinza: o mapa de agora · cor: o que o arquivo muda · tracejado: o que o arquivo não traz.</small>`
+}
+
+/** Uma linha da lista de mudanças: de onde para onde. */
+function _revisaoLinha(m) {
+  const L = (q, l) => `Q ${esc(q ?? '—')} · L ${esc(l ?? '—')}`
+  const avisos = [m.impedimento ? `<span class="badge bd-er" title="${esc(m.impedimento)}">bloqueado</span>` : '',
+    m.vinculos ? `<span class="badge bd-al" title="Vistoria, documento ou obra ligados ao lote">${m.vinculos} vínculo${m.vinculos > 1 ? 's' : ''}</span>` : ''].join(' ')
+  const o = {
+    desenho:     () => `${L(m.quadra, m.lote)}</td><td>contorno novo (${m.iguais}% igual ao de agora)`,
+    numero:      () => `${L(m.quadra, m.lote)}</td><td>passa a ser <b>${L(m.para_quadra, m.para_lote)}</b>`,
+    desmembrado: () => `${L(m.quadra, m.lote)}</td><td>em ${m.partes.length} partes (no arquivo: ${m.partes.map(p => esc(p.lote ?? '—')).join(', ')})`,
+    unificado:   () => `${m.lotes.map(x => L(x.quadra, x.lote)).join(' + ')}</td><td>viram o lote <b>${esc(m.para_lote)}</b>`,
+    sumiu:       () => `${L(m.quadra, m.lote)}</td><td>não vem no arquivo: fica inativo`,
+  }[m.grupo]
+  return o ? `<tr><td>${o()} ${avisos}</td></tr>` : ''
+}
+
+function _htmlComparacaoDaRevisao(c) {
+  const e = c.etapa, et = impState.etapa, n = e.contagem || {}
+  const marcados = _revisaoGrupos(e)
+  const grupo = t => {
+    const T = REVISAO_TIPOS[t]
+    const caixa = T.grupo
+      ? `<input type="checkbox" ${marcados.includes(t) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="marcarGrupoDaRevisao('${t}', this.checked)" aria-label="Aplicar: ${esc(T.rotulo)}">`
+      : `<i class="imp-rev-sem"></i>`
+    return `<div class="imp-etapa-g imp-rev-g${et.foco === t ? ' sel' : ''}${et.foco && et.foco !== t ? ' apag' : ''}" data-tipo="${t}" role="button" tabindex="0" onclick="focarGrupoDaRevisao('${t}')">
+      ${caixa}<i style="background:${T.cor}"></i><span><b>${T.rotulo}</b><small>${T.dica}</small></span>
+      <b class="imp-etapa-n">${_revisaoQuantos(t, n)}</b></div>`
+  }
+  const tipos = ['igual', 'desenho', 'numero', 'desmembrado', 'unificado', 'novo', 'sumiu', 'duvidoso']
+    .filter(t => t === 'igual' || t === 'novo' || (t === 'desmembrado' ? n.desmembrado_mapa : t === 'unificado' ? n.unificado_mapa : n[t]))
+  const lista = (e.mudancas || []).filter(m => marcados.includes(m.grupo) && (!et.foco || et.foco === m.grupo))
+  const duvidosos = (e.duvidosos || []).map(x => `<tr><td>Q ${esc(x.quadra ?? '—')} · L ${esc(x.lote ?? '—')}</td><td>${esc(x.detalhe)}</td></tr>`)
+  const av = e.avisos || {}
+  return `
+    <div class="imp-etapa-comp">
+      <div class="imp-etapa-mapa" id="imp-etapa-mapa">${_svgDaRevisao(e.desenho, et.foco)}</div>
+      <div class="imp-etapa-lado">
+        <div class="sec-title">Área revisada: quadra${e.quadras?.length === 1 ? '' : 's'} ${esc(_impListaQuadras(e.quadras || []) || '—')}</div>
+        ${tipos.map(grupo).join('')}
+        <p class="imp-expl">Só as quadras do arquivo são tocadas: o resto de ${esc(e.de)} fica como está.
+          Clique num grupo para vê-lo no desenho; a caixa diz se ele é aplicado.</p>
+      </div>
+    </div>
+    ${av.bloqueados ? `<div class="cad-nota cad-aviso">${av.bloqueados} mudança(s) num terreno com frações ideais: ficam <b>bloqueadas</b> e não se aplicam. Desfaça as frações antes, se for o caso.</div>` : ''}
+    ${av.vinculos ? `<div class="cad-nota cad-aviso">${av.vinculos} mudança(s) mexem em lote com vistoria, documento ou obra. O vínculo segue o lote (no desmembramento e na unificação, fica com o lote de origem, como sempre).</div>` : ''}
+    ${lista.length ? `<table class="imp-tabela imp-rev-lista"><thead><tr><th>No mapa</th><th>O que muda</th></tr></thead><tbody>${lista.slice(0, 200).map(_revisaoLinha).join('')}</tbody></table>` : ''}
+    ${duvidosos.length ? `<table class="imp-tabela"><thead><tr><th>Duvidoso</th><th>Por quê</th></tr></thead><tbody>${duvidosos.join('')}</tbody></table>` : ''}
+    <div class="cad-nota imp-nota"><b>Ao publicar:</b> cada mudança marcada passa pela ferramenta de sempre (editar, desmembrar, unificar),
+      com as mesmas provas e o registro no Histórico${e.ato ? `, e as quadras revisadas ficam como alteradas pelo <b>${esc(e.ato.ato)}</b>` : ''}.
+      Uma que não passar (o lote mudou nesse meio tempo, por exemplo) fica relatada na ficha, e as outras seguem.</div>`
+}
+
+function marcarGrupoDaRevisao(t, sim) {
+  const et = impState.etapa, e = impState.confArquivo?.etapa
+  const atual = new Set(_revisaoGrupos(e || {}))
+  sim ? atual.add(t) : atual.delete(t)
+  et.grupos = Object.keys(REVISAO_TIPOS).filter(x => atual.has(x))
+  _lerArquivoDaImportacao()
+}
+
+function focarGrupoDaRevisao(t) {
+  const et = impState.etapa
+  et.foco = et.foco === t ? null : t
+  const alvo = document.getElementById('imp-rev'), c = impState.confArquivo
+  if (alvo && c?.etapa) alvo.innerHTML = _htmlComparacaoDaRevisao(c)
 }
 
 const ETAPA_TIPOS = {
@@ -535,6 +678,7 @@ function focarGrupoDaEtapa(t) {
 function _htmlEtapaNaFicha(i) {
   const e = i.conferencia?.etapa
   if (!e) return ''
+  if (e.modo === 'revisao') return _htmlRevisaoNaFicha(i, e)
   const n = e.contagem || {}
   const q = e.quadras
   return `<div class="cad-nota imp-nota imp-etapa-ficha">
@@ -542,6 +686,26 @@ function _htmlEtapaNaFicha(i) {
     ${n.existe ? ` · ${Number(n.existe).toLocaleString('pt-BR')} lotes que já existiam ficaram de fora` : ''}
     ${q ? `<br>Na publicação: ${q.marcadas.length ? `quadras ${esc(_impListaQuadras(q.marcadas))} marcadas como do decreto` : 'nenhuma quadra marcada'}${q.mistas.length
       ? `; quadra${q.mistas.length > 1 ? 's' : ''} <b>${esc(_impListaQuadras(q.mistas))}</b> já tinha${q.mistas.length > 1 ? 'm' : ''} lotes de antes: decida em "Quadras por decreto", no balão do bairro` : ''}.` : ''}
+  </div>`
+}
+
+/** Na ficha da revisão: o que vai mudar no mapa e, publicada, o que passou e o que não. */
+function _htmlRevisaoNaFicha(i, e) {
+  const ms = e.mudancas || [], r = e.resultado
+  const conta = {}
+  ms.forEach(m => { conta[m.grupo] = (conta[m.grupo] || 0) + 1 })
+  const resumo = Object.keys(REVISAO_TIPOS).filter(t => conta[t])
+    .map(t => `${REVISAO_TIPOS[t].rotulo} ${conta[t].toLocaleString('pt-BR')}`).join(' · ')
+  const falhas = r?.falhas || []
+  return `<div class="cad-nota imp-nota imp-etapa-ficha">
+    <b>Revisão de parte de ${esc(e.de)}</b>${e.ato ? ` · ${esc(e.ato.ato)} (${esc(e.ato.rotulo)})` : ' · correção do desenho, sem ato'}
+    · quadra${(e.quadras || []).length === 1 ? '' : 's'} ${esc(_impListaQuadras(e.quadras || []))}
+    <br>${r ? 'Mudanças no mapa' : 'Mudanças no mapa, que só valem na publicação'}: ${resumo || 'nenhuma'}.
+    ${r ? `<br>Na publicação: <b>${r.aplicadas.toLocaleString('pt-BR')}</b> aplicada(s).
+      ${r.quadras_marcadas?.length ? ` Quadras ${esc(_impListaQuadras(r.quadras_marcadas))} marcadas como alteradas pelo decreto.` : ''}
+      ${falhas.length ? `<br><b>${falhas.length}</b> não passaram — faça cada uma pela tela:` : ''}
+      ${falhas.length ? `<ul class="imp-rev-falhas">${falhas.map(f => `<li>${esc(REVISAO_TIPOS[f.grupo]?.rotulo || f.grupo)} · Q ${esc(f.quadra ?? '—')} · L ${esc(f.lote ?? '—')}: ${esc(f.motivo)}</li>`).join('')}</ul>` : ''}`
+      : ms.length ? `<table class="imp-tabela imp-rev-lista"><tbody>${ms.slice(0, 200).map(_revisaoLinha).join('')}</tbody></table>` : ''}
   </div>`
 }
 
@@ -559,8 +723,10 @@ function _htmlConferenciaArquivo(c) {
   c.repetidos.forEach(r => avisos.push(`<tr><td>Quadra ${esc(r.quadra)} · Lote ${esc(r.lote)} aparece ${r.vezes} vezes no arquivo — entram <b>sem número</b>, para você escolher no mapa qual é o certo</td><td class="num">${r.vezes}</td></tr>`))
   if (c.ignoradas) avisos.push(`<tr><td>Feições que não são polígono, ou sem bairro (ignoradas)</td><td class="num">${c.ignoradas}</td></tr>`)
   // Na etapa com "só os novos", o que já existe é separado acima (já existe / mesmo número): não é aviso aqui.
-  const etapaSoNovos = !!(c.etapa && c.etapa.so_novos)
+  const revisao = c.etapa?.modo === 'revisao'
+  const etapaSoNovos = !!(c.etapa && (c.etapa.so_novos || revisao))
   if (!etapaSoNovos) c.conflitos.forEach(x => avisos.push(`<tr><td>Quadra ${esc(x.quadra)} · Lote ${esc(x.lote)} já existe na base</td><td class="num">1</td></tr>`))
+  const emConflito = revisao ? (c.etapa.contagem?.duvidoso || 0) : (c.etapa?.contagem?.numero || 0) + (c.etapa?.contagem?.sobre || 0)
 
   return `
     <div class="imp-passos">1 Arquivo › <b>2 Leitura</b> › 3 Pré-curadoria e conferência › 4 Salvar</div>
@@ -571,14 +737,17 @@ function _htmlConferenciaArquivo(c) {
       ${kpi('Sem quadra', c.sem_quadra, c.sem_quadra ? 'aviso' : '')}
       ${kpi('Nº repetido', c.repetidos_total, c.repetidos_total ? 'aviso' : '')}
       ${etapaSoNovos
-        ? kpi('Conflito com o mapa', (c.etapa.contagem?.numero || 0) + (c.etapa.contagem?.sobre || 0), (c.etapa.contagem?.numero || 0) + (c.etapa.contagem?.sobre || 0) ? 'aviso' : 'ok')
+        ? kpi(revisao ? 'Duvidosos' : 'Conflito com o mapa', emConflito, emConflito ? 'aviso' : 'ok')
         : kpi('Conflito com a base', c.conflitos_total, c.conflitos_total ? 'erro' : 'ok')}
     </div>
     ${avisos.length ? `<table class="imp-tabela"><thead><tr><th>Aviso</th><th class="num">Lotes</th></tr></thead><tbody>${avisos.join('')}</tbody></table>` : ''}
     ${c.vinculo && c.pode_gravar ? _htmlVinculoBairro(c.bairro, c.vinculo, 'leitura') : ''}
     ${c.impedimentos.length
       ? `<div class="cad-nota cad-erro">${c.impedimentos.map(esc).join('<br>')}</div>`
-      : `<div class="cad-nota imp-nota">Os lotes entram como <b>rascunho</b>: só você enxerga, e a importação
+      : revisao
+        ? `<div class="cad-nota imp-nota">No rascunho entram só os lotes <b>novos</b> e os <b>duvidosos</b>. As mudanças nos lotes que
+             já estão no mapa ficam guardadas e só valem quando a importação for <b>publicada</b>.</div>`
+        : `<div class="cad-nota imp-nota">Os lotes entram como <b>rascunho</b>: só você enxerga, e a importação
            ainda não vale. Faça a pré-curadoria e a conferência; se estiver bom, <b>salve</b>. Se não, descarte.</div>`}`
 }
 
@@ -663,12 +832,7 @@ async function gravarImportacao() {
   fd.append('arquivo', impState.arquivo)
   const vinculo = _impVinculoEscolhido()
   if (vinculo) fd.append('cadastro_bairro_id', vinculo)
-  const et = impState.etapa
-  if (et?.modo === 'etapa' && et.de) {
-    fd.append('etapa_de', et.de)
-    fd.append('so_novos', et.soNovos ? '1' : '0')
-    if (et.ato) fd.append('etapa_ato_id', et.ato)
-  }
+  _impCamposDaEtapa(fd, impState.etapa)
   try {
     const d = await _impPedir('/api/importacoes', { method: 'POST', body: fd })
     toast(d.message)
@@ -970,8 +1134,8 @@ function _htmlPendenciasDoDesenho(i) {
     ${grupo('Número repetido no arquivo — entraram sem número',
       'Veja cada um no mapa: informe o número do que está certo <b>(N)</b> e renumere ou exclua <b>(X)</b> o outro.',
       p.repetidos, l => `<tr><td>Q ${esc(l.quadra)}</td><td>No arquivo era o lote <b>${esc(l.lote)}</b></td><td class="jt-acoes">${ver(l, 'repetido')}</td></tr>`)}
-    ${grupo('Conflito com o mapa (etapa) — entraram sem número',
-      'O lote do arquivo tem o número de um lote que já existe com outro desenho, ou fica em cima de outro lote. Veja no mapa: '
+    ${grupo(i.conferencia?.etapa?.modo === 'revisao' ? 'Duvidosos da revisão — entraram sem número' : 'Conflito com o mapa (etapa) — entraram sem número',
+      'O lote do arquivo tem o número de um lote que já existe com outro desenho, ou fica em parte em cima de outro lote. Veja no mapa: '
       + 'informe o número certo <b>(N)</b>, ajuste <b>(L)</b> ou exclua <b>(X)</b>.',
       p.etapa || [], l => `<tr><td>Q ${esc(l.quadra ?? '—')}</td><td>No arquivo era o lote <b>${esc(l.lote ?? '—')}</b> · ${esc(l.detalhe)}</td><td class="jt-acoes">${ver(l, 'etapa')}</td></tr>`)}`
 }

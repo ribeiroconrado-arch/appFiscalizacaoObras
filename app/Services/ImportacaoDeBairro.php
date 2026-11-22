@@ -155,6 +155,19 @@ class ImportacaoDeBairro
         return $lido;
     }
 
+    /** As mudanças da revisão sem as geometrias (para a tela e para a ficha). */
+    private static function semGeometria(array $ops): array
+    {
+        return array_map(function ($o) {
+            $o = collect($o)->except(['geometria', 'linhas'])->all();
+            if (isset($o['partes'])) {
+                $o['partes'] = array_map(fn ($p) => collect($p)->except('geometria')->all(), $o['partes']);
+            }
+
+            return $o;
+        }, $ops);
+    }
+
     /** As quadras dos lotes novos (sem os conflitos), em ordem natural. */
     private function quadrasDosNovos(array $linhas, array $tipos): array
     {
@@ -208,18 +221,34 @@ class ImportacaoDeBairro
         // A comparação com o mapa: o que já existe, o que é novo, os conflitos.
         $comparacao = null;
         $atoDaEtapa = null;
+        $revisao = $etapa && ($etapa['modo'] ?? 'etapa') === 'revisao';
+        $grupos = $revisao ? array_values(array_intersect($etapa['grupos'] ?? \App\Cadastro\RevisaoDoBairro::GRUPOS_PADRAO,
+            \App\Cadastro\RevisaoDoBairro::GRUPOS)) : [];
         if ($etapa && $linhas) {
-            $comparacao = app(\App\Cadastro\EtapaDoBairro::class)->classificar($linhas, $bairro);
+            $comparacao = $revisao
+                ? app(\App\Cadastro\RevisaoDoBairro::class)->classificar($linhas, $bairro, $grupos)
+                : app(\App\Cadastro\EtapaDoBairro::class)->classificar($linhas, $bairro);
             if (! empty($etapa['ato_id'])) {
                 $dec = new \App\Cadastro\DecretosDasQuadras();
+                $papel = $revisao ? 'alterou' : 'criou';
                 $atoDaEtapa = collect($dec->doBairro($dec->bairro($bairro))['atos'])
-                    ->first(fn ($a) => $a['id'] === (int) $etapa['ato_id'] && $a['papel'] === 'criou');
+                    ->first(fn ($a) => $a['id'] === (int) $etapa['ato_id'] && $a['papel'] === $papel);
                 if (! $atoDaEtapa) {
-                    $impedimentos[] = 'O decreto escolhido não é uma aprovação, ampliação ou etapa deste bairro.';
+                    $impedimentos[] = $revisao
+                        ? 'O decreto escolhido não é uma alteração deste bairro.'
+                        : 'O decreto escolhido não é uma aprovação, ampliação ou etapa deste bairro.';
                 }
             }
             $c = $comparacao['contagem'];
-            if (! empty($etapa['so_novos']) && $c['novo'] + $c['numero'] + $c['sobre'] === 0) {
+            if ($revisao) {
+                $mudam = count(array_filter($comparacao['operacoes'], fn ($o) => in_array($o['grupo'], $grupos, true)))
+                    + (in_array('novo', $grupos, true) ? $c['novo'] : 0) + $c['duvidoso'];
+                if ($mudam === 0) {
+                    $impedimentos[] = $c['igual'] === count($linhas)
+                        ? 'O arquivo é igual ao mapa nas quadras dele: não há o que revisar.'
+                        : 'Nenhuma mudança marcada: marque ao menos um grupo para revisar.';
+                }
+            } elseif (! empty($etapa['so_novos']) && $c['novo'] + $c['numero'] + $c['sobre'] === 0) {
                 $impedimentos[] = 'Todos os lotes do arquivo já existem no mapa, com o mesmo desenho: não há o que importar.';
             }
         }
@@ -255,7 +284,7 @@ class ImportacaoDeBairro
         $conflitos = $this->conflitos($linhas);
         // Na etapa com "só os novos", o que já existe fica de fora e os
         // conflitos entram sem número: não barram.
-        if ($conflitos['total'] > 0 && ! ($etapa && ! empty($etapa['so_novos']))) {
+        if ($conflitos['total'] > 0 && ! ($etapa && ($revisao || ! empty($etapa['so_novos'])))) {
             $impedimentos[] = $conflitos['total'] . ' lote(s) do arquivo já existem na base. '
                 . 'Pela tela só se importa lote novo; reconciliar bairro já carregado é pelo comando gis:importar-lotes.';
         }
@@ -307,7 +336,24 @@ class ImportacaoDeBairro
             // A que bairro do cadastro o nome do arquivo está ligado — e, se
             // a nenhum, a lista para ligar já no carregamento.
             'vinculo'        => $bairro ? app(VinculoDoBairro::class)->situacao($bairro) : null,
-            'etapa'          => $etapa ? [
+            'etapa'          => $etapa && $revisao ? [
+                'modo'            => 'revisao',
+                'de'              => $bairro,
+                'nome_no_arquivo' => $lido['nome_no_arquivo'] ?? [],
+                'grupos'          => $grupos,
+                'ato'             => $atoDaEtapa ? ['id' => $atoDaEtapa['id'], 'ato' => $atoDaEtapa['ato'], 'rotulo' => $atoDaEtapa['rotulo']] : null,
+                'contagem'        => $comparacao['contagem'] ?? null,
+                'avisos'          => $comparacao['avisos'] ?? null,
+                'quadras'         => $comparacao['quadras'] ?? [],
+                // As mudanças, sem as geometrias: a tela lista; a gravação usa as completas.
+                'mudancas'        => self::semGeometria(array_slice($comparacao['operacoes'] ?? [], 0, 400)),
+                'duvidosos'       => array_slice($comparacao['duvidosos'] ?? [], 0, self::AMOSTRA),
+                'desenho'         => $comparacao['desenho'] ?? null,
+                '_tipos'          => $comparacao['tipos'] ?? [],
+                '_operacoes'      => $comparacao['operacoes'] ?? [],
+                '_duvidosos'      => $comparacao['duvidosos'] ?? [],
+            ] : ($etapa ? [
+                'modo'            => 'etapa',
                 'de'              => $bairro,
                 'nome_no_arquivo' => $lido['nome_no_arquivo'] ?? [],
                 'so_novos'        => ! empty($etapa['so_novos']),
@@ -321,7 +367,7 @@ class ImportacaoDeBairro
                 '_tipos'          => $comparacao['tipos'] ?? [],
                 '_numero'         => $comparacao['numero'] ?? [],
                 '_sobre'          => $comparacao['sobre'] ?? [],
-            ] : null,
+            ] : null),
             'impedimentos'   => $impedimentos,
             'pode_gravar'    => $impedimentos === [],
         ];
@@ -349,7 +395,27 @@ class ImportacaoDeBairro
         // com outro desenho, ou sobreposto a outro lote) entra SEM número e
         // vai para as pendências, como o repetido.
         $conflitoDaEtapa = [];
-        if ($et) {
+        if ($et && $et['modo'] === 'revisao') {
+            // REVISÃO: no rascunho só entra o que é novo (com número) e o
+            // duvidoso (sem número, nas pendências). O que muda no mapa fica
+            // guardado e só vale na publicação (RevisaoDoBairro::aplicar).
+            foreach ($et['_duvidosos'] as $d) {
+                $conflitoDaEtapa[$d['indice']] = ['tipo' => 'duvidoso', 'detalhe' => $d['detalhe'], 'outro_id' => $d['outro_id']];
+            }
+            $tipos = $et['_tipos'];
+            $comNovos = in_array('novo', $et['grupos'], true);
+            foreach ($linhas as $i => &$l) {
+                $l['_etapa'] = $conflitoDaEtapa[$i] ?? null;
+                $t = $tipos[$i] ?? 'novo';
+                $l['_fora'] = ! ($t === 'duvidoso' || ($t === 'novo' && $comNovos));
+            }
+            unset($l);
+            $linhas = array_values(array_filter($linhas, fn ($l) => ! $l['_fora']));
+            $conf['revisao_operacoes'] = array_values(array_filter($et['_operacoes'],
+                fn ($o) => in_array($o['grupo'], $et['grupos'], true)));
+            $conf['etapa'] = collect($et)->except(['_tipos', '_operacoes', '_duvidosos', 'desenho', 'duvidosos', 'mudancas'])->all()
+                + ['ato_id' => $et['ato']['id'] ?? null, 'mudancas' => self::semGeometria($conf['revisao_operacoes'])];
+        } elseif ($et) {
             foreach ($et['_numero'] as $n) {
                 $conflitoDaEtapa[$n['indice']] = ['tipo' => 'numero',
                     'detalhe' => "Q {$n['quadra']} · L {$n['lote']} já existe com outro desenho ({$n['iguais']}% em comum)",
@@ -540,7 +606,7 @@ class ImportacaoDeBairro
                 . 'na ficha da importação. Edite ou exclua cada um na pré-curadoria antes de salvar.');
         }
         $ativos = DB::table('lotes')->where('importacao_id', $imp->id)->where('situacao', 'ativo')->count();
-        if ($ativos === 0) {
+        if ($ativos === 0 && empty($imp->conferencia['revisao_operacoes'])) {
             throw new RuntimeException('O rascunho não tem nenhum lote. Descarte-o em vez de salvar.');
         }
 
@@ -704,7 +770,7 @@ class ImportacaoDeBairro
             // ETAPA: as quadras só desta importação ficam com o decreto escolhido.
             $etapa = $imp->conferencia['etapa'] ?? null;
             $quadras = null;
-            if ($etapa) {
+            if ($etapa && ($etapa['modo'] ?? 'etapa') !== 'revisao') {
                 $quadras = app(\App\Cadastro\EtapaDoBairro::class)->marcarQuadras($imp, $etapa['ato_id'] ?? null);
                 $imp->update(['conferencia' => array_merge($imp->conferencia, ['etapa' => $etapa + ['quadras' => $quadras]])]);
             }
@@ -714,6 +780,25 @@ class ImportacaoDeBairro
                 'justificativa' => $justificativa !== '' ? $justificativa : null,
             ] + ($quadras ? ['quadras_do_decreto' => $quadras['marcadas'], 'quadras_mistas' => $quadras['mistas']] : []));
         });
+
+        // REVISÃO: as mudanças guardadas passam agora, uma a uma, pelas
+        // ferramentas de sempre (cada uma na sua transação, com a trilha dela).
+        $imp->refresh();
+        $etapa = $imp->conferencia['etapa'] ?? null;
+        if ($etapa && ($etapa['modo'] ?? null) === 'revisao') {
+            $rev = app(\App\Cadastro\RevisaoDoBairro::class);
+            $resultado = $rev->aplicar($imp);
+            $marcadas = $rev->marcarQuadras($imp, $etapa['ato_id'] ?? null, $etapa['quadras'] ?? []);
+            $imp->update(['conferencia' => array_merge($imp->conferencia, [
+                'etapa' => $etapa + ['resultado' => [
+                    'aplicadas' => count($resultado['aplicadas']), 'falhas' => $resultado['falhas'], 'quadras_marcadas' => $marcadas,
+                ]],
+            ])]);
+            $this->auditar('revisou', $imp, null, [
+                'bairro' => $imp->bairro, 'aplicadas' => $resultado['aplicadas'], 'falhas' => $resultado['falhas'],
+                'quadras_do_decreto' => $marcadas,
+            ]);
+        }
 
         // Publicado, o bairro passa a valer: a inscrição dos lotes fica gravada.
         (new InscricoesGravadas())->gravar(

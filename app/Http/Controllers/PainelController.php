@@ -437,6 +437,7 @@ class PainelController extends Controller
             'alterou prazo' => 'com prazo alterado',
             'carregou'     => 'carregado',
             'publicou'     => 'publicado',
+            'revisou'      => $feminino ? 'revisada' : 'revisado',
             'encerrou vigência' => 'com vigência encerrada',
             'descartou'    => 'descartado',
             'refez pelo memorial' => 'refeito pelo memorial',

@@ -95,7 +95,8 @@ class ImportacaoController extends Controller
         if ($e = $this->exigirCuradorDe($r, $importacao)) { return $e; }
 
         return response()->json($this->resumo($importacao) + [
-            'conferencia'          => $importacao->conferencia,
+            // As mudanças da revisão com as geometrias ficam no servidor (a ficha usa etapa.mudancas).
+            'conferencia'          => collect($importacao->conferencia ?? [])->except('revisao_operacoes')->all() ?: null,
             'conferencia_cadastro' => $importacao->conferencia_cadastro,
             'conferencia_em_dia'   => $importacao->emAndamento()
                 ? ! $this->importacao->mudouDepoisDaConferencia($importacao) : null,
@@ -148,7 +149,7 @@ class ImportacaoController extends Controller
 
         unset($conf['hash']);
         if ($conf['etapa']) {
-            unset($conf['etapa']['_tipos'], $conf['etapa']['_numero'], $conf['etapa']['_sobre']);
+            $conf['etapa'] = array_filter($conf['etapa'], fn ($k) => ! str_starts_with((string) $k, '_'), ARRAY_FILTER_USE_KEY);
         }
 
         return response()->json($conf);
@@ -159,8 +160,14 @@ class ImportacaoController extends Controller
     {
         $de = trim((string) $r->input('etapa_de', ''));
 
+        // REVISÃO de parte do bairro: os grupos marcados vêm separados por vírgula.
+        $revisao = $r->input('etapa_modo') === 'revisao';
+
         return $de === '' ? null : [
             'de'       => $de,
+            'modo'     => $revisao ? 'revisao' : 'etapa',
+            'grupos'   => $revisao && $r->has('revisao_grupos')
+                ? array_values(array_filter(explode(',', (string) $r->input('revisao_grupos')))) : null,
             'so_novos' => $r->boolean('so_novos', true),
             'ato_id'   => $r->integer('etapa_ato_id') ?: null,
         ];
@@ -195,10 +202,13 @@ class ImportacaoController extends Controller
             $p['etapa'] ? count($p['etapa']) . ' em conflito com o mapa (entraram sem número)' : null,
         ]);
         $fora = (int) ($imp->conferencia['etapa']['contagem']['existe'] ?? 0);
+        $mudancas = count($imp->conferencia['revisao_operacoes'] ?? []);
 
         return response()->json([
-            'message' => ($fora ? "Etapa de {$imp->bairro} carregada como rascunho: {$imp->total_lotes} lotes ({$fora} que já existiam ficaram de fora). "
-                    : "{$imp->bairro} carregado como rascunho: {$imp->total_lotes} lotes. ")
+            'message' => (($imp->conferencia['etapa']['modo'] ?? null) === 'revisao'
+                    ? "Revisão de {$imp->bairro} carregada como rascunho: {$mudancas} mudança(s) no mapa, que só valem na publicação, e {$imp->total_lotes} lote(s) novo(s) ou em dúvida. "
+                    : ($fora ? "Etapa de {$imp->bairro} carregada como rascunho: {$imp->total_lotes} lotes ({$fora} que já existiam ficaram de fora). "
+                    : "{$imp->bairro} carregado como rascunho: {$imp->total_lotes} lotes. "))
                 . ($pendencias ? 'Pendências do desenho: ' . implode(' e ', $pendencias) . ' — veja na ficha. '
                     : 'Faça a pré-curadoria e a conferência; ')
                 . ($pendencias ? 'A' : 'a') . ' importação só vale depois de salva.',

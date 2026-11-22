@@ -685,3 +685,12 @@ table.per-mem tr.ruim td{background:rgba(217,119,6,.12)}
 .imp-etapa-so{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--blt);font-size:12.5px;cursor:pointer}
 .imp-etapa-ficha{margin:6px 0 8px}
 @media (max-width:720px){ .imp-etapa-comp{grid-template-columns:1fr} }
+
+/* ── Revisão de parte de um bairro existente (importacoes.js, 21/11/2026) ── */
+.imp-rev-g{grid-template-columns:16px 14px minmax(0,1fr) auto}
+.imp-rev-g > input{margin:0;width:15px;height:15px;cursor:pointer}
+.imp-rev-g > i{width:14px;height:14px;border-radius:3px}
+.imp-rev-g > i.imp-rev-sem{width:15px;height:15px;background:none}
+.imp-rev-lista td:first-child{white-space:nowrap}
+.imp-rev-lista .badge{margin-left:4px;vertical-align:middle}
+.imp-rev-falhas{margin:6px 0 0;padding-left:18px}

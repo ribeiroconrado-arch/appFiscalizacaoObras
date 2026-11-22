@@ -159,12 +159,16 @@ final class EtapaDoBairro
             ->selectRaw('bairro, COUNT(*) AS n')->groupBy('bairro')->pluck('n', 'bairro');
         $dec = new DecretosDasQuadras();
         $atos = [];
+        $alteram = [];
         foreach (\App\Models\CadastroBairro::whereIn('nome_gis', $lotes->keys())->get() as $b) {
             $d = $dec->doBairro($b);
             $atos[$b->nome_gis] = array_values(array_filter($d['atos'], fn ($a) => $a['papel'] === 'criou'));
+            // Os da revisão de parte do bairro (RevisaoDoBairro): alteração.
+            $alteram[$b->nome_gis] = array_values(array_filter($d['atos'], fn ($a) => $a['papel'] === 'alterou'));
         }
 
-        return $lotes->map(fn ($n, $nome) => ['nome' => $nome, 'lotes' => (int) $n, 'atos' => $atos[$nome] ?? []])
+        return $lotes->map(fn ($n, $nome) => ['nome' => $nome, 'lotes' => (int) $n, 'atos' => $atos[$nome] ?? [],
+            'atos_alteram' => $alteram[$nome] ?? []])
             ->sortKeys()->values()->all();
     }
 
