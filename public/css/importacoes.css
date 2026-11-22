@@ -170,6 +170,7 @@
 .ruas-cor.o-sugestao{background:repeating-linear-gradient(90deg,#d97706 0 5px,transparent 5px 8px)}
 .ruas-cor.o-oculto{background:repeating-linear-gradient(90deg,#9ca3af 0 5px,transparent 5px 8px)}
 .ruas-desenhar{align-self:flex-start}
+.ruas-busca{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .ruas-legenda-pe{display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 12px;border-top:1.5px solid var(--blt);
   font-size:11px;color:var(--tx3);flex-shrink:0}
 .ruas-legenda-pe span{display:inline-flex;align-items:center;gap:5px}

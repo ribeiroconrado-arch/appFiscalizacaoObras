@@ -230,7 +230,12 @@ sobrescrito na carga seguinte. Na TELA (desde 22/11/2026), porém, a unidade
 viram um grupo, um clique seleciona o grupo, e a gravação vai num pedido só
 (`POST /api/ruas/manuais/lote`). O sem nome que continua, alinhado, uma rua com
 nome recebe esse nome como sugestão, aceita em bloco. O painel é uma mesa
-lateral (`#ruas-mesa`), sem balão. Rua sem lote de frente é desenhada com
+lateral (`#ruas-mesa`), sem balão. "Buscar nomes que faltam" consulta o
+OpenStreetMap ao vivo (`POST /api/ruas/osm`, Overpass, um dia de cache; a
+cópia do Fundo da cidade não serve, é recortada fora dos bairros): a via
+paralela a até 18 m do trecho sem nome dá o nome, que vira sugestão se bater
+com a lista do cadastro do bairro, e só pista se não bater. Nada é gravado
+até o curador aceitar. Rua sem lote de frente é desenhada com
 vários pontos (duplo clique termina). Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
 `ruas_manuais` (nunca apagada pelo "Gerar"); o manual cobre o gerado com que
 coincide na LEITURA (`App\Cadastro\TrechosDeRua`), com auditoria.

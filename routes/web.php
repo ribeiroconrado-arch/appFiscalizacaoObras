@@ -143,6 +143,7 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/ruas/logradouros', [\App\Http\Controllers\RuaManualController::class, 'logradouros']);
         Route::post('/ruas/manuais', [\App\Http\Controllers\RuaManualController::class, 'criar']);
         Route::post('/ruas/manuais/lote', [\App\Http\Controllers\RuaManualController::class, 'lote']);
+        Route::post('/ruas/osm', [\App\Http\Controllers\RuaManualController::class, 'osm']);
         Route::put('/ruas/manuais/{rua}', [\App\Http\Controllers\RuaManualController::class, 'alterar']);
         Route::delete('/ruas/manuais/{rua}', [\App\Http\Controllers\RuaManualController::class, 'excluir']);
         Route::get('/mapa/google-sessao', [MapaController::class, 'googleSessao']);

@@ -42,6 +42,15 @@ const ruaState = {
   /** @type {{pontos: L.LatLng[]}|null} rua sendo desenhada */ desenhando: null,
   /** @type {Array<{bairro:string, de:number[], ate:number[]}>|null} desenhada, esperando nome */ novo: null,
   /** @type {Map<string, {logradouros:string[], livre:boolean, cadastro:boolean}>} por bairro */ listas: new Map(),
+  /**
+   * O que a busca no OpenStreetMap achou, por trecho: `nome` é a grafia da
+   * lista do cadastro (vira sugestão); `osm`, o nome como está lá (só pista,
+   * quando não bate com a lista); os dois nulos, procurado e nada achado.
+   * Vive só na tela: nada disto é gravado até o curador aceitar.
+   * @type {Map<string, {nome:?string, osm:?string}>}
+   */
+  osm: new Map(),
+  buscandoOsm: false,
   gravando: false,
 }
 
@@ -80,6 +89,7 @@ function abrirNomesDeRua() {
     ruaState.realce = L.layerGroup().addTo(mapa)
     mapa.on('click', _cliqueNoMapaRuas)
     mapa.on('dblclick', _duploCliqueRuas)
+    mapa.on('moveend', _aoMoverRuas)
     document.addEventListener('keydown', _teclaRuas)
     window.addEventListener('resize', _posicionarMesaRuas)
 
@@ -105,6 +115,7 @@ function fecharNomesDeRua() {
   ruaState.camada = ruaState.realce = null
   mapa?.off('click', _cliqueNoMapaRuas)
   mapa?.off('dblclick', _duploCliqueRuas)
+  mapa?.off('moveend', _aoMoverRuas)
   document.removeEventListener('keydown', _teclaRuas)
   window.removeEventListener('resize', _posicionarMesaRuas)
   // A tela de desenho (canvas) do painel cobre o mapa inteiro e engoliria
@@ -115,6 +126,11 @@ function fecharNomesDeRua() {
   if (mesa) mesa.hidden = true
   if (ruaState.daCuradoria && typeof pedirVoltaACuradoria === 'function') pedirVoltaACuradoria()
   ruaState.daCuradoria = false
+}
+
+/** Mapa movido: a contagem "na tela" da busca no OpenStreetMap muda. Desenhando, nada. */
+function _aoMoverRuas() {
+  if (!ruaState.desenhando && !ruaState.gravando) pintarMesaRuas()
 }
 
 /** Com a régua da base de lotes à vista, a mesa fica ao lado dela, e não por cima. */
@@ -191,7 +207,7 @@ function _indexarRuas() {
         k: _kDoTrecho(bairro, t), bairro, t, a, b: bb, len,
         ux: (bb[0] - a[0]) / len, uy: (bb[1] - a[1]) / len,
         chave: t.nome && t.origem !== 'oculto' ? _chaveDaRua(t.nome) : null,
-        grupo: null, sugestao: null,
+        grupo: null, sugestao: null, fonte: null, pista: null,
       })
     }
   }
@@ -219,22 +235,35 @@ function _indexarRuas() {
 
   // Sugestões: o sem nome cujos vizinhos com nome concordam num nome só. Em
   // passadas, para atravessar dois ou três sem nome seguidos.
-  for (let passada = 0; passada < 4; passada++) {
-    let mudou = false
-    trechos.forEach((t, i) => {
-      if (t.t.origem !== 'sem_nome' || t.sugestao) return
-      const nomes = new Map()
-      for (const j of viz[i]) {
-        const u = trechos[j]
-        const nome = u.chave ? u.t.nome : u.sugestao
-        if (!nome) continue
-        const ch = _chaveDaRua(nome)
-        // O nome do mesmo bairro, se houver: é a grafia que a lista dele aceita.
-        if (!nomes.has(ch) || u.bairro === t.bairro) nomes.set(ch, nome)
-      }
-      if (nomes.size === 1) { t.sugestao = [...nomes.values()][0]; mudou = true }
-    })
-    if (!mudou) break
+  const continuacao = () => {
+    for (let passada = 0; passada < 4; passada++) {
+      let mudou = false
+      trechos.forEach((t, i) => {
+        if (t.t.origem !== 'sem_nome' || t.sugestao) return
+        const nomes = new Map()
+        for (const j of viz[i]) {
+          const u = trechos[j]
+          const nome = u.chave ? u.t.nome : u.sugestao
+          if (!nome) continue
+          const ch = _chaveDaRua(nome)
+          // O nome do mesmo bairro, se houver: é a grafia que a lista dele aceita.
+          if (!nomes.has(ch) || u.bairro === t.bairro) nomes.set(ch, nome)
+        }
+        if (nomes.size === 1) { t.sugestao = [...nomes.values()][0]; t.fonte = 'continuacao'; mudou = true }
+      })
+      if (!mudou) break
+    }
+  }
+  continuacao()
+  // Depois, o que a busca no OpenStreetMap achou para os que sobraram — e a
+  // continuação de novo, que agora tem mais nomes para propagar.
+  if (ruaState.osm.size) {
+    for (const t of trechos) {
+      const o = t.t.origem === 'sem_nome' && !t.sugestao ? ruaState.osm.get(t.k) : null
+      if (o?.nome) { t.sugestao = o.nome; t.fonte = 'osm' }
+      else if (o?.osm) t.pista = o.osm
+    }
+    continuacao()
   }
 
   ruaState.trechos = trechos
@@ -263,7 +292,9 @@ function aoMudarRuas() {
       L.DomEvent.stopPropagation(e)
       _clicarTrecho(x.k)
     })
-    linha.bindTooltip(x.t.nome || (x.sugestao ? `sem nome · sugestão: ${x.sugestao}` : ROTULO_ORIGEM[x.t.origem]),
+    linha.bindTooltip(x.t.nome
+      || (x.sugestao ? `sem nome · sugestão${x.fonte === 'osm' ? ' do OpenStreetMap' : ''}: ${x.sugestao}`
+        : x.pista ? `sem nome · OpenStreetMap: ${x.pista} (fora da lista do cadastro)` : ROTULO_ORIGEM[x.t.origem]),
       { sticky: true, direction: 'top' })
     ruaState.camada.addLayer(linha)
   }
@@ -374,11 +405,23 @@ function pintarMesaRuas() {
 
   if (n.sugestoes && ruaState.filtro !== 'sugestoes' && !ruaState.desenhando && !ruaState.novo) {
     partes.push(`<div class="ruas-sugere">
-      <b>${n.sugestoes} ${n.sugestoes === 1 ? 'trecho sem nome continua' : 'trechos sem nome continuam'} uma rua com nome.</b>
+      <b>${n.sugestoes} ${n.sugestoes === 1 ? 'trecho sem nome tem' : 'trechos sem nome têm'} sugestão de nome.</b>
       <div class="ruas-botoes">
         <button type="button" class="btn sm primary" onclick="aceitarSugestoesDeRua()" ${ruaState.gravando ? 'disabled' : ''}>Aceitar ${n.sugestoes === 1 ? 'a sugestão' : 'as ' + n.sugestoes}</button>
         <button type="button" class="btn sm" onclick="filtrarRuas('sugestoes')">Ver uma a uma</button>
       </div></div>`)
+  }
+
+  // A busca no OpenStreetMap: para os sem nome À VISTA que ainda não têm
+  // sugestão nem foram procurados.
+  if (!ruaState.desenhando && !ruaState.novo) {
+    const faltam = _semNomeParaBuscar().length
+    if (faltam || ruaState.buscandoOsm) {
+      partes.push(`<div class="ruas-busca">
+        <button type="button" class="btn sm" onclick="buscarNomesNoOsm()" ${ruaState.buscandoOsm ? 'disabled' : ''}>
+          ${ruaState.buscandoOsm ? 'Buscando no OpenStreetMap…' : `Buscar nomes que faltam (${faltam} na tela)`}</button>
+        <span class="ruas-nota">Consulta o OpenStreetMap; nada é gravado até você aceitar.</span></div>`)
+    }
   }
 
   const filtros = [['todas', 'Ruas'], ['sem_nome', 'Sem nome'], ['sugestoes', 'Sugestões'], ['manual', 'À mão']]
@@ -389,6 +432,10 @@ function pintarMesaRuas() {
   if (!ruaState.desenhando && !ruaState.novo) {
     partes.push(`<button type="button" class="btn sm ruas-desenhar" onclick="comecarDesenhoRua()"
       title="Rua sem lote de frente: rodovia, avenida ao lado de área verde">Desenhar rua</button>`)
+  }
+  // ODbL: o nome que veio de lá cita a fonte.
+  if (ruaState.trechos.some(t => t.fonte === 'osm' || t.pista)) {
+    partes.push('<div class="ruas-nota">Nomes sugeridos pelo OpenStreetMap: © colaboradores do OpenStreetMap.</div>')
   }
   corpo.innerHTML = partes.join('')
   _preencherComboRuas()
@@ -413,7 +460,12 @@ function _htmlSelecao() {
   const total = sel.reduce((s, t) => s + t.len, 0)
   const temManual = sel.some(t => t.t.id)
   const n = sel.length
-  const dica = !nomes.length && sugestoes.length === 1 ? `<div class="ruas-dica">Continua a <b>${esc(sugestoes[0])}</b>.</div>` : ''
+  const pistas = [...new Set(sel.map(t => t.pista).filter(Boolean))]
+  const doOsm = sel.some(t => t.fonte === 'osm')
+  const dica = !nomes.length && sugestoes.length === 1
+    ? `<div class="ruas-dica">${doOsm ? 'O OpenStreetMap chama de' : 'Continua a'} <b>${esc(sugestoes[0])}</b>.</div>`
+    : !nomes.length && !sugestoes.length && pistas.length === 1
+      ? `<div class="ruas-dica">O OpenStreetMap chama de <b>${esc(pistas[0])}</b>, que não está na lista do cadastro do bairro.</div>` : ''
   return `<div class="ruas-sel">
     <div class="ruas-sel-nome">${titulo}</div>
     <div class="ruas-sel-sub">${n} ${n === 1 ? 'trecho' : 'trechos'} · ${_metros(total)} · ${esc(bairros.length === 1 ? bairros[0] : bairros.length + ' bairros')}</div>
@@ -483,10 +535,11 @@ function _htmlListaRuas() {
     })
   } else if (ruaState.filtro === 'sem_nome') {
     itens = ts.filter(t => t.t.origem === 'sem_nome' && !t.sugestao).map(t =>
-      linha('o-sem_nome', 'Sem nome', `${esc(t.bairro)} · ${_metros(t.len)}`, doTrecho(t)))
+      linha('o-sem_nome', 'Sem nome', `${esc(t.bairro)} · ${_metros(t.len)}`
+        + (t.pista ? ` · OpenStreetMap: ${esc(t.pista)} (fora da lista)` : ruaState.osm.has(t.k) ? ' · nada no OpenStreetMap' : ''), doTrecho(t)))
   } else if (ruaState.filtro === 'sugestoes') {
     itens = ts.filter(t => t.sugestao).map(t =>
-      linha('o-sugestao', esc(t.sugestao), `sugestão · ${esc(t.bairro)} · ${_metros(t.len)}`, doTrecho(t),
+      linha('o-sugestao', esc(t.sugestao), `${t.fonte === 'osm' ? 'do OpenStreetMap' : 'continuação'} · ${esc(t.bairro)} · ${_metros(t.len)}`, doTrecho(t),
         `<button type="button" class="btn sm" onclick="aceitarSugestoesDeRua('${_kAttr(t.k)}')">Aceitar</button>`))
   } else {
     itens = ts.filter(t => t.t.origem === 'manual' || t.t.origem === 'oculto').map(t =>
@@ -627,6 +680,95 @@ async function _enviarLoteRuas(corpo, extra = '') {
     toast(e.message, 'err')
   } finally {
     ruaState.gravando = false
+    aoMudarRuas()
+  }
+}
+
+// ══════ BUSCAR NO OPENSTREETMAP ══════
+
+/** Os sem nome à vista, sem sugestão e ainda não procurados. */
+function _semNomeParaBuscar() {
+  const vista = mapaState.obj?.getBounds().pad(0.1)
+  return ruaState.trechos.filter(t => t.t.origem === 'sem_nome' && !t.sugestao && !ruaState.osm.has(t.k)
+    && vista?.contains(L.latLngBounds([t.t.de, t.t.ate]).getCenter()))
+}
+
+/** O nome sem o tipo ("R.", "AV."…): o cadastro às vezes não o traz, o OSM sempre traz. */
+const _nucleoDaRua = nome => _chaveDaRua(nome).replace(/^(R|AV|TV|ALAM|ROD|EST|PÇ|PC)\.?\s+/, '')
+
+/**
+ * A via do OSM que corre junto do trecho: paralela (até 20°) e com o meio do
+ * trecho a até 18 m dela. O trecho fica no meio da rua (7 m da quadra), como
+ * a linha do OSM; 18 m cobre avenida larga e desenho um pouco deslocado.
+ * @param {Object} t trecho indexado @param {Array} segs [{a,b,ux,uy,len,nome}] em metros
+ */
+function _viaDoOsmNoTrecho(t, segs) {
+  const m = [(t.a[0] + t.b[0]) / 2, (t.a[1] + t.b[1]) / 2]
+  let melhor = null, dist = 18
+  for (const s of segs) {
+    if (Math.abs(s.ux * t.ux + s.uy * t.uy) < RUA_ANGULO_COS) continue
+    const k = Math.max(0, Math.min(s.len, (m[0] - s.a[0]) * s.ux + (m[1] - s.a[1]) * s.uy))
+    const d = Math.hypot(m[0] - (s.a[0] + s.ux * k), m[1] - (s.a[1] + s.uy * k))
+    if (d < dist) { dist = d; melhor = s.nome }
+  }
+  return melhor
+}
+
+/**
+ * Procura no OpenStreetMap o nome dos trechos sem nome à vista. O nome achado
+ * é conferido com a lista do cadastro do bairro: batendo, vira sugestão (com a
+ * grafia do cadastro); não batendo, fica só como pista. Nada é gravado.
+ */
+async function buscarNomesNoOsm() {
+  const alvo = _semNomeParaBuscar()
+  if (!alvo.length || ruaState.buscandoOsm) return
+  const lats = alvo.flatMap(t => [t.t.de[0], t.t.ate[0]]), lngs = alvo.flatMap(t => [t.t.de[1], t.t.ate[1]])
+  const caixa = [Math.min(...lats) - 0.0005, Math.min(...lngs) - 0.0005, Math.max(...lats) + 0.0005, Math.max(...lngs) + 0.0005]
+  if (caixa[2] - caixa[0] > 0.08 || caixa[3] - caixa[1] > 0.08) {
+    toast('Área grande demais para buscar de uma vez. Aproxime o mapa.', 'aviso')
+    return
+  }
+  ruaState.buscandoOsm = true
+  pintarMesaRuas()
+  try {
+    const r = await fetch('/api/ruas/osm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '' },
+      body: JSON.stringify({ caixa }),
+    })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.message || 'Não foi possível consultar o OpenStreetMap.')
+
+    const segs = []
+    for (const v of d.vias || []) {
+      for (let i = 1; i < v.pontos.length; i++) {
+        const a = _m(v.pontos[i - 1]), b = _m(v.pontos[i])
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+        if (len > 0.5) segs.push({ a, b, len, ux: (b[0] - a[0]) / len, uy: (b[1] - a[1]) / len, nome: v.nome })
+      }
+    }
+    const listas = new Map(await Promise.all([...new Set(alvo.map(t => t.bairro))].map(async b => [b, await _listaDoBairro(b)])))
+
+    let sugeridos = 0, pistas = 0, nada = 0
+    for (const t of alvo) {
+      const osm = _viaDoOsmNoTrecho(t, segs)
+      if (!osm) { ruaState.osm.set(t.k, { nome: null, osm: null }); nada++; continue }
+      const lista = listas.get(t.bairro)?.logradouros || []
+      const doCadastro = lista.find(n => _chaveDaRua(n) === _chaveDaRua(osm))
+        || lista.find(n => _nucleoDaRua(n) === _nucleoDaRua(osm))
+      ruaState.osm.set(t.k, { nome: doCadastro || null, osm })
+      doCadastro ? sugeridos++ : pistas++
+    }
+    const partes = [`${sugeridos} ${sugeridos === 1 ? 'sugestão' : 'sugestões'}`]
+    if (pistas) partes.push(`${pistas} com nome fora da lista do cadastro`)
+    if (nada) partes.push(`${nada} sem nome lá também`)
+    toast('OpenStreetMap: ' + partes.join(', ') + '.', sugeridos ? 'ok' : 'aviso')
+    if (sugeridos) ruaState.filtro = 'sugestoes'
+  } catch (e) {
+    toast(e.message, 'err')
+  } finally {
+    ruaState.buscandoOsm = false
     aoMudarRuas()
   }
 }

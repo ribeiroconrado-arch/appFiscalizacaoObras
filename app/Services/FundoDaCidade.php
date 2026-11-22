@@ -44,8 +44,8 @@ class FundoDaCidade
     /** Início, fim e erro da última atualização (andamento()). */
     private const ESTADO = 'app/fundo-cidade.estado.json';
 
-    /** Tentados em ordem; o principal às vezes devolve 429/502. */
-    private const SERVIDORES = [
+    /** Tentados em ordem; o principal às vezes devolve 429/502. Também os usa RuaManualController::osm. */
+    public const SERVIDORES = [
         'https://overpass-api.de/api/interpreter',
         'https://overpass.kumi.systems/api/interpreter',
         'https://overpass.private.coffee/api/interpreter',

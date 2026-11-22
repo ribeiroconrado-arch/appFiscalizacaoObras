@@ -7,7 +7,10 @@ use App\Models\RuaManual;
 use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\FundoDaCidade;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 /**
  * Alteração cadastral → Nomes de rua: o curador informa (ou oculta) o nome de
@@ -197,6 +200,68 @@ class RuaManualController extends Controller
             'message' => $msg,
             'ruas'    => collect($bairros)->mapWithKeys(fn ($b) => [$b => $this->lotes->ruasDoBairro($b)])->all(),
         ]);
+    }
+
+    /**
+     * POST /api/ruas/osm — as vias COM NOME do OpenStreetMap num retângulo
+     * (22/11/2026): a ferramenta Nomes de rua busca o nome que falta.
+     *
+     * Só passa adiante: nada é gravado (a cópia do Fundo da cidade é recortada
+     * FORA dos bairros, e aqui o que interessa é justamente dentro deles). O
+     * casamento com o trecho e com a lista do cadastro é da tela
+     * (ruas-manuais.js); o que o curador aceitar vira nome à mão, como sempre.
+     * A resposta fica um dia no cache, para o mesmo retângulo não ir duas vezes
+     * ao Overpass.
+     */
+    public function osm(Request $r): JsonResponse
+    {
+        if (! $this->podeEditar($r)) {
+            return response()->json(['message' => 'Buscar nome de rua é do curador do cadastro.'], 403);
+        }
+        $d = $r->validate([
+            'caixa'   => ['required', 'array', 'size:4'],     // [sul, oeste, norte, leste]
+            'caixa.*' => ['numeric', 'between:-180,180'],
+        ]);
+        [$s, $o, $n, $l] = array_map(fn ($v) => round((float) $v, 4), $d['caixa']);
+        if ($n <= $s || $l <= $o || $n - $s > 0.08 || $l - $o > 0.08) {
+            return response()->json(['message' => 'Área grande demais para buscar de uma vez. Aproxime o mapa.'], 422);
+        }
+
+        $vias = Cache::remember("ruas:osm:$s,$o,$n,$l", now()->addDay(), function () use ($s, $o, $n, $l) {
+            $q = '[out:json][timeout:25];way["highway"]["name"](' . "$s,$o,$n,$l" . ');out tags geom;';
+            // Um minuto no total: o servidor público às vezes não responde, e a
+            // tela não pode ficar esperando quatro servidores lentos em fila.
+            $ate = microtime(true) + 55;
+            foreach (FundoDaCidade::SERVIDORES as $url) {
+                $resta = (int) floor($ate - microtime(true));
+                if ($resta < 8) {
+                    break;
+                }
+                try {
+                    $resp = Http::connectTimeout(6)->timeout(min(30, $resta))->asForm()
+                        ->withHeaders(['User-Agent' => 'FiscalizacaoObras/1.0 (mapa municipal; conferencia de nomes de rua)'])
+                        ->post($url, ['data' => $q]);
+                    if ($resp->successful() && is_array($resp->json('elements'))) {
+                        return collect($resp->json('elements'))
+                            ->filter(fn ($e) => ! empty($e['tags']['name']) && count($e['geometry'] ?? []) > 1)
+                            ->map(fn ($e) => [
+                                'nome'   => $e['tags']['name'],
+                                'pontos' => array_map(fn ($p) => [round($p['lat'], 7), round($p['lon'], 7)], $e['geometry']),
+                            ])->values()->all();
+                    }
+                } catch (\Throwable) {
+                    // o próximo servidor
+                }
+            }
+
+            return null;   // null não fica no cache: tenta de novo no próximo pedido
+        });
+
+        if ($vias === null) {
+            return response()->json(['message' => 'O OpenStreetMap não respondeu. Tente de novo em alguns minutos.'], 502);
+        }
+
+        return response()->json(['vias' => $vias]);
     }
 
     /** @return array<string,mixed> */
