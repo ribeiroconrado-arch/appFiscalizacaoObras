@@ -76,7 +76,7 @@ function _linhaDoHistorico(i) {
   else detalhe = `em ${pos}`
   if (i.tipo !== 'troca') detalhe += i.protocolo ? ` · protocolo ${i.protocolo}` : ' · ato direto'
   return `<button type="button" class="hist-linha" onclick="abrirAto(${i.ato})">
-    <span class="hist-data">${esc(i.quando)}</span>
+    <span class="hist-data">${esc(String(i.quando || '').split(' ')[0])}<small>${esc(String(i.quando || '').split(' ')[1] || '')}</small></span>
     <span class="hist-ato"><b>${esc(i.rotulo)}</b> · ${esc(onde)}<small>${esc(detalhe)}</small></span>
     <span class="hist-quem">${esc(i.usuario || '—')}</span>
   </button>`

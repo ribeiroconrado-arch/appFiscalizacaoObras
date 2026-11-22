@@ -975,10 +975,12 @@
      Abre pelo "Ver tudo" do bloco no Painel; a aba marcada continua a do Painel. --}}
 @if ($temAba('historico') && ! $externo)
 <section class="tela" id="t-historico">
-  <div class="topo-lista hist-topo-tela">
-    <button type="button" class="hist-voltar" onclick="irPara('painel')" aria-label="Voltar ao Painel">← Painel</button>
-    <div class="sec-simples">Histórico do cadastro</div>
-  </div>
+  <header class="painel-cabecalho hist-cabecalho">
+    <button type="button" class="hist-voltar" onclick="irPara('painel')">← Painel</button>
+    <h1>Histórico do cadastro</h1>
+    <p>Os atos que mudam lotes: desmembramentos, unificações, frações ideais e trocas de identidade.
+       Os outros registros do sistema estão em “Atividade recente”, no Painel.</p>
+  </header>
   <div class="hist-barra">
     <div class="hist-filtros" id="hist-filtros" role="group" aria-label="Tipo de ato"></div>
     <input type="search" class="hist-busca" placeholder="Bairro, quadra, lote ou inscrição"
