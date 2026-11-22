@@ -120,6 +120,22 @@ try {
     $r = $rua('excluir', $admin, [], $manual->fresh());
     confere(array_column(json_decode($r->getContent(), true)['ruas'], 'origem') === ['cadastro', 'sem_nome'], 'voltar ao cadastro');
 
+    echo "Nomes de rua — a rua inteira de uma vez\n";
+    $itens = [['bairro' => $bairro] + array_intersect_key($trecho, ['de' => 1, 'ate' => 1]),
+              ['bairro' => $bairro] + array_intersect_key($semNome, ['de' => 1, 'ate' => 1])];
+    $r = $rua('lote', $admin, ['acao' => 'nome', 'nome' => 'RUA UNIDA', 'itens' => $itens]);
+    $d = json_decode($r->getContent(), true);
+    confere($r->getStatusCode() === 200 && array_column($d['ruas'][$bairro], 'origem') === ['manual', 'manual']
+        && count(array_unique(array_column($d['ruas'][$bairro], 'nome'))) === 1, 'os dois trechos ganham o nome num pedido só (' . $d['message'] . ')');
+    $comId = array_map(fn ($t) => ['id' => $t['id'], 'bairro' => $bairro, 'de' => $t['de'], 'ate' => $t['ate']], $d['ruas'][$bairro]);
+    $r = $rua('lote', $admin, ['acao' => 'ocultar', 'itens' => $comId]);
+    confere(array_column(json_decode($r->getContent(), true)['ruas'][$bairro], 'origem') === ['oculto', 'oculto'], 'ocultar a rua inteira altera os manuais, sem duplicar');
+    confere(\App\Models\RuaManual::where('bairro', $bairro)->count() === 2, 'continuam dois manuais');
+    $r = $rua('lote', $admin, ['acao' => 'voltar', 'itens' => $comId]);
+    confere(array_column(json_decode($r->getContent(), true)['ruas'][$bairro], 'origem') === ['cadastro', 'sem_nome'], 'voltar a rua inteira ao cadastro');
+    $r = $rua('lote', $admin, ['acao' => 'nome', 'itens' => $itens]);
+    confere($r->getStatusCode() === 422, 'sem nome, nada é gravado');
+
     DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')->limit(1)->update(['updated_at' => now()->addMinute()]);
     $f = collect(json_decode($chama('index', $admin)->getContent(), true)['features'])->firstWhere('properties.nome', $bairro);
     confere($f['properties']['desatualizado'] === true, 'lote alterado depois do contorno o deixa desatualizado');

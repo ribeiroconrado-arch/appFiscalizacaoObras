@@ -305,8 +305,6 @@
   <div class="imp-barra" id="imp-barra" hidden></div>
   {{-- As pendências da conferência do bairro com o cadastro (conferencia-bairro.js). --}}
   <div class="imp-barra conf-barra" id="conf-barra" hidden></div>
-  {{-- A ferramenta Nomes de rua (ruas-manuais.js). --}}
-  <div class="imp-barra ruas-barra" id="ruas-barra" hidden></div>
   {{-- Editar o contorno do bairro, vértice a vértice (contorno-editor.js). --}}
   <div class="imp-barra ce-barra" id="ce-barra" hidden></div>
 @endif
@@ -3490,6 +3488,24 @@
 <aside class="cad-mesa so-regua base-mesa" id="base-mesa" hidden aria-label="Ferramentas de importação">
   <div class="mesa-titulo-v" aria-hidden="true">Ferramentas de importação</div>
   <nav class="cad-regua" id="base-regua" aria-label="Ferramentas de importação"></nav>
+</aside>
+
+{{-- NOMES DE RUA (ruas-manuais.js) — no molde da mesa de desmembramento: a
+     lateral fixa, e não a barra flutuante com legenda. Com a régua da base à
+     vista, fica ao lado dela (_posicionarMesaRuas). --}}
+<aside class="desm-mesa ruas-mesa" id="ruas-mesa" hidden aria-label="Nomes de rua">
+  <div class="cad-mesa-topo">
+    <span class="cad-mesa-tit">Nomes de rua</span>
+    <button class="cad-mesa-x" onclick="fecharNomesDeRua()" title="Fechar Nomes de rua" aria-label="Fechar Nomes de rua">&#10005;</button>
+  </div>
+  <div class="cad-mesa-rolo" id="ruas-mesa-corpo"></div>
+  <div class="ruas-legenda-pe" aria-hidden="true">
+    <span><i class="ruas-cor o-cadastro"></i>cadastro</span>
+    <span><i class="ruas-cor o-manual"></i>à mão</span>
+    <span><i class="ruas-cor o-sugestao"></i>sugestão</span>
+    <span><i class="ruas-cor o-sem_nome"></i>sem nome</span>
+    <span><i class="ruas-cor o-oculto"></i>oculto</span>
+  </div>
 </aside>
 @endif
 

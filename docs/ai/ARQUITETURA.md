@@ -225,8 +225,13 @@ O que o voto não resolve, o curador informa na ferramenta **Nomes de rua**
 (`ruas-manuais.js`, `RuaManualController`), escolhendo da lista de logradouros
 do cadastro do bairro (fora dela, só o administrador). O nome é informado no
 TRECHO, e não no lote: o endereço do lote vem do cadastro e seria
-sobrescrito na carga seguinte. Rua sem lote de frente é desenhada com dois
-toques. Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
+sobrescrito na carga seguinte. Na TELA (desde 22/11/2026), porém, a unidade
+é a RUA: os trechos que se continuam com o mesmo nome (e os sem nome seguidos)
+viram um grupo, um clique seleciona o grupo, e a gravação vai num pedido só
+(`POST /api/ruas/manuais/lote`). O sem nome que continua, alinhado, uma rua com
+nome recebe esse nome como sugestão, aceita em bloco. O painel é uma mesa
+lateral (`#ruas-mesa`), sem balão. Rua sem lote de frente é desenhada com
+vários pontos (duplo clique termina). Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
 `ruas_manuais` (nunca apagada pelo "Gerar"); o manual cobre o gerado com que
 coincide na LEITURA (`App\Cadastro\TrechosDeRua`), com auditoria.
 

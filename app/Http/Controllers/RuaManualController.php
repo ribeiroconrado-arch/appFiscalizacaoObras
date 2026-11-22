@@ -7,6 +7,7 @@ use App\Models\RuaManual;
 use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Alteração cadastral → Nomes de rua: o curador informa (ou oculta) o nome de
@@ -104,6 +105,98 @@ class RuaManualController extends Controller
         $rua->delete();
 
         return $this->resposta($bairro, 'O trecho voltou ao nome do cadastro.');
+    }
+
+    /**
+     * POST /api/ruas/manuais/lote — a RUA INTEIRA de uma vez (22/11/2026).
+     *
+     * A tela junta os trechos (um por lado de quadra) numa rua só, e o nome é
+     * dado à rua: aqui chegam todos os trechos dela, que podem atravessar mais
+     * de um bairro. Cada um é gravado como seria sozinho — o que já é manual é
+     * alterado, o gerado ganha um manual por cima —, tudo numa transação.
+     *
+     *   acao  nome     cada item leva `nome` próprio, ou o `nome` geral
+     *         ocultar  o rótulo some do mapa
+     *         voltar   apaga o manual (o item sem id é ignorado)
+     */
+    public function lote(Request $r): JsonResponse
+    {
+        if (! $this->podeEditar($r)) {
+            return response()->json(['message' => 'Informar nome de rua é do curador do cadastro.'], 403);
+        }
+        $d = $r->validate([
+            'acao'           => ['required', 'in:nome,ocultar,voltar'],
+            'nome'           => ['nullable', 'string', 'max:180'],
+            'itens'          => ['required', 'array', 'min:1', 'max:500'],
+            'itens.*.id'     => ['nullable', 'integer'],
+            'itens.*.bairro' => ['required', 'string', 'max:120'],
+            'itens.*.nome'   => ['nullable', 'string', 'max:180'],
+            'itens.*.de'     => ['required', 'array', 'size:2'],
+            'itens.*.de.*'   => ['numeric', 'between:-180,180'],
+            'itens.*.ate'    => ['required', 'array', 'size:2'],
+            'itens.*.ate.*'  => ['numeric', 'between:-180,180'],
+        ]);
+
+        $bairros = array_values(array_unique(array_column($d['itens'], 'bairro')));
+        $existem = DB::table('lotes')->whereIn('bairro', $bairros)->distinct()->pluck('bairro')->all();
+        if ($faltam = array_diff($bairros, $existem)) {
+            return response()->json(['message' => 'Bairro desconhecido: ' . implode(', ', $faltam) . '.'], 422);
+        }
+
+        if ($d['acao'] === 'nome') {
+            foreach ($d['itens'] as $i) {
+                $nome = $this->limpo($i['nome'] ?? $d['nome'] ?? null);
+                if ($nome === null) {
+                    return response()->json(['message' => 'Escolha o logradouro.'], 422);
+                }
+                if ($erro = $this->conferirNome($r, ['bairro' => $i['bairro'], 'nome' => $nome])) {
+                    return $erro;
+                }
+            }
+        }
+
+        $ids = array_values(array_filter(array_column($d['itens'], 'id')));
+        $manuais = RuaManual::whereKey($ids)->get()->keyBy('id');
+
+        $n = 0;
+        DB::transaction(function () use ($d, $r, $manuais, &$n) {
+            foreach ($d['itens'] as $i) {
+                $existente = ! empty($i['id']) ? $manuais->get($i['id']) : null;
+                if ($d['acao'] === 'voltar') {
+                    if ($existente) {
+                        $existente->delete();
+                        $n++;
+                    }
+                    continue;
+                }
+                $dados = [
+                    'nome'    => $d['acao'] === 'ocultar' ? null : $this->limpo($i['nome'] ?? $d['nome'] ?? null),
+                    'oculto'  => $d['acao'] === 'ocultar',
+                    'user_id' => $r->user()->id,
+                ];
+                if ($existente) {
+                    $existente->update($dados);
+                } else {
+                    RuaManual::create($dados + [
+                        'bairro' => $i['bairro'],
+                        'de_lat' => $i['de'][0], 'de_lon' => $i['de'][1], 'ate_lat' => $i['ate'][0], 'ate_lon' => $i['ate'][1],
+                    ]);
+                }
+                $n++;
+            }
+        });
+
+        $plural = $n === 1 ? 'trecho' : 'trechos';
+        $msg = match ($d['acao']) {
+            'nome'    => "Nome gravado em {$n} {$plural}.",
+            'ocultar' => $n === 1 ? '1 trecho oculto.' : "{$n} trechos ocultos.",
+            'voltar'  => "{$n} {$plural} de volta ao nome do cadastro.",
+        };
+
+        return response()->json([
+            'message' => $msg,
+            'ruas'    => collect($bairros)->mapWithKeys(fn ($b) => [$b => $this->lotes->ruasDoBairro($b)])->all(),
+        ]);
     }
 
     /** @return array<string,mixed> */

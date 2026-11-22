@@ -134,17 +134,46 @@
 .ico-cadeado{width:12px;height:12px;flex:none}
 
 /* ── NOMES DE RUA (ruas-manuais.js) ── */
-.ruas-legenda{display:inline-flex;align-items:center;gap:4px 8px;flex-wrap:wrap;font-size:11.5px;color:var(--tx2)}
-.ruas-legenda i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:-4px}
-.ruas-passo{font-size:12px;font-weight:600;color:var(--gd)}
-.rua-balao .leaflet-popup-content{margin:12px 14px}
-.rua-balao-tit{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--tx3)}
-.rua-balao-nome{font-size:14px;font-weight:700;color:var(--tx);margin:2px 0 8px}
-.rua-balao .rua-sem{color:var(--red)}
-.rua-balao .field{margin-bottom:8px}
-.rua-balao .field select,.rua-balao .field input{width:100%}
+/* Refeita em 22/11/2026: mesa lateral (#ruas-mesa), sem balão nem barra flutuante. */
+@media (min-width:600px){ .ruas-mesa{width:320px} }
+.ruas-mesa .cad-mesa-rolo{display:flex;flex-direction:column;gap:10px}
+.ruas-nota{font-size:12px;color:var(--tx3);line-height:1.45}
+.ruas-sel{border:1.5px solid #2563eb;border-radius:var(--rl);padding:10px 12px;background:var(--sur)}
+.ruas-sel-nome{font-size:14px;font-weight:700;color:var(--tx);overflow-wrap:anywhere}
+.ruas-sel-sub{font-size:12px;color:var(--tx3);margin:2px 0 8px;line-height:1.4}
+.ruas-sem{color:var(--red);font-weight:600}
+.ruas-dica{font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:5px 8px;margin-bottom:8px}
+.ruas-sel .field{margin-bottom:8px}
+.ruas-sel .field select,.ruas-sel .field input{width:100%;min-width:0}
 .rua-aviso{font-size:11.5px;color:var(--warn);margin-bottom:8px}
-.rua-balao-acoes{display:flex;gap:6px;flex-wrap:wrap}
+.ruas-botoes{display:flex;gap:6px;flex-wrap:wrap}
+.ruas-leves{margin-top:6px;gap:14px}
+.ruas-leves .hist-voltar{padding:0}
+.ruas-sugere{border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:var(--rl);padding:9px 11px;font-size:12.5px;line-height:1.4}
+.ruas-sugere .ruas-botoes{margin-top:8px}
+.ruas-filtros{margin:0}
+.ruas-filtros button{font-size:11.5px;padding:5px 4px;white-space:nowrap}
+.ruas-n{display:inline-block;margin-left:4px;font-variant-numeric:tabular-nums;color:var(--tx3);font-weight:600}
+.ruas-lista{border:1px solid var(--bord);border-radius:var(--rl);overflow:hidden}
+.ruas-lista > .ruas-nota{padding:10px 12px}
+.ruas-item{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--blt);padding-right:8px}
+.ruas-item:last-of-type{border-bottom:0}
+.ruas-item-ir{flex:1;min-width:0;display:flex;align-items:center;gap:9px;border:0;background:none;padding:7px 10px;
+  font:inherit;font-size:12.5px;color:var(--tx);text-align:left;cursor:pointer}
+.ruas-item-ir:hover{background:var(--blt)}
+.ruas-item-txt{min-width:0;overflow-wrap:anywhere}
+.ruas-item-txt small{display:block;font-size:11px;color:var(--tx3);margin-top:1px}
+.ruas-cor{flex:none;display:inline-block;width:16px;height:4px;border-radius:2px}
+.ruas-cor.o-cadastro{background:#16a34a}
+.ruas-cor.o-manual{background:#2563eb}
+.ruas-cor.o-sem_nome{background:repeating-linear-gradient(90deg,#dc2626 0 5px,transparent 5px 8px)}
+.ruas-cor.o-sugestao{background:repeating-linear-gradient(90deg,#d97706 0 5px,transparent 5px 8px)}
+.ruas-cor.o-oculto{background:repeating-linear-gradient(90deg,#9ca3af 0 5px,transparent 5px 8px)}
+.ruas-desenhar{align-self:flex-start}
+.ruas-legenda-pe{display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 12px;border-top:1.5px solid var(--blt);
+  font-size:11px;color:var(--tx3);flex-shrink:0}
+.ruas-legenda-pe span{display:inline-flex;align-items:center;gap:5px}
+#map.ruas-desenhando, #map.ruas-desenhando .leaflet-interactive{cursor:crosshair}
 
 /* ── FICHA DA IMPORTAÇÃO: três faixas, e só a do meio rola ──
    O cabeçalho (identificação, vínculo do bairro e a linha da conferência) e o
