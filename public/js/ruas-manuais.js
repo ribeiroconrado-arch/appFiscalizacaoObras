@@ -210,7 +210,7 @@ const COSTURA_ALINHA_M = 6     // em linha: fora da reta no máximo isto
 const COSTURA_RETA_COS = Math.cos(8 * Math.PI / 180)
 const COSTURA_CURVA_GRAUS = 65 // dobra até isto é curva da rua; acima, esquina
 const COSTURA_T_COS = Math.cos(30 * Math.PI / 180)
-const _ll = p => [+(p[1] / 110574).toFixed(7), +(p[0] / (111320 * _COS_LAT)).toFixed(7)]
+const _llCostura = p => [+(p[1] / 110574).toFixed(7), +(p[0] / (111320 * _COS_LAT)).toFixed(7)]
 
 /** Preenche `t.linha` (lat,lng) de cada trecho, já com as pontas costuradas. */
 function _costurar(trechos) {
@@ -301,7 +301,7 @@ function _costurar(trechos) {
     const [c0, c1] = t.costura
     // A ponta recuada não pode atravessar a outra: aí fica o trecho como veio.
     const ok = (c1.p[0] - c0.p[0]) * t.ux + (c1.p[1] - c0.p[1]) * t.uy > 1
-    t.linha = (ok ? [...[...c0.extra].reverse(), c0.p, c1.p, ...c1.extra] : [t.a, t.b]).map(_ll)
+    t.linha = (ok ? [...[...c0.extra].reverse(), c0.p, c1.p, ...c1.extra] : [t.a, t.b]).map(_llCostura)
     delete t.costura
   }
 }

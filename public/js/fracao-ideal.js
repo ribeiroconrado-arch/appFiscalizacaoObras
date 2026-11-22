@@ -55,7 +55,7 @@ function donosEmTexto(lista) {
   return lista.map(d => d.nome + (d.documento_mascarado ? ` (${d.documento_mascarado})` : '')).join('; ')
 }
 
-const _m2 = n => n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' m²'
+const _m2Fracao = n => n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' m²'
 
 // ── balão ───────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ function htmlFracaoNoBalao(p) {
     return `<div class="fr-balao"><span class="fr-tag">Condomínio · ${Number(p.unidades || 0)} unidade(s)</span></div>`
   }
   return `<div class="fr-balao"><span class="fr-tag fr-tag-un">Unidade ${esc(p.unidade || '')}</span>
-    <table class="balao4-tab"><tr><td>Fração ideal</td><td><b>${_m2(p.fracao_ideal_m2)}</b></td></tr>
+    <table class="balao4-tab"><tr><td>Fração ideal</td><td><b>${_m2Fracao(p.fracao_ideal_m2)}</b></td></tr>
       <tr><td>Proprietário</td><td id="fr-balao-dono">…</td></tr></table>
     <button type="button" class="btn sm fr-btn-terreno" onclick="irAoTerrenoDaUnidade(${Number(p.terreno_id)})">↑ Terreno</button></div>`
 }
@@ -137,14 +137,14 @@ async function carregarAbaUnidades(p) {
          › Unidade ${esc(p.unidade || '')} de ${d.unidades.length}</div>`
     : `<div class="fr-migalha"><span class="fr-tag">${esc(d.condominio_rotulo)}</span> ${inst}</div>`
   const resumo = `<div class="fr-resumo">
-      <div><span>Terreno</span><b>${_m2(t.area_matricula ?? t.area_desenho)}</b></div>
-      <div><span>Soma das frações</span><b>${_m2(t.soma_fracoes)}</b></div>
-      <div><span>Área comum</span><b>${_m2(t.area_comum)}</b></div>
+      <div><span>Terreno</span><b>${_m2Fracao(t.area_matricula ?? t.area_desenho)}</b></div>
+      <div><span>Soma das frações</span><b>${_m2Fracao(t.soma_fracoes)}</b></div>
+      <div><span>Área comum</span><b>${_m2Fracao(t.area_comum)}</b></div>
       <div><span>Multa por área</span><b>${d.condominio === 'predio' ? 'obra toda' : 'área individual'}</b></div></div>`
   const linhas = d.unidades.map(u => `<tr class="${u.id === Number(p.id) ? 'fr-atual' : ''}">
       <td><b>${esc(u.unidade)}</b></td><td class="mono">${esc(u.inscricao || '—')}</td>
       <td>${esc(donosEmTexto(u.proprietarios))}</td>
-      <td class="n">${_m2(u.fracao_ideal_m2)}</td><td class="n">${_m2(u.area_exclusiva)}</td>
+      <td class="n">${_m2Fracao(u.fracao_ideal_m2)}</td><td class="n">${_m2Fracao(u.area_exclusiva)}</td>
       <td class="n">${u.documentos ? u.documentos + ' doc.' : ''}${u.vistorias ? ' ' + u.vistorias + ' vist.' : ''}</td>
       <td>${u.id === Number(p.id) ? '<small>esta</small>' : `<button type="button" class="btn sm" onclick="abrirUnidade(${u.id}, ${t.id})">Abrir</button>`}</td></tr>`).join('')
   alvo.innerHTML = `${cab}${resumo}
@@ -175,9 +175,9 @@ async function notaDaAreaNoDocumento(p) {
   const u = p.terreno_id ? d.unidades.find(x => x.id === Number(p.id)) : null
   let txt
   if (d.condominio === 'predio') {
-    txt = `Prédio em fração ideal: a multa por área usa a área da obra TODA do prédio${u ? ` (esta é a unidade ${u.unidade}, fração de ${_m2(u.fracao_ideal_m2)})` : ''}.`
+    txt = `Prédio em fração ideal: a multa por área usa a área da obra TODA do prédio${u ? ` (esta é a unidade ${u.unidade}, fração de ${_m2Fracao(u.fracao_ideal_m2)})` : ''}.`
   } else if (u) {
-    txt = `Unidade ${u.unidade} de condomínio de casas: a multa por área usa a área INDIVIDUAL desta unidade${u.area_exclusiva ? ` (área exclusiva de ${_m2(u.area_exclusiva)})` : ''}.`
+    txt = `Unidade ${u.unidade} de condomínio de casas: a multa por área usa a área INDIVIDUAL desta unidade${u.area_exclusiva ? ` (área exclusiva de ${_m2Fracao(u.area_exclusiva)})` : ''}.`
   } else {
     txt = 'Terreno em condomínio de casas: a multa por área usa a área individual de cada unidade. Se a obra é de uma casa, lavre na unidade dela.'
   }
