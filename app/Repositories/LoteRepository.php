@@ -699,27 +699,57 @@ class LoteRepository
      */
     public function lotesDoBairro(string $bairro, ?string $codigoCadastro = null): array
     {
-        if ($codigoCadastro === null) {
-            return DB::select('SELECT id, quadra, ST_AsGeoJSON(geom) AS geojson, NULL AS logradouro FROM lotes
-                                WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$bairro]);
+        $lotes = DB::select('SELECT id, quadra, ST_AsGeoJSON(geom) AS geojson,
+                                    inscricao_imobiliaria, inscricao_montada
+                               FROM lotes WHERE ' . self::SO_ATIVOS . ' AND bairro = ?', [$bairro]);
+
+        // O ENDEREÇO é amarrado aqui, em PHP, e não por JOIN.
+        //
+        // O JOIN com a subconsulta do cadastro parecia barato — ela filtra um
+        // bairro só —, mas o MySQL FUNDE a derivada na consulta de fora em vez
+        // de materializá-la, e aí varre o cadastro inteiro a cada lote: no
+        // Buritis V eram 1.527 lotes × 990 linhas, 4,7 s para uma leitura que
+        // sozinha leva 48 ms. Com as duas listas em memória o custo é o de
+        // montar um array. Medido em 22/11/2026.
+        $ruas = $codigoCadastro === null ? [] : $this->logradourosPorInscricao($codigoCadastro);
+        foreach ($lotes as $l) {
+            $l->logradouro = $ruas[self::inscricaoDoLote($l)] ?? null;
+            unset($l->inscricao_imobiliaria, $l->inscricao_montada);
         }
 
-        return DB::select("SELECT l.id, l.quadra, ST_AsGeoJSON(l.geom) AS geojson, c.logradouro
-                             FROM lotes l
-                             LEFT JOIN (
-                                   SELECT REPLACE(inscricao, '.', '') AS inscricao, logradouro
-                                     FROM cadastro_externo_imoveis
-                                    WHERE TRIM(LEADING '0' FROM codigo_bairro) = ?
-                                      AND ausente_desde_carga_id IS NULL
-                                      AND logradouro IS NOT NULL AND logradouro <> '') c
-                                -- COLLATE dos DOIS lados: `lotes` e o cadastro foram criados com
-                                -- collations diferentes (0900_ai_ci e unicode_ci), e o MySQL recusa
-                                -- comparar as duas sem que alguém diga qual vale (erro 1267).
-                                ON c.inscricao COLLATE utf8mb4_unicode_ci =
-                                   (CASE WHEN COALESCE(l.inscricao_imobiliaria, '') <> ''
-                                         THEN REPLACE(REPLACE(l.inscricao_imobiliaria, '.', ''), ' ', '')
-                                         ELSE l.inscricao_montada END) COLLATE utf8mb4_unicode_ci
-                            WHERE l." . self::SO_ATIVOS . ' AND l.bairro = ?', [ltrim($codigoCadastro, '0'), $bairro]);
+        return $lotes;
+    }
+
+    /**
+     * A inscrição que identifica o lote no cadastro: a INFORMADA quando existe,
+     * senão a montada, sempre só com os dígitos. Mesma regra do SQL que isto
+     * substituiu, para o vínculo não mudar de resultado.
+     */
+    private static function inscricaoDoLote(object $l): string
+    {
+        $informada = str_replace(['.', ' '], '', (string) ($l->inscricao_imobiliaria ?? ''));
+
+        return $informada !== '' ? $informada : (string) ($l->inscricao_montada ?? '');
+    }
+
+    /**
+     * logradouro de cada imóvel do bairro no cadastro, pela inscrição só com
+     * os dígitos. Imóvel ausente da última carga não entra.
+     *
+     * @return array<string,string>
+     */
+    private function logradourosPorInscricao(string $codigoCadastro): array
+    {
+        $mapa = [];
+        foreach (DB::select("SELECT inscricao, logradouro FROM cadastro_externo_imoveis
+                              WHERE TRIM(LEADING '0' FROM codigo_bairro) = ?
+                                AND ausente_desde_carga_id IS NULL
+                                AND logradouro IS NOT NULL AND logradouro <> ''",
+            [ltrim($codigoCadastro, '0')]) as $c) {
+            $mapa[str_replace('.', '', (string) $c->inscricao)] = $c->logradouro;
+        }
+
+        return $mapa;
     }
 
     /**

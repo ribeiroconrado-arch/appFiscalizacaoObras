@@ -175,7 +175,10 @@ class PesquisaMapaController extends Controller
 
         foreach (preg_split('/\s+/u', trim($d['termo'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) as $termo) {
             $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $termo) . '%';
-            $q->where(function ($s) use ($termo, $like) {
+            // O nome do bairro NO CADASTRO sai antes, numa consulta só: dentro
+            // do EXISTS ele obrigaria a varrer cadastro_bairros a cada lote.
+            $codigos = $this->codigosDeBairroPorNome($like);
+            $q->where(function ($s) use ($termo, $like, $codigos) {
                 $s->whereRaw("lotes.bairro LIKE ? ESCAPE '!'", [$like])
                     ->orWhereRaw("lotes.inscricao_imobiliaria LIKE ? ESCAPE '!'", [$like]);
                 $s->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('cadastro_bairros as pmb')
@@ -183,14 +186,15 @@ class PesquisaMapaController extends Controller
                 if (preg_match('/^[0-9.\-]+$/', $termo)) {
                     $s->orWhere('lotes.inscricao_montada', 'like', preg_replace('/\D/', '', $termo) . '%');
                 }
-                $s->orWhereExists(function ($sub) use ($like) {
-                    $this->cadastroRelacionado($sub);
-                    $sub->where(function ($texto) use ($like) {
+                $this->existeNoCadastro($s, function ($sub) use ($like, $codigos) {
+                    $sub->where(function ($texto) use ($like, $codigos) {
                         $texto->whereRaw("pmc.logradouro LIKE ? ESCAPE '!'", [$like])
-                            ->orWhereRaw("pmc.numero_predial LIKE ? ESCAPE '!'", [$like])
-                            ->orWhereRaw("pmb.nome_cadastro LIKE ? ESCAPE '!'", [$like]);
+                            ->orWhereRaw("pmc.numero_predial LIKE ? ESCAPE '!'", [$like]);
+                        if ($codigos) {
+                            $texto->orWhereIn(DB::raw("TRIM(LEADING '0' FROM pmc.codigo_bairro)"), $codigos);
+                        }
                     });
-                });
+                }, ou: true);
             });
             $usou = true;
         }
@@ -203,10 +207,7 @@ class PesquisaMapaController extends Controller
                     $s->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('cadastro_bairros as pmb')
                         ->whereColumn('pmb.nome_gis', 'lotes.bairro')->whereRaw("pmb.nome_cadastro LIKE ? ESCAPE '!'", [$like]));
                 } else {
-                    $s->whereExists(function ($sub) use ($like) {
-                        $this->cadastroRelacionado($sub);
-                        $sub->whereRaw("pmc.logradouro LIKE ? ESCAPE '!'", [$like]);
-                    });
+                    $this->existeNoCadastro($s, fn ($sub) => $sub->whereRaw("pmc.logradouro LIKE ? ESCAPE '!'", [$like]));
                 }
             });
             $usou = true;
@@ -364,20 +365,58 @@ class PesquisaMapaController extends Controller
         . " THEN REPLACE(REPLACE(lotes.inscricao_imobiliaria, '.', ''), ' ', '')"
         . ' ELSE lotes.inscricao_montada END) COLLATE utf8mb4_unicode_ci';
 
-    /** Correlaciona endereço e lote pela INSCRIÇÃO (17/11/2026; antes, quadra e número). */
-    private function cadastroRelacionado($q): void
+    /**
+     * `EXISTS` do imóvel do cadastro que É este lote, com a condição extra.
+     *
+     * Correlaciona endereço e lote pela INSCRIÇÃO (17/11/2026; antes, quadra e
+     * número). São DOIS EXISTS de igualdade simples, um por forma da inscrição,
+     * e não um `IN` com as duas expressões: com o `IN` correlacionado o MySQL
+     * varre o cadastro INTEIRO a cada lote e a cada palavra do termo
+     * (EXPLAIN: pmc=ALL), e com a igualdade ele usa o índice único da coluna
+     * (pmc=eq_ref). Com quatro palavras e 6.800 lotes isso era a diferença
+     * entre 504 do gateway e resposta imediata — medido em 22/11/2026.
+     *
+     * Nada de `JOIN` com cadastro_bairros aqui: a tabela não tem índice por
+     * `codigo`, e dentro de uma subconsulta correlacionada ela é varrida uma
+     * vez por lote. Quem precisa do nome do bairro resolve os códigos antes,
+     * com codigosDeBairroPorNome().
+     *
+     * @param \Closure $condicao  recebe o builder do cadastro (alias `pmc`)
+     * @param bool $ou  junta por OU ao que já está no grupo, em vez de por E
+     */
+    private function existeNoCadastro($s, \Closure $condicao, bool $ou = false): void
     {
         $i = self::INSCRICAO_DO_LOTE;
         // Os 15 dígitos, ou a forma com pontos (01.124.004.0020.000) que uma
-        // carga pode ter gravado: as duas comparadas direto, e o índice único
-        // da coluna continua valendo.
+        // carga pode ter gravado.
         $comPontos = "CONCAT(SUBSTRING({$i},1,2),'.',SUBSTRING({$i},3,3),'.',SUBSTRING({$i},6,3),'.',SUBSTRING({$i},9,4),'.',SUBSTRING({$i},13,3))";
-        $q->selectRaw('1')->from('cadastro_externo_imoveis as pmc')
-            // O bairro do cadastro vem junto: a busca por texto procura também no nome dele.
-            ->leftJoin('cadastro_bairros as pmb', function ($join) {
-                $join->whereRaw("TRIM(LEADING '0' FROM pmb.codigo) = TRIM(LEADING '0' FROM pmc.codigo_bairro)");
-            })
-            ->whereRaw("pmc.inscricao COLLATE utf8mb4_unicode_ci IN ({$i}, {$comPontos})");
+
+        $grupo = function ($g) use ($condicao, $i, $comPontos) {
+            foreach ([$i, $comPontos] as $n => $forma) {
+                $g->{$n === 0 ? 'whereExists' : 'orWhereExists'}(function ($sub) use ($condicao, $forma) {
+                    $sub->selectRaw('1')->from('cadastro_externo_imoveis as pmc')
+                        ->whereRaw("pmc.inscricao = {$forma}");
+                    $condicao($sub);
+                });
+            }
+        };
+        $ou ? $s->orWhere($grupo) : $s->where($grupo);
+    }
+
+    /**
+     * Os códigos (sem zero à esquerda) dos bairros cujo nome NO CADASTRO casa
+     * com o texto. Uma consulta a uma tabela de dezenas de linhas, feita uma
+     * vez por palavra — e não uma varredura por lote.
+     *
+     * @return list<string>
+     */
+    private function codigosDeBairroPorNome(string $like): array
+    {
+        return DB::table('cadastro_bairros')
+            ->whereRaw("nome_cadastro LIKE ? ESCAPE '!'", [$like])
+            ->pluck('codigo')
+            ->map(fn ($c) => ltrim((string) $c, '0'))
+            ->filter()->unique()->values()->all();
     }
 
     /**

@@ -181,6 +181,30 @@ document.addEventListener('click', e => {
     }
   }, 0)
 })
+/**
+ * Quanto a tela espera o servidor antes de desistir, em milissegundos.
+ *
+ * Sem isso, um servidor que para de responder deixa "Pesquisando…" na tela
+ * para sempre: o fetch do navegador não tem prazo próprio, e o 504 do gateway
+ * nem sempre chega. Aconteceu em produção com termo de quatro palavras.
+ */
+const PESQ_TEMPO_MAX = 30000
+
+/**
+ * A resposta como JSON. Um 502/504 do gateway chega em HTML, e o JSON.parse
+ * dele viraria "Unexpected token '<'" na cara do fiscal.
+ */
+async function _pesqJson(r) {
+  const texto = await r.text()
+  try {
+    return JSON.parse(texto)
+  } catch {
+    throw new Error(r.status === 502 || r.status === 503 || r.status === 504
+      ? 'O servidor demorou demais para responder. Tente de novo em instantes.'
+      : `O servidor respondeu ${r.status} em vez do resultado.`)
+  }
+}
+
 async function _pesqBuscar() {
   clearTimeout(pesqState.timer)
   const s = pesqState, pedido = ++s.pedido
@@ -190,9 +214,11 @@ async function _pesqBuscar() {
   if (!p.size) { s.aviso = null; destacarLotes(null); _pesqAtualizarResultado(); return }
   s.aviso = { texto: 'Pesquisando…' }; _pesqAtualizarResultado()
   s.abort = new AbortController()
+  let porTempo = false
+  const relogio = setTimeout(() => { porTempo = true; s.abort.abort() }, PESQ_TEMPO_MAX)
   try {
     const r = await fetch('/api/mapa/pesquisa?' + p, { headers: { Accept: 'application/json' }, signal: s.abort.signal })
-    const d = await r.json()
+    const d = await _pesqJson(r)
     if (pedido !== s.pedido) return
     if (!r.ok) throw new Error(d.message || 'Falha na pesquisa.')
     s.aviso = null; s.res = d
@@ -210,8 +236,19 @@ async function _pesqBuscar() {
       mapaState.obj?.fitBounds([[sul, oeste], [norte, leste]], { paddingTopLeft: inicio, paddingBottomRight: final, maxZoom: ZOOM_DO_LOTE, animate: false })
     }
   } catch (e) {
-    if (pedido !== s.pedido || e.name === 'AbortError') return
-    s.aviso = { texto: e.message, erro: true }; destacarLotes(null)
+    if (pedido !== s.pedido) return
+    // Cancelamento por tecla nova não é erro; estouro de prazo é, e precisa
+    // aparecer — senão a tela fica dizendo "Pesquisando…" indefinidamente.
+    if (e.name === 'AbortError' && ! porTempo) return
+    s.aviso = {
+      texto: porTempo
+        ? 'A pesquisa passou de 30 segundos e foi interrompida. Tente com menos palavras, ou use os campos de bairro e rua.'
+        : e.message,
+      erro: true,
+    }
+    destacarLotes(null)
+  } finally {
+    clearTimeout(relogio)
   }
   _pesqAtualizarResultado()
 }
@@ -226,22 +263,139 @@ function _pesqSaida(html) {
   el.innerHTML = html || ''
 }
 
-function _pesqIrACoordenada(termo) {
-  const nums = (termo.match(/-?\d+(?:[.,]\d+)?/g) || []).map(n => Number(n.replace(',', '.')))
-  if (nums.length < 2) { _pesqSaida('<div class="pesq-msg pesq-erro">Informe as duas coordenadas.</div>'); return }
-  let [a, b] = nums
-  let lat, lon, como
-  if (Math.abs(a) <= 90 && Math.abs(b) <= 180) {
-    // Graus decimais. Aceita na ordem que vier: aqui a latitude é ~-15 e a longitude ~-54.
-    ;[lat, lon] = Math.abs(a) < Math.abs(b) ? [a, b] : [b, a]
-    como = 'lat/long'
-  } else {
-    // UTM — E tem 6 dígitos, N tem 7. Fuso 21 sul (SIRGAS 2000), o do município.
-    const [E, N] = a < b ? [a, b] : [b, a]
-    ;[lat, lon] = utmParaLatLon(E, N, 21, true)
-    como = 'UTM 21S'
+/**
+ * Até onde o salto por coordenada aceita ir, em quilômetros contados do centro
+ * de Primavera do Leste. O município tem ~75 km de ponta a ponta, então 150 km
+ * cobre qualquer ponto legítimo da região com folga. Serve para barrar o erro
+ * de digitação que manda o mapa para o outro lado do mundo: hemisfério escrito
+ * com a letra e sem o sinal de menos erra ~12.000 km, grau-minuto-segundo lido
+ * como grau decimal erra ~9.600 km, e o fuso digitado na frente erra ~8.300 km.
+ */
+const COORD_RAIO_MAX_KM = 150
+
+/** Centro da cidade, usado quando a extensão real do cadastro ainda não carregou. */
+const COORD_CENTRO = [-15.5556, -54.2961]
+
+/**
+ * Lê a coordenada escrita à mão. Aceita, em qualquer ordem:
+ *
+ *   -15.512931, -54.313763          graus decimais, com ou sem vírgula decimal
+ *   15°30'46.6"S 54°18'49.5"W       grau, minuto e segundo (o que o Google Maps mostra)
+ *   15 30.777 S, 54 18.826 W        grau e minuto decimal (comum em memorial)
+ *   788181.66, 8283132.48           UTM, fuso 21 sul por omissão
+ *   21S 788181.66 8283132.48        UTM com o fuso escrito
+ *
+ * A letra do hemisfério (N/S e E/W, ou L/O em português) manda no sinal e também
+ * diz qual número é a latitude. Sem letra e sem sinal, vale a ordem natural daqui:
+ * a latitude é ~-15 e a longitude ~-54, então o de menor módulo é a latitude.
+ *
+ * @returns {{lat: number, lon: number, como: string}|{erro: string}}
+ */
+function _pesqLerCoordenada(termo) {
+  let t = String(termo || '').toUpperCase()
+    .replace(/[’′`]/g, "'").replace(/[”″]/g, '"').replace(/[º°]/g, '°')
+
+  // Fuso escrito junto ("21S", "22 K"). Só conta se o que sobra for tamanho de
+  // UTM — senão o "15" de 15°30' seria confundido com o número do fuso.
+  let zona = 21
+  const mz = t.match(/(?:^|\s)(\d{1,2})\s*[C-HJ-NP-X](?=$|[\s,;])/)
+  if (mz) {
+    const resto = t.replace(mz[0], ' ')
+    const grandes = (resto.match(/\d+(?:[.,]\d+)?/g) || [])
+      .filter(n => parseFloat(n.replace(',', '.')) >= 100000)
+    if (grandes.length >= 2) { zona = Number(mz[1]); t = resto }
   }
-  if (!isFinite(lat) || !isFinite(lon)) { _pesqSaida('<div class="pesq-msg pesq-erro">Coordenada inválida.</div>'); return }
+
+  // Marca as letras de hemisfério que estão soltas, para não pescar o L de "LAT".
+  t = t.replace(/(^|[\s,;°'"\d])([NSEWLO])(?=$|[\s,;.\d-])/g, '$1 ¤$2 ')
+
+  const pecas = []
+  const re = /(-?\d+(?:[.,]\d+)?)\s*(°|'|"|)|¤([NSEWLO])/g
+  let m
+  while ((m = re.exec(t)) !== null) {
+    if (m[3]) pecas.push({ hemi: m[3] })
+    else pecas.push({ n: parseFloat(m[1].replace(',', '.')), u: m[2] })
+  }
+  const numeros = pecas.filter(p => p.hemi === undefined).map(p => p.n)
+  if (numeros.length < 2) return { erro: 'Informe as duas coordenadas.' }
+
+  // Dois grupos: um por coordenada. A letra abre o grupo (quando vem antes dos
+  // números) ou fecha (quando vem depois) — as duas escritas aparecem na prática.
+  let grupos = []
+  if (pecas[0].hemi) {
+    for (const p of pecas) {
+      if (p.hemi) grupos.push({ hemi: p.hemi, nums: [] })
+      else if (grupos.length) grupos[grupos.length - 1].nums.push(p.n)
+    }
+  } else {
+    let nums = []
+    for (const p of pecas) {
+      if (p.hemi) { grupos.push({ hemi: p.hemi, nums }); nums = [] }
+      else nums.push(p.n)
+    }
+    if (nums.length) grupos.push({ hemi: null, nums })
+  }
+  grupos = grupos.filter(g => g.nums.length)
+  if (grupos.length !== 2) {
+    // Sem letra separando: 4 ou 6 números são grau-minuto(-segundo) dos dois
+    // lados; qualquer outra quantidade vale pelos dois primeiros.
+    grupos = numeros.length === 4 || numeros.length === 6
+      ? [{ hemi: null, nums: numeros.slice(0, numeros.length / 2) },
+         { hemi: null, nums: numeros.slice(numeros.length / 2) }]
+      : [{ hemi: null, nums: [numeros[0]] }, { hemi: null, nums: [numeros[1]] }]
+  }
+
+  const valor = g => {
+    const [d = 0, mi = 0, s = 0] = g.nums
+    const magnitude = Math.abs(d) + Math.abs(mi) / 60 + Math.abs(s) / 3600
+    const negativo = g.hemi ? /[SWO]/.test(g.hemi) : d < 0
+    return negativo ? -magnitude : magnitude
+  }
+  const v1 = valor(grupos[0]), v2 = valor(grupos[1])
+  const hemi = grupos.map(g => g.hemi || '')
+  const grauMinutoSegundo = grupos.some(g => g.nums.length > 1) || /['"°]/.test(t)
+
+  let lat, lon, como
+  if (grauMinutoSegundo || (Math.abs(v1) <= 90 && Math.abs(v2) <= 180)) {
+    if (/[NS]/.test(hemi[0]) && /[EWOL]/.test(hemi[1])) [lat, lon] = [v1, v2]
+    else if (/[EWOL]/.test(hemi[0]) && /[NS]/.test(hemi[1])) [lat, lon] = [v2, v1]
+    else [lat, lon] = Math.abs(v1) < Math.abs(v2) ? [v1, v2] : [v2, v1]
+    como = grauMinutoSegundo ? 'grau/minuto/segundo' : 'lat/long'
+  } else {
+    const [E, N] = v1 < v2 ? [v1, v2] : [v2, v1]
+    ;[lat, lon] = utmParaLatLon(E, N, zona, true)
+    como = 'UTM ' + zona + 'S'
+  }
+  if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return { erro: 'Coordenada inválida.' }
+  }
+  return { lat, lon, como }
+}
+
+/** Distância em km até o cadastro (ou até o centro da cidade, se ele não carregou). */
+function _pesqDistanciaDaCidade(lat, lon) {
+  const e = mapaState.extensao
+  const centro = e
+    ? [(e.sul + e.norte) / 2, (e.oeste + e.leste) / 2]
+    : COORD_CENTRO
+  const dLat = (lat - centro[0]) * 111.32
+  const dLon = (lon - centro[1]) * 111.32 * Math.cos(centro[0] * Math.PI / 180)
+  return Math.hypot(dLat, dLon)
+}
+
+function _pesqIrACoordenada(termo) {
+  const r = _pesqLerCoordenada(termo)
+  if (r.erro) { _pesqSaida(`<div class="pesq-msg pesq-erro">${r.erro}</div>`); return }
+  const { lat, lon, como } = r
+
+  const km = _pesqDistanciaDaCidade(lat, lon)
+  if (km > COORD_RAIO_MAX_KM) {
+    _pesqSaida(`<div class="pesq-msg pesq-erro">Entendi <strong>${como}</strong>:
+      ${lat.toFixed(6)}, ${lon.toFixed(6)} — ${fmtBR(km, 0)} km de Primavera do Leste.
+      Confira o que foi digitado: o hemisfério sul e oeste precisa do sinal de menos
+      ou da letra (S e W), e o fuso, se escrever, vem antes dos dois números.</div>`)
+    return
+  }
 
   pesqState.ponto?.remove()
   pesqState.ponto = L.circleMarker([lat, lon], { radius: 9, color: '#facc15', weight: 3, fillOpacity: .25 })
