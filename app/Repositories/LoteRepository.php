@@ -931,6 +931,7 @@ class LoteRepository
      */
     public function gravarRuas(string $bairro, array $trechos): int
     {
+        $trechos = array_values(array_filter($trechos, fn ($t) => ! $this->trechoDentroDeLote($t['de'], $t['ate'])));
         $agora = now()->toDateTimeString();
         DB::table('ruas_trechos')->where('bairro', $bairro)->delete();
         foreach (array_chunk($trechos, 500) as $bloco) {
@@ -942,6 +943,27 @@ class LoteRepository
         }
 
         return count($trechos);
+    }
+
+    /**
+     * TRECHO DENTRO DE LOTE NÃO É RUA (22/11/2026). O gerador já descarta o
+     * lado que dá para outra quadra do mesmo bairro, mas não vê as quadras do
+     * vizinho: dois loteamentos encostados pelos fundos ganhavam uma "rua"
+     * atravessando os lotes do outro. Aqui vale qualquer bairro: o trecho com
+     * os pontos a 20, 50 e 80 % dentro de lote ativo é descartado. O que só
+     * entra em parte num lote fica (pode ser rua de verdade com lote mal
+     * desenhado): esse se exclui à mão em Nomes de rua.
+     *
+     * A migração 2026_11_22_000200 limpou, com a mesma regra, os já gravados.
+     */
+    public function trechoDentroDeLote(array $de, array $ate): bool
+    {
+        $sub = "EXISTS (SELECT 1 FROM lotes WHERE situacao = 'ativo'
+                    AND ST_Contains(geom, ST_GeomFromText(?, 4326, 'axis-order=long-lat')))";
+        $pontos = array_map(fn ($f) => sprintf('POINT(%.7F %.7F)',
+            $de[1] + ($ate[1] - $de[1]) * $f, $de[0] + ($ate[0] - $de[0]) * $f), [0.2, 0.5, 0.8]);
+
+        return (bool) DB::selectOne("SELECT ($sub AND $sub AND $sub) AS dentro", $pontos)->dentro;
     }
 
     /**

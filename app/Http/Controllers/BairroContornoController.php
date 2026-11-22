@@ -262,9 +262,10 @@ class BairroContornoController extends Controller
         }
 
         $codigo = $this->codigoNoCadastro($d['bairro']);
-        $q = DB::transaction(function () use ($d, $codigo, $geojson, $r, $editado) {
+        $ruasGravadas = null;
+        $q = DB::transaction(function () use ($d, $codigo, $geojson, $r, $editado, &$ruasGravadas) {
             if (array_key_exists('ruas', $d)) {
-                $this->lotes->gravarRuas($d['bairro'], array_map(fn ($t) => [
+                $ruasGravadas = $this->lotes->gravarRuas($d['bairro'], array_map(fn ($t) => [
                     'nome' => isset($t['nome']) && trim($t['nome']) !== '' ? trim($t['nome']) : null,
                     'de'   => [(float) $t['de'][0], (float) $t['de'][1]],
                     'ate'  => [(float) $t['ate'][0], (float) $t['ate'][1]],
@@ -303,7 +304,9 @@ class BairroContornoController extends Controller
                 $msg .= '. Bairro sem cadastro amarrado: nomes de rua automáticos não gerados (dá para informar à mão em Nomes de rua)';
             } else {
                 $semNome = count(array_filter($d['ruas'] ?? [], fn ($t) => empty($t['nome'])));
-                $msg .= sprintf('. %d trecho(s) de rua', count($d['ruas'] ?? []))
+                $dentro = count($d['ruas'] ?? []) - (int) $ruasGravadas;
+                $msg .= sprintf('. %d trecho(s) de rua', $ruasGravadas)
+                    . ($dentro ? sprintf(' (%d dentro de lotes, descartados)', $dentro) : '')
                     . ($semNome ? sprintf(', %d sem nome — veja em Nomes de rua', $semNome) : '');
             }
         }

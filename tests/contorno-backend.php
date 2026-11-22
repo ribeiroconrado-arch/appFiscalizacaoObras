@@ -136,6 +136,18 @@ try {
     $r = $rua('lote', $admin, ['acao' => 'nome', 'itens' => $itens]);
     confere($r->getStatusCode() === 422, 'sem nome, nada é gravado');
 
+    echo "Nomes de rua — trecho dentro de lote não é rua\n";
+    $repo = app(LoteRepository::class);
+    $c = DB::selectOne("SELECT ST_Y(p) lat, ST_X(p) lon FROM (SELECT ST_Centroid(ST_SRID(geom, 0)) p FROM lotes
+        WHERE bairro = ? AND situacao = 'ativo' AND ST_Area(ST_SRID(geom, 0)) > 2e-8 ORDER BY id LIMIT 1) x", [$bairro]);
+    $miolo = ['de' => [$c->lat, $c->lon - 0.00002], 'ate' => [$c->lat, $c->lon + 0.00002]];
+    confere($repo->trechoDentroDeLote($miolo['de'], $miolo['ate']), 'trecho no miolo de um lote é reconhecido');
+    confere(! $repo->trechoDentroDeLote($trecho['de'], $trecho['ate']), 'o trecho de rua de verdade não');
+    $antes = DB::table('ruas_trechos')->where('bairro', $bairro)->count();
+    $n = $repo->gravarRuas($bairro, [['nome' => null] + $miolo, ['nome' => $trecho['nome'], 'de' => $trecho['de'], 'ate' => $trecho['ate']],
+        ['nome' => null, 'de' => $semNome['de'], 'ate' => $semNome['ate']]]);
+    confere($n === 2 && DB::table('ruas_trechos')->where('bairro', $bairro)->count() === 2, "gravar descarta o de dentro do lote (antes {$antes})");
+
     echo "Nomes de rua — excluir trecho\n";
     $r = $rua('lote', $admin, ['acao' => 'excluir', 'itens' => $itens]);
     $d = json_decode($r->getContent(), true);

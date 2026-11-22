@@ -239,7 +239,14 @@ até o curador aceitar. Rua sem lote de frente é desenhada com
 vários pontos (duplo clique termina). "Excluir" tira o trecho que não é rua,
 linha e rótulo: o gerado ganha um manual `excluido` (o "Gerar" o traria de
 volta), visível só no filtro À mão para "Voltar ao cadastro"; o desenhado à mão
-é apagado. "Ocultar" tira só o rótulo. Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
+é apagado. "Ocultar" tira só o rótulo. Trecho com os pontos a 20, 50 e 80 %
+dentro de lote ativo de QUALQUER bairro não é rua (loteamentos encostados pelos
+fundos): `LoteRepository::trechoDentroDeLote` o descarta ao gravar, e a
+migração 2026_11_22_000200 limpou os já gravados. Na ferramenta, as linhas são
+COSTURADAS só no desenho (`_costurar`, nada gravado): pontas em linha se
+encontram no meio, dobra de até 65° vira curva suave (Bézier pelo cruzamento
+das retas, metade para cada trecho), dobra maior encontra no cruzamento, e a
+ponta solta vai até a transversal à frente (o "T"), tudo até 40 m. Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
 `ruas_manuais` (nunca apagada pelo "Gerar"); o manual cobre o gerado com que
 coincide na LEITURA (`App\Cadastro\TrechosDeRua`), com auditoria.
 

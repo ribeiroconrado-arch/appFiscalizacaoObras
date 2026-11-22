@@ -191,6 +191,121 @@ function _vizinhos(trechos) {
   })
 }
 
+// ══════ COSTURA: AS LINHAS SE ENCONTRAM ══════
+//
+// O trecho gerado é um segmento reto por lado de quadra, cortado onde acabam
+// os lotes: sobrava buraco em toda esquina, e a curva da avenida virava
+// pedaços soltos (22/11/2026). A costura é só do DESENHO, feita na hora com o
+// que está na tela — o gravado não muda, o "Gerar" não precisa ser refeito e
+// vale também entre bairros vizinhos.
+//  1. Ponta com ponta: as duas pontas mais próximas que se olham se encontram.
+//     Em linha, no meio do caminho; dobrando pouco (curva da rua), por uma
+//     curva suave que passa pelo cruzamento das duas retas, metade para cada
+//     trecho; dobrando muito (esquina), no cruzamento das retas.
+//  2. Ponta solta que chega numa rua transversal (o "T") vai até ela.
+
+const COSTURA_ALCANCE_M = 40   // até onde uma ponta vai buscar a outra
+const COSTURA_RECUO_M = 8      // a ponta que passou do cruzamento pode voltar até isto
+const COSTURA_ALINHA_M = 6     // em linha: fora da reta no máximo isto
+const COSTURA_RETA_COS = Math.cos(8 * Math.PI / 180)
+const COSTURA_CURVA_GRAUS = 65 // dobra até isto é curva da rua; acima, esquina
+const COSTURA_T_COS = Math.cos(30 * Math.PI / 180)
+const _ll = p => [+(p[1] / 110574).toFixed(7), +(p[0] / (111320 * _COS_LAT)).toFixed(7)]
+
+/** Preenche `t.linha` (lat,lng) de cada trecho, já com as pontas costuradas. */
+function _costurar(trechos) {
+  const vivos = trechos.filter(t => t.t.origem !== 'excluido')
+  for (const t of trechos) t.linha = [t.t.de, t.t.ate]
+  const pontas = []
+  for (const t of vivos) {
+    t.costura = [{ p: t.a, extra: [] }, { p: t.b, extra: [] }]
+    pontas.push({ t, e: 0, p: t.a, d: [-t.ux, -t.uy] }, { t, e: 1, p: t.b, d: [t.ux, t.uy] })
+  }
+  const CEL = 50
+  const grade = new Map()
+  pontas.forEach((P, i) => {
+    const c = Math.floor(P.p[0] / CEL) + ':' + Math.floor(P.p[1] / CEL)
+    ;(grade.get(c) || grade.set(c, []).get(c)).push(i)
+  })
+
+  // 1. Pares de pontas, do mais barato ao mais caro.
+  const pares = []
+  const nomesCombinam = (a, b) => !a.chave || !b.chave || a.chave === b.chave
+  pontas.forEach((E, i) => {
+    const cx = Math.floor(E.p[0] / CEL), cy = Math.floor(E.p[1] / CEL)
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      for (const j of grade.get((cx + dx) + ':' + (cy + dy)) || []) {
+        const F = pontas[j]
+        if (j <= i || F.t === E.t) continue
+        const v = [F.p[0] - E.p[0], F.p[1] - E.p[1]], dist = Math.hypot(v[0], v[1])
+        if (dist > COSTURA_ALCANCE_M) continue
+        const cos = E.d[0] * F.d[0] + E.d[1] * F.d[1]
+        if (cos < -COSTURA_RETA_COS) {
+          // De frente, em linha: a rua continua do outro lado do cruzamento.
+          const ao = v[0] * E.d[0] + v[1] * E.d[1], fora = Math.abs(v[0] * E.d[1] - v[1] * E.d[0])
+          if (ao >= -COSTURA_RECUO_M && fora <= COSTURA_ALINHA_M) pares.push({ E, F, tipo: 'reta', custo: dist })
+          continue
+        }
+        // O cruzamento das duas retas: E.p + s·E.d = F.p + r·F.d
+        const det = -E.d[0] * F.d[1] + E.d[1] * F.d[0]
+        if (Math.abs(det) < 1e-6) continue
+        const s = (-v[0] * F.d[1] + v[1] * F.d[0]) / det
+        const r = (E.d[0] * v[1] - E.d[1] * v[0]) / det
+        if (s < -COSTURA_RECUO_M || r < -COSTURA_RECUO_M || s > COSTURA_ALCANCE_M || r > COSTURA_ALCANCE_M) continue
+        const giro = Math.acos(Math.max(-1, Math.min(1, -cos))) * 180 / Math.PI
+        const curva = giro <= COSTURA_CURVA_GRAUS && s >= 0 && r >= 0 && nomesCombinam(E.t, F.t)
+        // +8: num cruzamento, a rua que segue reta ganha da que dobra.
+        pares.push({ E, F, s, tipo: curva ? 'curva' : 'esquina', custo: Math.max(s, 0) + Math.max(r, 0) + 8 })
+      }
+    }
+  })
+  pares.sort((a, b) => a.custo - b.custo)
+  const usada = new Set(), chaveP = P => P.t.k + '#' + P.e
+  for (const { E, F, s, tipo } of pares) {
+    if (usada.has(chaveP(E)) || usada.has(chaveP(F))) continue
+    usada.add(chaveP(E)); usada.add(chaveP(F))
+    if (tipo === 'reta') {
+      const m = [(E.p[0] + F.p[0]) / 2, (E.p[1] + F.p[1]) / 2]
+      E.t.costura[E.e].p = m; F.t.costura[F.e].p = m
+      continue
+    }
+    const X = [E.p[0] + E.d[0] * s, E.p[1] + E.d[1] * s]
+    if (tipo === 'esquina') { E.t.costura[E.e].p = X; F.t.costura[F.e].p = X; continue }
+    // Curva: Bézier de E.p a F.p puxada pelo cruzamento X; cada trecho leva a sua metade.
+    const n = Math.max(4, Math.ceil((Math.hypot(X[0] - E.p[0], X[1] - E.p[1]) + Math.hypot(X[0] - F.p[0], X[1] - F.p[1])) / 4))
+    const B = u => [0, 1].map(c => (1 - u) * (1 - u) * E.p[c] + 2 * u * (1 - u) * X[c] + u * u * F.p[c])
+    const meio = Math.floor(n / 2)
+    for (let k = 1; k <= meio; k++) E.t.costura[E.e].extra.push(B(k / n))
+    for (let k = n - 1; k >= meio; k--) F.t.costura[F.e].extra.push(B(k / n))
+  }
+
+  // 2. O "T": a ponta que sobrou vai até a rua transversal à frente (ou volta
+  //    até ela, se passou um pouco).
+  for (const E of pontas) {
+    if (usada.has(chaveP(E))) continue
+    let melhor = null
+    for (const u of vivos) {
+      if (u === E.t || Math.abs(E.d[0] * u.ux + E.d[1] * u.uy) > COSTURA_T_COS) continue
+      const v = [u.a[0] - E.p[0], u.a[1] - E.p[1]]
+      const det = -E.d[0] * u.uy + E.d[1] * u.ux
+      if (Math.abs(det) < 1e-6) continue
+      const s = (-v[0] * u.uy + v[1] * u.ux) / det
+      const w = (E.d[0] * v[1] - E.d[1] * v[0]) / det
+      if (s < -COSTURA_RECUO_M || s > COSTURA_ALCANCE_M || w < -2 || w > u.len + 2) continue
+      if (melhor === null || Math.abs(s) < Math.abs(melhor)) melhor = s
+    }
+    if (melhor !== null) E.t.costura[E.e].p = [E.p[0] + E.d[0] * melhor, E.p[1] + E.d[1] * melhor]
+  }
+
+  for (const t of vivos) {
+    const [c0, c1] = t.costura
+    // A ponta recuada não pode atravessar a outra: aí fica o trecho como veio.
+    const ok = (c1.p[0] - c0.p[0]) * t.ux + (c1.p[1] - c0.p[1]) * t.uy > 1
+    t.linha = (ok ? [...[...c0.extra].reverse(), c0.p, c1.p, ...c1.extra] : [t.a, t.b]).map(_ll)
+    delete t.costura
+  }
+}
+
 /**
  * Refaz o índice: cada trecho com a chave, a geometria em metros, o grupo
  * (a rua contínua de mesmo nome) e a sugestão de nome, se for sem nome.
@@ -266,6 +381,7 @@ function _indexarRuas() {
     continuacao()
   }
 
+  _costurar(trechos)
   ruaState.trechos = trechos
   ruaState.porK = new Map(trechos.map(t => [t.k, t]))
   for (const k of [...ruaState.selecao]) if (!ruaState.porK.has(k)) ruaState.selecao.delete(k)
@@ -283,7 +399,7 @@ function aoMudarRuas() {
     const o = x.sugestao ? 'sugestao' : x.t.origem
     // O excluído só aparece no filtro À mão, onde se desfaz.
     if (o === 'excluido' && ruaState.filtro !== 'manual') continue
-    const linha = L.polyline([x.t.de, x.t.ate], {
+    const linha = L.polyline(x.linha, {
       pane: 'ruasEdicao', renderer: ruaState.renderer,
       color: COR_TRECHO[o] || '#666', weight: o === 'cadastro' ? 3 : o === 'excluido' ? 2.5 : 3.5,
       opacity: o === 'cadastro' ? .55 : o === 'excluido' ? .7 : .9,
@@ -358,7 +474,7 @@ function _pintarRealceRuas() {
   }
   for (const k of ruaState.selecao) {
     const x = ruaState.porK.get(k)
-    if (x) halo([x.t.de, x.t.ate], COR_TRECHO.manual)
+    if (x) halo(x.linha, COR_TRECHO.manual)
   }
   for (const s of ruaState.novo || []) halo([s.de, s.ate], COR_TRECHO.novo)
   const d = ruaState.desenhando
