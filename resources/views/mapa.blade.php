@@ -3505,6 +3505,7 @@
     <span><i class="ruas-cor o-sugestao"></i>sugestão</span>
     <span><i class="ruas-cor o-sem_nome"></i>sem nome</span>
     <span><i class="ruas-cor o-oculto"></i>oculto</span>
+    <span><i class="ruas-cor o-excluido"></i>excluído (no À mão)</span>
   </div>
 </aside>
 @endif

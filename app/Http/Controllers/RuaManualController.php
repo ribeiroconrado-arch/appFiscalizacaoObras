@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Cadastro\BairrosDoDesenho;
+use App\Cadastro\TrechosDeRua;
 use App\Models\RuaManual;
 use App\Repositories\LoteRepository;
 use Illuminate\Http\JsonResponse;
@@ -91,8 +92,9 @@ class RuaManualController extends Controller
 
         $rua->update([
             'nome'    => ! empty($d['oculto']) ? null : $this->limpo($d['nome'] ?? null),
-            'oculto'  => ! empty($d['oculto']),
-            'user_id' => $r->user()->id,
+            'oculto'   => ! empty($d['oculto']),
+            'excluido' => false,
+            'user_id'  => $r->user()->id,
         ]);
 
         return $this->resposta($rua->bairro, ! empty($d['oculto']) ? 'Trecho oculto.' : 'Nome de rua gravado.');
@@ -120,6 +122,9 @@ class RuaManualController extends Controller
      *
      *   acao  nome     cada item leva `nome` próprio, ou o `nome` geral
      *         ocultar  o rótulo some do mapa
+     *         excluir  o trecho some inteiro, linha e rótulo: o gerado ganha
+     *                  um manual excluído (o "Gerar" o traria de volta); o
+     *                  desenhado à mão, que não cobre gerado nenhum, é apagado
      *         voltar   apaga o manual (o item sem id é ignorado)
      */
     public function lote(Request $r): JsonResponse
@@ -128,7 +133,7 @@ class RuaManualController extends Controller
             return response()->json(['message' => 'Informar nome de rua é do curador do cadastro.'], 403);
         }
         $d = $r->validate([
-            'acao'           => ['required', 'in:nome,ocultar,voltar'],
+            'acao'           => ['required', 'in:nome,ocultar,excluir,voltar'],
             'nome'           => ['nullable', 'string', 'max:180'],
             'itens'          => ['required', 'array', 'min:1', 'max:500'],
             'itens.*.id'     => ['nullable', 'integer'],
@@ -161,10 +166,30 @@ class RuaManualController extends Controller
         $ids = array_values(array_filter(array_column($d['itens'], 'id')));
         $manuais = RuaManual::whereKey($ids)->get()->keyBy('id');
 
+        // O desenhado à mão não tem gerado por baixo: excluí-lo é apagá-lo.
+        $geradosDe = [];
+        $desenhado = function (RuaManual $m) use (&$geradosDe): bool {
+            $g = $geradosDe[$m->bairro] ??= DB::table('ruas_trechos')->where('bairro', $m->bairro)->get()
+                ->map(fn ($l) => ['de' => [(float) $l->de_lat, (float) $l->de_lon], 'ate' => [(float) $l->ate_lat, (float) $l->ate_lon]])->all();
+            $mm = ['de' => [(float) $m->de_lat, (float) $m->de_lon], 'ate' => [(float) $m->ate_lat, (float) $m->ate_lon]];
+            foreach ($g as $x) {
+                if (TrechosDeRua::cobre($mm, $x)) {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+
         $n = 0;
-        DB::transaction(function () use ($d, $r, $manuais, &$n) {
+        DB::transaction(function () use ($d, $r, $manuais, $desenhado, &$n) {
             foreach ($d['itens'] as $i) {
                 $existente = ! empty($i['id']) ? $manuais->get($i['id']) : null;
+                if ($d['acao'] === 'excluir' && $existente && $desenhado($existente)) {
+                    $existente->delete();
+                    $n++;
+                    continue;
+                }
                 if ($d['acao'] === 'voltar') {
                     if ($existente) {
                         $existente->delete();
@@ -173,8 +198,9 @@ class RuaManualController extends Controller
                     continue;
                 }
                 $dados = [
-                    'nome'    => $d['acao'] === 'ocultar' ? null : $this->limpo($i['nome'] ?? $d['nome'] ?? null),
-                    'oculto'  => $d['acao'] === 'ocultar',
+                    'nome'     => $d['acao'] === 'nome' ? $this->limpo($i['nome'] ?? $d['nome'] ?? null) : null,
+                    'oculto'   => $d['acao'] === 'ocultar',
+                    'excluido' => $d['acao'] === 'excluir',
                     'user_id' => $r->user()->id,
                 ];
                 if ($existente) {
@@ -193,6 +219,7 @@ class RuaManualController extends Controller
         $msg = match ($d['acao']) {
             'nome'    => "Nome gravado em {$n} {$plural}.",
             'ocultar' => $n === 1 ? '1 trecho oculto.' : "{$n} trechos ocultos.",
+            'excluir' => ($n === 1 ? '1 trecho excluído' : "{$n} trechos excluídos") . ' do mapa.',
             'voltar'  => "{$n} {$plural} de volta ao nome do cadastro.",
         };
 

@@ -958,7 +958,7 @@ class LoteRepository
         $gerados = DB::table('ruas_trechos')->where('bairro', $bairro)->orderBy('id')->get()
             ->map(fn ($l) => ['nome' => $l->nome, 'de' => $ponto($l, 'de'), 'ate' => $ponto($l, 'ate')])->all();
         $manuais = DB::table('ruas_manuais')->where('bairro', $bairro)->orderBy('id')->get()
-            ->map(fn ($l) => ['id' => (int) $l->id, 'nome' => $l->nome, 'oculto' => (bool) $l->oculto,
+            ->map(fn ($l) => ['id' => (int) $l->id, 'nome' => $l->nome, 'oculto' => (bool) $l->oculto, 'excluido' => (bool) ($l->excluido ?? false),
                 'de' => $ponto($l, 'de'), 'ate' => $ponto($l, 'ate')])->all();
 
         return array_map(fn ($t) => ['nome' => \App\Cadastro\TipoDoLogradouro::completar($t['nome'], $bairro)] + $t,

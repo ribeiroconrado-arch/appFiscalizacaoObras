@@ -54,8 +54,8 @@ const ruaState = {
   gravando: false,
 }
 
-const COR_TRECHO = { cadastro: '#16a34a', manual: '#2563eb', sem_nome: '#dc2626', oculto: '#9ca3af', sugestao: '#d97706', novo: '#2563eb' }
-const ROTULO_ORIGEM = { cadastro: 'cadastro', manual: 'à mão', sem_nome: 'sem nome', oculto: 'oculto' }
+const COR_TRECHO = { cadastro: '#16a34a', manual: '#2563eb', sem_nome: '#dc2626', oculto: '#9ca3af', excluido: '#6b7280', sugestao: '#d97706', novo: '#2563eb' }
+const ROTULO_ORIGEM = { cadastro: 'cadastro', manual: 'à mão', sem_nome: 'sem nome', oculto: 'oculto', excluido: 'excluído' }
 
 // Continuação de rua, em metros. Ver _continua.
 const RUA_ANGULO_COS = Math.cos(20 * Math.PI / 180)
@@ -281,10 +281,13 @@ function aoMudarRuas() {
   ruaState.camada.clearLayers()
   for (const x of ruaState.trechos) {
     const o = x.sugestao ? 'sugestao' : x.t.origem
+    // O excluído só aparece no filtro À mão, onde se desfaz.
+    if (o === 'excluido' && ruaState.filtro !== 'manual') continue
     const linha = L.polyline([x.t.de, x.t.ate], {
       pane: 'ruasEdicao', renderer: ruaState.renderer,
-      color: COR_TRECHO[o] || '#666', weight: o === 'cadastro' ? 3 : 3.5, opacity: o === 'cadastro' ? .55 : .9,
-      dashArray: ['sem_nome', 'oculto', 'sugestao'].includes(o) ? '7 5' : null,
+      color: COR_TRECHO[o] || '#666', weight: o === 'cadastro' ? 3 : o === 'excluido' ? 2.5 : 3.5,
+      opacity: o === 'cadastro' ? .55 : o === 'excluido' ? .7 : .9,
+      dashArray: ['sem_nome', 'oculto', 'sugestao'].includes(o) ? '7 5' : o === 'excluido' ? '2 6' : null,
     })
     linha.on('click', e => {
       // Desenhando, o toque é ponto da rua nova: deixa passar para o mapa.
@@ -385,7 +388,7 @@ function _contagensRuas() {
     todas: new Set(ts.filter(t => t.chave).map(t => t.chave)).size,
     sem_nome: ts.filter(t => t.t.origem === 'sem_nome' && !t.sugestao).length,
     sugestoes: ts.filter(t => t.sugestao).length,
-    manual: ts.filter(t => t.t.origem === 'manual' || t.t.origem === 'oculto').length,
+    manual: ts.filter(t => ['manual', 'oculto', 'excluido'].includes(t.t.origem)).length,
   }
 }
 
@@ -442,8 +445,11 @@ function pintarMesaRuas() {
 }
 
 function filtrarRuas(f) {
+  const redesenha = (f === 'manual') !== (ruaState.filtro === 'manual')
   ruaState.filtro = f
-  pintarMesaRuas()
+  // Entrar ou sair do À mão mostra ou esconde os excluídos no mapa.
+  if (redesenha) aoMudarRuas()
+  else pintarMesaRuas()
 }
 
 /** O cartão da seleção: o nome, o tamanho e a escolha do logradouro. */
@@ -455,6 +461,7 @@ function _htmlSelecao() {
     : nomes.length > 1 ? `${nomes.length} nomes diferentes`
       : nomes.length === 1 ? `${esc(nomes[0])} <span class="ruas-sem">e trechos sem nome</span>`
         : sel.every(t => t.t.origem === 'oculto') ? '<span class="ruas-sem">oculto</span>'
+          : sel.every(t => t.t.origem === 'excluido') ? '<span class="ruas-sem">excluído</span>'
           : '<span class="ruas-sem">sem nome</span>'
   const bairros = [...new Set(sel.map(t => t.bairro))]
   const total = sel.reduce((s, t) => s + t.len, 0)
@@ -473,7 +480,8 @@ function _htmlSelecao() {
     ${_htmlCampoNome()}
     <div class="ruas-botoes">
       <button type="button" class="btn sm primary" onclick="salvarNomeDeRua()" ${ruaState.gravando ? 'disabled' : ''}>${n === 1 ? 'Salvar' : 'Salvar nos ' + n}</button>
-      <button type="button" class="btn sm" onclick="ocultarRuaSelecionada()" title="Rótulo errado e sem nome melhor: some do mapa">Ocultar</button>
+      <button type="button" class="btn sm" onclick="ocultarRuaSelecionada()" title="Rótulo errado e sem nome melhor: o nome some do mapa, a linha fica">Ocultar</button>
+      ${sel.some(t => t.t.origem !== 'excluido') ? '<button type="button" class="btn sm danger" onclick="excluirRuaSelecionada()" title="Não é rua: a linha e o nome somem do mapa">Excluir</button>' : ''}
       ${temManual ? '<button type="button" class="btn sm" onclick="voltarRuaAoCadastro()">Voltar ao cadastro</button>' : ''}
     </div>
     <div class="ruas-botoes ruas-leves">
@@ -542,8 +550,9 @@ function _htmlListaRuas() {
       linha('o-sugestao', esc(t.sugestao), `${t.fonte === 'osm' ? 'do OpenStreetMap' : 'continuação'} · ${esc(t.bairro)} · ${_metros(t.len)}`, doTrecho(t),
         `<button type="button" class="btn sm" onclick="aceitarSugestoesDeRua('${_kAttr(t.k)}')">Aceitar</button>`))
   } else {
-    itens = ts.filter(t => t.t.origem === 'manual' || t.t.origem === 'oculto').map(t =>
-      linha('o-' + t.t.origem, t.t.origem === 'oculto' ? 'Oculto' : esc(t.t.nome), `${ROTULO_ORIGEM[t.t.origem]} · ${esc(t.bairro)}`, doTrecho(t)))
+    itens = ts.filter(t => ['manual', 'oculto', 'excluido'].includes(t.t.origem)).map(t =>
+      linha('o-' + t.t.origem, t.t.origem === 'oculto' ? 'Oculto' : t.t.origem === 'excluido' ? 'Excluído' : esc(t.t.nome),
+        `${ROTULO_ORIGEM[t.t.origem]} · ${esc(t.bairro)}`, doTrecho(t)))
   }
   if (!itens.length) {
     return `<div class="ruas-nota">${{ sem_nome: 'Nenhum trecho sem nome à vista.', sugestoes: 'Nenhuma sugestão à vista.', manual: 'Nada informado à mão à vista.' }[ruaState.filtro] || ''}</div>`
@@ -621,6 +630,17 @@ async function ocultarRuaSelecionada() {
   const itens = _selecionados().filter(t => t.t.origem !== 'oculto').map(_itemDoTrecho)
   if (!itens.length) { toast('A seleção já está oculta.', 'aviso'); return }
   await _enviarLoteRuas({ acao: 'ocultar', itens })
+}
+
+/**
+ * Exclui a seleção: o trecho que não é rua some, linha e nome. O que veio do
+ * cadastro fica guardado no filtro À mão, de onde volta; o desenhado à mão é
+ * apagado.
+ */
+async function excluirRuaSelecionada() {
+  const itens = _selecionados().filter(t => t.t.origem !== 'excluido').map(_itemDoTrecho)
+  if (!itens.length) { toast('A seleção já está excluída.', 'aviso'); return }
+  await _enviarLoteRuas({ acao: 'excluir', itens }, ' Para desfazer: filtro À mão, Voltar ao cadastro.')
 }
 
 async function voltarRuaAoCadastro() {

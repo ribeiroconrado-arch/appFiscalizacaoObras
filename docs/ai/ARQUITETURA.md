@@ -236,7 +236,10 @@ cópia do Fundo da cidade não serve, é recortada fora dos bairros): a via
 paralela a até 18 m do trecho sem nome dá o nome, que vira sugestão se bater
 com a lista do cadastro do bairro, e só pista se não bater. Nada é gravado
 até o curador aceitar. Rua sem lote de frente é desenhada com
-vários pontos (duplo clique termina). Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
+vários pontos (duplo clique termina). "Excluir" tira o trecho que não é rua,
+linha e rótulo: o gerado ganha um manual `excluido` (o "Gerar" o traria de
+volta), visível só no filtro À mão para "Voltar ao cadastro"; o desenhado à mão
+é apagado. "Ocultar" tira só o rótulo. Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
 `ruas_manuais` (nunca apagada pelo "Gerar"); o manual cobre o gerado com que
 coincide na LEITURA (`App\Cadastro\TrechosDeRua`), com auditoria.
 

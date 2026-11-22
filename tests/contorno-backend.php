@@ -136,6 +136,22 @@ try {
     $r = $rua('lote', $admin, ['acao' => 'nome', 'itens' => $itens]);
     confere($r->getStatusCode() === 422, 'sem nome, nada é gravado');
 
+    echo "Nomes de rua — excluir trecho\n";
+    $r = $rua('lote', $admin, ['acao' => 'excluir', 'itens' => $itens]);
+    $d = json_decode($r->getContent(), true);
+    confere($r->getStatusCode() === 200 && array_column($d['ruas'][$bairro], 'origem') === ['excluido', 'excluido']
+        && array_filter(array_column($d['ruas'][$bairro], 'nome')) === [], 'o gerado excluído vira manual excluído, sem nome (' . $d['message'] . ')');
+    $comId = array_map(fn ($t) => ['id' => $t['id'], 'bairro' => $bairro, 'de' => $t['de'], 'ate' => $t['ate']], $d['ruas'][$bairro]);
+    $r = $rua('lote', $admin, ['acao' => 'voltar', 'itens' => $comId]);
+    confere(array_column(json_decode($r->getContent(), true)['ruas'][$bairro], 'origem') === ['cadastro', 'sem_nome'], 'o excluído volta ao cadastro');
+    // Desenhado à mão longe de tudo: excluir é apagar.
+    $longe = ['bairro' => $bairro, 'de' => [$trecho['de'][0] + 0.01, $trecho['de'][1]], 'ate' => [$trecho['ate'][0] + 0.01, $trecho['ate'][1]]];
+    $d = json_decode($rua('lote', $admin, ['acao' => 'nome', 'nome' => 'RUA DESENHADA', 'itens' => [$longe]])->getContent(), true);
+    $desenhada = collect($d['ruas'][$bairro])->firstWhere('origem', 'manual');
+    $r = $rua('lote', $admin, ['acao' => 'excluir', 'itens' => [['id' => $desenhada['id']] + $longe]]);
+    confere($r->getStatusCode() === 200 && \App\Models\RuaManual::where('bairro', $bairro)->count() === 0
+        && count(json_decode($r->getContent(), true)['ruas'][$bairro]) === 2, 'a rua desenhada à mão, excluída, é apagada');
+
     DB::table('lotes')->where('bairro', $bairro)->where('situacao', 'ativo')->limit(1)->update(['updated_at' => now()->addMinute()]);
     $f = collect(json_decode($chama('index', $admin)->getContent(), true)['features'])->firstWhere('properties.nome', $bairro);
     confere($f['properties']['desatualizado'] === true, 'lote alterado depois do contorno o deixa desatualizado');

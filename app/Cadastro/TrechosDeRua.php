@@ -28,7 +28,8 @@ final class TrechosDeRua
      * @param  list<array{id?:int, nome:?string, de:array{0:float,1:float}, ate:array{0:float,1:float}}>  $gerados
      * @param  list<array{id:int, nome:?string, oculto:bool, de:array{0:float,1:float}, ate:array{0:float,1:float}}>  $manuais
      * @return list<array{id:?int, nome:?string, de:array, ate:array, origem:string}>
-     *         origem: cadastro | sem_nome | manual | oculto
+     *         origem: cadastro | sem_nome | manual | oculto | excluido
+     *         (o excluído volta só para a ferramenta poder desfazê-lo; o mapa não o desenha)
      */
     public static function combinar(array $gerados, array $manuais): array
     {
@@ -48,7 +49,7 @@ final class TrechosDeRua
         }
         foreach ($manuais as $m) {
             $saida[] = ['id' => $m['id'], 'nome' => $m['nome'], 'de' => $m['de'], 'ate' => $m['ate'],
-                'origem' => $m['oculto'] ? 'oculto' : 'manual'];
+                'origem' => ! empty($m['excluido']) ? 'excluido' : ($m['oculto'] ? 'oculto' : 'manual')];
         }
 
         return $saida;
