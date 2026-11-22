@@ -81,6 +81,14 @@
 .hist-data { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hist-voltar { border: 0; background: none; padding: 0 0 6px; font: inherit; font-size: 13px; color: var(--gd, #1f7a4a); cursor: pointer; }
 .hist-voltar:hover { text-decoration: underline; }
+/* O modal do relógio da Alteração cadastral (#m-historico): Atos e Edições do mapa. */
+#m-historico .modal { max-width: 920px; }
+#m-historico .sub-abas { margin: 4px 0 12px; max-width: 360px; }
+#m-historico .mh-nota { font-size: 12.5px; color: var(--tx3, #777); margin: 0 0 10px; }
+#m-historico .hist-busca { min-width: 200px; }
+#m-historico .hc-filtros { max-width: 420px; }
+#m-historico #hc-lista { border: 1px solid var(--bord, #e5e5e5); border-radius: 10px; padding: 0 14px; }
+#m-historico #hc-lista:empty, #m-historico #hc-lista > .lista-vazia:only-child { border: 0; padding: 0; }
 /* O bloco do Painel: a mesma linha, sem a coluna "Quem" e sem moldura própria. */
 .painel-historico-tit { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .painel-ver-tudo { border: 0; background: none; padding: 0; font: inherit; font-size: 12.5px; color: var(--gd, #1f7a4a); cursor: pointer; text-transform: none; letter-spacing: 0; }

@@ -4067,14 +4067,6 @@ body:not(:has(#t-mapa.at)) .base-mesa{display:none}
 @media (min-width:600px){
   .cad-mesa{width:var(--mesa-w, 348px)}
   .cad-mesa.so-regua{width:78px}
-  /* HISTÓRICO: lista de leitura, a mesa cresce com a tela e estica pela alça
-     da borda (historico-cadastro.js). As outras ferramentas ficam nos 348px.
-     --mesa-w também desloca o que se posiciona ao lado da mesa. */
-  body.mesa-historico{--mesa-w:var(--mesa-hist-w, clamp(348px, 30vw, 560px))}
-  .mesa-alca{display:none}
-  body.mesa-historico .cad-mesa:not(.so-regua) .mesa-alca{display:block;position:absolute;top:0;right:0;bottom:0;
-    width:8px;cursor:ew-resize;z-index:2;touch-action:none}
-  body.mesa-historico .mesa-alca:hover{background:color-mix(in srgb, var(--gd) 22%, transparent)}
 }
 
 /* ── ÍCONES 15% MAIORES nas duas réguas (21px → 24px) ── */

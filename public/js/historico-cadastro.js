@@ -1,10 +1,10 @@
 // ══════════════════════════════════════════════
 // O HISTÓRICO DO CADASTRO — e o desfazer
 //
-// Vive DENTRO DA MESA, ao lado das ferramentas de curadoria, e não numa tela de
-// administração. Quem desfaz um ato do cadastro é quem estava fazendo o ato: o
-// curador, no mapa, com o desenho à frente. Levá-lo para Parâmetros obrigaria a
-// sair do trabalho, procurar a linha numa lista do sistema inteiro, e voltar.
+// Abre pelo relógio da Alteração cadastral, sem sair do mapa. Desde 22/11/2026
+// é um MODAL (#m-historico) com duas abas: "Atos" (historico-atos.js, a mesma
+// lista do "Ver tudo" do Painel) e "Edições do mapa" (esta), que tem o Desfazer.
+// Antes era o lado direito da mesa, estreito para uma lista de leitura.
 //
 // O recorte é o MAPA: quadra corrigida, lote renumerado, unificação,
 // desmembramento, exclusão e restauração. A auditoria do sistema — usuários,
@@ -13,21 +13,22 @@
 
 const hcState = {
   /** @type {Array<Object>} */ linhas: [],
+  /** @type {'atos'|'edicoes'} a aba aberta por último */ aba: 'atos',
 }
 
-/**
- * Entra no modo histórico. É uma ferramenta da régua como as outras: ocupa o
- * lado direito da mesa e é largada pelo mesmo caminho.
- */
+/** O relógio da régua: abre o modal na última aba usada. Não larga a ferramenta em curso. */
 function abrirHistoricoCadastral() {
-  sairModoCadastral(true)
-  cadModo = 'historico'
+  openModal('m-historico')
+  abaDoHistorico(hcState.aba)
+}
 
-  if (typeof fecharPaineisMapa === 'function') { fecharPaineisMapa() }
-  if (ehMesaCadastral()) { abrirMesaCadastral() } else { abrirModalCad() }
-
-  pintarPainelCadastro()
-  carregarHistoricoCadastral()
+/** @param {'atos'|'edicoes'} aba */
+function abaDoHistorico(aba) {
+  hcState.aba = aba
+  document.querySelectorAll('#m-historico .sub-abas button').forEach(b => b.classList.toggle('at', b.dataset.mh === aba))
+  document.querySelectorAll('#m-historico .mh-painel').forEach(p => { p.hidden = p.dataset.mh !== aba })
+  if (aba === 'atos') prepararHistorico('m-historico')
+  else carregarHistoricoCadastral()
 }
 
 async function carregarHistoricoCadastral() {
@@ -90,7 +91,7 @@ function renderHistoricoCadastral(truncou) {
         ? `<span class="hc-sem-volta" title="${esc(l.desfazer.motivo)}">sem volta</span>`
         : ''
     const prancha = ['desmembrou', 'unificou', 'instituiu frações'].includes(l.acao) && l.registro
-      ? `<button type="button" class="btn sm" onclick="PranchetaCad.verSalvas(${Number(l.registro)})">Ver prancha</button>` : ''
+      ? `<button type="button" class="btn sm" onclick="fModalBtn('m-historico'); PranchetaCad.verSalvas(${Number(l.registro)})">Ver prancha</button>` : ''
 
     // O lote é clicável: leva o mapa até ele. Ver um registro de alteração sem
     // poder olhar o desenho é metade da resposta.
@@ -124,53 +125,6 @@ const HC_ACOES = {
   excluiu:             { rotulo: 'Exclusão',        cls: 'perigosa' },
 }
 
-// ── A LARGURA DA MESA NO HISTÓRICO ──
-// Por padrão ela cresce com a tela (CSS: body.mesa-historico); a alça na borda
-// direita estica até 70% da janela, e a largura escolhida fica guardada neste
-// navegador. Duplo clique na alça volta ao padrão.
-const HC_LARGURA_CHAVE = 'hc-largura-mesa'
-
-function _hcAplicarLargura(px) {
-  if (px) document.body.style.setProperty('--mesa-hist-w', px + 'px')
-  else document.body.style.removeProperty('--mesa-hist-w')
-}
-try { const v = Number(localStorage.getItem(HC_LARGURA_CHAVE)); if (v) _hcAplicarLargura(v) } catch { /* sem armazenamento */ }
-
-/** Põe a alça na mesa, uma vez só. @param {HTMLElement} mesa */
-function montarAlcaDaMesa(mesa) {
-  if (!mesa || mesa.querySelector('.mesa-alca')) return
-  const alca = document.createElement('div')
-  alca.className = 'mesa-alca'
-  alca.title = 'Arraste para alargar o histórico · duplo clique volta ao padrão'
-  alca.setAttribute('role', 'separator')
-  alca.setAttribute('aria-orientation', 'vertical')
-  mesa.appendChild(alca)
-
-  alca.addEventListener('pointerdown', e => {
-    e.preventDefault()
-    alca.setPointerCapture(e.pointerId)
-    const esquerda = mesa.getBoundingClientRect().left
-    const mover = ev => {
-      const w = Math.round(Math.min(Math.max(ev.clientX - esquerda, 348), window.innerWidth * 0.7))
-      _hcAplicarLargura(w)
-    }
-    const soltar = () => {
-      alca.removeEventListener('pointermove', mover)
-      alca.removeEventListener('pointerup', soltar)
-      alca.removeEventListener('pointercancel', soltar)
-      const w = parseInt(document.body.style.getPropertyValue('--mesa-hist-w'), 10)
-      try { if (w) localStorage.setItem(HC_LARGURA_CHAVE, String(w)) } catch { /* sem armazenamento */ }
-    }
-    alca.addEventListener('pointermove', mover)
-    alca.addEventListener('pointerup', soltar)
-    alca.addEventListener('pointercancel', soltar)
-  })
-  alca.addEventListener('dblclick', () => {
-    _hcAplicarLargura(null)
-    try { localStorage.removeItem(HC_LARGURA_CHAVE) } catch { /* sem armazenamento */ }
-  })
-}
-
 function hcValor(v) {
   if (v === null || v === undefined || v === '') { return '—' }
   return String(v)
@@ -179,6 +133,7 @@ function hcValor(v) {
 /** Leva o mapa até o lote da linha. @param {number} id */
 function irAoLoteDoHistorico(id) {
   if (typeof destacarPorId === 'function' && mapaState.porId.has(id)) {
+    fModalBtn('m-historico')   // o modal cobre o mapa: fecha para mostrar o lote
     destacarPorId(id)
     return
   }

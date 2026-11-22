@@ -4,9 +4,13 @@
  * mais antigo. Cada linha abre a tela do ato (identidades.js).
  * Ato desfeito sai da sucessão e não aparece aqui; a trilha do lote conta.
  * Servidor: GET /api/atos (AtosDoCadastro::lista).
+ *
+ * A mesma lista mora em DOIS lugares (22/11/2026): a tela #t-historico (o
+ * "Ver tudo" do Painel) e a aba "Atos" do modal #m-historico (o relógio da
+ * Alteração cadastral, historico-cadastro.js). `raiz` diz em qual se pinta.
  */
 
-const histState = { tipo: '', busca: '', pagina: 1, itens: [], mais: false, carregando: false }
+const histState = { raiz: 't-historico', tipo: '', busca: '', pagina: 1, itens: [], mais: false, carregando: false }
 let _histEspera = null
 
 const HIST_FILTROS = [
@@ -14,18 +18,26 @@ const HIST_FILTROS = [
   ['fracao_ideal', 'Frações ideais'], ['troca', 'Trocas de identidade'],
 ]
 
-function prepararHistorico() {
-  const f = document.getElementById('hist-filtros')
+/** @param {string} sel @returns {?HTMLElement} dentro da raiz em uso */
+const _histEl = sel => document.getElementById(histState.raiz)?.querySelector(sel) ?? null
+
+/** @param {string} [raiz] id da tela ou do modal onde a lista é pintada */
+function prepararHistorico(raiz = 't-historico') {
+  histState.raiz = raiz
+  const f = _histEl('.hist-filtros')
   if (f && !f.children.length) {
     f.innerHTML = HIST_FILTROS.map(([v, r]) =>
-      `<button type="button" data-tipo="${v}" aria-pressed="${v === histState.tipo}" onclick="filtrarHistorico('${v}')">${r}</button>`).join('')
+      `<button type="button" data-tipo="${v}" onclick="filtrarHistorico('${v}')">${r}</button>`).join('')
   }
+  f?.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tipo === histState.tipo)))
+  const busca = _histEl('.hist-busca')
+  if (busca) busca.value = histState.busca
   carregarHistoricoDeAtos(true)
 }
 
 function filtrarHistorico(tipo) {
   histState.tipo = tipo
-  document.querySelectorAll('#hist-filtros button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tipo === tipo)))
+  _histEl('.hist-filtros')?.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tipo === tipo)))
   carregarHistoricoDeAtos(true)
 }
 
@@ -35,7 +47,7 @@ function buscarNoHistorico(v) {
 }
 
 async function carregarHistoricoDeAtos(doZero) {
-  const alvo = document.getElementById('hist-lista')
+  const alvo = _histEl('.hist-lista')
   if (!alvo) return
   if (doZero) { histState.pagina = 1; histState.itens = []; alvo.innerHTML = '<div class="vazio-msg">Carregando…</div>' }
   histState.carregando = true
@@ -109,7 +121,8 @@ const AtosTexto = {
 }
 
 function pintarHistoricoDeAtos() {
-  const alvo = document.getElementById('hist-lista')
+  const alvo = _histEl('.hist-lista')
+  if (!alvo) return
   if (!histState.itens.length) {
     alvo.innerHTML = `<div class="vazio-msg">${histState.busca || histState.tipo ? 'Nenhum ato com esse filtro.' : 'Nenhum ato no cadastro ainda.'}</div>`
     return

@@ -982,11 +982,11 @@
        Os outros registros do sistema estão em “Atividade recente”, no Painel.</p>
   </header>
   <div class="hist-barra">
-    <div class="hist-filtros" id="hist-filtros" role="group" aria-label="Tipo de ato"></div>
+    <div class="hist-filtros" role="group" aria-label="Tipo de ato"></div>
     <input type="search" class="hist-busca" placeholder="Bairro, quadra, lote ou inscrição"
            aria-label="Buscar no histórico" oninput="buscarNoHistorico(this.value)">
   </div>
-  <div id="hist-lista" class="hist-lista"></div>
+  <div class="hist-lista"></div>
 </section>
 @endif
 
@@ -1477,6 +1477,53 @@
     <div class="notif-rodape">Fim das notificações</div>
   </div>
 </div>
+
+{{-- HISTÓRICO DO CADASTRO (22/11/2026) — o relógio da Alteração cadastral.
+     Duas listas: os ATOS (desmembramento, unificação, fração ideal, troca de
+     identidade; historico-atos.js, a mesma da tela #t-historico) e as EDIÇÕES
+     DO MAPA (quadra corrigida, renumeração, exclusão…, com o Desfazer;
+     historico-cadastro.js). Antes do modal do ato e da confirmação no
+     documento: os dois abrem por cima deste. --}}
+@if (! $externo)
+<div class="modal-bg" id="m-historico" onclick="fModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="fModalBtn('m-historico')">&#10005;</button>
+    <h3>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg>
+      Histórico do cadastro
+    </h3>
+    <div class="sub-abas" role="tablist">
+      <button type="button" class="at" data-mh="atos" onclick="abaDoHistorico('atos')">Atos</button>
+      <button type="button" data-mh="edicoes" onclick="abaDoHistorico('edicoes')">Edições do mapa</button>
+    </div>
+    <div class="mh-painel" data-mh="atos">
+      <p class="mh-nota">Desmembramentos, unificações, frações ideais e trocas de identidade. Clique numa linha para abrir o ato.</p>
+      <div class="hist-barra">
+        <div class="hist-filtros" role="group" aria-label="Tipo de ato"></div>
+        <input type="search" class="hist-busca" placeholder="Bairro, quadra, lote ou inscrição"
+               aria-label="Buscar nos atos" oninput="buscarNoHistorico(this.value)">
+      </div>
+      <div class="hist-lista"></div>
+    </div>
+    <div class="mh-painel" data-mh="edicoes" hidden>
+      <p class="mh-nota">Cada mudança feita no desenho (quadra corrigida, renumeração, exclusão, os atos), com o Desfazer enquanto ainda for possível.</p>
+      <div class="hc-filtros">
+        <select data-combo id="hc-escopo" onchange="carregarHistoricoCadastral()">
+          <option value="tudo">Todo o cadastro</option>
+          <option value="marcados">Só os lotes marcados</option>
+        </select>
+        <select data-combo id="hc-dias" onchange="carregarHistoricoCadastral()">
+          <option value="7">Últimos 7 dias</option>
+          <option value="30">Últimos 30 dias</option>
+          <option value="90">Últimos 90 dias</option>
+        </select>
+      </div>
+      <div id="hc-lista"></div>
+    </div>
+  </div>
+</div>
+@endif
 
 {{-- FICHA DO IMÓVEL --}}
 <div class="modal-bg" id="m-ficha" onclick="fModal()">
@@ -3371,26 +3418,7 @@
     </div>
 
 
-    {{-- HISTÓRICO DO CADASTRO — o que foi feito no desenho, e o desfazer.
-
-         Só o que acontece NO MAPA: quadra corrigida, lote renumerado,
-         unificação, desmembramento, exclusão e restauração. A auditoria do
-         sistema inteiro — usuários, documentos, protocolos — é outra coisa, com
-         outro público, e não cabe na coluna de trabalho do cadastro. --}}
-    <div class="cad-painel" id="cadp-historico" hidden>
-      <div class="hc-filtros">
-        <select data-combo id="hc-escopo" onchange="carregarHistoricoCadastral()">
-          <option value="tudo">Todo o cadastro</option>
-          <option value="marcados">Só os lotes marcados</option>
-        </select>
-        <select data-combo id="hc-dias" onchange="carregarHistoricoCadastral()">
-          <option value="7">Últimos 7 dias</option>
-          <option value="30">Últimos 30 dias</option>
-          <option value="90">Últimos 90 dias</option>
-        </select>
-      </div>
-      <div id="hc-lista"></div>
-    </div>
+    {{-- O histórico do cadastro saiu daqui (22/11/2026): é o modal #m-historico. --}}
 
     </div>{{-- /cad-corpo --}}
     </div>{{-- /cad-modal-corpo --}}
