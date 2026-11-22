@@ -1075,7 +1075,6 @@ function abrirBalao(feicao, camada) {
           <div class="balao4-cel"><span>Origem</span><b><span class="lote-tag-origem" title="${esc(p.tag_origem || 'ORIGINAL')}">${esc(origem)}</span></b></div>
           <div class="balao4-cel"><span>Situação</span><b id="balao-sit"><span class="balao4-sk"></span></b></div>
         </div>
-        ${typeof htmlDecretoNoBalao === 'function' ? htmlDecretoNoBalao(p) : ''}
         ${typeof htmlFracaoNoBalao === 'function' ? htmlFracaoNoBalao(p) : ''}
         <div class="balao4-acoes" style="grid-template-columns:repeat(${atalhos.length},1fr)">${atalhos.join('')}</div>
         <button class="btn primary sm balao-btn" onclick="abrirFichaDoBalao()">Abrir ficha</button>
@@ -1087,7 +1086,6 @@ function abrirBalao(feicao, camada) {
   }).openPopup()
   if (typeof preencherFracaoNoBalao === 'function') preencherFracaoNoBalao(p)
   preencherDonoNoBalao(p.id, camada.getPopup()?.getElement())
-  if (typeof preencherDecretoNoBalao === 'function') preencherDecretoNoBalao(p, camada.getPopup()?.getElement())
 }
 
 /** O proprietário de cada lote já aberto: não se pergunta duas vezes. */

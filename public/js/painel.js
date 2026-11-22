@@ -27,6 +27,8 @@ async function carregarPainel() {
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const d = await r.json()
     renderPainel(d)
+    // O bloco do histórico do cadastro (historico-atos.js): pedido à parte, sem esperar.
+    if (typeof carregarHistoricoNoPainel === 'function') { carregarHistoricoNoPainel() }
     // Os avisos vêm de outra rota (a do sino) e por isso são pedidos aqui:
     // o painel não os recalcula, só os mostra num segundo lugar.
     await carregarNotificacoes()

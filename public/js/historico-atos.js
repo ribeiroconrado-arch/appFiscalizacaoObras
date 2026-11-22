@@ -82,6 +82,27 @@ function _linhaDoHistorico(i) {
   </button>`
 }
 
+/**
+ * O bloco do Painel (21/11/2026): os 5 atos mais recentes, sem filtro. A lista
+ * inteira, com filtros e busca, abre pelo "Ver tudo" (#t-historico).
+ */
+async function carregarHistoricoNoPainel() {
+  const alvo = document.getElementById('pn-historico')
+  if (!alvo) return
+  if (!alvo.children.length) alvo.innerHTML = '<div class="vazio-msg">Carregando…</div>'
+  try {
+    const r = await fetch('/api/atos?pagina=1', { headers: { Accept: 'application/json' } })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.message || 'Não foi possível ler o histórico.')
+    const itens = (d.itens || []).slice(0, 5)
+    alvo.innerHTML = itens.length
+      ? `<div class="hist-lista hist-painel">${itens.map(_linhaDoHistorico).join('')}</div>`
+      : '<div class="vazio-msg">Nenhum ato no cadastro ainda.</div>'
+  } catch (e) {
+    alvo.innerHTML = `<div class="ident-erro">${esc(e.message)}</div>`
+  }
+}
+
 /** O texto das trocas, igual ao do servidor (AtosDoCadastro::textoDasTrocas). */
 const AtosTexto = {
   trocas: t => (t || []).map(x => x.de + (x.mutua ? ' ↔ ' : ' → ') + x.para).join(', '),

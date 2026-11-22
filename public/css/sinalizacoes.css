@@ -126,9 +126,3 @@
 
 /* Imóvel com mais de uma sinalização: os balões empilhados, com rolagem. */
 .sin-balao-grupo{max-height:min(62vh,440px);overflow-y:auto}
-/* Balão do lote: o decreto que criou a quadra (decretos-quadras.js). */
-.balao-decreto{font-size:12px;padding:4px 0 2px;display:flex;flex-direction:column;gap:3px}
-.balao-decreto[hidden]{display:none}
-.balao-decreto > div{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
-.balao-decreto-r{color:var(--tx3);margin-right:2px}
-.balao-decreto .badge{font-size:10.5px}

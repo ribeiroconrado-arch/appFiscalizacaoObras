@@ -8,8 +8,9 @@
  * quadra marcada a devolve à aprovação. A aba "Alterou" marca as quadras de
  * regularização, retificação e alteração, sem trocar quem as criou.
  *
- * O lote não guarda nada: o balão lê o decreto da quadra dele
- * (preencherDecretoNoBalao). Servidor: App\Cadastro\DecretosDasQuadras.
+ * O lote não guarda nada: o decreto é da quadra. Saiu do balão do lote em
+ * 21/11/2026, a pedido dele; fica no balão da quadra (etapas-loteamentos.js).
+ * Servidor: App\Cadastro\DecretosDasQuadras.
  */
 
 const qdState = {
@@ -37,7 +38,7 @@ FERRAMENTAS_MAPA.decretos = {
 
 const _qdNorm = q => String(q ?? '').trim().replace(/^0+(?=\d)/, '')
 
-/* ── Leitura (balão do lote e ferramenta) ───────────────────────────── */
+/* ── Leitura (ferramenta) ───────────────────────────── */
 
 /** Pedido por bairro, guardado: o balão não pergunta duas vezes. */
 const _decretosDoBairro = new Map()
@@ -72,27 +73,6 @@ function decretoDaQuadra(d, quadra) {
     presumido: !!criou && marcado == null && criam > 1,
     alterou: (d?.alterou?.[q] || []).map(id => porId.get(id)).filter(Boolean),
   }
-}
-
-/** A linha do balão do lote: nasce vazia e é preenchida quando o pedido volta. */
-function htmlDecretoNoBalao() {
-  return '<div class="balao-decreto" id="balao-decreto" hidden></div>'
-}
-
-/** @param {Object} p propriedades do lote @param {?HTMLElement} raiz o balão */
-async function preencherDecretoNoBalao(p, raiz) {
-  if (!p?.bairro) return
-  const d = await pedirDecretosDoBairro(p.bairro)
-  if (state.selecionado?.properties?.id !== p.id) return
-  const el = (raiz || document).querySelector('#balao-decreto')
-  if (!el || !d) return
-  const { criou, presumido, alterou } = decretoDaQuadra(d, p.quadra)
-  const ato = a => `<b>${esc(a.ato)}</b> <span class="badge bd-in">${esc(a.rotulo)}</span>`
-  el.innerHTML = `
-    <div><span class="balao-decreto-r">Criado por</span>${criou ? ato(criou) : '<span class="balao4-fraco">sem decreto</span>'}
-      ${presumido ? '<span class="badge bd-al" title="A quadra não foi marcada em nenhuma ampliação: vale a aprovação do bairro">padrão do bairro</span>' : ''}</div>
-    ${alterou.map(a => `<div><span class="balao-decreto-r">Alterado por</span>${ato(a)}</div>`).join('')}`
-  el.hidden = false
 }
 
 /* ── A ferramenta ───────────────────────────────────────────────────── */

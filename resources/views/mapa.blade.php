@@ -223,6 +223,15 @@
       <div id="pn-atencao"></div>
     </div>
 
+    @if ($temAba('historico') && ! $externo)
+    {{-- Os atos mais recentes do cadastro; "Ver tudo" abre a lista inteira (historico-atos.js). --}}
+    <div class="bloco painel-historico">
+      <div class="sec-simples painel-historico-tit">Histórico do cadastro
+        <button type="button" class="painel-ver-tudo" onclick="irPara('historico')">Ver tudo →</button></div>
+      <div id="pn-historico"></div>
+    </div>
+    @endif
+
     <div class="bloco" id="pn-avisos-bloco" hidden>
       <div class="sec-simples">Outros avisos <span class="cont" id="pn-avisos-n">0</span></div>
       <div id="pn-avisos"></div>
@@ -962,10 +971,12 @@
   <div id="busca-resultado"></div>
 </section>
 
-{{-- ══════ ABA: HISTÓRICO — os atos do cadastro (historico-atos.js) ══════ --}}
+{{-- ══════ HISTÓRICO — os atos do cadastro (historico-atos.js) ══════
+     Abre pelo "Ver tudo" do bloco no Painel; a aba marcada continua a do Painel. --}}
 @if ($temAba('historico') && ! $externo)
 <section class="tela" id="t-historico">
-  <div class="topo-lista">
+  <div class="topo-lista hist-topo-tela">
+    <button type="button" class="hist-voltar" onclick="irPara('painel')" aria-label="Voltar ao Painel">← Painel</button>
     <div class="sec-simples">Histórico do cadastro</div>
   </div>
   <div class="hist-barra">
@@ -1444,12 +1455,8 @@
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h.01M12 11h4M9 16h.01M12 16h4"/></svg>
     <span class="aba-txt aba-txt-longa">{{ $rotuloFila }}</span><span class="aba-txt aba-txt-curta" aria-hidden="true">{{ $modulo === 'obras' ? 'Prot. & OS' : 'Ordens' }}</span>
   </button>
-  @if ($temAba('historico'))
-  <button class="aba" data-destino="historico" title="Histórico" onclick="irPara('historico')">
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/></svg>
-    <span class="aba-txt">Histórico</span>
-  </button>
-  @endif
+  {{-- O Histórico do cadastro não é aba (21/11/2026): é um bloco do Painel,
+       com "Ver tudo" para a tela #t-historico. --}}
   @endunless
 </nav>
 

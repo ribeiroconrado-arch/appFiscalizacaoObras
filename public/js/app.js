@@ -1189,15 +1189,17 @@ function irPara(destino) {
 
   // A aba marcada é a do DESTINO, e não a da posição: o externo não tem
   // Painel, Documentos nem Protocolo, e contar por índice marcaria a aba
-  // errada assim que faltasse uma.
+  // errada assim que faltasse uma. O Histórico do cadastro não tem aba: é o
+  // "Ver tudo" do Painel, e a aba marcada continua a do Painel.
+  const aba = destino === 'historico' ? 'painel' : destino
   document.querySelectorAll('.aba').forEach(a => {
-    const esta = a.dataset.destino === destino
+    const esta = a.dataset.destino === aba
     a.classList.toggle('at', esta)
     if (esta) a.setAttribute('aria-current', 'page')
     else a.removeAttribute('aria-current')
   })
 
-  marcarModuloNoSubcabecalho(destino)
+  marcarModuloNoSubcabecalho(aba)
 
   // Sobreposicoes do mapa que vivem fora de `#t-mapa` nao somem sozinhas ao
   // trocar de modulo — a barra do modo cadastral e a unica hoje, e ela sabe

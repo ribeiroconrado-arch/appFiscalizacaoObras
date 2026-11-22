@@ -72,6 +72,17 @@
 .hist-ato small { display: block; color: var(--tx3, #777); margin-top: 2px; overflow-wrap: anywhere; }
 .hist-mais { margin: 10px auto; display: block; }
 .hist-lista .vazio-msg { padding: 16px; }
+/* A tela cheia abre pelo Painel: o "← Painel" volta. */
+.hist-topo-tela { justify-content: flex-start; gap: 12px; }
+.hist-voltar { border: 0; background: none; padding: 4px 0; font: inherit; font-size: 13px; color: var(--gd, #1f7a4a); cursor: pointer; }
+.hist-voltar:hover { text-decoration: underline; }
+/* O bloco do Painel: a mesma linha, sem a coluna "Quem" e sem moldura própria. */
+.painel-historico-tit { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.painel-ver-tudo { border: 0; background: none; padding: 0; font: inherit; font-size: 12.5px; color: var(--gd, #1f7a4a); cursor: pointer; text-transform: none; letter-spacing: 0; }
+.painel-ver-tudo:hover { text-decoration: underline; }
+.hist-painel { border: 0; border-radius: 0; background: none; }
+.hist-painel .hist-linha { grid-template-columns: 92px minmax(0, 1fr); padding: 8px 0; }
+.hist-painel .hist-quem { display: none; }
 @media (max-width: 640px) {
   .hist-cab { display: none; }
   .hist-linha { grid-template-columns: 1fr; gap: 2px; }
