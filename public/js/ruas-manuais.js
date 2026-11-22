@@ -254,8 +254,13 @@ function _costurar(trechos) {
         if (s < -COSTURA_RECUO_M || r < -COSTURA_RECUO_M || s > COSTURA_ALCANCE_M || r > COSTURA_ALCANCE_M) continue
         const giro = Math.acos(Math.max(-1, Math.min(1, -cos))) * 180 / Math.PI
         const curva = giro <= COSTURA_CURVA_GRAUS && s >= 0 && r >= 0 && nomesCombinam(E.t, F.t)
-        // +8: num cruzamento, a rua que segue reta ganha da que dobra.
-        pares.push({ E, F, s, tipo: curva ? 'curva' : 'esquina', custo: Math.max(s, 0) + Math.max(r, 0) + 8 })
+        // Num cruzamento, a rua que segue reta ganha da que dobra; e a que dobra
+        // continuando o MESMO nome ganha da transversal — senão cada pedaço da
+        // curva ia para a esquina com a travessa e a rua não se encontrava
+        // (R. Maria Beer, 22/11/2026).
+        const mesmoNome = E.t.chave && E.t.chave === F.t.chave
+        const extra = mesmoNome ? 4 : curva ? 8 : 16
+        pares.push({ E, F, s, tipo: curva ? 'curva' : 'esquina', custo: Math.max(s, 0) + Math.max(r, 0) + extra })
       }
     }
   })
@@ -286,12 +291,18 @@ function _costurar(trechos) {
     let melhor = null
     for (const u of vivos) {
       if (u === E.t || Math.abs(E.d[0] * u.ux + E.d[1] * u.uy) > COSTURA_T_COS) continue
-      const v = [u.a[0] - E.p[0], u.a[1] - E.p[1]]
-      const det = -E.d[0] * u.uy + E.d[1] * u.ux
+      // A transversal já costurada: o "T" que cai no encontro de dois pedaços
+      // (a curva da avenida) também acha a rua.
+      const ua = u.costura[0].p, ub = u.costura[1].p
+      const ulen = Math.hypot(ub[0] - ua[0], ub[1] - ua[1])
+      if (ulen < 0.5) continue
+      const ux = (ub[0] - ua[0]) / ulen, uy = (ub[1] - ua[1]) / ulen
+      const v = [ua[0] - E.p[0], ua[1] - E.p[1]]
+      const det = -E.d[0] * uy + E.d[1] * ux
       if (Math.abs(det) < 1e-6) continue
-      const s = (-v[0] * u.uy + v[1] * u.ux) / det
+      const s = (-v[0] * uy + v[1] * ux) / det
       const w = (E.d[0] * v[1] - E.d[1] * v[0]) / det
-      if (s < -COSTURA_RECUO_M || s > COSTURA_ALCANCE_M || w < -2 || w > u.len + 2) continue
+      if (s < -COSTURA_RECUO_M || s > COSTURA_ALCANCE_M || w < -3 || w > ulen + 3) continue
       if (melhor === null || Math.abs(s) < Math.abs(melhor)) melhor = s
     }
     if (melhor !== null) E.t.costura[E.e].p = [E.p[0] + E.d[0] * melhor, E.p[1] + E.d[1] * melhor]
@@ -472,9 +483,13 @@ function _pintarRealceRuas() {
     r.addLayer(L.polyline(pts, { ...op, color: cor, weight: 12, opacity: .22 }))
     r.addLayer(L.polyline(pts, { ...op, color: cor, weight: 3.5, opacity: 1 }))
   }
+  // Selecionado: amarelo com borda preta, como marca-texto — o azul é do
+  // editado à mão e confundia (22/11/2026).
   for (const k of ruaState.selecao) {
     const x = ruaState.porK.get(k)
-    if (x) halo(x.linha, COR_TRECHO.manual)
+    if (!x) continue
+    r.addLayer(L.polyline(x.linha, { ...op, color: '#111827', weight: 9, opacity: .9, lineCap: 'round', lineJoin: 'round' }))
+    r.addLayer(L.polyline(x.linha, { ...op, color: '#facc15', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }))
   }
   for (const s of ruaState.novo || []) halo([s.de, s.ate], COR_TRECHO.novo)
   const d = ruaState.desenhando
@@ -719,10 +734,14 @@ async function _preencherComboRuas() {
   // lista de cada um, e um nome fora de uma delas recusaria tudo.
   const livre = listas.length > 0 && listas.every(l => l.livre)
   const opcoes = todos.map(n => `<option value="${esc(n)}"${n === atual ? ' selected' : ''}>${esc(n)}</option>`).join('')
+  // O combobox padrão do sistema (data-combo, ui.js) mesmo com poucas opções —
+  // a lista nativa destoava das outras telas (22/11/2026). Livre (bairro sem
+  // cadastro amarrado) é campo de texto simples: o nome não sai de lista.
   caixa.innerHTML = livre
-    ? `<input id="rua-nome" list="rua-nomes" value="${esc(atual)}" placeholder="Nome do logradouro" maxlength="180" oninput="ruaState.escolha=this.value">
-       <datalist id="rua-nomes">${opcoes}</datalist>`
-    : `<select id="rua-nome" onchange="ruaState.escolha=this.value"><option value="">Escolha o logradouro…</option>${opcoes}</select>`
+    ? `<input type="text" id="rua-nome" value="${esc(atual)}" placeholder="Nome do logradouro" maxlength="180" autocomplete="off" oninput="ruaState.escolha=this.value">`
+    : `<select id="rua-nome" data-combo onchange="ruaState.escolha=this.value"><option value="">Escolha o logradouro…</option>${opcoes}</select>`
+  const combo = caixa.querySelector('select[data-combo]')
+  if (combo && typeof comboDeSelect === 'function') comboDeSelect(combo)
   const aviso = document.getElementById('rua-nome-aviso')
   if (aviso) aviso.innerHTML = listas.some(l => !l.cadastro) ? '<div class="rua-aviso">Bairro sem cadastro amarrado: o nome é livre.</div>' : ''
 }

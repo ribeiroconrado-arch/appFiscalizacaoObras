@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
  * LIMPEZA ÚNICA (22/11/2026): apaga os trechos de rua GERADOS que ficam
  * dentro de lote — dois loteamentos encostados pelos fundos ganhavam uma
  * "rua" atravessando os lotes do vizinho. Mesma regra de
- * LoteRepository::trechoDentroDeLote (pontos a 20, 50 e 80 % dentro de lote
+ * a regra de pontos a 20, 50 e 80 % dentro de lote
  * ativo), que daqui em diante o "Gerar" aplica ao gravar.
  *
  * Só `ruas_trechos`: é dado calculado, que o "Gerar" refaz. Os manuais (o que

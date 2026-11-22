@@ -233,12 +233,12 @@ class RuaManualController extends Controller
      * POST /api/ruas/osm — as vias COM NOME do OpenStreetMap num retângulo
      * (22/11/2026): a ferramenta Nomes de rua busca o nome que falta.
      *
-     * Só passa adiante: nada é gravado (a cópia do Fundo da cidade é recortada
-     * FORA dos bairros, e aqui o que interessa é justamente dentro deles). O
-     * casamento com o trecho e com a lista do cadastro é da tela
-     * (ruas-manuais.js); o que o curador aceitar vira nome à mão, como sempre.
-     * A resposta fica um dia no cache, para o mesmo retângulo não ir duas vezes
-     * ao Overpass.
+     * Lê da cópia que o Fundo da cidade baixa (FundoDaCidade::vias, as vias
+     * com nome sem recorte): o Overpass público passa horas sem responder, e
+     * a busca na hora falhava (22/11/2026). Sem a cópia, pergunta ao Overpass
+     * por no máximo 25 s, e guarda um dia no cache. O casamento com o trecho e
+     * com a lista do cadastro é da tela (ruas-manuais.js); o que o curador
+     * aceitar vira nome à mão, como sempre.
      */
     public function osm(Request $r): JsonResponse
     {
@@ -254,11 +254,16 @@ class RuaManualController extends Controller
             return response()->json(['message' => 'Área grande demais para buscar de uma vez. Aproxime o mapa.'], 422);
         }
 
+        $copia = app(FundoDaCidade::class)->vias($s, $o, $n, $l);
+        if ($copia !== null) {
+            return response()->json(['vias' => $copia]);
+        }
+
         $vias = Cache::remember("ruas:osm:$s,$o,$n,$l", now()->addDay(), function () use ($s, $o, $n, $l) {
             $q = '[out:json][timeout:25];way["highway"]["name"](' . "$s,$o,$n,$l" . ');out tags geom;';
             // Um minuto no total: o servidor público às vezes não responde, e a
             // tela não pode ficar esperando quatro servidores lentos em fila.
-            $ate = microtime(true) + 55;
+            $ate = microtime(true) + 25;
             foreach (FundoDaCidade::SERVIDORES as $url) {
                 $resta = (int) floor($ate - microtime(true));
                 if ($resta < 8) {
@@ -285,7 +290,7 @@ class RuaManualController extends Controller
         });
 
         if ($vias === null) {
-            return response()->json(['message' => 'O OpenStreetMap não respondeu. Tente de novo em alguns minutos.'], 502);
+            return response()->json(['message' => 'O OpenStreetMap não respondeu. Para não depender dele na hora, o administrador baixa a cópia em Importações › Mapa (Fundo da cidade).'], 502);
         }
 
         return response()->json(['vias' => $vias]);

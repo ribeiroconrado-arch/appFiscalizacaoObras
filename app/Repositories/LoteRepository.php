@@ -959,9 +959,23 @@ class LoteRepository
      *
      * @param  list<array{nome:?string, de:array{0:float,1:float}, ate:array{0:float,1:float}}>  $trechos
      */
-    public function gravarRuas(string $bairro, array $trechos): int
+    public function gravarRuas(string $bairro, array $trechos): array
     {
-        $trechos = array_values(array_filter($trechos, fn ($t) => ! $this->trechoDentroDeLote($t['de'], $t['ate'])));
+        // Cada trecho perde o que passa por dentro de lote (ver trechoForaDeLotes).
+        $partes = [];
+        $descartados = $recortados = 0;
+        foreach ($trechos as $t) {
+            $p = $this->trechoForaDeLotes($t['de'], $t['ate']);
+            if (! $p) {
+                $descartados++;
+            } elseif (count($p) > 1 || $p[0] !== [$t['de'], $t['ate']]) {
+                $recortados++;
+            }
+            foreach ($p as [$de, $ate]) {
+                $partes[] = ['nome' => $t['nome'], 'de' => $de, 'ate' => $ate];
+            }
+        }
+        $trechos = $partes;
         $agora = now()->toDateTimeString();
         DB::table('ruas_trechos')->where('bairro', $bairro)->delete();
         foreach (array_chunk($trechos, 500) as $bloco) {
@@ -972,28 +986,91 @@ class LoteRepository
             ], $bloco));
         }
 
-        return count($trechos);
+        return ['gravados' => count($trechos), 'descartados' => $descartados, 'recortados' => $recortados];
     }
 
-    /**
-     * TRECHO DENTRO DE LOTE NÃO É RUA (22/11/2026). O gerador já descarta o
-     * lado que dá para outra quadra do mesmo bairro, mas não vê as quadras do
-     * vizinho: dois loteamentos encostados pelos fundos ganhavam uma "rua"
-     * atravessando os lotes do outro. Aqui vale qualquer bairro: o trecho com
-     * os pontos a 20, 50 e 80 % dentro de lote ativo é descartado. O que só
-     * entra em parte num lote fica (pode ser rua de verdade com lote mal
-     * desenhado): esse se exclui à mão em Nomes de rua.
-     *
-     * A migração 2026_11_22_000200 limpou, com a mesma regra, os já gravados.
-     */
-    public function trechoDentroDeLote(array $de, array $ate): bool
-    {
-        $sub = "EXISTS (SELECT 1 FROM lotes WHERE situacao = 'ativo'
-                    AND ST_Contains(geom, ST_GeomFromText(?, 4326, 'axis-order=long-lat')))";
-        $pontos = array_map(fn ($f) => sprintf('POINT(%.7F %.7F)',
-            $de[1] + ($ate[1] - $de[1]) * $f, $de[0] + ($ate[0] - $de[0]) * $f), [0.2, 0.5, 0.8]);
+    /** Recuo para dentro do lote: a linha que só encosta na divisa não conta. */
+    private const RECUO_LOTE_GRAUS = 0.000015; // ~1,6 m
 
-        return (bool) DB::selectOne("SELECT ($sub AND $sub AND $sub) AS dentro", $pontos)->dentro;
+    /** Pedaço fora de lote menor que isto não é rua (sobra de esquina). */
+    private const PEDACO_MINIMO_M = 6.0;
+
+    /**
+     * O TRECHO MENOS O QUE PASSA POR DENTRO DE LOTE (22/11/2026). O trecho
+     * gerado é uma reta por lado de quadra; onde a quadra encosta direto em
+     * outra (sem rua no meio), a reta seguia por cima dos lotes da vizinha —
+     * a R. Rio de Janeiro do Jardim Maringá passava 40 m dentro dos lotes nas
+     * duas pontas. Aqui o trecho é cortado em cada lote ativo que ele atravessa
+     * (de qualquer bairro) e ficam só os pedaços na rua, de pelo menos 6 m.
+     * Vazio = o trecho inteiro está em lote (dois loteamentos encostados pelos
+     * fundos). Devolve o próprio trecho, intacto, quando não toca lote — o
+     * manual que o cobre continua achando-o (TrechosDeRua::cobre).
+     *
+     * O lote entra com recuo de ~1,6 m: o trecho que corre pela divisa (o
+     * gerado no lado da quadra, antes da autocuradoria) não é cortado.
+     *
+     * @return list<array{0:array{0:float,1:float},1:array{0:float,1:float}}>  [de, ate] em [lat, lon]
+     */
+    public function trechoForaDeLotes(array $de, array $ate): array
+    {
+        $linha = sprintf('LINESTRING(%.7F %.7F, %.7F %.7F)', $de[1], $de[0], $ate[1], $ate[0]);
+        $cortes = DB::select(
+            "SELECT ST_AsText(ST_Intersection(ST_Buffer(ST_SRID(geom, 0), ?), ST_GeomFromText(?, 0))) AS x
+               FROM lotes
+              WHERE situacao = 'ativo'
+                AND ST_Intersects(geom, ST_GeomFromText(?, 4326, 'axis-order=long-lat'))
+                AND ST_IsValid(geom)",
+            [-self::RECUO_LOTE_GRAUS, $linha, $linha]
+        );
+        if (! $cortes) {
+            return [[$de, $ate]];
+        }
+
+        // Em metros, no plano local: o parâmetro u (0..1) de cada ponto ao longo do trecho.
+        $kx = 111320 * cos(deg2rad($de[0]));
+        $vx = ($ate[1] - $de[1]) * $kx;
+        $vy = ($ate[0] - $de[0]) * 110574;
+        $len = hypot($vx, $vy);
+        if ($len < 0.5) {
+            return [];
+        }
+        $u = fn (float $lon, float $lat) => ((($lon - $de[1]) * $kx) * $vx + (($lat - $de[0]) * 110574) * $vy) / ($len * $len);
+
+        $dentro = [];
+        foreach ($cortes as $c) {
+            // Cada linha do resultado (LINESTRING ou partes de MULTILINESTRING/
+            // GEOMETRYCOLLECTION); ponto solto é só toque, não conta.
+            preg_match_all('/\(([-\d. ,]+)\)/', (string) $c->x, $grupos);
+            foreach ($grupos[1] as $g) {
+                $us = array_map(fn ($par) => $u(...array_map('floatval', preg_split('/\s+/', trim($par)))), explode(',', $g));
+                if (count($us) > 1 && (max($us) - min($us)) * $len >= 1.0) {
+                    $dentro[] = [max(0.0, min($us)), min(1.0, max($us))];
+                }
+            }
+        }
+        if (! $dentro) {
+            return [[$de, $ate]];
+        }
+
+        // O que sobra de [0, 1] tirando os intervalos dentro de lote.
+        usort($dentro, fn ($a, $b) => $a[0] <=> $b[0]);
+        $livres = [];
+        $cursor = 0.0;
+        foreach ($dentro as [$a, $b]) {
+            if ($a > $cursor) {
+                $livres[] = [$cursor, $a];
+            }
+            $cursor = max($cursor, $b);
+        }
+        if ($cursor < 1.0) {
+            $livres[] = [$cursor, 1.0];
+        }
+        $ponto = fn (float $f) => [round($de[0] + ($ate[0] - $de[0]) * $f, 7), round($de[1] + ($ate[1] - $de[1]) * $f, 7)];
+
+        return array_values(array_map(
+            fn ($l) => [$l[0] == 0.0 ? $de : $ponto($l[0]), $l[1] == 1.0 ? $ate : $ponto($l[1])],
+            array_filter($livres, fn ($l) => ($l[1] - $l[0]) * $len >= self::PEDACO_MINIMO_M)
+        ));
     }
 
     /**

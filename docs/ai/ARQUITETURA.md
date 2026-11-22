@@ -231,22 +231,30 @@ viram um grupo, um clique seleciona o grupo, e a gravação vai num pedido só
 (`POST /api/ruas/manuais/lote`). O sem nome que continua, alinhado, uma rua com
 nome recebe esse nome como sugestão, aceita em bloco. O painel é uma mesa
 lateral (`#ruas-mesa`), sem balão. "Buscar nomes que faltam" consulta o
-OpenStreetMap ao vivo (`POST /api/ruas/osm`, Overpass, um dia de cache; a
-cópia do Fundo da cidade não serve, é recortada fora dos bairros): a via
+OpenStreetMap (`POST /api/ruas/osm`) na cópia `storage/app/osm-nomes-de-rua.json`,
+as vias com nome da cidade inteira SEM recorte, gravada junto com o Fundo da
+cidade (`FundoDaCidade::vias`); sem a cópia, pergunta ao Overpass por até 25 s
+(o público passa horas sem responder e prendia o PHP): a via
 paralela a até 18 m do trecho sem nome dá o nome, que vira sugestão se bater
 com a lista do cadastro do bairro, e só pista se não bater. Nada é gravado
 até o curador aceitar. Rua sem lote de frente é desenhada com
 vários pontos (duplo clique termina). "Excluir" tira o trecho que não é rua,
 linha e rótulo: o gerado ganha um manual `excluido` (o "Gerar" o traria de
 volta), visível só no filtro À mão para "Voltar ao cadastro"; o desenhado à mão
-é apagado. "Ocultar" tira só o rótulo. Trecho com os pontos a 20, 50 e 80 %
-dentro de lote ativo de QUALQUER bairro não é rua (loteamentos encostados pelos
-fundos): `LoteRepository::trechoDentroDeLote` o descarta ao gravar, e a
-migração 2026_11_22_000200 limpou os já gravados. Na ferramenta, as linhas são
+é apagado. "Ocultar" tira só o rótulo. O que passa por DENTRO de lote ativo de
+QUALQUER bairro não é rua: `LoteRepository::trechoForaDeLotes` corta o trecho em
+cada lote que atravessa (lote com recuo de ~1,6 m, para a linha da divisa não
+contar) e guarda só os pedaços de 6 m ou mais — o trecho todo em lote sai
+(loteamentos encostados pelos fundos), e a reta do lado da quadra deixa de
+seguir por cima da quadra vizinha encostada. As migrações 2026_11_22_000200 e
+000300 aplicaram isso aos já gravados. Na ferramenta, as linhas são
 COSTURADAS só no desenho (`_costurar`, nada gravado): pontas em linha se
 encontram no meio, dobra de até 65° vira curva suave (Bézier pelo cruzamento
 das retas, metade para cada trecho), dobra maior encontra no cruzamento, e a
-ponta solta vai até a transversal à frente (o "T"), tudo até 40 m. Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
+ponta solta vai até a transversal à frente (o "T", já costurada), tudo até 40 m.
+Num cruzamento, a reta ganha da dobra, e a dobra que continua o MESMO nome ganha
+da esquina com a travessa. Selecionado é amarelo com borda preta (o azul é do
+editado à mão); o campo Logradouro é o combobox padrão (`data-combo`). Duas tabelas: `ruas_trechos` (gerada, refeita a cada "Gerar") e
 `ruas_manuais` (nunca apagada pelo "Gerar"); o manual cobre o gerado com que
 coincide na LEITURA (`App\Cadastro\TrechosDeRua`), com auditoria.
 

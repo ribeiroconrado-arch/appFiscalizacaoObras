@@ -92,8 +92,9 @@ try {
     confere(DB::table('quadras')->where('bairro', $bairro)->pluck('numero')->all() === ['2'],'gerar de novo substitui as quadras do bairro');
 
     echo "Nomes de rua\n";
-    $trecho = ['nome' => 'RUA TESTE', 'de' => [$e['sul'], $e['oeste']], 'ate' => [$e['sul'], $e['leste']]];
-    $semNome = ['nome' => null, 'de' => [$e['norte'], $e['oeste']], 'ate' => [$e['norte'], $e['leste']]];
+    // Longe de qualquer lote (1° ao sul): trecho que passa por lote é cortado ao gravar.
+    $trecho = ['nome' => 'RUA TESTE', 'de' => [$e['sul'] - 1, $e['oeste']], 'ate' => [$e['sul'] - 1, $e['leste']]];
+    $semNome = ['nome' => null, 'de' => [$e['norte'] - 1, $e['oeste']], 'ate' => [$e['norte'] - 1, $e['leste']]];
     $r = $chama('gravar', $admin, ['bairro' => $bairro, 'geometry' => $todos, 'raio_m' => 25, 'lotes_contados' => $total, 'ruas' => [$trecho, $semNome]]);
     confere($r->getStatusCode() === 200, 'trechos de rua gravados junto (' . json_decode($r->getContent())->message . ')');
     $ruas = json_decode($chama('quadras', $admin, ['bairro' => $bairro])->getContent(), true)['ruas'];
@@ -141,12 +142,17 @@ try {
     $c = DB::selectOne("SELECT ST_Y(p) lat, ST_X(p) lon FROM (SELECT ST_Centroid(ST_SRID(geom, 0)) p FROM lotes
         WHERE bairro = ? AND situacao = 'ativo' AND ST_Area(ST_SRID(geom, 0)) > 2e-8 ORDER BY id LIMIT 1) x", [$bairro]);
     $miolo = ['de' => [$c->lat, $c->lon - 0.00002], 'ate' => [$c->lat, $c->lon + 0.00002]];
-    confere($repo->trechoDentroDeLote($miolo['de'], $miolo['ate']), 'trecho no miolo de um lote é reconhecido');
-    confere(! $repo->trechoDentroDeLote($trecho['de'], $trecho['ate']), 'o trecho de rua de verdade não');
+    confere($repo->trechoForaDeLotes($miolo['de'], $miolo['ate']) === [], 'trecho no miolo de um lote some inteiro');
+    confere($repo->trechoForaDeLotes($trecho['de'], $trecho['ate']) === [[$trecho['de'], $trecho['ate']]], 'o trecho de rua de verdade fica intacto');
+    // Atravessando o lote de fora a fora (60 m): sai cortado, sem o pedaço de dentro.
+    $longo = ['de' => [$c->lat, $c->lon - 0.0003], 'ate' => [$c->lat, $c->lon + 0.0003]];
+    $partes = $repo->trechoForaDeLotes($longo['de'], $longo['ate']);
+    $noMiolo = fn ($p) => $p[0][1] < $c->lon && $p[1][1] > $c->lon;
+    confere(! array_filter($partes, $noMiolo), 'o que atravessa o lote é cortado nele (' . count($partes) . ' pedaço(s) fora)');
     $antes = DB::table('ruas_trechos')->where('bairro', $bairro)->count();
-    $n = $repo->gravarRuas($bairro, [['nome' => null] + $miolo, ['nome' => $trecho['nome'], 'de' => $trecho['de'], 'ate' => $trecho['ate']],
+    $g = $repo->gravarRuas($bairro, [['nome' => null] + $miolo, ['nome' => $trecho['nome'], 'de' => $trecho['de'], 'ate' => $trecho['ate']],
         ['nome' => null, 'de' => $semNome['de'], 'ate' => $semNome['ate']]]);
-    confere($n === 2 && DB::table('ruas_trechos')->where('bairro', $bairro)->count() === 2, "gravar descarta o de dentro do lote (antes {$antes})");
+    confere($g['gravados'] === 2 && $g['descartados'] === 1 && DB::table('ruas_trechos')->where('bairro', $bairro)->count() === 2, "gravar descarta o de dentro do lote (antes {$antes})");
 
     echo "Nomes de rua — excluir trecho\n";
     $r = $rua('lote', $admin, ['acao' => 'excluir', 'itens' => $itens]);

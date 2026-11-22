@@ -304,9 +304,13 @@ class BairroContornoController extends Controller
                 $msg .= '. Bairro sem cadastro amarrado: nomes de rua automáticos não gerados (dá para informar à mão em Nomes de rua)';
             } else {
                 $semNome = count(array_filter($d['ruas'] ?? [], fn ($t) => empty($t['nome'])));
-                $dentro = count($d['ruas'] ?? []) - (int) $ruasGravadas;
-                $msg .= sprintf('. %d trecho(s) de rua', $ruasGravadas)
-                    . ($dentro ? sprintf(' (%d dentro de lotes, descartados)', $dentro) : '')
+                $rg = $ruasGravadas ?? ['gravados' => 0, 'descartados' => 0, 'recortados' => 0];
+                $avisos = array_filter([
+                    $rg['descartados'] ? sprintf('%d dentro de lotes, descartados', $rg['descartados']) : null,
+                    $rg['recortados'] ? sprintf('%d cortados onde passavam por lote', $rg['recortados']) : null,
+                ]);
+                $msg .= sprintf('. %d trecho(s) de rua', $rg['gravados'])
+                    . ($avisos ? ' (' . implode('; ', $avisos) . ')' : '')
                     . ($semNome ? sprintf(', %d sem nome — veja em Nomes de rua', $semNome) : '');
             }
         }

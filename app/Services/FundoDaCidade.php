@@ -204,6 +204,10 @@ class FundoDaCidade
             }
         }
 
+        // Os nomes de rua, inteiros (sem o recorte dos bairros), para a busca
+        // de Nomes de rua — antes das pistas duplas mexerem no desenho.
+        $this->gravarNomesDeRua($vias);
+
         $this->progresso('Juntando as pistas duplas…', 45);
         $this->juntarPistasDuplas($vias);
 
@@ -250,6 +254,56 @@ class FundoDaCidade
         rename($destino . '.tmp', $destino);
 
         return $resumo;
+    }
+
+    // ── NOMES DE RUA (para Nomes de rua › Buscar no OpenStreetMap) ──
+
+    /**
+     * As vias COM NOME da cidade inteira, como vieram do OpenStreetMap, sem
+     * recorte. A busca de Nomes de rua lê daqui (vias()) e não pergunta mais
+     * ao Overpass na hora: os servidores públicos passam horas sem responder,
+     * e cada busca prendia um processo do PHP por até um minuto (22/11/2026).
+     * Atualiza junto com o fundo da cidade.
+     */
+    private const NOMES = 'app/osm-nomes-de-rua.json';
+
+    private function gravarNomesDeRua(array $vias): void
+    {
+        $com = [];
+        foreach ($vias as $v) {
+            if ($v['n'] !== null && ! in_array($v['t'], ['river', 'canal', 'stream', 'footway', 'path', 'cycleway'], true)) {
+                $com[] = ['n' => $v['n'], 'c' => array_map(fn ($p) => [round($p[1], 7), round($p[0], 7)], $v['c'])];
+            }
+        }
+        $destino = storage_path(self::NOMES);
+        file_put_contents($destino . '.tmp', json_encode(['gerado_em' => now()->format('d/m/Y H:i'), 'vias' => $com],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        rename($destino . '.tmp', $destino);
+    }
+
+    /**
+     * As vias com nome que passam pela caixa [sul, oeste, norte, leste], no
+     * formato da busca: [{nome, pontos:[[lat,lon]…]}]. Null se a cópia nunca
+     * foi baixada (aí a busca pergunta ao Overpass).
+     *
+     * @return ?list<array{nome:string, pontos:list<array{0:float,1:float}>}>
+     */
+    public function vias(float $s, float $o, float $n, float $l): ?array
+    {
+        $c = storage_path(self::NOMES);
+        if (! is_file($c)) {
+            return null;
+        }
+        $saida = [];
+        foreach (json_decode((string) file_get_contents($c), true)['vias'] ?? [] as $v) {
+            $la = array_column($v['c'], 0);
+            $lo = array_column($v['c'], 1);
+            if (max($la) >= $s && min($la) <= $n && max($lo) >= $o && min($lo) <= $l) {
+                $saida[] = ['nome' => $v['n'], 'pontos' => $v['c']];
+            }
+        }
+
+        return $saida;
     }
 
     // ── DOWNLOAD ─────────────────────────────────────────────────
