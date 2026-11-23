@@ -1341,18 +1341,26 @@ function calcularQuadras(lotes) {
 }
 
 // ── NOMES DE RUA ─────────────────────────────────────────────
+//
+// Refeito em 23/11/2026. Antes, o trecho saía de cada LADO RETO de quadra,
+// empurrado 7 m para fora e fundido com o lado de lá: em bairro de rua curva
+// (COND. SPLENDORE) a curva virava pedaços retos tortos, cruzando lotes, e a
+// fusão falhava. Agora o eixo é o MEIO DO ESPAÇO ENTRE AS QUADRAS, calculado
+// ponto a ponto (Voronoi), e acompanha a curva; e é uma linha só por rua.
 
-/** Aresta de lote a até isto (m) da borda da quadra está SOBRE a borda. */
+/** Aresta de lote a até isto (m) da borda da quadra está SOBRE a borda (é frente). */
 const RUA_TOLERANCIA_BORDA = 1.5
-/** Arestas paralelas (graus) e alinhadas (m) são o mesmo LADO da quadra. */
-const RUA_ANGULO = 15
-const RUA_ALINHAMENTO = 3
-/** Lado mais curto que isto (m) é chanfro de esquina, não frente de rua. */
-const RUA_LADO_MINIMO = 8
-/** Da borda da quadra ao meio da rua (m): calçada e meia pista. */
-const RUA_AFASTAMENTO = 7
-/** Dois lados (um de cada quadra) até esta distância (m) são a mesma rua. */
-const RUA_FUSAO = 12
+
+const VAZIO_PASSO = 2.5        // pontos na borda das quadras a cada isto (m)
+const VAZIO_MEIA_MIN = 2.5     // meio da rua a menos disto da quadra: quadras encostadas, não há rua
+const VAZIO_MEIA_MAX = 20      // a mais disto: não é rua entre as duas (campo aberto)
+const VAZIO_LADO_UNICO = 7     // rua com quadra de um lado só: o meio fica a isto da quadra
+const VAZIO_SIMPLIFICA = 0.6   // tolerância do desenho final (m)
+const VAZIO_PONTA_MIN = 8      // ponta solta mais curta que isto é rebarba
+const VAZIO_LADO_UNICO_MIN = 15
+const VAZIO_ESQUINA_GRAUS = 55 // a linha dobra mais que isto em VAZIO_ESQUINA_M para cada lado: é esquina
+const VAZIO_ESQUINA_M = 8
+const VAZIO_JA_TEM_EIXO = 10   // borda afastada a até isto de um eixo entre quadras: a rua já está desenhada
 
 /**
  * Quadras E nomes de rua, num cálculo só (a união dos lotes de cada quadra
@@ -1365,19 +1373,10 @@ const RUA_FUSAO = 12
  * mesmo número cortada por rua fica em pedaços, e o número vai no ponto
  * INTERNO do maior (o centro de uma quadra em L cairia na rua).
  *
- * RUA: o DWG não traz eixo de rua, então o nome sai dos LADOS das quadras.
- *   1. As arestas de lote que estão sobre a borda da quadra são as FRENTES;
- *      as alinhadas formam um lado.
- *   2. Cada lote vota, no lado em que encosta, no logradouro do seu endereço
- *      (cadastro). Lote que encosta num lado só vale 1; o de esquina, que
- *      tem um endereço só para dois lados, vale 0,25 — senão o nome da rua
- *      dele iria para o lado errado. Vence o mais votado com soma ≥ 1; sem
- *      isso o lado fica SEM NOME (null), para o curador informar.
- *   3. O trecho vai RUA_AFASTAMENTO para fora da quadra, que é o meio da rua.
- *      Se esse ponto cai dentro de OUTRA quadra, as duas se encostam pelos
- *      fundos e não há rua ali: o lado é descartado.
- *   4. Os dois lados da rua (quadras frente a frente) viram um trecho só, e
- *      um lado sem nome herda o do lado de lá.
+ * RUA: o DWG não traz eixo de rua. O eixo é o meio entre as quadras
+ * (_eixosPeloVazio), partido nos cruzamentos; cada eixo leva o nome que os
+ * lotes de frente para ele votam (_nomearEixos). Uma rua curva sai como uma
+ * sequência de trechos curtos.
  */
 function calcularQuadrasERuas(lotes) {
   const J = window.jsts
@@ -1399,13 +1398,12 @@ function calcularQuadrasERuas(lotes) {
     })
   }
 
-  const quadras = [], lados = [], todasAsPartes = []
+  const quadras = [], partesComLotes = []
   for (const [numero, ls] of grupos) {
     const f = ls[0].g.getFactory()
     let g = _unirComSeguranca(f, ls.map(l => l.g))
     g = buf(buf(g, QUADRA_RAIO), -QUADRA_RAIO)
     g = J.simplify.TopologyPreservingSimplifier.simplify(g, 0.3)
-
     const partes = []
     for (let i = 0; i < g.getNumGeometries(); i++) {
       const p = g.getGeometryN(i)
@@ -1414,130 +1412,283 @@ function calcularQuadrasERuas(lotes) {
     }
     if (!partes.length) continue
     partes.sort((a, b) => b.getArea() - a.getArea())
-
     const c = partes[0].getInteriorPoint().getCoordinate()
     const [lon, lat] = plano.de([c.x, c.y])
-    quadras.push({
-      numero,
-      geometry: _multiPoligonoLonLat(partes.map(p => escritor.write(p).coordinates), plano),
-      rotulo: [Number(lat.toFixed(7)), Number(lon.toFixed(7))],
-      lotes: ls.length,
-    })
-    lados.push(..._ladosDaQuadra(partes, ls, J, f))
-    todasAsPartes.push(...partes)
+    quadras.push({ numero, geometry: _multiPoligonoLonLat(partes.map(p => escritor.write(p).coordinates), plano),
+      rotulo: [Number(lat.toFixed(7)), Number(lon.toFixed(7))], lotes: ls.length })
+    // Cada pedaço com os lotes que estão nele.
+    for (const p of partes) partesComLotes.push({ p, lotes: ls.filter(l => p.intersects(l.g.getInteriorPoint())) })
   }
 
-  // LADO QUE DÁ PARA OUTRA QUADRA NÃO É RUA. O trecho já está deslocado para
-  // onde seria o meio da rua; se esse ponto cai DENTRO de uma quadra, é
-  // porque as duas se encostam pelos fundos, sem rua entre elas.
-  const fabrica = todasAsPartes[0]?.getFactory()
-  const deRua = lados.filter(t => {
-    const meio = fabrica.createPoint(new J.geom.Coordinate((t.a[0] + t.b[0]) / 2, (t.a[1] + t.b[1]) / 2))
-    return !todasAsPartes.some(p => p.contains(meio))
-  })
-
-  const ruas = _fundirLados(deRua).map(t => {
-    const [lon1, lat1] = plano.de(t.a), [lon2, lat2] = plano.de(t.b)
-    return { nome: t.nome, de: [Number(lat1.toFixed(7)), Number(lon1.toFixed(7))], ate: [Number(lat2.toFixed(7)), Number(lon2.toFixed(7))] }
-  })
+  const linhas = _eixosPeloVazio(partesComLotes.map(x => x.p), J)
+  const ruas = []
+  for (const { pts, nome } of _nomearEixos(linhas, partesComLotes, J)) {
+    for (let i = 1; i < pts.length; i++) {
+      const [lon1, lat1] = plano.de(pts[i - 1]), [lon2, lat2] = plano.de(pts[i])
+      ruas.push({ nome, de: [Number(lat1.toFixed(7)), Number(lon1.toFixed(7))], ate: [Number(lat2.toFixed(7)), Number(lon2.toFixed(7))] })
+    }
+  }
   return { quadras, ruas }
 }
 
 /**
- * Os lados de UMA quadra, já com o nome votado e deslocados para o meio da
- * rua. Em metros. @returns {{nome:?string, a:number[], b:number[], ux:number, uy:number}[]}
+ * Os eixos das ruas, em metros: o meio do caminho entre as quadras.
+ * Pontos a cada VAZIO_PASSO na borda de cada quadra; no diagrama de Voronoi
+ * desses pontos, a aresta entre a célula de um ponto de uma quadra e a de um
+ * ponto de OUTRA quadra está a igual distância das duas — é o meio da rua.
+ * Ficam as que estão a uma distância de rua (VAZIO_MEIA_MIN a _MAX). Onde
+ * não há quadra do outro lado, o eixo é a borda afastada VAZIO_LADO_UNICO.
+ * @returns {{pts:number[][], ladoUnico:boolean}[]} polilinhas, e se são de um lado só
  */
-function _ladosDaQuadra(partes, lotes, J, f) {
-  const borda = f.createMultiLineString(partes.map(p => f.createLineString(p.getExteriorRing().getCoordinates())))
-  const sobreABorda = (x, y) => borda.distance(f.createPoint(new J.geom.Coordinate(x, y))) <= RUA_TOLERANCIA_BORDA
-  const paralelo = Math.cos(RUA_ANGULO * Math.PI / 180)
+function _eixosPeloVazio(partes, J) {
+  const f = partes[0].getFactory()
+  const sites = [], dono = new Map()
+  const chave = c => c.x.toFixed(3) + ',' + c.y.toFixed(3)
+  partes.forEach((p, i) => {
+    const anel = J.densify.Densifier.densify(p.getExteriorRing(), VAZIO_PASSO)
+    for (const c of anel.getCoordinates()) {
+      const k = chave(c)
+      if (!dono.has(k)) { dono.set(k, i); sites.push(c) }
+    }
+  })
+  const vb = new J.triangulate.VoronoiDiagramBuilder()
+  vb.setSites(f.createMultiPointFromCoords(sites))
+  // As células direto da subdivisão, SEM o recorte do getDiagram: em quadra
+  // regular o recorte cai em erro de precisão. As de fora ficam grandes, mas
+  // as arestas longe das quadras saem pelo filtro de distância.
+  const celulas = vb.getSubdivision().getVoronoiCellPolygons(f).toArray()
 
-  // 1. Frentes: aresta com as duas pontas E o meio sobre a borda. O meio
-  //    importa: num lote que ocupa a quadra de lado a lado, a aresta lateral
-  //    liga uma borda à outra sem estar em nenhuma.
-  const lados = []
-  for (const l of lotes) {
-    const cs = l.g.getExteriorRing().getCoordinates()
-    for (let i = 0; i + 1 < cs.length; i++) {
-      const a = cs[i], b = cs[i + 1]
-      const len = Math.hypot(b.x - a.x, b.y - a.y)
-      if (len < 1 || !sobreABorda(a.x, a.y) || !sobreABorda(b.x, b.y) || !sobreABorda((a.x + b.x) / 2, (a.y + b.y) / 2)) continue
-      const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
-      let lado = lados.find(L => Math.abs(L.ux * ux + L.uy * uy) >= paralelo
-        && Math.abs((mx - L.px) * L.uy - (my - L.py) * L.ux) <= RUA_ALINHAMENTO)
-      if (!lado) { lado = { ux, uy, px: a.x, py: a.y, pontos: [], lotes: new Set() }; lados.push(lado) }
-      lado.pontos.push(a, b)
-      lado.lotes.add(l)
+  // Arestas: cada uma aparece em duas células; fica a que separa quadras diferentes.
+  const arestas = new Map()
+  const ck = c => c.x.toFixed(4) + ',' + c.y.toFixed(4)
+  for (const cel of celulas) {
+    const site = cel.getUserData()
+    const q = dono.get(chave(site))
+    const cs = cel.getExteriorRing().getCoordinates()
+    for (let j = 0; j + 1 < cs.length; j++) {
+      const a = cs[j], b = cs[j + 1]
+      const k = ck(a) < ck(b) ? ck(a) + '|' + ck(b) : ck(b) + '|' + ck(a)
+      const e = arestas.get(k)
+      if (!e) arestas.set(k, { a, b, q, site })
+      else e.q2 = q
     }
   }
-
-  // 2. Voto. Quantos lados cada lote toca decide o peso dele.
-  const nLados = new Map()
-  for (const L of lados) for (const l of L.lotes) nLados.set(l, (nLados.get(l) || 0) + 1)
-
-  const saida = []
-  for (const L of lados) {
-    const votos = new Map()
-    for (const l of L.lotes) {
-      if (!l.logradouro) continue
-      votos.set(l.logradouro, (votos.get(l.logradouro) || 0) + (nLados.get(l) === 1 ? 1 : 0.25))
-    }
-    let nome = null, maior = 0
-    for (const [n, v] of votos) if (v > maior) { maior = v; nome = n }
-    if (maior < 1) nome = null
-
-    // 3. Extensão do lado e deslocamento para fora da quadra.
-    let t0 = Infinity, t1 = -Infinity
-    for (const p of L.pontos) { const t = (p.x - L.px) * L.ux + (p.y - L.py) * L.uy; t0 = Math.min(t0, t); t1 = Math.max(t1, t) }
-    if (t1 - t0 < RUA_LADO_MINIMO) continue
-    const mx = L.px + L.ux * (t0 + t1) / 2, my = L.py + L.uy * (t0 + t1) / 2
-    let nx = -L.uy, ny = L.ux
-    if (partes.some(p => p.contains(f.createPoint(new J.geom.Coordinate(mx + nx * 2, my + ny * 2))))) { nx = -nx; ny = -ny }
-    const ox = nx * RUA_AFASTAMENTO, oy = ny * RUA_AFASTAMENTO
-    saida.push({
-      nome, ux: L.ux, uy: L.uy,
-      a: [L.px + L.ux * t0 + ox, L.py + L.uy * t0 + oy],
-      b: [L.px + L.ux * t1 + ox, L.py + L.uy * t1 + oy],
-    })
+  const indice = new J.index.strtree.STRtree()
+  partes.forEach(p => indice.insert(p.getEnvelopeInternal(), p))
+  const dentroDeQuadra = (x, y) => {
+    const pt = f.createPoint(new J.geom.Coordinate(x, y))
+    return indice.query(pt.getEnvelopeInternal()).toArray().some(p => p.contains(pt))
   }
-  return saida
+  const segs = []
+  for (const e of arestas.values()) {
+    if (e.q2 === undefined || e.q2 === e.q) continue
+    const mx = (e.a.x + e.b.x) / 2, my = (e.a.y + e.b.y) / 2
+    const d = Math.hypot(mx - e.site.x, my - e.site.y)
+    if (d < VAZIO_MEIA_MIN || d > VAZIO_MEIA_MAX || dentroDeQuadra(mx, my)) continue
+    // Presas a 1 cm: em quadra regular as arestas saem quase iguais, e a
+    // união de linhas quase iguais cai em erro de precisão.
+    const r = c => new J.geom.Coordinate(Math.round(c.x * 100) / 100, Math.round(c.y * 100) / 100)
+    const a = r(e.a), b = r(e.b)
+    if (!a.equals2D(b)) segs.push(f.createLineString([a, b]))
+  }
+
+  // Rua com quadra de um lado só: a borda afastada, onde não há quadra do outro lado.
+  const P = J.operation.buffer.BufferParameters
+  // Quina viva (mitre): a esquina da borda afastada fica num ponto só, onde a linha é partida.
+  const pr = new P(); pr.setJoinStyle(P.JOIN_MITRE); pr.setMitreLimit(3)
+  const bufR = (g, d) => J.operation.buffer.BufferOp.bufferOp(g, d, pr)
+  // Sai da borda afastada o que já tem eixo entre quadras perto (até
+  // VAZIO_JA_TEM_EIXO) e o que cai dentro de outra quadra (encostadas pelos
+  // fundos). Perto de um cruzamento, a borda termina a essa distância do eixo
+  // transversal, e a costura do desenho a leva até ele.
+  const ladoUnico = []
+  const juntar = ls => { const m = new J.operation.linemerge.LineMerger(); m.add(_unirLinhas(f, ls)); return m.getMergedLineStrings().toArray() }
+  const eixosEntre = segs.length ? juntar(segs).map(l => J.simplify.DouglasPeuckerSimplifier.simplify(l, VAZIO_SIMPLIFICA)) : []
+  segs.length = 0
+  segs.push(...eixosEntre)
+  const pr2 = new P(); pr2.setQuadrantSegments(2)
+  const jaTem = eixosEntre.length ? J.operation.buffer.BufferOp.bufferOp(f.createMultiLineString(eixosEntre), VAZIO_JA_TEM_EIXO, pr2) : null
+  partes.forEach((p, i) => {
+    const caixa = p.getEnvelopeInternal()
+    const outras = partes.filter((o, j) => j !== i && o.getEnvelopeInternal().distance(caixa) <= VAZIO_LADO_UNICO + 2)
+    let anel = f.createLineString(bufR(p, VAZIO_LADO_UNICO).getExteriorRing().getCoordinates())
+    if (jaTem) anel = _sobreporComSeguranca(anel, jaTem, 'difference')
+    if (anel && outras.length) anel = _sobreporComSeguranca(anel, bufR(_unirComSeguranca(f, outras), 1), 'difference')
+    if (!anel) return   // a conta não fechou: sem rua de um lado só nesta quadra
+    for (let k = 0; k < anel.getNumGeometries(); k++) {
+      const l = anel.getGeometryN(k)
+      if (l.getLength() >= VAZIO_LADO_UNICO_MIN) { segs.push(l); ladoUnico.push(l) }
+    }
+  })
+
+  // Junta em polilinhas entre cruzamentos.
+  if (!segs.length) return []
+  let linhas = juntar(segs)
+
+  // Rebarbas: ponta solta curta.
+  for (let volta = 0; volta < 3; volta++) {
+    const grau = new Map()
+    const kk = c => c.x.toFixed(2) + ',' + c.y.toFixed(2)
+    for (const l of linhas) for (const c of [l.getCoordinateN(0), l.getCoordinateN(l.getNumPoints() - 1)]) grau.set(kk(c), (grau.get(kk(c)) || 0) + 1)
+    const antes = linhas.length
+    linhas = linhas.filter(l => !(l.getLength() < VAZIO_PONTA_MIN
+      && (grau.get(kk(l.getCoordinateN(0))) === 1 || grau.get(kk(l.getCoordinateN(l.getNumPoints() - 1))) === 1)))
+    if (linhas.length === antes) break
+    const lm2 = new J.operation.linemerge.LineMerger()
+    linhas.forEach(l => lm2.add(l))
+    linhas = lm2.getMergedLineStrings().toArray()
+  }
+  // De um lado só: a linha que cai quase toda sobre a borda afastada.
+  const faixaLado = ladoUnico.length ? bufR(f.createMultiLineString(ladoUnico), 0.5) : null
+  return linhas.flatMap(l => {
+    const ladoUnico = !!faixaLado && (_sobreporComSeguranca(l, faixaLado, 'intersection')?.getLength() ?? 0) > 0.8 * l.getLength()
+    const pts = J.simplify.DouglasPeuckerSimplifier.simplify(l, VAZIO_SIMPLIFICA).getCoordinates().map(c => [c.x, c.y])
+    return _partirNasEsquinas(pts).map(p => ({ pts: p, ladoUnico }))
+  })
 }
 
 /**
- * 4. Os dois lados da mesma rua — um de cada quadra, frente a frente — viram
- * um trecho só, sobre a reta média. Nomes diferentes não se fundem; um lado
- * sem nome herda o do lado de lá (é a mesma rua).
+ * Parte a polilinha nas ESQUINAS: onde a direção muda mais de VAZIO_ESQUINA_GRAUS
+ * entre VAZIO_ESQUINA_M antes e depois do vértice. A volta em torno de uma
+ * quadra sozinha (sem cruzamento que a parta) eram quatro ruas com um nome só.
+ * Curva de rua (Splendore) dobra pouco nesses metros e não é partida.
+ * @param {number[][]} pts @returns {number[][][]}
  */
-function _fundirLados(lados) {
-  const paralelo = Math.cos(RUA_ANGULO * Math.PI / 180)
-  const fundidos = []
-  for (const t of lados) {
-    const tmx = (t.a[0] + t.b[0]) / 2, tmy = (t.a[1] + t.b[1]) / 2
-    const par = fundidos.find(o => {
-      if (o.nome && t.nome && o.nome !== t.nome) return false
-      if (Math.abs(o.ux * t.ux + o.uy * t.uy) < paralelo) return false
-      if (Math.abs((tmx - o.a[0]) * o.uy - (tmy - o.a[1]) * o.ux) > RUA_FUSAO) return false
-      // Sobreposição ao longo da rua: os dois lados de UM quarteirão, não o seguinte.
-      const len = Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1])
-      const p1 = (t.a[0] - o.a[0]) * o.ux + (t.a[1] - o.a[1]) * o.uy
-      const p2 = (t.b[0] - o.a[0]) * o.ux + (t.b[1] - o.a[1]) * o.uy
-      const sentido = Math.sign((o.b[0] - o.a[0]) * o.ux + (o.b[1] - o.a[1]) * o.uy) || 1
-      const [i0, i1] = sentido > 0 ? [0, len] : [-len, 0]
-      return Math.min(i1, Math.max(p1, p2)) - Math.max(i0, Math.min(p1, p2)) > 0.3 * Math.min(len, Math.hypot(t.b[0] - t.a[0], t.b[1] - t.a[1]))
-    })
-    if (!par) { fundidos.push({ ...t }); continue }
-
-    // Reta média: o lado de cá desloca metade da distância até o de lá.
-    const d = (tmx - par.a[0]) * par.uy - (tmy - par.a[1]) * par.ux   // distância com sinal, normal (uy, -ux)
-    const nx = par.uy * d / 2, ny = -par.ux * d / 2
-    const ts = [par.a, par.b, t.a, t.b].map(p => (p[0] - par.a[0]) * par.ux + (p[1] - par.a[1]) * par.uy)
-    const t0 = Math.min(...ts), t1 = Math.max(...ts)
-    par.a = [par.a[0] + par.ux * t0 + nx, par.a[1] + par.uy * t0 + ny]
-    par.b = [par.a[0] - par.ux * t0 + par.ux * t1, par.a[1] - par.uy * t0 + par.uy * t1]
-    par.nome = par.nome ?? t.nome
+function _partirNasEsquinas(pts) {
+  if (pts.length < 3) return [pts]
+  // Linha fechada (a volta da quadra): passa a começar no meio do lado mais
+  // longo, que não é esquina; no fim, o primeiro e o último pedaço se juntam.
+  const fechada = pts.length > 3 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 0.01
+  if (fechada) {
+    let k = 0, maior = -1
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const d = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1])
+      if (d > maior) { maior = d; k = i }
+    }
+    const meio = [(pts[k][0] + pts[k + 1][0]) / 2, (pts[k][1] + pts[k + 1][1]) / 2]
+    pts = [meio, ...pts.slice(k + 1, -1), ...pts.slice(0, k + 1), meio]
   }
-  return fundidos
+  const acum = [0]
+  for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
+  const total = acum[acum.length - 1]
+  const em = s => {   // o ponto a s metros do início
+    s = Math.max(0, Math.min(total, s))
+    let i = 1
+    while (i < pts.length - 1 && acum[i] < s) i++
+    const t = (s - acum[i - 1]) / ((acum[i] - acum[i - 1]) || 1)
+    return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]
+  }
+  const giro = i => {
+    const a = em(acum[i] - VAZIO_ESQUINA_M), b = pts[i], c = em(acum[i] + VAZIO_ESQUINA_M)
+    const u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]]
+    const nu = Math.hypot(...u), nv = Math.hypot(...v)
+    if (nu < 0.5 || nv < 0.5) return 0
+    return Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (nu * nv)))) * 180 / Math.PI
+  }
+  const giros = pts.map((_, i) => (i === 0 || i === pts.length - 1) ? 0 : giro(i))
+  const cortes = []
+  for (let i = 1; i < pts.length - 1; i++) {
+    if (giros[i] < VAZIO_ESQUINA_GRAUS) continue
+    // Da mesma esquina (vértices a menos de VAZIO_ESQUINA_M), só o que mais dobra.
+    const perto = j => Math.abs(acum[j] - acum[i]) < VAZIO_ESQUINA_M
+    if (perto(i - 1) && giros[i - 1] >= VAZIO_ESQUINA_GRAUS && giros[i - 1] >= giros[i]) continue
+    if (perto(i + 1) && giros[i + 1] >= VAZIO_ESQUINA_GRAUS && giros[i + 1] > giros[i]) continue
+    cortes.push(i)
+  }
+  if (!cortes.length) return [pts]
+  const partes = []
+  let ini = 0
+  for (const c of cortes) { partes.push(pts.slice(ini, c + 1)); ini = c }
+  partes.push(pts.slice(ini))
+  // O ponto do meio (o início artificial) sai: está na reta entre os vizinhos.
+  if (fechada && partes.length > 1) partes[0] = [...partes.pop().slice(0, -1), ...partes[0].slice(1)]
+  return partes.filter(p => p.length >= 2)
+}
+
+/**
+ * União (e nó nos cruzamentos) de linhas, com o socorro de precisão de
+ * _sobreporComSeguranca: 1 mm, depois 1 cm, depois 10 cm.
+ */
+function _unirLinhas(f, linhas) {
+  const J = window.jsts
+  const todas = f.createMultiLineString(linhas)
+  try { return J.operation.union.UnaryUnionOp.union(todas) } catch { /* refaz com precisão reduzida */ }
+  for (const escala of [1000, 100, 10]) {
+    try { return J.operation.union.UnaryUnionOp.union(J.precision.GeometryPrecisionReducer.reduce(todas, new J.geom.PrecisionModel(escala))) } catch { /* próxima grade */ }
+  }
+  return todas
+}
+
+/**
+ * O nome de cada eixo: os lotes votam pelo endereço, cada frente (aresta do
+ * lote sobre a borda da quadra) no eixo à sua frente. Lote que dá para um eixo
+ * só vale 1; o de esquina, 0,25. Vence o mais votado com soma ≥ 1.
+ */
+function _nomearEixos(linhas, partesComLotes, J) {
+  const eixos = linhas.map(l => ({ ...l, votos: new Map() }))
+  // Segmentos de todos os eixos, numa grade de 25 m.
+  const grade = new Map(), CEL = 25
+  eixos.forEach((e, ie) => {
+    for (let i = 1; i < e.pts.length; i++) {
+      const a = e.pts[i - 1], b = e.pts[i]
+      const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / CEL) + 1
+      const vistos = new Set()
+      for (let k = 0; k <= n; k++) {
+        const x = a[0] + (b[0] - a[0]) * k / n, y = a[1] + (b[1] - a[1]) * k / n
+        const c = Math.floor(x / CEL) + ':' + Math.floor(y / CEL)
+        if (vistos.has(c)) continue
+        vistos.add(c)
+        ;(grade.get(c) || grade.set(c, []).get(c)).push([ie, a, b])
+      }
+    }
+  })
+  const paralelo = Math.cos(30 * Math.PI / 180)
+  const eixoEmFrente = (mx, my, ux, uy) => {
+    let melhor = null, dmin = VAZIO_MEIA_MAX + 3
+    const cx = Math.floor(mx / CEL), cy = Math.floor(my / CEL)
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      for (const [ie, a, b] of grade.get((cx + dx) + ':' + (cy + dy)) || []) {
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1])
+        if (L < 0.1) continue
+        const sx = (b[0] - a[0]) / L, sy = (b[1] - a[1]) / L
+        if (Math.abs(sx * ux + sy * uy) < paralelo) continue
+        const t = Math.max(0, Math.min(L, (mx - a[0]) * sx + (my - a[1]) * sy))
+        const d = Math.hypot(mx - a[0] - sx * t, my - a[1] - sy * t)
+        if (d < dmin) { dmin = d; melhor = ie }
+      }
+    }
+    return melhor
+  }
+  for (const { p, lotes } of partesComLotes) {
+    const f = p.getFactory()
+    const borda = f.createLineString(p.getExteriorRing().getCoordinates())
+    const sobre = (x, y) => borda.distance(f.createPoint(new J.geom.Coordinate(x, y))) <= RUA_TOLERANCIA_BORDA
+    for (const l of lotes) {
+      const toca = new Set()
+      const cs = l.g.getExteriorRing().getCoordinates()
+      for (let i = 0; i + 1 < cs.length; i++) {
+        const a = cs[i], b = cs[i + 1]
+        const len = Math.hypot(b.x - a.x, b.y - a.y)
+        if (len < 1) continue
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+        if (!sobre(a.x, a.y) || !sobre(b.x, b.y) || !sobre(mx, my)) continue
+        const ie = eixoEmFrente(mx, my, (b.x - a.x) / len, (b.y - a.y) / len)
+        if (ie !== null) toca.add(ie)
+      }
+      if (!l.logradouro) continue
+      const peso = toca.size === 1 ? 1 : 0.25
+      for (const ie of toca) eixos[ie].votos.set(l.logradouro, (eixos[ie].votos.get(l.logradouro) || 0) + peso)
+    }
+  }
+  const nomeados = eixos.map(e => {
+    let nome = null, maior = 0
+    for (const [n, v] of e.votos) if (v > maior) { maior = v; nome = n }
+    return { pts: e.pts, ladoUnico: e.ladoUnico, nome: maior >= 1 ? nome : null }
+  })
+  // Lado único sem nome é, quase sempre, muro ou fundo de lote (a borda do
+  // condomínio): sai, se o bairro tem nomes. Sem cadastro, fica tudo.
+  const temNomes = nomeados.some(e => e.nome)
+  return nomeados.filter(e => !(e.ladoUnico && !e.nome && temNomes))
 }
 
 /**

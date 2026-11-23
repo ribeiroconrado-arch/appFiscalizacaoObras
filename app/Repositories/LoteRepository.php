@@ -955,7 +955,8 @@ class LoteRepository
 
     /**
      * Substitui os trechos de rua GERADOS de um bairro. Os manuais
-     * (`ruas_manuais`) não são tocados: valem por cima, na leitura.
+     * (`ruas_manuais`) valem por cima, na leitura; aqui só passam para o
+     * desenho dos trechos novos (TrechosDeRua::reconciliar).
      *
      * @param  list<array{nome:?string, de:array{0:float,1:float}, ate:array{0:float,1:float}}>  $trechos
      */
@@ -964,6 +965,9 @@ class LoteRepository
         // Cada trecho perde o que passa por dentro de lote (ver trechoForaDeLotes).
         $partes = [];
         $descartados = $recortados = 0;
+        // Na casa do banco (7 decimais): o manual que copia o gerado tem de
+        // ser IGUAL a ele na próxima reconciliação.
+        $r7 = fn (array $p) => [round((float) $p[0], 7), round((float) $p[1], 7)];
         foreach ($trechos as $t) {
             $p = $this->trechoForaDeLotes($t['de'], $t['ate']);
             if (! $p) {
@@ -972,7 +976,7 @@ class LoteRepository
                 $recortados++;
             }
             foreach ($p as [$de, $ate]) {
-                $partes[] = ['nome' => $t['nome'], 'de' => $de, 'ate' => $ate];
+                $partes[] = ['nome' => $t['nome'], 'de' => $r7($de), 'ate' => $r7($ate)];
             }
         }
         $trechos = $partes;
@@ -986,7 +990,26 @@ class LoteRepository
             ], $bloco));
         }
 
-        return ['gravados' => count($trechos), 'descartados' => $descartados, 'recortados' => $recortados];
+        // Os manuais passam para o desenho novo.
+        $ponto = fn ($l, $p) => [(float) $l->{$p . '_lat'}, (float) $l->{$p . '_lon'}];
+        $manuais = DB::table('ruas_manuais')->where('bairro', $bairro)->get()
+            ->map(fn ($l) => ['id' => (int) $l->id, 'nome' => $l->nome, 'oculto' => (bool) $l->oculto,
+                'excluido' => (bool) ($l->excluido ?? false), 'user_id' => $l->user_id,
+                'de' => $ponto($l, 'de'), 'ate' => $ponto($l, 'ate')])->all();
+        $rec = \App\Cadastro\TrechosDeRua::reconciliar($trechos, $manuais);
+        foreach (array_chunk($rec['apagar'], 500) as $ids) {
+            DB::table('ruas_manuais')->whereIn('id', $ids)->delete();
+        }
+        foreach (array_chunk($rec['novos'], 500) as $bloco) {
+            DB::table('ruas_manuais')->insert(array_map(fn ($m) => [
+                'bairro' => $bairro, 'nome' => $m['nome'], 'oculto' => $m['oculto'], 'excluido' => $m['excluido'],
+                'de_lat' => $m['de'][0], 'de_lon' => $m['de'][1], 'ate_lat' => $m['ate'][0], 'ate_lon' => $m['ate'][1],
+                'user_id' => $m['user_id'], 'created_at' => $agora, 'updated_at' => $agora,
+            ], $bloco));
+        }
+
+        return ['gravados' => count($trechos), 'descartados' => $descartados, 'recortados' => $recortados,
+            'manuais_passados' => $rec['passados'], 'manuais_descartados' => $rec['descartados']];
     }
 
     /** Recuo para dentro do lote: a linha que só encosta na divisa não conta. */

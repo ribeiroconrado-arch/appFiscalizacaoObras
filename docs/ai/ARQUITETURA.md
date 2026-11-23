@@ -210,16 +210,26 @@ pede as quadras por bairro, uma vez, quando o bairro entra na tela no nível
 das quadras — um bairro de 1.500 lotes são ~50 quadras, 13 KB (1 KB
 compactado), contra ~1 MB dos lotes.
 
-**Nomes de rua**: o DWG não traz eixo de rua, então o nome sai dos LADOS das
-quadras, no mesmo cálculo das quadras (`calcularQuadrasERuas`). Cada lote vem
-com o logradouro do seu endereço no cadastro (`LoteRepository::lotesDoBairro`,
-a mesma ligação bairro/quadra/lote da ficha) e vota no lado em que encosta:
-vale 1 o lote de um lado só e 0,25 o de esquina, que tem um endereço só para
-dois lados. Vence o mais votado com soma ≥ 1; senão o lado fica SEM NOME. O
-trecho vai 7 m para fora da quadra (o meio da rua), e os dois lados da mesma
-rua viram um trecho só. No mapa, o nome aparece nos níveis das quadras e dos
-lotes, girado com a rua, só onde CABE no trecho (senão abreviado: "R.",
-"AV.").
+**Nomes de rua**: o DWG não traz eixo de rua. Desde 23/11/2026 o eixo é o
+MEIO DO ESPAÇO ENTRE AS QUADRAS, no mesmo cálculo das quadras
+(`calcularQuadrasERuas` → `_eixosPeloVazio`): pontos a cada 2,5 m na borda de
+cada quadra, e no diagrama de Voronoi deles a aresta entre células de quadras
+DIFERENTES, a 2,5–20 m delas, é o meio da rua — acompanha a curva e é uma
+linha só por rua. Onde só há quadra de um lado, o eixo é a borda afastada 7 m.
+As linhas são partidas nos cruzamentos e nas esquinas (dobra > 55° em 8 m) e
+viram trechos curtos (rua curva = vários). Antes, o trecho saía de cada lado
+RETO de quadra empurrado 7 m: em bairro de rua curva (COND. SPLENDORE) virava
+pedaços tortos cruzando lotes. O NOME (`_nomearEixos`): cada lote vem com o
+logradouro do seu endereço no cadastro (`LoteRepository::lotesDoBairro`) e
+cada frente dele (aresta sobre a borda da quadra) vota no eixo à sua frente:
+vale 1 o lote que dá para um eixo só e 0,25 o de esquina. Vence o mais votado
+com soma ≥ 1; senão SEM NOME. Eixo de um lado só e sem nome, num bairro com
+cadastro, sai: é muro ou divisa (a borda do condomínio). Ao gravar
+(`gravarRuas`), os manuais passam para o desenho novo
+(`TrechosDeRua::reconciliar`): nome e oculto vão para os trechos novos que
+cobrem; a exclusão só passa para o mesmo traço (1,5 m) — a da regra velha sai.
+No mapa, o nome aparece nos níveis das quadras e dos lotes, girado com a rua,
+só onde CABE no trecho (senão abreviado: "R.", "AV.").
 
 O que o voto não resolve, o curador informa na ferramenta **Nomes de rua**
 (`ruas-manuais.js`, `RuaManualController`), escolhendo da lista de logradouros

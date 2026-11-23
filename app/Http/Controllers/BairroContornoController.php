@@ -313,6 +313,15 @@ class BairroContornoController extends Controller
                     . ($avisos ? ' (' . implode('; ', $avisos) . ')' : '')
                     . ($semNome ? sprintf(', %d sem nome — veja em Nomes de rua', $semNome) : '');
             }
+            // Os informados à mão passam para o desenho novo (TrechosDeRua::reconciliar).
+            $mp = $ruasGravadas['manuais_passados'] ?? 0;
+            $md = $ruasGravadas['manuais_descartados'] ?? 0;
+            if ($mp || $md) {
+                $msg .= '. Nomes de rua informados à mão: ' . implode('; ', array_filter([
+                    $mp ? sprintf('%d passado(s) para o desenho novo', $mp) : null,
+                    $md ? sprintf('%d exclusão(ões) da linha antiga, que não existe mais, removida(s)', $md) : null,
+                ]));
+            }
         }
 
         return response()->json([

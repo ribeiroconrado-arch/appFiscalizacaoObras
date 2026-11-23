@@ -72,4 +72,72 @@ class TrechosDeRuaTest extends TestCase
         $r = TrechosDeRua::combinar([$this->t(0, 0, 100, 0)], [$this->manual(0, 0, 100, 0, null, true)]);
         $this->assertSame(['oculto'], array_column($r, 'origem'));
     }
+
+    // ── reconciliar: o "Gerar" refez os trechos ──
+
+    private function m(int $id, float $x1, float $y1, float $x2, float $y2, ?string $nome, bool $oculto = false, bool $excluido = false): array
+    {
+        return $this->t($x1, $y1, $x2, $y2, $nome, ['id' => $id, 'oculto' => $oculto, 'excluido' => $excluido, 'user_id' => 3]);
+    }
+
+    public function test_reconciliar_o_nome_passa_para_os_trechos_novos(): void
+    {
+        // O manual velho (uma reta 4 m ao lado) cobre os dois pedaços novos da rua.
+        $novos = [$this->t(0, 0, 50, 0, null), $this->t(50, 0, 100, 1, null)];
+        $r = TrechosDeRua::reconciliar($novos, [$this->m(9, 0, 4, 100, 4, 'RUA B')]);
+        $this->assertSame([9], $r['apagar']);
+        $this->assertSame(1, $r['passados']);
+        $this->assertSame(['RUA B', 'RUA B'], array_column($r['novos'], 'nome'));
+        $this->assertSame($novos[1]['de'], $r['novos'][1]['de'], 'com o desenho do novo');
+        $this->assertSame(3, $r['novos'][0]['user_id']);
+    }
+
+    public function test_reconciliar_manual_que_ja_e_o_gerado_fica(): void
+    {
+        $r = TrechosDeRua::reconciliar([$this->t(0, 0, 100, 0, null)], [$this->m(9, 0, 0, 100, 0, 'RUA B')]);
+        $this->assertSame([], $r['apagar']);
+        $this->assertSame([], $r['novos']);
+    }
+
+    public function test_reconciliar_exclusao_da_linha_velha_sai(): void
+    {
+        // Excluído 5 m ao lado da rua nova: era a linha torta da regra antiga.
+        $r = TrechosDeRua::reconciliar([$this->t(0, 0, 100, 0, null)], [$this->m(9, 0, 5, 100, 5, null, false, true)]);
+        $this->assertSame([9], $r['apagar']);
+        $this->assertSame(1, $r['descartados']);
+        $this->assertSame([], $r['novos']);
+    }
+
+    public function test_reconciliar_exclusao_no_mesmo_traco_continua(): void
+    {
+        $r = TrechosDeRua::reconciliar([$this->t(0, 0, 100, 0, null)], [$this->m(9, 0, 0.5, 100, 0.5, null, false, true)]);
+        $this->assertSame(0, $r['descartados']);
+        $this->assertCount(1, $r['novos']);
+        $this->assertTrue($r['novos'][0]['excluido']);
+    }
+
+    public function test_reconciliar_com_nome_ganha_do_excluido_no_mesmo_trecho(): void
+    {
+        $r = TrechosDeRua::reconciliar([$this->t(0, 0, 100, 0, null)],
+            [$this->m(8, 0, 0.5, 100, 0.5, null, false, true), $this->m(9, 0, 3, 100, 3, 'RUA B')]);
+        $this->assertSame(['RUA B'], array_column($r['novos'], 'nome'));
+        $this->assertContains(8, $r['apagar'], 'a exclusão fica sem trecho e sai');
+    }
+
+    public function test_reconciliar_manual_repetido_no_mesmo_trecho_sai(): void
+    {
+        // Dois manuais da mesma rua sobre o mesmo trecho novo: um fica com ele, o outro sai.
+        $r = TrechosDeRua::reconciliar([$this->t(0, 0, 100, 0, null)],
+            [$this->m(8, 0, 2, 100, 2, 'RUA B'), $this->m(9, 0, 4, 100, 4, 'RUA B')]);
+        $this->assertCount(1, $r['novos']);
+        $this->assertEqualsCanonicalizing([8, 9], $r['apagar']);
+    }
+
+    public function test_reconciliar_rua_desenhada_a_mao_fica(): void
+    {
+        // Não cobre nenhum gerado (rua sem lote de frente): fica como está.
+        $r = TrechosDeRua::reconciliar([$this->t(0, 0, 100, 0, null)], [$this->m(9, 0, 200, 100, 200, 'RUA NOVA')]);
+        $this->assertSame([], $r['apagar']);
+        $this->assertSame(0, $r['passados']);
+    }
 }

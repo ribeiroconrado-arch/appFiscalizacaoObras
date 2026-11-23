@@ -104,14 +104,21 @@ test('ruas: cada frente leva o nome da rua dos seus lotes, no meio da rua', () =
   assert.ok(sul && norte, JSON.stringify(rs))
   assert.ok(Math.abs(sul.y + 7) < 0.5, `RUA SUL 7 m abaixo da quadra (y=${sul.y.toFixed(2)})`)
   assert.ok(Math.abs(norte.y - 57) < 0.5, `RUA NORTE 7 m acima (y=${norte.y.toFixed(2)})`)
-  assert.ok(Math.abs(sul.ang) < 1 && Math.abs(sul.len - 60) < 1, 'paralelo e do tamanho da frente')
+  // Até a esquina das ruas em volta (23/11/2026): 60 m de frente + 7 m de cada lado.
+  assert.ok(Math.abs(sul.ang) < 1 && Math.abs(sul.len - 74) < 1, `paralelo e de esquina a esquina (${sul.len.toFixed(1)} m)`)
 })
 
-test('ruas: o lado só com lotes de esquina fica SEM NOME, e não com o nome da esquina', () => {
+test('ruas: o lado só com lotes de esquina não leva o nome da esquina', () => {
+  // Quadra sozinha, bairro com cadastro: do lado de fora, sem voto nenhum, é
+  // muro ou divisa (a borda do condomínio) e some — 23/11/2026.
   const rs = ruas(quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA NORTE'))
   const lados = rs.filter(r => Math.abs(Math.abs(r.ang) - 90) < 1)
-  assert.equal(lados.length, 2, 'os dois lados de 50 m aparecem')
   assert.ok(lados.every(r => r.nome === null), JSON.stringify(lados))
+})
+
+test('ruas: sem cadastro, o lado de fora de uma quadra sozinha continua (sem nome)', () => {
+  const rs = ruas(quadra('01', 0, 0, 5))
+  assert.equal(rs.filter(r => Math.abs(Math.abs(r.ang) - 90) < 1).length, 2, 'os dois lados de 50 m aparecem')
 })
 
 test('ruas: as duas quadras de frente para a mesma rua dão UM nome só, no meio dela', () => {
@@ -128,9 +135,12 @@ test('ruas: o lado sem endereço herda o nome do lado de lá', () => {
   assert.deepEqual(noMeio.map(r => r.nome), ['RUA DO MEIO'])
 })
 
-test('ruas: nomes diferentes frente a frente não se fundem', () => {
+test('ruas: nomes diferentes frente a frente: uma linha só, com um dos dois', () => {
+  // A rua é uma só, no meio (23/11/2026): fica o nome mais votado.
   const rs = ruas([...quadraComRuas('01', 0, 0, 5, 'RUA SUL', 'RUA A'), ...quadraComRuas('02', 0, 64, 5, 'RUA B', 'RUA NORTE')])
-  assert.ok(rs.some(r => r.nome === 'RUA A') && rs.some(r => r.nome === 'RUA B'))
+  const meio = rs.filter(r => Math.abs(r.y - 57) < 1 && Math.abs(r.ang) < 1)
+  assert.equal(meio.length, 1, JSON.stringify(meio))
+  assert.ok(['RUA A', 'RUA B'].includes(meio[0].nome))
 })
 
 test('ruas: sem cadastro (nenhum logradouro), os lados saem todos sem nome', () => {
