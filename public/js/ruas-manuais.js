@@ -39,6 +39,7 @@ const ruaState = {
   /** @type {?string} o último trecho clicado ("Só o trecho clicado") */ ultimo: null,
   /** @type {'todas'|'sem_nome'|'sugestoes'|'manual'} */ filtro: 'todas',
   /** @type {?string} o logradouro escolhido no combo, preservado entre repinturas */ escolha: null,
+  /** @type {boolean} administrador digitando um nome fora da lista */ nomeLivre: false,
   /** @type {{pontos: L.LatLng[]}|null} rua sendo desenhada */ desenhando: null,
   /** @type {Array<{bairro:string, de:number[], ate:number[]}>|null} desenhada, esperando nome */ novo: null,
   /** @type {Map<string, {logradouros:string[], livre:boolean, cadastro:boolean}>} por bairro */ listas: new Map(),
@@ -441,7 +442,7 @@ function _clicarTrecho(k) {
   const todos = grupo.every(t => ruaState.selecao.has(t.k))
   for (const t of grupo) todos ? ruaState.selecao.delete(t.k) : ruaState.selecao.add(t.k)
   ruaState.ultimo = todos ? null : k
-  ruaState.escolha = null
+  ruaState.escolha = null; ruaState.nomeLivre = false
   _pintarRealceRuas()
   pintarMesaRuas()
 }
@@ -452,7 +453,7 @@ function _selecionarELevar(lista) {
   ruaState.novo = null
   ruaState.selecao = new Set(lista.map(t => t.k))
   ruaState.ultimo = lista[0].k
-  ruaState.escolha = null
+  ruaState.escolha = null; ruaState.nomeLivre = false
   const caixa = L.latLngBounds(lista.flatMap(t => [t.t.de, t.t.ate]))
   mapaState.obj.fitBounds(caixa, { padding: [80, 80], maxZoom: 19 })
   _pintarRealceRuas()
@@ -462,7 +463,7 @@ function _selecionarELevar(lista) {
 function limparSelecaoRuas() {
   ruaState.selecao.clear()
   ruaState.ultimo = null
-  ruaState.escolha = null
+  ruaState.escolha = null; ruaState.nomeLivre = false
   _pintarRealceRuas()
   pintarMesaRuas()
 }
@@ -733,17 +734,31 @@ async function _preencherComboRuas() {
   // Livre só se TODOS os bairros em jogo forem livres: o servidor confere a
   // lista de cada um, e um nome fora de uma delas recusaria tudo.
   const livre = listas.length > 0 && listas.every(l => l.livre)
+  // Para quem pode nome livre, o atual fora da lista (sugestão do OSM) entra
+  // como opção, para o combo abrir com ele escolhido.
+  const temLista = todos.length > 0
+  if (livre && temLista && atual && !todos.includes(atual)) todos.unshift(atual)
   const opcoes = todos.map(n => `<option value="${esc(n)}"${n === atual ? ' selected' : ''}>${esc(n)}</option>`).join('')
-  // O combobox padrão do sistema (data-combo, ui.js) mesmo com poucas opções —
-  // a lista nativa destoava das outras telas (22/11/2026). Livre (bairro sem
-  // cadastro amarrado) é campo de texto simples: o nome não sai de lista.
-  caixa.innerHTML = livre
-    ? `<input type="text" id="rua-nome" value="${esc(atual)}" placeholder="Nome do logradouro" maxlength="180" autocomplete="off" oninput="ruaState.escolha=this.value">`
+  // Havendo lista, é sempre o combobox padrão do sistema (data-combo, ui.js).
+  // Livre (administrador, ou bairro sem cadastro amarrado) pode ainda digitar
+  // um nome fora dela pelo "Nome fora da lista"; sem lista nenhuma, só texto.
+  // Em 56465ac o livre virou texto puro e o administrador perdeu o combo (23/11/2026).
+  const texto = `<input type="text" id="rua-nome" value="${esc(atual)}" placeholder="Nome do logradouro" maxlength="180" autocomplete="off" oninput="ruaState.escolha=this.value">`
+  caixa.innerHTML = !temLista || ruaState.nomeLivre
+    ? texto + (temLista ? '<button type="button" class="hist-voltar" onclick="_nomeForaDaLista(false)">Escolher da lista</button>' : '')
     : `<select id="rua-nome" data-combo onchange="ruaState.escolha=this.value"><option value="">Escolha o logradouro…</option>${opcoes}</select>`
+      + (livre ? '<button type="button" class="hist-voltar" onclick="_nomeForaDaLista(true)">Nome fora da lista</button>' : '')
   const combo = caixa.querySelector('select[data-combo]')
   if (combo && typeof comboDeSelect === 'function') comboDeSelect(combo)
+  if (ruaState.nomeLivre) caixa.querySelector('input')?.focus()
   const aviso = document.getElementById('rua-nome-aviso')
   if (aviso) aviso.innerHTML = listas.some(l => !l.cadastro) ? '<div class="rua-aviso">Bairro sem cadastro amarrado: o nome é livre.</div>' : ''
+}
+
+/** Troca entre o combo da lista e o campo de texto livre. @param {boolean} sim */
+function _nomeForaDaLista(sim) {
+  ruaState.nomeLivre = sim
+  _preencherComboRuas()
 }
 
 /** Grava o nome escolhido em toda a seleção (ou na rua desenhada). */
@@ -829,7 +844,7 @@ async function _enviarLoteRuas(corpo, extra = '') {
     ruaState.novo = null
     ruaState.selecao.clear()
     ruaState.ultimo = null
-    ruaState.escolha = null
+    ruaState.escolha = null; ruaState.nomeLivre = false
     toast(d.message + extra, 'ok')
   } catch (e) {
     toast(e.message, 'err')
@@ -1009,7 +1024,7 @@ function concluirDesenhoRua() {
   }
   _cancelarDesenhoRua(true)
   ruaState.novo = segs
-  ruaState.escolha = null
+  ruaState.escolha = null; ruaState.nomeLivre = false
   _pintarRealceRuas()
   pintarMesaRuas()
 }

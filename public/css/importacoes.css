@@ -135,7 +135,7 @@
 
 /* ── NOMES DE RUA (ruas-manuais.js) ── */
 /* Refeita em 22/11/2026: mesa lateral (#ruas-mesa), sem balão nem barra flutuante. */
-@media (min-width:600px){ .ruas-mesa{width:320px} }
+@media (min-width:1000px){ .ruas-mesa{width:min(420px, calc(100vw - 80px))} }
 .ruas-mesa .cad-mesa-rolo{display:flex;flex-direction:column;gap:10px}
 .ruas-nota{font-size:12px;color:var(--tx3);line-height:1.45}
 .ruas-sel{border:1.5px solid #2563eb;border-radius:var(--rl);padding:10px 12px;background:var(--sur)}
@@ -151,10 +151,11 @@
 .ruas-leves .hist-voltar{padding:0}
 .ruas-sugere{border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:var(--rl);padding:9px 11px;font-size:12.5px;line-height:1.4}
 .ruas-sugere .ruas-botoes{margin-top:8px}
-.ruas-filtros{margin:0}
-.ruas-filtros button{font-size:11.5px;padding:5px 4px;white-space:nowrap}
+.ruas-filtros{margin:0;max-width:100%;overflow-x:auto;flex-wrap:nowrap;flex-shrink:0;scrollbar-width:thin}
+.ruas-filtros button{font-size:11.5px;padding:5px 8px;white-space:nowrap;flex:1 0 auto}
 .ruas-n{display:inline-block;margin-left:4px;font-variant-numeric:tabular-nums;color:var(--tx3);font-weight:600}
-.ruas-lista{border:1px solid var(--bord);border-radius:var(--rl);overflow:hidden}
+/* A lista rola sozinha (23/11/2026): o resto do painel — seleção, busca, abas — fica à vista. */
+.ruas-lista{border:1px solid var(--bord);border-radius:var(--rl);overflow-y:auto;overflow-x:hidden;flex-shrink:0;max-height:min(48vh, 460px);overscroll-behavior:contain;scrollbar-width:thin}
 .ruas-lista > .ruas-nota{padding:10px 12px}
 .ruas-item{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--blt);padding-right:8px}
 .ruas-item:last-of-type{border-bottom:0}
