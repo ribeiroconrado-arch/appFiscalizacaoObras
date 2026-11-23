@@ -1,5 +1,5 @@
 /** Pesquisa livre e campos combinados; coordenadas continuam independentes. */
-const pesqState = { opcoes: null, campos: {}, res: null, aviso: null, pedido: 0, ponto: null, coordenada: false, combinando: false, timer: null, abort: null }
+const pesqState = { opcoes: null, campos: {}, res: null, aviso: null, pedido: 0, ponto: null, coordenada: false, combinando: false, timer: null, abort: null, sugDigitando: false, sugAtivo: -1 }
 const _pesqVal = id => document.getElementById(id)?.value.trim() ?? ''
 
 /** Ancora à esquerda da lupa e limita o painel à área visível do mapa. */
@@ -76,7 +76,17 @@ function pintarBarraPesquisa() {
   const detalhes = [...barra.querySelectorAll('details[open]')].map(d => d.id)
   const s = pesqState, c = s.campos, o = s.opcoes || {}
   const campo = (nome, rotulo, extra = '', dica = '') => `<label class="pesq-direto-campo"><span>${rotulo}</span><input id="pd-${nome}" name="${nome}" value="${esc(c[nome] || '')}" ${extra} placeholder="${dica}" autocomplete="off"></label>`
-  const select = (nome, rotulo, opcoes) => `<label class="pesq-direto-campo"><span>${rotulo}</span><select id="pd-${nome}" name="${nome}">${Object.entries(opcoes).map(([v, label]) => `<option value="${esc(v)}" ${String(c[nome] || '') === v ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
+  // data-combo: o COMBOBOX PADRÃO do sistema (ui.js, comboDeSelect). Sem ele
+  // estes três ficavam de select nativo, por terem menos opções que o limite
+  // que veste um select sozinho — eram os únicos campos de escolha do sistema
+  // fora do padrão. Ver docs/ai/DESIGN-SYSTEM.md › Combobox.
+  // Campo de texto LIVRE com a lista flutuante do sistema (.ac-wrap/.ac-list,
+  // ver docs/ai/DESIGN-SYSTEM.md > Combobox). Não é <select>: o fiscal pode
+  // digitar um pedaço do nome ("buritis") e pesquisar sem escolher da lista —
+  // era o que o <datalist> fazia, só que com a cara do navegador, diferente do
+  // resto do sistema.
+  const campoLista = (nome, rotulo, fonte, extra, dica) => `<label class="pesq-direto-campo"><span>${rotulo}</span><div class="ac-wrap"><input id="pd-${nome}" name="${nome}" value="${esc(c[nome] || '')}" data-sugestao="${fonte}" role="combobox" aria-expanded="false" aria-autocomplete="list" ${extra} placeholder="${dica}" autocomplete="off"><button class="clr-btn" type="button" tabindex="-1" title="Limpar" ${c[nome] ? '' : 'hidden'}>&times;</button><div class="ac-list"></div></div></label>`
+  const select = (nome, rotulo, opcoes) => `<label class="pesq-direto-campo"><span>${rotulo}</span><select id="pd-${nome}" name="${nome}" data-combo>${Object.entries(opcoes).map(([v, label]) => `<option value="${esc(v)}" ${String(c[nome] || '') === v ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`
   barra.innerHTML = `<div class="pesq-cabecalho"><h2>Pesquisar no mapa</h2><button type="button" data-pesq="fechar" aria-label="Fechar pesquisa">&#10005;</button></div>
     <div class="pesq-conteudo"><form id="pesq-direta">
     <div class="pesq-livre"><input id="pd-termo" name="termo" value="${esc(c.termo || '')}" maxlength="120" placeholder="Endereço, bairro ou inscrição…" aria-label="Pesquisa livre" autocomplete="off"><button type="button" class="btn" data-pesq="limpar">Limpar</button><button type="submit" class="btn primary">Buscar</button></div>
@@ -84,9 +94,9 @@ function pintarBarraPesquisa() {
     <button type="button" class="pesq-combinar" data-pesq="combinar" aria-expanded="${s.combinando}" aria-controls="pesq-campos-diretos">Combinar campos <span>${s.combinando ? '−' : '+'}</span></button>
     <div id="pesq-campos-diretos" class="${s.combinando ? 'expandido' : ''}"><div class="pesq-direta-titulo">Pesquisar por campos <small>Preencha só o que souber</small></div>
     <div class="pesq-direta-grid">
-    ${campo('bairro_texto', 'Bairro', 'list="pd-bairros" maxlength="160"', 'Todos os bairros')}
+    ${campoLista('bairro_texto', 'Bairro', 'bairros', 'maxlength="160"', 'Todos os bairros')}
     ${campo('inscricao', 'Inscrição imobiliária', 'maxlength="40"', 'Completa ou início')}
-    <div class="pesq-linha-inteira">${campo('rua_texto', 'Rua / logradouro', 'list="pd-ruas" maxlength="180"', 'Nome da rua')}</div>
+    <div class="pesq-linha-inteira">${campoLista('rua_texto', 'Rua / logradouro', 'ruas', 'maxlength="180"', 'Nome da rua')}</div>
     <div class="pesq-tres">${campo('numero_de', 'Número', 'type="number" min="0" inputmode="numeric"', 'Nº')}${campo('quadra_de', 'Quadra', 'type="number" min="0" inputmode="numeric"')}${campo('lote_de', 'Lote', 'type="number" min="0" inputmode="numeric"')}</div></div>
     <details id="pd-intervalos"><summary>Intervalos e lado da rua</summary><div class="pesq-direta-grid">
       ${campo('quadra_ate', 'Até a quadra', 'type="number" min="0" inputmode="numeric"')}${campo('lote_ate', 'Até o lote', 'type="number" min="0" inputmode="numeric"')}
@@ -96,9 +106,7 @@ function pintarBarraPesquisa() {
     </div>
     <div class="pesq-direta-pe"><span>Os campos preenchidos são combinados.</span></div>
     </form>
-    <details id="pd-coordenada"><summary>Ir para coordenada</summary><div class="pesq-linha"><input id="pesq-coord" class="pesq-coord" aria-label="Coordenada" placeholder="Latitude, longitude ou UTM 21S"><button type="button" class="btn primary" data-pesq="ir-coordenada">Ir</button></div><div id="pesq-coord-msg" hidden></div></details>
-    <datalist id="pd-bairros">${(o.bairros || []).map(b => `<option value="${esc(b.nome)}">${esc(b.codigo || '')}</option>`).join('')}</datalist>
-    <datalist id="pd-ruas">${(o.ruas || []).map(r => `<option value="${esc(r.rua)}"></option>`).join('')}</datalist>
+    <details id="pd-coordenada"><summary>Ir para coordenada</summary><div class="pesq-linha"><input id="pesq-coord" class="pesq-coord" aria-label="Coordenada" placeholder="Latitude, longitude ou UTM 21S"><button type="button" class="btn primary" data-pesq="ir-coordenada">Ir</button></div><p class="pesq-dica">Aceita -15.5129, -54.3138 · 15°30'46"S 54°18'49"W · UTM 788181, 8283132.</p><div id="pesq-coord-msg" hidden></div></details>
     <div id="pesq-resultado" class="pesq-resultado" aria-live="polite">${_pesqResultadoHtml()}</div></div>`
   detalhes.forEach(id => { const el = document.getElementById(id); if (el) el.open = true })
   if (foco) {
@@ -142,15 +150,177 @@ function _pesqLerCampos() {
   const form = document.getElementById('pesq-direta')
   if (form) pesqState.campos = Object.fromEntries(new FormData(form))
 }
-document.addEventListener('input', e => {
+/**
+ * Um campo mudou: relê o formulário e repesquisa, com folga para quem digita.
+ *
+ * Escuta 'input' E 'change'. O combobox padrão (comboDeSelect, em ui.js)
+ * escreve no <select> escondido e avisa só por 'change' — sem ele, escolher
+ * uma pendência não dispararia pesquisa nenhuma.
+ */
+function _pesqCampoMudou(e) {
   if (!e.target.closest?.('#pesq-direta')) return
+  // O texto que se digita DENTRO do combobox é filtro da lista dele, não um
+  // campo da pesquisa: o valor só muda quando a opção é escolhida ('change').
+  if (e.type === 'input' && e.target.classList?.contains('combo-entrada')) return
+  if (e.type === 'input' && e.target.dataset?.sugestao) {
+    pesqState.sugDigitando = true
+    pesqState.sugAtivo = -1
+    e.target.parentElement.querySelector('.clr-btn').hidden = !e.target.value
+    _pesqPintarLista(e.target)
+  }
   _pesqLerCampos()
   // Invalida imediatamente qualquer resposta da consulta anterior.
   pesqState.pedido++
   pesqState.abort?.abort()
   clearTimeout(pesqState.timer)
   pesqState.timer = setTimeout(_pesqBuscar, 500)
+}
+// ── LISTA DE SUGESTÃO DOS CAMPOS DE TEXTO ────────────────────
+//
+// Mesmo contrato do combobox padrão (comboDeSelect, em ui.js): abre no foco com
+// tudo, digitar filtra sem ligar para maiúscula nem acento, escolhe no
+// mousedown (antes do blur), setas e Enter andam pela lista, × limpa. A
+// diferença é que aqui o campo é texto livre — a lista sugere, não obriga.
+//
+// Por DELEGAÇÃO porque pintarBarraPesquisa() refaz o innerHTML da barra
+// inteira, e ouvintes presos aos elementos morreriam a cada repintura.
+
+/** As sugestões de um campo: o valor e o detalhe que vai em .ac-sub. */
+function _pesqSugestoes(fonte) {
+  const o = pesqState.opcoes || {}
+  return fonte === 'bairros'
+    ? (o.bairros || []).map(b => ({ valor: b.nome, sub: b.codigo ? 'Código ' + b.codigo : '' }))
+    : (o.ruas || []).map(r => ({ valor: r.rua, sub: (r.bairros || []).join(' · ') }))
+}
+
+/** Por que a lista está vazia — a tela diz o motivo, não só "nada encontrado". */
+function _pesqListaVazia(fonte, filtrou) {
+  if (filtrou) {
+    return fonte === 'bairros'
+      ? 'Nenhum bairro com esse nome. O texto vale do mesmo jeito.'
+      : 'Nenhuma rua com esse nome. O texto vale do mesmo jeito.'
+  }
+  return fonte === 'bairros'
+    ? 'Nenhum bairro publicado ainda.'
+    : 'Nenhuma rua disponível: o cadastro dos bairros publicados ainda não foi carregado.'
+}
+
+function _pesqFiltradas(inp) {
+  const q = pesqState.sugDigitando ? _semAcento(inp.value.trim()) : ''
+  return _pesqSugestoes(inp.dataset.sugestao).filter(x => !q || _semAcento(x.valor).includes(q))
+}
+
+/** O trecho digitado em destaque, como na variante de etiquetas do design system. */
+function _pesqRealce(texto, q) {
+  if (!q) return esc(texto)
+  const i = _semAcento(texto).indexOf(_semAcento(q))
+  return i < 0 ? esc(texto)
+    : esc(texto.slice(0, i)) + '<mark>' + esc(texto.slice(i, i + q.length)) + '</mark>' + esc(texto.slice(i + q.length))
+}
+
+function _pesqPintarLista(inp) {
+  const lista = inp.parentElement.querySelector('.ac-list')
+  if (!lista) return
+  // Uma lista de cada vez: ir de um campo a outro sem passar pelo foco
+  // (clicar direto no outro) deixaria a anterior aberta por cima desta.
+  document.querySelectorAll('#pesq-barra .ac-list.open').forEach(l => { if (l !== lista) l.classList.remove('open') })
+  const itens = _pesqFiltradas(inp)
+  const q = pesqState.sugDigitando ? inp.value.trim() : ''
+  lista.innerHTML = itens.length
+    ? itens.map((x, i) => `<div class="ac-item${i === pesqState.sugAtivo ? ' ativo' : ''}" data-i="${i}" role="option">${_pesqRealce(x.valor, q)}${x.sub ? `<span class="ac-sub">${esc(x.sub)}</span>` : ''}</div>`).join('')
+    : `<div class="ac-empty">${esc(_pesqListaVazia(inp.dataset.sugestao, q !== ''))}</div>`
+  lista.classList.add('open')
+  inp.setAttribute('aria-expanded', 'true')
+  _pesqLadoDaLista(inp, lista)
+  lista.querySelector('.ac-item.ativo')?.scrollIntoView({ block: 'nearest' })
+}
+
+/**
+ * Abre a lista para baixo, ou para cima quando não cabe. A barra da pesquisa
+ * rola por dentro (.pesq-conteudo), então uma lista ancorada embaixo de um
+ * campo do fim do formulário apareceria cortada pela borda da área que rola.
+ */
+function _pesqLadoDaLista(inp, lista) {
+  const area = inp.closest('.pesq-conteudo')
+  lista.classList.remove('para-cima')
+  if (!area) return
+  const campo = inp.getBoundingClientRect(), limite = area.getBoundingClientRect()
+  const altura = lista.offsetHeight
+  const cabeEmbaixo = limite.bottom - campo.bottom >= altura + 10
+  const cabeEmCima = campo.top - limite.top >= altura + 10
+  if (!cabeEmbaixo && cabeEmCima) lista.classList.add('para-cima')
+}
+
+function _pesqFecharLista(inp) {
+  inp?.parentElement.querySelector('.ac-list')?.classList.remove('open')
+  inp?.setAttribute('aria-expanded', 'false')
+  pesqState.sugDigitando = false
+  pesqState.sugAtivo = -1
+}
+
+/** Põe o valor no campo e repesquisa, como se tivesse sido digitado. */
+function _pesqEscolherSugestao(inp, valor) {
+  inp.value = valor
+  inp.parentElement.querySelector('.clr-btn').hidden = !valor
+  // O aviso vem ANTES de fechar: ele é o mesmo 'input' de quem digita, e o
+  // tratador dele reabre a lista. Fechar depois deixa a lista fechada, que é o
+  // que se espera de quem acabou de escolher.
+  inp.dispatchEvent(new Event('input', { bubbles: true }))
+  _pesqFecharLista(inp)
+}
+
+document.addEventListener('focusin', e => {
+  const inp = e.target.closest?.('#pesq-barra input[data-sugestao]')
+  if (!inp) return
+  pesqState.sugDigitando = false
+  pesqState.sugAtivo = -1
+  _pesqPintarLista(inp)
 })
+document.addEventListener('focusout', e => {
+  const inp = e.target.closest?.('#pesq-barra input[data-sugestao]')
+  if (inp) setTimeout(() => _pesqFecharLista(inp), 150)
+})
+document.addEventListener('keydown', e => {
+  const inp = e.target.closest?.('#pesq-barra input[data-sugestao]')
+  if (!inp) return
+  const lista = inp.parentElement.querySelector('.ac-list')
+  const aberta = lista?.classList.contains('open')
+  const itens = _pesqFiltradas(inp)
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault()
+    if (!aberta) { _pesqPintarLista(inp); return }
+    pesqState.sugAtivo = Math.max(0, Math.min(itens.length - 1, pesqState.sugAtivo + (e.key === 'ArrowDown' ? 1 : -1)))
+    _pesqPintarLista(inp)
+  } else if (e.key === 'Enter' && aberta && pesqState.sugAtivo >= 0) {
+    // Só rouba o Enter quando há uma opção REALÇADA: sem isso ele continua
+    // sendo o "Buscar" do formulário, que é o que se espera ao digitar à mão.
+    e.preventDefault()
+    _pesqEscolherSugestao(inp, itens[pesqState.sugAtivo].valor)
+  } else if (e.key === 'Escape' && aberta) {
+    e.stopPropagation()
+    _pesqFecharLista(inp)
+  }
+})
+// mousedown, e não click: acontece ANTES do blur que fecharia a lista.
+document.addEventListener('mousedown', e => {
+  const item = e.target.closest?.('#pesq-barra .ac-list .ac-item')
+  if (!item) return
+  const inp = item.closest('.ac-wrap').querySelector('input[data-sugestao]')
+  const escolhida = _pesqFiltradas(inp)[Number(item.dataset.i)]
+  if (!escolhida) return
+  e.preventDefault()
+  _pesqEscolherSugestao(inp, escolhida.valor)
+})
+document.addEventListener('click', e => {
+  const btn = e.target.closest?.('#pesq-barra .ac-wrap .clr-btn')
+  if (!btn) return
+  const inp = btn.parentElement.querySelector('input[data-sugestao]')
+  _pesqEscolherSugestao(inp, '')
+  inp.focus()
+})
+
+document.addEventListener('input', _pesqCampoMudou)
+document.addEventListener('change', _pesqCampoMudou)
 document.addEventListener('submit', e => {
   if (e.target.id !== 'pesq-direta') return
   e.preventDefault(); _pesqLerCampos(); _pesqBuscar()

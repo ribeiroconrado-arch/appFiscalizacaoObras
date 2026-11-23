@@ -174,12 +174,32 @@ de Documentos › agente; documento › origem, reincidência e testemunha da
 recusa; vistoria › protocolo; Desmembramento e Conferência › bairro; Importação
 › vínculo do bairro; usuário › cargo.
 
-**Variante de escolher VÁRIOS, com etiquetas** — Mapa › filtros da pesquisa
-(`.pesq-sel`, `pesquisa-mapa.js`): bairro, rua, pendência e situação da
-vistoria. A lista é a mesma (`.ac-list`/`.ac-item`/`.ac-sub`/`.ac-empty`); o que
-se escolhe vira etiqueta (`.pesq-tk`) dentro do campo, o trecho digitado sai em
-destaque (`<mark>`) e o `×` tira todas as etiquetas de uma vez. Não tem `+add`:
-escolher já adiciona.
+**Mapa › pesquisa** (`pesquisa-mapa.js`, 22/11/2026): número da rua, pendência e
+última vistoria são `<select data-combo>`, o padrão sem mais nada.
+
+**Variante de SUGERIR, sem obrigar** — Mapa › pesquisa, campos Bairro e
+Rua/logradouro. São campos de **texto livre**: o fiscal digita um pedaço do nome
+("buritis") e pesquisa sem escolher da lista, porque o cadastro dos bairros
+publicados nem sempre cobre o que ele procura. A lista é a mesma do padrão
+(`.ac-wrap`/`.ac-list`/`.ac-item`/`.ac-sub`/`.ac-empty`), com o mesmo contrato —
+abre no foco com tudo, digitar filtra sem ligar para maiúscula nem acento,
+escolhe no `mousedown`, setas e Enter andam, `×` limpa — e o trecho digitado sai
+em destaque (`<mark>`). O que muda:
+
+- **Não é `<select>`**, então não é `comboDeSelect`: o comportamento está no
+  próprio `pesquisa-mapa.js`, por delegação, porque a barra refaz o `innerHTML`
+  inteiro a cada repintura. O campo leva `data-sugestao="bairros|ruas"`.
+- **`Enter` só escolhe quando há opção realçada**; sem realce ele continua sendo
+  o "Buscar" do formulário, que é o que se espera ao digitar à mão.
+- **A lista vazia diz o motivo** ("o cadastro dos bairros publicados ainda não
+  foi carregado"), não só "nada encontrado".
+- **A lista pode abrir para cima** (`.ac-list.para-cima`): a barra da pesquisa
+  rola por dentro, e um campo do fim do formulário abriria a lista cortada.
+- **Largura própria** (até 300px): a coluna da grade tem 154px e nome de
+  loteamento não cabe.
+
+Quem precisar de texto livre com sugestão em outro lugar copia daqui, não do
+`<datalist>` — ele tem a cara do navegador, diferente do resto do sistema.
 
 **Listas curtas e fixas (etapa 3, 09/10/2026)** — também pelo `data-combo`:
 vistoria (finalidade, alvará, método da área, fase, situação, quem acompanhou) e

@@ -238,7 +238,10 @@ class PesquisaMapaController extends Controller
 
         // Inscrição pelo começo: "01.090.002" é a quadra 2 do bairro 90
         // inteira. Compara com a GRAVADA (lotes.inscricao_montada) ou a informada.
-        if (! empty($d['inscricao'])) {
+        // trim() e não empty(): para o PHP a string "0" é vazia, e a inscrição
+        // "0" sozinha era descartada em silêncio — a tela respondia "digite um
+        // termo" em vez de pesquisar, enquanto "1" pesquisava normalmente.
+        if (trim($d['inscricao'] ?? '') !== '') {
             $dig = preg_replace('/\D/', '', $d['inscricao']);
             if (strlen($dig) < 2) {
                 $q->whereRaw('1 = 0');
