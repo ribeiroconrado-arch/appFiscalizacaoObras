@@ -17,7 +17,8 @@ use Illuminate\Validation\Rule;
  * Pesquisa do mapa por FILTROS COMBINADOS.
  *
  * Texto livre e campos se combinam por E. Cada palavra pode aparecer no
- * bairro, na inscrição ou no endereço cadastral vinculado ao mesmo lote.
+ * bairro, na inscrição ou no endereço cadastral vinculado ao mesmo lote;
+ * "rua", "av.", "nº" e companhia não contam como palavra (PALAVRAS_VAZIAS).
  * Os parâmetros de listas continuam disponíveis para clientes existentes.
  *
  * A Consulta (BuscaController::buscar) continua com a busca dela; aqui a
@@ -173,7 +174,7 @@ class PesquisaMapaController extends Controller
     {
         $usou = false;
 
-        foreach (preg_split('/\s+/u', trim($d['termo'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) as $termo) {
+        foreach ($this->palavrasDoTermo($d['termo'] ?? '') as $termo) {
             $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $termo) . '%';
             // O nome do bairro NO CADASTRO sai antes, numa consulta só: dentro
             // do EXISTS ele obrigaria a varrer cadastro_bairros a cada lote.
@@ -186,15 +187,13 @@ class PesquisaMapaController extends Controller
                 if (preg_match('/^[0-9.\-]+$/', $termo)) {
                     $s->orWhere('lotes.inscricao_montada', 'like', preg_replace('/\D/', '', $termo) . '%');
                 }
-                $this->existeNoCadastro($s, function ($sub) use ($like, $codigos) {
-                    $sub->where(function ($texto) use ($like, $codigos) {
-                        $texto->whereRaw("pmc.logradouro LIKE ? ESCAPE '!'", [$like])
-                            ->orWhereRaw("pmc.numero_predial LIKE ? ESCAPE '!'", [$like]);
-                        if ($codigos) {
-                            $texto->orWhereIn(DB::raw("TRIM(LEADING '0' FROM pmc.codigo_bairro)"), $codigos);
-                        }
-                    });
-                }, ou: true);
+                $this->loteComInscricaoEm($s, $this->inscricoesNoCadastro(function ($c) use ($like, $codigos) {
+                    $c->whereRaw("logradouro LIKE ? ESCAPE '!'", [$like])
+                        ->orWhereRaw("numero_predial LIKE ? ESCAPE '!'", [$like]);
+                    if ($codigos) {
+                        $c->orWhereIn(DB::raw("TRIM(LEADING '0' FROM codigo_bairro)"), $codigos);
+                    }
+                }));
             });
             $usou = true;
         }
@@ -207,7 +206,8 @@ class PesquisaMapaController extends Controller
                     $s->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('cadastro_bairros as pmb')
                         ->whereColumn('pmb.nome_gis', 'lotes.bairro')->whereRaw("pmb.nome_cadastro LIKE ? ESCAPE '!'", [$like]));
                 } else {
-                    $this->existeNoCadastro($s, fn ($sub) => $sub->whereRaw("pmc.logradouro LIKE ? ESCAPE '!'", [$like]));
+                    $this->loteComInscricaoEm($s, $this->inscricoesNoCadastro(
+                        fn ($c) => $c->whereRaw("logradouro LIKE ? ESCAPE '!'", [$like])));
                 }
             });
             $usou = true;
@@ -360,50 +360,84 @@ class PesquisaMapaController extends Controller
     }
 
     /**
-     * A inscrição do lote em SQL, para casar com o cadastro: a informada,
-     * quando há; senão a gravada. Em utf8mb4_unicode_ci, a colação do
-     * cadastro (`lotes` foi criada com outra, e o MySQL recusa misturar).
+     * Palavras que só dizem o TIPO do logradouro ou anunciam o número.
+     *
+     * O cadastro da prefeitura grava parte das ruas sem o tipo ("INGÁ", e não
+     * "RUA INGÁ" — ver App\Cadastro\TipoDoLogradouro), e as palavras do termo
+     * se juntam por E: "rua ingá" exigia "rua" em algum campo do lote e não
+     * achava nada. Saem do termo — a não ser que sejam tudo o que se digitou.
      */
-    private const INSCRICAO_DO_LOTE = "(CASE WHEN COALESCE(lotes.inscricao_imobiliaria, '') <> ''"
-        . " THEN REPLACE(REPLACE(lotes.inscricao_imobiliaria, '.', ''), ' ', '')"
-        . ' ELSE lotes.inscricao_montada END) COLLATE utf8mb4_unicode_ci';
+    private const PALAVRAS_VAZIAS = [
+        'rua', 'r', 'avenida', 'av', 'travessa', 'trav', 'tv', 'alameda', 'al',
+        'estrada', 'est', 'rodovia', 'rod', 'praça', 'praca', 'pça', 'pca', 'pc',
+        'viela', 'largo', 'n', 'nº', 'n°', 'no', 'num', 'numero', 'número',
+    ];
 
     /**
-     * `EXISTS` do imóvel do cadastro que É este lote, com a condição extra.
+     * As palavras do termo que servem para procurar.
      *
-     * Correlaciona endereço e lote pela INSCRIÇÃO (17/11/2026; antes, quadra e
-     * número). São DOIS EXISTS de igualdade simples, um por forma da inscrição,
-     * e não um `IN` com as duas expressões: com o `IN` correlacionado o MySQL
-     * varre o cadastro INTEIRO a cada lote e a cada palavra do termo
-     * (EXPLAIN: pmc=ALL), e com a igualdade ele usa o índice único da coluna
-     * (pmc=eq_ref). Com quatro palavras e 6.800 lotes isso era a diferença
-     * entre 504 do gateway e resposta imediata — medido em 22/11/2026.
+     * Separa também por vírgula e ponto e vírgula: "passo fundo, 188" virava a
+     * palavra "fundo," — com a vírgula colada, que não casa com nada.
      *
-     * Nada de `JOIN` com cadastro_bairros aqui: a tabela não tem índice por
-     * `codigo`, e dentro de uma subconsulta correlacionada ela é varrida uma
-     * vez por lote. Quem precisa do nome do bairro resolve os códigos antes,
-     * com codigosDeBairroPorNome().
-     *
-     * @param \Closure $condicao  recebe o builder do cadastro (alias `pmc`)
-     * @param bool $ou  junta por OU ao que já está no grupo, em vez de por E
+     * @return list<string>
      */
-    private function existeNoCadastro($s, \Closure $condicao, bool $ou = false): void
+    private function palavrasDoTermo(string $termo): array
     {
-        $i = self::INSCRICAO_DO_LOTE;
-        // Os 15 dígitos, ou a forma com pontos (01.124.004.0020.000) que uma
-        // carga pode ter gravado.
-        $comPontos = "CONCAT(SUBSTRING({$i},1,2),'.',SUBSTRING({$i},3,3),'.',SUBSTRING({$i},6,3),'.',SUBSTRING({$i},9,4),'.',SUBSTRING({$i},13,3))";
+        $palavras = preg_split('/[\s,;]+/u', trim($termo), -1, PREG_SPLIT_NO_EMPTY);
+        $uteis = array_values(array_filter($palavras,
+            fn ($p) => ! in_array(rtrim(mb_strtolower($p), '.'), self::PALAVRAS_VAZIAS, true)));
 
-        $grupo = function ($g) use ($condicao, $i, $comPontos) {
-            foreach ([$i, $comPontos] as $n => $forma) {
-                $g->{$n === 0 ? 'whereExists' : 'orWhereExists'}(function ($sub) use ($condicao, $forma) {
-                    $sub->selectRaw('1')->from('cadastro_externo_imoveis as pmc')
-                        ->whereRaw("pmc.inscricao = {$forma}");
-                    $condicao($sub);
-                });
-            }
-        };
-        $ou ? $s->orWhere($grupo) : $s->where($grupo);
+        return $uteis ?: $palavras;
+    }
+
+    /**
+     * As inscrições (15 dígitos) dos imóveis do cadastro que atendem a condição.
+     *
+     * Uma consulta SÓ, ao cadastro, antes da consulta dos lotes — e não uma
+     * subconsulta correlacionada por lote (22/11/2026). A correlacionada
+     * comparava a inscrição do lote, montada com CASE/REPLACE, com a do
+     * cadastro, e as duas tabelas não têm a mesma colação (`lotes` em
+     * utf8mb4_0900_ai_ci, o cadastro em utf8mb4_unicode_ci): o custo dependia
+     * de o MySQL conseguir usar o índice do cadastro através do COLLATE, a
+     * cada lote e a cada palavra. Assim, o cadastro é lido uma vez por
+     * palavra, e o lote compara a própria coluna com uma lista fixa.
+     *
+     * @param \Closure $condicao  recebe o builder de cadastro_externo_imoveis
+     * @return list<string>
+     */
+    private function inscricoesNoCadastro(\Closure $condicao): array
+    {
+        $q = DB::table('cadastro_externo_imoveis');
+        $q->where(fn ($c) => $condicao($c));
+
+        return $q->pluck('inscricao')
+            ->map(fn ($i) => InscricaoImobiliaria::normalizar($i))
+            ->filter()->unique()->values()->all();
+    }
+
+    /**
+     * OU "o lote é um destes imóveis" — pela inscrição informada, quando há,
+     * senão a gravada; a mesma regra de InscricaoImobiliaria::filtrarLotes.
+     *
+     * A lista vai ESCRITA na consulta, e não em marcadores "?": uma palavra
+     * comum ("jardim") pode trazer milhares de imóveis, e o MySQL aceita no
+     * máximo 65.535 marcadores por consulta. É seguro porque cada valor passou
+     * por normalizar() e é conferido aqui: só dígitos.
+     *
+     * @param list<string> $inscricoes
+     */
+    private function loteComInscricaoEm($s, array $inscricoes): void
+    {
+        $digitos = array_values(array_filter($inscricoes, fn ($i) => is_string($i) && ctype_digit($i)));
+        if (! $digitos) {
+            $s->orWhereRaw('1 = 0');
+            return;
+        }
+        $lista = "'" . implode("','", $digitos) . "'";
+        $s->orWhere(fn ($m) => $m
+            ->where(fn ($v) => $v->whereNull('lotes.inscricao_imobiliaria')->orWhere('lotes.inscricao_imobiliaria', ''))
+            ->whereRaw("lotes.inscricao_montada IN ({$lista})"))
+            ->orWhereRaw("REPLACE(REPLACE(lotes.inscricao_imobiliaria, '.', ''), ' ', '') IN ({$lista})");
     }
 
     /**

@@ -39,7 +39,9 @@ function abrirPesquisaMapa() {
     pintarBarraPesquisa()
     document.querySelector('#grupo-busca .ctrl-btn')?.classList.add('at')
     _pesqCarregarOpcoes()
-    if (Object.values(pesqState.campos).some(Boolean)) _pesqBuscar()
+    // Reabrir mostra de novo o último resultado, sem ir ao servidor: a pesquisa
+    // só sai pelo botão "Buscar".
+    if (pesqState.res?.ids?.length) destacarLotes(pesqState.res.ids)
   })
 }
 function fecharPesquisaMapa() {
@@ -135,7 +137,7 @@ function _pesqParametros() {
 function _pesqResultadoHtml() {
   const s = pesqState
   if (s.aviso) return `<div class="pesq-msg${s.aviso.erro ? ' pesq-erro' : ''}">${esc(s.aviso.texto)}</div>`
-  if (!s.res) return '<div class="pesq-msg">Digite na busca livre ou preencha os campos para pesquisar.</div>'
+  if (!s.res) return '<div class="pesq-msg">Digite na busca livre ou preencha os campos e clique em Buscar.</div>'
   const r = s.res
   if (!r.total) return '<div class="pesq-msg">Nenhum imóvel combina com os critérios informados.</div>'
   return `<div class="pesq-msg">${r.total}${r.truncado ? '+' : ''} imóveis encontrados${r.truncado ? ' · refine a pesquisa' : ''}</div>
@@ -151,11 +153,16 @@ function _pesqLerCampos() {
   if (form) pesqState.campos = Object.fromEntries(new FormData(form))
 }
 /**
- * Um campo mudou: relê o formulário e repesquisa, com folga para quem digita.
+ * Um campo mudou: relê o formulário e cuida da lista de sugestão. NÃO
+ * pesquisa — a pesquisa só sai pelo botão "Buscar" (ou Enter num campo, que é
+ * o mesmo botão), a pedido dele em 22/11/2026: disparar a cada tecla mandava
+ * ao servidor uma consulta por pedaço de palavra ("man", "mang", "manga"…),
+ * pintava o mapa com resultados que ele não pediu e, no servidor pequeno,
+ * empilhava consultas umas sobre as outras.
  *
  * Escuta 'input' E 'change'. O combobox padrão (comboDeSelect, em ui.js)
- * escreve no <select> escondido e avisa só por 'change' — sem ele, escolher
- * uma pendência não dispararia pesquisa nenhuma.
+ * escreve no <select> escondido e avisa só por 'change' — sem ele, o valor
+ * escolhido numa pendência não chegaria ao formulário lido no "Buscar".
  */
 function _pesqCampoMudou(e) {
   if (!e.target.closest?.('#pesq-direta')) return
@@ -169,11 +176,6 @@ function _pesqCampoMudou(e) {
     _pesqPintarLista(e.target)
   }
   _pesqLerCampos()
-  // Invalida imediatamente qualquer resposta da consulta anterior.
-  pesqState.pedido++
-  pesqState.abort?.abort()
-  clearTimeout(pesqState.timer)
-  pesqState.timer = setTimeout(_pesqBuscar, 500)
 }
 // ── LISTA DE SUGESTÃO DOS CAMPOS DE TEXTO ────────────────────
 //
