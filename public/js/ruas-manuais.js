@@ -310,8 +310,20 @@ function _costurar(trechos) {
     if (usada.has(chaveP(E)) || usada.has(chaveP(F))) continue
     usada.add(chaveP(E)); usada.add(chaveP(F))
     if (tipo === 'emenda') {
-      // Cada trecho fica reto; um pedacinho liga as duas pontas pelo meio.
-      const m = [(E.p[0] + F.p[0]) / 2, (E.p[1] + F.p[1]) / 2]
+      // Cada trecho fica reto; um pedacinho em diagonal liga os dois. Antes
+      // as duas pontas RECUAM: na curva os pedaços se sobrepõem (o fim de um
+      // passa do começo do outro, ao lado), e ligar direto fazia um "Z" que
+      // voltava para trás (Av. Dom Aquino, 23/11/2026). O recuo deixa a
+      // diagonal andar para a frente pelo menos o dobro do deslocamento.
+      const v = [F.p[0] - E.p[0], F.p[1] - E.p[1]]
+      const avanco = v[0] * E.d[0] + v[1] * E.d[1]
+      const lado = Math.abs(v[0] * E.d[1] - v[1] * E.d[0])
+      const recuo = Math.max(0, (Math.max(2 * lado, 4) - avanco) / 2)
+      const a = Math.min(recuo, E.t.len * 0.3), b = Math.min(recuo, F.t.len * 0.3)
+      const pe = [E.p[0] - E.d[0] * a, E.p[1] - E.d[1] * a]
+      const pf = [F.p[0] - F.d[0] * b, F.p[1] - F.d[1] * b]
+      const m = [(pe[0] + pf[0]) / 2, (pe[1] + pf[1]) / 2]
+      E.t.costura[E.e].p = pe; F.t.costura[F.e].p = pf
       E.t.costura[E.e].extra.push(m); F.t.costura[F.e].extra.push(m)
       continue
     }
