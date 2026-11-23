@@ -184,29 +184,36 @@ class FundoDaCidade
         @ini_set('memory_limit', '256M');
         $this->progresso('Lendo o perímetro e os bairros…', 2);
         $this->montarRegiao();
-        $osm = $this->baixar();
-        $this->progresso('Separando vias, verde e água…', 40);
+        [$consultaVias, $consultaAreas] = $this->consultas();
 
         $vias = [];
         $areas = [];
-        foreach ($osm['elements'] ?? [] as $e) {
-            $t = $e['tags'] ?? [];
-            if ($e['type'] === 'way' && ($tipo = $this->tipoDeVia($t))) {
-                $pts = array_map(fn ($p) => [(float) $p['lon'], (float) $p['lat']], $e['geometry'] ?? []);
-                if (count($pts) >= 2) {
-                    $vias[] = ['t' => $tipo, 'n' => trim($t['name'] ?? '') ?: null, 'l' => self::LARGURA[$tipo] ?? 8,
-                               'mao' => ($t['oneway'] ?? '') === 'yes' || ($t['junction'] ?? '') === 'roundabout', 'c' => $pts];
-                }
-            } elseif ($tipo = $this->tipoDeArea($t)) {
-                foreach ($this->aneisExternos($e) as $anel) {
-                    $areas[] = ['t' => $tipo, 'c' => $anel];
-                }
-            }
-        }
+        $this->separar($this->pedirAoOverpass($consultaVias, 'as vias', 5, 28), $vias, $areas);
 
         // Os nomes de rua, inteiros (sem o recorte dos bairros), para a busca
-        // de Nomes de rua — antes das pistas duplas mexerem no desenho.
+        // de Nomes de rua — logo que as vias chegam (se o verde e a água
+        // falharem, os nomes já ficaram) e antes das pistas duplas mexerem no desenho.
         $this->gravarNomesDeRua($vias);
+
+        // O verde e a água são o segundo pedido. Se o OpenStreetMap não
+        // responder, o fundo sai assim mesmo com o verde e a água da cópia
+        // anterior (recortados de novo pelos bairros de hoje), e a tela avisa
+        // — antes, a falha descartava também as vias já baixadas (22/11/2026).
+        $aviso = null;
+        try {
+            $this->separar($this->pedirAoOverpass($consultaAreas, 'o verde e a água', 28, 40), $vias, $areas);
+        } catch (RuntimeException $ex) {
+            $anterior = ($c = $this->caminho()) ? json_decode((string) file_get_contents($c), true) : null;
+            foreach ($anterior['areas'] ?? [] as $a) {
+                $areas[] = ['t' => $a['t'], 'c' => $a['c']];
+            }
+            $aviso = 'O OpenStreetMap não respondeu ao pedir o verde e a água; '
+                . (isset($anterior['resumo']['gerado_em'])
+                    ? 'ficaram os da cópia de ' . $anterior['resumo']['gerado_em'] . '.'
+                    : 'o fundo saiu sem eles.')
+                . ' As vias e os nomes de rua estão atualizados. Para trazer o verde e a água, atualize de novo mais tarde.';
+        }
+        $this->progresso('Separando vias, verde e água…', 40);
 
         $this->progresso('Juntando as pistas duplas…', 45);
         $this->juntarPistasDuplas($vias);
@@ -244,7 +251,7 @@ class FundoDaCidade
             'agua'      => count(array_filter($areasSaida, fn ($a) => $a['t'] === 'agua'))
                 + count(array_filter($saida, fn ($v) => in_array($v['t'], ['river', 'canal', 'stream'], true))),
             'bairros'   => count($this->bairros),
-        ];
+        ] + ($aviso ? ['aviso' => $aviso] : []);
         $json = json_encode(['resumo' => $resumo, 'vias' => $saida, 'areas' => $areasSaida],
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $this->progresso('Gravando…', 98);
@@ -313,9 +320,9 @@ class FundoDaCidade
      * pedido único da cidade inteira levou 502/504 dos três servidores. Pedido
      * menor passa onde o grande cai, e a barra ganha uma etapa de verdade.
      *
-     * @return array{elements: array}
+     * @return array{0:string, 1:string} as consultas das vias e do verde e da água
      */
-    private function baixar(): array
+    private function consultas(): array
     {
         [$o, $s, $l, $n] = PerimetrosUrbanos::retanguloParaOMapa();
         $c = "($s,$o,$n,$l)";
@@ -328,10 +335,26 @@ class FundoDaCidade
             . 'relation["leisure"~"^(park|nature_reserve)$"]' . $c . ';'
             . 'relation["landuse"~"^(grass|forest|meadow|reservoir)$"]' . $c . ';';
 
-        return ['elements' => array_merge(
-            $this->pedirAoOverpass($vias, 'as vias', 5, 28),
-            $this->pedirAoOverpass($areas, 'o verde e a água', 28, 40),
-        )];
+        return [$vias, $areas];
+    }
+
+    /** Separa os elementos do Overpass em vias (linhas) e áreas (anéis externos). */
+    private function separar(array $elementos, array &$vias, array &$areas): void
+    {
+        foreach ($elementos as $e) {
+            $t = $e['tags'] ?? [];
+            if ($e['type'] === 'way' && ($tipo = $this->tipoDeVia($t))) {
+                $pts = array_map(fn ($p) => [(float) $p['lon'], (float) $p['lat']], $e['geometry'] ?? []);
+                if (count($pts) >= 2) {
+                    $vias[] = ['t' => $tipo, 'n' => trim($t['name'] ?? '') ?: null, 'l' => self::LARGURA[$tipo] ?? 8,
+                               'mao' => ($t['oneway'] ?? '') === 'yes' || ($t['junction'] ?? '') === 'roundabout', 'c' => $pts];
+                }
+            } elseif ($tipo = $this->tipoDeArea($t)) {
+                foreach ($this->aneisExternos($e) as $anel) {
+                    $areas[] = ['t' => $tipo, 'c' => $anel];
+                }
+            }
+        }
     }
 
     /**

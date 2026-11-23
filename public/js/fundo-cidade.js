@@ -221,6 +221,7 @@ async function pintarAbaMapa(aoTerminar = false) {
             ? `Última cópia: <b>${esc(r.gerado_em)}</b> · ${esc(r.perimetro)}<br>
                ${r.vias} trechos de via (${r.nomes} nomes) · ${r.verde} áreas verdes · ${r.agua} rios e lagoas`
             : 'Ainda não foi baixado. O mapa cadastral mostra só os bairros importados.'}</div>
+          ${r?.aviso && !d.andamento ? `<div class="cad-nota" style="margin-bottom:12px">${esc(r.aviso)}</div>` : ''}
           ${!d.andamento && d.erro ? `<div class="cad-nota cad-erro" style="margin-bottom:12px">A última tentativa falhou: ${esc(d.erro)}</div>` : ''}
           ${d.andamento ? `
             <div class="fundo-prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${d.pct}">
@@ -240,7 +241,7 @@ async function pintarAbaMapa(aoTerminar = false) {
     if (d.andamento) { setTimeout(() => { if (impState.aba === 'mapa') pintarAbaMapa(true) }, 2000); return }
     if (!aoTerminar) return
     if (d.erro) { toast(d.erro, 'err'); return }
-    toast('Fundo da cidade atualizado', 'ok')
+    toast(r?.aviso ? 'Fundo atualizado sem o verde e a água novos' : 'Fundo da cidade atualizado', r?.aviso ? 'aviso' : 'ok')
     carregarFundoDaCidade()
   } catch (e) {
     _impCorpo(`${_impAbas()}<div class="cad-nota cad-erro">${esc(e.message)}</div>`)
