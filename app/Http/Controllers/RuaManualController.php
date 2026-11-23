@@ -225,6 +225,7 @@ class RuaManualController extends Controller
 
         return response()->json([
             'message' => $msg,
+            'n'       => $n,
             'ruas'    => collect($bairros)->mapWithKeys(fn ($b) => [$b => $this->lotes->ruasDoBairro($b)])->all(),
         ]);
     }

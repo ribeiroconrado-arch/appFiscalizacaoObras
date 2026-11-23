@@ -211,7 +211,31 @@ const COSTURA_ALINHA_M = 6     // em linha: fora da reta no máximo isto
 const COSTURA_RETA_COS = Math.cos(8 * Math.PI / 180)
 const COSTURA_CURVA_GRAUS = 65 // dobra até isto é curva da rua; acima, esquina
 const COSTURA_T_COS = Math.cos(30 * Math.PI / 180)
+const COSTURA_EMENDA_M = 25    // reserva da emenda: pontas a até isto
+const COSTURA_EMENDA_GRAUS = 30 // e dobrando até isto
 const _llCostura = p => [+(p[1] / 110574).toFixed(7), +(p[0] / (111320 * _COS_LAT)).toFixed(7)]
+
+/**
+ * O segmento p→q (o esticão de uma ponta) atravessa algum trecho que não seja
+ * os dois do par? Só conta o cruzamento por dentro dos dois segmentos: tocar
+ * na ponta não é atravessar.
+ */
+function _cortaOutro(p, q, t1, t2, vivos) {
+  const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+  if (len < 1) return false
+  const minX = Math.min(p[0], q[0]), maxX = Math.max(p[0], q[0]), minY = Math.min(p[1], q[1]), maxY = Math.max(p[1], q[1])
+  const lado = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+  for (const u of vivos) {
+    if (u === t1 || u === t2) continue
+    if (Math.max(u.a[0], u.b[0]) < minX || Math.min(u.a[0], u.b[0]) > maxX
+      || Math.max(u.a[1], u.b[1]) < minY || Math.min(u.a[1], u.b[1]) > maxY) continue
+    const d1 = lado(p, q, u.a), d2 = lado(p, q, u.b), d3 = lado(u.a, u.b, p), d4 = lado(u.a, u.b, q)
+    // Folga de ~0,5 m de cada lado: encostar não é cruzar.
+    const fp = 0.5 * len, fu = 0.5 * u.len
+    if (((d1 > fp && d2 < -fp) || (d1 < -fp && d2 > fp)) && ((d3 > fu && d4 < -fu) || (d3 < -fu && d4 > fu))) return true
+  }
+  return false
+}
 
 /** Preenche `t.linha` (lat,lng) de cada trecho, já com as pontas costuradas. */
 function _costurar(trechos) {
@@ -241,10 +265,22 @@ function _costurar(trechos) {
         const v = [F.p[0] - E.p[0], F.p[1] - E.p[1]], dist = Math.hypot(v[0], v[1])
         if (dist > COSTURA_ALCANCE_M) continue
         const cos = E.d[0] * F.d[0] + E.d[1] * F.d[1]
+        const giro = Math.acos(Math.max(-1, Math.min(1, -cos))) * 180 / Math.PI
+        // Reserva: as duas pontas se olham, a rua quase não dobra e estão
+        // perto, mas uma está deslocada para o lado — nem "em linha" (passa de
+        // 6 m fora da reta) nem curva (o cruzamento cai para trás). Encontram-se
+        // no meio; antes ficava o buraco (Av. Dom Aquino, 23/11/2026).
+        const seOlham = v[0] * E.d[0] + v[1] * E.d[1] >= -COSTURA_RECUO_M && -(v[0] * F.d[0] + v[1] * F.d[1]) >= -COSTURA_RECUO_M
+        const emenda = () => {
+          if (giro <= COSTURA_EMENDA_GRAUS && seOlham && dist <= COSTURA_EMENDA_M && nomesCombinam(E.t, F.t)) {
+            pares.push({ E, F, tipo: 'emenda', custo: dist + 6 })
+          }
+        }
         if (cos < -COSTURA_RETA_COS) {
           // De frente, em linha: a rua continua do outro lado do cruzamento.
           const ao = v[0] * E.d[0] + v[1] * E.d[1], fora = Math.abs(v[0] * E.d[1] - v[1] * E.d[0])
           if (ao >= -COSTURA_RECUO_M && fora <= COSTURA_ALINHA_M) pares.push({ E, F, tipo: 'reta', custo: dist })
+          else emenda()
           continue
         }
         // O cruzamento das duas retas: E.p + s·E.d = F.p + r·F.d
@@ -252,8 +288,11 @@ function _costurar(trechos) {
         if (Math.abs(det) < 1e-6) continue
         const s = (-v[0] * F.d[1] + v[1] * F.d[0]) / det
         const r = (E.d[0] * v[1] - E.d[1] * v[0]) / det
-        if (s < -COSTURA_RECUO_M || r < -COSTURA_RECUO_M || s > COSTURA_ALCANCE_M || r > COSTURA_ALCANCE_M) continue
-        const giro = Math.acos(Math.max(-1, Math.min(1, -cos))) * 180 / Math.PI
+        if (s < -COSTURA_RECUO_M || r < -COSTURA_RECUO_M || s > COSTURA_ALCANCE_M || r > COSTURA_ALCANCE_M) { emenda(); continue }
+        // Esticar até o cruzamento não pode atravessar outra linha: virava um
+        // "X" com o outro lado da avenida (Q 85, 23/11/2026).
+        const X = [E.p[0] + E.d[0] * s, E.p[1] + E.d[1] * s]
+        if (_cortaOutro(E.p, X, E.t, F.t, vivos) || _cortaOutro(F.p, X, E.t, F.t, vivos)) { emenda(); continue }
         const curva = giro <= COSTURA_CURVA_GRAUS && s >= 0 && r >= 0 && nomesCombinam(E.t, F.t)
         // Num cruzamento, a rua que segue reta ganha da que dobra; e a que dobra
         // continuando o MESMO nome ganha da transversal — senão cada pedaço da
@@ -270,6 +309,12 @@ function _costurar(trechos) {
   for (const { E, F, s, tipo } of pares) {
     if (usada.has(chaveP(E)) || usada.has(chaveP(F))) continue
     usada.add(chaveP(E)); usada.add(chaveP(F))
+    if (tipo === 'emenda') {
+      // Cada trecho fica reto; um pedacinho liga as duas pontas pelo meio.
+      const m = [(E.p[0] + F.p[0]) / 2, (E.p[1] + F.p[1]) / 2]
+      E.t.costura[E.e].extra.push(m); F.t.costura[F.e].extra.push(m)
+      continue
+    }
     if (tipo === 'reta') {
       const m = [(E.p[0] + F.p[0]) / 2, (E.p[1] + F.p[1]) / 2]
       E.t.costura[E.e].p = m; F.t.costura[F.e].p = m
@@ -538,12 +583,13 @@ function pintarMesaRuas() {
   else if (ruaState.selecao.size) partes.push(_htmlSelecao())
   else partes.push('<div class="ruas-nota">Clique numa rua no mapa: ela é selecionada inteira. Outro clique soma outra rua; Esc limpa.</div>')
 
-  if (n.sugestoes && ruaState.filtro !== 'sugestoes' && !ruaState.desenhando && !ruaState.novo) {
+  // Também na aba Sugestões: lá o botão em bloco fazia falta (23/11/2026).
+  if (n.sugestoes && !ruaState.desenhando && !ruaState.novo) {
     partes.push(`<div class="ruas-sugere">
       <b>${n.sugestoes} ${n.sugestoes === 1 ? 'trecho sem nome tem' : 'trechos sem nome têm'} sugestão de nome.</b>
       <div class="ruas-botoes">
         <button type="button" class="btn sm primary" onclick="aceitarSugestoesDeRua()" ${ruaState.gravando ? 'disabled' : ''}>Aceitar ${n.sugestoes === 1 ? 'a sugestão' : 'as ' + n.sugestoes}</button>
-        <button type="button" class="btn sm" onclick="filtrarRuas('sugestoes')">Ver uma a uma</button>
+        ${ruaState.filtro !== 'sugestoes' ? `<button type="button" class="btn sm" onclick="filtrarRuas('sugestoes')">Ver uma a uma</button>` : ''}
       </div></div>`)
   }
 
@@ -551,10 +597,13 @@ function pintarMesaRuas() {
   // sugestão nem foram procurados.
   if (!ruaState.desenhando && !ruaState.novo) {
     const faltam = _semNomeParaBuscar().length
-    if (faltam || ruaState.buscandoOsm) {
+    // Todos os da tela já procurados: o botão vira "Buscar de novo" (a cópia
+    // do OpenStreetMap pode ter sido atualizada desde a última busca, 23/11/2026).
+    const deNovo = !faltam && _semNomeParaBuscar(true).length
+    if (faltam || deNovo || ruaState.buscandoOsm) {
       partes.push(`<div class="ruas-busca">
-        <button type="button" class="btn sm" onclick="buscarNomesNoOsm()" ${ruaState.buscandoOsm ? 'disabled' : ''}>
-          ${ruaState.buscandoOsm ? 'Buscando no OpenStreetMap…' : `Buscar nomes que faltam (${faltam} na tela)`}</button>
+        <button type="button" class="btn sm" onclick="buscarNomesNoOsm(${!faltam})" ${ruaState.buscandoOsm ? 'disabled' : ''}>
+          ${ruaState.buscandoOsm ? 'Buscando no OpenStreetMap…' : faltam ? `Buscar nomes que faltam (${faltam} na tela)` : `Buscar de novo no OpenStreetMap (${deNovo} na tela)`}</button>
         <span class="ruas-nota">Consulta o OpenStreetMap; nada é gravado até você aceitar.</span></div>`)
     }
   }
@@ -827,20 +876,36 @@ async function aceitarSugestoesDeRua(kAttr) {
 const _selecionados = () => [...ruaState.selecao].map(k => ruaState.porK.get(k)).filter(Boolean)
 const _itemDoTrecho = t => ({ id: t.t.id ?? null, bairro: t.bairro, de: t.t.de, ate: t.t.ate })
 
+const RUA_LOTE_MAX = 500   // o limite de itens por pedido no servidor (RuaManualController::lote)
+
 async function _enviarLoteRuas(corpo, extra = '') {
   if (ruaState.gravando) return
   ruaState.gravando = true
   pintarMesaRuas()
+  // O servidor aceita até 500 itens por pedido: "Aceitar as 618" vai em
+  // partes (23/11/2026). Cada parte grava sozinha; se uma falhar, as
+  // anteriores ficam e o aviso diz quantas.
+  const blocos = []
+  for (let i = 0; i < corpo.itens.length; i += RUA_LOTE_MAX) blocos.push(corpo.itens.slice(i, i + RUA_LOTE_MAX))
+  let gravados = 0
   try {
-    const r = await fetch('/api/ruas/manuais/lote', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '' },
-      body: JSON.stringify(corpo),
-    })
-    const d = await r.json()
-    if (!r.ok) throw new Error(d.message || 'Não foi possível gravar o nome de rua.')
-    for (const [bairro, ruas] of Object.entries(d.ruas || {})) atualizarRuasDoBairro(bairro, ruas)
+    let d
+    for (const itens of blocos) {
+      const r = await fetch('/api/ruas/manuais/lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '' },
+        body: JSON.stringify({ ...corpo, itens }),
+      })
+      d = await r.json()
+      if (!r.ok) {
+        throw new Error((d.message || 'Não foi possível gravar o nome de rua.')
+          + (gravados ? ` ${gravados} trechos já tinham sido gravados.` : ''))
+      }
+      gravados += d.n ?? itens.length
+      for (const [bairro, ruas] of Object.entries(d.ruas || {})) atualizarRuasDoBairro(bairro, ruas)
+    }
+    if (blocos.length > 1) d.message = d.message.replace(/\d+/, gravados)
     ruaState.novo = null
     ruaState.selecao.clear()
     ruaState.ultimo = null
@@ -856,10 +921,10 @@ async function _enviarLoteRuas(corpo, extra = '') {
 
 // ══════ BUSCAR NO OPENSTREETMAP ══════
 
-/** Os sem nome à vista, sem sugestão e ainda não procurados. */
-function _semNomeParaBuscar() {
+/** Os sem nome à vista, sem sugestão e ainda não procurados (ou todos, para buscar de novo). @param {boolean} [deNovo] */
+function _semNomeParaBuscar(deNovo = false) {
   const vista = mapaState.obj?.getBounds().pad(0.1)
-  return ruaState.trechos.filter(t => t.t.origem === 'sem_nome' && !t.sugestao && !ruaState.osm.has(t.k)
+  return ruaState.trechos.filter(t => t.t.origem === 'sem_nome' && (deNovo ? !t.sugestao || t.fonte === 'osm' : !t.sugestao && !ruaState.osm.has(t.k))
     && vista?.contains(L.latLngBounds([t.t.de, t.t.ate]).getCenter()))
 }
 
@@ -889,8 +954,9 @@ function _viaDoOsmNoTrecho(t, segs) {
  * é conferido com a lista do cadastro do bairro: batendo, vira sugestão (com a
  * grafia do cadastro); não batendo, fica só como pista. Nada é gravado.
  */
-async function buscarNomesNoOsm() {
-  const alvo = _semNomeParaBuscar()
+/** @param {boolean} [deNovo] procura também os já procurados à vista */
+async function buscarNomesNoOsm(deNovo = false) {
+  const alvo = _semNomeParaBuscar(deNovo)
   if (!alvo.length || ruaState.buscandoOsm) return
   const lats = alvo.flatMap(t => [t.t.de[0], t.t.ate[0]]), lngs = alvo.flatMap(t => [t.t.de[1], t.t.ate[1]])
   const caixa = [Math.min(...lats) - 0.0005, Math.min(...lngs) - 0.0005, Math.max(...lats) + 0.0005, Math.max(...lngs) + 0.0005]
