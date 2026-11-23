@@ -1361,6 +1361,8 @@ const VAZIO_LADO_UNICO_MIN = 15
 const VAZIO_ESQUINA_GRAUS = 55 // a linha dobra mais que isto em VAZIO_ESQUINA_M para cada lado: é esquina
 const VAZIO_ESQUINA_M = 8
 const VAZIO_JA_TEM_EIXO = 10   // borda afastada a até isto de um eixo entre quadras: a rua já está desenhada
+const VAZIO_ENCOSTADAS = 1.4   // aresta cujas duas quadras distam menos que isto × a distância a elas: divisa, não rua
+const VAZIO_DEFRONTE_M = 80    // lado único com outra quadra do bairro até isto à frente: é rua, mesmo sem nome
 
 /**
  * Quadras E nomes de rua, num cálculo só (a união dos lotes de cada quadra
@@ -1470,7 +1472,7 @@ function _eixosPeloVazio(partes, J) {
       const k = ck(a) < ck(b) ? ck(a) + '|' + ck(b) : ck(b) + '|' + ck(a)
       const e = arestas.get(k)
       if (!e) arestas.set(k, { a, b, q, site })
-      else e.q2 = q
+      else { e.q2 = q; e.site2 = site }
     }
   }
   const indice = new J.index.strtree.STRtree()
@@ -1485,6 +1487,10 @@ function _eixosPeloVazio(partes, J) {
     const mx = (e.a.x + e.b.x) / 2, my = (e.a.y + e.b.y) / 2
     const d = Math.hypot(mx - e.site.x, my - e.site.y)
     if (d < VAZIO_MEIA_MIN || d > VAZIO_MEIA_MAX || dentroDeQuadra(mx, my)) continue
+    // As duas quadras se encostam ali perto (lotes grandes lado a lado): a
+    // aresta sai da divisa e atravessa a rua da frente — não é rua. No meio
+    // de rua de verdade, os dois pontos ficam um de cada lado (≈ 2 × d).
+    if (Math.hypot(e.site.x - e.site2.x, e.site.y - e.site2.y) < VAZIO_ENCOSTADAS * d) continue
     // Presas a 1 cm: em quadra regular as arestas saem quase iguais, e a
     // união de linhas quase iguais cai em erro de precisão.
     const r = c => new J.geom.Coordinate(Math.round(c.x * 100) / 100, Math.round(c.y * 100) / 100)
@@ -1540,11 +1546,48 @@ function _eixosPeloVazio(partes, J) {
   }
   // De um lado só: a linha que cai quase toda sobre a borda afastada.
   const faixaLado = ladoUnico.length ? bufR(f.createMultiLineString(ladoUnico), 0.5) : null
-  return linhas.flatMap(l => {
+  const pedacos = linhas.flatMap(l => {
     const ladoUnico = !!faixaLado && (_sobreporComSeguranca(l, faixaLado, 'intersection')?.getLength() ?? 0) > 0.8 * l.getLength()
     const pts = J.simplify.DouglasPeuckerSimplifier.simplify(l, VAZIO_SIMPLIFICA).getCoordinates().map(c => [c.x, c.y])
     return _partirNasEsquinas(pts).map(p => ({ pts: p, ladoUnico }))
   })
+  // Rebarba que só aparece depois de partir nas esquinas (ou que a
+  // simplificação encurtou): curta e com uma ponta solta.
+  const kp = c => c[0].toFixed(1) + ',' + c[1].toFixed(1)
+  const grauP = new Map()
+  for (const { pts } of pedacos) for (const c of [pts[0], pts[pts.length - 1]]) grauP.set(kp(c), (grauP.get(kp(c)) || 0) + 1)
+  const compr = pts => pts.reduce((s, c, i) => i ? s + Math.hypot(c[0] - pts[i - 1][0], c[1] - pts[i - 1][1]) : 0, 0)
+  return pedacos
+    .filter(({ pts }) => !(compr(pts) < VAZIO_PONTA_MIN && (grauP.get(kp(pts[0])) === 1 || grauP.get(kp(pts[pts.length - 1])) === 1)))
+    .map(e => ({ ...e, defronte: e.ladoUnico && _temQuadraDefronte(e.pts, partes, indice, eixosEntre, f, J) }))
+}
+
+/**
+ * Rua de um lado só com OUTRA quadra do bairro à frente (até VAZIO_DEFRONTE_M):
+ * é rua num vão largo (praça, área verde, gleba do outro lado), e não muro.
+ * De pontos a cada 10 m, olha para longe da quadra mais perto; vale se a
+ * metade ou mais dá em outra quadra SEM passar antes por um eixo entre
+ * quadras (avenida larga: o meio dela já é a rua, e a borda afastada não é).
+ */
+function _temQuadraDefronte(pts, partes, indice, eixosEntre, f, J) {
+  const eixos = eixosEntre.length ? f.createMultiLineString(eixosEntre) : null
+  const linha = f.createLineString(pts.map(([x, y]) => new J.geom.Coordinate(x, y)))
+  const n = Math.max(1, Math.round(linha.getLength() / 10))
+  const li = new J.linearref.LengthIndexedLine(linha)
+  let viu = 0
+  for (let k = 0; k < n; k++) {
+    const c = li.extractPoint((k + 0.5) * linha.getLength() / n)
+    const pt = f.createPoint(c)
+    let dona = null, dMin = Infinity
+    for (const p of partes) { const d = p.distance(pt); if (d < dMin) { dMin = d; dona = p } }
+    if (!dona || dMin < 0.01) continue
+    const perto = J.operation.distance.DistanceOp.nearestPoints(dona, pt)[0]
+    const ux = (c.x - perto.x) / dMin, uy = (c.y - perto.y) / dMin
+    const raio = f.createLineString([new J.geom.Coordinate(c.x + ux, c.y + uy), new J.geom.Coordinate(c.x + ux * VAZIO_DEFRONTE_M, c.y + uy * VAZIO_DEFRONTE_M)])
+    if (eixos && eixos.intersects(raio)) continue
+    if (indice.query(raio.getEnvelopeInternal()).toArray().some(p => p !== dona && p.intersects(raio))) viu++
+  }
+  return viu * 2 >= n
 }
 
 /**
@@ -1683,12 +1726,13 @@ function _nomearEixos(linhas, partesComLotes, J) {
   const nomeados = eixos.map(e => {
     let nome = null, maior = 0
     for (const [n, v] of e.votos) if (v > maior) { maior = v; nome = n }
-    return { pts: e.pts, ladoUnico: e.ladoUnico, nome: maior >= 1 ? nome : null }
+    return { pts: e.pts, ladoUnico: e.ladoUnico, defronte: e.defronte, nome: maior >= 1 ? nome : null }
   })
   // Lado único sem nome é, quase sempre, muro ou fundo de lote (a borda do
-  // condomínio): sai, se o bairro tem nomes. Sem cadastro, fica tudo.
+  // condomínio): sai, se o bairro tem nomes. Sem cadastro, fica tudo. Fica
+  // o que tem outra quadra do bairro à frente: rua num vão largo.
   const temNomes = nomeados.some(e => e.nome)
-  return nomeados.filter(e => !(e.ladoUnico && !e.nome && temNomes))
+  return nomeados.filter(e => !(e.ladoUnico && !e.nome && temNomes && !e.defronte))
 }
 
 /**

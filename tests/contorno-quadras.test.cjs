@@ -174,3 +174,25 @@ test('exibição: nome de rua gravado que cai dentro de uma quadra não é desen
   assert.equal(dentro(500, 500), false, 'longe de tudo')
   vm.runInContext("quadraState.porBairro.delete('TESTE')", ctx)
 })
+
+test('ruas: lotes grandes encostados lado a lado não ganham risco atravessando a rua da frente', () => {
+  // Três glebas de uma quadra cada, coladas, a 14 m de uma quadra comprida (PQ. ELDORADO).
+  const ls = [...quadraComRuas('01', 0, 0, 15, 'RUA SUL', 'AV. FRENTE'),
+    { ...lote('81', 0, 64, 60, 60), logradouro: 'AV. FRENTE' }, { ...lote('82', 60, 64, 60, 60), logradouro: 'AV. FRENTE' },
+    { ...lote('83', 120, 64, 60, 60), logradouro: 'AV. FRENTE' }]
+  const rs = ruas(ls)
+  const atravessados = rs.filter(r => Math.abs(r.ang) > 45 && r.y > 45 && r.y < 70 && r.x > 20 && r.x < 160)
+  assert.equal(atravessados.length, 0, 'nada atravessando a avenida: ' + JSON.stringify(atravessados))
+  assert.ok(rs.some(r => r.nome === 'AV. FRENTE' && Math.abs(r.ang) < 5 && Math.abs(r.y - 57) < 1.5), 'a avenida continua')
+})
+
+test('ruas: vão largo entre quadras do bairro tem rua dos dois lados, mesmo sem nome; muro não', () => {
+  // A 01 dá as frentes para o sul; ao norte, 60 m de vão até a gleba 80.
+  const q1 = quadra('01', 0, 0, 8).map((l, i) => ({ ...l, logradouro: i < 8 ? 'RUA SUL' : null }))
+  const gleba = { ...lote('80', 0, 110, 96, 60), logradouro: null }
+  const lado = (rs, y) => rs.filter(r => Math.abs(r.ang) < 5 && Math.abs(r.y - y) < 1.5 && r.x > 10 && r.x < 86)
+  const rs = ruas([...q1, gleba])
+  assert.ok(lado(rs, 57).length, 'a borda norte da 01, de frente para a gleba')
+  assert.ok(lado(rs, 103).length, 'a borda sul da gleba, de frente para a 01')
+  assert.equal(lado(ruas(q1), 57).length, 0, 'sem nada à frente é muro: sai')
+})

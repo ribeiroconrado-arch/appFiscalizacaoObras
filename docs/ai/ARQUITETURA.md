@@ -215,7 +215,10 @@ MEIO DO ESPAÇO ENTRE AS QUADRAS, no mesmo cálculo das quadras
 (`calcularQuadrasERuas` → `_eixosPeloVazio`): pontos a cada 2,5 m na borda de
 cada quadra, e no diagrama de Voronoi deles a aresta entre células de quadras
 DIFERENTES, a 2,5–20 m delas, é o meio da rua — acompanha a curva e é uma
-linha só por rua. Onde só há quadra de um lado, o eixo é a borda afastada 7 m.
+linha só por rua. A aresta cujos dois pontos estão perto um do outro (menos
+de 1,4 × a distância a eles) sai: é a divisa de quadras encostadas (glebas
+lado a lado no PQ. ELDORADO) se estendendo pela rua da frente, e não rua.
+Onde só há quadra de um lado, o eixo é a borda afastada 7 m.
 As linhas são partidas nos cruzamentos e nas esquinas (dobra > 55° em 8 m) e
 viram trechos curtos (rua curva = vários). Antes, o trecho saía de cada lado
 RETO de quadra empurrado 7 m: em bairro de rua curva (COND. SPLENDORE) virava
@@ -224,7 +227,11 @@ logradouro do seu endereço no cadastro (`LoteRepository::lotesDoBairro`) e
 cada frente dele (aresta sobre a borda da quadra) vota no eixo à sua frente:
 vale 1 o lote que dá para um eixo só e 0,25 o de esquina. Vence o mais votado
 com soma ≥ 1; senão SEM NOME. Eixo de um lado só e sem nome, num bairro com
-cadastro, sai: é muro ou divisa (a borda do condomínio). Ao gravar
+cadastro, sai: é muro ou divisa (a borda do condomínio). Fica quando há outra
+quadra do bairro à frente, a até 80 m, sem eixo entre quadras no caminho
+(`_temQuadraDefronte`): é rua num vão largo de mais para o meio (a cunha do
+PQ. ELDORADO); com eixo no caminho é avenida larga, e o meio dela já é a rua.
+Ao gravar
 (`gravarRuas`), os manuais passam para o desenho novo
 (`TrechosDeRua::reconciliar`): nome e oculto vão para os trechos novos que
 cobrem; a exclusão só passa para o mesmo traço (1,5 m) — a da regra velha sai.
