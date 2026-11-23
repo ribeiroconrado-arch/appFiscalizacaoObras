@@ -1767,6 +1767,7 @@ async function abrirContornosDosBairros() {
       <div class="jt-rodape">
         <span class="imp-sub">${linhas.length} bairro(s)${nDesat ? ` · ${nDesat} desatualizado(s)` : ''}${nSem ? ` · ${nSem} sem contorno` : ''}${!nDesat && !nSem ? ' · todos em dia' : ''}</span>
         <div class="btn-row"><button class="btn" onclick="fecharImportacoes()">Fechar</button>
+          ${d.features.length ? `<button class="btn" onclick="refazerRuasDeTodos(this)" title="Refaz só os nomes de rua, sem mexer no contorno nem nas quadras">Refazer nomes de rua (${d.features.length})</button>` : ''}
           ${nDesat ? `<button class="btn primary" onclick="atualizarContornosDesatualizados(this)">Atualizar desatualizados (${nDesat})</button>` : ''}</div>
       </div>
     </div>`,
@@ -1854,6 +1855,72 @@ async function _gerarEmSequencia(btn, nomes, raios = {}) {
   if (document.getElementById('m-importacoes')?.classList.contains('open') && document.getElementById('ctn-raio')) {
     await abrirContornosDosBairros()
   }
+}
+
+/**
+ * Refaz SÓ os trechos de rua de um bairro, pela regra do meio entre as
+ * quadras: o contorno e as quadras ficam como estão (o editado à mão também).
+ * Os informados à mão passam para o desenho novo no servidor.
+ *
+ * @param {string} bairro
+ * @returns {Promise<Object>} a resposta do servidor
+ */
+async function gerarRuasDoBairro(bairro) {
+  await _carregarJsts()
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+  const rl = await fetch('/api/bairros/lotes?bairro=' + encodeURIComponent(bairro), { headers: { Accept: 'application/json' } })
+  const dl = await rl.json()
+  if (!rl.ok) throw new Error(dl.message || 'Não foi possível ler os lotes do bairro.')
+  if (!dl.lotes.length) throw new Error('O bairro não tem lotes ativos.')
+  const { ruas } = calcularQuadrasERuas(dl.lotes)
+  const rg = await fetch('/api/bairros/contorno', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf },
+    body: JSON.stringify({ bairro, so_ruas: true, ruas }),
+  })
+  const dg = await rg.json()
+  if (!rg.ok) throw new Error(dg.message || 'O servidor recusou os nomes de rua.')
+  return dg
+}
+
+/** "Refazer nomes de rua": todos os bairros com contorno, um por vez. @param {HTMLButtonElement} btn */
+function refazerRuasDeTodos(btn) {
+  const nomes = (contornoState.dados?.features || []).map(f => f.properties.nome)
+  if (!nomes.length) return
+  confirmarAcao({
+    titulo: 'Refazer nomes de rua',
+    mensagem: `Refaz os trechos de rua dos ${nomes.length} bairro(s) com contorno, um por vez, pelo meio do espaço entre as quadras. `
+      + 'O contorno e as quadras não mudam. Os nomes informados à mão passam para o desenho novo; as exclusões feitas '
+      + 'na linha antiga, que não existe mais, saem. Pode levar alguns minutos; deixe esta janela aberta até terminar.',
+    textoBtn: 'Refazer',
+    onConfirm: () => { _refazerRuasEmSequencia(btn, nomes) },
+  })
+}
+
+/** @param {HTMLButtonElement} btn @param {string[]} nomes */
+async function _refazerRuasEmSequencia(btn, nomes) {
+  const rotulo = btn.textContent
+  btn.disabled = true
+  const falhas = []
+  let semNome = 0, passados = 0, descartados = 0
+  for (const [i, nome] of nomes.entries()) {
+    btn.textContent = `Ruas ${i + 1} de ${nomes.length}…`
+    try {
+      const r = await gerarRuasDoBairro(nome)
+      semNome += r.sem_nome || 0; passados += r.manuais_passados || 0; descartados += r.manuais_descartados || 0
+    } catch (e) {
+      falhas.push(nome)
+      console.warn('Nomes de rua de ' + nome + ':', e)
+    }
+  }
+  const feitos = nomes.length - falhas.length
+  toast(`Nomes de rua refeitos em ${feitos} bairro(s)`
+    + (semNome ? `; ${semNome} trecho(s) sem nome — veja em Nomes de rua` : '')
+    + (passados ? `; ${passados} nome(s) informado(s) à mão passado(s) para o desenho novo` : '')
+    + (descartados ? `; ${descartados} exclusão(ões) da linha antiga removida(s)` : '')
+    + (falhas.length ? `. ${falhas.length} falharam: ${falhas.join(', ')}` : '') + '.',
+  falhas.length ? 'aviso' : 'ok')
+  btn.disabled = false; btn.textContent = rotulo
 }
 
 /** Lote isolado: vai até ele, onde quer que a coordenada o tenha posto. */

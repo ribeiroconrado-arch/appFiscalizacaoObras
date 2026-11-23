@@ -228,6 +228,10 @@ cadastro, sai: é muro ou divisa (a borda do condomínio). Ao gravar
 (`gravarRuas`), os manuais passam para o desenho novo
 (`TrechosDeRua::reconciliar`): nome e oculto vão para os trechos novos que
 cobrem; a exclusão só passa para o mesmo traço (1,5 m) — a da regra velha sai.
+"Refazer nomes de rua", no rodapé de Contorno dos bairros, faz isso em todos
+os bairros com contorno, um por vez (`refazerRuasDeTodos`). Ele usa a mesma
+rota com `so_ruas`, que grava só os trechos: o contorno e as quadras não mudam,
+e o contorno editado à mão também fica como está.
 No mapa, o nome aparece nos níveis das quadras e dos lotes, girado com a rua,
 só onde CABE no trecho (senão abreviado: "R.", "AV.").
 

@@ -204,6 +204,9 @@ class BairroContornoController extends Controller
         if (! $this->podeGerar($r)) {
             return response()->json(['message' => 'Gerar o contorno do bairro é do curador do cadastro.'], 403);
         }
+        if ($r->boolean('so_ruas')) {
+            return $this->gravarSoRuas($r);
+        }
         $d = $r->validate([
             'bairro'               => ['required', 'string', 'max:120', 'exists:lotes,bairro'],
             'geometry'             => ['required', 'array'],
@@ -300,28 +303,7 @@ class BairroContornoController extends Controller
             }
         }
         if (array_key_exists('ruas', $d)) {
-            if ($codigo === null) {
-                $msg .= '. Bairro sem cadastro amarrado: nomes de rua automáticos não gerados (dá para informar à mão em Nomes de rua)';
-            } else {
-                $semNome = count(array_filter($d['ruas'] ?? [], fn ($t) => empty($t['nome'])));
-                $rg = $ruasGravadas ?? ['gravados' => 0, 'descartados' => 0, 'recortados' => 0];
-                $avisos = array_filter([
-                    $rg['descartados'] ? sprintf('%d dentro de lotes, descartados', $rg['descartados']) : null,
-                    $rg['recortados'] ? sprintf('%d cortados onde passavam por lote', $rg['recortados']) : null,
-                ]);
-                $msg .= sprintf('. %d trecho(s) de rua', $rg['gravados'])
-                    . ($avisos ? ' (' . implode('; ', $avisos) . ')' : '')
-                    . ($semNome ? sprintf(', %d sem nome — veja em Nomes de rua', $semNome) : '');
-            }
-            // Os informados à mão passam para o desenho novo (TrechosDeRua::reconciliar).
-            $mp = $ruasGravadas['manuais_passados'] ?? 0;
-            $md = $ruasGravadas['manuais_descartados'] ?? 0;
-            if ($mp || $md) {
-                $msg .= '. Nomes de rua informados à mão: ' . implode('; ', array_filter([
-                    $mp ? sprintf('%d passado(s) para o desenho novo', $mp) : null,
-                    $md ? sprintf('%d exclusão(ões) da linha antiga, que não existe mais, removida(s)', $md) : null,
-                ]));
-            }
+            $msg .= $this->mensagemDasRuas($codigo, $d['ruas'] ?? [], $ruasGravadas);
         }
 
         return response()->json([
@@ -331,6 +313,68 @@ class BairroContornoController extends Controller
             'quadras' => $q['gravadas'] ?? null,
             'quadras_invalidas' => $q['invalidas'] ?? [],
         ]);
+    }
+
+    /**
+     * "Refazer nomes de rua" (todos os bairros): grava só os trechos de rua,
+     * sem tocar no contorno nem nas quadras — o contorno editado à mão fica
+     * como está. Os informados à mão passam para o desenho novo como no "Gerar".
+     */
+    private function gravarSoRuas(Request $r): JsonResponse
+    {
+        $d = $r->validate([
+            'bairro'        => ['required', 'string', 'max:120', 'exists:lotes,bairro'],
+            'ruas'          => ['present', 'array', 'max:' . self::MAX_TRECHOS],
+            'ruas.*.nome'   => ['nullable', 'string', 'max:180'],
+            'ruas.*.de'     => ['required', 'array', 'size:2'],
+            'ruas.*.de.*'   => ['numeric', 'between:-180,180'],
+            'ruas.*.ate'    => ['required', 'array', 'size:2'],
+            'ruas.*.ate.*'  => ['numeric', 'between:-180,180'],
+        ]);
+        $codigo = $this->codigoNoCadastro($d['bairro']);
+        $g = DB::transaction(fn () => $this->lotes->gravarRuas($d['bairro'], array_map(fn ($t) => [
+            'nome' => isset($t['nome']) && trim($t['nome']) !== '' ? trim($t['nome']) : null,
+            'de'   => [(float) $t['de'][0], (float) $t['de'][1]],
+            'ate'  => [(float) $t['ate'][0], (float) $t['ate'][1]],
+        ], $d['ruas'])));
+
+        return response()->json([
+            'message' => 'Nomes de rua de ' . $d['bairro'] . ' refeitos' . $this->mensagemDasRuas($codigo, $d['ruas'], $g) . '.',
+            // Sem cadastro amarrado, sem nome é o esperado: não conta como pendência.
+            'sem_nome' => $codigo === null ? 0 : count(array_filter($d['ruas'], fn ($t) => empty($t['nome']))),
+            'manuais_passados' => $g['manuais_passados'] ?? 0,
+            'manuais_descartados' => $g['manuais_descartados'] ?? 0,
+        ]);
+    }
+
+    /** O pedaço da mensagem sobre os trechos de rua gravados (começa com ". "). */
+    private function mensagemDasRuas(?string $codigo, array $ruas, ?array $ruasGravadas): string
+    {
+        $msg = '';
+        if ($codigo === null) {
+            $msg .= '. Bairro sem cadastro amarrado: nomes de rua automáticos não gerados (dá para informar à mão em Nomes de rua)';
+        } else {
+            $semNome = count(array_filter($ruas, fn ($t) => empty($t['nome'])));
+            $rg = $ruasGravadas ?? ['gravados' => 0, 'descartados' => 0, 'recortados' => 0];
+            $avisos = array_filter([
+                $rg['descartados'] ? sprintf('%d dentro de lotes, descartados', $rg['descartados']) : null,
+                $rg['recortados'] ? sprintf('%d cortados onde passavam por lote', $rg['recortados']) : null,
+            ]);
+            $msg .= sprintf('. %d trecho(s) de rua', $rg['gravados'])
+                . ($avisos ? ' (' . implode('; ', $avisos) . ')' : '')
+                . ($semNome ? sprintf(', %d sem nome — veja em Nomes de rua', $semNome) : '');
+        }
+        // Os informados à mão passam para o desenho novo (TrechosDeRua::reconciliar).
+        $mp = $ruasGravadas['manuais_passados'] ?? 0;
+        $md = $ruasGravadas['manuais_descartados'] ?? 0;
+        if ($mp || $md) {
+            $msg .= '. Nomes de rua informados à mão: ' . implode('; ', array_filter([
+                $mp ? sprintf('%d passado(s) para o desenho novo', $mp) : null,
+                $md ? sprintf('%d exclusão(ões) da linha antiga, que não existe mais, removida(s)', $md) : null,
+            ]));
+        }
+
+        return $msg;
     }
 
     /**
