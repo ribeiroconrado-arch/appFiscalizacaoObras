@@ -1363,6 +1363,13 @@ const VAZIO_ESQUINA_M = 8
 const VAZIO_JA_TEM_EIXO = 10   // borda afastada a até isto de um eixo entre quadras: a rua já está desenhada
 const VAZIO_ENCOSTADAS = 1.4   // aresta cujas duas quadras distam menos que isto × a distância a elas: divisa, não rua
 const VAZIO_DEFRONTE_M = 80    // lado único com outra quadra do bairro até isto à frente: é rua, mesmo sem nome
+const VAZIO_COSTURA_M = 22     // ponta solta que, seguindo em frente, dá em outra linha a até isto: vai até ela
+const VAZIO_COSTURA_PAR_M = 50 // duas pontas soltas uma de frente para a outra a até isto: se juntam
+const VAZIO_COSTURA_GRAUS = 30 // folga do "de frente"
+const VAZIO_COSTURA_NO_M = 8   // três ou mais pontas soltas a até isto uma da outra: viram um nó
+const VAZIO_COSTURA_PERTO_M = 5 // ponta solta a até isto de outra linha: liga nela
+const VAZIO_NO_CURTO_M = 3     // pedaço mais curto que isto entre dois cruzamentos: é um cruzamento só
+const VAZIO_GALHO_M = 25       // ponta solta mais curta que isto saindo de um cruzamento: sobra
 
 /**
  * Quadras E nomes de rua, num cálculo só (a união dos lotes de cada quadra
@@ -1531,19 +1538,44 @@ function _eixosPeloVazio(partes, J) {
   if (!segs.length) return []
   let linhas = juntar(segs)
 
-  // Rebarbas: ponta solta curta.
-  for (let volta = 0; volta < 3; volta++) {
-    const grau = new Map()
-    const kk = c => c.x.toFixed(2) + ',' + c.y.toFixed(2)
-    for (const l of linhas) for (const c of [l.getCoordinateN(0), l.getCoordinateN(l.getNumPoints() - 1)]) grau.set(kk(c), (grau.get(kk(c)) || 0) + 1)
-    const antes = linhas.length
-    linhas = linhas.filter(l => !(l.getLength() < VAZIO_PONTA_MIN
-      && (grau.get(kk(l.getCoordinateN(0))) === 1 || grau.get(kk(l.getCoordinateN(l.getNumPoints() - 1))) === 1)))
-    if (linhas.length === antes) break
-    const lm2 = new J.operation.linemerge.LineMerger()
-    linhas.forEach(l => lm2.add(l))
-    linhas = lm2.getMergedLineStrings().toArray()
+  // Rebarbas: ponta solta curta (VAZIO_PONTA_MIN), e o galho — ponta solta
+  // mais curta que VAZIO_GALHO_M saindo de um cruzamento — é sobra do vazio.
+  const limpar = ls => {
+    for (let volta = 0; volta < 4; volta++) {
+      const grau = new Map()
+      const kk = c => c.x.toFixed(2) + ',' + c.y.toFixed(2)
+      for (const l of ls) for (const c of [l.getCoordinateN(0), l.getCoordinateN(l.getNumPoints() - 1)]) grau.set(kk(c), (grau.get(kk(c)) || 0) + 1)
+      const g0 = l => grau.get(kk(l.getCoordinateN(0))), g1 = l => grau.get(kk(l.getCoordinateN(l.getNumPoints() - 1)))
+      const antes = ls.length
+      // A mesma ligação duas vezes (a união deixou duas linhas quase iguais
+      // entre os mesmos nós): fica uma.
+      const entre = new Map()
+      ls = ls.filter(l => {
+        const k = [kk(l.getCoordinateN(0)), kk(l.getCoordinateN(l.getNumPoints() - 1))].sort().join('|')
+        const outras = entre.get(k) || entre.set(k, []).get(k)
+        if (outras.some(o => J.algorithm.distance.DiscreteHausdorffDistance.distance(o, l) < 2)) return false
+        outras.push(l)
+        return true
+      })
+      ls = ls.filter(l => {
+        const L = l.getLength(), solta = g0(l) === 1 || g1(l) === 1
+        if (solta && L < VAZIO_PONTA_MIN) return false
+        // Laço curto (sai e volta ao mesmo nó): sobra da costura, não é rua.
+        if (l.isClosed() && L < 2 * VAZIO_GALHO_M) return false
+        return !(L < VAZIO_GALHO_M && ((g0(l) === 1 && g1(l) >= 3) || (g1(l) === 1 && g0(l) >= 3)))
+      })
+      if (ls.length === antes) break
+      const lm = new J.operation.linemerge.LineMerger()
+      ls.forEach(l => lm.add(l))
+      ls = lm.getMergedLineStrings().toArray()
+    }
+    return ls
   }
+  linhas = limpar(linhas)
+  // Costura: a ponta que parou perto de outra linha vai até ela.
+  const costurado = _costurarPontas(linhas, partes, indice, f, J)
+  if (costurado.novos.length) linhas = limpar(juntar([...costurado.linhas, ...costurado.novos]))
+  linhas = _contrairNosCurtos(linhas, J)
   // De um lado só: a linha que cai quase toda sobre a borda afastada.
   const faixaLado = ladoUnico.length ? bufR(f.createMultiLineString(ladoUnico), 0.5) : null
   const pedacos = linhas.flatMap(l => {
@@ -1560,6 +1592,214 @@ function _eixosPeloVazio(partes, J) {
   return pedacos
     .filter(({ pts }) => !(compr(pts) < VAZIO_PONTA_MIN && (grauP.get(kp(pts[0])) === 1 || grauP.get(kp(pts[pts.length - 1])) === 1)))
     .map(e => ({ ...e, defronte: e.ladoUnico && _temQuadraDefronte(e.pts, partes, indice, eixosEntre, f, J) }))
+}
+
+/**
+ * Cruzamento em dois nós: no Voronoi, o cruzamento de quatro ruas sai muitas
+ * vezes como dois nós a 1–2 m, ligados por um pedacinho que virava um trecho
+ * sem nome. O pedaço mais curto que VAZIO_NO_CURTO_M entre dois cruzamentos
+ * some, e os dois nós viram um só, no meio dele.
+ */
+function _contrairNosCurtos(linhas, J) {
+  const kk = c => c.x.toFixed(2) + ',' + c.y.toFixed(2)
+  const ponta = (l, fim) => l.getCoordinateN(fim ? l.getNumPoints() - 1 : 0)
+  const grau = new Map()
+  for (const l of linhas) for (const fim of [false, true]) grau.set(kk(ponta(l, fim)), (grau.get(kk(ponta(l, fim))) || 0) + 1)
+  // União dos nós ligados por pedaço curto (uma cadeia vira um nó só).
+  const pai = new Map()
+  const raiz = k => { while (pai.has(k) && pai.get(k) !== k) k = pai.get(k); return k }
+  const soma = new Map()   // raiz → [Σx, Σy, n]
+  const curtos = new Set()
+  for (const l of linhas) {
+    const a = ponta(l, false), b = ponta(l, true)
+    if (l.getLength() >= VAZIO_NO_CURTO_M || kk(a) === kk(b) || grau.get(kk(a)) < 3 || grau.get(kk(b)) < 3) continue
+    curtos.add(l)
+    const ra = raiz(kk(a)), rb = raiz(kk(b))
+    if (!soma.has(ra)) soma.set(ra, [a.x, a.y, 1])
+    if (!soma.has(rb)) soma.set(rb, [b.x, b.y, 1])
+    if (ra === rb) continue
+    pai.set(rb, ra)
+    const sa = soma.get(ra), sb = soma.get(rb)
+    soma.set(ra, [sa[0] + sb[0], sa[1] + sb[1], sa[2] + sb[2]])
+  }
+  if (!curtos.size) return linhas
+  const novoNo = k => { const s = soma.get(raiz(k)); return s ? new J.geom.Coordinate(s[0] / s[2], s[1] / s[2]) : null }
+  const f = linhas[0].getFactory()
+  const ficam = []
+  for (const l of linhas) {
+    if (curtos.has(l)) continue
+    const cs = l.getCoordinates().map(c => new J.geom.Coordinate(c.x, c.y))
+    const a = novoNo(kk(cs[0])), b = novoNo(kk(cs[cs.length - 1]))
+    if (a) cs[0] = a
+    if (b) cs[cs.length - 1] = b
+    if (cs.length === 2 && cs[0].equals2D(cs[1])) continue
+    ficam.push(f.createLineString(cs))
+  }
+  const lm = new J.operation.linemerge.LineMerger()
+  ficam.forEach(l => lm.add(l))
+  return lm.getMergedLineStrings().toArray()
+}
+
+/**
+ * Costura das pontas soltas. O eixo entre quadras para onde o vão fica largo
+ * demais, e a borda afastada para a VAZIO_JA_TEM_EIXO do eixo transversal:
+ * nos cruzamentos da borda do bairro as linhas ficavam a poucos metros umas
+ * das outras, sem se tocar. Em ordem:
+ *  0. três ou mais pontas soltas juntas (VAZIO_COSTURA_NO_M) viram um nó;
+ *  1. duas pontas soltas uma de frente para a outra (até VAZIO_COSTURA_PAR_M,
+ *     cada uma apontando para a outra com folga de VAZIO_COSTURA_GRAUS): se juntam;
+ *  2. a ponta que, seguindo em frente até VAZIO_COSTURA_M, dá em outra linha: vai até ela;
+ *  3. a ponta a até VAZIO_COSTURA_PERTO_M de outra linha: liga no ponto mais perto.
+ * A costura que atravessaria uma quadra não é feita.
+ * @returns {{linhas: object[], novos: object[]}} as linhas (sem os ganchos) e os segmentos novos, para juntar
+ */
+function _costurarPontas(linhas, partes, indice, f, J) {
+  const C = (x, y) => new J.geom.Coordinate(x, y)
+  const kk = c => c.x.toFixed(2) + ',' + c.y.toFixed(2)
+  const grau = new Map()
+  for (const l of linhas) for (const c of [l.getCoordinateN(0), l.getCoordinateN(l.getNumPoints() - 1)]) grau.set(kk(c), (grau.get(kk(c)) || 0) + 1)
+  // Gancho: a borda afastada dobra a esquina da quadra e para logo depois
+  // (VAZIO_ESQUINA_M). Na ponta solta, o gancho sai antes de costurar — com
+  // ele, a ponta aponta para o lado e não vê a outra metade da rua.
+  const semGancho = cs => {
+    let s = 0, corte = -1
+    for (let i = cs.length - 2; i >= 1; i--) {
+      s += Math.hypot(cs[i + 1].x - cs[i].x, cs[i + 1].y - cs[i].y)
+      if (s > VAZIO_ESQUINA_M + 2) break
+      const ux = cs[i].x - cs[i - 1].x, uy = cs[i].y - cs[i - 1].y, vx = cs[i + 1].x - cs[i].x, vy = cs[i + 1].y - cs[i].y
+      const nu = Math.hypot(ux, uy), nv = Math.hypot(vx, vy)
+      if (nu < 0.01 || nv < 0.01) continue
+      if ((ux * vx + uy * vy) / (nu * nv) < Math.cos(VAZIO_ESQUINA_GRAUS * Math.PI / 180)) corte = i
+    }
+    return corte > 0 ? cs.slice(0, corte + 1) : cs
+  }
+  // Quais pontas são soltas, antes de aparar (a ponta aparada não está no grau).
+  const solta = linhas.map(l => [grau.get(kk(l.getCoordinateN(0))) === 1, grau.get(kk(l.getCoordinateN(l.getNumPoints() - 1))) === 1])
+  linhas = linhas.map((l, il) => {
+    let cs = l.getCoordinates()
+    if (cs.length < 3 || l.isClosed()) return l
+    if (solta[il][1]) cs = semGancho(cs)
+    if (solta[il][0]) cs = semGancho([...cs].reverse()).reverse()
+    return cs.length === l.getNumPoints() ? l : f.createLineString(cs)
+  })
+  // Cada ponta solta, com a direção em que a linha chega nela (dos últimos 5 m).
+  const pontas = []
+  linhas.forEach((l, il) => {
+    const L = l.getLength()
+    if (L < 1) return
+    const li = new J.linearref.LengthIndexedLine(l)
+    for (const ini of [true, false]) {
+      const c = l.getCoordinateN(ini ? 0 : l.getNumPoints() - 1)
+      if (!solta[il][ini ? 0 : 1]) continue
+      const t = li.extractPoint(ini ? Math.min(5, L) : L - Math.min(5, L))
+      const d = Math.hypot(c.x - t.x, c.y - t.y)
+      if (d < 0.5) continue
+      pontas.push({ c, ux: (c.x - t.x) / d, uy: (c.y - t.y) / d, il, feita: false })
+    }
+  })
+  if (!pontas.length) return { linhas, novos: [] }
+  const cruzaQuadra = seg => indice.query(seg.getEnvelopeInternal()).toArray().some(p => p.intersects(seg))
+  const novos = []
+  // `passa`: a costura que termina SOBRE outra linha passa 10 cm dela — em
+  // ponto flutuante a ponta "em cima" da linha não é cruzamento, e a união
+  // não fazia o nó. A pontinha que sobra sai com as rebarbas.
+  const costura = (a, b, passa = false) => {
+    const d = Math.hypot(b.x - a.x, b.y - a.y)
+    if (d < 0.01) return false
+    const e = passa ? 0.1 / d : 0
+    const seg = f.createLineString([C(a.x, a.y), C(b.x + (b.x - a.x) * e, b.y + (b.y - a.y) * e)])
+    if (cruzaQuadra(seg)) return false
+    novos.push(seg)
+    return true
+  }
+  // Ponto de chegada perto (2 m) de um vértice da linha: vai no vértice, que
+  // já é nó — sem o pedacinho de poucos centímetros entre dois nós.
+  const ligar = (a, b, linha) => {
+    let v = null, dv = 2
+    for (const c of linha.getCoordinates()) { const d = Math.hypot(c.x - b.x, c.y - b.y); if (d < dv) { dv = d; v = c } }
+    return v ? costura(a, v) : costura(a, b, true)
+  }
+
+  // 0. Três ou mais pontas soltas juntas (a até VAZIO_COSTURA_NO_M uma da
+  // outra): é um cruzamento que o vazio não fechou; viram um nó, no meio delas.
+  const grupoDe = new Map()
+  pontas.forEach((p, i) => grupoDe.set(p, i))
+  const raizP = p => { let g = grupoDe.get(p); while (grupoDe.get(pontas[g]) !== g) g = grupoDe.get(pontas[g]); return g }
+  for (let i = 0; i < pontas.length; i++) for (let j = i + 1; j < pontas.length; j++) {
+    if (Math.hypot(pontas[i].c.x - pontas[j].c.x, pontas[i].c.y - pontas[j].c.y) > VAZIO_COSTURA_NO_M) continue
+    const a = raizP(pontas[i]), b = raizP(pontas[j])
+    if (a !== b) grupoDe.set(pontas[b], a)
+  }
+  const grupos = new Map()
+  for (const p of pontas) { const g = raizP(p); (grupos.get(g) || grupos.set(g, []).get(g)).push(p) }
+  for (const g of grupos.values()) {
+    if (g.length < 3) continue
+    const meio = C(g.reduce((s, p) => s + p.c.x, 0) / g.length, g.reduce((s, p) => s + p.c.y, 0) / g.length)
+    for (const p of g) if (costura(p.c, meio)) p.feita = true
+  }
+
+  // 1. Pares de frente.
+  const cosMax = Math.cos(VAZIO_COSTURA_GRAUS * Math.PI / 180)
+  const pares = []
+  for (let i = 0; i < pontas.length; i++) for (let j = i + 1; j < pontas.length; j++) {
+    const a = pontas[i], b = pontas[j]
+    if (a.il === b.il && linhas[a.il].getLength() < 4 * VAZIO_COSTURA_PAR_M) continue   // fecharia um laço
+    const dx = b.c.x - a.c.x, dy = b.c.y - a.c.y, d = Math.hypot(dx, dy)
+    if (d < 0.01 || d > VAZIO_COSTURA_PAR_M) continue
+    if ((a.ux * dx + a.uy * dy) / d < cosMax || -(b.ux * dx + b.uy * dy) / d < cosMax) continue
+    pares.push({ a, b, d })
+  }
+  pares.sort((x, y) => x.d - y.d)
+  for (const { a, b } of pares) {
+    if (a.feita || b.feita) continue
+    if (costura(a.c, b.c)) a.feita = b.feita = true
+  }
+
+  // A ponta que passou um pouco de outra linha (já a cruza a até 10 m da
+  // ponta) não é costurada: é pontinha que sobra e sai com as rebarbas.
+  // Voltar dela até a linha fazia um laço.
+  const jaCruza = p => {
+    const propria = linhas[p.il]
+    for (const l of [...linhas.filter((_, k) => k !== p.il), ...novos]) {
+      if (!l.getEnvelopeInternal().intersects(propria.getEnvelopeInternal())) continue
+      let x
+      try { x = propria.intersection(l) } catch { continue }
+      if (x.getCoordinates().some(c => Math.hypot(c.x - p.c.x, c.y - p.c.y) < 10)) return true
+    }
+    return false
+  }
+  for (const p of pontas) if (!p.feita && jaCruza(p)) p.feita = true
+
+  // 2. Em frente, até outra linha (as costuras já feitas contam).
+  for (const p of pontas) {
+    if (p.feita) continue
+    const raio = f.createLineString([C(p.c.x, p.c.y), C(p.c.x + p.ux * VAZIO_COSTURA_M, p.c.y + p.uy * VAZIO_COSTURA_M)])
+    let melhor = null, dela = null, dMin = Infinity
+    const alvos = [...linhas.filter((_, k) => k !== p.il), ...novos]
+    for (const l of alvos) {
+      if (!l.getEnvelopeInternal().intersects(raio.getEnvelopeInternal())) continue
+      let x
+      try { x = l.intersection(raio) } catch { continue }
+      for (const c of x.getCoordinates()) {
+        const d = Math.hypot(c.x - p.c.x, c.y - p.c.y)
+        if (d > 0.01 && d < dMin) { dMin = d; melhor = c; dela = l }
+      }
+    }
+    if (melhor && ligar(p.c, melhor, dela)) p.feita = true
+  }
+
+  // 3. Bem perto de outra linha.
+  for (const p of pontas) {
+    if (p.feita) continue
+    const pt = f.createPoint(C(p.c.x, p.c.y))
+    let melhor = null, dela = null, dMin = VAZIO_COSTURA_PERTO_M
+    for (const l of [...linhas.filter((_, k) => k !== p.il), ...novos]) {
+      const d = l.distance(pt)
+      if (d > 0.01 && d < dMin) { dMin = d; melhor = J.operation.distance.DistanceOp.nearestPoints(l, pt)[0]; dela = l }
+    }
+    if (melhor && ligar(p.c, melhor, dela)) p.feita = true
+  }
+  return { linhas, novos }
 }
 
 /**
@@ -1720,7 +1960,11 @@ function _nomearEixos(linhas, partesComLotes, J) {
       }
       if (!l.logradouro) continue
       const peso = toca.size === 1 ? 1 : 0.25
-      for (const ie of toca) eixos[ie].votos.set(l.logradouro, (eixos[ie].votos.get(l.logradouro) || 0) + peso)
+      // Lote que dá para um eixo entre quadras E para uma borda de lado único
+      // (o chacarão com frente na avenida e fundo no campo): o fundo não leva
+      // o nome da frente. O voto fica só com o eixo entre quadras.
+      const entre = [...toca].filter(ie => !eixos[ie].ladoUnico)
+      for (const ie of entre.length ? entre : toca) eixos[ie].votos.set(l.logradouro, (eixos[ie].votos.get(l.logradouro) || 0) + peso)
     }
   }
   const nomeados = eixos.map(e => {

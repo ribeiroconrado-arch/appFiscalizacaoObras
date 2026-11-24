@@ -219,6 +219,22 @@ linha só por rua. A aresta cujos dois pontos estão perto um do outro (menos
 de 1,4 × a distância a eles) sai: é a divisa de quadras encostadas (glebas
 lado a lado no PQ. ELDORADO) se estendendo pela rua da frente, e não rua.
 Onde só há quadra de um lado, o eixo é a borda afastada 7 m.
+Antes de partir, a rede é COSTURADA (`_costurarPontas`). A borda afastada
+para a 10 m do eixo transversal e o eixo entre quadras para onde o vão
+alarga, então nos cruzamentos da borda do bairro as linhas ficavam soltas a
+poucos metros umas das outras. A costura funciona assim:
+- tira o gancho da esquina na ponta solta;
+- junta 3 ou mais pontas a até 8 m num nó;
+- junta duas pontas de frente uma para a outra, a até 50 m e 30°;
+- leva a ponta, em frente, até a linha que estiver a até 22 m;
+- liga a ponta à linha a até 5 m.
+A ponta que já cruza outra linha (a até 10 m) não é costurada, porque voltar
+dela fazia laço. Em seguida a limpeza tira a ponta solta com menos de 8 m, o
+galho com menos de 25 m saindo de cruzamento, o laço curto e a ligação
+repetida. O cruzamento que o Voronoi parte em dois nós a menos de 3 m vira um
+só (`_contrairNosCurtos`); antes, esse pedacinho virava um trecho sem nome.
+O lote que dá para um eixo entre quadras não vota na borda de lado único: o
+fundo do chacarão não leva o nome da avenida da frente.
 As linhas são partidas nos cruzamentos e nas esquinas (dobra > 55° em 8 m) e
 viram trechos curtos (rua curva = vários). Antes, o trecho saía de cada lado
 RETO de quadra empurrado 7 m: em bairro de rua curva (COND. SPLENDORE) virava

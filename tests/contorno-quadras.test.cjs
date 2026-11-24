@@ -196,3 +196,17 @@ test('ruas: vão largo entre quadras do bairro tem rua dos dois lados, mesmo sem
   assert.ok(lado(rs, 103).length, 'a borda sul da gleba, de frente para a 01')
   assert.equal(lado(ruas(q1), 57).length, 0, 'sem nada à frente é muro: sai')
 })
+
+test('ruas: na borda do bairro as linhas se encontram no cruzamento, sem ponta solta nem rebarba', () => {
+  // Quatro quadras em cruz, ruas de 14 m entre elas, sem cadastro: a borda de
+  // fora (de um lado só) parava a 10 m do eixo transversal e ninguém se tocava.
+  const ls = [...quadra('01', 0, 0, 5), ...quadra('02', 74, 0, 5), ...quadra('03', 0, 64, 5), ...quadra('04', 74, 64, 5)]
+  const trechos = ctx.calcularQuadrasERuas(ls).ruas
+  const k = p => p[0].toFixed(7) + ',' + p[1].toFixed(7)
+  const grau = new Map()
+  for (const t of trechos) for (const p of [t.de, t.ate]) grau.set(k(p), (grau.get(k(p)) || 0) + 1)
+  const soltas = [...grau].filter(([, n]) => n === 1).map(([p]) => p)
+  assert.deepEqual(soltas, [], 'pontas soltas: ' + soltas.join(' | '))
+  const curtos = trechos.map(emMetros).filter(r => r.len < 3)
+  assert.equal(curtos.length, 0, 'pedacinhos: ' + JSON.stringify(curtos))
+})
