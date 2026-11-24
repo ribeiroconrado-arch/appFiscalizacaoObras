@@ -48,5 +48,6 @@ Thumbs.db
 /public/css/vistorias-guiadas.css
 /public/js/vistorias-guiadas.js
 /resources/views/vistorias-guiadas.blade.php
+/resources/views/impressao/vistoria-guiada.blade.php
 
 /routes/teste-local.php
