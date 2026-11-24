@@ -589,8 +589,8 @@
           </span>
         </button>
 
-        {{-- MOVER LOTES — desloca os marcados no próprio mapa, como o MOVER do
-             AutoCAD: ponto de base e destino, ou a medida. Ver mover-lotes.js e
+        {{-- MOVER — desloca os marcados (ou a quadra inteira deles) no próprio
+             mapa, como o MOVER do AutoCAD: ponto de base e destino, ou a medida. Ver mover-lotes.js e
              App\Services\MoverLotes. --}}
         <button type="button" class="btn sm cad-lanca" id="cad-mover-lotes"
                 data-fer="mover" data-tecla="M" data-min="1" data-exige="1 lote ou mais"
@@ -599,8 +599,8 @@
                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>
           </svg>
-          <span class="cad-lanca-txt">Mover lotes
-            <span class="cad-lanca-obs">Como o Mover do AutoCAD: ponto de base e destino, ou a medida.</span>
+          <span class="cad-lanca-txt">Mover
+            <span class="cad-lanca-obs">Os lotes marcados ou a quadra inteira deles, como o Mover do AutoCAD.</span>
           </span>
         </button>
 

@@ -9,16 +9,27 @@
  *   F8 trava a direção nos lados dos lotes marcados (frente, fundo e as
  *   perpendiculares); Esc sai.
  *
+ * LOTES OU QUADRAS (24/11/2026): a barra tem a escolha. Em "Quadra inteira",
+ * andam todos os lotes das quadras dos marcados (basta marcar um lote de
+ * cada) — como o mover quadras do conversor GeoJSON. Os lotes da quadra que
+ * não estão na tela são buscados antes (_feicoesDasQuadras).
+ *
  * Só desloca: forma e área não mudam. Invadir um lote que não andou vira
  * aviso para confirmar, não recusa — é o passo do meio de um acerto (ver
  * App\Services\MoverLotes). Grava pelo /api/lotes/mover, com o modal de etapas.
  */
 
 const MOV_SNAP_PX = 14
+/** Teto de lotes num movimento (o mesmo do servidor, CadastroLoteController::validarMover). */
+const MOV_MAX_LOTES = 150
 
 const movLoteState = {
   ativo: false,
   /** @type {Object[]} as feições dos lotes que andam */ feicoes: [],
+  /** @type {'lotes'|'quadras'} */ escopo: 'lotes',
+  /** @type {Object[]} os lotes marcados na mesa */ marcados: [],
+  /** @type {Object[]|null} todos os lotes das quadras dos marcados, quando já buscados */ daQuadra: null,
+  buscandoQuadras: false,
   /** @type {'base'|'destino'} */ passo: 'base',
   /** @type {L.LatLng|null} */ base: null,
   /** O deslocamento do momento, em metros, e o último com direção (para a medida digitada). */
@@ -44,21 +55,109 @@ function moverLotesNoMapa(ids) {
   const feicoes = ids.map(id => mapaState.porId.get(id)?.feature).filter(f => f?.geometry?.type === 'Polygon')
   if (!feicoes.length) { toast('Marque no mapa os lotes que vão ser movidos.', 'err'); return }
   if (feicoes.length < ids.length) { toast('Só lotes com um contorno simples (sem partes separadas) podem ser movidos.', 'err'); return }
-  pedirFerramenta('moverLotes', () => _abrirMover(feicoes), { convive: ['curadoria'] })
+  pedirFerramenta('moverLotes', () => {
+    Object.assign(movLoteState, { marcados: feicoes, escopo: 'lotes', daQuadra: null, buscandoQuadras: false })
+    _abrirMover(feicoes)
+  }, { convive: ['curadoria'] })
 }
 
-function _abrirMover(feicoes) {
-  const m = mapaState.obj
-  const [lon, lat] = feicoes[0].geometry.coordinates[0][0]
-  Object.assign(movLoteState, { ativo: true, feicoes, passo: 'base', base: null, v: null, dir: null, ortho: false, travado: false, conferindo: false, gravando: false, plano: planoLocal(lat, lon) })
-  // As direções de cada lado (e a perpendicular), para a trava F8.
-  movLoteState.dirs = feicoes.flatMap(f => {
+/** bairro|quadra de um lote. */
+const _movChaveQuadra = f => String(f.properties.bairro ?? '') + '|' + String(f.properties.quadra ?? '')
+
+/** As quadras dos lotes marcados, como "Q 12, Q 13 (Bairro)". */
+function _movNomeQuadras() {
+  const qs = [...new Set(movLoteState.marcados.map(_movChaveQuadra))].map(k => k.split('|'))
+  const bairros = [...new Set(qs.map(q => q[0]))]
+  return qs.map(q => 'Q ' + q[1]).join(', ') + (bairros.length === 1 ? ' (' + bairros[0] + ')' : '')
+}
+
+/**
+ * Todos os lotes das quadras dos marcados. A quadra pode passar da tela: os
+ * blocos em volta dos lotes já conhecidos dela (300 m) são carregados, e de
+ * novo enquanto aparecer lote novo da quadra (até 3 voltas).
+ * @returns {Promise<{feicoes: Object[], partes: number, truncado: boolean}>}
+ */
+async function _feicoesDasQuadras() {
+  const chaves = new Set(movLoteState.marcados.map(_movChaveQuadra))
+  const pre = typeof impState !== 'undefined' ? impState.preCuradoria : null
+  const daQuadra = () => [...state.lotes.values()].filter(f => chaves.has(_movChaveQuadra(f))
+    && (!f.properties.situacao || f.properties.situacao === 'ativo')
+    && (!pre || Number(f.properties.importacao_id) === pre.id))
+  let achados = daQuadra(), antes = -1
+  for (let volta = 0; volta < 3 && achados.length !== antes; volta++) {
+    antes = achados.length
+    let oeste = Infinity, sul = Infinity, leste = -Infinity, norte = -Infinity
+    for (const f of achados) {
+      const aneis = f.geometry.type === 'Polygon' ? [f.geometry.coordinates[0]] : f.geometry.coordinates.map(p => p[0])
+      for (const anel of aneis) for (const [x, y] of anel) { oeste = Math.min(oeste, x); leste = Math.max(leste, x); sul = Math.min(sul, y); norte = Math.max(norte, y) }
+    }
+    const folga = 300 / 107000
+    const blocos = blocosDoRetangulo({ oeste: oeste - folga, sul: sul - folga, leste: leste + folga, norte: norte + folga }, tamanhoDoBloco())
+    await Promise.all(blocos.filter(k => !state.blocos.has(k)).map(k => state.pendentes.get(k) || carregarBloco(k, state.versaoLotes)))
+    achados = daQuadra()
+  }
+  return {
+    feicoes: achados.filter(f => f.geometry?.type === 'Polygon'),
+    partes: achados.filter(f => f.geometry?.type !== 'Polygon').length,
+    truncado: !!state.truncado,
+  }
+}
+
+/** A escolha da barra: só os lotes marcados ou as quadras inteiras deles. @param {'lotes'|'quadras'} escopo */
+async function escopoDoMover(escopo) {
+  const s = movLoteState
+  if (!s.ativo || s.travado || s.buscandoQuadras || s.escopo === escopo) return
+  if (escopo === 'lotes') {
+    s.escopo = 'lotes'
+    _movTrocarFeicoes(s.marcados)
+    return
+  }
+  if (!s.daQuadra) {
+    s.buscandoQuadras = true
+    _movBarra()
+    let r
+    try { r = await _feicoesDasQuadras() } catch { r = null }
+    s.buscandoQuadras = false
+    if (!s.ativo) return
+    if (!r?.feicoes.length) { toast('Não foi possível juntar os lotes da quadra. Tente de novo.', 'err'); _movBarra(); return }
+    if (r.feicoes.length > MOV_MAX_LOTES) {
+      toast(`As quadras escolhidas têm ${r.feicoes.length} lotes; o mover leva até ${MOV_MAX_LOTES} de cada vez. Mova uma quadra por vez.`, 'err')
+      _movBarra()
+      return
+    }
+    if (r.partes) toast(`${r.partes} lote(s) da quadra têm partes separadas e ficam onde estão.`, 'aviso')
+    if (r.truncado) toast('O mapa não trouxe todos os lotes desta região. Aproxime o mapa da quadra e tente de novo.', 'aviso')
+    s.daQuadra = r.feicoes
+  }
+  s.escopo = 'quadras'
+  _movTrocarFeicoes(s.daQuadra)
+}
+
+/** Troca os lotes que andam, sem perder o ponto de base já escolhido. */
+function _movTrocarFeicoes(feicoes) {
+  const s = movLoteState
+  s.feicoes = feicoes
+  s.dirs = _movDirecoes(feicoes)
+  _movBarra()
+  if (s.passo === 'destino' && s.ultimo) _movMove({ latlng: s.ultimo })
+}
+
+/** Direções de cada lado (e a perpendicular), para a trava F8. */
+function _movDirecoes(feicoes) {
+  return feicoes.flatMap(f => {
     const r = f.geometry.coordinates[0].map(([x, y]) => _movM(x, y))
     return r.slice(1).flatMap((p, i) => {
       const dx = p[0] - r[i][0], dy = p[1] - r[i][1], l = Math.hypot(dx, dy)
       return l < 0.5 ? [] : [[dx / l, dy / l], [-dy / l, dx / l]]
     })
   })
+}
+
+function _abrirMover(feicoes) {
+  const m = mapaState.obj
+  const [lon, lat] = feicoes[0].geometry.coordinates[0][0]
+  Object.assign(movLoteState, { ativo: true, feicoes, passo: 'base', base: null, v: null, dir: null, ortho: false, travado: false, conferindo: false, gravando: false, plano: planoLocal(lat, lon) })
+  movLoteState.dirs = _movDirecoes(feicoes)
   if (!m.getPane('moverLotes')) { m.createPane('moverLotes').style.zIndex = 660; m.getPane('moverLotes').style.pointerEvents = 'none' }
   movLoteState.camada = L.layerGroup().addTo(m)
   m.getContainer().classList.add('mov-cursor')
@@ -94,7 +193,7 @@ function _movBarra() {
     el = document.createElement('div')
     el.id = 'mov-barra'
     el.className = 'mov-barra'
-    el.innerHTML = `<b>Mover ${movLoteState.feicoes.length} lote(s)</b><span id="mov-passo"></span>
+    el.innerHTML = `<b>Mover</b><span class="seg mov-escopo" role="group" aria-label="O que mover"><button type="button" data-esc="lotes" onclick="escopoDoMover('lotes')"></button><button type="button" data-esc="quadras" onclick="escopoDoMover('quadras')"></button></span><span id="mov-passo"></span>
       <label id="mov-medida" hidden>Medida <input id="mov-dist" inputmode="decimal" autocomplete="off" placeholder="0,10"> m</label>
       <span id="mov-ortho" class="mov-ortho"></span>
       <button type="button" class="btn sm" onclick="sairMoverLotes()">Cancelar</button>`
@@ -107,6 +206,16 @@ function _movBarra() {
       if (ev.key === 'F8') { ev.preventDefault(); _movOrtho() }
     })
   }
+  const s = movLoteState
+  const nl = s.marcados.length
+  const bLotes = el.querySelector('[data-esc="lotes"]'), bQuadras = el.querySelector('[data-esc="quadras"]')
+  bLotes.textContent = nl === 1 ? 'Lote marcado' : `${nl} lotes marcados`
+  bQuadras.textContent = s.buscandoQuadras ? 'Juntando a quadra…'
+    : s.escopo === 'quadras' ? `Quadra inteira · ${s.feicoes.length} lotes` : 'Quadra inteira'
+  bQuadras.title = 'Todos os lotes de ' + _movNomeQuadras()
+  bLotes.classList.toggle('at', s.escopo === 'lotes')
+  bQuadras.classList.toggle('at', s.escopo === 'quadras')
+  bLotes.disabled = bQuadras.disabled = !!s.travado || s.buscandoQuadras
   const destino = movLoteState.passo === 'destino'
   el.querySelector('#mov-passo').textContent = destino
     ? 'Clique no destino (encaixa em vértice e ponto médio) ou digite a medida e Enter.'
@@ -270,10 +379,12 @@ async function _movConcluir(v) {
   if (!previa) { _movTravar(false); return }
   if (previa.impedimento) { toast(previa.impedimento, 'err'); _movTravar(false); return }
   const n = itens.length
+  const quadras = movLoteState.escopo === 'quadras'
   // A trava segue até a confirmação ser respondida (ver _movTravado).
   confirmarAcao({
-    titulo: 'Mover lotes',
-    mensagem: `Desloca ${n} lote(s) ${dist} m, sem mudar forma nem área.`
+    titulo: quadras ? 'Mover quadras' : 'Mover lotes',
+    mensagem: (quadras ? `Desloca ${_movNomeQuadras()}, ${n} lote(s), ${dist} m, sem mudar forma nem área. Depois gere o contorno do bairro de novo, para as quadras e as ruas acompanharem.`
+      : `Desloca ${n} lote(s) ${dist} m, sem mudar forma nem área.`)
       + (previa.avisos?.length ? ` Atenção: ${previa.avisos.join(' ')} Acerte depois com Editar lote.` : ''),
     textoBtn: 'Mover',
     onConfirm: () => _movGravar(itens),

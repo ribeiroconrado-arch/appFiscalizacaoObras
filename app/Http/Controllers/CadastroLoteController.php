@@ -837,7 +837,7 @@ class CadastroLoteController extends Controller
     private function validarMover(Request $request): array
     {
         return $request->validate([
-            'lotes'                          => ['required', 'array', 'min:1', 'max:60'],
+            'lotes'                          => ['required', 'array', 'min:1', 'max:150'],
             'lotes.*.id'                     => ['required', 'integer'],
             'lotes.*.geometry'               => ['required', 'array'],
             'lotes.*.geometry.type'          => ['required', 'string'],

@@ -4196,6 +4196,9 @@ body.prancheta-aberta .mapa-fundo-seletor{display:none}
 .mov-barra #mov-passo{color:var(--tx2)}
 .mov-barra label{display:flex;align-items:center;gap:5px;font-weight:600}
 .mov-barra input{width:72px;padding:4px 6px;border:1.5px solid var(--bord);border-radius:7px;font:13px monospace}
+.mov-barra .mov-escopo{margin:0;flex:0 0 auto}
+.mov-barra .mov-escopo button{flex:0 0 auto;padding:3px 10px;font-size:12px;white-space:nowrap}
+.mov-barra .mov-escopo button:disabled{opacity:.6;cursor:wait}
 .mov-ortho{font-size:11px;color:var(--tx3)}
 .mov-ortho.lig{color:var(--gd);font-weight:700}
 .leaflet-tooltip.mov-dica{background:var(--sur);border:1px solid var(--bord);color:var(--tx);font-size:11px;font-weight:600;padding:1px 6px;box-shadow:none}

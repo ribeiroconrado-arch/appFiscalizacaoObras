@@ -22,6 +22,9 @@
  *    o clique tem tolerância (L.canvas tolerance).
  *  - Rua desenhada com VÁRIOS pontos, terminando no duplo clique, com as
  *    pontas encaixando nas ruas que já existem.
+ *  - ENCOSTAR PONTAS (24/11/2026): a ponta de um trecho é levada até o outro
+ *    trecho, sem fundir os dois (cada um fica com o seu nome). Ver
+ *    comecarEncostar e RuaManualController::encostar.
  *
  * O nome é escolhido da lista de logradouros do cadastro do bairro; só o
  * administrador digita fora dela (ver RuaManualController).
@@ -42,6 +45,12 @@ const ruaState = {
   /** @type {boolean} administrador digitando um nome fora da lista */ nomeLivre: false,
   /** @type {{pontos: L.LatLng[]}|null} rua sendo desenhada */ desenhando: null,
   /** @type {Array<{bairro:string, de:number[], ate:number[]}>|null} desenhada, esperando nome */ novo: null,
+  /**
+   * Encostar pontas: a ponta escolhida (o trecho e qual ponta, 0 = de, 1 = até)
+   * e o ponto onde ela encostaria agora, sob o cursor.
+   * @type {{ponta: ?{x: Object, e: number}, alvo: ?{p: number[], tipo: string}}|null}
+   */
+  encostando: null,
   /** @type {Map<string, {logradouros:string[], livre:boolean, cadastro:boolean}>} por bairro */ listas: new Map(),
   /**
    * O que a busca no OpenStreetMap achou, por trecho: `nome` é a grafia da
@@ -68,7 +77,8 @@ const RUA_LISTA_MAX = 150
 FERRAMENTAS_MAPA.ruas = {
   rotulo: 'nomes de rua',
   aberta: () => ruaState.ativa,
-  emCurso: () => ruaState.desenhando?.pontos.length || ruaState.novo ? 'uma rua desenhada sem nome' : null,
+  emCurso: () => ruaState.desenhando?.pontos.length || ruaState.novo ? 'uma rua desenhada sem nome'
+    : ruaState.encostando?.ponta ? 'uma ponta escolhida para encostar' : null,
   fechar: () => fecharNomesDeRua(),
 }
 
@@ -91,6 +101,7 @@ function abrirNomesDeRua() {
     mapa.on('click', _cliqueNoMapaRuas)
     mapa.on('dblclick', _duploCliqueRuas)
     mapa.on('moveend', _aoMoverRuas)
+    mapa.on('mousemove', _moverEncostar)
     document.addEventListener('keydown', _teclaRuas)
     window.addEventListener('resize', _posicionarMesaRuas)
 
@@ -109,6 +120,7 @@ function fecharNomesDeRua() {
   const mapa = mapaState.obj
   ruaState.ativa = false
   _cancelarDesenhoRua(true)
+  _sairEncostar(true)
   ruaState.novo = null
   ruaState.selecao.clear()
   ruaState.camada?.remove()
@@ -117,6 +129,7 @@ function fecharNomesDeRua() {
   mapa?.off('click', _cliqueNoMapaRuas)
   mapa?.off('dblclick', _duploCliqueRuas)
   mapa?.off('moveend', _aoMoverRuas)
+  mapa?.off('mousemove', _moverEncostar)
   document.removeEventListener('keydown', _teclaRuas)
   window.removeEventListener('resize', _posicionarMesaRuas)
   // A tela de desenho (canvas) do painel cobre o mapa inteiro e engoliria
@@ -475,8 +488,8 @@ function aoMudarRuas() {
       dashArray: ['sem_nome', 'oculto', 'sugestao'].includes(o) ? '7 5' : o === 'excluido' ? '2 6' : null,
     })
     linha.on('click', e => {
-      // Desenhando, o toque é ponto da rua nova: deixa passar para o mapa.
-      if (ruaState.desenhando) return
+      // Desenhando ou encostando, o toque é ponto: deixa passar para o mapa.
+      if (ruaState.desenhando || ruaState.encostando) return
       L.DomEvent.stopPropagation(e)
       _clicarTrecho(x.k)
     })
@@ -550,6 +563,7 @@ function _pintarRealceRuas() {
     r.addLayer(L.polyline(x.linha, { ...op, color: '#facc15', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }))
   }
   for (const s of ruaState.novo || []) halo([s.de, s.ate], COR_TRECHO.novo)
+  _realceEncostar(r, op)
   const d = ruaState.desenhando
   if (d?.pontos.length) {
     if (d.pontos.length > 1) halo(d.pontos, COR_TRECHO.novo)
@@ -563,6 +577,11 @@ function _pintarRealceRuas() {
 function _teclaRuas(e) {
   if (e.key !== 'Escape' || !ruaState.ativa) return
   if (e.target.closest?.('input, select, textarea') || document.querySelector('.modal-bg.open')) return
+  if (ruaState.encostando) {
+    // Com a ponta escolhida, o Esc a larga; sem ela, sai do encostar.
+    if (ruaState.encostando.ponta) { ruaState.encostando = { ponta: null, alvo: null }; _pintarRealceRuas(); pintarMesaRuas() } else _sairEncostar()
+    return
+  }
   if (ruaState.desenhando) { _cancelarDesenhoRua(); return }
   if (ruaState.novo) { descartarRuaNova(); return }
   limparSelecaoRuas()
@@ -590,7 +609,8 @@ function pintarMesaRuas() {
   const n = _contagensRuas()
   const partes = []
 
-  if (ruaState.desenhando) partes.push(_htmlDesenhando())
+  if (ruaState.encostando) partes.push(_htmlEncostando())
+  else if (ruaState.desenhando) partes.push(_htmlDesenhando())
   else if (ruaState.novo) partes.push(_htmlRuaNova())
   else if (ruaState.selecao.size) partes.push(_htmlSelecao())
   else partes.push('<div class="ruas-nota">Clique numa rua no mapa: ela é selecionada inteira. Outro clique soma outra rua; Esc limpa.</div>')
@@ -625,9 +645,12 @@ function pintarMesaRuas() {
     `<button type="button" class="${ruaState.filtro === f ? 'at' : ''}" onclick="filtrarRuas('${f}')">${r}<span class="ruas-n">${n[f]}</span></button>`).join('')}</div>`)
   partes.push(`<div class="ruas-lista">${_htmlListaRuas()}</div>`)
 
-  if (!ruaState.desenhando && !ruaState.novo) {
-    partes.push(`<button type="button" class="btn sm ruas-desenhar" onclick="comecarDesenhoRua()"
-      title="Rua sem lote de frente: rodovia, avenida ao lado de área verde">Desenhar rua</button>`)
+  if (!ruaState.desenhando && !ruaState.novo && !ruaState.encostando) {
+    partes.push(`<div class="ruas-botoes ruas-ferramentas">
+      <button type="button" class="btn sm ruas-desenhar" onclick="comecarDesenhoRua()"
+        title="Rua sem lote de frente: rodovia, avenida ao lado de área verde">Desenhar rua</button>
+      <button type="button" class="btn sm ruas-desenhar" onclick="comecarEncostar()"
+        title="Leva a ponta de um trecho até o outro, sem juntar os dois">Encostar pontas</button></div>`)
   }
   // ODbL: o nome que veio de lá cita a fonte.
   if (ruaState.trechos.some(t => t.fonte === 'osm' || t.pista)) {
@@ -1021,6 +1044,191 @@ async function buscarNomesNoOsm(deNovo = false) {
   }
 }
 
+// ══════ ENCOSTAR PONTAS ══════
+//
+// O trecho que para antes do outro (a esquina que a costura do desenho não
+// fechou): clique na PONTA dele e depois no trecho onde ela deve encostar. A
+// ponta vai até lá — na reta do próprio trecho, se ela cruza o outro; senão,
+// no ponto do outro mais perto do clique. Os dois continuam trechos
+// separados, cada um com o seu nome. Grava na hora (acao "encostar") e fica
+// no modo para a próxima ponta; Esc sai.
+
+const ENCOSTAR_PX = 14          // o clique pega a ponta ou o trecho a até isto
+const ENCOSTAR_MAX_M = 80       // a ponta não anda mais que isto (o servidor confere)
+
+function comecarEncostar() {
+  _cancelarDesenhoRua(true)
+  ruaState.novo = null
+  ruaState.selecao.clear()
+  ruaState.ultimo = null
+  ruaState.encostando = { ponta: null, alvo: null }
+  document.getElementById('map')?.classList.add('ruas-desenhando')
+  _pintarRealceRuas()
+  pintarMesaRuas()
+}
+
+/** @param {boolean} [calado] ao fechar a ferramenta, sem repintar */
+function _sairEncostar(calado) {
+  if (!ruaState.encostando) return
+  ruaState.encostando = null
+  document.getElementById('map')?.classList.remove('ruas-desenhando')
+  if (!calado && ruaState.ativa) { _pintarRealceRuas(); pintarMesaRuas() }
+}
+
+function _htmlEncostando() {
+  const p = ruaState.encostando.ponta
+  const passo = p
+    ? `Ponta de <b>${esc(p.x.t.nome || 'trecho sem nome')}</b> escolhida. Clique no trecho onde ela deve encostar.`
+    : 'Clique na PONTA do trecho que vai andar.'
+  return `<div class="ruas-sel">
+    <div class="ruas-sel-nome">Encostar pontas</div>
+    <div class="ruas-sel-sub">${passo} Os dois trechos continuam separados, cada um com o seu nome. Esc ${p ? 'larga a ponta' : 'sai'}.</div>
+    <div class="ruas-botoes">
+      ${p ? '<button type="button" class="btn sm" onclick="ruaState.encostando = { ponta: null, alvo: null }; _pintarRealceRuas(); pintarMesaRuas()">Outra ponta</button>' : ''}
+      <button type="button" class="btn sm" onclick="_sairEncostar()">Concluir</button>
+    </div></div>`
+}
+
+/** Distância na tela, em px. */
+function _pxEntre(a, b) {
+  const m = mapaState.obj
+  return m.latLngToContainerPoint(L.latLng(a[0], a[1])).distanceTo(m.latLngToContainerPoint(L.latLng(b[0], b[1])))
+}
+
+/** A ponta de trecho mais perto do clique (a desenhada ou a gravada). @param {L.LatLng} ll */
+function _pontaPerto(ll) {
+  const c = [ll.lat, ll.lng]
+  let melhor = null, menor = ENCOSTAR_PX
+  for (const x of ruaState.trechos) {
+    if (x.t.origem === 'excluido') continue
+    for (const e of [0, 1]) {
+      for (const p of [e ? x.t.ate : x.t.de, e ? x.linha.at(-1) : x.linha[0]]) {
+        const d = _pxEntre(c, p)
+        if (d < menor) { menor = d; melhor = { x, e } }
+      }
+    }
+  }
+  return melhor
+}
+
+/** O pé da perpendicular de p no segmento a–b, em metros. */
+function _peNoSegmento(p, a, b) {
+  const vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy
+  const t = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / l2))
+  return [a[0] + vx * t, a[1] + vy * t]
+}
+
+/**
+ * Onde a ponta escolhida encostaria, com o cursor em "ll":
+ *  - numa ponta de outro trecho, a até ENCOSTAR_PX: nela;
+ *  - sobre outro trecho: onde a reta do trecho que anda cruza o outro (se
+ *    cruza perto); senão, no ponto do outro mais perto do cursor.
+ * @param {L.LatLng} ll @returns {?{p: number[], tipo: string}} p em [lat, lon]
+ */
+function _alvoEncostar(ll) {
+  const { x: anda, e } = ruaState.encostando.ponta
+  const c = [ll.lat, ll.lng]
+  let melhor = null, menor = ENCOSTAR_PX
+  for (const x of ruaState.trechos) {
+    if (x === anda || x.t.origem === 'excluido') continue
+    for (const p of [x.t.de, x.t.ate, x.linha[0], x.linha.at(-1)]) {
+      const d = _pxEntre(c, p)
+      if (d < menor) { menor = d; melhor = { p, tipo: 'ponta' } }
+    }
+  }
+  if (melhor) return melhor
+
+  // Sobre a linha de outro trecho (o desenho com a costura, e o gravado).
+  const cm = _m(c)
+  let seg = null
+  menor = ENCOSTAR_PX
+  for (const x of ruaState.trechos) {
+    if (x === anda || x.t.origem === 'excluido') continue
+    const linhas = [x.linha.map(_m), [x.a, x.b]]
+    for (const pts of linhas) {
+      for (let i = 1; i < pts.length; i++) {
+        const pe = _peNoSegmento(cm, pts[i - 1], pts[i])
+        const d = _pxEntre(c, _llCostura(pe))
+        if (d < menor) { menor = d; seg = [pts[i - 1], pts[i]] }
+      }
+    }
+  }
+  if (!seg) return null
+  // A reta do trecho que anda, da ponta que fica para a que anda.
+  const fica = e ? anda.a : anda.b, vai = e ? anda.b : anda.a
+  const ux = vai[0] - fica[0], uy = vai[1] - fica[1]
+  const sx = seg[1][0] - seg[0][0], sy = seg[1][1] - seg[0][1]
+  const det = ux * sy - uy * sx
+  const lu = Math.hypot(ux, uy), ls = Math.hypot(sx, sy)
+  if (lu > 0.5 && ls > 0.5 && Math.abs(det) / (lu * ls) > Math.sin(15 * Math.PI / 180)) {
+    const wx = seg[0][0] - fica[0], wy = seg[0][1] - fica[1]
+    const t = (wx * sy - wy * sx) / det           // ao longo do trecho que anda
+    const r = (wx * uy - wy * ux) / det           // ao longo do outro (0..1)
+    const X = [fica[0] + ux * t, fica[1] + uy * t]
+    if (r >= -2 / ls && r <= 1 + 2 / ls && t > 0 && Math.hypot(X[0] - vai[0], X[1] - vai[1]) <= ENCOSTAR_MAX_M) {
+      return { p: _llCostura(_peNoSegmento(X, seg[0], seg[1])), tipo: 'em linha' }
+    }
+  }
+  return { p: _llCostura(_peNoSegmento(cm, seg[0], seg[1])), tipo: 'no trecho' }
+}
+
+/** @param {L.LeafletMouseEvent} ev */
+function _moverEncostar(ev) {
+  const en = ruaState.encostando
+  if (!en) return
+  if (!en.ponta) {
+    const p = _pontaPerto(ev.latlng)
+    const k = p ? p.x.k + '#' + p.e : null
+    if (k !== en.sobre) { en.sobre = k; en.dica = p; _pintarRealceRuas() }
+    return
+  }
+  en.alvo = _alvoEncostar(ev.latlng)
+  _pintarRealceRuas()
+}
+
+/** @param {L.LatLng} ll */
+function _cliqueEncostar(ll) {
+  const en = ruaState.encostando
+  if (ruaState.gravando) return
+  if (!en.ponta) {
+    const p = _pontaPerto(ll)
+    if (!p) { toast('Clique perto da ponta de um trecho.', 'aviso'); return }
+    en.ponta = p
+    en.alvo = null
+    _pintarRealceRuas()
+    pintarMesaRuas()
+    return
+  }
+  const alvo = _alvoEncostar(ll)
+  if (!alvo) { toast('Clique sobre o trecho onde a ponta deve encostar.', 'aviso'); return }
+  const { x, e } = en.ponta
+  const r = n => Number(n.toFixed(7))
+  const p = [r(alvo.p[0]), r(alvo.p[1])]
+  const novoDe = e ? x.t.de : p, novoAte = e ? p : x.t.ate
+  ruaState.encostando = { ponta: null, alvo: null }
+  _enviarLoteRuas({ acao: 'encostar', itens: [{ ..._itemDoTrecho(x), novo_de: novoDe, novo_ate: novoAte }] })
+}
+
+/** O realce do encostar: a ponta sob o cursor ou a escolhida, e a prévia do trecho novo. */
+function _realceEncostar(r, op) {
+  const en = ruaState.encostando
+  if (!en) return
+  const marca = (p, cor) => r.addLayer(L.circleMarker(p, { ...op, radius: 7, color: cor, weight: 2.5, fillColor: '#fff', fillOpacity: 1 }))
+  const pontaDe = ({ x, e }) => e ? x.linha.at(-1) : x.linha[0]
+  if (!en.ponta) {
+    if (en.dica) marca(pontaDe(en.dica), '#7c3aed')
+    return
+  }
+  const { x, e } = en.ponta
+  r.addLayer(L.polyline(x.linha, { ...op, color: '#7c3aed', weight: 6, opacity: .35 }))
+  marca(pontaDe(en.ponta), '#7c3aed')
+  if (en.alvo) {
+    const fica = e ? x.t.de : x.t.ate
+    r.addLayer(L.polyline([fica, en.alvo.p], { ...op, color: '#7c3aed', weight: 3, dashArray: '6 5' }))
+    marca(en.alvo.p, '#16a34a')
+  }
+}
+
 // ══════ DESENHAR UMA RUA (sem lote de frente) ══════
 
 function comecarDesenhoRua() {
@@ -1072,6 +1280,7 @@ function _encaixarRua(p) {
 
 /** @param {L.LeafletMouseEvent} e */
 function _cliqueNoMapaRuas(e) {
+  if (ruaState.encostando) { _cliqueEncostar(e.latlng); return }
   const d = ruaState.desenhando
   if (!d) return   // fora do desenho, o clique no vazio não desfaz nada
   const p = _encaixarRua(e.latlng)

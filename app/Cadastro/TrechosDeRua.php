@@ -29,6 +29,8 @@ final class TrechosDeRua
      * @param  list<array{id:int, nome:?string, oculto:bool, de:array{0:float,1:float}, ate:array{0:float,1:float}}>  $manuais
      * @return list<array{id:?int, nome:?string, de:array, ate:array, origem:string}>
      *         origem: cadastro | sem_nome | manual | oculto | excluido
+     *         (o manual SEM nome — o trecho sem nome que o curador encostou em
+     *         outro, 24/11/2026 — sai como sem_nome: continua pedindo nome)
      *         (o excluído volta só para a ferramenta poder desfazê-lo; o mapa não o desenha)
      */
     public static function combinar(array $gerados, array $manuais): array
@@ -49,7 +51,7 @@ final class TrechosDeRua
         }
         foreach ($manuais as $m) {
             $saida[] = ['id' => $m['id'], 'nome' => $m['nome'], 'de' => $m['de'], 'ate' => $m['ate'],
-                'origem' => ! empty($m['excluido']) ? 'excluido' : ($m['oculto'] ? 'oculto' : 'manual')];
+                'origem' => ! empty($m['excluido']) ? 'excluido' : ($m['oculto'] ? 'oculto' : ($m['nome'] === null ? 'sem_nome' : 'manual'))];
         }
 
         return $saida;
@@ -86,13 +88,17 @@ final class TrechosDeRua
      * excluído; empate, o mais novo. O manual que já é exatamente um gerado
      * fica como está.
      *
+     * AJUSTADO (encostado pelo curador, 24/11/2026): fica como está, com o
+     * desenho dele, e fica com os gerados que cobre — é o desenho que o
+     * curador acertou à mão, e o gerado novo o desfaria.
+     *
      * @param  list<array{nome:?string, de:array, ate:array}>  $gerados
      * @param  list<array{id:int, nome:?string, oculto:bool, excluido?:bool, de:array, ate:array, user_id?:?int}>  $manuais
      * @return array{apagar: list<int>, novos: list<array>, passados: int, descartados: int}
      */
     public static function reconciliar(array $gerados, array $manuais): array
     {
-        $peso = fn (array $m) => ! empty($m['excluido']) ? 0 : ($m['oculto'] ? 1 : 2);
+        $peso = fn (array $m) => ! empty($m['ajustado']) ? 3 : (! empty($m['excluido']) ? 0 : ($m['oculto'] ? 1 : 2));
         usort($manuais, fn ($a, $b) => [$peso($b), $b['id']] <=> [$peso($a), $a['id']]);
         $igual = fn (array $m, array $g) => (self::perto($m['de'], $g['de']) && self::perto($m['ate'], $g['ate']))
             || (self::perto($m['de'], $g['ate']) && self::perto($m['ate'], $g['de']));
@@ -101,6 +107,14 @@ final class TrechosDeRua
         $apagar = $novos = [];
         $passados = $descartados = 0;
         foreach ($manuais as $m) {
+            if (! empty($m['ajustado'])) {
+                foreach ($gerados as $i => $g) {
+                    if (self::cobre($m, $g)) {
+                        $tomado[$i] = true;
+                    }
+                }
+                continue;
+            }
             $excluido = ! empty($m['excluido']);
             $seus = [];
             $jaDeOutro = false;

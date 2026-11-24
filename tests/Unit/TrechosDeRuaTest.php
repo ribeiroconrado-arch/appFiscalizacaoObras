@@ -133,6 +133,25 @@ class TrechosDeRuaTest extends TestCase
         $this->assertEqualsCanonicalizing([8, 9], $r['apagar']);
     }
 
+    public function test_manual_sem_nome_encostado_continua_sem_nome(): void
+    {
+        // O sem nome que o curador encostou em outro trecho (24/11/2026).
+        $r = TrechosDeRua::combinar([$this->t(0, 0, 100, 0, null)], [$this->manual(0, 0, 108, 0, null)]);
+        $this->assertSame(['sem_nome'], array_column($r, 'origem'));
+        $this->assertSame(7, $r[0]['id'], 'com o id do manual, para o nome dado depois cair nele');
+    }
+
+    public function test_reconciliar_ajustado_fica_com_o_desenho_dele(): void
+    {
+        // Encostado à mão 8 m além do gerado: o "Gerar" não o troca pelo novo,
+        // e o novo que ele cobre não ganha outro manual por cima.
+        $ajustado = $this->m(9, 0, 3, 108, 3, 'RUA B') + ['ajustado' => true];
+        $r = TrechosDeRua::reconciliar([$this->t(0, 0, 100, 0, null)], [$this->m(8, 0, 2, 100, 2, 'RUA C'), $ajustado]);
+        $this->assertNotContains(9, $r['apagar']);
+        $this->assertSame([], array_filter($r['novos'], fn ($n) => $n['nome'] === 'RUA B'));
+        $this->assertContains(8, $r['apagar'], 'o outro manual do mesmo trecho sai: o ajustado já ficou com ele');
+    }
+
     public function test_reconciliar_rua_desenhada_a_mao_fica(): void
     {
         // Não cobre nenhum gerado (rua sem lote de frente): fica como está.

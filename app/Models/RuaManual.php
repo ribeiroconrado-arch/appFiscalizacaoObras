@@ -17,9 +17,9 @@ class RuaManual extends Model
 
     protected $table = 'ruas_manuais';
 
-    protected $fillable = ['bairro', 'nome', 'oculto', 'excluido', 'de_lat', 'de_lon', 'ate_lat', 'ate_lon', 'user_id'];
+    protected $fillable = ['bairro', 'nome', 'oculto', 'excluido', 'ajustado', 'de_lat', 'de_lon', 'ate_lat', 'ate_lon', 'user_id'];
 
-    protected $casts = ['oculto' => 'boolean', 'excluido' => 'boolean'];
+    protected $casts = ['oculto' => 'boolean', 'excluido' => 'boolean', 'ajustado' => 'boolean'];
 
     /** O que a trilha de auditoria mostra no lugar do id. */
     protected function descricaoAuditoria(): ?string

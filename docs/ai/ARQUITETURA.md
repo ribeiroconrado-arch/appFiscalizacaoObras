@@ -255,6 +255,19 @@ cobrem; a exclusão só passa para o mesmo traço (1,5 m) — a da regra velha s
 os bairros com contorno, um por vez (`refazerRuasDeTodos`). Ele usa a mesma
 rota com `so_ruas`, que grava só os trechos: o contorno e as quadras não mudam,
 e o contorno editado à mão também fica como está.
+**Encostar pontas** (Nomes de rua, 24/11/2026): o curador clica na ponta de
+um trecho e depois no trecho onde ela deve encostar. A ponta vai até lá:
+- na reta do próprio trecho, quando ela cruza o outro;
+- senão, no ponto do outro mais perto do clique;
+- ou na ponta do outro, se o clique cair nela.
+Os dois trechos não se fundem. Grava pela ação `encostar` de
+`/api/ruas/manuais/lote` (`RuaManualController::encostar`): o manual muda de
+desenho, e o gerado ganha um manual por cima, com o nome que ele tem no banco.
+Esse manual fica `ajustado`, e o `reconciliar` o mantém com o desenho dele e
+com os gerados que ele cobre. A ponta anda no máximo 80 m, e o desenho novo
+tem de continuar cobrindo o gerado de baixo, senão o gerado reapareceria como
+trecho a mais. O manual sem nome sai na leitura como `sem_nome`.
+"Voltar ao cadastro" desfaz o ajuste.
 No mapa, o nome aparece nos níveis das quadras e dos lotes, girado com a rua,
 só onde CABE no trecho (senão abreviado: "R.", "AV.").
 

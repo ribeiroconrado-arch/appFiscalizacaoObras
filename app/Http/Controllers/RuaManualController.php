@@ -126,6 +126,8 @@ class RuaManualController extends Controller
      *                  um manual excluído (o "Gerar" o traria de volta); o
      *                  desenhado à mão, que não cobre gerado nenhum, é apagado
      *         voltar   apaga o manual (o item sem id é ignorado)
+     *         encostar o trecho ganha o desenho novo (novo_de, novo_ate): a
+     *                  ponta levada até o outro trecho (encostar())
      */
     public function lote(Request $r): JsonResponse
     {
@@ -133,7 +135,7 @@ class RuaManualController extends Controller
             return response()->json(['message' => 'Informar nome de rua é do curador do cadastro.'], 403);
         }
         $d = $r->validate([
-            'acao'           => ['required', 'in:nome,ocultar,excluir,voltar'],
+            'acao'           => ['required', 'in:nome,ocultar,excluir,voltar,encostar'],
             'nome'           => ['nullable', 'string', 'max:180'],
             'itens'          => ['required', 'array', 'min:1', 'max:500'],
             'itens.*.id'     => ['nullable', 'integer'],
@@ -143,12 +145,20 @@ class RuaManualController extends Controller
             'itens.*.de.*'   => ['numeric', 'between:-180,180'],
             'itens.*.ate'    => ['required', 'array', 'size:2'],
             'itens.*.ate.*'  => ['numeric', 'between:-180,180'],
+            'itens.*.novo_de'     => ['required_if:acao,encostar', 'array', 'size:2'],
+            'itens.*.novo_de.*'   => ['numeric', 'between:-180,180'],
+            'itens.*.novo_ate'    => ['required_if:acao,encostar', 'array', 'size:2'],
+            'itens.*.novo_ate.*'  => ['numeric', 'between:-180,180'],
         ]);
 
         $bairros = array_values(array_unique(array_column($d['itens'], 'bairro')));
         $existem = DB::table('lotes')->whereIn('bairro', $bairros)->distinct()->pluck('bairro')->all();
         if ($faltam = array_diff($bairros, $existem)) {
             return response()->json(['message' => 'Bairro desconhecido: ' . implode(', ', $faltam) . '.'], 422);
+        }
+
+        if ($d['acao'] === 'encostar') {
+            return $this->encostar($r, $d['itens'], $bairros);
         }
 
         if ($d['acao'] === 'nome') {
@@ -295,6 +305,94 @@ class RuaManualController extends Controller
         }
 
         return response()->json(['vias' => $vias]);
+    }
+
+    /** A ponta não anda mais que isto: é encostar no vizinho, não redesenhar a rua. */
+    private const ENCOSTAR_MAX_M = 80;
+
+    /**
+     * ENCOSTAR (24/11/2026): o trecho fica com o desenho novo, com uma ponta
+     * levada até o outro trecho. Não funde os dois: cada um continua o seu
+     * trecho, com o seu nome.
+     *
+     *  - o manual (com id) muda de desenho e mantém o nome, oculto ou não;
+     *  - o gerado ganha um manual por cima, com o nome que o gerado tem (lido
+     *    do banco, e não do pedido) — sem nome continua sem nome.
+     *
+     * Nos dois, o manual fica AJUSTADO: o "Gerar" não o troca pelo desenho
+     * novo (TrechosDeRua::reconciliar). E o desenho novo tem de continuar
+     * cobrindo o gerado de baixo (TrechosDeRua::cobre) — senão o gerado
+     * reapareceria ao lado, como um trecho a mais.
+     *
+     * @param  list<array<string,mixed>>  $itens
+     * @param  list<string>  $bairros
+     */
+    private function encostar(Request $r, array $itens, array $bairros): JsonResponse
+    {
+        $ponto = fn ($l, $p) => [(float) $l->{$p . '_lat'}, (float) $l->{$p . '_lon'}];
+        $metros = function (array $a, array $b): float {
+            $dy = ($a[0] - $b[0]) * 110574;
+            $dx = ($a[1] - $b[1]) * 111320 * cos(deg2rad($a[0]));
+
+            return hypot($dx, $dy);
+        };
+        $perto = fn (array $a, array $b) => abs($a[0] - $b[0]) < 2e-7 && abs($a[1] - $b[1]) < 2e-7;
+        $gerados = [];
+        $geradosDe = function (string $b) use (&$gerados, $ponto) {
+            return $gerados[$b] ??= DB::table('ruas_trechos')->where('bairro', $b)->get()
+                ->map(fn ($l) => ['nome' => $l->nome, 'de' => $ponto($l, 'de'), 'ate' => $ponto($l, 'ate')])->all();
+        };
+
+        $plano = [];
+        foreach ($itens as $i) {
+            $novo = ['de' => array_map('floatval', $i['novo_de']), 'ate' => array_map('floatval', $i['novo_ate'])];
+            $velho = ['de' => array_map('floatval', $i['de']), 'ate' => array_map('floatval', $i['ate'])];
+            if ($metros($novo['de'], $novo['ate']) < 1) {
+                return response()->json(['message' => 'O trecho ficaria com menos de 1 m. Escolha outro ponto.'], 422);
+            }
+            if ($metros($novo['de'], $velho['de']) > self::ENCOSTAR_MAX_M || $metros($novo['ate'], $velho['ate']) > self::ENCOSTAR_MAX_M) {
+                return response()->json(['message' => 'A ponta andaria mais de ' . self::ENCOSTAR_MAX_M . ' m. Encostar é levar a ponta até o trecho vizinho; '
+                    . 'rua nova se desenha com "Desenhar rua".'], 422);
+            }
+            $manual = ! empty($i['id']) ? RuaManual::whereKey($i['id'])->where('bairro', $i['bairro'])->first() : null;
+            if (! empty($i['id']) && ! $manual) {
+                return response()->json(['message' => 'O trecho mudou desde que a tela foi aberta. Recarregue o mapa.'], 409);
+            }
+            // Os gerados que o trecho cobre hoje (o próprio, se for gerado) têm de continuar cobertos.
+            $base = $manual ? ['de' => $ponto($manual, 'de'), 'ate' => $ponto($manual, 'ate')] : $velho;
+            $cobertos = array_values(array_filter($geradosDe($i['bairro']), fn ($g) => $manual
+                ? TrechosDeRua::cobre($base, $g) : ($perto($g['de'], $velho['de']) && $perto($g['ate'], $velho['ate']))));
+            if (! $manual && ! $cobertos) {
+                return response()->json(['message' => 'O trecho mudou desde que a tela foi aberta. Recarregue o mapa.'], 409);
+            }
+            foreach ($cobertos as $g) {
+                if (! TrechosDeRua::cobre($novo, $g)) {
+                    return response()->json(['message' => 'Assim o trecho muda demais de direção ou de tamanho, e o trecho de baixo voltaria a aparecer. '
+                        . 'Encoste a outra ponta, ou exclua este trecho e desenhe a rua com "Desenhar rua".'], 422);
+                }
+            }
+            $plano[] = [$i, $manual, $novo, $cobertos[0]['nome'] ?? null];
+        }
+
+        DB::transaction(function () use ($plano, $r) {
+            foreach ($plano as [$i, $manual, $novo, $nomeGerado]) {
+                $desenho = ['de_lat' => $novo['de'][0], 'de_lon' => $novo['de'][1], 'ate_lat' => $novo['ate'][0], 'ate_lon' => $novo['ate'][1],
+                    'ajustado' => true, 'user_id' => $r->user()->id];
+                if ($manual) {
+                    $manual->update($desenho);
+                } else {
+                    RuaManual::create($desenho + ['bairro' => $i['bairro'], 'nome' => $nomeGerado, 'oculto' => false, 'excluido' => false]);
+                }
+            }
+        });
+
+        $n = count($plano);
+
+        return response()->json([
+            'message' => $n === 1 ? 'Trecho encostado.' : "{$n} trechos encostados.",
+            'n'       => $n,
+            'ruas'    => collect($bairros)->mapWithKeys(fn ($b) => [$b => $this->lotes->ruasDoBairro($b)])->all(),
+        ]);
     }
 
     /** @return array<string,mixed> */
