@@ -292,24 +292,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::get('/painel', [PainelController::class, 'index']);
         Route::get('/notificacoes', [PainelController::class, 'notificacoes']);
 
-        // Vistoria guiada — PÁGINA DE TESTE (22/11/2026). Ver VistoriaGuiadaController.
-        Route::prefix('vistorias-guiadas')->controller(\App\Http\Controllers\VistoriaGuiadaController::class)->group(function () {
-            Route::get('/modelos', 'modelos');
-            Route::post('/modelos', 'criarModelo');
-            Route::post('/modelos/exemplos', 'exemplos');
-            Route::put('/modelos/{modelo}', 'salvarModelo')->whereNumber('modelo');
-            Route::post('/modelos/{modelo}/publicar', 'publicar')->whereNumber('modelo');
-            Route::get('/', 'vistorias');
-            Route::post('/', 'criarVistoria')->middleware('throttle:pesado');
-            Route::get('/{vistoria}', 'mostrar')->whereNumber('vistoria');
-            Route::put('/{vistoria}/andamento', 'andamento')->whereNumber('vistoria');
-            Route::post('/{vistoria}/concluir', 'concluir')->whereNumber('vistoria');
-            Route::post('/{vistoria}/fotos', 'foto')->whereNumber('vistoria');
-            Route::delete('/fotos/{arquivo}', 'apagarFoto')->whereNumber('arquivo');
-            Route::post('/{vistoria}/livres', 'criarLivre')->whereNumber('vistoria');
-            Route::delete('/livres/{livre}', 'apagarLivre')->whereNumber('livre');
-        });
-
 
         // Fiscalização
         // O artigo pelo problema que o fiscal viu ("escav" → escavação), em
@@ -478,12 +460,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::get('/evidencias/{evidencia}/arquivo', [VistoriaController::class, 'arquivo'])
         ->name('evidencia.arquivo');
 
-    // Vistoria guiada — página de teste e os arquivos dela.
-    Route::get('/vistorias-guiadas', [\App\Http\Controllers\VistoriaGuiadaController::class, 'pagina'])
-        ->name('vg.pagina');
-    Route::get('/vistorias-guiadas/arquivos/{arquivo}', [\App\Http\Controllers\VistoriaGuiadaController::class, 'arquivo'])
-        ->whereNumber('arquivo')->name('vg.arquivo');
-
     // O relatório de vistoria em papel, nos dois destinos do documento: a
     // janela de impressão do navegador e o PDF do dompdf.
     Route::get('/vistorias/{vistoria}/impressao', [VistoriaController::class, 'impressao'])
@@ -515,3 +491,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         ->middleware('throttle:pesado')->name('importacao.divergencias.pdf');
     });
 });
+
+// Páginas de teste que ficam só na máquina de quem desenvolve (o arquivo está
+// no .gitignore). Em produção ele não existe e nada é registrado.
+if (is_file(__DIR__ . '/teste-local.php')) {
+    require __DIR__ . '/teste-local.php';
+}
