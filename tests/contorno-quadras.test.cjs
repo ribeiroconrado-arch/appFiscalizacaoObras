@@ -210,3 +210,24 @@ test('ruas: na borda do bairro as linhas se encontram no cruzamento, sem ponta s
   const curtos = trechos.map(emMetros).filter(r => r.len < 3)
   assert.equal(curtos.length, 0, 'pedacinhos: ' + JSON.stringify(curtos))
 })
+
+test('ruas: no cruzamento a rua segue reta, sem o pedaço em diagonal puxado pela quina chanfrada', () => {
+  // A quina do cruzamento chanfrada em 6 m (o lote da esquina cortado): o
+  // meio entre as quadras entortava para a quina (PQ. ELDORADO, 24/11/2026).
+  const chanfrada = (numero, x, y, n, cx, cy) => quadra(numero, x, y, n).map(l => {
+    const anel = l.geometry.coordinates[0].map(c => plano.para(c))
+    const perto = anel.map(([px, py]) => Math.hypot(px - cx, py - cy) < 0.01)
+    if (!perto.some(Boolean)) return l
+    const i = perto.indexOf(true)
+    const a = anel[(i + anel.length - 2) % (anel.length - 1)], b = anel[(i + 1) % (anel.length - 1)]
+    const u = (p, d) => { const L = Math.hypot(p[0] - cx, p[1] - cy); return [cx + (p[0] - cx) / L * d, cy + (p[1] - cy) / L * d] }
+    const novo = [...anel.slice(0, i), u(a, 6), u(b, 6), ...anel.slice(i + 1, -1)]
+    novo.push(novo[0])
+    return { ...l, geometry: { type: 'Polygon', coordinates: [novo.map(c => plano.de(c))] } }
+  })
+  // O 'T': duas quadras em cima, com a quina da travessa chanfrada, e uma
+  // quadra comprida embaixo, do outro lado da rua.
+  const ls = [...chanfrada('01', 0, 64, 5, 60, 64), ...chanfrada('02', 74, 64, 5, 74, 64), ...quadra('03', 0, 0, 11)]
+  const tortos = ruas(ls).filter(r => r.len > 0.5 && Math.abs(r.ang) > 5 && Math.abs(Math.abs(r.ang) - 90) > 5)
+  assert.deepEqual(tortos, [], 'trechos em diagonal: ' + JSON.stringify(tortos))
+})

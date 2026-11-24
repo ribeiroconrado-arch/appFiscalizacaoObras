@@ -1369,6 +1369,10 @@ const VAZIO_COSTURA_GRAUS = 30 // folga do "de frente"
 const VAZIO_COSTURA_NO_M = 8   // três ou mais pontas soltas a até isto uma da outra: viram um nó
 const VAZIO_COSTURA_PERTO_M = 5 // ponta solta a até isto de outra linha: liga nela
 const VAZIO_NO_CURTO_M = 3     // pedaço mais curto que isto entre dois cruzamentos: é um cruzamento só
+const VAZIO_CRUZ_RETA_DE_M = 12   // no cruzamento, a reta da rua é medida daqui…
+const VAZIO_CRUZ_RETA_ATE_M = 45  // …até aqui do nó; mais perto, a linha entorta para a quina
+const VAZIO_CRUZ_RETA_FOLGA_M = 0.8 // a rua é reta nesse pedaço se nenhum vértice sai mais que isto
+const VAZIO_CRUZ_MOVE_MAX_M = 12  // o nó não anda mais que isto
 const VAZIO_GALHO_M = 25       // ponta solta mais curta que isto saindo de um cruzamento: sobra
 
 /**
@@ -1576,6 +1580,7 @@ function _eixosPeloVazio(partes, J) {
   const costurado = _costurarPontas(linhas, partes, indice, f, J)
   if (costurado.novos.length) linhas = limpar(juntar([...costurado.linhas, ...costurado.novos]))
   linhas = _contrairNosCurtos(linhas, J)
+  linhas = _endireitarCruzamentos(linhas, J)
   // De um lado só: a linha que cai quase toda sobre a borda afastada.
   const faixaLado = ladoUnico.length ? bufR(f.createMultiLineString(ladoUnico), 0.5) : null
   const pedacos = linhas.flatMap(l => {
@@ -1592,6 +1597,168 @@ function _eixosPeloVazio(partes, J) {
   return pedacos
     .filter(({ pts }) => !(compr(pts) < VAZIO_PONTA_MIN && (grauP.get(kp(pts[0])) === 1 || grauP.get(kp(pts[pts.length - 1])) === 1)))
     .map(e => ({ ...e, defronte: e.ladoUnico && _temQuadraDefronte(e.pts, partes, indice, eixosEntre, f, J) }))
+}
+
+/**
+ * Ruas retas até o cruzamento (24/11/2026). Perto do cruzamento, o meio entre
+ * as quadras é puxado pelas quinas (chanfradas ou arredondadas): as linhas
+ * chegavam ao nó entortando, em diagonal — no mapa, pedacinhos tortos em toda
+ * esquina. A rua de verdade segue reta até o encontro.
+ *
+ * Em cada nó com 3 ou mais linhas: a reta de cada uma é medida longe da
+ * quina, de VAZIO_CRUZ_RETA_DE_M a _ATE_M do nó (vale se a linha é reta ali);
+ * o nó vai para o ponto que melhor encontra essas retas (mínimos quadrados —
+ * no "T", o encontro da rua com a transversal); e cada linha reta passa a ir
+ * direto do nó novo ao seu trecho reto, sem o pedaço torto. A linha curva, ou
+ * curta, só troca a ponta pelo nó novo. O nó que andaria mais de
+ * VAZIO_CRUZ_MOVE_MAX_M fica onde estava.
+ */
+function _endireitarCruzamentos(linhas, J) {
+  const kk = c => c[0].toFixed(2) + ',' + c[1].toFixed(2)
+  const cs = linhas.map(l => l.getCoordinates().map(c => [c.x, c.y]))
+  const nos = new Map()
+  cs.forEach((c, i) => {
+    if (c.length < 2 || kk(c[0]) === kk(c[c.length - 1])) return
+    for (const fim of [false, true]) {
+      const k = kk(fim ? c[c.length - 1] : c[0])
+      ;(nos.get(k) || nos.set(k, []).get(k)).push({ i, fim })
+    }
+  })
+  const A = VAZIO_CRUZ_RETA_DE_M, B = VAZIO_CRUZ_RETA_ATE_M
+  // O ponto a s metros do início de pts.
+  const em = (pts, s) => {
+    let acc = 0
+    for (let i = 1; i < pts.length; i++) {
+      const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+      if (acc + d >= s) { const t = d ? (s - acc) / d : 0; return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t] }
+      acc += d
+    }
+    return pts[pts.length - 1]
+  }
+  const comprimento = pts => pts.reduce((t, p, i) => i ? t + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0, 0)
+
+  for (const [, ps] of nos) {
+    if (ps.length < 3) continue
+    // Cada linha, do nó para fora.
+    const ramos = ps.map(({ i, fim }) => {
+      const pts = fim ? [...cs[i]].reverse() : cs[i]
+      const L = comprimento(pts)
+      // A reta é procurada recuando: a quina pode entortar a linha por mais
+      // de A metros (a travessa que chega à avenida em curva, ~20 m). A outra
+      // ponta também pode ser cruzamento: a janela não passa do meio dela.
+      let reta = null
+      for (const de of [A, A + 8, A + 16]) {
+        const ate = Math.min(de + (B - A), L - de)
+        if (ate - de < 8) break
+        const p = em(pts, de), q = em(pts, ate)
+        const d = Math.hypot(q[0] - p[0], q[1] - p[1])
+        if (d <= 1) continue
+        const u = [(q[0] - p[0]) / d, (q[1] - p[1]) / d]
+        let acc = 0, reto = true
+        for (let k = 1; k < pts.length && reto; k++) {
+          acc += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1])
+          if (acc <= de || acc >= ate) continue
+          if (Math.abs((pts[k][0] - p[0]) * u[1] - (pts[k][1] - p[1]) * u[0]) > VAZIO_CRUZ_RETA_FOLGA_M) reto = false
+        }
+        if (reto) { reta = { p, u, de }; break }
+      }
+      return { i, fim, pts, reta }
+    })
+    const retas = ramos.filter(r => r.reta)
+    // Uma reta só chegando numa rua curva (a travessa na avenida em curva): a
+    // reta vai até a curva, e o pedaço da curva entre o nó velho e o encontro
+    // passa para o outro lado da curva.
+    if (retas.length === 1) { _retaAteACurva(retas[0], ramos, cs, A); continue }
+    if (retas.length < 2) continue
+    // O ponto que melhor encontra as retas: Σ (I − u uᵀ) X = Σ (I − u uᵀ) p.
+    let a = 0, b = 0, c = 0, bx = 0, by = 0
+    for (const { reta: { p, u } } of retas) {
+      const m11 = 1 - u[0] * u[0], m12 = -u[0] * u[1], m22 = 1 - u[1] * u[1]
+      a += m11; b += m12; c += m22
+      bx += m11 * p[0] + m12 * p[1]; by += m12 * p[0] + m22 * p[1]
+    }
+    const det = a * c - b * b
+    if (Math.abs(det) < 0.05 * retas.length) continue   // todas paralelas: não há encontro definido
+    const X = [(c * bx - b * by) / det, (a * by - b * bx) / det]
+    const no = ramos[0].pts[0]
+    if (Math.hypot(X[0] - no[0], X[1] - no[1]) > VAZIO_CRUZ_MOVE_MAX_M) continue
+    for (const r of ramos) {
+      let novo
+      if (r.reta) {
+        // Do nó novo direto ao trecho reto: o pedaço torto perto da quina sai.
+        let acc = 0, k = 1
+        for (; k < r.pts.length; k++) {
+          acc += Math.hypot(r.pts[k][0] - r.pts[k - 1][0], r.pts[k][1] - r.pts[k - 1][1])
+          if (acc > r.reta.de) break
+        }
+        novo = [X, r.reta.p, ...r.pts.slice(k)]
+      } else {
+        novo = [X, ...r.pts.slice(1)]
+      }
+      cs[r.i] = r.fim ? novo.reverse() : novo
+    }
+  }
+  const f = linhas[0]?.getFactory()
+  if (!f) return linhas
+  return cs.map(c => f.createLineString(c.map(([x, y]) => new J.geom.Coordinate(x, y))))
+}
+
+/**
+ * O "T" com a rua de cima em curva: a reta `r` (o ramo, do nó para fora) é
+ * prolongada até cruzar um dos outros ramos, a até VAZIO_CRUZ_MOVE_MAX_M do
+ * nó. Ali fica o nó novo: o ramo cruzado é cortado nele, e o pedaço que sobra
+ * (entre o nó velho e o novo) vai para um dos outros ramos, para a curva
+ * continuar inteira. Muda `cs` no lugar.
+ */
+function _retaAteACurva(r, ramos, cs, A) {
+  const { p, u } = r.reta
+  const no = r.pts[0]
+  // O lado da reta: do trecho reto para o nó (para trás em u).
+  let melhor = null
+  for (const o of ramos) {
+    if (o === r) continue
+    let acc = 0
+    for (let k = 1; k < o.pts.length && acc <= VAZIO_CRUZ_MOVE_MAX_M * 2; k++) {
+      const a = o.pts[k - 1], b = o.pts[k]
+      acc += Math.hypot(b[0] - a[0], b[1] - a[1])
+      // p − t·u cruza a–b?
+      const ex = b[0] - a[0], ey = b[1] - a[1]
+      const den = -u[0] * ey + u[1] * ex
+      if (Math.abs(den) < 1e-9) continue
+      const wx = a[0] - p[0], wy = a[1] - p[1]
+      const t = (-wx * ey + wy * ex) / den           // ao longo de −u, a partir de p
+      const w = (-u[0] * wy + u[1] * wx) / den       // ao longo de a–b (0..1)
+      if (w < -1e-9 || w > 1 + 1e-9 || t <= 0) continue
+      const X = [p[0] - u[0] * t, p[1] - u[1] * t]
+      if (Math.hypot(X[0] - no[0], X[1] - no[1]) > VAZIO_CRUZ_MOVE_MAX_M) continue
+      if (!melhor || t < melhor.t) melhor = { o, k, X, t }
+    }
+  }
+  if (!melhor) return
+  const { o, k, X } = melhor
+  // O ramo cruzado: do nó novo para fora.
+  const resto = [X, ...o.pts.slice(k)]
+  // O pedaço do nó velho até o novo, que passa para um dos outros ramos.
+  const pedaco = [...o.pts.slice(0, k), X]
+  const outro = ramos.find(x => x !== r && x !== o)
+  if (!outro) return
+  const outroNovo = [...pedaco.reverse(), ...outro.pts.slice(1)]
+  // A reta: do nó novo direto ao trecho reto.
+  let acc = 0, j = 1
+  for (; j < r.pts.length; j++) {
+    acc += Math.hypot(r.pts[j][0] - r.pts[j - 1][0], r.pts[j][1] - r.pts[j - 1][1])
+    if (acc > r.reta.de) break
+  }
+  const retaNova = [X, p, ...r.pts.slice(j)]
+  // Os demais ramos (cruzamento de 4 ou mais) também passam pelo nó novo.
+  for (const x of ramos) {
+    let novo
+    if (x === r) novo = retaNova
+    else if (x === o) novo = resto
+    else if (x === outro) novo = outroNovo
+    else novo = [X, ...x.pts.slice(1)]
+    cs[x.i] = x.fim ? [...novo].reverse() : novo
+  }
 }
 
 /**

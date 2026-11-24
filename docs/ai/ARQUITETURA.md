@@ -233,6 +233,13 @@ dela fazia laço. Em seguida a limpeza tira a ponta solta com menos de 8 m, o
 galho com menos de 25 m saindo de cruzamento, o laço curto e a ligação
 repetida. O cruzamento que o Voronoi parte em dois nós a menos de 3 m vira um
 só (`_contrairNosCurtos`); antes, esse pedacinho virava um trecho sem nome.
+Depois, os cruzamentos são ENDIREITADOS (`_endireitarCruzamentos`, 24/11/2026).
+Perto do nó, a quina chanfrada ou arredondada puxava o meio entre as quadras,
+e as ruas chegavam em diagonal. Para cada linha, a reta é medida longe da
+quina, entre 12 e 45 m do nó, recuando até 28 m se for preciso. O nó vai para
+o encontro dessas retas (mínimos quadrados), e cada rua reta vai direto até
+ele. No "T" com a rua de cima em curva (`_retaAteACurva`), a travessa é
+prolongada até a curva. O nó anda no máximo 12 m.
 O lote que dá para um eixo entre quadras não vota na borda de lado único: o
 fundo do chacarão não leva o nome da avenida da frente.
 As linhas são partidas nos cruzamentos e nas esquinas (dobra > 55° em 8 m) e
