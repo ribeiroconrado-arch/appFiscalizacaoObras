@@ -3919,6 +3919,8 @@ select.combo-oculto{display:none !important}
 .med-meio{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 12px;
   border-left:1px solid var(--blt);min-width:0}
 .med-meio .btn{white-space:nowrap}
+.med-medida{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--tx2)}
+.med-medida input{width:78px;padding:4px 6px;border:1.5px solid var(--bord);border-radius:7px;font:13px monospace}
 .med-passo{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap}
 .mapa-barras > .med-barra{position:static}
 @media (max-width:999px){

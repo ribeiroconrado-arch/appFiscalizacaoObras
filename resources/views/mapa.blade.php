@@ -370,6 +370,7 @@
   <div class="med-meio">
     <button type="button" class="btn sm" id="med-barra-desfazer" disabled onclick="desfazerPontoDaMedida()" title="Desfazer último ponto (Ctrl+Z)" aria-label="Desfazer último ponto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5-5 5 5 5M4 10h10a6 6 0 0 1 0 12"/></svg></button>
     <button type="button" class="btn sm" id="med-barra-concluir" disabled onclick="concluirMedida()" title="Concluir (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Concluir</button>
+    <label class="med-medida" id="med-barra-medida" hidden title="Aponte o cursor na direção e digite a distância; Enter marca o ponto">Medida <input id="med-barra-dist" inputmode="decimal" autocomplete="off" placeholder="0,00"> m</label>
     <button type="button" class="btn sm" id="med-barra-apagar" hidden onclick="apagarMedidaSelecionada()" title="Delete">Apagar medida</button>
     <button type="button" class="btn sm med-limpar" disabled onclick="limparMedidas()" aria-label="Limpar todas as medidas"
             title="Limpar todas as medidas temporárias"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
@@ -379,6 +380,12 @@
             onclick="opcoesSnapDaMedida()" aria-label="Snap (OSNAP)"
             title="Snap (OSNAP) — onde o ponto encaixa: extremidade, meio, interseção, na face, perpendicular">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v9a6 6 0 0 0 12 0V3h-4v9a2 2 0 0 1-4 0V3z"/><path d="M6 7h4M14 7h4"/></svg></button>
+    <button type="button" class="cad-fer" id="med-barra-orto" aria-pressed="false" onclick="alternarOrthoDaMedida()" aria-label="Ortho (F8)"
+            title="Ortho (F8) — trecho só na horizontal ou na vertical da tela; Shift inverte enquanto pressionado">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4v15h15"/><path d="M5 14h5v5"/></svg></button>
+    <button type="button" class="cad-fer" id="med-barra-arco" aria-pressed="false" disabled onclick="alternarArcoDaMedida()" aria-label="Arco (A)"
+            title="Arco (A) — o próximo trecho é um arco: toque num ponto no arco e depois no fim. Para a quina arredondada do lote">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V12a8 8 0 0 1 8-8h8"/><circle cx="4" cy="20" r="1.4" fill="currentColor"/><circle cx="20" cy="4" r="1.4" fill="currentColor"/></svg></button>
     <button type="button" class="cad-fer cad-fechar" onclick="sairDeMedir()" aria-label="Fechar a medição" title="Fechar a medição (Esc)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
@@ -593,14 +600,14 @@
              mapa, como o MOVER do AutoCAD: ponto de base e destino, ou a medida. Ver mover-lotes.js e
              App\Services\MoverLotes. --}}
         <button type="button" class="btn sm cad-lanca" id="cad-mover-lotes"
-                data-fer="mover" data-tecla="M" data-min="1" data-exige="1 lote ou mais"
+                data-fer="mover" data-tecla="M" data-min="0" data-exige="nada: sem lote marcado, escolha no mapa"
                 onclick="moverLotesDaMesa()">
           <svg class="cad-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>
           </svg>
           <span class="cad-lanca-txt">Mover
-            <span class="cad-lanca-obs">Os lotes marcados ou a quadra inteira deles, como o Mover do AutoCAD.</span>
+            <span class="cad-lanca-obs">Os lotes marcados ou as quadras inteiras; sem nada marcado, escolha clicando no mapa.</span>
           </span>
         </button>
 

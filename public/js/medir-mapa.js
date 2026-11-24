@@ -29,6 +29,17 @@
  * medida) o ponto gruda no canto, e a medida passa a ser a do desenho, não a
  * do dedo.
  *
+ * ── Ortho, medida digitada e arco (24/11/2026) ──
+ *
+ * Como o desenho de linha da prancheta: F8 (ou o botão) liga o ORTHO — o
+ * trecho só na horizontal ou na vertical da tela; Shift inverte enquanto
+ * pressionado; o encaixe vence o ortho. Com um ponto marcado, DIGITAR um
+ * número põe o próximo ponto àquela distância, na direção do cursor (Enter).
+ * ARCO (A, ou o botão): o próximo trecho é um arco por três pontos — o último
+ * marcado, um ponto NO arco e o fim —, para medir a quina arredondada de
+ * lote e quadra. O arco vale para um trecho só. O comprimento é o do arco, e
+ * a área conta o gomo dele (_medArco).
+ *
  * É uma FERRAMENTA do mapa (ferramentas-mapa.js): abrir a medição encerra a
  * pesquisa ou a alteração cadastral, e vice-versa.
  */
@@ -63,6 +74,20 @@ const medState = {
   ultimoModo: 'regua',
   /** @type {Array<[number,number]>} pontos da medida em curso, em [lon, lat] */
   pontos: [],
+  /**
+   * Os arcos da medida em curso: o trecho i (de pontos[i] ao seguinte; na
+   * área, o último volta ao primeiro) passa por arcos[i], um ponto NO arco.
+   * @type {Object<number, [number,number]>}
+   */
+  arcos: {},
+  /** O próximo trecho é arco: null; 'meio' (falta o ponto no arco) ou 'fim' (com arcoMeio, falta o fim). */
+  arco: null,
+  /** @type {[number,number]|null} o ponto no arco já marcado */
+  arcoMeio: null,
+  /** Ortho ligado (F8). Shift inverte enquanto pressionado. */
+  ortho: false,
+  /** @type {[number,number]|null} a direção (unitária, no plano) do último ponto ao cursor, para a medida digitada */
+  dir: null,
   /** @type {[number,number]|null} onde o cursor está (já com ímã) */
   cursor: null,
   /** @type {Object<string,boolean>} os encaixes ligados (OSNAP) — ver _medSnapsSalvos */
@@ -104,14 +129,20 @@ function _medNoPlano(pts) {
  * @param {boolean} fechado conta o lado que volta ao primeiro ponto
  * @returns {{lados:number[], total:number, area:number}}
  */
-function medirPontos(pts, fechado) {
-  if (pts.length < 2) return { lados: [], total: 0, area: 0 }
-  const m = _medNoPlano(pts)
-  const lados = []
+function medirPontos(pts, fechado, arcos = {}) {
+  if (pts.length < 2) return { lados: [], total: 0, area: 0, raios: [] }
+  const p = planoLocal(pts[0][1], pts[0][0])
+  const noPlano = c => [(c[0] - p.lonRef) * p.porGrauLon, (c[1] - p.latRef) * p.porGrauLat]
+  const m = pts.map(noPlano)
+  const lados = [], raios = []
   const n = m.length
+  let gomos = 0
   for (let i = 0; i < (fechado ? n : n - 1); i++) {
     const j = (i + 1) % n
-    lados.push(Math.hypot(m[j][0] - m[i][0], m[j][1] - m[i][1]))
+    const arco = arcos[i] ? _medArco(m[i], noPlano(arcos[i]), m[j]) : null
+    lados.push(arco ? arco.comprimento : Math.hypot(m[j][0] - m[i][0], m[j][1] - m[i][1]))
+    raios.push(arco ? arco.raio : null)
+    if (arco) gomos += arco.gomo
   }
   let s = 0
   if (fechado && n >= 3) {
@@ -120,7 +151,82 @@ function medirPontos(pts, fechado) {
       s += m[i][0] * m[j][1] - m[j][0] * m[i][1]
     }
   }
-  return { lados, total: lados.reduce((a, b) => a + b, 0), area: Math.abs(s) / 2 }
+  return { lados, total: lados.reduce((a, b) => a + b, 0), area: fechado ? Math.abs(s / 2 + gomos) : 0, raios }
+}
+
+/**
+ * O arco que sai de a, passa por q e chega em b (no plano, em metros).
+ *
+ * comprimento = raio × ângulo; gomo = a área entre o arco e a corda, COM
+ * SINAL para somar à área com sinal do polígono pelas cordas: o gomo do lado
+ * de fora soma, o de dentro desconta. Com a, q e b alinhados (ou quase), é
+ * reta: null.
+ *
+ * @returns {{comprimento:number, raio:number, gomo:number, centro:number[], a0:number, varre:number}|null}
+ */
+function _medArco(a, q, b) {
+  const ax = a[0], ay = a[1], bx = b[0], by = b[1], qx = q[0], qy = q[1]
+  const d = 2 * (ax * (qy - by) + qx * (by - ay) + bx * (ay - qy))
+  const corda = Math.hypot(bx - ax, by - ay)
+  if (corda < 1e-6 || Math.abs(d) < 1e-9 * Math.max(1, corda * corda)) return null
+  const a2 = ax * ax + ay * ay, q2 = qx * qx + qy * qy, b2 = bx * bx + by * by
+  const cx = (a2 * (qy - by) + q2 * (by - ay) + b2 * (ay - qy)) / d
+  const cy = (a2 * (bx - qx) + q2 * (ax - bx) + b2 * (qx - ax)) / d
+  const raio = Math.hypot(ax - cx, ay - cy)
+  if (raio > 1e5) return null
+  // O lado da corda em que o ponto do arco está: o arco vai por ali.
+  const ladoQ = (bx - ax) * (qy - ay) - (by - ay) * (qx - ax)
+  const ladoC = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+  const meio = 2 * Math.asin(Math.min(1, corda / (2 * raio)))
+  const ang = Math.sign(ladoQ) === Math.sign(ladoC) && Math.abs(ladoC) > 1e-12 ? 2 * Math.PI - meio : meio
+  const gomo = (raio * raio / 2) * (ang - Math.sin(ang))
+  // A varredura de a até b (para desenhar): no sentido anti-horário se q
+  // está no caminho anti-horário de a até b; senão, no horário.
+  const a0 = Math.atan2(ay - cy, ax - cx)
+  const norm = x => ((x % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
+  const atB = norm(Math.atan2(by - cy, bx - cx) - a0), atQ = norm(Math.atan2(qy - cy, qx - cx) - a0)
+  const varre = atQ < atB ? atB : atB - 2 * Math.PI
+  return { comprimento: raio * ang, raio, gomo: -Math.sign(ladoQ) * gomo, centro: [cx, cy], a0, varre }
+}
+
+/**
+ * Os pontos do arco a→q→b, em [lon, lat], para desenhar (um a cada ~3°).
+ * Sem arco (alinhados), só as duas pontas.
+ */
+function _medPontosDoArco(a, q, b) {
+  const p = planoLocal(a[1], a[0])
+  const noPlano = c => [(c[0] - p.lonRef) * p.porGrauLon, (c[1] - p.latRef) * p.porGrauLat]
+  const doPlano = ([x, y]) => [p.lonRef + x / p.porGrauLon, p.latRef + y / p.porGrauLat]
+  const arco = _medArco(noPlano(a), noPlano(q), noPlano(b))
+  if (!arco) return [a, b]
+  const n = Math.max(4, Math.ceil(Math.abs(arco.varre) / (3 * Math.PI / 180)))
+  const saida = [a]
+  for (let k = 1; k < n; k++) {
+    const t = arco.a0 + arco.varre * k / n
+    saida.push(doPlano([arco.centro[0] + arco.raio * Math.cos(t), arco.centro[1] + arco.raio * Math.sin(t)]))
+  }
+  saida.push(b)
+  return saida
+}
+
+/** O ponto no meio do arco a→q→b, em [lon, lat] (onde vai a etiqueta). */
+function _medMeioDoArco(a, q, b) {
+  const lista = _medPontosDoArco(a, q, b)
+  return lista.length > 2 ? lista[Math.floor(lista.length / 2)] : _meio(a, b)
+}
+
+/** O caminho inteiro em [lon, lat], com os arcos já em pontos (para desenhar). */
+function _medCaminho(pts, fechado, arcos) {
+  const n = pts.length
+  if (n < 2) return pts
+  const saida = [pts[0]]
+  for (let i = 0; i < (fechado ? n : n - 1); i++) {
+    const j = (i + 1) % n
+    const trecho = arcos[i] ? _medPontosDoArco(pts[i], arcos[i], pts[j]) : [pts[i], pts[j]]
+    saida.push(...trecho.slice(1))
+  }
+  if (fechado) saida.pop()   // o polígono fecha sozinho
+  return saida
 }
 
 // ── ENTRAR E SAIR ────────────────────────────────────────────
@@ -144,6 +250,7 @@ function medirNoMapa(modo) {
     _medPreparar()
     medState.modo = medState.ultimoModo = modo
     medState.pontos = []
+    medState.arcos = {}; medState.arco = null; medState.arcoMeio = null
     medState.cursor = null
     _medPintar()
   }
@@ -190,6 +297,7 @@ function sairDeMedir() {
   }
   medState.modo = null
   medState.pontos = []
+  medState.arcos = {}; medState.arco = null; medState.arcoMeio = null
   medState.cursor = null
   medState.imaEm = null
   medState.imaTipo = null
@@ -205,6 +313,7 @@ function limparMedidas() {
   medState.prontas?.clearLayers()
   medState.viva?.clearLayers()
   medState.pontos = []
+  medState.arcos = {}; medState.arco = null; medState.arcoMeio = null
   medState.medidas = []
   medState.selecionada = null
   medState.quantas = 0
@@ -214,9 +323,82 @@ function limparMedidas() {
 
 /** Tira o último ponto da medida em curso. */
 function desfazerPontoDaMedida() {
+  // Com o ponto no arco marcado, o desfazer tira primeiro ele.
+  if (medState.arcoMeio) { medState.arcoMeio = null; medState.arco = 'meio'; _medPintar(); return }
   if (!medState.pontos.length) return
   medState.pontos.pop()
+  delete medState.arcos[medState.pontos.length - 1]
+  if (!medState.pontos.length) medState.arco = null
   _medPintar()
+}
+
+// ── ORTHO, ARCO E MEDIDA DIGITADA ────────────────────────────
+
+/** Liga ou desliga o ortho (F8 e o botão da barra). */
+function alternarOrthoDaMedida() {
+  medState.ortho = !medState.ortho
+  try { localStorage.setItem('med-ortho', medState.ortho ? '1' : '0') } catch {}
+  _medPintar()
+}
+try { medState.ortho = localStorage.getItem('med-ortho') === '1' } catch {}
+
+/** Liga ou desliga o arco no próximo trecho (A e o botão da barra). */
+function alternarArcoDaMedida() {
+  if (!medState.modo || medState.modo === 'cota') return
+  if (medState.arco) { medState.arco = null; medState.arcoMeio = null }
+  else if (!medState.pontos.length) { toast('Marque o ponto onde o arco começa; depois ligue o arco.', 'aviso'); return }
+  else medState.arco = 'meio'
+  _medPintar()
+}
+
+/**
+ * O ortho: o ponto preso na horizontal ou na vertical da tela a partir do
+ * último ponto marcado — a que estiver mais perto do cursor. O encaixe (menos
+ * o "na face") vence o ortho, como na prancheta.
+ * @param {L.LatLng} ll já com o ímã @param {MouseEvent} [ev]
+ */
+function _medOrtho(ll, ev) {
+  const pts = medState.pontos
+  const ligado = medState.ortho !== !!ev?.shiftKey
+  if (!ligado || !pts.length || medState.arco === 'fim') return ll
+  if (medState.imaEm && medState.imaTipo !== 'near') return ll
+  const [lon0, lat0] = pts[pts.length - 1]
+  const p = planoLocal(lat0, lon0)
+  const dx = (ll.lng - lon0) * p.porGrauLon, dy = (ll.lat - lat0) * p.porGrauLat
+  medState.imaEm = null
+  medState.imaTipo = null
+  return Math.abs(dx) >= Math.abs(dy) ? L.latLng(lat0, ll.lng) : L.latLng(ll.lat, lon0)
+}
+
+/** Guarda a direção do último ponto ao cursor (para a medida digitada). */
+function _medGuardarDirecao() {
+  const pts = medState.pontos, c = medState.cursor
+  if (!pts.length || !c) return
+  const [lon0, lat0] = pts[pts.length - 1]
+  const p = planoLocal(lat0, lon0)
+  const dx = (c[0] - lon0) * p.porGrauLon, dy = (c[1] - lat0) * p.porGrauLat
+  const l = Math.hypot(dx, dy)
+  if (l > 1e-6) medState.dir = [dx / l, dy / l]
+}
+
+/** A medida digitada na barra: o próximo ponto àquela distância, na direção do cursor. */
+function medidaDigitadaNaMedicao() {
+  const inp = document.getElementById('med-barra-dist')
+  const n = lerNumeroBR(inp?.value ?? '')
+  if (!Number.isFinite(n) || n <= 0) { toast('Digite a distância, em metros (ex.: 12,50).', 'err'); return }
+  const pts = medState.pontos
+  if (!pts.length) { toast('Marque o primeiro ponto; depois aponte a direção e digite a distância.', 'aviso'); return }
+  if (medState.arco) { toast('No arco, marque os pontos com o clique.', 'aviso'); return }
+  if (!medState.dir) { toast('Aponte o cursor na direção do próximo ponto antes de digitar.', 'aviso'); return }
+  const [lon0, lat0] = pts[pts.length - 1]
+  const p = planoLocal(lat0, lon0)
+  pts.push([lon0 + medState.dir[0] * n / p.porGrauLon, lat0 + medState.dir[1] * n / p.porGrauLat])
+  inp.value = ''
+  medState.cursor = null
+  if (medState.modo === 'cota' && pts.length === 2) { concluirMedida(); return }
+  _medPintar()
+  // O foco volta ao mapa: o próximo número digitado começa outra medida.
+  inp.blur()
 }
 
 // ── O OSNAP ──────────────────────────────────────────────────
@@ -420,7 +602,7 @@ function _medSobToque(ll) {
 
   for (let k = medState.medidas.length - 1; k >= 0; k--) {
     const m = medState.medidas[k]
-    const px = m.pts.map(c => mapa.latLngToContainerPoint(_ll(c)))
+    const px = _medCaminho(m.pts, m.modo === 'area', m.arcos || {}).map(c => mapa.latLngToContainerPoint(_ll(c)))
     const ate = m.modo === 'area' ? px.length : px.length - 1
     for (let i = 0; i < ate; i++) {
       if (_medDistAoTrecho(p, px[i], px[(i + 1) % px.length]) <= MED_PEGA_PX) return m
@@ -438,7 +620,7 @@ function _medSobToque(ll) {
 /** Redesenha uma medida pronta — em destaque, se for a selecionada. */
 function _medRedesenhar(m) {
   m.grupo.clearLayers()
-  _medDesenhar(m.grupo, m.modo, m.pts, null, m.id === medState.selecionada)
+  _medDesenhar(m.grupo, m.modo, m.pts, null, m.id === medState.selecionada, m.arcos || {})
 }
 
 /** Seleciona uma medida pronta (ou nenhuma). @param {number|null} id */
@@ -484,14 +666,29 @@ function _medAoClicar(ev) {
   }
   _medSelecionar(null)
 
-  const ll = _medIma(ev.latlng, ev.originalEvent)
+  const ll = _medOrtho(_medIma(ev.latlng, ev.originalEvent), ev.originalEvent)
   const pts = medState.pontos
 
-  // Área: tocar de novo no primeiro ponto fecha o contorno.
+  // Arco: o primeiro toque é o ponto NO arco; o segundo, o fim.
+  if (medState.arco === 'meio' && pts.length) {
+    medState.arcoMeio = [ll.lng, ll.lat]
+    medState.arco = 'fim'
+    medState.cursor = null
+    _medPintar()
+    return
+  }
+  const doArco = medState.arco === 'fim' ? medState.arcoMeio : null
+
+  // Área: tocar de novo no primeiro ponto fecha o contorno (pelo arco, se for o caso).
   if (medState.modo === 'area' && pts.length >= 3 && ll.lat === pts[0][1] && ll.lng === pts[0][0]) {
+    if (doArco) medState.arcos[pts.length - 1] = doArco
+    medState.arco = null; medState.arcoMeio = null
     concluirMedida(); return
   }
   pts.push([ll.lng, ll.lat])
+  if (doArco) medState.arcos[pts.length - 2] = doArco
+  // O arco vale para um trecho só.
+  medState.arco = null; medState.arcoMeio = null
   medState.cursor = null
 
   // A cota é um trecho só: o segundo ponto já a conclui.
@@ -509,8 +706,9 @@ function _medAoMover(ev) {
   // A mãozinha diz que o toque vai selecionar, e não começar uma medida.
   document.getElementById('map').classList.toggle('med-sobre',
     !medState.pontos.length && !ev.originalEvent?.altKey && !!_medSobToque(ev.latlng))
-  const ll = _medIma(ev.latlng, ev.originalEvent)
+  const ll = _medOrtho(_medIma(ev.latlng, ev.originalEvent), ev.originalEvent)
   medState.cursor = [ll.lng, ll.lat]
+  _medGuardarDirecao()
   // Um redesenho por quadro: o mouse dispara mais rápido do que a tela pinta.
   if (medState._quadro) return
   medState._quadro = setTimeout(() => { medState._quadro = 0; _medPintar() }, 16)
@@ -520,13 +718,21 @@ document.addEventListener('keydown', ev => {
   if (!medState.modo) return
   if (ev.target.closest?.('input,textarea,select,[contenteditable="true"]')) return
   if (document.querySelector('.modal-bg.open')) return
+  if (ev.key === 'F8') { alternarOrthoDaMedida(); ev.preventDefault(); return }
+  if ((ev.key === 'a' || ev.key === 'A') && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { alternarArcoDaMedida(); ev.preventDefault(); return }
+  // Começou a digitar a distância com o foco no mapa: vai para o campo.
+  if (/^[0-9]$/.test(ev.key) && medState.pontos.length && !medState.arco) {
+    const inp = document.getElementById('med-barra-dist')
+    if (inp && !inp.closest('[hidden]')) { inp.value = ev.key; inp.focus(); ev.preventDefault(); return }
+  }
   if (ev.key === 'Delete' || (ev.key === 'Backspace' && !medState.pontos.length)) {
     if (medState.selecionada !== null) { apagarMedidaSelecionada(); ev.preventDefault() }
     return
   }
   if (ev.key === 'Escape') {
-    // Esc larga, nesta ordem: a medida começada, a seleção, a ferramenta.
-    if (medState.pontos.length) { medState.pontos = []; _medPintar() }
+    // Esc larga, nesta ordem: o arco, a medida começada, a seleção, a ferramenta.
+    if (medState.arco) { medState.arco = null; medState.arcoMeio = null; _medPintar() }
+    else if (medState.pontos.length) { medState.pontos = []; medState.arcos = {}; _medPintar() }
     else if (medState.selecionada !== null) _medSelecionar(null)
     else sairDeMedir()
     ev.preventDefault()
@@ -549,11 +755,14 @@ function concluirMedida() {
     toast(modo === 'area' ? 'A área precisa de ao menos três pontos.' : 'Marque ao menos dois pontos.', 'err')
     return
   }
-  const m = { id: ++medState._seq, modo, pts: pts.map(c => [...c]), grupo: L.layerGroup().addTo(medState.prontas) }
+  // O arco que fechava sem o toque no primeiro ponto (Enter, Concluir) fica de fora.
+  const arcos = Object.fromEntries(Object.entries(medState.arcos).filter(([i]) => Number(i) < (modo === 'area' ? pts.length : pts.length - 1)))
+  const m = { id: ++medState._seq, modo, pts: pts.map(c => [...c]), arcos, grupo: L.layerGroup().addTo(medState.prontas) }
   medState.medidas.push(m)
-  _medDesenhar(m.grupo, modo, m.pts, null)
+  _medDesenhar(m.grupo, modo, m.pts, null, false, m.arcos)
   medState.quantas = medState.medidas.length
   medState.pontos = []
+  medState.arcos = {}; medState.arco = null; medState.arcoMeio = null
   medState.cursor = null
   _medPintar()
 }
@@ -654,7 +863,7 @@ function _medNoAnel(c, anel) {
  * @param {[number,number]|null} cursor o ponto elástico, na medida em curso
  * @param {boolean} [sel] a medida está selecionada
  */
-function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
+function _medDesenhar(grupo, modo, pts, cursor, sel = false, arcos = {}) {
   const todos = cursor ? [...pts, cursor] : pts
   if (!todos.length) return
   const viva = !!cursor || grupo === medState.viva
@@ -682,8 +891,8 @@ function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
   }
 
   const fechado = modo === 'area' && todos.length >= 3
-  const m = medirPontos(todos, fechado)
-  const linha = todos.map(_ll)
+  const m = medirPontos(todos, fechado, arcos)
+  const linha = _medCaminho(todos, fechado, arcos).map(_ll)
   if (fechado) {
     L.polygon(linha, { ...sombra, fill: false }).addTo(grupo)
     L.polygon(linha, { ...traco, fillColor: sel ? cor : tema.miolo, fillOpacity: .16, dashArray: viva ? '6 5' : null }).addTo(grupo)
@@ -698,7 +907,15 @@ function _medDesenhar(grupo, modo, pts, cursor, sel = false) {
     todos.reduce((s, c) => s + c[1], 0) / todos.length, todos.reduce((s, c) => s + c[0], 0) / todos.length)) : null
   m.lados.forEach((d, i) => {
     if (d < 0.00005) return
-    const a = todos[i], b = todos[(i + 1) % todos.length], texto = fmtMed(d) + ' m'
+    const a = todos[i], b = todos[(i + 1) % todos.length]
+    // No arco, a medida é a do arco, com o raio, no meio dele.
+    if (arcos[i] && m.raios[i]) {
+      const meio = _medMeioDoArco(a, arcos[i], b)
+      const texto = `⌒ ${fmtMed(d)} m · R ${fmtBR(m.raios[i], 2)}`
+      _medEtiqueta(grupo, meio, texto, cssSel, _medAoLado(a, b, texto, centro))
+      return
+    }
+    const texto = fmtMed(d) + ' m'
     _medEtiqueta(grupo, _meio(a, b), texto, cssSel, _medAoLado(a, b, texto, centro))
   })
 
@@ -721,7 +938,13 @@ function _medPintar() {
   if (g) {
     g.clearLayers()
     if (medState.modo) {
-      _medDesenhar(g, medState.modo, medState.pontos, medState.pontos.length ? medState.cursor : null)
+      const arcos = { ...medState.arcos }
+      // O arco em curso: do último ponto ao cursor, passando pelo ponto no arco.
+      if (medState.arco === 'fim' && medState.arcoMeio && medState.pontos.length) arcos[medState.pontos.length - 1] = medState.arcoMeio
+      _medDesenhar(g, medState.modo, medState.pontos, medState.pontos.length ? medState.cursor : null, false, arcos)
+      if (medState.arcoMeio) {
+        L.circleMarker(_ll(medState.arcoMeio), { pane: 'medidas', interactive: false, radius: 4, color: '#7c3aed', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(g)
+      }
       // Onde o encaixe pegou, com o símbolo do tipo (□ △ ⊠ × ∟), antes de tocar.
       if (medState.imaEm) {
         const t = MED_SNAP_TIPOS[medState.imaTipo] || MED_SNAP_TIPOS.end
@@ -746,10 +969,14 @@ function _medPintarBarra() {
       const pts = medState.pontos
       const n = pts.length
       const todos = n && medState.cursor ? [...pts, medState.cursor] : pts
-      const m = medirPontos(todos, modo === 'area' && todos.length >= 3)
+      const arcosVivos = { ...medState.arcos }
+      if (medState.arco === 'fim' && medState.arcoMeio && n) arcosVivos[n - 1] = medState.arcoMeio
+      const m = medirPontos(todos, modo === 'area' && todos.length >= 3, arcosVivos)
       document.getElementById('med-barra-passo').textContent =
-        n === 0 ? (modo === 'cota' ? 'Toque nas duas pontas do trecho.' : modo === 'area' ? 'Toque nos cantos do contorno.' : 'Toque no ponto de partida.')
-          : `${n} ${n === 1 ? 'ponto' : 'pontos'} · ${n >= (modo === 'area' ? 3 : 2) ? 'Concluir para finalizar' : 'Marque o próximo ponto'}`
+        medState.arco === 'meio' ? 'Arco: toque num ponto NO arco (o meio da curva).'
+          : medState.arco === 'fim' ? 'Arco: toque no fim do arco.'
+          : n === 0 ? (modo === 'cota' ? 'Toque nas duas pontas do trecho.' : modo === 'area' ? 'Toque nos cantos do contorno.' : 'Toque no ponto de partida.')
+          : `${n} ${n === 1 ? 'ponto' : 'pontos'} · ${n >= (modo === 'area' ? 3 : 2) ? 'Concluir para finalizar' : 'Marque o próximo ponto'} · digite a distância`
       const resultado = document.getElementById('med-barra-resultado')
       resultado.textContent = modo === 'area' && todos.length >= 3 ? `${fmtMed(m.area)} m² · perím. ${fmtMed(m.total)} m`
         : `${fmtMed(m.total)} m`
@@ -769,6 +996,17 @@ function _medPintarBarra() {
       }
       const ima = document.getElementById('med-barra-ima')
       ima.classList.toggle('at', _medSnapLigado())
+      const orto = document.getElementById('med-barra-orto')
+      if (orto) { orto.classList.toggle('at', medState.ortho); orto.setAttribute('aria-pressed', String(medState.ortho)) }
+      const arco = document.getElementById('med-barra-arco')
+      if (arco) {
+        arco.hidden = modo === 'cota'
+        arco.classList.toggle('at', !!medState.arco)
+        arco.setAttribute('aria-pressed', String(!!medState.arco))
+        arco.disabled = !n
+      }
+      const campo = document.getElementById('med-barra-medida')
+      if (campo) campo.hidden = !n || !!medState.arco
       if (medState.imaEm && medState.imaTipo) {
         document.getElementById('med-barra-passo').textContent += ` · Snap: ${MED_SNAP_TIPOS[medState.imaTipo].nome}`
       }
@@ -826,6 +1064,12 @@ function posicionarBarraMedicao() {
 }
 window.addEventListener('resize', posicionarBarraMedicao)
 document.addEventListener('DOMContentLoaded', () => {
+  // O campo da medida digitada: Enter marca o ponto; Esc limpa e devolve o foco ao mapa.
+  document.getElementById('med-barra-dist')?.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); medidaDigitadaNaMedicao() }
+    else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); ev.target.value = ''; ev.target.blur() }
+    else if (ev.key === 'F8') { ev.preventDefault(); ev.stopPropagation(); alternarOrthoDaMedida() }
+  })
   const mapa = document.getElementById('map')
   if (mapa) new ResizeObserver(posicionarBarraMedicao).observe(mapa)
   // Mesa do lote abrindo ou fechando (classe no body): a barra solta sai de baixo dela.

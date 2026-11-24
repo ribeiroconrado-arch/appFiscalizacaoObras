@@ -426,24 +426,28 @@ class LoteRepository
     {
         // PRIMEIRO, SÓ OS DE PERTO (24/11/2026): medir até todos os lotes do
         // bairro custava ~0,5 s por desenho num bairro de 1.400 lotes — mover
-        // uma quadra de 45 lotes levava 20 s só aqui. O retângulo do desenho
-        // folgado em 120 m usa o índice espacial; o mais próximo, se está a
-        // até 120 m, está dentro dele. Nada ali: a conta inteira, como antes
-        // (é o desenho longe, e a mensagem diz a quantos metros).
+        // uma quadra de 45 lotes levava 20 s só aqui. O retângulo do desenho,
+        // folgado em F metros, usa o índice espacial: todo lote a até F metros
+        // está dentro dele, então o mínimo achado ali, se for ≤ F, é o mínimo
+        // do bairro. Primeiro com 2 m (os vizinhos que encostam: poucos, e é
+        // o caso de quase todo desenho), depois com 120 m. Nada ali: a conta
+        // inteira, como antes (o desenho longe, e a mensagem diz quanto).
         $anel = json_decode($geojson, true)['coordinates'][0] ?? [];
         if ($anel) {
             $lons = array_column($anel, 0);
             $lats = array_column($anel, 1);
-            $dLat = 120 / 110574;
-            $dLon = 120 / (111320 * max(cos(deg2rad($lats[0])), 0.01));
-            $perto = DB::scalar(
-                'SELECT MIN(ST_Distance(geom, ST_GeomFromGeoJSON(?, 1, 4326)))
-                   FROM lotes WHERE ' . self::SO_ATIVOS . ' AND bairro = ?
-                    AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))',
-                [$geojson, $bairro, $this->retangulo(min($lons) - $dLon, min($lats) - $dLat, max($lons) + $dLon, max($lats) + $dLat)]
-            );
-            if ($perto !== null) {
-                return (float) $perto;
+            foreach ([2, 120] as $folga) {
+                $dLat = $folga / 110574;
+                $dLon = $folga / (111320 * max(cos(deg2rad($lats[0])), 0.01));
+                $perto = DB::scalar(
+                    'SELECT MIN(ST_Distance(geom, ST_GeomFromGeoJSON(?, 1, 4326)))
+                       FROM lotes WHERE ' . self::SO_ATIVOS . ' AND bairro = ?
+                        AND MBRIntersects(geom, ST_GeomFromText(?, 4326, \'axis-order=long-lat\'))',
+                    [$geojson, $bairro, $this->retangulo(min($lons) - $dLon, min($lats) - $dLat, max($lons) + $dLon, max($lats) + $dLat)]
+                );
+                if ($perto !== null && (float) $perto <= $folga) {
+                    return (float) $perto;
+                }
             }
         }
 

@@ -2198,7 +2198,8 @@ async function confirmarExclusaoLote() {
  */
 function moverLotesDaMesa() {
   const ids = [...selState.ids].map(Number)
-  if (!ids.length) { toast('Marque os lotes que vão andar juntos.', 'err'); return }
+  // Sem lote marcado, a escolha é feita dentro do próprio mover (24/11/2026).
+  if (!ids.length) { moverEscolhendoNoMapa(); return }
   const pre = typeof impState !== 'undefined' ? impState.preCuradoria : null
   if (pre && ids.some(id => Number(mapaState.porId.get(id)?.feature?.properties?.importacao_id) !== pre.id)) {
     toast('Só entram lotes da importação em pré-curadoria.', 'err'); return

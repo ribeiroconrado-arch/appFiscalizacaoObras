@@ -14,6 +14,11 @@
  * cada) — como o mover quadras do conversor GeoJSON. Os lotes da quadra que
  * não estão na tela são buscados antes (_feicoesDasQuadras).
  *
+ * SEM NADA MARCADO (24/11/2026): o Mover fica sempre aceso na régua. Sem lote
+ * marcado, ele abre no passo ESCOLHA: cada clique num lote o põe (ou tira) da
+ * lista — em "Quadra inteira", põe a quadra dele. "Pronto" (ou Enter) segue
+ * para o ponto de base. Várias quadras de uma vez, até MOV_MAX_LOTES lotes.
+ *
  * Só desloca: forma e área não mudam. Invadir um lote que não andou vira
  * aviso para confirmar, não recusa — é o passo do meio de um acerto (ver
  * App\Services\MoverLotes). Grava pelo /api/lotes/mover, com o modal de etapas.
@@ -21,7 +26,7 @@
 
 const MOV_SNAP_PX = 14
 /** Teto de lotes num movimento (o mesmo do servidor, CadastroLoteController::validarMover). */
-const MOV_MAX_LOTES = 150
+const MOV_MAX_LOTES = 300
 
 const movLoteState = {
   ativo: false,
@@ -30,7 +35,7 @@ const movLoteState = {
   /** @type {Object[]} os lotes marcados na mesa */ marcados: [],
   /** @type {Object[]|null} todos os lotes das quadras dos marcados, quando já buscados */ daQuadra: null,
   buscandoQuadras: false,
-  /** @type {'base'|'destino'} */ passo: 'base',
+  /** @type {'escolha'|'base'|'destino'} */ passo: 'base',
   /** @type {L.LatLng|null} */ base: null,
   /** O deslocamento do momento, em metros, e o último com direção (para a medida digitada). */
   v: null, dir: null,
@@ -45,7 +50,8 @@ if (typeof FERRAMENTAS_MAPA !== 'undefined') {
   FERRAMENTAS_MAPA.moverLotes = {
     rotulo: 'o mover lotes',
     aberta: () => movLoteState.ativo,
-    emCurso: () => movLoteState.base ? 'um movimento começado' : null,
+    emCurso: () => movLoteState.base ? 'um movimento começado'
+      : movLoteState.passo === 'escolha' && movLoteState.marcados.length ? 'lotes escolhidos para mover' : null,
     fechar: () => sairMoverLotes(),
   }
 }
@@ -59,6 +65,91 @@ function moverLotesNoMapa(ids) {
     Object.assign(movLoteState, { marcados: feicoes, escopo: 'lotes', daQuadra: null, buscandoQuadras: false })
     _abrirMover(feicoes)
   }, { convive: ['curadoria'] })
+}
+
+/**
+ * Abre o mover SEM lote marcado: os lotes (ou quadras) são escolhidos no
+ * próprio mapa, clicando neles.
+ */
+function moverEscolhendoNoMapa() {
+  pedirFerramenta('moverLotes', () => {
+    Object.assign(movLoteState, { marcados: [], escopo: 'lotes', daQuadra: null, buscandoQuadras: false })
+    _abrirMover([], true)
+  }, { convive: ['curadoria'] })
+}
+
+/**
+ * Clique num lote durante a ESCOLHA (chamado pelo clique do lote, mapa.js).
+ * Em "Lotes", põe ou tira o lote; em "Quadra inteira", põe ou tira a quadra dele.
+ * @param {Object} f a feição do lote
+ */
+function movEscolherLote(f) {
+  const s = movLoteState
+  if (!s.ativo || s.passo !== 'escolha' || s.buscandoQuadras) return
+  if (f?.geometry?.type !== 'Polygon') { toast('Este lote tem partes separadas e não pode ser movido.', 'aviso'); return }
+  if (f.properties.situacao && f.properties.situacao !== 'ativo') { toast('Lote inativo não se move.', 'aviso'); return }
+  const pre = typeof impState !== 'undefined' ? impState.preCuradoria : null
+  if (pre && Number(f.properties.importacao_id) !== pre.id) { toast('Só entram lotes da importação em pré-curadoria.', 'aviso'); return }
+  const id = f.properties.id
+  if (s.escopo === 'quadras') {
+    const k = _movChaveQuadra(f)
+    const ja = s.marcados.some(x => _movChaveQuadra(x) === k)
+    s.marcados = ja ? s.marcados.filter(x => _movChaveQuadra(x) !== k) : [...s.marcados, f]
+  } else {
+    const ja = s.marcados.some(x => x.properties.id === id)
+    s.marcados = ja ? s.marcados.filter(x => x.properties.id !== id) : [...s.marcados, f]
+  }
+  s.daQuadra = null
+  _movRealceEscolha()
+  _movBarra()
+}
+
+/** Os lotes que a escolha pega agora (na quadra, só os que já estão na tela). */
+function _movEscolhidos() {
+  const s = movLoteState
+  if (s.escopo !== 'quadras') return s.marcados
+  const ks = new Set(s.marcados.map(_movChaveQuadra))
+  return [...state.lotes.values()].filter(f => ks.has(_movChaveQuadra(f)) && f.geometry?.type === 'Polygon'
+    && (!f.properties.situacao || f.properties.situacao === 'ativo'))
+}
+
+/** Pinta os escolhidos, cheios de roxo, durante a escolha. */
+function _movRealceEscolha() {
+  const s = movLoteState
+  s.camada.eachLayer(l => { if (l !== s.marca) s.camada.removeLayer(l) }); s.fantasma = s.guia = null
+  for (const f of _movEscolhidos()) {
+    L.polygon(f.geometry.coordinates[0].map(([x, y]) => [y, x]), { pane: 'moverLotes', color: '#7c3aed', weight: 2, fillColor: '#7c3aed', fillOpacity: 0.25, interactive: false }).addTo(s.camada)
+  }
+}
+
+/** "Pronto": a escolha vira os lotes que andam, e o mover segue para o ponto de base. */
+async function movProntoEscolha() {
+  const s = movLoteState
+  if (!s.ativo || s.passo !== 'escolha' || s.buscandoQuadras) return
+  if (!s.marcados.length) { toast('Clique nos lotes que vão andar.', 'aviso'); return }
+  let feicoes = s.marcados
+  if (s.escopo === 'quadras') {
+    s.buscandoQuadras = true
+    _movBarra()
+    let r
+    try { r = await _feicoesDasQuadras() } catch { r = null }
+    s.buscandoQuadras = false
+    if (!s.ativo) return
+    if (!r?.feicoes.length) { toast('Não foi possível juntar os lotes da quadra. Tente de novo.', 'err'); _movBarra(); return }
+    if (r.partes) toast(`${r.partes} lote(s) da quadra têm partes separadas e ficam onde estão.`, 'aviso')
+    if (r.truncado) toast('O mapa não trouxe todos os lotes desta região. Aproxime o mapa das quadras e tente de novo.', 'aviso')
+    s.daQuadra = feicoes = r.feicoes
+  }
+  if (feicoes.length > MOV_MAX_LOTES) {
+    toast(`São ${feicoes.length} lotes; o mover leva até ${MOV_MAX_LOTES} de cada vez. Tire alguma quadra da escolha.`, 'err')
+    _movBarra()
+    return
+  }
+  const [lon, lat] = feicoes[0].geometry.coordinates[0][0]
+  s.plano = planoLocal(lat, lon)
+  s.passo = 'base'
+  s.camada.eachLayer(l => { if (l !== s.marca) s.camada.removeLayer(l) }); s.fantasma = s.guia = null
+  _movTrocarFeicoes(feicoes)
 }
 
 /** bairro|quadra de um lote. */
@@ -107,6 +198,13 @@ async function _feicoesDasQuadras() {
 async function escopoDoMover(escopo) {
   const s = movLoteState
   if (!s.ativo || s.travado || s.buscandoQuadras || s.escopo === escopo) return
+  if (s.passo === 'escolha') {
+    s.escopo = escopo
+    s.daQuadra = null
+    _movRealceEscolha()
+    _movBarra()
+    return
+  }
   if (escopo === 'lotes') {
     s.escopo = 'lotes'
     _movTrocarFeicoes(s.marcados)
@@ -121,7 +219,7 @@ async function escopoDoMover(escopo) {
     if (!s.ativo) return
     if (!r?.feicoes.length) { toast('Não foi possível juntar os lotes da quadra. Tente de novo.', 'err'); _movBarra(); return }
     if (r.feicoes.length > MOV_MAX_LOTES) {
-      toast(`As quadras escolhidas têm ${r.feicoes.length} lotes; o mover leva até ${MOV_MAX_LOTES} de cada vez. Mova uma quadra por vez.`, 'err')
+      toast(`As quadras escolhidas têm ${r.feicoes.length} lotes; o mover leva até ${MOV_MAX_LOTES} de cada vez. Mova menos quadras por vez.`, 'err')
       _movBarra()
       return
     }
@@ -153,10 +251,12 @@ function _movDirecoes(feicoes) {
   })
 }
 
-function _abrirMover(feicoes) {
+/** @param {Object[]} feicoes @param {boolean} [escolher] abre no passo da escolha, sem lotes */
+function _abrirMover(feicoes, escolher = false) {
   const m = mapaState.obj
-  const [lon, lat] = feicoes[0].geometry.coordinates[0][0]
-  Object.assign(movLoteState, { ativo: true, feicoes, passo: 'base', base: null, v: null, dir: null, ortho: false, travado: false, conferindo: false, gravando: false, plano: planoLocal(lat, lon) })
+  const c = m.getCenter()
+  const [lon, lat] = feicoes.length ? feicoes[0].geometry.coordinates[0][0] : [c.lng, c.lat]
+  Object.assign(movLoteState, { ativo: true, feicoes, passo: escolher ? 'escolha' : 'base', base: null, v: null, dir: null, ortho: false, travado: false, conferindo: false, gravando: false, plano: planoLocal(lat, lon) })
   movLoteState.dirs = _movDirecoes(feicoes)
   if (!m.getPane('moverLotes')) { m.createPane('moverLotes').style.zIndex = 660; m.getPane('moverLotes').style.pointerEvents = 'none' }
   movLoteState.camada = L.layerGroup().addTo(m)
@@ -173,7 +273,7 @@ function sairMoverLotes() {
   movLoteState.travado = movLoteState.conferindo = movLoteState.gravando = false
   m?.getContainer().classList.remove('mov-espera')
   movLoteState.camada?.remove()
-  movLoteState.camada = movLoteState.marca = movLoteState.guia = null
+  movLoteState.camada = movLoteState.marca = movLoteState.guia = movLoteState.fantasma = null
   m?.getContainer().classList.remove('mov-cursor')
   m?.off('mousemove', _movMove).off('click', _movClique)
   document.removeEventListener('keydown', _movTecla, true)
@@ -196,6 +296,7 @@ function _movBarra() {
     el.innerHTML = `<b>Mover</b><span class="seg mov-escopo" role="group" aria-label="O que mover"><button type="button" data-esc="lotes" onclick="escopoDoMover('lotes')"></button><button type="button" data-esc="quadras" onclick="escopoDoMover('quadras')"></button></span><span id="mov-passo"></span>
       <label id="mov-medida" hidden>Medida <input id="mov-dist" inputmode="decimal" autocomplete="off" placeholder="0,10"> m</label>
       <span id="mov-ortho" class="mov-ortho"></span>
+      <button type="button" class="btn sm primary" id="mov-pronto" onclick="movProntoEscolha()" hidden>Pronto</button>
       <button type="button" class="btn sm" onclick="sairMoverLotes()">Cancelar</button>`
     mapaState.obj.getContainer().parentElement.appendChild(el)
     const inp = el.querySelector('#mov-dist')
@@ -209,18 +310,30 @@ function _movBarra() {
   const s = movLoteState
   const nl = s.marcados.length
   const bLotes = el.querySelector('[data-esc="lotes"]'), bQuadras = el.querySelector('[data-esc="quadras"]')
-  bLotes.textContent = nl === 1 ? 'Lote marcado' : `${nl} lotes marcados`
+  const escolha = s.passo === 'escolha'
+  bLotes.textContent = escolha ? 'Lotes' : nl === 1 ? 'Lote marcado' : `${nl} lotes marcados`
   bQuadras.textContent = s.buscandoQuadras ? 'Juntando a quadra…'
-    : s.escopo === 'quadras' ? `Quadra inteira · ${s.feicoes.length} lotes` : 'Quadra inteira'
-  bQuadras.title = 'Todos os lotes de ' + _movNomeQuadras()
+    : s.escopo === 'quadras' && !escolha ? `Quadra inteira · ${s.feicoes.length} lotes` : 'Quadra inteira'
+  bQuadras.title = nl ? 'Todos os lotes de ' + _movNomeQuadras() : 'O clique pega a quadra inteira do lote'
+  const pronto = el.querySelector('#mov-pronto')
+  pronto.hidden = !escolha
+  if (escolha) {
+    const n = _movEscolhidos().length
+    const nq = new Set(s.marcados.map(_movChaveQuadra)).size
+    pronto.disabled = !nl || s.buscandoQuadras
+    pronto.textContent = !nl ? 'Pronto' : s.escopo === 'quadras' ? `Pronto · ${nq} quadra(s)` : `Pronto · ${n} lote(s)`
+  }
   bLotes.classList.toggle('at', s.escopo === 'lotes')
   bQuadras.classList.toggle('at', s.escopo === 'quadras')
   bLotes.disabled = bQuadras.disabled = !!s.travado || s.buscandoQuadras
   const destino = movLoteState.passo === 'destino'
-  el.querySelector('#mov-passo').textContent = destino
+  el.querySelector('#mov-passo').textContent = escolha
+    ? (s.escopo === 'quadras' ? 'Clique num lote de cada quadra que vai andar (de novo tira).' : 'Clique nos lotes que vão andar (de novo tira).') + ' Depois, Pronto ou Enter.'
+    : destino
     ? 'Clique no destino (encaixa em vértice e ponto médio) ou digite a medida e Enter.'
     : 'Clique no ponto de base — encaixa em vértice e ponto médio dos lotes.'
   el.querySelector('#mov-medida').hidden = !destino
+  el.querySelector('#mov-ortho').hidden = escolha
   el.querySelector('#mov-ortho').textContent = `F8 ${movLoteState.ortho ? 'trava ligada' : 'trava desligada'}`
   el.querySelector('#mov-ortho').classList.toggle('lig', movLoteState.ortho)
 }
@@ -278,7 +391,7 @@ function _movTravar(sim) {
 
 function _movMove(ev) {
   const s = movLoteState
-  if (!s.ativo || _movTravado()) return
+  if (!s.ativo || _movTravado() || s.passo === 'escolha') return
   s.ultimo = ev.latlng
   const enc = _movEncaixe(ev.latlng)
   let alvo = enc?.ll || ev.latlng
@@ -309,18 +422,29 @@ function _movMove(ev) {
 /** Os lotes deslocados por `v` (metros), tracejados, e a linha da base ao cursor. */
 function _movFantasma(v, alvo) {
   const s = movLoteState
-  s.camada.eachLayer(l => { if (l !== s.marca) s.camada.removeLayer(l) })
-  for (const f of s.feicoes) {
-    const r = f.geometry.coordinates[0].map(([x, y]) => { const p = _movM(x, y), q = _movLL(p[0] + v[0], p[1] + v[1]); return [q[1], q[0]] })
-    L.polygon(r, { pane: 'moverLotes', color: '#7c3aed', weight: 2, dashArray: '6 4', fill: true, fillOpacity: 0.08, interactive: false }).addTo(s.camada)
+  // UMA camada para todos os lotes, só atualizada (24/11/2026): com várias
+  // quadras (até 300 lotes), recriar um polígono por lote a cada movimento do
+  // mouse travava o mapa. O deslocamento é uma translação no plano local:
+  // em graus, a mesma soma para todos os vértices.
+  const dLon = v[0] / s.plano.porGrauLon, dLat = v[1] / s.plano.porGrauLat
+  const aneis = s.feicoes.map(f => f.geometry.coordinates[0].map(([x, y]) => [y + dLat, x + dLon]))
+  if (!s.fantasma || !s.camada.hasLayer(s.fantasma) || s.fantasmaDe !== s.feicoes) {
+    if (s.fantasma) s.camada.removeLayer(s.fantasma)
+    if (s.guia) s.camada.removeLayer(s.guia)
+    s.fantasma = L.polygon(aneis.map(a => [a]), { pane: 'moverLotes', color: '#7c3aed', weight: 2, dashArray: '6 4', fill: true, fillOpacity: 0.08, interactive: false }).addTo(s.camada)
+    s.fantasmaDe = s.feicoes
+    s.guia = L.polyline([s.base, alvo], { pane: 'moverLotes', color: '#7c3aed', weight: 1.5, dashArray: '3 4', interactive: false })
+      .bindTooltip('', { permanent: true, direction: 'center', className: 'mov-dica' }).addTo(s.camada)
+  } else {
+    s.fantasma.setLatLngs(aneis.map(a => [a]))
+    s.guia.setLatLngs([s.base, alvo])
   }
-  L.polyline([s.base, alvo], { pane: 'moverLotes', color: '#7c3aed', weight: 1.5, dashArray: '3 4', interactive: false })
-    .bindTooltip(`${fmtMed(Math.hypot(...v))} m`, { permanent: true, direction: 'center', className: 'mov-dica' }).addTo(s.camada)
+  s.guia.setTooltipContent(`${fmtMed(Math.hypot(...v))} m`)
 }
 
 function _movClique(ev) {
   const s = movLoteState
-  if (!s.ativo || _movTravado()) return
+  if (!s.ativo || _movTravado() || s.passo === 'escolha') return
   const enc = _movEncaixe(ev.latlng)
   if (s.passo === 'base') {
     s.base = enc?.ll || ev.latlng
@@ -341,6 +465,10 @@ function _movTecla(ev) {
     return
   }
   if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); sairMoverLotes(); return }
+  if (movLoteState.passo === 'escolha') {
+    if (ev.key === 'Enter' && !ev.target.closest?.('input,textarea')) { ev.preventDefault(); ev.stopPropagation(); movProntoEscolha() }
+    return
+  }
   if (ev.key === 'F8') { ev.preventDefault(); ev.stopPropagation(); _movOrtho(); return }
   // Começou a digitar a medida com o foco no mapa: vai para o campo.
   if (movLoteState.passo === 'destino' && /^[0-9.,]$/.test(ev.key) && !ev.target.closest?.('input,textarea')) {

@@ -743,8 +743,12 @@ function adicionarAoMapa(geojson, aoClicar) {
         // Desenhando um trecho de rua (ruas-manuais.js), o toque é ponto do
         // trecho — quem o trata é o clique no mapa, não o lote embaixo.
         if (typeof ruaState !== 'undefined' && ruaState.desenhando) return
-        // Movendo lotes (mover-lotes.js): o clique é ponto de base ou destino.
-        if (typeof movLoteState !== 'undefined' && movLoteState.ativo) return
+        // Movendo lotes (mover-lotes.js): o clique é ponto de base ou destino;
+        // na escolha (mover sem lote marcado), põe ou tira o lote da lista.
+        if (typeof movLoteState !== 'undefined' && movLoteState.ativo) {
+          if (movLoteState.passo === 'escolha') movEscolherLote(feicao)
+          return
+        }
         // Editando o contorno do bairro (contorno-editor.js): o lote é só
         // referência por baixo — nada de balão nem de marcar (07/11/2026).
         if (typeof ceState !== 'undefined' && ceState.ativo) return
