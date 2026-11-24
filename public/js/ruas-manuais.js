@@ -491,7 +491,7 @@ function aoMudarRuas() {
       // Desenhando ou encostando, o toque é ponto: deixa passar para o mapa.
       if (ruaState.desenhando || ruaState.encostando) return
       L.DomEvent.stopPropagation(e)
-      _clicarTrecho(x.k)
+      _clicarTrecho(x.k, !!e.originalEvent?.shiftKey)
     })
     linha.bindTooltip(x.t.nome
       || (x.sugestao ? `sem nome · sugestão${x.fonte === 'osm' ? ' do OpenStreetMap' : ''}: ${x.sugestao}`
@@ -503,11 +503,24 @@ function aoMudarRuas() {
   pintarMesaRuas()
 }
 
-/** Um clique seleciona a RUA inteira (o grupo); clicar de novo nela tira. Soma às outras. */
-function _clicarTrecho(k) {
+/**
+ * Um clique seleciona a RUA inteira (o grupo); clicar de novo nela tira. Soma às outras.
+ * Com SHIFT, só o trecho clicado (24/11/2026): cada Shift+clique põe ou tira
+ * um trecho, e a seleção vira uma composição de trechos.
+ * @param {string} k @param {boolean} [soTrecho] Shift pressionado
+ */
+function _clicarTrecho(k, soTrecho = false) {
   const x = ruaState.porK.get(k)
   if (!x) return
   ruaState.novo = null
+  if (soTrecho) {
+    if (ruaState.selecao.has(k)) { ruaState.selecao.delete(k); ruaState.ultimo = null }
+    else { ruaState.selecao.add(k); ruaState.ultimo = k }
+    ruaState.escolha = null; ruaState.nomeLivre = false
+    _pintarRealceRuas()
+    pintarMesaRuas()
+    return
+  }
   const grupo = ruaState.trechos.filter(t => t.grupo === x.grupo)
   const todos = grupo.every(t => ruaState.selecao.has(t.k))
   for (const t of grupo) todos ? ruaState.selecao.delete(t.k) : ruaState.selecao.add(t.k)
@@ -613,7 +626,7 @@ function pintarMesaRuas() {
   else if (ruaState.desenhando) partes.push(_htmlDesenhando())
   else if (ruaState.novo) partes.push(_htmlRuaNova())
   else if (ruaState.selecao.size) partes.push(_htmlSelecao())
-  else partes.push('<div class="ruas-nota">Clique numa rua no mapa: ela é selecionada inteira. Outro clique soma outra rua; Esc limpa.</div>')
+  else partes.push('<div class="ruas-nota">Clique numa rua no mapa: ela é selecionada inteira. Outro clique soma outra rua. Com Shift, cada clique põe ou tira um trecho só. Esc limpa.</div>')
 
   // Também na aba Sugestões: lá o botão em bloco fazia falta (23/11/2026).
   if (n.sugestoes && !ruaState.desenhando && !ruaState.novo) {
