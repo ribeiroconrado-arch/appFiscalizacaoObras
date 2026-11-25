@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#004D1C">
 {{-- O POST de identificação passa pelo grupo `web`, então precisa do token. --}}
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<title>{{ \App\Support\Modulo::titulo(\App\Support\Modulo::ativo()) }} — Mapa</title>
+<title>GeUrb — {{ \App\Support\Modulo::titulo(\App\Support\Modulo::ativo()) }} — Mapa</title>
 {{-- Dois conjuntos de ícone, um por tema. Os dois endereços vêm daqui, e não
      montados no JavaScript, para não perder o ?v= do @assetv — sem ele, uma
      regeração de ícones sairia do cache do navegador. --}}
@@ -69,10 +69,14 @@
      que cada lista traz é o servidor, pela sessão. --}}
 <script>window.MODULO = @json($modulo)</script>
 <header class="topo">
-  {{-- Ícone oficial, sem o fundo de fora do squircle. Troca junto com o tema
-       (ver js/tema.js): verde no institucional, âmbar no Tema F. --}}
-  <img class="topo-marca" src="@assetv('img/logo-64.png')" alt=""
-       data-src-institucional="@assetv('img/logo-64.png')" data-src-f="@assetv('img/logo-64-ambar.png')" data-src-cinza="@assetv('img/logo-64-cinza.png')">
+  {{-- MARCA GeUrb (identidade de 24/11/2026), em branco e igual nos três
+       temas: o ícone colorido de cada tema sumia sobre a barra da mesma cor.
+       Fica fora do .topo-tit, que some no celular quando há seletor de
+       módulo — a marca não. Em tela muito estreita, só o símbolo. --}}
+  <picture class="topo-marca">
+    <source media="(max-width:359px)" srcset="@assetv('img/simbolo-geurb-branco.svg')">
+    <img src="@assetv('img/marca-geurb-branca.svg')" alt="GeUrb">
+  </picture>
   <div class="topo-tit">
     <h1>{{ \App\Support\Modulo::titulo($modulo) }}</h1>
     <div class="sub">{{ number_format($total, 0, ',', '.') }} lotes na base</div>

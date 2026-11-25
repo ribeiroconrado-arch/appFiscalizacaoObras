@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#B4470D">
-<title>Entrar — Fiscalização Municipal</title>
+<title>Entrar — GeUrb</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -36,7 +36,10 @@
       <img src="@assetv('img/logo-128.png')" alt="" style="width:104px;height:104px;display:block"
            data-src-institucional="@assetv('img/logo-128.png')" data-src-f="@assetv('img/logo-128-ambar.png')" data-src-cinza="@assetv('img/logo-128-cinza.png')">
     </div>
-    <h1>Fiscalização Municipal</h1>
+    {{-- GeUrb é o nome do sistema; a Prefeitura continua como a dona dele.
+         "Ge" leve e "Urb" forte, como no logotipo (identidade de 24/11/2026). --}}
+    <h1 class="login-geurb">Ge<strong>Urb</strong></h1>
+    <p class="login-geurb-sub">Gestão Urbana Municipal</p>
     <p>Prefeitura de Primavera do Leste</p>
   </div>
 

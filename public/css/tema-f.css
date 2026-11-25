@@ -38,10 +38,21 @@
 .topo{background:var(--grad-topo)}
 
 /* ── MARCA NA BARRA SUPERIOR ──
-   Sem moldura nem fundo: a marca tem um conjunto por tema (ver js/tema.js),
-   então ela nunca fica da mesma cor da barra e não precisa de apoio.
-   O miolo branco do desenho já é o contraste. */
-.topo-marca{width:28px;height:28px;flex-shrink:0}
+   GeUrb em branco (símbolo + nome), a mesma nos três temas: o ícone de cada
+   tema é um quadrado na cor da própria barra e sumia nela (contraste de 1,2
+   a 1,9:1). O SVG tem proporção 11:3; abaixo de 360px (iPhone SE/5) o
+   <picture> troca pelo símbolo quadrado — de 375px para cima o nome cabe. O traço separa a marca do módulo: "GeUrb | Fiscalização
+   de Obras" — e sai quando o título do módulo some (celular com seletor). */
+.topo-marca{display:flex;align-items:center;flex-shrink:0;padding-right:12px;
+  border-right:1px solid rgba(255,255,255,.35)}
+.topo-marca img{display:block;height:30px;width:auto}
+@media(max-width:640px){
+  .topo:has(.modulo-sel) .topo-marca{border-right:0;padding-right:0}
+}
+@media(max-width:359px){
+  .topo-marca{border-right:0;padding-right:0}
+  .topo-marca img{height:26px}
+}
 /* O bloco do título precisa poder encolher para o ellipsis funcionar: sem
    min-width:0 o flex respeita o tamanho do conteúdo e "Fiscalização de
    Obras" quebrava em três linhas dentro de uma barra de 56px. */
@@ -554,6 +565,11 @@ body.login-bg{
 .login-logo h1{font-family:'Manrope',sans-serif;font-weight:700;color:var(--gd);
   font-size:18px;letter-spacing:-.02em}
 .login-logo p{font-family:'Inter',sans-serif;font-weight:500;color:var(--tx3)}
+/* Nome GeUrb no login: "Ge" leve e "Urb" forte, em grafite, como no logotipo
+   (a cor do tema fica no selo e no fundo). Logo abaixo, o descritor. */
+.login-logo h1.login-geurb{font-size:30px;font-weight:600;color:#30383C;letter-spacing:-.03em;line-height:1}
+.login-logo h1.login-geurb strong{font-weight:800}
+.login-logo p.login-geurb-sub{font-size:13px;text-transform:none;letter-spacing:0;color:var(--tx2);margin-top:6px}
 
 /* Campos e botão do login também saem do laranja: formulário é cinza. */
 .login-card .field{border-color:var(--f-bord)}
