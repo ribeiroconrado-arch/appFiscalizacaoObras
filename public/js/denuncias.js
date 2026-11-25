@@ -23,7 +23,7 @@ const dnState = {
   fonte: 'Residência',
   bairrosCarregados: false,
   /** @type {string[]} os bairros ligados à rua escolhida (vazio: rua sem ligação) */ bairrosDaRua: [],
-  /** @type {SpeechRecognition|null} */ voz: null,
+  /** @type {{parar:()=>void}|null} o endereço falado em curso (Ditado.ouvir) */ vozEnd: null,
   /** @type {number|null} a denúncia a destacar quando o mapa carregar */ focoNoMapa: null,
 }
 
@@ -571,7 +571,8 @@ function _dnLimparForm() {
 }
 
 function fecharFormDen() {
-  dnState.voz?.stop()
+  dnState.vozEnd?.parar()
+  Ditado.parar()
   fModalBtn('m-den')
 }
 
@@ -797,36 +798,194 @@ function _dnLimparGps() {
 // ── DITADO POR VOZ ───────────────────────────────────────────
 
 /**
- * Dita a observação (o voz.js do AppPOSTURAS, só a parte da observação). Fala
- * na porta da casa, com a mão ocupada, é o caso de uso. O Safari do iPhone não
- * tem o reconhecimento: lá vale o microfone do próprio teclado.
+ * Dita a observação (o voz.js do AppPOSTURAS, só a parte da observação), pelo
+ * Ditado comum (ditado.js), que não duplica o texto no Android. Fala na porta
+ * da casa, com a mão ocupada, é o caso de uso.
  */
 function ditarObsDen() {
-  const Reconhecer = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!Reconhecer) { toast('Este navegador não dita por voz. No iPhone, use o microfone do teclado.', 'aviso'); return }
-  if (dnState.voz) { dnState.voz.stop(); return }
-
   const campo = document.getElementById('dn-obs')
-  const marcar = ligado => {
-    document.getElementById('dn-voz').classList.toggle('ouvindo', ligado)
-    document.getElementById('dn-voz-txt').textContent = ligado ? 'Parar' : 'Falar'
+  if (!dnState.vozObsVigia) {
+    // O botão "Falar" acompanha o campo: aceso enquanto ele está ditando.
+    dnState.vozObsVigia = new MutationObserver(() => {
+      const ligado = campo.classList.contains('ditando')
+      document.getElementById('dn-voz').classList.toggle('ouvindo', ligado)
+      document.getElementById('dn-voz-txt').textContent = ligado ? 'Parar' : 'Falar'
+    })
+    dnState.vozObsVigia.observe(campo, { attributes: true, attributeFilter: ['class'] })
   }
-  const r = new Reconhecer()
-  r.lang = 'pt-BR'
-  r.continuous = true
-  r.interimResults = false
-  r.onresult = e => {
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (!e.results[i].isFinal) continue
-      const frase = e.results[i][0].transcript.trim().toUpperCase()
-      campo.value = (campo.value.trim() ? campo.value.trimEnd() + ' ' : '') + frase
+  campo.focus()
+  Ditado.alternar(campo)
+}
+
+// ── ENDEREÇO FALADO ──────────────────────────────────────────
+//
+// Como no app antigo: o agente fala "rua Cuiabá, número 500, bairro Parque
+// Eldorado" e o sistema procura a rua e o bairro nas listas do Posturas
+// (Parâmetros → Ruas e bairros). O que não achar com segurança vai como foi
+// dito (a rua) ou fica em branco (o bairro): melhor conferir do que gravar
+// errado. Sem a palavra "bairro", o que vem depois do número é tentado como
+// bairro; e a rua com um bairro só ligado já o preenche (ruaEscolhidaDen).
+
+const _DN_NUMEROS = { zero: 0, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9,
+  dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19,
+  vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90,
+  cem: 100, cento: 100, duzentos: 200, trezentos: 300, quatrocentos: 400, quinhentos: 500,
+  seiscentos: 600, setecentos: 700, oitocentos: 800, novecentos: 900, mil: 1000 }
+
+/** "mil duzentos e trinta" → 1230; o que não for número por extenso → null. */
+function _dnNumeroFalado(s) {
+  const ws = s.split(/\s+/).filter(w => w && w !== 'e')
+  if (!ws.length || !ws.every(w => w in _DN_NUMEROS)) return null
+  let total = 0, parcial = 0
+  for (const w of ws) {
+    const v = _DN_NUMEROS[w]
+    if (v === 1000) { total += (parcial || 1) * 1000; parcial = 0 } else parcial += v
+  }
+  return total + parcial
+}
+
+const _dnSemAcento = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+const _DN_TIPOS = /^(rua|r|avenida|av|travessa|tv|alameda|al|estrada|est|rodovia|rod|praca|pc|beco|via)\.?\s+/
+
+const _DN_ROMANOS = { um: 'i', dois: 'ii', tres: 'iii', quatro: 'iv', cinco: 'v', seis: 'vi', sete: 'vii', oito: 'viii', nove: 'ix', dez: 'x' }
+
+/** Parecença de dois nomes (Dice nos pares de letras), sem acento e sem o tipo da via; "dois" = "II". */
+function _dnParecenca(a, b) {
+  const pares = s => {
+    const t = _dnSemAcento(s).replace(_DN_TIPOS, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+      .split(' ').map(w => _DN_ROMANOS[w] || w).join(' ')
+    const m = new Map()
+    for (let i = 0; i < t.length - 1; i++) { const p = t.slice(i, i + 2); m.set(p, (m.get(p) || 0) + 1) }
+    return [m, Math.max(0, t.length - 1)]
+  }
+  const [ma, na] = pares(a), [mb, nb] = pares(b)
+  if (!na || !nb) return 0
+  let comum = 0
+  for (const [p, n] of ma) comum += Math.min(n, mb.get(p) || 0)
+  return 2 * comum / (na + nb)
+}
+
+/** O tipo da via no começo do nome ("rua", "avenida"…), igualado à abreviação. */
+function _dnTipo(s) {
+  const m = _dnSemAcento(s).match(_DN_TIPOS)
+  if (!m) return null
+  const t = m[1]
+  return { r: 'rua', av: 'avenida', tv: 'travessa', al: 'alameda', est: 'estrada', rod: 'rodovia', pc: 'praca' }[t] || t
+}
+
+/** O nome da lista mais parecido com o falado, se passar de `minimo`. O mesmo tipo de via desempata. */
+function _dnMelhor(falado, lista, minimo = 0.55) {
+  const tipo = _dnTipo(falado)
+  let melhor = null, nota = minimo
+  for (const n of lista) {
+    const p = _dnParecenca(falado, n)
+    if (p < minimo) continue
+    const q = p + (tipo && _dnTipo(n) === tipo ? 0.05 : 0)
+    if (q > nota) { nota = q; melhor = n }
+  }
+  return melhor
+}
+
+/**
+ * Separa a fala em rua, número e bairro.
+ * @param {string} texto @returns {{rua:string, numero:string, bairro:string}}
+ */
+function separarEnderecoFalado(texto) {
+  let t = _dnSemAcento(texto).replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim()
+  t = t.replace(/^(o\s+)?(endereco|local)\s*(e|eh|:)?\s+/, '').replace(/^(na|no|em)\s+/, '')
+  const MARCA_NUM = '(?:numero|n[oº°]\\.?|nº|casa)'
+  let rua = '', numero = '', bairro = ''
+  const mb = t.match(/\bbairro\s+(.+)$/)
+  if (mb) {
+    bairro = mb[1]; t = t.slice(0, mb.index).trim()
+    // "bairro Castelândia, rua Goiás, número 30": a rua veio depois do bairro.
+    const mr = bairro.match(/\b(rua|avenida|travessa|alameda|estrada|rodovia)\b/)
+    if (mr && mr.index > 0) { t = (t + ' ' + bairro.slice(mr.index)).trim(); bairro = bairro.slice(0, mr.index).trim() }
+  }
+  const mn = t.match(new RegExp('\\b' + MARCA_NUM + '\\s+(.+)$'))
+  if (mn) {
+    const resto = mn[1].trim()
+    const dig = resto.match(/^(\d+[a-z]?)\b\s*(.*)$/)
+    if (dig) { numero = dig[1]; if (!bairro && dig[2]) bairro = dig[2] }
+    else {
+      // Número por extenso: as palavras-número do começo; o resto, bairro.
+      const ws = resto.split(' ')
+      let k = 0
+      while (k < ws.length && (ws[k] in _DN_NUMEROS || ws[k] === 'e')) k++
+      const n = _dnNumeroFalado(ws.slice(0, k).join(' '))
+      if (n != null) numero = String(n)
+      if (!bairro && ws.slice(k).join(' ')) bairro = ws.slice(k).join(' ')
     }
+    rua = t.slice(0, mn.index).trim()
+  } else {
+    // Sem "número": o primeiro número dito separa a rua do resto.
+    const md = t.match(/^(.*?)\s+(\d+[a-z]?)\b\s*(.*)$/)
+    if (md) { rua = md[1]; numero = md[2]; if (!bairro && md[3]) bairro = md[3] }
+    else rua = t
   }
-  r.onerror = e => { if (e.error === 'not-allowed') toast('Permita o microfone para ditar.', 'err') }
-  r.onend = () => { dnState.voz = null; marcar(false) }
-  dnState.voz = r
-  marcar(true)
-  r.start()
+  bairro = bairro.replace(/^(do|da|de|no|na)\s+/, '').replace(/^bairro\s+/, '').trim()
+  return { rua: rua.trim(), numero, bairro }
+}
+
+/** As ruas da lista do Posturas parecidas com a falada (uma busca por palavra forte). */
+async function _dnRuasCandidatas(rua) {
+  const nome = _dnSemAcento(rua).replace(_DN_TIPOS, '').trim()
+  const palavras = [nome, ...nome.split(' ').filter(w => w.length >= 4).sort((x, y) => y.length - x.length).slice(0, 2)]
+  const vistos = new Set()
+  for (const q of palavras) {
+    if (!q) continue
+    try {
+      const d = await _dnPedir('/api/enderecos/logradouros?q=' + encodeURIComponent(q))
+      for (const l of d.logradouros) vistos.add(l.nome)
+    } catch { /* segue com o que achou */ }
+    if (vistos.size >= 30) break
+  }
+  return [...vistos]
+}
+
+/** O botão "Falar endereço": ouve uma frase e preenche rua, número e bairro. */
+function falarEnderecoDen() {
+  const btn = document.getElementById('dn-voz-end')
+  const res = document.getElementById('dn-voz-end-res')
+  if (dnState.vozEnd) { dnState.vozEnd.parar(); return }
+  if (!Ditado.disponivel) { toast('Este navegador não reconhece voz. Use o microfone do teclado do celular.', 'aviso'); return }
+  const marcar = ligado => { btn.classList.toggle('ouvindo', ligado); btn.querySelector('span').textContent = ligado ? 'Ouvindo…' : 'Falar endereço' }
+  res.hidden = false
+  res.textContent = 'Fale: "rua …, número …, bairro …"'
+  dnState.vozEnd = Ditado.ouvir({
+    umaFrase: true,
+    aoParcial: t => { if (t) res.textContent = '… ' + t },
+    aoFinal: t => preencherEnderecoFaladoDen(t),
+    aoFim: () => { dnState.vozEnd = null; marcar(false) },
+  })
+  if (dnState.vozEnd) marcar(true)
+}
+
+/** Preenche os campos com o que a fala disse, conferido nas listas. @param {string} texto */
+async function preencherEnderecoFaladoDen(texto) {
+  const res = document.getElementById('dn-voz-end-res')
+  const { rua, numero, bairro } = separarEnderecoFalado(texto)
+  res.innerHTML = `Ouvido: <i>"${esc(texto)}"</i>`
+  if (!rua && !numero && !bairro) { res.innerHTML += '<br>Não deu para separar o endereço. Tente: "rua Cuiabá, número 500, bairro Parque Eldorado".'; return }
+  const achados = []
+  if (rua) {
+    const lista = await _dnRuasCandidatas(rua)
+    const certa = _dnMelhor(rua, lista)
+    document.getElementById('dn-logradouro').value = certa || rua.toUpperCase()
+    achados.push(certa ? 'rua da lista' : 'rua como foi dita — confira')
+  }
+  if (numero) { document.getElementById('dn-numero').value = numero; achados.push('número') }
+  if (bairro) {
+    let nomes = []
+    try { nomes = (await _dnPedir('/api/enderecos/bairros')).bairros.map(b => b.nome) } catch { /* sem lista */ }
+    const certo = _dnMelhor(bairro, nomes)
+    if (certo) { document.getElementById('dn-bairro').value = certo; achados.push('bairro') }
+    else achados.push('bairro não encontrado na lista — escolha')
+  }
+  // A rua escolhida traz os bairros dela (e preenche se for um só), e a reincidência.
+  await ruaEscolhidaDen()
+  conferirBairroDen()
+  res.innerHTML += '<br>' + esc(achados.join(' · ')) + '.'
 }
 
 // ── CAMADA NO MAPA ───────────────────────────────────────────

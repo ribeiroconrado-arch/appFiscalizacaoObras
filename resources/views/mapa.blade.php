@@ -3900,7 +3900,13 @@
         </div>
       </div>
 
-      <div class="sec-title">Local</div>
+      <div class="sec-title den-local-tit">Local
+        <button type="button" class="den-voz" id="dn-voz-end" onclick="falarEnderecoDen()" title="Falar o endereço: rua, número e bairro">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4M8 23h8"/></svg>
+          <span>Falar endereço</span>
+        </button>
+      </div>
+      <small class="den-voz-res" id="dn-voz-end-res" hidden></small>
       <div class="field">
         <label for="dn-logradouro">Logradouro *</label>
         <input type="text" id="dn-logradouro" list="dn-lista-ruas" autocomplete="off" maxlength="180"
@@ -3974,7 +3980,8 @@
             <span id="dn-voz-txt">Falar</span>
           </button>
         </div>
-        <textarea id="dn-obs" rows="3" maxlength="4000" placeholder="Detalhes do atendimento…"></textarea>
+        {{-- O "Falar" ao lado do rótulo é o ditado deste campo: sem o botão flutuante (ditado.js). --}}
+        <textarea id="dn-obs" rows="3" maxlength="4000" placeholder="Detalhes do atendimento…" data-sem-ditado data-ditado-maiusculas></textarea>
       </div>
       <p class="den-lgpd"><b>LGPD:</b> os dados pessoais servem exclusivamente à fiscalização e ao
         cumprimento de obrigação legal do Município (Lei 13.709/2018, art. 7º, II e III).</p>
@@ -4653,6 +4660,8 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 </script>
 <script src="{{ asset('vendor/leaflet-1.9.4/leaflet.js') }}"></script>
 <script src="@assetv('js/ui.js')"></script>
+{{-- Ditado por voz em todo campo de texto longo (Web Speech, acertado para o Android). --}}
+<script src="@assetv('js/ditado.js')"></script>
 {{-- O registro das camadas vem cedo: os módulos seguintes registram as suas. --}}
 <script src="@assetv('js/camadas-mapa.js')"></script>
 <script src="@assetv('js/pesquisa-mapa.js')"></script>

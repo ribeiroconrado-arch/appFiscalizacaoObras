@@ -189,3 +189,7 @@
 @media (min-width:1000px){.den-csv-larga{display:inline-flex;align-items:center;gap:6px}.den-csv-larga svg{width:15px;height:15px}}
 /* O último cartão não fica escondido atrás do "+". */
 #t-denuncias #lista-denuncias{padding-bottom:76px}
+
+/* Endereço falado (falarEnderecoDen). */
+.den-local-tit{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.den-voz-res{display:block;margin:-2px 0 8px;font-size:12px;color:var(--tx2);line-height:1.4}
