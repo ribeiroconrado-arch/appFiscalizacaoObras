@@ -1127,18 +1127,18 @@
        virou coluna e filtro; o que continua separado é o formulário — e as
        tabelas do banco, que só têm quatro colunas em comum (ver
        DemandaController). --}}
-  {{-- SERVIÇOS (24/11/2026): a fila virou de tudo o que há para fazer —
-       em Obras, protocolos, ordens, vistorias e sinalizações; em Posturas,
-       documentos, ordens e sinalizações (ver DemandaController). Um "Novo"
-       só, que abre o menu das opções, como os outros "Novo" do sistema. O que
-       cada um pode criar vai nos data-*; esconder não é a segurança — quem
-       autoriza é o servidor de cada formulário. --}}
+  {{-- SERVIÇOS (25/11/2026): a fila de tudo o que há para fazer —
+       protocolos (em Posturas, também as denúncias gerais), ordens de serviço
+       e sinalizações. Vistorias, autos e notificações ficam em Documentos
+       (ver DemandaController). Um "Novo" só, que abre o menu das opções, como
+       os outros "Novo" do sistema. O que cada um pode criar vai nos data-*;
+       esconder não é a segurança — quem autoriza é o servidor de cada
+       formulário. --}}
   <div class="topo-lista">
     <div class="sec-simples">Serviços <span class="cont" id="cont-demandas">0</span></div>
     <button class="btn primary sm" onclick="novoServico(event)"
-            data-protocolar="{{ $modulo === 'obras' && auth()->user()->canEdit() ? 1 : 0 }}"
-            data-os="{{ auth()->user()->isAdmin() ? 1 : 0 }}"
-            data-lavrar="{{ auth()->user()->podeLavrarDocumento() ? 1 : 0 }}">
+            data-protocolar="{{ auth()->user()->canEdit() ? 1 : 0 }}"
+            data-os="{{ auth()->user()->isAdmin() ? 1 : 0 }}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       Novo
     </button>
@@ -1441,8 +1441,8 @@
        (User::EXTERNOS) não os vê — e o servidor recusa as rotas deles de
        qualquer jeito (middleware `interno`). --}}
   @unless ($externo)
-  {{-- Em Posturas, Serviços SUBSTITUI Documentos (24/11/2026): os documentos
-       estão na fila de Serviços, e a aba não aparece (config/modulos.php). --}}
+  {{-- Documentos: autos e notificações, nos dois módulos. A aba existe se o
+       módulo a tiver (config/modulos.php). --}}
   @if ($temAba('documentos'))
   <button class="aba" data-destino="documentos" title="Documentos" onclick="irPara('documentos')">
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="12" height="15" rx="2"/><path d="M16 21H6a2 2 0 0 1-2-2V8m8-1h4m-4 4h4"/></svg>
@@ -4073,7 +4073,7 @@
            stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
         <rect x="9" y="2" width="6" height="4" rx="1"/><path d="M8 12h8M8 16h5"/></svg>
-      Novo protocolo
+      <span id="np-titulo">Novo protocolo</span>
     </h3>
     <div class="sub" id="np-imovel">—</div>
     <input type="hidden" id="np-lote">
@@ -4081,19 +4081,26 @@
     <div class="sec-title">Identificação</div>
     <div class="field">
       {{-- Número vem do protocolo geral da prefeitura; o sistema não gera. --}}
-      <label for="np-numero">Número do protocolo</label>
+      <label for="np-numero">Número do protocolo / processo</label>
       <input type="text" id="np-numero" class="mono" placeholder="2026/0412" maxlength="30">
     </div>
     <div class="field">
-      <label for="np-tipo">Tipo de requerimento</label>
-      <select data-combo id="np-tipo">
-        @foreach (\App\Models\Protocolo::TIPOS as $valor => $rotulo)
+      {{-- Os tipos são do módulo: em Posturas, protocolo e denúncia geral
+           (Protocolo::tiposDo, 25/11/2026). --}}
+      <label for="np-tipo">Tipo</label>
+      <select data-combo id="np-tipo" onchange="ajustarFormProtocolo()">
+        @foreach (\App\Models\Protocolo::tiposDo($modulo) as $valor => $rotulo)
           <option value="{{ $valor }}">{{ $rotulo }}</option>
         @endforeach
       </select>
     </div>
+    <div class="field">
+      {{-- Onde é, quando não há lote (calçada, via, comércio). --}}
+      <label for="np-local">Local {{ $modulo === 'posturas' ? '' : '(se não houver lote)' }}</label>
+      <input type="text" id="np-local" maxlength="255" placeholder="Rua, número, ponto de referência">
+    </div>
 
-    <div class="sec-title">Requerente</div>
+    <div class="sec-title" id="np-sec-requerente">Requerente</div>
     <div class="field">
       <label for="np-requerente">Nome</label>
       <input type="text" id="np-requerente" maxlength="160">

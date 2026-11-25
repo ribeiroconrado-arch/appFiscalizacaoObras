@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Documento;
 use App\Models\OrdemServico;
 use App\Models\Protocolo;
 use App\Models\Sinalizacao;
-use App\Models\Vistoria;
 use App\Support\Modulo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,7 +46,7 @@ class DemandaController extends Controller
         $u = $request->user();
 
         $d = $request->validate([
-            'tipo'     => ['nullable', 'in:protocolo,os,vistoria,sinalizacao,documento'],
+            'tipo'     => ['nullable', 'in:protocolo,os,sinalizacao'],
             'situacao' => ['nullable', 'string', 'max:40'],
             'agente'   => ['nullable', 'in:eu,todos,sem_dono'],
             'busca'    => ['nullable', 'string', 'max:80'],
@@ -68,10 +66,8 @@ class DemandaController extends Controller
         $quer = fn (string $t) => in_array($t, $tipos, true) && ($tipo === '' || $tipo === $t);
 
         $linhas = collect();
-        if ($quer('protocolo'))   { $linhas = $linhas->concat($this->protocolos($u->id, $escopo, $texto, $sit)); }
+        if ($quer('protocolo'))   { $linhas = $linhas->concat($this->protocolos($u->id, $escopo, $texto, $sit, $modulo)); }
         if ($quer('os'))          { $linhas = $linhas->concat($this->ordens($u->id, $escopo, $texto, $sit)); }
-        if ($quer('vistoria'))    { $linhas = $linhas->concat($this->vistorias($u->id, $escopo, $texto, $sit)); }
-        if ($quer('documento'))   { $linhas = $linhas->concat($this->documentos($u->id, $escopo, $texto, $sit, $modulo)); }
         if ($quer('sinalizacao')) { $linhas = $linhas->concat($this->sinalizacoes($u, $escopo, $texto, $sit, $modulo)); }
 
         // Ordena pela data, do mais recente para o mais antigo. `ordem` é a
@@ -84,8 +80,10 @@ class DemandaController extends Controller
             'total'    => $linhas->count(),
             // Quantos de cada tipo, para o filtro dizer o que existe.
             'contagem' => collect($tipos)->mapWithKeys(fn ($t) => [$t => $linhas->where('tipo', $t)->count()]),
-            'tipos'    => collect($tipos)->map(fn ($t) => ['valor' => $t, 'rotulo' => self::ROTULOS[$t]])->values(),
-            'tipos_protocolo' => collect(Protocolo::TIPOS)
+            // Em Posturas o protocolo inclui a denúncia geral: o filtro diz isso.
+            'tipos'    => collect($tipos)->map(fn ($t) => ['valor' => $t,
+                'rotulo' => $t === 'protocolo' && $modulo === 'posturas' ? 'Protocolos e denúncias' : self::ROTULOS[$t]])->values(),
+            'tipos_protocolo' => collect(Protocolo::tiposDo($modulo))
                 ->map(fn ($r, $v) => ['valor' => $v, 'rotulo' => $r])->values(),
             // Agrupadas por tipo: as situações não são as mesmas entre eles, e
             // um seletor plano faria "Deferido" e "Concluída" parecerem
@@ -93,122 +91,31 @@ class DemandaController extends Controller
             'situacoes' => collect([
                 'protocolo' => fn () => collect(Protocolo::SITUACOES)->map(fn ($s, $v) => ['valor' => $v, 'rotulo' => $s[0]])->values(),
                 'os'        => fn () => collect(OrdemServico::SITUACOES)->map(fn ($s, $v) => ['valor' => $v, 'rotulo' => $s['texto']])->values(),
-                'vistoria'  => fn () => collect(Vistoria::SITUACOES)->map(fn ($r, $v) => ['valor' => 'vis_' . $v, 'rotulo' => $r])->values(),
-                'documento' => fn () => collect(self::STATUS_DOCUMENTO)->map(fn ($r, $v) => ['valor' => 'doc_' . $v, 'rotulo' => $r])->values(),
             ])->only($tipos)->map(fn ($f) => $f()),
             'pode_protocolar' => $u->canEdit() && in_array('protocolo', $tipos, true),
             'pode_emitir_os'  => $u->isAdmin(),
-            'pode_lavrar'     => $u->podeLavrarDocumento(),
         ]);
     }
 
     /**
-     * O que entra na fila de SERVIÇOS de cada módulo (decisão de 24/11/2026):
-     *   Obras    — a antiga "Protocolos e ordens de serviço", mais as
-     *              vistorias e as sinalizações. Documentos continuam na
-     *              tela Documentos.
-     *   Posturas — Serviços SUBSTITUI a tela Documentos: os documentos, as
-     *              ordens de serviço e as sinalizações. As denúncias de
-     *              perturbação do sossego continuam na tela Denúncias.
+     * O que entra na fila de SERVIÇOS de cada módulo (acertado com ele em
+     * 25/11/2026):
+     *   Obras    — protocolos, ordens de serviço e sinalizações;
+     *   Posturas — protocolos e denúncias gerais (o mesmo formulário, ver
+     *              Protocolo::TIPOS_POSTURAS), ordens de serviço e
+     *              sinalizações.
+     * Vistorias, autos e notificações ficam na tela Documentos, nos dois; a
+     * denúncia de perturbação do sossego, na tela Denúncias.
      */
     const TIPOS_DO_MODULO = [
-        'obras'    => ['protocolo', 'os', 'vistoria', 'sinalizacao'],
-        'posturas' => ['documento', 'os', 'sinalizacao'],
+        'obras'    => ['protocolo', 'os', 'sinalizacao'],
+        'posturas' => ['protocolo', 'os', 'sinalizacao'],
     ];
 
     const ROTULOS = [
-        'protocolo' => 'Protocolos', 'os' => 'Ordens de serviço', 'vistoria' => 'Vistorias',
-        'sinalizacao' => 'Sinalizações', 'documento' => 'Documentos',
+        'protocolo' => 'Protocolos', 'os' => 'Ordens de serviço',
+        'sinalizacao' => 'Sinalizações',
     ];
-
-    /** Os status do documento como o filtro os oferece (Documento::statusBadge). */
-    const STATUS_DOCUMENTO = [
-        'rascunho' => 'Rascunho', 'gravado' => 'Gravado', 'lavrado' => 'Lavrado', 'em_defesa' => 'Em defesa',
-        'atendido' => 'Atendido', 'cancelado' => 'Cancelado', 'defendido' => 'Defendido',
-    ];
-
-    /** Vistorias de obra: registro do que foi constatado, com o fiscal como responsável. */
-    private function vistorias(int $usuarioId, string $escopo, ?string $texto, ?string $situacao)
-    {
-        // Vistoria nasce feita, com fiscal: não há "sem dono".
-        if ($escopo === 'sem_dono') {
-            return collect();
-        }
-        $q = Vistoria::query()->with(['lote:id,bairro,quadra,numero_lote', 'fiscal:id,name']);
-        if ($situacao && str_starts_with($situacao, 'vis_') && array_key_exists(substr($situacao, 4), Vistoria::SITUACOES)) {
-            $q->where('situacao', substr($situacao, 4));
-        } elseif ($situacao) {
-            return collect();
-        }
-        if ($escopo === 'eu') {
-            $q->where('fiscal_id', $usuarioId);
-        }
-        if ($texto) {
-            $q->where(fn ($s) => $s->where('numero', 'like', "%{$texto}%")
-                ->orWhereHas('lote', fn ($l) => $l->where('quadra', 'like', "%{$texto}%")
-                    ->orWhere('numero_lote', 'like', "%{$texto}%")->orWhere('bairro', 'like', "%{$texto}%")));
-        }
-
-        return $q->latest('data_hora')->limit(300)->get()->map(fn (Vistoria $v) => [
-            'tipo'        => 'vistoria',
-            'tipo_rotulo' => 'Vistoria',
-            'id'          => $v->id,
-            'numero'      => $v->numeroFormatado(),
-            'assunto'     => $v->finalidadeRotulo(),
-            'quem'        => $v->fiscal?->name,
-            'quem_rotulo' => 'Fiscal',
-            'imovel'      => $v->lote?->rotuloCompleto(),
-            'responsavel' => $v->fiscal?->name,
-            'data'        => $v->data_hora?->format('d/m/Y'),
-            'ordem'       => $v->data_hora?->format('Y-m-d') ?? '',
-            'situacao'    => ['texto' => $v->situacaoRotulo(), 'classe' => $v->situacaoBadge()],
-            'alerta'      => null,
-        ]);
-    }
-
-    /** Documentos do módulo (em Posturas, Serviços faz o papel da tela Documentos). */
-    private function documentos(int $usuarioId, string $escopo, ?string $texto, ?string $situacao, string $modulo)
-    {
-        if ($escopo === 'sem_dono') {
-            return collect();
-        }
-        $q = Documento::query()->doModulo($modulo)->with(['lote:id,bairro,quadra,numero_lote', 'agente:id,name']);
-        if ($situacao && str_starts_with($situacao, 'doc_') && array_key_exists(substr($situacao, 4), self::STATUS_DOCUMENTO)) {
-            $st = substr($situacao, 4);
-            // "Cancelado" junta o nome novo e o antigo do cancelamento.
-            $st === 'cancelado' ? $q->whereIn('status', ['cancelado', 'anulado']) : $q->where('status', $st);
-        } elseif ($situacao) {
-            return collect();
-        }
-        if ($escopo === 'eu') {
-            $q->where('agente_id', $usuarioId);
-        }
-        if ($texto) {
-            $q->where(fn ($s) => $s->where('numero', 'like', "%{$texto}%")
-                ->orWhere('autuado_nome', 'like', "%{$texto}%")
-                ->orWhere('endereco', 'like', "%{$texto}%"));
-        }
-
-        return $q->latest('id')->limit(300)->get()->map(function (Documento $doc) {
-            [$txt, $cls] = $doc->statusBadge();
-            $quando = $doc->data_lavratura ?? $doc->created_at;
-            return [
-                'tipo'        => 'documento',
-                'tipo_rotulo' => 'Documento',
-                'id'          => $doc->id,
-                'numero'      => $doc->numeroFormatado(),
-                'assunto'     => $doc->rotuloTipo(),
-                'quem'        => $doc->autuado_nome,
-                'quem_rotulo' => 'Autuado',
-                'imovel'      => $doc->lote?->rotuloCompleto() ?? ($doc->endereco ?: null),
-                'responsavel' => $doc->agente?->name,
-                'data'        => $quando?->format('d/m/Y'),
-                'ordem'       => $quando?->format('Y-m-d') ?? '',
-                'situacao'    => ['texto' => $txt, 'classe' => $cls],
-                'alerta'      => null,
-            ];
-        });
-    }
 
     /** Sinalizações pendentes do módulo — as mesmas bandeiras do mapa. */
     private function sinalizacoes($u, string $escopo, ?string $texto, ?string $situacao, string $modulo)
@@ -257,9 +164,10 @@ class DemandaController extends Controller
     }
 
     /** @return \Illuminate\Support\Collection<int,array<string,mixed>> */
-    private function protocolos(int $usuarioId, string $escopo, ?string $texto, ?string $situacao)
+    private function protocolos(int $usuarioId, string $escopo, ?string $texto, ?string $situacao, string $modulo)
     {
-        $q = Protocolo::query()
+        // Cada módulo vê os seus (em Posturas, protocolos e denúncias gerais).
+        $q = Protocolo::query()->doModulo($modulo)
             ->with(['lote:id,bairro,quadra,numero_lote', 'responsavel:id,name']);
 
         // A situação chega de um seletor que mistura os dois tipos; a que não
@@ -282,6 +190,8 @@ class DemandaController extends Controller
             $q->where(function ($s) use ($texto) {
                 $s->where('numero', 'like', "%{$texto}%")
                   ->orWhere('requerente_nome', 'like', "%{$texto}%")
+                  ->orWhere('local', 'like', "%{$texto}%")
+                  ->orWhere('objeto', 'like', "%{$texto}%")
                   ->orWhereHas('lote', fn ($l) => $l
                       ->where('quadra', 'like', "%{$texto}%")
                       ->orWhere('numero_lote', 'like', "%{$texto}%")
@@ -293,15 +203,19 @@ class DemandaController extends Controller
             [$txt, $cls] = $p->situacaoBadge();
             $prazo = $p->situacaoPrazo();
 
+            $denuncia = $p->tipo === 'denuncia';
+
             return [
                 'tipo'        => 'protocolo',
-                'tipo_rotulo' => 'Protocolo',
+                'tipo_rotulo' => $denuncia ? 'Denúncia' : 'Protocolo',
+                // O selo da lista: em Posturas a denúncia geral se diz denúncia.
+                'selo'        => $denuncia ? 'Denúncia' : null,
                 'id'          => $p->id,
                 'numero'      => $p->numero,
-                'assunto'     => $p->rotuloTipo(),
+                'assunto'     => $denuncia || $p->tipo === 'requerimento' ? ($p->objeto ?: $p->rotuloTipo()) : $p->rotuloTipo(),
                 'quem'        => $p->requerente_nome,
-                'quem_rotulo' => 'Requerente',
-                'imovel'      => $p->lote?->rotuloCompleto(),
+                'quem_rotulo' => $denuncia ? 'Denunciante' : 'Requerente',
+                'imovel'      => $p->lote?->rotuloCompleto() ?? $p->local,
                 'responsavel' => $p->responsavel?->name,
                 'data'        => $p->protocolado_em?->format('d/m/Y'),
                 'ordem'       => $p->protocolado_em?->format('Y-m-d') ?? '',

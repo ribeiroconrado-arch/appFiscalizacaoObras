@@ -1,19 +1,19 @@
 // ══════════════════════════════════════════════
 // MÓDULO: SERVIÇOS — a fila de trabalho
 //
-// Tudo o que há para fazer numa lista só (decisão de 24/11/2026):
-//   Obras    — protocolos, ordens de serviço, vistorias e sinalizações
-//              (era "Protocolos e ordens de serviço"; os documentos
-//              continuam na tela Documentos);
-//   Posturas — documentos, ordens de serviço e sinalizações (Serviços
-//              substitui a tela Documentos; as denúncias de perturbação do
-//              sossego continuam na tela Denúncias).
-// O que entra em cada módulo quem decide é o servidor (DemandaController::
-// TIPOS_DO_MODULO); esta tela monta o filtro com o que ele devolve.
+// Tudo o que há para fazer numa lista só (acertado com ele em 25/11/2026):
+//   Obras    — protocolos, ordens de serviço e sinalizações (era
+//              "Protocolos e ordens de serviço");
+//   Posturas — protocolos e denúncias gerais (o mesmo formulário), ordens de
+//              serviço e sinalizações.
+// Nos dois, vistorias, autos e notificações ficam na tela Documentos; o
+// sossego, na tela Denúncias. O que entra em cada módulo quem decide é o
+// servidor (DemandaController::TIPOS_DO_MODULO); esta tela monta o filtro
+// com o que ele devolve.
 //
 // O QUE CONTINUA SEPARADO: o formulário de cada um, a ficha de cada um, e as
 // tabelas do banco. Este módulo só LÊ — abrir e criar continuam em
-// protocolos.js, os.js, vistoria.js, documento-form.js e sinalizacoes.js.
+// protocolos.js, os.js e sinalizacoes.js.
 // ══════════════════════════════════════════════
 
 const dmState = {
@@ -65,7 +65,7 @@ async function carregarDemandas() {
     const d = await r.json()
 
     dmState.lista = d.demandas ?? []
-    dmState.pode = { protocolar: !!d.pode_protocolar, os: !!d.pode_emitir_os, lavrar: !!d.pode_lavrar }
+    dmState.pode = { protocolar: !!d.pode_protocolar, os: !!d.pode_emitir_os }
     montarFiltrosDemanda(d.tipos, d.situacoes)
     document.getElementById('cont-demandas').textContent = d.total ?? 0
     renderDemandas()
@@ -122,8 +122,6 @@ function renderDemandas() {
 /** Abre a ficha certa para o tipo da linha. @param {string} tipo @param {number} id */
 function abrirDemanda(tipo, id) {
   if (tipo === 'os') return abrirOs(id)
-  if (tipo === 'vistoria') return verVistoria(id)
-  if (tipo === 'documento') return abrirDocumento(id)
   if (tipo === 'sinalizacao') {
     // A sinalização mora no mapa: vai até ela (o lote, ou o ponto na via).
     const s = dmState.lista.find(d => d.tipo === 'sinalizacao' && d.id === id)
@@ -135,7 +133,9 @@ function abrirDemanda(tipo, id) {
 
 /** A coluna TIPO: é o que a lista única precisa dizer antes de tudo. */
 function seloDeTipo(d) {
-  return `<span class="dm-tipo dm-tipo-${esc(d.tipo)}">${esc(DM_SELO[d.tipo] || d.tipo)}</span>`
+  // `selo` vem do servidor quando a linha diz mais que o tipo (a denúncia
+  // geral de Posturas é um protocolo, mas se lê "Denúncia").
+  return `<span class="dm-tipo dm-tipo-${esc(d.tipo)}">${esc(d.selo || DM_SELO[d.tipo] || d.tipo)}</span>`
 }
 
 /** A linha sem responsável: em vermelho, para não passar batida. */
@@ -215,7 +215,7 @@ function cartoesDemandas() {
 const DM_ICO = {
   protocolo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg>',
   os: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/></svg>',
-  vistoria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  denuncia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v3M12 13.5h0"/></svg>',
   sinalizacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
 }
 
@@ -229,14 +229,20 @@ const DM_ICO = {
 async function novoServico(ev) {
   const botao = ev.currentTarget
   const obras = (window.MODULO || 'obras') === 'obras'
-  const pode = { protocolar: botao.dataset.protocolar === '1', os: botao.dataset.os === '1', lavrar: botao.dataset.lavrar === '1' }
+  const pode = { protocolar: botao.dataset.protocolar === '1', os: botao.dataset.os === '1' }
   const ops = []
 
-  if (obras && pode.lavrar) {
-    ops.push({ rotulo: 'Vistoria', obs: 'Do imóvel escolhido no mapa ou informado no formulário.', icone: DM_ICO.vistoria, acao: () => novaVistoria() })
-  }
-  if (obras && pode.protocolar) {
-    ops.push({ rotulo: 'Protocolo', obs: 'O que chega de fora: requerimento do contribuinte.', icone: DM_ICO.protocolo, acao: () => novoProtocolo() })
+  // Vistoria não entra: ela é da tela Documentos (o "Novo documento"), nos
+  // dois módulos — acertado com ele em 25/11/2026.
+  if (pode.protocolar) {
+    ops.push({ rotulo: 'Protocolo', obs: obras ? 'O que chega de fora: requerimento do contribuinte.' : 'Requerimento registrado no protocolo geral.',
+      icone: DM_ICO.protocolo, acao: () => novoProtocolo(obras ? null : 'requerimento') })
+    // Em Posturas a denúncia geral usa o mesmo formulário. A de perturbação
+    // do sossego continua na tela Denúncias.
+    if (!obras) {
+      ops.push({ rotulo: 'Denúncia', obs: 'Reclamação recebida. Sossego continua na tela Denúncias.',
+        icone: DM_ICO.denuncia, acao: () => novoProtocolo('denuncia') })
+    }
   }
   if (pode.os) {
     ops.push({ rotulo: 'Ordem de serviço', obs: 'O que a coordenação manda fazer.', icone: DM_ICO.os, acao: () => novaOs() })
@@ -244,18 +250,7 @@ async function novoServico(ev) {
   ops.push({ rotulo: 'Sinalização', obs: 'No mapa: toque e segure no ponto (clique direito no computador).', icone: DM_ICO.sinalizacao,
     acao: () => { irPara('mapa'); toast('Toque e segure no ponto do mapa para sinalizar (no computador, clique direito).') } })
 
-  // Em Posturas os documentos moram aqui: as peças entram no mesmo menu,
-  // depois do traço — as mesmas do "Novo documento".
-  if (!obras && pode.lavrar && typeof carregarOpcoes === 'function') {
-    try {
-      const o = await carregarOpcoes()
-      o.tipos.filter(t => t.valor !== 'vistoria').forEach((t, i) => ops.push({
-        rotulo: t.rotulo, obs: (typeof OBS_TIPO_DOC !== 'undefined' && OBS_TIPO_DOC[t.valor]) || '',
-        icone: (typeof ICO_TIPO_DOC !== 'undefined' && (ICO_TIPO_DOC[t.valor] || ICO_TIPO_DOC.padrao)) || '',
-        separar: i === 0, acao: () => escolherTipoDoc(t.valor),
-      }))
-    } catch { /* sem as peças, o resto do menu continua valendo */ }
-  }
-
+  // Autos e notificações NÃO entram aqui: têm o "Novo documento" da tela
+  // Documentos, nos dois módulos (correção dele, 25/11/2026).
   abrirMenuNovo(botao, ops)
 }

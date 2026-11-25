@@ -37,10 +37,12 @@ return [
         // Cadeia do AppPOSTURAS: Notificação → Auto de Infração → Auto de Apreensão.
         'tipos'  => ['notificacao', 'auto_infracao', 'auto_apreensao'],
         // Denúncias é a tela principal de Posturas; Consulta é do cadastro de lotes, de Obras.
-        // "protocolos" é a tela SERVIÇOS, que em Posturas substitui Documentos
-        // (24/11/2026): documentos, ordens de serviço e sinalizações numa
-        // fila só (DemandaController::TIPOS_DO_MODULO).
-        'abas'   => ['painel', 'denuncias', 'mapa', 'protocolos'],
+        // Documentos fica com os autos e as notificações. "protocolos" é a
+        // tela SERVIÇOS: ordens de serviço e sinalizações (e, quando
+        // existirem, protocolos e denúncias gerais) — DemandaController::
+        // TIPOS_DO_MODULO. Correção dele em 25/11/2026: Serviços NÃO
+        // substitui Documentos em Posturas.
+        'abas'   => ['painel', 'denuncias', 'mapa', 'documentos', 'protocolos'],
         'parametros' => [
             'impressao_selo' => 'FISCALIZAÇÃO DE POSTURAS',
             // A linha 3 do cabeçalho impresso. O telefone e o resto seguem os

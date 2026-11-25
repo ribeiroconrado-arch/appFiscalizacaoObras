@@ -53,8 +53,10 @@ class ProtocoloController extends Controller
             'data'        => $p->protocolado_em?->format('d/m/Y'),
             'situacao'    => ['texto' => $sTxt, 'classe' => $sCls],
             'prazo'       => $prazo ? ['texto' => $prazo[0], 'classe' => $prazo[1]] : null,
-            'requerente'  => $p->requerente_nome,
-            'imovel'      => $p->lote?->rotuloCompleto() ?? 'Não vinculado a lote',
+            'requerente'  => $p->requerente_nome ?: 'Não informado',
+            'imovel'      => $p->lote?->rotuloCompleto() ?? ($p->local ?: 'Não vinculado a lote'),
+            'local'       => $p->local,
+            'modulo'      => $p->modulo,
             'responsavel' => $p->responsavel?->name ?? 'Não distribuído',
             'objeto'      => $p->objeto,
             'lote_id'     => $p->lote_id,
@@ -78,7 +80,7 @@ class ProtocoloController extends Controller
             'busca'    => ['nullable', 'string', 'max:80'],
         ]);
 
-        $q = Protocolo::query()
+        $q = Protocolo::query()->doModulo()
             ->with(['lote:id,bairro,quadra,numero_lote', 'responsavel:id,name'])
             ->orderByRaw('prazo_resposta IS NULL, prazo_resposta ASC')  // vencendo primeiro
             ->orderByDesc('protocolado_em');
@@ -119,11 +121,16 @@ class ProtocoloController extends Controller
             return response()->json(['message' => 'Seu perfil não permite registrar protocolos.'], 403);
         }
 
+        // O módulo é o da sessão: cada um tem os seus tipos (Protocolo::tiposDo).
+        $modulo = \App\Support\Modulo::ativo($request->user());
+
         $d = $request->validate([
             'numero'               => ['required', 'string', 'max:30', 'unique:protocolos,numero'],
-            'tipo'                 => ['required', Rule::in(array_keys(Protocolo::TIPOS))],
+            'tipo'                 => ['required', Rule::in(array_keys(Protocolo::tiposDo($modulo)))],
             'lote_id'              => ['nullable', 'exists:lotes,id'],
-            'requerente_nome'      => ['required', 'string', 'max:160'],
+            'local'                => ['nullable', 'string', 'max:255'],
+            // Em Posturas a denúncia pode ser anônima: quem denunciou é opcional.
+            'requerente_nome'      => [$modulo === 'posturas' ? 'nullable' : 'required', 'string', 'max:160'],
             'requerente_documento' => ['nullable', 'string', 'max:20', new \App\Rules\CpfCnpj],
             'requerente_contato'   => ['nullable', 'string', 'max:120'],
             'protocolado_em'       => ['required', 'date'],
@@ -131,10 +138,10 @@ class ProtocoloController extends Controller
             'objeto'               => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $p = Protocolo::create($d + ['situacao' => 'aguardando_vistoria']);
+        $p = Protocolo::create($d + ['situacao' => 'aguardando_vistoria', 'modulo' => $modulo]);
 
         return response()->json([
-            'message'   => 'Protocolo ' . $p->numero . ' registrado.',
+            'message'   => $p->tipo === 'denuncia' ? 'Denúncia ' . $p->numero . ' registrada.' : 'Protocolo ' . $p->numero . ' registrado.',
             'protocolo' => ['id' => $p->id, 'numero' => $p->numero],
         ], 201);
     }

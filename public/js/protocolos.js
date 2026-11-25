@@ -176,14 +176,25 @@ async function salvarProtocolo(dados, id = protoState.atual?.id) {
  * antes de alguém saber a que lote ele se refere, e travar o cadastro nisso
  * empurraria o registro para fora do sistema.
  */
-function novoProtocolo() {
+/**
+ * @param {string|null} tipo já escolhido — em Posturas, "requerimento" ou
+ *   "denuncia": a denúncia geral usa este mesmo formulário (25/11/2026).
+ */
+function novoProtocolo(tipo = null) {
   const sel = state.selecionado?.properties
   document.getElementById('np-lote').value = sel?.id ?? ''
   document.getElementById('np-imovel').textContent = sel
     ? `${sel.apelido || bairroDe(sel)} · Quadra ${sel.quadra ?? '—'} · Lote ${sel.numero_lote ?? '—'}`
     : 'Nenhum lote selecionado no mapa (opcional)'
 
+  const campoTipo = document.getElementById('np-tipo')
+  if (tipo && [...campoTipo.options].some(o => o.value === tipo)) campoTipo.value = tipo
+  else campoTipo.selectedIndex = 0
+  campoTipo.dispatchEvent(new Event('change'))
+  ajustarFormProtocolo()
+
   document.getElementById('np-numero').value = ''
+  const local = document.getElementById('np-local'); if (local) local.value = ''
   document.getElementById('np-requerente').value = ''
   document.getElementById('np-documento').value = ''
   conferirCpfCnpjCampo(document.getElementById('np-documento'))
@@ -195,20 +206,36 @@ function novoProtocolo() {
   openModal('m-novo-proto')
 }
 
+/**
+ * Título e rótulos conforme o tipo: em Posturas, "Nova denúncia" e
+ * "Denunciante (opcional)" — a denúncia pode ser anônima.
+ */
+function ajustarFormProtocolo() {
+  const posturas = window.MODULO === 'posturas'
+  const denuncia = document.getElementById('np-tipo').value === 'denuncia'
+  const tit = document.getElementById('np-titulo')
+  if (tit) tit.textContent = denuncia ? 'Nova denúncia' : 'Novo protocolo'
+  const sec = document.getElementById('np-sec-requerente')
+  if (sec) sec.textContent = denuncia ? 'Denunciante (opcional)' : posturas ? 'Requerente (opcional)' : 'Requerente'
+}
+
 async function salvarNovoProtocolo() {
+  const posturas = window.MODULO === 'posturas'
   const corpo = {
     numero:               document.getElementById('np-numero').value.trim(),
     tipo:                 document.getElementById('np-tipo').value,
     lote_id:              document.getElementById('np-lote').value || null,
-    requerente_nome:      document.getElementById('np-requerente').value.trim(),
+    local:                document.getElementById('np-local')?.value.trim() || null,
+    requerente_nome:      document.getElementById('np-requerente').value.trim() || null,
     requerente_documento: document.getElementById('np-documento').value.trim() || null,
     requerente_contato:   document.getElementById('np-contato').value.trim() || null,
     protocolado_em:       document.getElementById('np-data').value,
     prazo_resposta:       document.getElementById('np-prazo').value || null,
     objeto:               document.getElementById('np-objeto').value.trim() || null,
   }
-  if (!corpo.numero || !corpo.requerente_nome || !corpo.protocolado_em) {
-    toast('Número, requerente e data são obrigatórios', 'err')
+  // Em Posturas quem denunciou ou requereu é opcional (denúncia anônima).
+  if (!corpo.numero || !corpo.protocolado_em || (!posturas && !corpo.requerente_nome)) {
+    toast(posturas ? 'Número e data são obrigatórios' : 'Número, requerente e data são obrigatórios', 'err')
     return
   }
   if (!conferirCpfCnpjCampo(document.getElementById('np-documento'))) {

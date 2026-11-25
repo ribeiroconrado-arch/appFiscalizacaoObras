@@ -184,8 +184,7 @@ class PainelController extends Controller
                 'titulo'  => $rascunhos . ' rascunho(s) parado(s) há mais de 3 dias',
                 'detalhe' => 'Peça começada que ainda não virou ato',
                 'tag'     => ['texto' => 'Rascunho', 'classe' => 'bd-in'],
-                // Em Posturas os documentos estão em Serviços (24/11/2026).
-                'aba'     => 'protocolos',
+                'aba'     => 'documentos',
             ];
         }
 
@@ -222,8 +221,7 @@ class PainelController extends Controller
                     ? sprintf('%s · Quadra %s · Lote %s', $doc->rotuloTipo(), $doc->lote?->quadra ?? '—', $doc->lote?->numero_lote ?? '—')
                     : $doc->rotuloTipo() . ' · ' . ($doc->endereco ?: 'sem endereço') . ($doc->autuado_nome ? ' · ' . $doc->autuado_nome : ''),
                 'tag'     => ['texto' => $txt, 'classe' => $cls],
-                // Em Posturas os documentos estão em Serviços (24/11/2026).
-                'aba'     => $obras ? 'documentos' : 'protocolos',
+                'aba'     => 'documentos',
             ];
         }
 
@@ -297,7 +295,7 @@ class PainelController extends Controller
         // `situacaoPrazo()` devolve null quando o protocolo já foi decidido ou
         // não tem prazo — e é ela quem decide o que é apertado, para o painel
         // e a lista dizerem a mesma coisa.
-        $meusProtocolos = Protocolo::query()
+        $meusProtocolos = Protocolo::query()->doModulo($modulo)
             ->where('responsavel_id', $uid)
             ->whereNotNull('prazo_resposta')
             ->with('lote:id,bairro,quadra,numero_lote')

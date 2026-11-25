@@ -33,6 +33,26 @@ class Protocolo extends Model
         'outro'            => 'Outro',
     ];
 
+    /**
+     * Posturas (25/11/2026): protocolo e DENÚNCIA GERAL no mesmo formulário.
+     * A denúncia de perturbação do sossego não é esta: tem a tela Denúncias.
+     */
+    public const TIPOS_POSTURAS = [
+        'requerimento' => 'Protocolo',
+        'denuncia'     => 'Denúncia',
+    ];
+
+    /** Os tipos que o formulário oferece em `$modulo`. */
+    public static function tiposDo(string $modulo): array
+    {
+        return $modulo === 'posturas' ? self::TIPOS_POSTURAS : self::TIPOS;
+    }
+
+    public function scopeDoModulo(\Illuminate\Database\Eloquent\Builder $q, ?string $modulo = null): \Illuminate\Database\Eloquent\Builder
+    {
+        return $q->where('modulo', $modulo ?? \App\Support\Modulo::ativo());
+    }
+
     public const SITUACOES = [
         'aguardando_vistoria' => ['Aguardando vistoria', 'bd-al'],
         'em_analise'          => ['Em análise', 'bd-in'],
@@ -45,7 +65,7 @@ class Protocolo extends Model
     public function responsavel(): BelongsTo { return $this->belongsTo(User::class, 'responsavel_id'); }
     public function vistoria(): BelongsTo    { return $this->belongsTo(Vistoria::class); }
 
-    public function rotuloTipo(): string { return self::TIPOS[$this->tipo] ?? $this->tipo; }
+    public function rotuloTipo(): string { return self::TIPOS[$this->tipo] ?? self::TIPOS_POSTURAS[$this->tipo] ?? $this->tipo; }
 
     /** @return array{0:string,1:string} */
     public function situacaoBadge(): array
