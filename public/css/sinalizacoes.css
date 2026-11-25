@@ -130,3 +130,6 @@
 /* "Sinalizar aqui": o toque longo num ponto do mapa (sinalizacoes.js). */
 .sin-aqui{padding:4px}
 .sin-aqui .balao-q{display:flex;align-items:center;gap:7px;white-space:nowrap}
+
+/* Falta de descrição em "Risco" e "Outro" (sinalizacoes.js). */
+.sin-falta{display:block;margin-top:4px;font-size:12px;color:var(--gd)}

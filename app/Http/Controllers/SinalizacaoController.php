@@ -26,6 +26,10 @@ class SinalizacaoController extends Controller
     /** Raio em que a mesma coisa, marcada na rua, é considerada a mesma sinalização. */
     const MESMO_LUGAR_M = 25;
 
+    /** Tipos que não se explicam sozinhos: exigem descrição, nos dois módulos. */
+    const EXIGEM_DESCRICAO = ['risco', 'outro'];
+    const DESCRICAO_MIN = 10;
+
     /** GET /api/sinalizacoes?bbox=oeste,sul,leste,norte — as bandeiras do mapa. */
     public function index(Request $r): JsonResponse
     {
@@ -134,15 +138,27 @@ class SinalizacaoController extends Controller
     {
         $modulo = Modulo::ativo($r->user());
 
+        // "Risco" e "Outro" não dizem o que é: sem descrição, quem vai atender
+        // não sabe o que procurar. Pelo menos 10 letras (pedido de 25/11/2026),
+        // contadas sem os espaços das pontas.
+        $r->merge(['comentario' => is_string($r->input('comentario')) ? trim($r->input('comentario')) : $r->input('comentario')]);
+
         return $r->validate([
+            'comentario' => ['nullable', 'string', 'max:500',
+                Rule::requiredIf(in_array($r->input('tipo'), self::EXIGEM_DESCRICAO, true)),
+                function ($campo, $valor, $falha) use ($r) {
+                    if (in_array($r->input('tipo'), self::EXIGEM_DESCRICAO, true) && mb_strlen((string) $valor) < self::DESCRICAO_MIN) {
+                        $falha('Descreva o que você viu, com pelo menos ' . self::DESCRICAO_MIN . ' caracteres.');
+                    }
+                }],
             // Só os tipos do balão do módulo — e o lembrete, que a vistoria cria.
             'tipo'       => ['required', Rule::in([...Sinalizacao::POR_MODULO[$modulo] ?? [], 'lembrete'])],
-            'comentario' => ['nullable', 'string', 'max:500'],
             'lembrar_em' => ['nullable', 'date', 'after_or_equal:today'],
             'lat'        => [$exigePonto ? 'required' : 'nullable', 'numeric', 'between:-90,90'],
             'lng'        => [$exigePonto ? 'required' : 'nullable', 'numeric', 'between:-180,180'],
             'referencia' => ['nullable', 'string', 'max:255'],
-        ], ['tipo.required' => 'Escolha o que você viu.', 'tipo.in' => 'Este tipo não é do módulo em que você está.']);
+        ], ['tipo.required' => 'Escolha o que você viu.', 'tipo.in' => 'Este tipo não é do módulo em que você está.',
+            'comentario.required' => 'Descreva o que você viu, com pelo menos ' . self::DESCRICAO_MIN . ' caracteres.']);
     }
 
     /**

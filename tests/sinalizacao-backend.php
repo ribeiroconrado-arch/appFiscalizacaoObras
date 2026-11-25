@@ -117,7 +117,12 @@ try {
     $anel = json_decode(DB::selectOne('SELECT ST_AsGeoJSON(geom) g FROM lotes WHERE id = ?', [$lote->id])->g, true)['coordinates'][0];
     array_pop($anel);
     $meio = ['lat' => array_sum(array_column($anel, 1)) / count($anel), 'lng' => array_sum(array_column($anel, 0)) / count($anel)];
-    [$s, $d] = chama($agente, 'POST', '/api/sinalizacoes', ['tipo' => 'risco', 'lat' => $meio['lat'], 'lng' => $meio['lng']]);
+    echo "Risco e Outro exigem descrição de 10 caracteres\n";
+    [$s] = chama($agente, 'POST', '/api/sinalizacoes', ['tipo' => 'risco', 'lat' => $meio['lat'], 'lng' => $meio['lng']]);
+    confere($s === 422, 'risco sem descrição é recusado');
+    [$s] = chama($agente, 'POST', "/api/lotes/{$lote->id}/sinalizacoes", ['tipo' => 'outro', 'comentario' => '  curto    ']);
+    confere($s === 422, 'outro com menos de 10 caracteres (sem contar espaços das pontas) é recusado');
+    [$s, $d] = chama($agente, 'POST', '/api/sinalizacoes', ['tipo' => 'risco', 'comentario' => 'fio solto no poste', 'lat' => $meio['lat'], 'lng' => $meio['lng']]);
     $dentro = $repo->contendo($meio['lat'], $meio['lng']);
     confere($s === 201 && $d['na_rua'] === false && Sinalizacao::find($d['id'])->lote_id === $dentro?->id,
         'ponto dentro de um lote liga a sinalização ao imóvel');
@@ -131,14 +136,14 @@ try {
         }
     }
     confere($rua !== null, 'achou um ponto na via perto do lote');
-    [$s, $d] = chama($agente, 'POST', '/api/sinalizacoes', ['tipo' => 'outro', 'comentario' => 'carro parado', 'lat' => $rua['lat'], 'lng' => $rua['lng']]);
+    [$s, $d] = chama($agente, 'POST', '/api/sinalizacoes', ['tipo' => 'outro', 'comentario' => 'carro parado sem placa', 'lat' => $rua['lat'], 'lng' => $rua['lng']]);
     $naRua = Sinalizacao::find($d['id'] ?? 0);
     confere($s === 201 && $d['na_rua'] === true && $naRua->lote_id === null && str_starts_with((string) $naRua->referencia, 'Próximo a'),
         'na via fica só o ponto, com referência "' . ($naRua->referencia ?? '') . '"');
     // 5 m adiante, na mesma direção — ainda na via (se cair num lote, o próprio ponto).
     $perto = ['lat' => $rua['lat'] + $dir[0] * 5 / 111320, 'lng' => $rua['lng'] + $dir[1] * 5 / (111320 * cos(deg2rad($rua['lat'])))];
     if ($repo->contendo($perto['lat'], $perto['lng'])) { $perto = $rua; }
-    [$s, $d] = chama($coord, 'POST', '/api/sinalizacoes', ['tipo' => 'outro', 'lat' => $perto['lat'], 'lng' => $perto['lng']]);
+    [$s, $d] = chama($coord, 'POST', '/api/sinalizacoes', ['tipo' => 'outro', 'comentario' => 'o mesmo carro, ainda lá', 'lat' => $perto['lat'], 'lng' => $perto['lng']]);
     confere($s === 200 && ! empty($d['somada']) && $d['id'] === $naRua->id, 'a mesma coisa marcada a poucos metros é somada à que existe'
         . ($s === 200 ? '' : " (HTTP {$s}: " . json_encode($d) . ')'));
     $longe = Sinalizacao::where('id', '<>', $naRua->id)->whereNull('lote_id')->count();

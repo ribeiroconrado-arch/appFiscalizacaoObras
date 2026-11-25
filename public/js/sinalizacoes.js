@@ -154,12 +154,35 @@ function _sinPintarForm() {
     ${ja ? `<p class="sin-soma">"${esc(ja.rotulo)}" já está sinalizado desde ${esc(ja.desde)}. O seu aviso será
       <b>somado</b> a ele: a bandeira continua uma só e passa a mostrar quantas pessoas avisaram.</p>` : ''}
     ${lembrete ? `<div class="sin-sub">Lembrar em</div>${_sinChipsLembrete('sin')}` : ''}
-    <div class="field"><label for="sin-comentario">Comentário (opcional)</label>
-      <input type="text" id="sin-comentario" maxlength="500" placeholder="${lembrete ? 'Conferir retirada do entulho' : 'O que você viu, em poucas palavras'}"></div>
+    <div class="field"><label for="sin-comentario">${_sinExigeDescricao() ? `Descreva o que você viu <b>(obrigatório)</b>` : 'Comentário (opcional)'}</label>
+      <input type="text" id="sin-comentario" maxlength="500" oninput="_sinConferirDescricao()"
+        placeholder="${lembrete ? 'Conferir retirada do entulho' : _sinExigeDescricao() ? `Pelo menos ${SIN_DESCRICAO_MIN} caracteres` : 'O que você viu, em poucas palavras'}">
+      <small class="sin-falta" id="sin-falta" hidden></small></div>
     <div class="btn-row"><button class="btn" onclick="fModalBtn('m-sinalizar')">Cancelar</button>
-      <button class="btn primary" id="sin-enviar" ${sinState.tipo ? '' : 'disabled'}
+      <button class="btn primary" id="sin-enviar" disabled
         onclick="enviarSinalizacao()">${ja ? 'Somar meu aviso' : 'Enviar'}</button></div>`
   const c = document.getElementById('sin-comentario'); if (c) c.value = comentario
+  _sinConferirDescricao()
+}
+
+/**
+ * "Risco" e "Outro" não dizem o que é: exigem descrição de pelo menos
+ * SIN_DESCRICAO_MIN caracteres, nos dois módulos (a mesma regra está em
+ * SinalizacaoController::EXIGEM_DESCRICAO — o servidor recusa sem ela).
+ */
+const SIN_EXIGEM_DESCRICAO = ['risco', 'outro']
+const SIN_DESCRICAO_MIN = 10
+const _sinExigeDescricao = () => SIN_EXIGEM_DESCRICAO.includes(sinState.tipo)
+function _sinConferirDescricao() {
+  const btn = document.getElementById('sin-enviar'), aviso = document.getElementById('sin-falta')
+  if (!btn) return
+  const n = (document.getElementById('sin-comentario')?.value || '').trim().length
+  const falta = _sinExigeDescricao() ? Math.max(0, SIN_DESCRICAO_MIN - n) : 0
+  btn.disabled = !sinState.tipo || falta > 0
+  if (aviso) {
+    aviso.hidden = !falta
+    aviso.textContent = falta === 1 ? 'Falta 1 caractere na descrição.' : falta ? `Faltam ${falta} caracteres na descrição.` : ''
+  }
 }
 
 /** Os atalhos do lembrete — os mesmos no formulário e no fim da vistoria. */
