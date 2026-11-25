@@ -49,6 +49,17 @@ final class ProprietariosVisiveis
     public static function mascarar(?string $documento): ?string
     {
         $digitos = preg_replace('/\D/', '', (string) $documento);
+        // Célula numérica na planilha perde os zeros da esquerda: até 11
+        // dígitos é CPF, mais que isso é CNPJ (24/11/2026). Sem isto, um CPF
+        // começado em zero chegava com 10 dígitos e sumia da ficha.
+        $n = strlen($digitos);
+        if ($n >= 9 && $n <= 14) {
+            $digitos = str_pad($digitos, $n <= 11 ? 11 : 14, '0', STR_PAD_LEFT);
+        }
+        if (strlen($digitos) === 14 && $n !== 14) {
+            $documento = substr($digitos, 0, 2) . '.' . substr($digitos, 2, 3) . '.' . substr($digitos, 5, 3)
+                . '/' . substr($digitos, 8, 4) . '-' . substr($digitos, 12, 2);
+        }
 
         return match (strlen($digitos)) {
             11      => '***.' . substr($digitos, 3, 3) . '.***-' . substr($digitos, 9, 2),

@@ -263,10 +263,12 @@ function secTopo(donos, i) {
   }
 
   const dono = donos.map(p => {
-    const doc = p.documento ?? p.documento_mascarado
+    const doc = bciDocumento(p.documento ?? p.documento_mascarado)
     return [
       bciLin('Nome', p.nome),
-      bciLin(/\//.test(doc ?? '') ? 'CNPJ' : 'CPF', doc, { mono: true }),
+      // Rótulo único (24/11/2026, a pedido dele): o campo traz o CPF ou o
+      // CNPJ, conforme o proprietário — o formato do número já diz qual é.
+      bciLin('CPF/CNPJ', doc, { mono: true }),
       p.endereco ? bciLin('Endereço', p.endereco, { longo: true }) : '',
     ].join('')
   }).join('')
@@ -274,6 +276,21 @@ function secTopo(donos, i) {
 
   if (!imovel) { return bciSecao(titulo, dono) }
   return `<div class="bci-sec"><div class="bci-g2">${bciSecao(titulo, dono)}${bciSecao('Imóvel', imovel.join(''))}</div></div>`
+}
+
+/**
+ * CPF ou CNPJ com pontuação. A planilha pode trazer só os dígitos — e, se a
+ * célula era número, sem os zeros da esquerda: até 11 dígitos é CPF, mais que
+ * isso é CNPJ. O mascarado ("***.456.***-00") e o que não for número passam
+ * como vieram.
+ */
+function bciDocumento(doc) {
+  const s = String(doc ?? '').trim()
+  if (!/^\d+$/.test(s) || s.length < 9 || s.length > 14) { return s || null }
+  const n = s.padStart(s.length <= 11 ? 11 : 14, '0')
+  return n.length === 11
+    ? n.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')
+    : n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
 }
 
 function secTerreno(i, c) {
