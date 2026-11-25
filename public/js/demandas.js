@@ -1,35 +1,33 @@
 // ══════════════════════════════════════════════
-// MÓDULO: A FILA DE TRABALHO
+// MÓDULO: SERVIÇOS — a fila de trabalho
 //
-// Protocolo e ordem de serviço numa lista só.
+// Tudo o que há para fazer numa lista só (decisão de 24/11/2026):
+//   Obras    — protocolos, ordens de serviço, vistorias e sinalizações
+//              (era "Protocolos e ordens de serviço"; os documentos
+//              continuam na tela Documentos);
+//   Posturas — documentos, ordens de serviço e sinalizações (Serviços
+//              substitui a tela Documentos; as denúncias de perturbação do
+//              sossego continuam na tela Denúncias).
+// O que entra em cada módulo quem decide é o servidor (DemandaController::
+// TIPOS_DO_MODULO); esta tela monta o filtro com o que ele devolve.
 //
-// Eram duas abas, e respondiam à mesma pergunta — "o que há para fazer?" —,
-// obrigando a olhar duas telas para saber o que estava pendente. O TIPO virou
-// coluna e filtro.
-//
-// O QUE CONTINUA SEPARADO: o formulário de cada uma, a ficha de cada uma, e as
-// tabelas do banco. Só quatro colunas coincidem em significado — protocolo tem
-// requerente, CPF, prazo legal e parecer; ordem tem designados, natureza,
-// regime, jornadas e assinatura de quem emite. Ver DemandaController.
-//
-// Este módulo só LÊ. Abrir, criar e editar continuam em protocolos.js e os.js.
+// O QUE CONTINUA SEPARADO: o formulário de cada um, a ficha de cada um, e as
+// tabelas do banco. Este módulo só LÊ — abrir e criar continuam em
+// protocolos.js, os.js, vistoria.js, documento-form.js e sinalizacoes.js.
 // ══════════════════════════════════════════════
-
-/**
- * O tipo de partida: fora de Obras a fila é só de ordens de serviço (o
- * servidor já recorta assim — DemandaController); aqui é para o seletor de
- * situação oferecer só as da OS.
- */
-const DM_TIPO_PADRAO = (window.MODULO || 'obras') === 'obras' ? '' : 'os'
 
 const dmState = {
   /** @type {Object} filtros da fila */
-  filtros: { tipo: DM_TIPO_PADRAO, agente: 'todos', situacao: '', busca: '' },
+  filtros: { tipo: '', agente: 'todos', situacao: '', busca: '' },
   /** @type {Array<Object>} a lista como veio do servidor */ lista: [],
-  /** @type {boolean} as situações do seletor já foram montadas */ situacoesProntas: false,
+  /** @type {boolean} tipos e situações do filtro já foram montados */ filtrosProntos: false,
+  /** Permissões que o servidor mandou com a lista. */ pode: null,
 }
 
-/** @param {string} chave @param {string} valor */
+/** O selo de cada tipo, curto: é o que a lista única precisa dizer antes de tudo. */
+const DM_SELO = { protocolo: 'Protocolo', os: 'OS', vistoria: 'Vistoria', sinalizacao: 'Sinalização', documento: 'Documento' }
+const DM_GRUPO = { protocolo: 'Protocolo', os: 'Ordem de serviço', vistoria: 'Vistoria', documento: 'Documento' }
+
 /**
  * ANOTA O FILTRO, MAS NÃO BUSCA — mesma regra da lista de documentos e da
  * Consulta: quem dispara a consulta é o botão Buscar. Ver `filtrarDocumentos`
@@ -42,12 +40,12 @@ function filtrarDemandas(chave, valor) {
 
 function limparFiltrosDemandas() {
   // "Todos os responsáveis" é o PADRÃO da fila, e não a ausência de filtro:
-  // protocolo chega sem dono, e limpar para "meus" esconderia justamente o que
-  // ninguém assumiu.
-  dmState.filtros = { tipo: DM_TIPO_PADRAO, agente: 'todos', situacao: '', busca: '' }
+  // protocolo e sinalização chegam sem dono, e limpar para "meus" esconderia
+  // justamente o que ninguém assumiu.
+  dmState.filtros = { tipo: '', agente: 'todos', situacao: '', busca: '' }
 
   const põe = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v } }
-  põe('dm-tipo', DM_TIPO_PADRAO); põe('dm-agente', 'todos'); põe('dm-situacao', ''); põe('dm-busca', '')
+  põe('dm-tipo', ''); põe('dm-agente', 'todos'); põe('dm-situacao', ''); põe('dm-busca', '')
 
   carregarDemandas()
 }
@@ -60,48 +58,54 @@ async function carregarDemandas() {
   for (const [k, v] of Object.entries(dmState.filtros)) { if (v) { p.set(k, v) } }
 
   alvo.innerHTML = '<div class="lista-vazia">Carregando…</div>'
-  mostrarCarregandoTela('Buscando na fila...')
+  mostrarCarregandoTela('Buscando os serviços...')
   try {
     const r = await fetch('/api/demandas?' + p, { headers: { Accept: 'application/json' } })
     if (!r.ok) { throw new Error('HTTP ' + r.status) }
     const d = await r.json()
 
     dmState.lista = d.demandas ?? []
-    montarSituacoesDemanda(d.situacoes)
+    dmState.pode = { protocolar: !!d.pode_protocolar, os: !!d.pode_emitir_os, lavrar: !!d.pode_lavrar }
+    montarFiltrosDemanda(d.tipos, d.situacoes)
     document.getElementById('cont-demandas').textContent = d.total ?? 0
     renderDemandas()
     limparBuscaPendente('dm-buscar')
   } catch (e) {
     console.error(e)
-    alvo.innerHTML = '<div class="lista-vazia">Não foi possível carregar a fila.</div>'
+    alvo.innerHTML = '<div class="lista-vazia">Não foi possível carregar os serviços.</div>'
   } finally {
     esconderCarregandoTela()
   }
 }
 
 /**
- * O seletor de situação, AGRUPADO POR TIPO.
+ * O seletor de tipo e o de situação, com o que existe NESTE módulo.
  *
- * As situações não são as mesmas nos dois: "Deferido" é resposta a um pedido
- * do cidadão, "Concluída" é estado de um trabalho interno. Num seletor plano
- * elas pareceriam alternativas da mesma pergunta.
+ * A situação é AGRUPADA POR TIPO: "Deferido" é resposta a um pedido do
+ * cidadão, "Concluída" é estado de um trabalho interno, "Irregular" é o que a
+ * vistoria constatou. Num seletor plano pareceriam alternativas da mesma
+ * pergunta.
  *
- * @param {{protocolo:Array,os:Array}} sits
+ * @param {Array<{valor:string, rotulo:string}>} tipos
+ * @param {Object<string, Array>} sits
  */
-function montarSituacoesDemanda(sits) {
-  if (dmState.situacoesProntas || !sits) { return }
+function montarFiltrosDemanda(tipos, sits) {
+  if (dmState.filtrosProntos) { return }
+  const selTipo = document.getElementById('dm-tipo')
+  if (selTipo && tipos) {
+    selTipo.innerHTML = '<option value="">Todos os serviços</option>'
+      + tipos.map(t => `<option value="${esc(t.valor)}">Só ${esc(t.rotulo.toLowerCase())}</option>`).join('')
+    selTipo.value = dmState.filtros.tipo || ''
+  }
   const sel = document.getElementById('dm-situacao')
-  if (!sel) { return }
-
-  const grupo = (rot, itens) => `<optgroup label="${esc(rot)}">`
-    + itens.map(s => `<option value="${esc(s.valor)}">${esc(s.rotulo)}</option>`).join('')
-    + '</optgroup>'
-
-  sel.innerHTML = '<option value="">Todas as situações</option>'
-    + grupo('Protocolo', sits.protocolo ?? [])
-    + grupo('Ordem de serviço', sits.os ?? [])
-
-  dmState.situacoesProntas = true
+  if (sel && sits) {
+    const grupo = (rot, itens) => `<optgroup label="${esc(rot)}">`
+      + itens.map(s => `<option value="${esc(s.valor)}">${esc(s.rotulo)}</option>`).join('')
+      + '</optgroup>'
+    sel.innerHTML = '<option value="">Todas as situações</option>'
+      + Object.entries(sits).map(([t, itens]) => grupo(DM_GRUPO[t] || t, itens ?? [])).join('')
+  }
+  dmState.filtrosProntos = true
 }
 
 function renderDemandas() {
@@ -117,13 +121,25 @@ function renderDemandas() {
 
 /** Abre a ficha certa para o tipo da linha. @param {string} tipo @param {number} id */
 function abrirDemanda(tipo, id) {
-  return tipo === 'os' ? abrirOs(id) : abrirProtocolo(id)
+  if (tipo === 'os') return abrirOs(id)
+  if (tipo === 'vistoria') return verVistoria(id)
+  if (tipo === 'documento') return abrirDocumento(id)
+  if (tipo === 'sinalizacao') {
+    // A sinalização mora no mapa: vai até ela (o lote, ou o ponto na via).
+    const s = dmState.lista.find(d => d.tipo === 'sinalizacao' && d.id === id)
+    if (!s) return
+    return s.lote_id ? irAoLoteNoMapa(s.lote_id) : irAoPontoDaSinalizacao(Number(s.lat), Number(s.lon))
+  }
+  return abrirProtocolo(id)
 }
 
 /** A coluna TIPO: é o que a lista única precisa dizer antes de tudo. */
 function seloDeTipo(d) {
-  return `<span class="dm-tipo dm-tipo-${d.tipo}">${esc(d.tipo === 'os' ? 'OS' : 'Protocolo')}</span>`
+  return `<span class="dm-tipo dm-tipo-${esc(d.tipo)}">${esc(DM_SELO[d.tipo] || d.tipo)}</span>`
 }
+
+/** A linha sem responsável: em vermelho, para não passar batida. */
+const dmResponsavel = d => d.responsavel ? esc(d.responsavel) : '<span class="tl-falta">não distribuído</span>'
 
 function tabelaDemandas() {
   const linhas = dmState.lista.map(d => `
@@ -133,8 +149,7 @@ function tabelaDemandas() {
       <td title="${esc(d.assunto ?? '')}">${esc(d.assunto ?? '—')}</td>
       <td title="${esc(d.imovel ?? '')}">${esc(d.imovel ?? 'Sem lote')}</td>
       <td class="tl-cinza" title="${esc(d.quem ?? '')}">${esc(d.quem ?? '—')}</td>
-      <td class="tl-cinza">${d.responsavel
-        ? esc(d.responsavel) : '<span class="tl-falta">não distribuído</span>'}</td>
+      <td class="tl-cinza">${dmResponsavel(d)}</td>
       <td>${esc((d.data ?? '—').slice(0, 5))}</td>
       <td>
         <div class="tl-tags">
@@ -152,12 +167,12 @@ function tabelaDemandas() {
   return `<div class="tabela-wrap">
       <table class="tabela-lista tl-dem">
         <thead><tr>
-          <th>Nº</th><th>Tipo</th><th>Assunto</th><th>Imóvel</th><th>Quem</th>
+          <th>Nº</th><th>Tipo</th><th>Assunto</th><th>Imóvel / local</th><th>Quem</th>
           <th>Responsável</th><th>Data</th><th>Situação</th><th class="tl-acao"></th>
         </tr></thead>
         <tbody>${linhas}</tbody>
       </table>
-      <div class="tl-rodape"><span>Mostrando ${dmState.lista.length} demanda(s)</span></div>
+      <div class="tl-rodape"><span>Mostrando ${dmState.lista.length} serviço(s)</span></div>
     </div>`
 }
 
@@ -172,12 +187,8 @@ function cartoesDemandas() {
 
     const linhas = [
       [esc(d.quem_rotulo), esc(d.quem ?? '—')],
-      ['Imóvel', esc(d.imovel ?? 'Não vinculado a lote')],
-      // Sem dono, o prazo do município corre e ninguém é cobrado. Marcar em
-      // vermelho é o jeito mais barato de isso não passar batido na lista.
-      ['Responsável', d.responsavel
-        ? esc(d.responsavel)
-        : '<span style="color:var(--red)">não distribuído</span>'],
+      [d.tipo === 'sinalizacao' && !d.lote_id ? 'Local' : 'Imóvel', esc(d.imovel ?? 'Não vinculado a lote')],
+      ['Responsável', d.responsavel ? esc(d.responsavel) : '<span style="color:var(--red)">não distribuído</span>'],
     ]
 
     return `
@@ -196,4 +207,55 @@ function cartoesDemandas() {
         </div>
       </div>`
   }).join('')
+}
+
+// ── NOVO ─────────────────────────────────────────────────────
+
+/** Ícones de linha do menu Novo (o mesmo traço dos demais menus). */
+const DM_ICO = {
+  protocolo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg>',
+  os: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/></svg>',
+  vistoria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  sinalizacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+}
+
+/**
+ * O "Novo" de Serviços: o mesmo menu dos outros "Novo" do sistema
+ * (abrirMenuNovo, em ui.js). Só oferece o que a pessoa pode criar — as
+ * permissões vêm da tela (data-* do botão, gravados pelo servidor) e quem
+ * autoriza de verdade é o servidor de cada um.
+ * @param {MouseEvent} ev
+ */
+async function novoServico(ev) {
+  const botao = ev.currentTarget
+  const obras = (window.MODULO || 'obras') === 'obras'
+  const pode = { protocolar: botao.dataset.protocolar === '1', os: botao.dataset.os === '1', lavrar: botao.dataset.lavrar === '1' }
+  const ops = []
+
+  if (obras && pode.lavrar) {
+    ops.push({ rotulo: 'Vistoria', obs: 'Do imóvel escolhido no mapa ou informado no formulário.', icone: DM_ICO.vistoria, acao: () => novaVistoria() })
+  }
+  if (obras && pode.protocolar) {
+    ops.push({ rotulo: 'Protocolo', obs: 'O que chega de fora: requerimento do contribuinte.', icone: DM_ICO.protocolo, acao: () => novoProtocolo() })
+  }
+  if (pode.os) {
+    ops.push({ rotulo: 'Ordem de serviço', obs: 'O que a coordenação manda fazer.', icone: DM_ICO.os, acao: () => novaOs() })
+  }
+  ops.push({ rotulo: 'Sinalização', obs: 'No mapa: toque e segure no ponto (clique direito no computador).', icone: DM_ICO.sinalizacao,
+    acao: () => { irPara('mapa'); toast('Toque e segure no ponto do mapa para sinalizar (no computador, clique direito).') } })
+
+  // Em Posturas os documentos moram aqui: as peças entram no mesmo menu,
+  // depois do traço — as mesmas do "Novo documento".
+  if (!obras && pode.lavrar && typeof carregarOpcoes === 'function') {
+    try {
+      const o = await carregarOpcoes()
+      o.tipos.filter(t => t.valor !== 'vistoria').forEach((t, i) => ops.push({
+        rotulo: t.rotulo, obs: (typeof OBS_TIPO_DOC !== 'undefined' && OBS_TIPO_DOC[t.valor]) || '',
+        icone: (typeof ICO_TIPO_DOC !== 'undefined' && (ICO_TIPO_DOC[t.valor] || ICO_TIPO_DOC.padrao)) || '',
+        separar: i === 0, acao: () => escolherTipoDoc(t.valor),
+      }))
+    } catch { /* sem as peças, o resto do menu continua valendo */ }
+  }
+
+  abrirMenuNovo(botao, ops)
 }

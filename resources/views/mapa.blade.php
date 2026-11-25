@@ -1127,43 +1127,29 @@
        virou coluna e filtro; o que continua separado é o formulário — e as
        tabelas do banco, que só têm quatro colunas em comum (ver
        DemandaController). --}}
+  {{-- SERVIÇOS (24/11/2026): a fila virou de tudo o que há para fazer —
+       em Obras, protocolos, ordens, vistorias e sinalizações; em Posturas,
+       documentos, ordens e sinalizações (ver DemandaController). Um "Novo"
+       só, que abre o menu das opções, como os outros "Novo" do sistema. O que
+       cada um pode criar vai nos data-*; esconder não é a segurança — quem
+       autoriza é o servidor de cada formulário. --}}
   <div class="topo-lista">
-    <div class="sec-simples">{{ $modulo === 'obras' ? 'Protocolos e ordens de serviço' : 'Ordens de serviço' }}
-      <span class="cont" id="cont-demandas">0</span></div>
-    {{-- Protocolo é requerimento de imóvel: só em Obras. --}}
-    @if ($modulo !== 'obras')
-    @elseif (auth()->user()->canEdit())
-      <button class="btn primary sm" onclick="novoProtocolo()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Novo protocolo
-      </button>
-    @else
-      <button class="btn sm" disabled title="Seu perfil é somente de consulta">Novo protocolo</button>
-    @endif
-    {{-- Emitir é da coordenação. Esconder de quem não pode não é a segurança —
-         quem autoriza é OrdemServicoController::store —, é não oferecer o que
-         seria recusado. --}}
-    @if (auth()->user()->isAdmin())
-      <button class="btn primary sm" onclick="novaOs()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Nova OS
-      </button>
-    @else
-      <button class="btn sm" disabled title="Só a coordenação emite ordem de serviço">Nova OS</button>
-    @endif
+    <div class="sec-simples">Serviços <span class="cont" id="cont-demandas">0</span></div>
+    <button class="btn primary sm" onclick="novoServico(event)"
+            data-protocolar="{{ $modulo === 'obras' && auth()->user()->canEdit() ? 1 : 0 }}"
+            data-os="{{ auth()->user()->isAdmin() ? 1 : 0 }}"
+            data-lavrar="{{ auth()->user()->podeLavrarDocumento() ? 1 : 0 }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Novo
+    </button>
   </div>
 
   <div class="busca-form lista-form">
     <div class="filtros-lista">
       <div class="linha-filtro">
-        {{-- Fora de Obras a fila é só de OS: o seletor fica, escondido, para o
-             JavaScript da lista continuar achando o campo. --}}
-        <div class="lista-campo" @if ($modulo !== 'obras') hidden @endif><label for="dm-tipo">Tipo</label><select data-combo id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
-          @if ($modulo === 'obras')
-            <option value="">Protocolos e ordens</option>
-            <option value="protocolo">Só protocolos</option>
-          @endif
-          <option value="os">Só ordens de serviço</option>
+        {{-- Os tipos do módulo chegam com a lista (demandas.js). --}}
+        <div class="lista-campo"><label for="dm-tipo">Tipo</label><select data-combo id="dm-tipo" onchange="filtrarDemandas('tipo', this.value)">
+          <option value="">Todos os serviços</option>
         </select></div>
         {{-- "Todos" e não "meus": protocolo chega SEM DONO, e abrir a fila
              filtrada pelo agente esconderia justamente o que ninguém assumiu.
@@ -1175,7 +1161,7 @@
         </select></div>
       </div>
       <div class="linha-filtro">
-        <div class="lista-campo lista-campo-busca"><label for="dm-busca">Busca</label><input type="text" id="dm-busca" placeholder="Buscar nº, requerente, objeto ou imóvel…"
+        <div class="lista-campo lista-campo-busca"><label for="dm-busca">Busca</label><input type="text" id="dm-busca" placeholder="Buscar nº, nome, assunto ou imóvel…"
                oninput="filtrarDemandas('busca', this.value)"></div>
         {{-- Agrupada por tipo: "Deferido" e "Concluída" não são alternativas
              da mesma pergunta. --}}
@@ -1455,16 +1441,19 @@
        (User::EXTERNOS) não os vê — e o servidor recusa as rotas deles de
        qualquer jeito (middleware `interno`). --}}
   @unless ($externo)
+  {{-- Em Posturas, Serviços SUBSTITUI Documentos (24/11/2026): os documentos
+       estão na fila de Serviços, e a aba não aparece (config/modulos.php). --}}
+  @if ($temAba('documentos'))
   <button class="aba" data-destino="documentos" title="Documentos" onclick="irPara('documentos')">
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="12" height="15" rx="2"/><path d="M16 21H6a2 2 0 0 1-2-2V8m8-1h4m-4 4h4"/></svg>
     <span class="aba-txt">Documentos</span>
   </button>
-  {{-- Em Posturas a mesma tela mostra só as ordens de serviço: protocolo é
-       requerimento de imóvel, de Obras (DemandaController). --}}
-  @php $rotuloFila = $modulo === 'obras' ? 'Protocolo & OS' : 'Ordens de serviço'; @endphp
-  <button class="aba" data-destino="protocolos" aria-label="{{ $rotuloFila }}" title="{{ $rotuloFila }}" onclick="irPara('protocolos')">
+  @endif
+  {{-- SERVIÇOS: a fila de tudo o que há para fazer (era "Protocolo & OS";
+       ver DemandaController). O destino continua "protocolos". --}}
+  <button class="aba" data-destino="protocolos" aria-label="Serviços" title="Serviços" onclick="irPara('protocolos')">
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h.01M12 11h4M9 16h.01M12 16h4"/></svg>
-    <span class="aba-txt aba-txt-longa">{{ $rotuloFila }}</span><span class="aba-txt aba-txt-curta" aria-hidden="true">{{ $modulo === 'obras' ? 'Prot. & OS' : 'Ordens' }}</span>
+    <span class="aba-txt">Serviços</span>
   </button>
   {{-- O Histórico do cadastro não é aba (21/11/2026): é um bloco do Painel,
        com "Ver tudo" para a tela #t-historico. --}}
