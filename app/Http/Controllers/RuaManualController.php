@@ -34,7 +34,11 @@ class RuaManualController extends Controller
         return $r->user()->podeCurarCadastro() || $r->user()->isAdmin();
     }
 
-    /** GET /api/ruas/logradouros?bairro= — a lista oficial do bairro, para o combo. */
+    /**
+     * GET /api/ruas/logradouros?bairro= — a lista oficial do bairro, para o
+     * combo, e (`cidade`) os outros logradouros da cidade no cadastro: a rua
+     * da divisa ou a avenida só com fundos não tem imóvel no bairro.
+     */
     public function logradouros(Request $r): JsonResponse
     {
         if (! $this->podeEditar($r)) {
@@ -43,9 +47,12 @@ class RuaManualController extends Controller
         $d = $r->validate(['bairro' => ['required', 'string', 'max:120']]);
         $codigo = $this->codigo($d['bairro']);
 
+        $doBairro = $codigo !== null ? $this->lotes->logradourosDoBairro($codigo) : [];
+
         return response()->json([
             'cadastro'    => $codigo !== null,
-            'logradouros' => $codigo !== null ? $this->lotes->logradourosDoBairro($codigo) : [],
+            'logradouros' => $doBairro,
+            'cidade'      => array_values(array_diff($this->lotes->logradourosDaCidade(), $doBairro)),
             'livre'       => $codigo === null || $r->user()->isAdmin(),
         ]);
     }
@@ -404,7 +411,7 @@ class RuaManualController extends Controller
         ];
     }
 
-    /** Nome fora da lista do cadastro do bairro: só administrador, ou bairro sem cadastro. */
+    /** Nome fora do cadastro (do bairro ou da cidade): só administrador, ou bairro sem cadastro. */
     private function conferirNome(Request $r, array $d): ?JsonResponse
     {
         if (! empty($d['oculto']) || $r->user()->isAdmin()) {
@@ -415,9 +422,10 @@ class RuaManualController extends Controller
             return null;
         }
         $nome = $this->limpo($d['nome'] ?? null);
-        $lista = array_map(fn ($n) => mb_strtoupper(trim($n)), $this->lotes->logradourosDoBairro($codigo));
+        $lista = array_map(fn ($n) => mb_strtoupper(trim($n)),
+            array_merge($this->lotes->logradourosDoBairro($codigo), $this->lotes->logradourosDaCidade()));
         if ($nome === null || ! in_array(mb_strtoupper($nome), $lista, true)) {
-            return response()->json(['message' => 'Escolha o logradouro na lista do cadastro do bairro. '
+            return response()->json(['message' => 'Escolha o logradouro na lista do cadastro. '
                 . 'Rua que ainda não está no cadastro só o administrador informa.'], 422);
         }
 

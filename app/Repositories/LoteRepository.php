@@ -798,6 +798,27 @@ class LoteRepository
     }
 
     /**
+     * Os logradouros da CIDADE TODA no cadastro imobiliário, com o tipo
+     * completado como em logradourosDoBairro (24/11/2026: a rua da divisa e a
+     * avenida só com fundos não têm imóvel no bairro, e faltavam na lista de
+     * Nomes de rua). Guardado em cache por carga do cadastro: são milhares de
+     * linhas, e a lista só muda quando a planilha é carregada de novo.
+     *
+     * @return list<string>
+     */
+    public function logradourosDaCidade(): array
+    {
+        $carga = (int) DB::table('cadastro_cargas')->max('id');
+
+        return Cache::remember("ruas:logradouros-cidade:{$carga}", now()->addHours(6), fn () => DB::table('cadastro_externo_imoveis')
+            ->whereNull('ausente_desde_carga_id')
+            ->whereNotNull('logradouro')->where('logradouro', '<>', '')
+            ->distinct()->get(['logradouro', 'nome_bairro', 'codigo_bairro'])
+            ->map(fn ($l) => \App\Cadastro\TipoDoLogradouro::completar($l->logradouro, $l->nome_bairro, $l->codigo_bairro))
+            ->unique()->sort()->values()->all());
+    }
+
+    /**
      * Lotes de OUTROS bairros em volta deste — o que a fusão do contorno não
      * pode engolir. O recorte é a extensão do bairro com folga de ~300 m.
      *

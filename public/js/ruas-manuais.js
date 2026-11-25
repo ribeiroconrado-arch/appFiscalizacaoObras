@@ -827,15 +827,23 @@ async function _preencherComboRuas() {
   const sugs = [...new Set(sel.map(t => t.sugestao).filter(Boolean))]
   const atual = ruaState.escolha ?? (nomes.length === 1 ? nomes[0] : !nomes.length && sugs.length === 1 ? sugs[0] : '')
 
-  const todos = [...new Set(listas.flatMap(l => l.logradouros))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  // As do bairro primeiro; depois as do resto da cidade (24/11/2026): a rua da
+  // divisa ou a avenida só com fundos não tem imóvel no bairro.
+  const ordem = (a, b) => a.localeCompare(b, 'pt-BR')
+  const doBairro = [...new Set(listas.flatMap(l => l.logradouros))].sort(ordem)
+  const daCidade = [...new Set(listas.flatMap(l => l.cidade || []))].filter(n => !doBairro.includes(n)).sort(ordem)
+  const todos = [...doBairro, ...daCidade]
   // Livre só se TODOS os bairros em jogo forem livres: o servidor confere a
   // lista de cada um, e um nome fora de uma delas recusaria tudo.
   const livre = listas.length > 0 && listas.every(l => l.livre)
   // Para quem pode nome livre, o atual fora da lista (sugestão do OSM) entra
   // como opção, para o combo abrir com ele escolhido.
   const temLista = todos.length > 0
-  if (livre && temLista && atual && !todos.includes(atual)) todos.unshift(atual)
-  const opcoes = todos.map(n => `<option value="${esc(n)}"${n === atual ? ' selected' : ''}>${esc(n)}</option>`).join('')
+  if (livre && temLista && atual && !todos.includes(atual)) { todos.unshift(atual); doBairro.unshift(atual) }
+  const opcao = n => `<option value="${esc(n)}"${n === atual ? ' selected' : ''}>${esc(n)}</option>`
+  const opcoes = daCidade.length
+    ? `<optgroup label="Ruas do bairro">${doBairro.map(opcao).join('')}</optgroup><optgroup label="Outras ruas da cidade">${daCidade.map(opcao).join('')}</optgroup>`
+    : todos.map(opcao).join('')
   // Havendo lista, é sempre o combobox padrão do sistema (data-combo, ui.js).
   // Livre (administrador, ou bairro sem cadastro amarrado) pode ainda digitar
   // um nome fora dela pelo "Nome fora da lista"; sem lista nenhuma, só texto.
@@ -1092,7 +1100,7 @@ function _htmlEncostando() {
   const p = ruaState.encostando.ponta
   const passo = p
     ? `Ponta de <b>${esc(p.x.t.nome || 'trecho sem nome')}</b> escolhida. Clique no trecho onde ela deve encostar.`
-    : 'Clique na PONTA do trecho que vai andar.'
+    : 'Clique no trecho que vai andar, perto da ponta que anda (ele fica realçado antes do clique).'
   return `<div class="ruas-sel">
     <div class="ruas-sel-nome">Encostar pontas</div>
     <div class="ruas-sel-sub">${passo} Os dois trechos continuam separados, cada um com o seu nome. Esc ${p ? 'larga a ponta' : 'sai'}.</div>
@@ -1110,18 +1118,26 @@ function _pxEntre(a, b) {
 
 /** A ponta de trecho mais perto do clique (a desenhada ou a gravada). @param {L.LatLng} ll */
 function _pontaPerto(ll) {
-  const c = [ll.lat, ll.lng]
+  // PELA LINHA, e não pela ponta (24/11/2026): no cruzamento as pontas de
+  // vários trechos ficam coladas, e o clique na ponta do azul pegava a do
+  // verde. Vale o trecho cuja LINHA passa mais perto do clique — clicar um
+  // pouco antes da ponta, sobre o trecho, escolhe sem dúvida —, e dele a
+  // ponta mais perto. Empate (a menos de 3 px): ganha o editado à mão.
+  const c = [ll.lat, ll.lng], cm = _m(c)
   let melhor = null, menor = ENCOSTAR_PX
   for (const x of ruaState.trechos) {
     if (x.t.origem === 'excluido') continue
-    for (const e of [0, 1]) {
-      for (const p of [e ? x.t.ate : x.t.de, e ? x.linha.at(-1) : x.linha[0]]) {
-        const d = _pxEntre(c, p)
-        if (d < menor) { menor = d; melhor = { x, e } }
-      }
-    }
+    const pts = x.linha.map(_m)
+    let d = Infinity
+    for (let i = 1; i < pts.length; i++) d = Math.min(d, _pxEntre(c, _llCostura(_peNoSegmento(cm, pts[i - 1], pts[i]))))
+    const aMao = x.t.id != null
+    const ganha = !melhor || d < menor - 3 || (Math.abs(d - menor) <= 3 && aMao && !melhor.aMao)
+    if (d < ENCOSTAR_PX && ganha) { menor = Math.min(menor, d); melhor = { x, aMao } }
   }
-  return melhor
+  if (!melhor) return null
+  const { x } = melhor
+  const e = _pxEntre(c, x.linha.at(-1)) < _pxEntre(c, x.linha[0]) ? 1 : 0
+  return { x, e }
 }
 
 /** O pé da perpendicular de p no segmento a–b, em metros. */
@@ -1229,7 +1245,10 @@ function _realceEncostar(r, op) {
   const marca = (p, cor) => r.addLayer(L.circleMarker(p, { ...op, radius: 7, color: cor, weight: 2.5, fillColor: '#fff', fillOpacity: 1 }))
   const pontaDe = ({ x, e }) => e ? x.linha.at(-1) : x.linha[0]
   if (!en.ponta) {
-    if (en.dica) marca(pontaDe(en.dica), '#7c3aed')
+    if (en.dica) {
+      r.addLayer(L.polyline(en.dica.x.linha, { ...op, color: '#7c3aed', weight: 7, opacity: .35 }))
+      marca(pontaDe(en.dica), '#7c3aed')
+    }
     return
   }
   const { x, e } = en.ponta
