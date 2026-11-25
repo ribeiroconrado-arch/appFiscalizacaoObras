@@ -740,6 +740,9 @@ function adicionarAoMapa(geojson, aoClicar) {
       // Em modo de alteração cadastral o clique MARCA o lote em vez de abrir o
       // balão — ver cadastro.js. Fora dele, nada muda.
       camada.on('click', ev => {
+        // Onde o lote foi tocado: a sinalização feita pelo balão fica neste
+        // ponto, e não no meio do lote (sinalizacoes.js).
+        state.ultimoToque = ev?.latlng ? { lat: ev.latlng.lat, lng: ev.latlng.lng } : null
         // Desenhando um trecho de rua (ruas-manuais.js), o toque é ponto do
         // trecho — quem o trata é o clique no mapa, não o lote embaixo.
         if (typeof ruaState !== 'undefined' && ruaState.desenhando) return
@@ -1137,7 +1140,7 @@ async function preencherDonoNoBalao(id, raiz) {
 /** Atalhos do balão: o lote já está em `state.selecionado`. */
 function sinalizarDoBalao() {
   mapaState.obj?.closePopup()
-  if (state.selecionado && typeof abrirSinalizar === 'function') abrirSinalizar(state.selecionado.properties)
+  if (state.selecionado && typeof abrirSinalizar === 'function') abrirSinalizar(state.selecionado.properties, state.ultimoToque)
 }
 function historicoDoBalao() {
   abrirFichaDoBalao()

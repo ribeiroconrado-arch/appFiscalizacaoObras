@@ -219,6 +219,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Sinalizacao::scopeVisiveisPara.
         Route::get('/sinalizacoes', [\App\Http\Controllers\SinalizacaoController::class, 'index']);
         Route::get('/sinalizacoes/hoje', [\App\Http\Controllers\SinalizacaoController::class, 'hoje']);
+        // Marcada num ponto do mapa: dentro de um lote é do imóvel; na via, só o ponto.
+        Route::post('/sinalizacoes', [\App\Http\Controllers\SinalizacaoController::class, 'storePonto']);
         Route::get('/lotes/{lote}/sinalizacoes', [\App\Http\Controllers\SinalizacaoController::class, 'doLote']);
         Route::post('/lotes/{lote}/sinalizacoes', [\App\Http\Controllers\SinalizacaoController::class, 'store']);
         Route::post('/sinalizacoes/{sinalizacao}/resolver', [\App\Http\Controllers\SinalizacaoController::class, 'resolver']);

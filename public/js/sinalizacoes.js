@@ -13,26 +13,40 @@
 
 /** Ícones de LINHA, no traço do resto do sistema — um por tipo. */
 const SIN_ICONES = {
-  obra_sem_placa: '<rect x="4" y="4" width="16" height="10" rx="1"/><path d="M8 14v6M16 14v6M7 8h10M7 11h6"/>',
-  entulho:        '<path d="M3 20h18M5 20l2-6h4l1 6M12 20l2-8h4l2 8M8 14l1-3h2"/>',
-  avanco:         '<path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"/>',
-  risco:          '<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5"/>',
-  obra_iniciada:  '<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',
-  pedir_vistoria: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
-  lembrete:       '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M5 4 2 7M19 4l3 3"/>',
-  outro:          '<path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/>',
-  bandeira:       '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
-  ok:             '<path d="M5 12l5 5L20 7"/>',
-  lapis:          '<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',
+  // Obras
+  obra_iniciada:      '<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',
+  invasao_recuo:      '<path d="M3 20h18M6 20V9h8v11M14 13h6M17 10l3 3-3 3"/>',
+  entulho:            '<path d="M3 20h18M5 20l2-6h4l1 6M12 20l2-8h4l2 8M8 14l1-3h2"/>',
+  asseio_via:         '<path d="M3 20h18M7 20c0-3 2-5 5-5s5 2 5 5M9 11c0-1.5 1-3 3-3M15 7l2-3M19 9l2-1"/>',
+  // Posturas
+  obstrucao_calcada:  '<path d="M3 20h18M3 16h18M7 16V9h4v7M15 16v-4h3v4"/>',
+  veiculo_abandonado: '<path d="M4 16V12l2-5h12l2 5v4z"/><circle cx="8" cy="17" r="1.8"/><circle cx="16" cy="17" r="1.8"/><path d="M4 12h16"/>',
+  aguas_servidas:     '<path d="M12 3s-5 6-5 9.5a5 5 0 0 0 10 0C17 9 12 3 12 3z"/><path d="M3 21c2-1 4-1 6 0s4 1 6 0 4-1 6 0"/>',
+  publicidade:        '<rect x="3" y="4" width="18" height="10" rx="1"/><path d="M12 14v7M8 21h8M7 8h10M7 11h6"/>',
+  // Os dois
+  risco:              '<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5"/>',
+  outro:              '<path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/>',
+  lembrete:           '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M5 4 2 7M19 4l3 3"/>',
+  bandeira:           '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  ok:                 '<path d="M5 12l5 5L20 7"/>',
+  lapis:              '<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',
 }
-const SIN_TIPOS = [
-  ['obra_sem_placa', 'Obra sem placa'], ['entulho', 'Entulho na calçada'], ['avanco', 'Avanço / muro'],
-  ['risco', 'Risco'], ['obra_iniciada', 'Obra iniciada'], ['pedir_vistoria', 'Pedir vistoria'],
-  ['lembrete', 'Lembrete'], ['outro', 'Outro'],
-]
+/**
+ * SEIS por módulo — o que cabe no balão (decisão de 24/11/2026). A mesma lista
+ * está em Sinalizacao::POR_MODULO, e é o servidor quem recusa o tipo errado.
+ * O lembrete não entra: é a vistoria que o deixa.
+ */
+const SIN_TIPOS_MODULO = {
+  obras: [['obra_iniciada', 'Obra iniciada'], ['invasao_recuo', 'Invasão de recuo'], ['entulho', 'Entulho na calçada'],
+    ['asseio_via', 'Asseio da via'], ['risco', 'Risco'], ['outro', 'Outro']],
+  posturas: [['obstrucao_calcada', 'Obstrução de calçada'], ['veiculo_abandonado', 'Veículo abandonado'], ['aguas_servidas', 'Águas servidas'],
+    ['publicidade', 'Publicidade irregular'], ['risco', 'Risco'], ['outro', 'Outro']],
+}
+const _sinTipos = () => SIN_TIPOS_MODULO[window.MODULO] || SIN_TIPOS_MODULO.obras
 
 const sinState = {
-  /** Lote do formulário aberto: {id, quadra, numero_lote}. */ lote: null,
+  /** Lote do formulário aberto: {id, quadra, numero_lote}; null = ponto na via. */ lote: null,
+  /** O ponto tocado: {lat, lng}. Com lote, onde ele tocou o lote; sem, o ponto na via. */ ponto: null,
   tipo: null,
   /** Dias do lembrete (null = data escolhida no campo). */ dias: 30,
   camada: null,
@@ -73,10 +87,13 @@ function _sinModal() {
   return m
 }
 
-/** @param {{id:number, quadra?:string, numero_lote?:string}} lote */
-async function abrirSinalizar(lote) {
+/**
+ * @param {{id:number, quadra?:string, numero_lote?:string}} lote
+ * @param {{lat:number, lng:number}=} ponto onde o lote foi tocado (a bandeira vai ali)
+ */
+async function abrirSinalizar(lote, ponto) {
   if (!lote?.id) { toast('Escolha o imóvel primeiro.', 'err'); return }
-  sinState.lote = lote; sinState.tipo = null; sinState.dias = 30; sinState.jaExistem = []
+  sinState.lote = lote; sinState.ponto = ponto || null; sinState.tipo = null; sinState.dias = 30; sinState.jaExistem = []
   _sinModal()
   // O formulário guarda o comentário entre repinturas; uma sinalização nova começa vazia.
   const c = document.getElementById('sin-comentario'); if (c) c.value = ''
@@ -89,6 +106,22 @@ async function abrirSinalizar(lote) {
     sinState.jaExistem = (await _sinPedir(`/api/lotes/${lote.id}/sinalizacoes`)).ja_existem || []
     _sinPintarForm()
   } catch { /* sem a lista, o servidor avisa ao enviar */ }
+}
+
+/**
+ * Sinalizar num PONTO do mapa (toque longo, ou clique direito). Se o ponto
+ * cair dentro de um lote, o servidor liga ao imóvel; na via, fica só o ponto,
+ * com o lote mais próximo como referência em texto — veículo abandonado na
+ * frente de uma casa não é da casa.
+ * @param {{lat:number, lng:number}} ponto
+ */
+function abrirSinalizarNoPonto(ponto) {
+  sinState.lote = null; sinState.ponto = ponto; sinState.tipo = null; sinState.dias = 30; sinState.jaExistem = []
+  _sinModal()
+  const c = document.getElementById('sin-comentario'); if (c) c.value = ''
+  document.getElementById('sin-titulo').textContent = 'Sinalizar neste ponto'
+  _sinPintarForm()
+  openModal('m-sinalizar')
 }
 
 function sinalizarDaFicha() {
@@ -108,10 +141,13 @@ function _sinPintarForm() {
     ? `<div class="sin-aviso">${_sinSvg('bandeira')}<span><b>Este imóvel já tem sinalização pendente:</b>
         ${sinState.jaExistem.map(x => `${esc(x.rotulo)} (desde ${esc(x.desde)})`).join(' · ')}.
         Se for a mesma coisa, o seu aviso é somado ao que existe.</span></div>` : ''
+  // No ponto: diz o que vai acontecer — o servidor decide pelo lugar.
+  const noPonto = !sinState.lote
+    ? `<p class="sin-soma">Se o ponto cair <b>dentro de um lote</b>, a sinalização fica no imóvel. Na <b>via</b>, fica só o ponto, com o lote mais próximo como referência.</p>` : ''
   document.getElementById('sin-corpo').innerHTML = `
-    ${pendentes}
+    ${pendentes}${noPonto}
     <div class="sin-sub">O que você viu?</div>
-    <div class="sin-grade">${SIN_TIPOS.map(([k, t]) => `
+    <div class="sin-grade">${_sinTipos().map(([k, t]) => `
       <button type="button" class="sin-op${sinState.tipo === k ? ' on' : ''}${jaTipos.has(k) ? ' ja' : ''}"
               onclick="sinState.tipo='${k}';sinState.duplicada=false;_sinPintarForm()">
         ${_sinSvg(k)}<span>${esc(t)}</span>${jaTipos.has(k) ? '<i class="sin-ja-marca" title="Já sinalizado">•</i>' : ''}</button>`).join('')}</div>
@@ -119,7 +155,7 @@ function _sinPintarForm() {
       <b>somado</b> a ele: a bandeira continua uma só e passa a mostrar quantas pessoas avisaram.</p>` : ''}
     ${lembrete ? `<div class="sin-sub">Lembrar em</div>${_sinChipsLembrete('sin')}` : ''}
     <div class="field"><label for="sin-comentario">Comentário (opcional)</label>
-      <input type="text" id="sin-comentario" maxlength="500" placeholder="${lembrete ? 'Conferir retirada do entulho' : 'Fundação começando, sem placa'}"></div>
+      <input type="text" id="sin-comentario" maxlength="500" placeholder="${lembrete ? 'Conferir retirada do entulho' : 'O que você viu, em poucas palavras'}"></div>
     <div class="btn-row"><button class="btn" onclick="fModalBtn('m-sinalizar')">Cancelar</button>
       <button class="btn primary" id="sin-enviar" ${sinState.tipo ? '' : 'disabled'}
         onclick="enviarSinalizacao()">${ja ? 'Somar meu aviso' : 'Enviar'}</button></div>`
@@ -159,21 +195,26 @@ function _sinDataEscolhida(prefixo) {
  * resposta — não há mais "enviar mesmo assim".
  */
 async function enviarSinalizacao() {
-  if (!sinState.tipo || !sinState.lote) return
+  if (!sinState.tipo || (!sinState.lote && !sinState.ponto)) return
   const btn = document.getElementById('sin-enviar'); btn.disabled = true
+  const p = sinState.ponto
   try {
-    const d = await _sinPedir(`/api/lotes/${sinState.lote.id}/sinalizacoes`, {
+    // Com lote: a rota do imóvel (o ponto, se veio, é onde a bandeira fica).
+    // Só o ponto: o servidor procura o lote em que ele cai.
+    const d = await _sinPedir(sinState.lote ? `/api/lotes/${sinState.lote.id}/sinalizacoes` : '/api/sinalizacoes', {
       method: 'POST',
       body: JSON.stringify({
         tipo: sinState.tipo,
         comentario: document.getElementById('sin-comentario').value.trim() || null,
         lembrar_em: sinState.tipo === 'lembrete' ? _sinDataEscolhida('sin') : null,
+        lat: p ? +p.lat.toFixed(7) : null,
+        lng: p ? +p.lng.toFixed(7) : null,
       }),
     })
     fModalBtn('m-sinalizar'); toast(d.message)
     recarregarSinalizacoes()
     if (typeof carregarParaHoje === 'function') carregarParaHoje()
-    if (document.getElementById('m-ficha')?.classList.contains('open') && typeof carregarHistorico === 'function') {
+    if (sinState.lote && document.getElementById('m-ficha')?.classList.contains('open') && typeof carregarHistorico === 'function') {
       carregarHistorico(sinState.lote.id)
     }
   } catch (e) { toast(e.message, 'err'); btn.disabled = false }
@@ -213,10 +254,12 @@ async function _sinCarregar() {
     // ponto (o meio dele): desenhadas uma a uma, caíam uma em cima da outra, e
     // só a de cima abria — o imóvel com dois avisos de tipos diferentes parecia
     // ter um só. Agora a bandeira reúne as do lote, e o balão lista todas.
+    // Na via cada sinalização é a sua bandeira, no ponto marcado.
     const porLote = new Map()
     for (const s of d.sinalizacoes) {
-      if (!porLote.has(s.lote_id)) porLote.set(s.lote_id, [])
-      porLote.get(s.lote_id).push(s)
+      const chave = s.lote_id ? 'l' + s.lote_id : 'p' + s.id
+      if (!porLote.has(chave)) porLote.set(chave, [])
+      porLote.get(chave).push(s)
     }
     for (const lista of porLote.values()) {
       const p = lista[0]
@@ -247,13 +290,14 @@ function _sinBalaoDoLote(lista) {
 /** O balão da bandeira, no mesmo modelo do balão do lote (D4). */
 function _sinBalao(s) {
   const lembrete = s.tipo === 'lembrete'
-  const vistoriar = window.PODE_EDITAR
+  // A vistoria de obra precisa de imóvel: na via, só o "Resolvido".
+  const vistoriar = window.PODE_EDITAR && s.lote_id
     ? `<button type="button" class="balao-q" onclick="vistoriarDaSinalizacao(${Number(s.lote_id)})">${_sinSvg('lapis')}Vistoriar</button>` : ''
   return `<div class="balao4">
     <div class="balao4-cab ${lembrete ? 'lembrete' : 'sinal'}">${_sinSvg(s.tipo)}<b>${esc(s.rotulo)}</b></div>
     <div class="balao4-corpo">
       <table class="balao4-tab">
-        <tr><td>Imóvel</td><td>${esc(s.imovel)}</td></tr>
+        <tr><td>${s.na_rua ? 'Local' : 'Imóvel'}</td><td class="balao4-quebra">${esc(s.imovel)}</td></tr>
         <tr><td>${lembrete ? 'Lembrete de' : 'Aberta'}</td><td>${esc(lembrete ? (s.lembrar_em || s.criada_em) : s.ha + ' · ' + s.criada_em)}</td></tr>
         <tr><td>Por</td><td>${esc(s.autor)}</td></tr>
         ${s.comentario ? `<tr><td>Comentário</td><td class="balao4-quebra">${esc(s.comentario)}</td></tr>` : ''}
@@ -357,11 +401,11 @@ async function carregarParaHoje() {
     document.getElementById('pn-hoje').innerHTML = d.itens.map(s => `
       <div class="sin-linha" id="pn-sin-${s.id}">
         <span class="sin-linha-ico ${s.tipo === 'lembrete' ? 'lembrete' : ''}">${_sinSvg(s.tipo === 'lembrete' ? 'lembrete' : 'bandeira')}</span>
-        <div class="sin-linha-txt" onclick="irAoLoteNoMapa(${Number(s.lote_id)})" title="Ver no mapa">
+        <div class="sin-linha-txt" onclick="${s.lote_id ? `irAoLoteNoMapa(${Number(s.lote_id)})` : `irAoPontoDaSinalizacao(${Number(s.lat)}, ${Number(s.lon)})`}" title="Ver no mapa">
           <b>${esc(s.tipo === 'lembrete' ? 'Voltar' : s.rotulo)}</b> · ${esc(s.imovel)}
           <div class="sin-linha-sub">${esc(s.comentario || '')}${s.comentario ? ' · ' : ''}${esc(s.ha || '')} · ${esc(s.autor)}${s.avisos > 1 ? ` · <b class="sin-n">${s.avisos} avisos</b>` : ''}</div>
         </div>
-        ${window.PODE_EDITAR ? `<button type="button" class="btn sm sin-registrar sin-vistoriar" onclick="fazerVistoriaDoPainel(${Number(s.lote_id)})">${_sinSvg('lapis')}Fazer vistoria</button>` : ''}
+        ${window.PODE_EDITAR && s.lote_id ? `<button type="button" class="btn sm sin-registrar sin-vistoriar" onclick="fazerVistoriaDoPainel(${Number(s.lote_id)})">${_sinSvg('lapis')}Fazer vistoria</button>` : ''}
         <button type="button" class="btn sm sin-registrar" id="pn-registrar-${s.id}" aria-expanded="false" aria-controls="pn-atendimento-${s.id}" onclick="abrirAtendimentoPainel(${s.id})">Registrar atendimento</button>
         <div class="sin-atendimento" id="pn-atendimento-${s.id}" hidden></div>
       </div>`).join('')
@@ -415,10 +459,38 @@ function anexarSinalNaVistoria(fd) {
   sinState.naVistoria = false
 }
 
+/** Vai até uma sinalização da via (o Painel não tem lote para abrir). */
+function irAoPontoDaSinalizacao(lat, lon) {
+  const mapa = mapaState?.obj
+  if (!mapa || !isFinite(lat) || !isFinite(lon)) return
+  if (typeof irPara === 'function') irPara('mapa')
+  if (!camadaLigada('sinalizacoes') && typeof ligarCamada === 'function') ligarCamada('sinalizacoes', true)
+  // A mesma espera do irAoLoteNoMapa: a aba do mapa precisa estar à vista.
+  setTimeout(() => mapa.setView([lat, lon], Math.max(mapa.getZoom() || 0, 18)), 120)
+}
+
+/**
+ * TOQUE LONGO (clique direito no computador) num ponto do mapa: oferece
+ * "Sinalizar aqui". Fica calado com qualquer ferramenta aberta — medir,
+ * desenhar rua, curadoria —, que é dona do mapa enquanto trabalha.
+ */
+function _sinOfertarNoPonto(ev) {
+  const ferramentaAberta = typeof FERRAMENTAS_MAPA !== 'undefined'
+    && Object.values(FERRAMENTAS_MAPA).some(f => { try { return f.aberta() } catch { return false } })
+  if (ferramentaAberta) return
+  ev.originalEvent?.preventDefault?.()
+  const p = { lat: ev.latlng.lat, lng: ev.latlng.lng }
+  L.popup({ className: 'popup-lote', closeButton: false, offset: [0, -2] })
+    .setLatLng(ev.latlng)
+    .setContent(`<div class="sin-aqui"><button type="button" class="balao-q" onclick="mapaState.obj.closePopup();abrirSinalizarNoPonto({lat:${p.lat},lng:${p.lng}})">${_sinSvg('bandeira')}Sinalizar aqui</button></div>`)
+    .openOn(mapaState.obj)
+}
+
 // O mapa nasce no bootstrap (app.js); as bandeiras acompanham o movimento dele.
 window.addEventListener('load', () => {
   const mapa = mapaState?.obj
   if (!mapa) return
   mapa.on('moveend', recarregarSinalizacoes)
+  mapa.on('contextmenu', _sinOfertarNoPonto)
   recarregarSinalizacoes()
 })

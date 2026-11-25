@@ -18,22 +18,58 @@ class Sinalizacao extends Model
 
     /**
      * Os tipos e o rótulo de cada um. A tela desenha o ícone pelo mesmo
-     * código; um tipo novo entra aqui e no mapa de ícones de sinalizacoes.js.
+     * código; um tipo novo entra aqui, em POR_MODULO e no mapa de ícones de
+     * sinalizacoes.js. Ver a migração 2026_11_24_000200.
      */
     public const TIPOS = [
-        'obra_sem_placa' => 'Obra sem placa',
-        'entulho'        => 'Entulho na calçada',
-        'avanco'         => 'Avanço / muro',
-        'risco'          => 'Risco',
-        'obra_iniciada'  => 'Obra iniciada',
-        'pedir_vistoria' => 'Pedir vistoria',
-        'lembrete'       => 'Lembrete',
-        'outro'          => 'Outro',
+        // Obras
+        'obra_iniciada'      => 'Obra iniciada',
+        'invasao_recuo'      => 'Invasão de recuo',
+        'entulho'            => 'Entulho na calçada',
+        'asseio_via'         => 'Asseio da via',
+        // Posturas
+        'obstrucao_calcada'  => 'Obstrução de calçada',
+        'veiculo_abandonado' => 'Veículo abandonado',
+        'aguas_servidas'     => 'Águas servidas',
+        'publicidade'        => 'Publicidade irregular',
+        // Os dois
+        'risco'              => 'Risco',
+        'outro'              => 'Outro',
+        // Criado pela vistoria ("voltar em tal data"); não entra no balão.
+        'lembrete'           => 'Lembrete',
     ];
+
+    /**
+     * O que o balão oferece em cada módulo: SEIS, sempre — é o que cabe nele
+     * (decisão de 24/11/2026). A sinalização é do módulo em que foi criada.
+     */
+    public const POR_MODULO = [
+        'obras'    => ['obra_iniciada', 'invasao_recuo', 'entulho', 'asseio_via', 'risco', 'outro'],
+        'posturas' => ['obstrucao_calcada', 'veiculo_abandonado', 'aguas_servidas', 'publicidade', 'risco', 'outro'],
+    ];
+
+    /** Os tipos que o balão de `$modulo` oferece, na ordem do balão, com o rótulo. */
+    public static function tiposDo(string $modulo): array
+    {
+        $out = [];
+        foreach (self::POR_MODULO[$modulo] ?? self::POR_MODULO['obras'] as $k) { $out[$k] = self::TIPOS[$k]; }
+        return $out;
+    }
 
     protected function casts(): array
     {
-        return ['lembrar_em' => 'date', 'resolvida_em' => 'datetime'];
+        return ['lembrar_em' => 'date', 'resolvida_em' => 'datetime', 'lat' => 'float', 'lng' => 'float'];
+    }
+
+    /** Sinalização na via, sem imóvel. */
+    public function naRua(): bool
+    {
+        return $this->lote_id === null;
+    }
+
+    public function scopeDoModulo(Builder $q, string $modulo): Builder
+    {
+        return $q->where('modulo', $modulo);
     }
 
     public function lote(): BelongsTo
