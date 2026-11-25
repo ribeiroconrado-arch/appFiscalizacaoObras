@@ -92,6 +92,10 @@ final class ColunasDaExportacao
         'ENERGIA', 'AGUA', 'COLETA DE LIXO', 'ASFALTO', 'CALCADA',
         'REDE DE ESGOTO', 'REDE TELEFONICA', 'GALERIAS', 'ILUMINAÇÃO PUBL',
         'CONSERVACAO DE',
+        // Vem do sistema tributário e só se LÊ aqui (24/11/2026): até então a
+        // fiscalização lançava na ficha. O nome exato da coluna na exportação
+        // ainda não foi visto numa planilha real — sem ela, a ficha mostra "—".
+        'PROGRESSIVIDADE',
     ];
 
 

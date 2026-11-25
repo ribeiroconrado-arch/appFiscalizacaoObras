@@ -48,8 +48,7 @@ class Lote extends Model
      */
     protected function casts(): array
     {
-        return ['inativado_em' => 'datetime', 'area_gis_m2' => 'float', 'em_revisao' => 'boolean',
-            'tem_progressividade' => 'boolean'];
+        return ['inativado_em' => 'datetime', 'area_gis_m2' => 'float', 'em_revisao' => 'boolean'];
     }
 
     /**
@@ -63,7 +62,7 @@ class Lote extends Model
     public const COLUNAS = [
         'id', 'bairro', 'quadra', 'numero_lote', 'desmembramento', 'chave',
         'inscricao_imobiliaria', 'inscricao_montada', 'inscricao_montada_em', 'area_gis_m2', 'fonte', 'origem',
-        'situacao', 'inativado_em', 'importacao_id', 'em_revisao', 'tem_progressividade',
+        'situacao', 'inativado_em', 'importacao_id', 'em_revisao',
         // Fração ideal (2026_10_15_000100).
         'terreno_id', 'fracao_ideal_m2', 'unidade_desenhada', 'condominio',
         'created_at', 'updated_at',

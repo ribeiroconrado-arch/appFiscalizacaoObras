@@ -1,7 +1,7 @@
 <?php
 // Diagnóstico local, no molde de sinalizacao-backend.php: roda numa transação
 // DESFEITA no fim. Cobre a aba BCI da ficha: o bairro do cadastro no retrato, a
-// progressividade (quem lança, os três estados) e o CPF por tipo de usuário.
+// progressividade (lida do cadastro, ninguém lança) e o CPF por tipo de usuário.
 //
 //   php tests/bci-backend.php
 
@@ -32,21 +32,6 @@ function ler(User $u, Lote $lote): array {
     $r = $app->make(CadastroImobiliarioController::class)->mostrar($lote);
     return [$r->getStatusCode(), json_decode($r->getContent(), true)];
 }
-function lancar(User $u, Lote $lote, array $corpo): int {
-    global $app;
-    Auth::guard('web')->setUser($u);
-    $req = Illuminate\Http\Request::create("/api/imoveis/{$lote->id}/progressividade", 'PUT', $corpo);
-    $req->setUserResolver(fn () => $u);
-    $app->instance('request', $req);
-    try {
-        return $app->make(CadastroImobiliarioController::class)->progressividade($req, $lote)->getStatusCode();
-    } catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
-        return $e->getStatusCode();
-    } catch (Illuminate\Validation\ValidationException $e) {
-        return 422;
-    }
-}
-
 // Um lote que o cadastro carregado conhece — sem carga, não há o que conferir.
 // Um lote de bairro já amarrado ao cadastro. O imóvel do cadastro é criado
 // AQUI, dentro da transação: a base local pode ter a amarração sem ter a carga
@@ -67,7 +52,7 @@ try {
         'inscricao' => $linha->inscricao, 'codigo_bairro' => $bairro->codigo, 'nome_bairro' => $linha->nome_bairro,
         'quadra' => $lote->quadra, 'lote' => $lote->numero_lote, 'logradouro' => 'RUA DE TESTE', 'numero_predial' => '10',
         'inscricao_alternativa' => '01.999', 'area_terreno_m2' => 360,
-        'caracteristicas' => json_encode(['CALCADA' => 'NÃO', 'AGUA' => 'SIM']),
+        'caracteristicas' => json_encode(['CALCADA' => 'NÃO', 'AGUA' => 'SIM', 'PROGRESSIVIDADE' => 'SIM']),
     ]);
 
     $novo = fn (string $email, string $perfil, string $tipo) => User::create(['name' => 'T ' . $tipo, 'email' => $email,
@@ -86,7 +71,9 @@ try {
     confere($d['imovel']['nome_bairro'] === $linha->nome_bairro, "o bairro vem do cadastro ({$linha->nome_bairro})");
     confere(array_key_exists('logradouro', $d['imovel']) && array_key_exists('inscricao_alternativa', $d['imovel']),
         'logradouro e inscrição alternativa vão no retrato');
-    confere($d['fiscalizacao'] === ['tem_progressividade' => null], 'progressividade nasce "não informada"');
+    $prog = collect($d['caracteristicas'])->firstWhere('chave', 'PROGRESSIVIDADE');
+    confere(($prog['valor'] ?? null) === 'SIM', 'a progressividade vem do cadastro');
+    confere(! array_key_exists('fiscalizacao', $d), 'e não há mais o dado lançado pela fiscalização');
 
     echo "Proprietário\n";
     confere($d['proprietarios'][0]['documento'] === '123.456.789-00' && $d['proprietarios'][0]['endereco'] === 'Rua A, 10',
@@ -96,19 +83,11 @@ try {
         'coordenador vê o nome e o CPF mascarado, sem endereço');
     [, $d] = ler($externo, $lote);
     confere(! array_key_exists('proprietarios', $d), 'externo não recebe o proprietário');
-    confere($d['fiscalizacao'] === ['tem_progressividade' => null], 'mas vê a progressividade');
+    confere(collect($d['caracteristicas'])->contains('chave', 'PROGRESSIVIDADE'), 'mas vê a progressividade');
 
     echo "Progressividade\n";
-    confere(lancar($coord, $lote, ['tem_progressividade' => true]) === 403, 'coordenador não lança');
-    confere(lancar($externo, $lote, ['tem_progressividade' => true]) === 403, 'externo não lança');
-    confere(lancar($agente, $lote, ['tem_progressividade' => true]) === 200, 'agente lança "sim"');
-    [, $d] = ler($coord, $lote);
-    confere($d['fiscalizacao']['tem_progressividade'] === true, 'e todos passam a ver "sim"');
-    confere(lancar($agente, $lote, ['tem_progressividade' => false]) === 200
-        && $lote->fresh()->tem_progressividade === false, '"não" é gravado como não, e não como vazio');
-    confere(lancar($agente, $lote, ['tem_progressividade' => null]) === 200
-        && $lote->fresh()->tem_progressividade === null, 'e dá para voltar a "não informado"');
-    confere(lancar($agente, $lote, []) === 422, 'sem o campo, recusa');
+    confere(! collect(Illuminate\Support\Facades\Route::getRoutes())->contains(fn ($r) => str_contains($r->uri(), 'progressividade')),
+        'não há rota para lançar a progressividade');
 
     echo "\n{$ok} verificações passaram.\n";
 } finally {

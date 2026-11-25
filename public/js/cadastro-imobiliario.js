@@ -12,8 +12,9 @@
 //    sistema continuam só no cabeçalho da ficha.
 // 3. CABE NA ABA, SEM ROLAGEM INTERNA. Linhas de rótulo e valor em duas
 //    colunas; os serviços públicos na testada ficam de fora (BCI_OCULTAS).
-// 4. A PROGRESSIVIDADE NÃO É DO CADASTRO: a fiscalização lança aqui, e ela
-//    mora no lote.
+// 4. NADA AQUI SE EDITA. Tudo vem do cadastro municipal — inclusive a
+//    progressividade, que é do sistema tributário (24/11/2026: até então a
+//    fiscalização lançava aqui).
 // ══════════════════════════════════════════════
 
 /** Cache por lote: reabrir a aba do mesmo imóvel não repete a ida ao servidor. */
@@ -81,7 +82,7 @@ function desenharBci(caixa, d) {
         <p class="bci-vazio-p">Área de terreno, medidas, características e
            construções vêm do cadastro da prefeitura. Esta aba fica vazia — e não
            em branco: o que falta é o dado de lá, não o imóvel.</p>
-      </div>${secTopo(d.proprietarios, null)}${secFiscalizacao(d, null)}`
+      </div>${secTopo(d.proprietarios, null)}`
     return
   }
 
@@ -170,13 +171,14 @@ function bciSecao(titulo, corpo, classe = '') {
  *
  * @param {string} rot
  * @param {*} val
- * @param {{mono?:boolean, forte?:boolean, longo?:boolean, html?:boolean}} [o]  `html`: o valor
- *        já vem montado (e escapado) por quem chama — é o caso do seletor.
+ * @param {{mono?:boolean, forte?:boolean, longo?:boolean}} [o]
  */
 function bciLin(rot, val, o = {}) {
   const vazio = val === null || val === undefined || val === ''
-  const corpo = vazio ? '—' : (o.html ? val : esc(val))
-  const cls = [o.mono ? 'mono' : '', o.forte ? 'forte' : '', o.longo ? 'longo' : '', vazio ? 'vazio' : ''].filter(Boolean).join(' ')
+  const corpo = vazio ? '—' : esc(val)
+  // O vazio nunca vai em monoespaçado: o travessão da fonte mono é mais curto,
+  // e a mesma coluna mostrava dois traços diferentes.
+  const cls = vazio ? 'vazio' : [o.mono ? 'mono' : '', o.forte ? 'forte' : '', o.longo ? 'longo' : ''].filter(Boolean).join(' ')
   return `<div class="bci-lin"><span>${esc(rot)}</span><b${cls ? ` class="${cls}"` : ''}>${corpo}</b></div>`
 }
 
@@ -271,7 +273,7 @@ function secTopo(donos, i) {
   const titulo = donos.length > 1 ? 'Proprietários' : 'Proprietário'
 
   if (!imovel) { return bciSecao(titulo, dono) }
-  return `<div class="bci-g2">${bciSecao(titulo, dono)}${bciSecao('Imóvel', imovel.join(''))}</div>`
+  return `<div class="bci-sec"><div class="bci-g2">${bciSecao(titulo, dono)}${bciSecao('Imóvel', imovel.join(''))}</div></div>`
 }
 
 function secTerreno(i, c) {
@@ -302,25 +304,20 @@ function secTerreno(i, c) {
   return bciSecao('Terreno', bciCols(esq, dir))
 }
 
-const BCI_DA_FISCALIZACAO = ['CALCADA', 'ELEMENTO DE PROTECAO', 'OCUPACAO DO LOTE', 'CONSERVACAO DE']
+const BCI_DA_FISCALIZACAO = ['CALCADA', 'PROGRESSIVIDADE', 'ELEMENTO DE PROTECAO', 'OCUPACAO DO LOTE', 'CONSERVACAO DE']
 
 /**
  * PARA A FISCALIZAÇÃO — o que decide conduta em campo: calçada,
  * progressividade, muro, ocupação, área edificada, conservação.
  *
- * A progressividade é o único dado da aba que NÃO vem do cadastro municipal: é
- * lançada aqui, pela fiscalização, e mora no lote. Por isso aparece mesmo
- * quando o imóvel não está no cadastro.
+ * Tudo lido do cadastro. A progressividade vem do sistema tributário e só é
+ * alterada lá; sem a coluna na planilha, a linha mostra "—".
  */
 function secFiscalizacao(d, c) {
   const i = d.imovel || {}
-  const progressividade = bciLin('Progressividade', campoProgressividade(d.fiscalizacao), { forte: true, html: true })
-  if (!c) {
-    return bciSecao('Para a fiscalização', `<div class="bci-g2 bci-marca"><div>${progressividade}</div><div></div></div>`)
-  }
   const esq = [
     bciLin('Calçada', bciTem(c.pega('CALCADA')), { forte: true }),
-    progressividade,
+    bciLin('Progressividade', bciFrase(c.pega('PROGRESSIVIDADE')), { forte: true }),
     bciLin('Muro / proteção', bciFrase(c.pega('ELEMENTO DE PROTECAO')), { forte: true }),
   ]
   const dir = [
@@ -328,47 +325,7 @@ function secFiscalizacao(d, c) {
     bciLin('Área edificada', bciM2(i.area_edificada_m2), { forte: true, mono: true }),
     bciLin('Conservação', bciFrase(c.pega('CONSERVACAO DE')), { forte: true }),
   ]
-  return bciSecao('Para a fiscalização', bciCols(esq, dir, 'bci-marca'))
-}
-
-const BCI_PROGRESSIVIDADE = [['', 'Não informado'], ['1', 'Sim'], ['0', 'Não']]
-
-/** Quem lança vê o seletor; quem só consulta, o texto. */
-function campoProgressividade(f) {
-  const atual = f?.tem_progressividade === true ? '1' : f?.tem_progressividade === false ? '0' : ''
-  if (!window.PODE_EDITAR) {
-    return esc(BCI_PROGRESSIVIDADE.find(([v]) => v === atual)[1])
-  }
-  return `<select class="bci-sel" aria-label="Progressividade" onchange="salvarProgressividade(this)">${
-    BCI_PROGRESSIVIDADE.map(([v, r]) => `<option value="${v}"${v === atual ? ' selected' : ''}>${r}</option>`).join('')
-  }</select>`
-}
-
-/** Grava a progressividade do lote aberto. Falhou: o seletor volta ao que era. */
-async function salvarProgressividade(sel) {
-  const loteId = state.selecionado?.properties?.id
-  if (!loteId) { return }
-  const antes = bciCache.get(loteId)?.fiscalizacao?.tem_progressividade
-  sel.disabled = true
-  try {
-    const r = await fetch(`/api/imoveis/${loteId}/progressividade`, {
-      method: 'PUT',
-      headers: {
-        Accept: 'application/json', 'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-      },
-      body: JSON.stringify({ tem_progressividade: sel.value === '' ? null : sel.value === '1' }),
-    })
-    if (!r.ok) { throw new Error(r.status) }
-    const dados = await r.json()
-    if (bciCache.has(loteId)) { bciCache.get(loteId).fiscalizacao = dados.fiscalizacao }
-    toast('Progressividade gravada')
-  } catch (e) {
-    sel.value = antes === true ? '1' : antes === false ? '0' : ''
-    toast('Não foi possível gravar a progressividade', 'err')
-  } finally {
-    sel.disabled = false
-  }
+  return bciSecao('Para a fiscalização', bciCols(esq, dir), 'bci-marca')
 }
 
 function secUnidades(lista) {

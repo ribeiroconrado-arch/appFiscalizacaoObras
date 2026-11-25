@@ -8,7 +8,6 @@ use App\Cadastro\ProprietariosVisiveis;
 use App\Cadastro\RetratoBci;
 use App\Models\Lote;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * A aba "Cadastro imobiliário" da ficha do imóvel.
@@ -38,7 +37,6 @@ class CadastroImobiliarioController extends Controller
         return response()->json(
             $this->retrato($lote)
             + ['integracao' => $situacao]
-            + ['fiscalizacao' => $this->fiscalizacao($lote)]
             + ($donos === null ? [] : ['proprietarios' => $donos])
         );
     }
@@ -72,31 +70,6 @@ class CadastroImobiliarioController extends Controller
             'proprietario' => $donos[0]['nome'] ?? null,
             'outros'       => max(0, count($donos) - 1),
         ]);
-    }
-
-    /**
-     * PUT /api/imoveis/{lote}/progressividade
-     *
-     * O único dado desta aba que NÃO vem do cadastro municipal: é lançado pela
-     * fiscalização e mora no lote (a carga mensal não o toca). `null` desfaz o
-     * lançamento — "não informado" é diferente de "não tem". Quem lançou e
-     * quando ficam na trilha de auditoria do Lote.
-     */
-    public function progressividade(Request $r, Lote $lote): JsonResponse
-    {
-        abort_unless($r->user()->canEdit(), 403, 'Só a fiscalização lança a progressividade.');
-
-        $d = $r->validate(['tem_progressividade' => ['present', 'nullable', 'boolean']]);
-        $lote->update(['tem_progressividade' => $d['tem_progressividade'] === null
-            ? null : (bool) $d['tem_progressividade']]);
-
-        return response()->json(['fiscalizacao' => $this->fiscalizacao($lote)]);
-    }
-
-    /** @return array{tem_progressividade:?bool} */
-    private function fiscalizacao(Lote $lote): array
-    {
-        return ['tem_progressividade' => $lote->tem_progressividade];
     }
 
     /** @return array<string,mixed> */

@@ -92,6 +92,8 @@ const CARACTERISTICAS = [
   'ENERGIA', 'AGUA', 'COLETA DE LIXO', 'ASFALTO', 'CALCADA',
   'REDE DE ESGOTO', 'REDE TELEFONICA', 'GALERIAS', 'ILUMINAÇÃO PUBL',
   'CONSERVACAO DE',
+  // Vem do sistema tributário e só se LÊ no sistema (24/11/2026).
+  'PROGRESSIVIDADE',
 ]
 
 const PROPRIETARIO = {

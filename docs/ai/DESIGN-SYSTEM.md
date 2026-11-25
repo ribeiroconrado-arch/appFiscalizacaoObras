@@ -215,8 +215,6 @@ feriado) e a escolha da carga do cadastro municipal.
 
 - `#nd-tipo` (documento): está escondido; o tipo é escolhido antes de o
   formulário abrir. Não é campo de tela.
-- BCI › progressividade (`.bci-sel`): vive dentro de uma linha de leitura de
-  22px, sem moldura de campo; o combobox quebraria a ficha "sóbria".
 - Nomes de rua › logradouro: `<datalist>` (texto livre) ou `<select>` dentro de
   um balão do mapa (`ruas-manuais.js`), onde a lista flutuante pode ser cortada.
 - Prancheta cadastral (`prancheta-cadastral.js`): interface própria, com os

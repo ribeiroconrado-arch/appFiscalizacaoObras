@@ -1895,18 +1895,24 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    tela é a ordem das seções (proprietário e imóvel, terreno, para a
    fiscalização, unidades), e o único destaque é o traço à esquerda do bloco
    da fiscalização, com os valores em peso maior.
+
+   TODA seção tem o mesmo recuo, com um traço transparente; a da fiscalização
+   só pinta o traço. Antes o recuo era só dela, e as suas colunas ficavam
+   fora de prumo com as de cima (24/11/2026).
    ══════════════════════════════════════════════ */
-.bci-sec{margin-bottom:9px}
+.bci-sec,.bci-cargas,#bci-historico{border-left:2px solid transparent;padding-left:10px}
+.bci-sec{margin-bottom:14px}
 .bci-sec:last-child{margin-bottom:0}
-.bci-sec-t{font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--tx3);margin-bottom:3px}
+.bci-sec-t{font-size:11.5px;font-weight:700;color:var(--tx2);margin-bottom:2px}
 
 /* Duas colunas. `minmax(0,1fr)` e não `1fr`: um endereço comprido empurraria
    a coluna para fora da ficha em vez de ser cortado com reticências. */
 .bci-g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 18px}
-.bci-g2 > .bci-sec{margin-bottom:9px}
+/* Seções lado a lado (proprietário e imóvel): o recuo é da seção de fora. */
+.bci-g2 > .bci-sec{margin-bottom:0;border-left:0;padding-left:0}
 
 .bci-lin{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
-  padding:4px 0;border-bottom:1px solid var(--bord);font-size:12.5px;min-width:0}
+  padding:5px 0;border-bottom:1px solid var(--bord);font-size:12.5px;min-width:0}
 .bci-lin > span{color:var(--tx3);white-space:nowrap;flex:0 0 auto}
 .bci-lin > b{color:var(--chumbo);font-weight:500;text-align:right;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1919,17 +1925,13 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
    de sumir nas reticências. */
 .bci-lin > b.longo{white-space:normal;overflow-wrap:anywhere;line-height:1.3}
 
-/* PARA A FISCALIZAÇÃO: só um traço à esquerda. Sem fundo e sem cor — o bloco
-   se destaca por estar marcado, não por gritar. */
-.bci-marca{border-left:2px solid var(--chumbo);padding-left:9px}
+/* PARA A FISCALIZAÇÃO: só o traço à esquerda, do título à última linha. Sem
+   fundo e sem cor — o bloco se destaca por estar marcado, não por gritar. */
+.bci-sec.bci-marca{border-left-color:var(--chumbo)}
 
-/* O seletor da progressividade cabe na linha, sem aumentar a altura dela. */
-.bci-sel{font:inherit;font-weight:700;color:var(--chumbo);height:22px;padding:0 4px;
-  border:1px solid var(--bord);border-radius:5px;background:var(--sur);max-width:100%}
-.bci-lin:has(.bci-sel){padding:2px 0}
-.bci-lin > b:has(.bci-sel){overflow:visible}
-
-.bci-cargas{margin:2px 0 8px;line-height:1.5}
+.bci-cargas{margin:0 0 12px;line-height:1.5}
+.bci-cargas a{color:var(--gd);font-weight:600;text-decoration:none}
+.bci-cargas a:hover{text-decoration:underline}
 
 /* No celular as duas colunas viram uma: 12 caracteres de rótulo mais o valor
    não cabem em meia tela de 360px. */
