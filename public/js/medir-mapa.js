@@ -1048,7 +1048,11 @@ function posicionarBarraMedicao() {
       else if (q.right >= r.right - 24 && q.left > r.left + r.width / 2) dir = Math.min(dir, q.left)
     }
     if (dir - esq < 260) { esq = r.left; dir = r.right }   // sem espaço: vale o mapa inteiro
-    barra.style.width = Math.min(570, Math.max(0, dir - esq - 16)) + 'px'
+    // Largura do PRÓPRIO conteúdo, só limitada pela área livre. Largura fixa
+    // (570 px) esticava as três colunas da grade e quebrava os botões em
+    // duas linhas ao arrastar (25/11/2026).
+    barra.style.width = 'max-content'
+    barra.style.maxWidth = Math.max(0, dir - esq - 16) + 'px'
     const b = barra.getBoundingClientRect()
     medBarraPosicao.x = Math.max(esq + 8, Math.min(medBarraPosicao.x, dir - b.width - 8))
     medBarraPosicao.y = Math.max(r.top + 8, Math.min(medBarraPosicao.y, limiteInferior - b.height - 8))
