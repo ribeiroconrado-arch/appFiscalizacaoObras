@@ -9,25 +9,25 @@
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/img/icone-192-ambar.png?v=geurb-20261124",
+      "src": "/img/icone-192-ambar.png?v=geurb-20261124b",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/img/icone-512-ambar.png?v=geurb-20261124",
+      "src": "/img/icone-512-ambar.png?v=geurb-20261124b",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/img/icone-maskable-192-ambar.png?v=geurb-20261124",
+      "src": "/img/icone-maskable-192-ambar.png?v=geurb-20261124b",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/img/icone-maskable-512-ambar.png?v=geurb-20261124",
+      "src": "/img/icone-maskable-512-ambar.png?v=geurb-20261124b",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
