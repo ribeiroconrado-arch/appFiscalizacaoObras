@@ -1029,7 +1029,7 @@ function comoLiberarLocalizacao() {
       '1) Ajustes do iPhone > Privacidade e Segurança > Serviços de Localização'
         + ' > Chrome > "Ao Usar o App".',
       '2) No Chrome, três pontos > Configurações > Configurações do site >'
-        + ' Localização, e permita para fiscobras.duckdns.org.',
+        + ' Localização, e permita para geurb.com.br.',
       'Depois feche a aba e abra o sistema de novo.',
     ].join(SALTO + SALTO)
   }
