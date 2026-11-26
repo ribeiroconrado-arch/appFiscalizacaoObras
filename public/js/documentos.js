@@ -81,20 +81,36 @@ function fundamentacaoDe(d) {
   if (d.artigos) {
     return `${d.artigos} artigo(s)` + (d.valor_upf ? ` · ${fmtNum(d.valor_upf)} UPF` : '')
   }
-  return d.registro === 'vistoria'
+  return d.registro === 'vistoria' || d.registro === 'vistoria_guiada'
     ? '<span class="tl-fraco">sem artigo citado</span>'
     : '<span class="tl-falta">sem fundamentação</span>'
 }
 
+// A vistoria guiada (26/11/2026) abre na página dela; a antiga, na janela de leitura.
 function aberturaDe(d) {
+  if (d.registro === 'vistoria_guiada') return `abrirVistoriaGuiada(${d.id})`
   return d.registro === 'vistoria' ? `verVistoria(${d.id})` : `abrirDocumento(${d.id})`
 }
 
 /** @param {Object} d @returns {string} o onclick do ⋮ */
 function menuDe(d) {
+  if (d.registro === 'vistoria_guiada') return `abrirOpcoesVistoriaGuiada(event, ${d.id})`
   return d.registro === 'vistoria'
     ? `abrirOpcoesVistoria(event, ${d.id})`
     : `abrirOpcoesDoc(event, ${d.id})`
+}
+
+/** O menu da linha de vistoria guiada: abrir, ou gerar a peça a partir dela. */
+function abrirOpcoesVistoriaGuiada(ev, id) {
+  const ico = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`
+  abrirMenuNovo(ev, [
+    { rotulo: 'Abrir a vistoria', obs: 'O roteiro, as fotos, o relatório e as assinaturas.',
+      icone: ico('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/>'),
+      acao: () => abrirVistoriaGuiada(id) },
+    ...(window.PODE_EDITAR ? [{ rotulo: 'Notificação ou auto', obs: 'A peça nasce com os artigos, a área e as exigências desta vistoria.',
+      icone: ico('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>'),
+      acao: () => documentoDaVistoriaGuiada(id) }] : []),
+  ])
 }
 
 /**
@@ -161,7 +177,7 @@ function tabelaDocumentos() {
     // O título do Tipo traz a lei e os artigos, para quem passar o mouse.
     // Na vistoria o rótulo é a FINALIDADE ("Fiscalização de obras"): na
     // coluna Tipo vai "Vistoria", e a finalidade fica na dica.
-    const tipo = d.registro === 'vistoria' ? 'Vistoria' : d.tipo_rotulo
+    const tipo = d.registro === 'vistoria' || d.registro === 'vistoria_guiada' ? 'Vistoria' : d.tipo_rotulo
     const dica = d.lei && d.lei !== '—' ? `${d.lei} · ${d.artigos} artigo(s)` : d.tipo_rotulo
     return `
       <tr class="st-${esc(d.status.valor ?? '')}" onclick="${esc(aberturaDe(d))}">
@@ -235,7 +251,7 @@ function cartoesDocumentos() {
         <div class="doc-rodape">
           ${d.lei && d.lei !== '—'
             ? `<span class="doc-lei">${esc(d.lei)}</span>`
-            : (d.registro === 'vistoria' ? '' : '<span class="doc-lei">sem legislação</span>')}
+            : (d.registro === 'vistoria' || d.registro === 'vistoria_guiada' ? '' : '<span class="doc-lei">sem legislação</span>')}
           <span class="doc-art">${rodape}</span>
           <span class="doc-data">${esc(d.data)}</span>
         </div>
@@ -1236,7 +1252,7 @@ function mostrarMultaDoc() {
  *
  * @param {number} vistoriaId
  */
-async function sugerirDaVistoria(vistoriaId) {
+async function sugerirDaVistoria(vistoriaId, guiada = false) {
   const caixa = document.getElementById('nd-sugestao')
   caixa.innerHTML = ''
   if (!vistoriaId) { return }
@@ -1244,16 +1260,18 @@ async function sugerirDaVistoria(vistoriaId) {
   // de um embargo (campo Origem). O servidor ignoraria o vínculo; a tela
   // avisa, para o fiscal não achar que ficou amarrado.
   if (document.getElementById('nd-tipo').value === 'auto_infracao') {
-    fdState.vistoriaId = null
+    fdState.vistoriaId = fdState.vgVistoriaId = null
     toast('Auto de Infração não se vincula a vistoria: informe em Origem a notificação ou o embargo de que ele decorre.', 'aviso')
     return
   }
 
   try {
-    fdState.vistoriaId = vistoriaId
+    // A guiada (26/11/2026) tem rota e coluna próprias; a resposta tem o mesmo formato.
+    if (guiada) { fdState.vgVistoriaId = vistoriaId; fdState.vistoriaId = null }
+    else { fdState.vistoriaId = vistoriaId; fdState.vgVistoriaId = null }
     // Com o tipo, o servidor devolve só os artigos da vistoria que servem a esta peça.
     const tipo = encodeURIComponent(document.getElementById('nd-tipo').value)
-    const r = await fetch(`/api/vistorias/${vistoriaId}/sugestao?tipo=${tipo}`, { headers: { Accept: 'application/json' } })
+    const r = await fetch(`/api/${guiada ? 'vistorias-guiadas' : 'vistorias'}/${vistoriaId}/sugestao?tipo=${tipo}`, { headers: { Accept: 'application/json' } })
     const s = await r.json()
 
     // A área e as exigências vêm ANTES do aviso de artigo faltando: mesmo sem
@@ -1294,6 +1312,12 @@ function aproveitarDaVistoria(s) {
   }
 
   const desc = document.getElementById('nd-descricao')
+  // A guiada diz como a área foi obtida: "aferida" quando medida, "projeto"
+  // quando tirada dele (o campo de origem da área da peça).
+  if (s.vistoria?.guiada && s.vistoria.area_construida_m2 && /projeto/i.test(s.vistoria.area_rotulo || '')) {
+    document.querySelectorAll('input[name="nd-area-origem"]').forEach(r => { r.checked = r.value === 'projeto' })
+  }
+
   if (desc && !desc.value.trim() && s.exigencias?.length) {
     desc.value = 'Fica o administrado NOTIFICADO a:\n'
       + s.exigencias.map((e, i) => `${i + 1}. ${e.rotulo}`).join('\n')

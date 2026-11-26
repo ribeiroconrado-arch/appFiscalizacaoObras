@@ -219,8 +219,11 @@ class DocumentoController extends Controller
     {
         $tipo = $d['tipo'] ?? '';
         if ($tipo !== '' && $tipo !== 'vistoria') { return collect(); }
-        // Vistoria de lote é ato de Obras; Posturas não as lista.
-        if (\App\Support\Modulo::ativo() !== 'obras') { return collect(); }
+        // A vistoria guiada (a que substitui a de obra, 26/11/2026) é dos dois
+        // módulos: em Posturas, é o auto de constatação.
+        $guiadas = $this->guiadasNaLista($request, $d);
+        // A vistoria de obra antiga é ato de Obras; Posturas não as lista.
+        if (\App\Support\Modulo::ativo() !== 'obras') { return $guiadas; }
 
         $q = Vistoria::query()
             ->with(['lote:id,bairro,quadra,numero_lote', 'fiscal:id,name'])
@@ -260,7 +263,55 @@ class DocumentoController extends Controller
             'fiscal'      => $v->fiscal?->name,
             'opcoes'      => [],
             '_ordem'      => $v->data_hora?->format('Y-m-d H:i:s') ?? '',
-        ]);
+        ])->concat($guiadas);
+    }
+
+    /**
+     * As vistorias guiadas do módulo, no formato de linha da lista. "Meus" é
+     * ser um dos fiscais relacionados; a busca vale pelo rótulo dos vínculos
+     * (inscrição, bairro, quadra e lote estão nele) e pelo local.
+     */
+    private function guiadasNaLista(Request $request, array $d)
+    {
+        $q = \App\Models\Vg\VgVistoria::query()
+            ->where('modulo', \App\Support\Modulo::ativo())
+            ->with(['versao', 'vinculos', 'fiscais.usuario'])
+            ->latest('id');
+        if (($d['agente'] ?? 'eu') === 'eu') {
+            $q->whereHas('fiscais', fn ($f) => $f->where('user_id', $request->user()->id));
+        }
+        if ($texto = $d['busca'] ?? null) {
+            $like = '%' . addcslashes($texto, '%_\\') . '%';
+            $q->where(fn ($w) => $w->where('local', 'like', $like)
+                ->orWhereHas('vinculos', fn ($l) => $l->where('rotulo', 'like', $like)));
+        }
+        $vs = $q->limit(300)->get();
+        $lotes = Lote::whereIn('id', $vs->map(fn ($v) => $v->loteId())->filter()->unique())->get()->keyBy('id');
+
+        return $vs->map(function (\App\Models\Vg\VgVistoria $v) use ($lotes) {
+            [$txt, $cls] = $v->situacaoBadge();
+            $l = $lotes->get($v->loteId());
+            return [
+                'id'          => $v->id,
+                'registro'    => 'vistoria_guiada',
+                'tipo'        => 'vistoria',
+                'tipo_rotulo' => $v->versao?->nome ?? 'Vistoria',
+                'numero'      => $v->numeroFormatado(),
+                'data'        => $v->dataHora()?->format('d/m/Y'),
+                'status'      => ['valor' => $v->situacao(), 'texto' => $txt, 'classe' => $cls],
+                'prazo'       => null,
+                'imovel'      => $l?->rotuloCompleto() ?? ($v->local ?: ($v->vinculos->first()?->rotulo ?? '—')),
+                'lote_curto'  => $l ? $this->loteCurto($l) : ($v->local ?: '—'),
+                'bairro'      => $l?->bairroOficial() ?? '—',
+                'agente'      => $v->fiscais->map(fn ($f) => $f->usuario?->name)->filter()->implode(', ') ?: '—',
+                'autuado'     => '—',
+                'lei'         => '—',
+                'artigos'     => count($v->artigosCitadosIds()),
+                'valor_upf'   => null,
+                'opcoes'      => [],
+                '_ordem'      => $v->dataHora()?->format('Y-m-d H:i:s') ?? '',
+            ];
+        });
     }
 
     /** GET /api/documentos/opcoes — dados para montar o formulário. */
@@ -411,6 +462,44 @@ class DocumentoController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/vistorias-guiadas/{vgVistoria}/sugestao — o mesmo da de cima,
+     * lido da VISTORIA GUIADA: os artigos citados nos "não confere", a área do
+     * item que o modelo marcou como área da multa e as exigências com prazo.
+     * Mesmo formato de resposta, para o formulário da peça não distinguir.
+     */
+    public function sugestaoGuiada(Request $request, \App\Models\Vg\VgVistoria $vgVistoria): JsonResponse
+    {
+        $tipo = $request->query('tipo');
+        $tipo = is_string($tipo) && isset(Documento::TIPOS[$tipo]) ? $tipo : null;
+        $v = $vgVistoria->loadMissing(['versao', 'vinculos']);
+        $artigos = $v->artigosCitados()->filter(fn ($a) => $tipo === null || $a->serveA($tipo))->values();
+        $area = $v->areaDaMulta();
+
+        return response()->json([
+            'vistoria' => [
+                'id'        => $v->id,
+                'guiada'    => true,
+                'numero'    => $v->numeroFormatado(),
+                'data_hora' => $v->dataHora()?->format('d/m/Y H:i'),
+                'lote_id'   => $v->loteId(),
+                'area_construida_m2' => $area['valor'] ?? null,
+                'area_rotulo'        => $area['rotulo'] ?? null,
+            ],
+            'exigencias' => $v->exigencias(),
+            'artigos' => $artigos->map(fn ($a) => [
+                'id' => $a->id, 'numero' => $a->numero, 'rotulo' => $a->rotulo(),
+                'conduta' => $a->conduta, 'sancao' => $a->sancao,
+                'multa_upf' => $a->multa_upf,
+                'lei' => $a->legislacao?->rotulo(),
+                'legislacao_id' => $a->legislacao_id,
+            ]),
+            'aviso' => $artigos->isEmpty()
+                ? 'Nenhum artigo citado nesta vistoria. Escolha a fundamentação abaixo.'
+                : null,
+        ]);
+    }
+
     /** POST /api/lotes/{lote}/documentos — cria como RASCUNHO, sem número. */
     /**
      * POST /api/documentos — mesma criação, SEM imóvel definido.
@@ -440,6 +529,8 @@ class DocumentoController extends Controller
         $d = $request->validate([
             'tipo'           => ['required', Rule::in(array_keys(Documento::tiposDoModulo($modulo)))],
             'vistoria_id'    => ['nullable', 'exists:vistorias,id'],
+            // A vistoria guiada (a que substitui a de obra). Vindo as duas, vale a guiada.
+            'vg_vistoria_id' => ['nullable', 'exists:vg_vistorias,id'],
             'legislacao_id'  => ['nullable', Rule::exists('legislacoes', 'id')->where('modulo', $modulo)],
             'data_fato'      => ['nullable', 'date_format:Y-m-d\TH:i'],
             'prazo_dias'     => ['nullable', 'integer', 'min:0', 'max:365'],
@@ -495,7 +586,8 @@ class DocumentoController extends Controller
             'lote_id'       => $lote?->id,
             // AUTO DE INFRAÇÃO NÃO SE VINCULA A VISTORIA: nasce de uma
             // notificação ou de um embargo (origem_id). O que vier é ignorado.
-            'vistoria_id'   => $d['tipo'] === 'auto_infracao' ? null : ($d['vistoria_id'] ?? null),
+            'vistoria_id'   => $d['tipo'] === 'auto_infracao' || ! empty($d['vg_vistoria_id']) ? null : ($d['vistoria_id'] ?? null),
+            'vg_vistoria_id' => $d['tipo'] === 'auto_infracao' ? null : ($d['vg_vistoria_id'] ?? null),
             // Peça nova: os anexos são os que o fiscal escolher, e não mais
             // todas as fotos da vistoria (ver DocumentoImpressao::anexos).
             'anexos_proprios' => true,
@@ -1201,8 +1293,11 @@ class DocumentoController extends Controller
 
             'anexos' => $documento->anexos_proprios
                 ? $documento->anexos()->count()
-                : ($documento->vistoria?->evidencias->count() ?? 0),
+                : ($documento->vg_vistoria_id ? $documento->vgVistoria?->fotos()->count() ?? 0
+                    : ($documento->vistoria?->evidencias->count() ?? 0)),
             'vistoria_id' => $documento->vistoria_id,
+            'vg_vistoria_id' => $documento->vg_vistoria_id,
+            'vistoria_numero' => $documento->numeroDaVistoria(),
 
             // As assinaturas colhidas na lavratura, para o resumo da peça.
             'assinaturas' => $documento->naoLavrado() ? null : [
@@ -1378,6 +1473,7 @@ class DocumentoController extends Controller
             $documento->tipo = $d['tipo'];
             if ($d['tipo'] === 'auto_infracao') {
                 $documento->vistoria_id = null;   // auto de infração não se vincula a vistoria
+                $documento->vg_vistoria_id = null;
             }
             $this->lavratura->vincularReincidencia($documento, $d['reincidencia_de_id'] ?? null);
         } catch (RuntimeException $e) {

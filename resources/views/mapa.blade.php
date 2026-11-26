@@ -4751,6 +4751,10 @@ window.SATELITE_ALT = {{ Js::from($sateliteAlt) }}
 {{-- Sinalização e lembrete de revistoria: bandeiras no mapa, aviso na ficha,
      "Para hoje" no Painel. Depois de camadas-mapa.js (registra a camada). --}}
 <script src="@assetv('js/sinalizacoes.js')"></script>
+{{-- A vistoria por modelo (vistoria guiada) no lugar da vistoria de obra: todo
+     caminho que abria a antiga abre a página /vistorias-guiadas. Depois de
+     vistoria.js, protocolos.js e sinalizacoes.js, cujas funções ela redefine. --}}
+<script src="@assetv('js/vistoria-guiada-ponte.js')"></script>
 {{-- Denúncias de perturbação (Posturas): a aba, o formulário e a camada do
      mapa. Depois de camadas-mapa.js, pela mesma razão das sinalizações. --}}
 @if ($temAba('denuncias') && ! $externo)

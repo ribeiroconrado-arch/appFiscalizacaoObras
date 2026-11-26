@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Documento;
 use App\Models\DocumentoAnexo;
 use App\Models\Evidencia;
+use App\Models\Vg\VgArquivo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -33,7 +34,18 @@ class DocumentoAnexoController extends Controller
         $jaTrazidos = fn (string $origem) => $proprios->where('origem', $origem)->pluck('origem_ref')->all();
 
         // Fotos da vistoria vinculada — o auto de infração não tem vistoria.
-        $daVistoria = $documento->vistoria_id && $documento->tipo !== 'auto_infracao'
+        $daVistoria = $documento->vg_vistoria_id && $documento->tipo !== 'auto_infracao'
+            ? $this->fotosDaGuiada($documento)->map(fn (VgArquivo $a) => [
+                'id'     => $a->id,
+                'titulo' => $this->tituloFotoGuiada($a),
+                'quando' => $a->created_at?->format('d/m/Y H:i'),
+                'data'   => $a->created_at?->format('Y-m-d H:i:s'),
+                'lat'    => $documento->vgVistoria?->ponto()['lat'] ?? null,
+                'lon'    => $documento->vgVistoria?->ponto()['lng'] ?? null,
+                'url'    => route('vg.foto', $a),
+                'usada'  => in_array($a->id, $jaTrazidos('vistoria'), true),
+            ])->values()
+            : ($documento->vistoria_id && $documento->tipo !== 'auto_infracao'
             ? Evidencia::where('vistoria_id', $documento->vistoria_id)->orderBy('ordem')->orderBy('id')->get()
                 ->filter(fn (Evidencia $e) => str_starts_with((string) $e->mime, 'image/'))
                 ->map(fn (Evidencia $e) => [
@@ -48,7 +60,7 @@ class DocumentoAnexoController extends Controller
                     'url'    => route('evidencia.arquivo', $e),
                     'usada'  => in_array($e->id, $jaTrazidos('vistoria'), true),
                 ])->values()
-            : collect();
+            : collect());
 
         // Anexos da peça de origem (a notificação ou o embargo de que o auto nasceu).
         $origem = $documento->origem;
@@ -67,7 +79,7 @@ class DocumentoAnexoController extends Controller
             'anexos'      => $proprios->map(fn (DocumentoAnexo $a) => $this->linha($a, $u)),
             'da_vistoria' => $daVistoria,
             'da_origem'   => $daOrigem,
-            'vistoria'    => $documento->vistoria_id && $documento->tipo !== 'auto_infracao' ? $documento->vistoria?->numeroFormatado() : null,
+            'vistoria'    => $documento->numeroDaVistoria(),
             'origem'      => $origem ? $origem->rotuloTipo() . ' nº ' . $origem->numeroFormatado() : null,
             'pode_juntar' => $documento->podeJuntarAnexo($u),
             'pode_alterar' => ! $documento->encerrado() && $documento->agente_id === $u->id,
@@ -101,8 +113,7 @@ class DocumentoAnexoController extends Controller
         if (! empty($d['da_vistoria'])) {
             // As mesmas travas do "trazer": a evidência é da vistoria desta
             // peça, auto de infração não tem vistoria, e não entra duas vezes.
-            $daPeca = $documento->tipo !== 'auto_infracao' && $documento->vistoria_id
-                && Evidencia::where('vistoria_id', $documento->vistoria_id)->whereKey($d['da_vistoria'])->exists();
+            $daPeca = $this->fotoDaVistoria($documento, (int) $d['da_vistoria']) !== null;
             if (! $daPeca) {
                 return response()->json(['message' => 'Essa foto não é da vistoria vinculada a este documento.'], 422);
             }
@@ -146,13 +157,15 @@ class DocumentoAnexoController extends Controller
 
         if ($d['de'] === 'vistoria') {
             // Auto de infração não se vincula a vistoria: nasce de notificação ou de embargo.
-            $e = $documento->tipo !== 'auto_infracao' && $documento->vistoria_id
-                ? Evidencia::where('vistoria_id', $documento->vistoria_id)->find($d['id']) : null;
+            $e = $this->fotoDaVistoria($documento, (int) $d['id']);
             if (! $e) {
                 return response()->json(['message' => 'Essa foto não é da vistoria vinculada a este documento.'], 422);
             }
-            $dados = ['arquivo' => $e->arquivo, 'mime' => $e->mime, 'nome_original' => $e->nome_original,
-                'titulo' => $e->titulo ?: $e->nome_original, 'data_hora' => $e->data_hora];
+            $dados = $e instanceof VgArquivo
+                ? ['arquivo' => $e->caminho, 'mime' => $e->mime, 'nome_original' => $e->nome_original,
+                    'titulo' => $this->tituloFotoGuiada($e), 'data_hora' => $e->created_at]
+                : ['arquivo' => $e->arquivo, 'mime' => $e->mime, 'nome_original' => $e->nome_original,
+                    'titulo' => $e->titulo ?: $e->nome_original, 'data_hora' => $e->data_hora];
         } else {
             $a = $documento->origem_id ? DocumentoAnexo::where('documento_id', $documento->origem_id)->find($d['id']) : null;
             if (! $a) {
@@ -221,6 +234,46 @@ class DocumentoAnexoController extends Controller
 
         return Storage::disk('private')->response($anexo->arquivo, $anexo->nome_original ?: 'anexo',
             ['Content-Type' => $anexo->mime ?: 'application/octet-stream']);
+    }
+
+    /** GET /vistorias-guiadas/fotos/{vgArquivo} — a foto da vistoria guiada, para quem está logado. */
+    public function fotoGuiada(VgArquivo $vgArquivo)
+    {
+        abort_unless($vgArquivo->papel === 'foto' && Storage::disk('private')->exists($vgArquivo->caminho), 404);
+
+        return Storage::disk('private')->response($vgArquivo->caminho, $vgArquivo->nome_original ?: 'foto.jpg',
+            ['Content-Type' => $vgArquivo->mime]);
+    }
+
+    /** As fotos da vistoria guiada da peça, na ordem em que foram tiradas. */
+    private function fotosDaGuiada(Documento $documento)
+    {
+        return VgArquivo::where('vistoria_id', $documento->vg_vistoria_id)->where('papel', 'foto')
+            ->where('mime', 'like', 'image/%')->orderBy('id')->get();
+    }
+
+    /**
+     * A foto `$id` da vistoria vinculada a esta peça — guiada ou antiga —, ou
+     * null se não for dela. Auto de infração não tem vistoria.
+     */
+    private function fotoDaVistoria(Documento $documento, int $id): VgArquivo|Evidencia|null
+    {
+        if ($documento->tipo === 'auto_infracao') { return null; }
+        if ($documento->vg_vistoria_id) {
+            return VgArquivo::where('vistoria_id', $documento->vg_vistoria_id)->where('papel', 'foto')->find($id);
+        }
+        return $documento->vistoria_id ? Evidencia::where('vistoria_id', $documento->vistoria_id)->find($id) : null;
+    }
+
+    /** "Foto · Recuos" — a etapa ou o item da vistoria de que a foto é prova. */
+    private function tituloFotoGuiada(VgArquivo $a): string
+    {
+        $v = $a->vistoria;
+        $itens = $v?->itens()->keyBy('id');
+        if ($a->item_chave && isset($itens[$a->item_chave])) { return 'Foto · ' . $itens[$a->item_chave]['rotulo']; }
+        if ($a->livre_id) { return 'Foto · ' . ($a->livre?->titulo ?? 'item livre'); }
+        $et = collect($v?->versao?->definicao['etapas'] ?? [])->firstWhere('id', $a->etapa_chave);
+        return 'Foto' . ($et ? ' · ' . $et['titulo'] : '');
     }
 
     private function recusaAoJuntar(Request $request, Documento $documento): ?JsonResponse

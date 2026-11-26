@@ -233,6 +233,12 @@ class PainelController extends Controller
                   ->whereColumn('documentos.vistoria_id', 'vistorias.id');
             })
             ->count();
+        // A guiada também: concluída Irregular e sem peça que a cite.
+        if ($obras) {
+            $semDoc += \App\Models\Vg\VgVistoria::where('estado', 'concluida')->where('modulo', 'obras')
+                ->whereDoesntHave('documentos')->get(['id', 'estado', 'conclusao'])
+                ->filter(fn ($g) => $g->situacao() === 'irregular')->count();
+        }
         if ($semDoc > 0) {
             $itens[] = [
                 'titulo'  => $semDoc . ' vistoria(s) irregular(es) sem documento',
@@ -505,19 +511,30 @@ class PainelController extends Controller
      */
     private function infracoesFrequentes(\Carbon\Carbon $desde): array
     {
-        return DB::table('vistoria_artigos as va')
-            ->join('artigos as a', 'a.id', '=', 'va.artigo_id')
+        // Contagem por artigo: as citações da vistoria antiga (tabela) e as da
+        // guiada (nos "não confere" de cada uma), uma vez por vistoria.
+        $n = DB::table('vistoria_artigos as va')
             ->join('vistorias as v', 'v.id', '=', 'va.vistoria_id')
-            ->leftJoin('legislacoes as l', 'l.id', '=', 'a.legislacao_id')
             ->where('va.tipo', 'citacao')
             ->where('v.data_hora', '>=', $desde)
-            ->select('a.numero', 'a.apelido', 'l.numero as lei', DB::raw('COUNT(DISTINCT va.vistoria_id) as n'))
-            ->groupBy('a.id', 'a.numero', 'a.apelido', 'l.numero')
-            ->orderByDesc('n')->limit(6)
-            ->get()->map(fn ($r) => [
-                'rotulo' => 'Art. ' . $r->numero . ($r->apelido ? ' — ' . $r->apelido : ($r->lei ? ' — ' . $r->lei : '')),
-                'n'      => (int) $r->n,
-            ])->all();
+            ->select('va.artigo_id', DB::raw('COUNT(DISTINCT va.vistoria_id) as n'))
+            ->groupBy('va.artigo_id')->pluck('n', 'artigo_id')->map(fn ($x) => (int) $x)->all();
+        $guiadas = \App\Models\Vg\VgVistoria::with('versao')->where('modulo', 'obras')
+            ->where(fn ($q) => $q->where('iniciada_em', '>=', $desde)->orWhere(fn ($w) => $w->whereNull('iniciada_em')->where('created_at', '>=', $desde)))
+            ->get();
+        foreach ($guiadas as $g) {
+            foreach ($g->artigosCitadosIds() as $id) { $n[$id] = ($n[$id] ?? 0) + 1; }
+        }
+        arsort($n);
+        $top = array_slice($n, 0, 6, true);
+        $artigos = \App\Models\Artigo::with('legislacao:id,numero')->whereIn('id', array_keys($top))->get()->keyBy('id');
+
+        // O número do artigo já vem com "Art." (Parâmetros); só acrescenta se faltar.
+        $num = fn (string $x) => preg_match('/^art/i', $x) ? $x : 'Art. ' . $x;
+        return collect($top)->map(fn ($qt, $id) => ($a = $artigos->get($id)) ? [
+            'rotulo' => $num($a->numero) . ($a->apelido ? ' — ' . $a->apelido : ($a->legislacao?->numero ? ' — ' . $a->legislacao->numero : '')),
+            'n'      => $qt,
+        ] : null)->filter()->values()->all();
     }
 
     /**

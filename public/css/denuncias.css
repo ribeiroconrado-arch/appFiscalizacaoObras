@@ -92,6 +92,9 @@
 .den-doc{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--bord);border-radius:var(--r);
   background:var(--sur);padding:8px 10px;font:inherit;margin-bottom:6px;cursor:pointer;text-align:left}
 .den-doc:hover{background:var(--blt)}
+/* Vistoria ligada à denúncia: abre na página da vistoria. */
+.den-vist{flex-wrap:wrap}
+.den-vist .tl-cinza{margin-left:auto}
 .den-logs{display:flex;flex-direction:column;gap:6px}
 .den-log{font-size:12px;background:var(--bg);border:1px solid var(--blt);border-radius:var(--r);padding:7px 10px}
 

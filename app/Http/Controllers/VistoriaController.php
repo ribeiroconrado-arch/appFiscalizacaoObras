@@ -10,6 +10,7 @@ use App\Models\Lote;
 use App\Models\Protocolo;
 use App\Models\Vistoria;
 use App\Models\VistoriaArtigo;
+use App\Models\Vg\VgVistoria;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -58,6 +59,7 @@ class VistoriaController extends Controller
             ->whereIn('tipo', ['desmembramento', 'unificacao', 'fracao_ideal'])
             ->where('situacao', 'deferido')
             ->whereNull('vistoria_id')
+            ->whereNull('vg_vistoria_id')
             ->orderByDesc('protocolado_em')
             ->get(['id', 'numero', 'tipo', 'objeto'])
             ->map(fn (Protocolo $p) => [
@@ -281,6 +283,28 @@ class VistoriaController extends Controller
             ];
         }
 
+        // As VISTORIAS GUIADAS ligadas a este imóvel (a guiada substitui a de
+        // obra desde 26/11/2026). A etiqueta é a conclusão escrita no modelo;
+        // a cor, a situação lida dela (VgVistoria::situacao).
+        $guiadas = VgVistoria::doLote($lote->id)
+            ->with(['versao', 'vinculos', 'fiscais.usuario'])->latest('id')->get();
+        foreach ($guiadas as $g) {
+            [$bTxt, $bCls] = $g->situacaoBadge();
+            $eventos[] = [
+                'tipo'    => 'vistoria_guiada',
+                'id'      => $g->id,
+                'lote_id' => $lote->id,
+                'quando'  => $g->dataHora()?->format('d/m/Y H:i'),
+                'titulo'  => $g->numeroFormatado() . ' — ' . ($g->versao?->nome ?? 'Vistoria'),
+                'detalhe' => ($f = $g->fiscais->map(fn ($x) => $x->usuario?->name)->filter()->implode(', '))
+                    ? 'Fiscal: ' . $f : null,
+                'badge'   => ['texto' => $bTxt, 'classe' => $bCls],
+                'ato_cadastral' => $g->concluida() ? app(SucessaoDeLotes::class)->atoDaVistoria($g) : null,
+                'itens'   => $g->artigosCitados()->map(fn ($a) => $a->numero . ($a->apelido ? ' — ' . $a->apelido : ''))->all(),
+                'obs'     => $g->descricao,
+            ];
+        }
+
         // Rascunho é trabalho em curso do fiscal, não ato: quem é de fora só
         // fica sabendo do documento depois de lavrado.
         $externo = ! auth()->user()?->podeVerDocumentos();
@@ -412,6 +436,14 @@ class VistoriaController extends Controller
         $vistorias = $lote->vistorias()->orderByDesc('data_hora')->get();
         $ultima = $vistorias->first();
 
+        // A guiada conta junto: a ÚLTIMA vistoria, de qualquer das duas, é a
+        // que diz se o imóvel está irregular. Em andamento não conta.
+        $guiadas = VgVistoria::doLote($lote->id)->where('estado', 'concluida')->with('versao')->get();
+        $ultimaGuiada = $guiadas->sortByDesc(fn ($g) => $g->dataHora()?->timestamp)->first();
+        $guiadaMaisNova = $ultimaGuiada && (! $ultima || $ultimaGuiada->dataHora()?->gt($ultima->data_hora));
+        $situacaoUltima = $guiadaMaisNova ? $ultimaGuiada->situacao() : $ultima?->situacao;
+        $dataUltima = $guiadaMaisNova ? $ultimaGuiada->dataHora() : $ultima?->data_hora;
+
         $embargo = Documento::where('lote_id', $lote->id)
             ->whereIn('tipo', ['auto_embargo', 'notificacao_embargo'])
             ->whereNotNull('data_lavratura')
@@ -424,9 +456,9 @@ class VistoriaController extends Controller
             $lote->situacao === 'inativo' => ['Inativo', 'bd-cx'],
             // (O INATIVO, acima, continua vermelho de propósito: é alerta.)
             $embargo                      => ['Embargado', 'bd-emb'],
-            $ultima?->situacao === 'irregular' => ['Irregular', 'bd-er'],
+            $situacaoUltima === 'irregular' => ['Irregular', 'bd-er'],
             $obra !== null                => [$obra->situacaoRotulo(), 'bd-in'],
-            $ultima !== null              => ['Regular', 'bd-ok'],
+            $dataUltima !== null          => ['Regular', 'bd-ok'],
             default                       => ['Sem vistoria', 'bd-in'],
         };
 
@@ -437,14 +469,20 @@ class VistoriaController extends Controller
             ->orderByDesc('data_hora')->orderByDesc('id')
             ->first();
 
+        // A foto mais recente da guiada vence a da antiga quando é mais nova.
+        $fotoG = $guiadas->isEmpty() ? null : \App\Models\Vg\VgArquivo::whereIn('vistoria_id', $guiadas->pluck('id'))
+            ->where('papel', 'foto')->latest('id')->first();
+        $fachada = $foto ? ['url' => route('evidencia.arquivo', $foto), 'quando' => $foto->data_hora?->format('d/m/Y'), 't' => $foto->data_hora] : null;
+        if ($fotoG && (! $fachada || $fotoG->created_at->gt($fachada['t']))) {
+            $fachada = ['url' => route('vg.foto', $fotoG), 'quando' => $fotoG->created_at->format('d/m/Y')];
+        }
+        unset($fachada['t']);
+
         return [
             'status'          => ['texto' => $status[0], 'classe' => $status[1]],
-            'vistorias'       => $vistorias->count(),
-            'ultima_vistoria' => $ultima?->data_hora?->format('d/m/Y'),
-            'fachada'         => $foto ? [
-                'url'    => route('evidencia.arquivo', $foto),
-                'quando' => $foto->data_hora?->format('d/m/Y'),
-            ] : null,
+            'vistorias'       => $vistorias->count() + $guiadas->count(),
+            'ultima_vistoria' => $dataUltima?->format('d/m/Y'),
+            'fachada'         => $fachada ?: null,
         ];
     }
 

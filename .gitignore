@@ -39,15 +39,7 @@ Thumbs.db
 # Script de deploy: mesma razão do docs/deploy.md — fica só no servidor.
 /deploy.sh
 
-# Vistoria guiada — PÁGINA DE TESTE, só local até ser aprovada (22/11/2026).
-# Quando for publicar, apague este bloco e leve as rotas de
-# routes/teste-local.php de volta para routes/web.php.
-/app/Http/Controllers/VistoriaGuiadaController.php
-/app/Models/Vg/
-/database/migrations/2026_11_22_000300_vistorias_guiadas_teste.php
-/public/css/vistorias-guiadas.css
-/public/js/vistorias-guiadas.js
-/resources/views/vistorias-guiadas.blade.php
-/resources/views/impressao/vistoria-guiada.blade.php
-
+# Páginas de teste locais (rotas incluídas no fim de routes/web.php se o
+# arquivo existir). A vistoria guiada saiu daqui em 26/11/2026, ao substituir
+# a vistoria de obra.
 /routes/teste-local.php

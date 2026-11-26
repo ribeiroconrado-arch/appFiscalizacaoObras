@@ -173,6 +173,10 @@ const ICO_EVENTO = {
   protocolo: '<path d="M9 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/><rect x="9" y="2" width="6" height="4" rx="1"/>',
   sinalizacao: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
 }
+// A vistoria guiada (26/11/2026) usa o mesmo ícone da vistoria, e abre na
+// página dela (vistoria-guiada-ponte.js).
+ICO_EVENTO.vistoria_guiada = ICO_EVENTO.vistoria
+ABRE_EVENTO.vistoria_guiada = 'abrirVistoriaGuiada'
 
 /**
  * Linha do tempo do imóvel, do mais recente para o mais antigo.

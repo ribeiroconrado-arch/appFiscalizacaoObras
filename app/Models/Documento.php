@@ -138,6 +138,15 @@ class Documento extends Model
 
     public function lote(): BelongsTo       { return $this->belongsTo(Lote::class); }
     public function vistoria(): BelongsTo   { return $this->belongsTo(Vistoria::class); }
+    /** A vistoria guiada que fundamenta a peça (a que substitui a de obra, 26/11/2026). */
+    public function vgVistoria(): BelongsTo { return $this->belongsTo(\App\Models\Vg\VgVistoria::class, 'vg_vistoria_id'); }
+
+    /** O número da vistoria vinculada, guiada ou antiga — o que a tela mostra. */
+    public function numeroDaVistoria(): ?string
+    {
+        if ($this->tipo === 'auto_infracao') { return null; }
+        return $this->vg_vistoria_id ? $this->vgVistoria?->numeroFormatado() : $this->vistoria?->numeroFormatado();
+    }
     public function legislacao(): BelongsTo { return $this->belongsTo(Legislacao::class); }
     public function agente(): BelongsTo     { return $this->belongsTo(User::class, 'agente_id'); }
     public function origem(): BelongsTo     { return $this->belongsTo(Documento::class, 'origem_id'); }

@@ -66,8 +66,10 @@ class ProtocoloController extends Controller
             'espera_vistoria' => in_array($p->tipo, ['desmembramento', 'unificacao', 'fracao_ideal'], true)
                 && $p->situacao === 'deferido'
                 && $p->vistoria_id === null
+                && $p->vg_vistoria_id === null
                 && $p->lote_id !== null,
             'vistoria_id' => $p->vistoria_id,
+            'vg_vistoria_id' => $p->vg_vistoria_id,
         ];
     }
 

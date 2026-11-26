@@ -375,6 +375,14 @@ function renderFichaDen(d) {
           <span class="proto-badge">${esc(x.numero || 'rascunho')}</span><span>${esc(x.tipo)}</span></button>`).join('')}`
     : ''
 
+  // A vistoria ligada à denúncia responde por ela: a conclusão aparece aqui.
+  const vists = (d.vistorias || []).length
+    ? `<div class="sec-title">Vistorias</div>${d.vistorias.map(v => `
+        <button type="button" class="den-doc den-vist" onclick="abrirVistoriaGuiada(${Number(v.id)})"><span class="proto-badge">${esc(v.numero)}</span><span>${esc(v.modelo || 'Vistoria')}</span>
+          <span class="badge ${esc(v.classe)}">${esc(v.conclusao || 'Em andamento')}</span>
+          <span class="tl-cinza">${esc(v.quando || '')}</span></button>`).join('')}`
+    : ''
+
   const logs = d.logs.length
     ? `<div class="sec-title">Histórico</div><div class="den-logs">${d.logs.map(l => `
         <div class="den-log"><b>${esc(l.acao)}</b> <span class="tl-cinza">${esc(l.em || '')} · ${esc(l.agente || '')}${l.mat ? ' · ' + esc(l.mat) : ''}</span>
@@ -393,7 +401,7 @@ function renderFichaDen(d) {
       ${linha('Observação', `<span class="balao4-quebra">${esc(d.obs || '')}</span>`)}
       ${d.cancelada ? linha('Cancelada', esc([d.cancelado_em, d.cancelado_por].filter(Boolean).join(' · '))) : ''}
     </table>
-    ${docs}${logs}`
+    ${vists}${docs}${logs}`
 
   // A ação principal fica à direita, como no resto do sistema; cancelar, que
   // não tem volta, fica separada à esquerda.
@@ -402,6 +410,7 @@ function renderFichaDen(d) {
     <div style="flex:1"></div>
     ${d.lat ? '<button class="btn" onclick="verDenunciaNoMapa()">Ver no mapa</button>' : ''}
     ${d.pode_editar ? '<button class="btn" onclick="editarDenuncia()">Editar</button>' : ''}
+    ${window.PODE_EDITAR && !d.cancelada ? `<button class="btn" onclick="irParaVistoriaGuiada({ denuncia: ${Number(d.id)} })">Vistoriar</button>` : ''}
     ${d.pode_notificar ? '<button class="btn primary" onclick="gerarNotificacaoDaDenuncia()">Gerar notificação</button>' : ''}
     ${!d.pode_editar && !d.pode_notificar ? '<button class="btn" onclick="fModalBtn(\'m-den-ver\')">Fechar</button>' : ''}`
 }

@@ -350,6 +350,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         // Consulta de CNPJ para o autuado — feita pelo servidor, com limite próprio.
         Route::get('/cnpj/{cnpj}', [\App\Http\Controllers\CnpjController::class, 'mostrar'])->middleware('throttle:pesado');
         Route::get('/vistorias/{vistoria}/sugestao', [DocumentoController::class, 'sugestao']);
+        // A mesma sugestão, lida da vistoria guiada (que substitui a de obra).
+        Route::get('/vistorias-guiadas/{vgVistoria}/sugestao', [DocumentoController::class, 'sugestaoGuiada'])->whereNumber('vgVistoria');
         Route::post('/lotes/{lote}/documentos', [DocumentoController::class, 'store']);
         // Sem imóvel: o fiscal abre a peça em campo e amarra o lote depois.
         // A obrigatoriedade não sumiu — mudou para a lavratura.
@@ -464,6 +466,9 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     // Fora do prefixo /api: é download de arquivo, não JSON.
     Route::get('/evidencias/{evidencia}/arquivo', [VistoriaController::class, 'arquivo'])
         ->name('evidencia.arquivo');
+    // A foto da vistoria guiada, para a peça que a traz e para o histórico.
+    Route::get('/vistorias-guiadas/fotos/{vgArquivo}', [\App\Http\Controllers\DocumentoAnexoController::class, 'fotoGuiada'])
+        ->whereNumber('vgArquivo')->name('vg.foto');
 
     // O relatório de vistoria em papel, nos dois destinos do documento: a
     // janela de impressão do navegador e o PDF do dompdf.
@@ -494,6 +499,49 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         ->middleware('throttle:pesado')->name('conferencia.bairro.pdf');
     Route::get('/importacoes/{importacao}/divergencias.pdf', [ImportacaoController::class, 'divergenciasPdf'])
         ->middleware('throttle:pesado')->name('importacao.divergencias.pdf');
+    });
+});
+
+/*
+| VISTORIAS (vistoria por modelo, a "vistoria guiada").
+| Nasceu como página de teste em 22/11/2026 e substituiu a vistoria de obra
+| em 26/11/2026. A página é a tela da vistoria; o mapa, a Documentos, o
+| protocolo e a sinalização a abrem com o vínculo já escolhido (?nova=1&…).
+*/
+Route::middleware(['auth', 'auth.session', 'interno'])->group(function () {
+    Route::get('/vistorias-guiadas', [\App\Http\Controllers\VistoriaGuiadaController::class, 'pagina'])->name('vg.pagina');
+    Route::get('/vistorias-guiadas/arquivos/{arquivo}', [\App\Http\Controllers\VistoriaGuiadaController::class, 'arquivo'])
+        ->whereNumber('arquivo')->name('vg.arquivo');
+    Route::get('/vistorias-guiadas/{vistoria}/relatorio', [\App\Http\Controllers\VistoriaGuiadaController::class, 'relatorio'])
+        ->whereNumber('vistoria')->name('vg.relatorio');
+    Route::get('/vistorias-guiadas/{vistoria}/relatorio.pdf', [\App\Http\Controllers\VistoriaGuiadaController::class, 'relatorioPdf'])
+        ->whereNumber('vistoria')->middleware('throttle:pesado')->name('vg.relatorio.pdf');
+
+    Route::prefix('api/vistorias-guiadas')->middleware('throttle:api')->controller(\App\Http\Controllers\VistoriaGuiadaController::class)->group(function () {
+        Route::get('/modelos', 'modelos');
+        Route::post('/modelos', 'criarModelo');
+        Route::post('/modelos/exemplos', 'exemplos');
+        Route::put('/modelos/{modelo}', 'salvarModelo')->whereNumber('modelo');
+        Route::post('/modelos/{modelo}/publicar', 'publicar')->whereNumber('modelo');
+        Route::get('/', 'vistorias');
+        Route::post('/', 'criarVistoria')->middleware('throttle:pesado');
+        Route::get('/{vistoria}', 'mostrar')->whereNumber('vistoria');
+        Route::put('/{vistoria}/andamento', 'andamento')->whereNumber('vistoria');
+        Route::post('/{vistoria}/concluir', 'concluir')->whereNumber('vistoria');
+        Route::post('/{vistoria}/fotos', 'foto')->whereNumber('vistoria');
+        Route::post('/{vistoria}/anexos', 'anexar')->whereNumber('vistoria')->middleware('throttle:pesado');
+        Route::delete('/arquivos/{arquivo}', 'apagarArquivoRota')->whereNumber('arquivo');
+        Route::post('/{vistoria}/livres', 'criarLivre')->whereNumber('vistoria');
+        Route::delete('/livres/{livre}', 'apagarLivre')->whereNumber('livre');
+        Route::get('/vinculos/busca', 'buscarVinculo');
+        // O rótulo de um vínculo pelo id: a vistoria aberta do mapa já vem ligada.
+        Route::get('/vinculos/rotulo', 'rotuloRota');
+        Route::post('/{vistoria}/vinculos', 'ligar')->whereNumber('vistoria');
+        Route::delete('/vinculos/{vinculo}', 'desligar')->whereNumber('vinculo');
+        Route::get('/agentes', 'agentes');
+        Route::post('/{vistoria}/fiscais', 'relacionar')->whereNumber('vistoria');
+        Route::delete('/{vistoria}/fiscais/{usuario}', 'desrelacionar')->whereNumber(['vistoria', 'usuario']);
+        Route::post('/{vistoria}/assinar', 'assinar')->whereNumber('vistoria');
     });
 });
 

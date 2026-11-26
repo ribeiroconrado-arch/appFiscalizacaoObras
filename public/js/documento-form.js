@@ -84,7 +84,13 @@ async function novoDocumento(ev) {
   // As peças são as do módulo ativo; o primeiro auto da lista abre o traço.
   const primeiroAuto = o.tipos.find(t => t.valor.startsWith('auto'))?.valor
 
-  abrirMenuNovo(botao, o.tipos.map(t => ({
+  // Posturas não tem "vistoria" entre as peças, mas tem o AUTO DE CONSTATAÇÃO,
+  // que é a vistoria por modelo (decisão de 25/11/2026). Entra no topo, como
+  // em Obras: é o ato de campo de que as outras peças nascem.
+  const tipos = o.tipos.some(t => t.valor === 'vistoria') ? o.tipos
+    : [{ valor: 'vistoria', rotulo: 'Auto de constatação' }, ...o.tipos]
+
+  abrirMenuNovo(botao, tipos.map(t => ({
     rotulo: t.rotulo,
     obs: OBS_TIPO_DOC[t.valor] || '',
     icone: ICO_TIPO_DOC[t.valor] || ICO_TIPO_DOC.padrao,
@@ -115,7 +121,7 @@ async function novoDocumento(ev) {
  * administrativo, é o lugar de impedir a troca grosseira.
  */
 const OBS_TIPO_DOC = {
-  vistoria: 'Registra o que foi visto no imóvel.',
+  vistoria: 'Vistoria por modelo: roteiro, fotos e conclusão.',
   notificacao: 'Dá prazo para regularizar, antes da multa.',
   notificacao_embargo: 'Avisa que a obra deve parar.',
   auto_embargo: 'Para a obra de imediato.',
@@ -167,7 +173,9 @@ async function escolherTipoDoc(tipo) {
  *   visitada duas vezes no mês — o auto sairia amarrado à visita errada, e
  *   ninguém perceberia, porque a tela não dizia a qual vistoria se prendeu.
  */
-async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null, vistoria = null } = {}) {
+// `vistoriaGuiada`: o id da vistoria guiada de que a peça nasce (a que
+// substitui a de obra, 26/11/2026). `vistoria` continua sendo a antiga.
+async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null, vistoria = null, vistoriaGuiada = null } = {}) {
   const o = await carregarOpcoes()
 
   fdState.editando = false
@@ -228,6 +236,7 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
     fdState.podeEditarOrigem = false
     fdState.anexos = 0
     fdState.vistoriaId = null
+    fdState.vgVistoriaId = null
     fdState.lote = lote
   }
 
@@ -282,7 +291,9 @@ async function abrirFormDoc({ lote = null, documento = null, tipoInicial = null,
   // vínculo e sem artigo: antes ela se prendia sozinha à última vistoria do
   // imóvel e já vinha com a infração preenchida.
   document.getElementById('nd-sugestao').innerHTML = ''
-  if (vistoria) {
+  if (vistoriaGuiada) {
+    await sugerirDaVistoria(vistoriaGuiada, true)
+  } else if (vistoria) {
     await sugerirDaVistoria(vistoria)
   }
 }
@@ -914,6 +925,7 @@ function corpoDoDoc() {
   const lei = document.getElementById('nd-lei').value
   if (lei) corpo.legislacao_id = Number(lei)
   if (fdState.vistoriaId) corpo.vistoria_id = fdState.vistoriaId
+  if (fdState.vgVistoriaId) corpo.vg_vistoria_id = fdState.vgVistoriaId
   if (t?.prazo === 'cumprimento') corpo.prazo_dias = Number(document.getElementById('nd-prazo').value || 0)
 
   const areaT = document.getElementById('nd-area-terreno').value

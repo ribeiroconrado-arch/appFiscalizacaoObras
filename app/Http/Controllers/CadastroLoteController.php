@@ -315,6 +315,15 @@ class CadastroLoteController extends Controller
         // respondendo "sem vistoria" naquela instancia. Numa requisicao HTTP o
         // modelo nasce novo e o defeito nao apareceria — que e justamente o
         // tipo de armadilha que so surge meses depois.
+        // A vistoria guiada (a que substitui a de obra) vem primeiro. A
+        // situação dela é lida da conclusão (VgVistoria::situacao).
+        if ($protocolo->vg_vistoria_id && ($vg = \App\Models\Vg\VgVistoria::find($protocolo->vg_vistoria_id))) {
+            return $vg->situacao() === 'regular' ? null : response()->json([
+                'message' => 'A vistoria ' . $vg->numeroFormatado() . ' do protocolo ' . $protocolo->numero . ' está como "'
+                    . $vg->situacaoBadge()[0] . '". Só vistoria Regular autoriza alterar o cadastro do imóvel.',
+            ], 422);
+        }
+
         $vistoria = $protocolo->vistoria_id
             ? Vistoria::find($protocolo->vistoria_id)
             : null;

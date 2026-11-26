@@ -64,6 +64,7 @@ class Protocolo extends Model
     public function lote(): BelongsTo        { return $this->belongsTo(Lote::class); }
     public function responsavel(): BelongsTo { return $this->belongsTo(User::class, 'responsavel_id'); }
     public function vistoria(): BelongsTo    { return $this->belongsTo(Vistoria::class); }
+    public function vgVistoria(): BelongsTo  { return $this->belongsTo(\App\Models\Vg\VgVistoria::class, 'vg_vistoria_id'); }
 
     public function rotuloTipo(): string { return self::TIPOS[$this->tipo] ?? self::TIPOS_POSTURAS[$this->tipo] ?? $this->tipo; }
 

@@ -103,23 +103,9 @@ async function abrirProtocolo(id) {
  */
 async function vistoriaDoProtocolo(protocoloId, loteId) {
   fModalBtn('m-proto')
-
-  try {
-    const r = await fetch('/api/imoveis/' + loteId, { headers: { Accept: 'application/json' } })
-    if (!r.ok) throw new Error('HTTP ' + r.status)
-    const d = await r.json()
-
-    // `novaVistoria()` lê o lote de `state.selecionado`; o formato é o mesmo
-    // da feição do mapa, com as propriedades dentro de `properties`.
-    state.selecionado = { properties: {
-      id: d.id, bairro: d.bairro, quadra: d.quadra, numero_lote: d.lote,
-    } }
-    vState.protocoloId = protocoloId
-    await novaVistoria()
-  } catch (e) {
-    console.error(e)
-    toast('Não foi possível abrir o imóvel do protocolo.', 'err')
-  }
+  // A vistoria (guiada, 26/11/2026) abre na página dela, já ligada ao imóvel e
+  // ao protocolo — a conclusão Regular é o que libera o ato cadastral.
+  irParaVistoriaGuiada({ imovel: loteId, protocolo: protocoloId })
 }
 
 /**

@@ -105,6 +105,11 @@ class Sinalizacao extends Model
         return $this->belongsTo(Vistoria::class);
     }
 
+    public function vgVistoria(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Vg\VgVistoria::class, 'vg_vistoria_id');
+    }
+
     /**
      * Abertas e JÁ VALENDO: o lembrete só aparece a partir da data dele.
      * Antes disso ele existe, mas não pede nada de ninguém.

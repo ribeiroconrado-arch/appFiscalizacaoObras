@@ -164,6 +164,15 @@ class DenunciaController extends Controller
             'documentos'    => $denuncia->documentos->map(fn ($x) => [
                 'id' => $x->id, 'tipo' => $x->rotuloTipo(), 'numero' => $x->numeroFormatado(), 'status' => $x->status,
             ]),
+            // As vistorias ligadas à denúncia, com a CONCLUSÃO — é a resposta
+            // que a denúncia espera (procedente, improcedente, não constatado).
+            'vistorias'     => \App\Models\Vg\VgVistoria::ligadaA('denuncia', $denuncia->id)->with('versao')->orderBy('id')->get()
+                ->map(fn ($v) => [
+                    'id' => $v->id, 'numero' => $v->numeroFormatado(), 'modelo' => $v->versao?->nome,
+                    'conclusao' => $v->concluida() ? $v->conclusao : null,
+                    'quando' => ($v->concluida_em ?? $v->dataHora())?->format('d/m/Y H:i'),
+                    'classe' => $v->situacaoBadge()[1],
+                ])->values(),
             'pode_editar'   => $denuncia->podeEditar($r->user()),
             'pode_notificar' => ! $denuncia->cancelada() && $r->user()->podeLavrarDocumento(),
         ]]);

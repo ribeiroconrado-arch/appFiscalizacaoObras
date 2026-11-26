@@ -123,11 +123,14 @@ class SucessaoDeLotes
      *
      * @return array{pode:bool, tipo:?string, protocolo:?array, motivo:?string}
      */
-    public function atoDaVistoria(Vistoria $vistoria): array
+    public function atoDaVistoria(Vistoria|\App\Models\Vg\VgVistoria $vistoria): array
     {
         $vazio = ['pode' => false, 'tipo' => null, 'protocolo' => null, 'motivo' => null];
 
-        $protocolo = $this->protocoloDaVistoria($vistoria);
+        // A vistoria guiada: o protocolo aponta para ela por `vg_vistoria_id`,
+        // e a situação é lida da conclusão (VgVistoria::situacao).
+        $guiada = $vistoria instanceof \App\Models\Vg\VgVistoria;
+        $protocolo = $guiada ? $vistoria->protocolosCadastrais()->first() : $this->protocoloDaVistoria($vistoria);
         if (! $protocolo) {
             return $vazio;   // vistoria comum: nem menciona o assunto
         }
@@ -142,8 +145,9 @@ class SucessaoDeLotes
         // Só vistoria REGULAR libera. Vistoria que apontou problema não é
         // fundamento para alterar o cadastro — é fundamento para exigir
         // correção antes.
-        if ($vistoria->situacao !== 'regular') {
-            $retrato['motivo'] = 'A vistoria está como "' . $vistoria->situacaoRotulo()
+        $situacao = $guiada ? $vistoria->situacao() : $vistoria->situacao;
+        if ($situacao !== 'regular') {
+            $retrato['motivo'] = 'A vistoria está como "' . ($guiada ? $vistoria->situacaoBadge()[0] : $vistoria->situacaoRotulo())
                 . '". Só vistoria Regular autoriza alterar o cadastro do imóvel.';
             return $retrato;
         }

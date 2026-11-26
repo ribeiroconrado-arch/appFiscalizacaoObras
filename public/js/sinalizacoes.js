@@ -313,9 +313,11 @@ function _sinBalaoDoLote(lista) {
 /** O balão da bandeira, no mesmo modelo do balão do lote (D4). */
 function _sinBalao(s) {
   const lembrete = s.tipo === 'lembrete'
-  // A vistoria de obra precisa de imóvel: na via, só o "Resolvido".
-  const vistoriar = window.PODE_EDITAR && s.lote_id
-    ? `<button type="button" class="balao-q" onclick="vistoriarDaSinalizacao(${Number(s.lote_id)})">${_sinSvg('lapis')}Vistoriar</button>` : ''
+  // A vistoria (guiada, 26/11/2026) não exige imóvel: a de rua também se
+  // vistoria, com o local em texto. O lembrete de voltar é sempre de imóvel.
+  _sinLocal[s.id] = s.imovel
+  const vistoriar = window.PODE_EDITAR && (s.lote_id || !lembrete)
+    ? `<button type="button" class="balao-q" onclick="vistoriarDaSinalizacao(${Number(s.lote_id) || 0}, ${Number(s.id)})">${_sinSvg('lapis')}Vistoriar</button>` : ''
   return `<div class="balao4">
     <div class="balao4-cab ${lembrete ? 'lembrete' : 'sinal'}">${_sinSvg(s.tipo)}<b>${esc(s.rotulo)}</b></div>
     <div class="balao4-corpo">
@@ -334,26 +336,30 @@ function _sinBalao(s) {
     </div></div>`
 }
 
-function vistoriarDaSinalizacao(loteId) {
-  const f = state.lotes?.get(loteId)
-  if (f) state.selecionado = f
+/**
+ * Abre a vistoria a partir da sinalização: ligada ao imóvel (se houver) e
+ * levando a sinalização, que a conclusão resolve. Na de rua vai o local em
+ * texto, que é o que a vistoria tem no lugar do imóvel.
+ * @param {number} loteId 0 na de rua @param {number} [sinId]
+ */
+function vistoriarDaSinalizacao(loteId, sinId) {
   mapaState.obj?.closePopup()
-  if (typeof novaVistoria === 'function') novaVistoria()
+  irParaVistoriaGuiada({
+    imovel: loteId || null,
+    sinalizacao: sinId || null,
+    local: !loteId && sinId ? _sinLocal[sinId] : null,
+  })
 }
+/** id → o local da sinalização, em texto (o que a de rua leva para a vistoria). */
+const _sinLocal = {}
 
 /**
  * "Fazer vistoria" a partir do painel — o mesmo atalho do balão da bandeira.
- * No painel o lote pode ainda não estar carregado no mapa: vai até ele, espera
- * chegar e só então abre a vistoria (que resolve as sinalizações do imóvel).
- * @param {number} loteId
+ * A vistoria abre na página dela; não precisa mais esperar o lote no mapa.
+ * @param {number} loteId @param {number} [sinId]
  */
-async function fazerVistoriaDoPainel(loteId) {
-  if (!state.lotes?.get(loteId)) {
-    await irAoLoteNoMapa(loteId)
-    for (let t = 0; t < 40 && !state.lotes?.get(loteId); t++) await new Promise(r => setTimeout(r, 250))
-  }
-  if (!state.lotes?.get(loteId)) { toast('Não foi possível carregar o imóvel para a vistoria.', 'err'); return }
-  vistoriarDaSinalizacao(loteId)
+function fazerVistoriaDoPainel(loteId, sinId) {
+  vistoriarDaSinalizacao(loteId, sinId)
 }
 
 // ── 3 · É RESOLVIDA: o "Resolvido" de um toque ───────────────
@@ -421,6 +427,7 @@ async function carregarParaHoje() {
     const d = await _sinPedir('/api/sinalizacoes/hoje')
     document.getElementById('pn-hoje-n').textContent = d.itens.length
     bloco.hidden = !d.itens.length
+    d.itens.forEach(s => { _sinLocal[s.id] = s.imovel })
     document.getElementById('pn-hoje').innerHTML = d.itens.map(s => `
       <div class="sin-linha" id="pn-sin-${s.id}">
         <span class="sin-linha-ico ${s.tipo === 'lembrete' ? 'lembrete' : ''}">${_sinSvg(s.tipo === 'lembrete' ? 'lembrete' : 'bandeira')}</span>
@@ -428,7 +435,7 @@ async function carregarParaHoje() {
           <b>${esc(s.tipo === 'lembrete' ? 'Voltar' : s.rotulo)}</b> · ${esc(s.imovel)}
           <div class="sin-linha-sub">${esc(s.comentario || '')}${s.comentario ? ' · ' : ''}${esc(s.ha || '')} · ${esc(s.autor)}${s.avisos > 1 ? ` · <b class="sin-n">${s.avisos} avisos</b>` : ''}</div>
         </div>
-        ${window.PODE_EDITAR && s.lote_id ? `<button type="button" class="btn sm sin-registrar sin-vistoriar" onclick="fazerVistoriaDoPainel(${Number(s.lote_id)})">${_sinSvg('lapis')}Fazer vistoria</button>` : ''}
+        ${window.PODE_EDITAR && (s.lote_id || s.tipo !== 'lembrete') ? `<button type="button" class="btn sm sin-registrar sin-vistoriar" onclick="fazerVistoriaDoPainel(${Number(s.lote_id) || 0}, ${Number(s.id)})">${_sinSvg('lapis')}Fazer vistoria</button>` : ''}
         <button type="button" class="btn sm sin-registrar" id="pn-registrar-${s.id}" aria-expanded="false" aria-controls="pn-atendimento-${s.id}" onclick="abrirAtendimentoPainel(${s.id})">Registrar atendimento</button>
         <div class="sin-atendimento" id="pn-atendimento-${s.id}" hidden></div>
       </div>`).join('')
