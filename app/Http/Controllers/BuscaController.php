@@ -132,7 +132,10 @@ class BuscaController extends Controller
         $truncado = $lotes->count() > self::PDF_LIMITE;
         $lotes = $lotes->take(self::PDF_LIMITE);
 
-        return \Barryvdh\DomPDF\Facade\Pdf::loadView('impressao.busca', [
+        $agora = now();
+        $por = auth()->user()?->name;
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('impressao.busca', [
             'navegador' => false,
             'orgao'     => $cabecalho->orgao(),
             'brasao'    => $cabecalho->brasao(true),
@@ -140,9 +143,24 @@ class BuscaController extends Controller
             'filtros'   => $this->filtrosEmTexto($d),
             'total'     => $truncado ? $q->count() : $lotes->count(),
             'truncado'  => $truncado,
-            'emitido'   => now()->format('d/m/Y H:i'),
-            'por'       => auth()->user()?->name,
-        ])->setPaper('a4', 'landscape')->stream('consulta-de-imoveis.pdf');
+            'emitido'   => $agora->format('d/m/Y \à\s H:i'),
+            'por'       => $por,
+        ])->setPaper('a4', 'landscape');
+
+        // RODAPÉ EM TODA FOLHA (26/11/2026, pedido dele): quem gerou, quando, e
+        // "Página N de M" — folha solta de uma listagem longa precisa dizer de
+        // onde é. O total de páginas só existe depois de desenhar, por isso o
+        // texto entra no canvas, e não no Blade (como em PaginacaoDocumentoA4).
+        $pdf->render();
+        $canvas = $pdf->getDomPDF()->getCanvas();
+        $fonte = $pdf->getDomPDF()->getFontMetrics()->getFont('Helvetica');
+        $y = $canvas->get_height() - 20;
+        $cinza = [0.33, 0.33, 0.33];
+        $quem = 'Gerado' . ($por ? ' por ' . $por : '') . ' em ' . $agora->format('d/m/Y') . ' às ' . $agora->format('H:i');
+        $canvas->page_text(28.35, $y, $quem, $fonte, 7, $cinza);
+        $canvas->page_text($canvas->get_width() - 100, $y, 'Página {PAGE_NUM} de {PAGE_COUNT}', $fonte, 7, $cinza);
+
+        return $pdf->stream('consulta-de-imoveis.pdf');
     }
 
     /**

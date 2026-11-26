@@ -45,7 +45,7 @@
 @include('impressao._pagina-abre', ['titulo' => 'CONSULTA DE IMÓVEIS', 'numero' => $int($total), 'numeroRotulo' => 'IMÓVEIS'])
 
   <div class="filtro"><b>Filtros:</b> {{ $filtros ? implode(' · ', $filtros) : '—' }}</div>
-  <p class="nota">{{ $int($total) }} {{ $total == 1 ? 'imóvel encontrado' : 'imóveis encontrados' }}.</p>
+  <p class="nota">{{ $int($total) }} {{ $total == 1 ? 'imóvel encontrado' : 'imóveis encontrados' }} · gerado {!! $por ? 'por <b>' . e($por) . '</b> ' : '' !!}em <b>{{ $emitido }}</b>.</p>
   @if ($truncado)
     <p class="aviso">Listagem cortada: mostra os {{ $int(count($linhas)) }} primeiros de {{ $int($total) }}. Refine os filtros para ver o restante.</p>
   @endif
@@ -87,7 +87,7 @@
     <p class="nota" style="margin-top:10px">Nenhum imóvel com esses filtros.</p>
   @endif
 
-  <div class="rodape">Emitido em {{ $emitido }}@if ($por) por {{ $por }}@endif · situação e endereço conforme a última carga do cadastro municipal.</div>
+  <div class="rodape">Situação e endereço conforme a última carga do cadastro municipal.</div>
 
 @include('impressao._pagina-fecha')
 
