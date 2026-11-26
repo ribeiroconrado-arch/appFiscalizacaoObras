@@ -79,17 +79,23 @@ class BuscaController extends Controller
     /** Linhas por página na Consulta de imóveis. */
     private const POR_PAGINA = 50;
 
-    /** As colunas que se ordenam pelo cabeçalho da tabela. */
-    private const ORDENAVEIS = ['inscricao', 'bairro', 'quadra', 'lote', 'documentos', 'vistorias'];
+    /** As colunas que se ordenam pelo cabeçalho da tabela — todas (26/11/2026). */
+    private const ORDENAVEIS = ['inscricao', 'logradouro', 'numero', 'bairro', 'quadra', 'lote', 'area',
+        'situacao', 'documentos', 'vistorias'];
 
     /**
      * A ordem pedida pelo clique no cabeçalho (26/11/2026), feita NO BANCO:
      * com paginação, ordenar no navegador ordenaria só os 50 da página aberta.
      *
-     * Logradouro, número, área e situação ficam de fora: vêm do cadastro
-     * municipal, outra tabela, casada pela inscrição depois da consulta — o
-     * banco não tem como ordenar por eles sem juntar as duas tabelas, que nem
-     * colação igual têm.
+     * Logradouro, número, área e situação são do CADASTRO MUNICIPAL: entram por
+     * subconsulta pela inscrição — a do lote (a informada, senão a montada,
+     * como em InscricaoImobiliaria::filtrarLotes) contra
+     * `cadastro_externo_imoveis.insc_digitos`, coluna indexada na colação de
+     * `lotes` (migration 2026_11_26_000100). Subconsulta, e não JOIN: uma
+     * inscrição gravada com e sem pontos duplicaria a linha do lote.
+     *
+     * Imóvel fora do cadastro (sem rua, sem número) vai sempre para o FIM, nos
+     * dois sentidos: o vazio não é o "menor" nem o "maior" endereço.
      *
      * Empate (mesma quadra, mesmo bairro) cai sempre na ordem natural —
      * bairro, quadra, lote —, e a lista não embaralha de uma página a outra.
@@ -97,7 +103,22 @@ class BuscaController extends Controller
     private function ordenar($q, array $d)
     {
         $s = ($d['sentido'] ?? 'asc') === 'desc' ? 'DESC' : 'ASC';
+        $insc = "COALESCE(NULLIF(REPLACE(REPLACE(lotes.inscricao_imobiliaria, '.', ''), ' ', ''), ''), lotes.inscricao_montada)";
+        $cad = fn (string $campo) => "(SELECT ce.{$campo} FROM cadastro_externo_imoveis ce WHERE ce.insc_digitos = {$insc}"
+            . ' ORDER BY ce.ausente_desde_carga_id IS NOT NULL, ce.id LIMIT 1)';
+        // A rua SEM o tipo: o cadastro grava ora "AV DAS NAÇÕES", ora "NAÇÕES"
+        // (TipoDoLogradouro) — com o tipo, toda avenida cairia junto no "A".
+        $rua = "REGEXP_REPLACE({$cad('logradouro')}, '^(RUA|R[.]|AVENIDA|AV[.]?|TRAVESSA|TRAV[.]?|TV[.]?|ALAMEDA|AL[.]|ESTRADA|EST[.]|RODOVIA|ROD[.]|PRACA|PRAÇA|PÇA[.]?) +', '')";
+        // A mesma situação da etiqueta (seloSituacaoBusca): Ativo, Inativo, Sem info.
+        $situacao = "CASE WHEN lotes.situacao = 'inativo' THEN 1 WHEN {$cad('isencao')} IS NULL OR TRIM({$cad('isencao')}) = '' THEN 2"
+            . " WHEN LOWER(TRIM({$cad('isencao')})) = 'inativo' THEN 1 ELSE 0 END";
+
         match ($d['ordem'] ?? null) {
+            'logradouro' => $q->orderByRaw("{$rua} IS NULL, {$rua} {$s}"),
+            'numero'     => $q->orderByRaw("{$cad('numero_predial')} IS NULL, CAST({$cad('numero_predial')} AS UNSIGNED) {$s}, {$rua} ASC"),
+            // A área que a tabela mostra: a do cadastro, senão a do desenho.
+            'area'       => $q->orderByRaw("COALESCE({$cad('area_terreno_m2')}, lotes.area_gis_m2) IS NULL, COALESCE({$cad('area_terreno_m2')}, lotes.area_gis_m2) {$s}"),
+            'situacao'   => $q->orderByRaw("{$situacao} {$s}"),
             'inscricao'  => $q->orderByRaw("inscricao_montada IS NULL, inscricao_montada {$s}"),
             'bairro'     => $q->orderBy('bairro', $s),
             'quadra'     => $q->orderByRaw("CAST(quadra AS UNSIGNED) {$s}, quadra {$s}"),

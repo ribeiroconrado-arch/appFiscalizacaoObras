@@ -1312,6 +1312,7 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .bs-tabela th.bs-ordena button{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:5px;
   width:100%;padding:8px 10px;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}
 .bs-tabela th.bs-ordena.bs-c button{justify-content:center}
+.bs-tabela th.bs-ordena.bs-d button{justify-content:flex-end}
 .bs-tabela th.bs-ordena button:hover{color:var(--tx)}
 .bs-tabela th.bs-ordena button:focus-visible{outline:2px solid var(--f-bord-foco);outline-offset:-2px}
 .bs-tabela th.bs-ordena .bs-seta{font-size:9px;opacity:.45}

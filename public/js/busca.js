@@ -313,8 +313,8 @@ function renderTabelaBusca(d) {
       <td class="bs-c bs-col-vist" data-rot="Vist.">${i.vistorias || '—'}</td>
     </tr>`).join('')
 
-  // Cabeçalho que ordena: as colunas que o banco sabe ordenar (ver
-  // BuscaController::ORDENAVEIS). As outras vêm do cadastro e não ordenam.
+  // Cabeçalho que ordena — todas as colunas, no banco (ver
+  // BuscaController::ordenar): vale para todas as páginas e para o PDF.
   const th = (rot, cls, campo) => {
     if (!campo || d.inicial || !d.imoveis.length) return `<th class="${cls}">${rot}</th>`
     const at = bState.ordem === campo
@@ -340,10 +340,10 @@ function renderTabelaBusca(d) {
       <table class="bs-tabela">
         <thead>
           <tr>
-            ${th('Inscrição', 'bs-w-insc bs-col-insc', 'inscricao')}${th('Logradouro', 'bs-col-logr')}
-            ${th('Número', 'bs-c bs-w-num bs-col-num')}${th('Bairro', 'bs-col-bairro', 'bairro')}
+            ${th('Inscrição', 'bs-w-insc bs-col-insc', 'inscricao')}${th('Logradouro', 'bs-col-logr', 'logradouro')}
+            ${th('Número', 'bs-c bs-w-num bs-col-num', 'numero')}${th('Bairro', 'bs-col-bairro', 'bairro')}
             ${th('Quadra', 'bs-c bs-w-n bs-col-q', 'quadra')}${th('Lote', 'bs-c bs-w-n bs-col-l', 'lote')}
-            ${th('Área', 'bs-d bs-w-area bs-col-area')}${th('Situação', 'bs-c bs-w-sit bs-col-sit')}
+            ${th('Área', 'bs-d bs-w-area bs-col-area', 'area')}${th('Situação', 'bs-c bs-w-sit bs-col-sit', 'situacao')}
             ${th('Doc.', 'bs-c bs-w-n bs-col-doc', 'documentos')}${th('Vist.', 'bs-c bs-w-n bs-col-vist', 'vistorias')}
           </tr>
         </thead>
