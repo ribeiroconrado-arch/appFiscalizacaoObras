@@ -1956,10 +1956,84 @@ function proximaFotoDaFila() {
     lat: vState.gps?.lat ?? null,
     lon: vState.gps?.lon ?? null,
     editando: null,
+    // O toque na foto MARCA um número (o padrão) ou BORRA ali.
+    modo: 'marcar',
+    // A foto que vai subir: reduzida e com os rostos borrados (prepararFotoVistoria).
+    prep: null,
   }
 
   renderFotoPendente()
   posicaoDaFoto()
+  if (ehImagem) prepararFotoVistoria(vState.fotoPendente)
+}
+
+/** Lado maior da foto que sobe, o mesmo dos anexos do documento. */
+const VS_FOTO_LADO_MAX = 1600
+
+/**
+ * ROSTOS BORRADOS também na foto da vistoria (pedido dele, 26/11/2026), do
+ * mesmo jeito dos anexos do documento: reconhecidos NO APARELHO pelo
+ * MediaPipe (acharRostosNaImagem, em documento-anexos.js), sem serviço de
+ * fora. Placas e rostos que escaparam, o fiscal borra com o toque no modo
+ * "Borrar". O que sobe é a imagem já reduzida e borrada; a original não sai do
+ * aparelho.
+ *
+ * A ficha não espera o reconhecimento: a foto aparece na hora, e os borrões
+ * automáticos entram quando ele termina.
+ *
+ * @param {Object} p a foto pendente
+ */
+async function prepararFotoVistoria(p) {
+  let img
+  try {
+    img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = p.url })
+  } catch (_) { return }   // não abre como imagem: sobe como veio
+  if (vState.fotoPendente !== p) return
+  const lw = img.naturalWidth || img.width, lh = img.naturalHeight || img.height
+  const escala = Math.min(1, VS_FOTO_LADO_MAX / Math.max(lw, lh))
+  p.prep = { img, w: Math.round(lw * escala), h: Math.round(lh * escala), borroes: [], procurando: true, aviso: 'Procurando rostos na foto…' }
+  desenharPrepVistoria(p)
+
+  const achados = typeof acharRostosNaImagem === 'function' ? await acharRostosNaImagem(img, p.prep.w, p.prep.h) : null
+  if (vState.fotoPendente !== p || !p.prep) return
+  p.prep.procurando = false
+  if (achados === null) {
+    p.prep.aviso = 'A procura automática de rostos não funcionou neste aparelho. Use "Borrar" e toque sobre cada rosto.'
+  } else {
+    for (const a of achados) {
+      if (!p.prep.borroes.some(b => Math.hypot(b.x - a.x, b.y - a.y) < b.r)) p.prep.borroes.push(a)
+    }
+    p.prep.aviso = achados.length
+      ? `${achados.length} rosto(s) borrado(s) automaticamente. Confira; placas e outros rostos, use "Borrar".`
+      : 'Nenhum rosto reconhecido. Se houver rosto ou placa, use "Borrar" e toque sobre eles.'
+  }
+  desenharPrepVistoria(p)
+}
+
+/** Redesenha a prévia: a foto reduzida com os borrões. @param {Object} p */
+function desenharPrepVistoria(p) {
+  const f = p.prep
+  if (!f) return
+  const c = f.canvas || (f.canvas = document.createElement('canvas'))
+  c.width = f.w; c.height = f.h
+  c.getContext('2d').drawImage(f.img, 0, 0, f.w, f.h)
+  if (typeof aplicarBorroes === 'function') aplicarBorroes(c, f.borroes)
+  f.previa = c.toDataURL('image/jpeg', 0.86)
+  if (vState.fotoPendente === p) renderFotoPendente()
+}
+
+/** Troca o que o toque na foto faz: numerar ou borrar. @param {'marcar'|'borrar'} m */
+function modoToqueFoto(m) {
+  if (!vState.fotoPendente) return
+  vState.fotoPendente.modo = m
+  renderFotoPendente()
+}
+
+function desfazerBorraoPendente() {
+  const f = vState.fotoPendente?.prep
+  if (!f?.borroes.length) { toast('Não há borrão para desfazer.', 'aviso'); return }
+  f.borroes.pop()
+  desenharPrepVistoria(vState.fotoPendente)
 }
 
 /**
@@ -2002,7 +2076,20 @@ function renderFotoPendente() {
   const palco = document.getElementById('vsi-foto-nova-palco')
   // Anexo que não é imagem (PDF de projeto) não tem palco nem marcação.
   palco.hidden = !p.url
-  if (p.url) { img.src = p.url }
+  // A prévia já reduzida e borrada, quando pronta; antes dela, a original.
+  const src = p.prep?.previa || p.url
+  if (src && img.getAttribute('src') !== src) { img.src = src }
+
+  // Marcar ou borrar: só para a foto nova (a correção não refaz a imagem).
+  const borra = document.getElementById('vsi-foto-borrar')
+  if (borra) {
+    borra.hidden = !p.prep || p.editando !== null
+    document.getElementById('vsi-modo-marcar')?.classList.toggle('at', p.modo !== 'borrar')
+    document.getElementById('vsi-modo-borrar')?.classList.toggle('at', p.modo === 'borrar')
+    const aviso = document.getElementById('vsi-foto-borrar-aviso')
+    if (aviso) aviso.textContent = p.prep?.aviso || ''
+  }
+  palco.classList.toggle('borrando', p.modo === 'borrar' && !!p.prep)
 
   document.getElementById('vsi-foto-nova-pinos').innerHTML =
     p.marcacoes.map((m, k) =>
@@ -2051,6 +2138,15 @@ function marcarNaFotoPendente(ev) {
   const y = (ev.clientY - r.top) / r.height
   if (x < 0 || x > 1 || y < 0 || y > 1) { return }
 
+  // Modo Borrar: o toque cobre a placa ou o rosto ali. O tamanho é o do
+  // seletor (em % do lado menor da foto, como nos anexos).
+  if (p.modo === 'borrar' && p.prep) {
+    const tam = Number(document.getElementById('vsi-borrar-tam')?.value) || 6
+    p.prep.borroes.push({ x: x * p.prep.w, y: y * p.prep.h, r: Math.min(p.prep.w, p.prep.h) * tam / 100 })
+    desenharPrepVistoria(p)
+    return
+  }
+
   if (p.marcacoes.length >= 20) { toast('Limite de 20 marcas na foto', 'aviso'); return }
   p.marcacoes.push({ n: p.marcacoes.length + 1, x: +x.toFixed(4), y: +y.toFixed(4) })
   renderFotoPendente()
@@ -2080,11 +2176,37 @@ function descartarFotoPendente() {
   if (vState.filaFotos.length) { proximaFotoDaFila() } else { renderFotoPendente() }
 }
 
-/** O "+ add" da ficha: agora sim a foto entra no item. */
-function adicionarFotoAoItem() {
+/**
+ * O "+ add" da ficha: agora sim a foto entra no item — a versão reduzida e
+ * borrada, não a original.
+ * @param {boolean} mesmoProcurando o fiscal já confirmou juntar sem esperar a procura de rostos
+ */
+async function adicionarFotoAoItem(mesmoProcurando = false) {
   const item = itemAtual()
   const p = vState.fotoPendente
   if (!item || !p) { return }
+
+  if (p.prep && p.editando === null) {
+    // A procura de rostos ainda não terminou: a foto subiria sem os borrões
+    // automáticos. O fiscal decide — pode já ter borrado pelo toque.
+    if (p.prep.procurando && !mesmoProcurando) {
+      confirmarAcao({
+        titulo: 'A procura de rostos não terminou',
+        mensagem: 'Os rostos que você não borrou pelo toque vão aparecer na foto. Adicionar assim mesmo?',
+        textoBtn: 'Adicionar assim mesmo',
+        onConfirm: async () => adicionarFotoAoItem(true),
+      })
+      return
+    }
+    const blob = await new Promise(ok => p.prep.canvas.toBlob(ok, 'image/jpeg', 0.86))
+    if (!blob) { toast('Não foi possível preparar a foto.', 'err'); return }
+    if (vState.fotoPendente !== p) { return }
+    const nome = (p.arquivo.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg'
+    URL.revokeObjectURL(p.url)
+    p.arquivo = new File([blob], nome, { type: 'image/jpeg', lastModified: p.arquivo.lastModified || Date.now() })
+    p.url = URL.createObjectURL(blob)
+    p.prep = null
+  }
 
   const legenda = document.getElementById('vsi-foto-nova-legenda').value.trim()
   const fachada = document.getElementById('vsi-foto-nova-fachada').checked

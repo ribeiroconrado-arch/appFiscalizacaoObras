@@ -2241,6 +2241,23 @@
             <img id="vsi-foto-nova-img" alt="">
             <div class="vsi-pinos" id="vsi-foto-nova-pinos"></div>
           </div>
+          {{-- ROSTOS E PLACAS BORRADOS (26/11/2026): os rostos o aparelho acha
+               sozinho; placas e o que escapou, o fiscal borra no modo
+               "Borrar". O que sobe é a foto já borrada (vistoria.js). --}}
+          <div class="vsi-borrar" id="vsi-foto-borrar" hidden>
+            <div class="seg" style="margin:0">
+              <button type="button" id="vsi-modo-marcar" class="at" onclick="modoToqueFoto('marcar')">Marcar número</button>
+              <button type="button" id="vsi-modo-borrar" onclick="modoToqueFoto('borrar')">Borrar</button>
+            </div>
+            <label class="vsi-borrar-tam">Tamanho
+              <select id="vsi-borrar-tam" aria-label="Tamanho do borrão">
+                <option value="4">Pequeno</option>
+                <option value="6" selected>Médio</option>
+                <option value="10">Grande</option>
+              </select></label>
+            <button type="button" class="btn sm" onclick="desfazerBorraoPendente()">Desfazer borrão</button>
+            <div class="vsi-nota" id="vsi-foto-borrar-aviso"></div>
+          </div>
           <div class="vsi-nota" id="vsi-foto-nova-meta"></div>
           <div class="field" style="margin:8px 0 0">
             <label for="vsi-foto-nova-legenda">Legenda</label>
@@ -2260,7 +2277,7 @@
           </div>
         </div>
 
-        <div class="vsi-nota" id="vsi-foto-dica">Toque na foto para numerar o que a legenda descreve.</div>
+        <div class="vsi-nota" id="vsi-foto-dica">Toque na foto para numerar o que a legenda descreve. Rostos são borrados sozinhos; placas, borre com o modo "Borrar".</div>
       </div>
 
       <div class="vsi-resumo" id="vsi-resumo"></div>

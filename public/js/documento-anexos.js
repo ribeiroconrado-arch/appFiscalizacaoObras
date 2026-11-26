@@ -654,27 +654,30 @@ function recortesParaRostos(w, h) {
 }
 
 /**
- * Procura rostos na foto aberta e borra os que achar. Usa o MediaPipe; se ele
- * não carregar, tenta o reconhecimento do próprio navegador (FaceDetector,
- * onde existe). Devolve quantos rostos borrou, ou null se nenhum dos dois
- * funcionou — aí o borrão é só pelo toque.
- * @returns {Promise<number|null>}
+ * ACHA OS ROSTOS numa imagem e devolve os borrões que os cobrem, em pixels da
+ * imagem já no tamanho w × h. Usa o MediaPipe; se ele não carregar, tenta o
+ * reconhecimento do próprio navegador (FaceDetector, onde existe). Devolve
+ * null se nenhum dos dois funcionou — aí o borrão é só pelo toque.
+ *
+ * Serve aos anexos do documento e às fotos da vistoria (vistoria.js): as duas
+ * telas borram do mesmo jeito.
+ *
+ * @param {CanvasImageSource} img
+ * @param {number} w @param {number} h
+ * @returns {Promise<{x:number,y:number,r:number}[]|null>}
  */
-async function detectarRostosAnexo() {
-  const f = anxState.foto
-  if (!f) return null
+async function acharRostosNaImagem(img, w, h) {
   const base = document.createElement('canvas')
-  base.width = f.w; base.height = f.h
-  base.getContext('2d').drawImage(f.img, 0, 0, f.w, f.h)
+  base.width = w; base.height = h
+  base.getContext('2d').drawImage(img, 0, 0, w, h)
 
   /** @type {{x:number,y:number,w:number,h:number}[]} caixas dos rostos, em pixels da foto */
   let caixas = null
   try {
     const detector = await carregarDetectorRostos()
-    if (anxState.foto !== f) return null   // a janela já foi fechada ou trocada
     caixas = []
     const pedaco = document.createElement('canvas')
-    for (const r of recortesParaRostos(f.w, f.h)) {
+    for (const r of recortesParaRostos(w, h)) {
       pedaco.width = r.w; pedaco.height = r.h
       pedaco.getContext('2d').drawImage(base, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h)
       for (const d of detector.detect(pedaco).detections || []) {
@@ -693,15 +696,63 @@ async function detectarRostosAnexo() {
       caixas = rostos.map(r => ({ x: r.boundingBox.x, y: r.boundingBox.y, w: r.boundingBox.width, h: r.boundingBox.height }))
     } catch (_) { /* fica só o toque */ }
   }
-  if (caixas === null || anxState.foto !== f) return null
+  if (caixas === null) return null
 
   // O mesmo rosto aparece em mais de um recorte: entra uma vez só. Os maiores
   // primeiro, para o borrão que fica cobrir o rosto todo.
-  let novos = 0
+  const borroes = []
   for (const c of caixas.sort((a, b) => b.w * b.h - a.w * a.h)) {
     const x = c.x + c.w / 2, y = c.y + c.h / 2, r = Math.max(c.w, c.h) * 0.65
-    if (f.borroes.some(b => Math.hypot(b.x - x, b.y - y) < b.r)) continue
-    f.borroes.push({ x, y, r })
+    if (borroes.some(b => Math.hypot(b.x - x, b.y - y) < b.r)) continue
+    borroes.push({ x, y, r })
+  }
+  return borroes
+}
+
+/**
+ * BORRÃO em mosaico: cada região é reduzida a poucos blocos e ampliada de
+ * volta sem suavizar. Funciona em qualquer navegador (o desfoque do canvas não
+ * existe no Safari antigo) e não se desfaz ampliando a foto. Desenha sobre o
+ * que já está no canvas.
+ *
+ * @param {HTMLCanvasElement} canvas a foto já desenhada, em w × h
+ * @param {{x:number,y:number,r:number}[]} borroes
+ */
+function aplicarBorroes(canvas, borroes) {
+  const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height
+  const blocos = document.createElement('canvas')
+  blocos.width = blocos.height = 9
+  const bctx = blocos.getContext('2d')
+  for (const b of borroes) {
+    const x = Math.max(0, b.x - b.r), y = Math.max(0, b.y - b.r)
+    const lado = Math.min(b.r * 2, w - x, h - y)
+    if (lado <= 2) continue
+    bctx.clearRect(0, 0, 9, 9)
+    bctx.drawImage(canvas, x, y, lado, lado, 0, 0, 9, 9)
+    ctx.save()
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.clip()
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(blocos, 0, 0, 9, 9, x, y, lado, lado)
+    ctx.restore()
+  }
+}
+
+/**
+ * Procura rostos na foto aberta e borra os que achar. Devolve quantos rostos
+ * borrou, ou null se o reconhecimento não funcionou — aí o borrão é só pelo
+ * toque.
+ * @returns {Promise<number|null>}
+ */
+async function detectarRostosAnexo() {
+  const f = anxState.foto
+  if (!f) return null
+  const achados = await acharRostosNaImagem(f.img, f.w, f.h)
+  if (achados === null || anxState.foto !== f) return null   // falhou, ou a janela já foi fechada
+
+  let novos = 0
+  for (const a of achados) {
+    if (f.borroes.some(b => Math.hypot(b.x - a.x, b.y - a.y) < b.r)) continue
+    f.borroes.push(a)
     novos++
   }
   if (novos) desenharFotoAnexo()
@@ -715,25 +766,7 @@ function desenharFotoAnexo() {
   canvas.width = f.w; canvas.height = f.h
   const ctx = canvas.getContext('2d')
   ctx.drawImage(f.img, 0, 0, f.w, f.h)
-
-  // BORRÃO em mosaico: a região é reduzida a poucos blocos e ampliada de volta
-  // sem suavizar. Funciona em qualquer navegador (o desfoque do canvas não
-  // existe no Safari antigo) e não se desfaz ampliando a foto.
-  const blocos = document.createElement('canvas')
-  blocos.width = blocos.height = 9
-  const bctx = blocos.getContext('2d')
-  for (const b of f.borroes) {
-    const x = Math.max(0, b.x - b.r), y = Math.max(0, b.y - b.r)
-    const lado = Math.min(b.r * 2, f.w - x, f.h - y)
-    if (lado <= 2) continue
-    bctx.clearRect(0, 0, 9, 9)
-    bctx.drawImage(canvas, x, y, lado, lado, 0, 0, 9, 9)
-    ctx.save()
-    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.clip()
-    ctx.imageSmoothingEnabled = false
-    ctx.drawImage(blocos, 0, 0, 9, 9, x, y, lado, lado)
-    ctx.restore()
-  }
+  aplicarBorroes(canvas, f.borroes)
 
   // MARCA D'ÁGUA: o brasão em cinza, no centro, quase transparente.
   if (anxState.brasao) {
