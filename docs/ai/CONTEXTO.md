@@ -124,7 +124,7 @@ imobiliária.
 | | |
 |---|---|
 | Desenvolvimento | Laravel Herd, `C:\Users\<user>\Herd\fiscalizacao-obras` |
-| Produção | <https://fiscobras.duckdns.org> — Oracle Always Free (Ubuntu 24.04), DuckDNS, Let's Encrypt |
+| Produção | <https://geurb.com.br> — Oracle Always Free (Ubuntu 24.04), domínio no Registro.br, Let's Encrypt. O antigo fiscobras.duckdns.org redireciona para ele, menos `/webhooks/deploy` (o webhook do GitHub ainda chama o duckdns) |
 | Deploy | `sudo /usr/local/bin/deploy-fiscobras.sh` no servidor — puxa do GitHub, migra, refaz caches e testa o site |
 | Repositório | <https://github.com/ribeiroconrado-arch/appFiscalizacaoObras> (público) |
 

@@ -7,7 +7,7 @@ auto de infração — com numeração, prazos e memória de cálculo da multa. 
 mapa serve à curadoria do cadastro imobiliário: desenho, desmembramento,
 unificação e importação de bairros, tudo auditado.
 
-Em produção: <https://fiscobras.duckdns.org>
+Em produção: <https://geurb.com.br>
 
 ## Stack
 

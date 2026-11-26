@@ -7,7 +7,7 @@
 
 ## Em produção
 
-<https://fiscobras.duckdns.org> · Oracle Always Free (Ubuntu 24.04) ·
+<https://geurb.com.br> (o antigo fiscobras.duckdns.org redireciona, menos o webhook do deploy) · Oracle Always Free (Ubuntu 24.04) ·
 2 vCPU / 1 GB + 2 GB swap · PHP 8.4 · MySQL 8.0.46
 
 ## Números da base (medidos em 04/09/2026)
