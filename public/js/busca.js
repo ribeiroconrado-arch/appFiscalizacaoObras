@@ -19,7 +19,9 @@ const bState = {
    * @type {string[]|null}
    */
   logradouros: null,
-  /** @type {Array<Object>} */ resultado: [],
+  /** @type {Array<Object>} a página aberta */ resultado: [],
+  /** @type {URLSearchParams|null} os filtros do último Buscar (páginas e PDF) */ params: null,
+  /** @type {Object|null} a última resposta, para "Voltar à lista" */ ultima: null,
 }
 
 /** Primeira entrada na aba: popula o filtro de bairros. */
@@ -118,8 +120,22 @@ function limparBusca() {
   }
   document.getElementById('busca-resultado').innerHTML = ''
   bState.resultado = []
+  bState.params = null
+  bState.ultima = null
   marcarPrecedencia()
 }
+
+// Enter em qualquer campo da busca é o botão Buscar — menos quando a lista de
+// ruas está aberta, onde o Enter é de quem escolhe uma rua.
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Enter' || !ev.target.closest?.('#t-busca .busca-form')) return
+  if (!ev.target.matches('input:not([type=checkbox])')) return
+  if (document.getElementById('bs-logr-sugestoes')?.classList.contains('open') && ev.target.id === 'bs-logradouro') {
+    fecharListaLogradouro()
+  }
+  ev.preventDefault()
+  executarBusca()
+})
 
 /** Mostra e esconde o bloco de filtros avançados. */
 function alternarFiltrosAvancados() {
@@ -151,6 +167,10 @@ function nivelDeBusca() {
 }
 
 function marcarPrecedencia() {
+  // Mexeu em QUALQUER filtro, o "informe ao menos um filtro" deixou de valer.
+  // Antes ele só saía digitando na inscrição, e ficava na tela mesmo depois
+  // de outra busca dar certo (26/11/2026).
+  limparCampoInvalido('bs-inscricao')
   const nivel = nivelDeBusca()
   const aviso = document.getElementById('bs-precedencia')
 
@@ -201,13 +221,30 @@ async function executarBusca() {
   // procura por inscrição, que é justamente como se acha um lote extinto.
   if (document.getElementById('bs-inativos')?.checked) { p.set('incluir_inativos', '1') }
 
-  if (![...p.keys()].length) {
+  limparCampoInvalido('bs-inscricao')
+  // Só "incluir inativos" não é filtro: amplia o universo, não o recorta.
+  if (![...p.keys()].filter(k => k !== 'incluir_inativos').length) {
     exigirCampo('bs-inscricao', 'Informe ao menos um filtro para buscar.')
     return
   }
 
+  // Guardados para as outras páginas e para o PDF: a mesma pergunta, e não o
+  // que estiver nos campos na hora (podem ter mudado depois do Buscar).
+  bState.params = p
+  await irParaPagina(1)
+}
+
+/**
+ * Uma página do resultado (BuscaController::POR_PAGINA linhas).
+ * @param {number} pagina
+ */
+async function irParaPagina(pagina) {
+  if (!bState.params) return
+  const p = new URLSearchParams(bState.params)
+  p.set('pagina', String(pagina))
+
   const alvo = document.getElementById('busca-resultado')
-  alvo.innerHTML = '<div class="lista-vazia">Buscando…</div>'
+  if (!alvo.querySelector('.bs-tabela')) alvo.innerHTML = '<div class="lista-vazia">Buscando…</div>'
   mostrarCarregandoTela('Buscando imóveis...')
 
   try {
@@ -216,16 +253,13 @@ async function executarBusca() {
     if (!r.ok) throw new Error(d.message || 'HTTP ' + r.status)
 
     bState.resultado = d.imoveis
-    if (!d.imoveis.length) {
-      alvo.innerHTML = '<div class="lista-vazia">Nenhum imóvel com esses filtros.</div>'
-      return
-    }
+    bState.ultima = d
     // Resultado único vai direto para a ficha: obrigar a clicar numa tabela
     // de uma linha só é um passo sem informação nova.
     // `await`: sem ele o `finally` daqui embaixo apagaria o overlay ENQUANTO a
     // ficha ainda estivesse carregando — a busca some da tela e a ficha demora,
     // que é justamente a espera que o overlay existe para cobrir.
-    if (d.imoveis.length === 1) { await abrirImovel(d.imoveis[0].id); return }
+    if (d.total === 1) { await abrirImovel(d.imoveis[0].id); return }
     renderTabelaBusca(d)
   } catch (e) {
     console.error(e)
@@ -237,39 +271,88 @@ async function executarBusca() {
   }
 }
 
-/** Tabela só com o essencial — a ficha completa é um clique adiante. */
+/**
+ * Tabela só com o essencial — a ficha completa é um clique adiante.
+ *
+ * Sem resultado, a tabela aparece do mesmo jeito, com o cabeçalho e a linha
+ * "nenhum imóvel": a resposta vazia fica no lugar onde o resultado estaria, e
+ * não parece que a busca nem rodou.
+ */
 function renderTabelaBusca(d) {
-  const linhas = d.imoveis.map(i => `
+  const n = d.total ?? d.imoveis.length
+  const linhas = !d.imoveis.length
+    ? '<tr class="bs-nenhum"><td colspan="10">Nenhum imóvel com esses filtros.</td></tr>'
+    : d.imoveis.map(i => `
     <tr onclick="abrirImovel(${i.id})">
       <td class="mono">${esc(i.inscricao || '—')}</td>
+      <td>${esc(i.logradouro || '—')}</td>
+      <td class="bs-c">${esc(i.numero || '—')}</td>
       <td>${esc(i.bairro || '—')}</td>
       <td class="bs-c">${esc(i.quadra ?? '—')}</td>
       <td class="bs-c">${esc(i.lote ?? '—')}</td>
       <td class="bs-d">${i.area ? fmtNum(i.area) + ' m²' : '—'}</td>
+      <td class="bs-c">${seloSituacaoBusca(i)}</td>
       <td class="bs-c">${i.documentos || '—'}</td>
       <td class="bs-c">${i.vistorias || '—'}</td>
-      <td class="bs-c">${i.situacao === 'inativo'
-        ? `<span class="bs-selo-inativo" title="Inativado em ${esc(i.inativado_em || '—')}">inativo</span>`
-        : ''}</td>
     </tr>`).join('')
+
+  // "1–50 de 711": de onde a onde vai esta página.
+  const pag = d.pagina || 1, por = d.por_pagina || d.imoveis.length
+  const de = d.imoveis.length ? (pag - 1) * por + 1 : 0
+  const ate = (pag - 1) * por + d.imoveis.length
 
   document.getElementById('busca-resultado').innerHTML = `
     <div class="bs-cabecalho">
-      <span>${d.total} imóvel(is)</span>
-      ${d.truncado ? '<span class="bs-aviso">Mostrando os 200 primeiros — refine os filtros.</span>' : ''}
+      <span>${fmtNum(n)} ${n === 1 ? 'imóvel' : 'imóveis'}</span>
+      ${d.truncado ? `<span class="bs-aviso">Mostrando os ${d.imoveis.length} primeiros — refine os filtros.</span>` : ''}
+      ${n ? `<button type="button" class="btn sm bs-pdf" onclick="exportarBuscaPdf()" title="Todas as páginas, até 400 imóveis">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v6M9 15l3 3 3-3"/></svg>
+        Exportar PDF</button>` : ''}
     </div>
     <div class="bs-tabela-rolagem">
       <table class="bs-tabela">
         <thead>
           <tr>
-            <th>Inscrição</th><th>Bairro</th><th class="bs-c">Q</th><th class="bs-c">Lt</th>
-            <th class="bs-d">Área</th><th class="bs-c">Doc.</th><th class="bs-c">Vist.</th>
-            <th class="bs-c"></th>
+            <th class="bs-w-insc">Inscrição</th><th>Logradouro</th><th class="bs-c bs-w-num">Número</th><th>Bairro</th>
+            <th class="bs-c bs-w-n">Quadra</th><th class="bs-c bs-w-n">Lote</th>
+            <th class="bs-d bs-w-area">Área</th><th class="bs-c bs-w-sit">Situação</th>
+            <th class="bs-c bs-w-n">Doc.</th><th class="bs-c bs-w-n">Vist.</th>
           </tr>
         </thead>
         <tbody>${linhas}</tbody>
       </table>
-    </div>`
+    </div>
+    ${(d.paginas || 1) > 1 ? `<nav class="bs-paginacao" aria-label="Páginas do resultado">
+      <span class="bs-pag-faixa">${fmtNum(de)}–${fmtNum(ate)} de ${fmtNum(n)}</span>
+      <button type="button" class="btn sm" ${pag <= 1 ? 'disabled' : ''} onclick="irParaPagina(1)" title="Primeira página">«</button>
+      <button type="button" class="btn sm" ${pag <= 1 ? 'disabled' : ''} onclick="irParaPagina(${pag - 1})">‹ Anterior</button>
+      <span class="bs-pag-atual">Página ${pag} de ${d.paginas}</span>
+      <button type="button" class="btn sm" ${pag >= d.paginas ? 'disabled' : ''} onclick="irParaPagina(${pag + 1})">Próxima ›</button>
+      <button type="button" class="btn sm" ${pag >= d.paginas ? 'disabled' : ''} onclick="irParaPagina(${d.paginas})" title="Última página">»</button>
+    </nav>` : ''}`
+  // Página nova começa do alto da tabela, e não onde a anterior parou.
+  document.querySelector('#busca-resultado .bs-tabela-rolagem')?.scrollTo(0, 0)
+}
+
+/**
+ * A situação do imóvel, na mesma regra da ficha e do balão do mapa: inativo
+ * no SISTEMA (unificado/desmembrado) ou no CADASTRO é "Inativo", em vermelho
+ * (decisão dele, 11/10/2026); ativo no cadastro, "Ativo"; sem o imóvel no
+ * cadastro, "Sem info.".
+ */
+function seloSituacaoBusca(i) {
+  if (i.situacao === 'inativo') {
+    return `<span class="badge bd-cx" title="Unificado ou desmembrado${i.inativado_em ? ' em ' + esc(i.inativado_em) : ''}">Inativo</span>`
+  }
+  if (i.ativo_no_cadastro === false) return '<span class="badge bd-cx" title="Inativo no cadastro municipal">Inativo</span>'
+  if (i.ativo_no_cadastro === true) return '<span class="badge bd-ok">Ativo</span>'
+  return '<span class="badge bd-in" title="O imóvel não está no cadastro municipal carregado">Sem info.</span>'
+}
+
+/** O PDF da busca: os mesmos filtros, todas as páginas (até 400 imóveis). */
+function exportarBuscaPdf() {
+  if (!bState.params) return
+  window.open('/imoveis/busca.pdf?' + bState.params, '_blank')
 }
 
 /** Ficha técnica do imóvel, carregada na própria tela. @param {number} id */
@@ -292,9 +375,13 @@ async function abrirImovel(id) {
 }
 
 function renderFichaImovel(d) {
-  const voltar = bState.resultado.length > 1
-    ? `<button class="btn" onclick="renderTabelaBusca({imoveis:bState.resultado,total:bState.resultado.length,truncado:false})">Voltar à lista</button>`
+  // Volta à MESMA página da lista em que se estava.
+  const voltar = (bState.ultima?.total ?? 0) > 1
+    ? `<button class="btn" onclick="renderTabelaBusca(bState.ultima)">‹ Voltar à lista</button>`
     : ''
+  // Endereço e situação no cadastro vêm da linha da busca (a ficha do lote não
+  // os traz: é a chamada leve dos pinos do mapa).
+  const linha = bState.resultado.find(x => x.id === d.id) || {}
 
   // Linha RESTRITA (externo): a lista mostra que o documento existe, sem id
   // para abrir — o servidor já não o manda. Ver BuscaController::ficha.
@@ -332,7 +419,9 @@ function renderFichaImovel(d) {
     ? (inativo
       ? `<button class="btn" onclick="verInativoNoMapa(${d.id}, ${d.lat}, ${d.lon})">
            Ver o contorno antigo no mapa</button>`
-      : `<button class="btn" onclick="verImovelNoMapa(${d.lat}, ${d.lon})">Ver no mapa</button>`)
+      // Leva E MARCA o lote (contorno piscante), como a pesquisa do mapa e a
+      // conferência fazem — ver irAoLoteNoMapa, em mapa.js (26/11/2026).
+      : `<button class="btn primary" onclick="irAoLoteNoMapa(${d.id})">Ver no mapa</button>`)
     : ''
 
   const selo = inativo
@@ -346,17 +435,27 @@ function renderFichaImovel(d) {
     <div class="bs-ficha">
       ${selo}
       <div class="bs-ficha-topo">
-        <div>
-          <h3 class="mono">${esc(d.inscricao || 'sem inscrição')}</h3>
-          <span class="lote-tag-origem">${esc(d.tag_origem || 'ORIGINAL')}</span>
-          <div class="sub">${esc(d.bairro || '—')} · Quadra ${esc(d.quadra ?? '—')} · Lote ${esc(d.lote ?? '—')}</div>
+        <div class="bs-ficha-id">
+          <div class="bs-ficha-l1">
+            <h3 class="mono">${esc(d.inscricao || 'sem inscrição')}</h3>
+            ${seloSituacaoBusca({ ...linha, situacao: d.situacao, inativado_em: d.inativado_em })}
+            <span class="lote-tag-origem">${esc(d.tag_origem || 'ORIGINAL')}</span>
+          </div>
+          <div class="bs-ficha-end${linha.logradouro ? '' : ' vazio'}">${linha.logradouro
+            ? esc(linha.logradouro) + (linha.numero ? ', ' + esc(linha.numero) : ', s/nº')
+            : 'Logradouro não cadastrado'}</div>
+          <div class="bs-ficha-campos">
+            <span><small>Bairro</small><b>${esc(d.bairro || '—')}</b></span>
+            <span><small>Quadra</small><b>${esc(d.quadra ?? '—')}</b></span>
+            <span><small>Lote</small><b>${esc(d.lote ?? '—')}</b></span>
+            <span><small>${d.area_oficial ? 'Área BCI' : 'Área mapa'}</small><b>${d.area ? fmtNum(d.area) + ' m²' : '—'}</b></span>
+          </div>
         </div>
-        <div class="btn-row" style="margin:0">${noMapa}${voltar}</div>
+        <div class="bs-ficha-acoes">${voltar}${noMapa}</div>
       </div>
 
       <div class="sec-title">Cadastro</div>
       <div class="df-grade">
-        <div><span class="df-rot">Área do terreno</span><span class="df-val">${d.area ? fmtNum(d.area) + ' m²' : '—'}</span></div>
         <div><span class="df-rot">Chave de integração</span><span class="df-val">${esc(d.chave || '—')}</span></div>
         <div><span class="df-rot">Origem do dado</span><span class="df-val">${esc(d.fonte || '—')}</span></div>
         <div><span class="df-rot">Coordenadas</span><span class="df-val">${d.lat ? d.lat.toFixed(6) + ', ' + d.lon.toFixed(6) : '—'}</span></div>

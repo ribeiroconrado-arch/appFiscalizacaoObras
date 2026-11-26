@@ -35,7 +35,219 @@ class BuscaController extends Controller
      */
     public function buscar(Request $request): JsonResponse
     {
-        $d = $request->validate([
+        $d = $request->validate($this->regras());
+        [$q, $usou] = $this->consulta($d);
+
+        if (! $usou) {
+            return response()->json(['message' => 'Informe ao menos um filtro para buscar.'], 422);
+        }
+
+        $ordenada = fn () => $q->clone()->orderBy('bairro')->orderByRaw(\App\Support\NumeroDoLote::ORDEM);
+
+        // PAGINADA quando a tela pede uma página (Consulta de imóveis,
+        // 26/11/2026): POR_PAGINA linhas por vez, com o total de verdade. Sem
+        // `pagina` — as buscas por termo da vistoria e do documento —, segue a
+        // lista única de até 200, como antes.
+        if ($request->filled('pagina')) {
+            $total = $q->count();
+            $paginas = max(1, (int) ceil($total / self::POR_PAGINA));
+            $pagina = min(max(1, (int) $request->input('pagina')), $paginas);
+            $lotes = $ordenada()->offset(($pagina - 1) * self::POR_PAGINA)->limit(self::POR_PAGINA)->get();
+
+            return response()->json([
+                'imoveis'    => $this->linhas($lotes),
+                'total'      => $total,
+                'pagina'     => $pagina,
+                'paginas'    => $paginas,
+                'por_pagina' => self::POR_PAGINA,
+                'truncado'   => false,
+            ]);
+        }
+
+        $limite = 200;
+        $lotes = $ordenada()->limit($limite + 1)->get();
+        $truncado = $lotes->count() > $limite;
+        $lotes = $lotes->take($limite);
+
+        return response()->json([
+            'imoveis'  => $this->linhas($lotes),
+            'total'    => $truncado ? $q->count() : $lotes->count(),
+            'truncado' => $truncado,
+        ]);
+    }
+
+    /** Linhas por página na Consulta de imóveis. */
+    private const POR_PAGINA = 50;
+
+    /**
+     * GET /imoveis/busca.pdf — a mesma consulta, em A4 (26/11/2026).
+     *
+     * Os mesmos filtros da tela — TODAS as páginas, e não só a aberta —, até
+     * PDF_LIMITE linhas. Passando disso, o PDF diz que foi cortado: listagem
+     * que some com o resto em silêncio parece completa.
+     */
+    public function pdf(Request $request, \App\Services\CabecalhoOficial $cabecalho): \Symfony\Component\HttpFoundation\Response
+    {
+        // O dompdf gasta ~0,4 MB por linha de tabela (medido: 200 linhas =
+        // 100 MB; 500 = 216 MB). O teto do PHP é 128 MB; aqui sobe só para
+        // esta geração, e o PDF_LIMITE segura o resto.
+        ini_set('memory_limit', '256M');
+        $d = $request->validate($this->regras());
+        [$q, $usou] = $this->consulta($d);
+        abort_unless($usou, 422, 'Informe ao menos um filtro para buscar.');
+
+        $lotes = $q->clone()->orderBy('bairro')->orderByRaw(\App\Support\NumeroDoLote::ORDEM)
+                   ->limit(self::PDF_LIMITE + 1)->get();
+        $truncado = $lotes->count() > self::PDF_LIMITE;
+        $lotes = $lotes->take(self::PDF_LIMITE);
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('impressao.busca', [
+            'navegador' => false,
+            'orgao'     => $cabecalho->orgao(),
+            'brasao'    => $cabecalho->brasao(true),
+            'linhas'    => $this->linhas($lotes),
+            'filtros'   => $this->filtrosEmTexto($d),
+            'total'     => $truncado ? $q->count() : $lotes->count(),
+            'truncado'  => $truncado,
+            'emitido'   => now()->format('d/m/Y H:i'),
+            'por'       => auth()->user()?->name,
+        ])->setPaper('a4', 'landscape')->stream('consulta-de-imoveis.pdf');
+    }
+
+    /**
+     * Teto de linhas do PDF (~10 folhas de A4 deitado). A máquina tem 1 GB e
+     * seis processos PHP: mais que isto, um PDF só pesaria sobre todos os
+     * outros usuários.
+     */
+    private const PDF_LIMITE = 400;
+
+    /** O que foi pedido, em português, para o alto do PDF. @return list<string> */
+    private function filtrosEmTexto(array $d): array
+    {
+        $rotulos = [
+            'inscricao' => 'Inscrição', 'inscricao_de' => 'BCI de', 'inscricao_ate' => 'BCI até',
+            'logradouro' => 'Logradouro', 'numero' => 'Número', 'quadra' => 'Quadra', 'lote' => 'Lote',
+            'bairro' => 'Bairro', 'termo' => 'Texto',
+        ];
+        $f = [];
+        foreach ($rotulos as $campo => $rot) {
+            if (($d[$campo] ?? '') !== '' && $d[$campo] !== null) { $f[] = "{$rot}: {$d[$campo]}"; }
+        }
+        if (! empty($d['vistoria'])) { $f[] = 'Última vistoria: ' . (Vistoria::SITUACOES[$d['vistoria']] ?? $d['vistoria']); }
+        if (! empty($d['embargo'])) { $f[] = 'Com embargo ativo'; }
+        if (! empty($d['doc_pendente'])) { $f[] = 'Com documento pendente'; }
+        if (! empty($d['obra_sem_vistoria'])) { $f[] = 'Projeto aprovado sem vistoria'; }
+        if (! empty($d['incluir_inativos'])) { $f[] = 'Incluindo imóveis inativos'; }
+
+        return $f;
+    }
+
+    /**
+     * As linhas da tabela (e do PDF): o lote, o endereço e a situação no
+     * cadastro, e as contagens de documento e vistoria.
+     *
+     * @param  \Illuminate\Support\Collection<int,Lote>  $lotes
+     * @return list<array<string,mixed>>
+     */
+    private function linhas($lotes): array
+    {
+        // Contagens numa consulta só: um COUNT por linha faria 200 idas ao
+        // banco para montar uma tabela de leitura.
+        $ids  = $lotes->pluck('id');
+        $docs = Documento::whereIn('lote_id', $ids)->selectRaw('lote_id, COUNT(*) c')
+                    ->groupBy('lote_id')->pluck('c', 'lote_id');
+        $vist = Vistoria::whereIn('lote_id', $ids)->selectRaw('lote_id, COUNT(*) c')
+                    ->groupBy('lote_id')->pluck('c', 'lote_id');
+
+        $areas = new \App\Cadastro\AreaOficial();
+        $inscricoes = $lotes->mapWithKeys(fn (Lote $l) => [$l->id => $this->inscricaoDe($l)]);
+        $cadastro = $this->cadastroDasInscricoes($inscricoes->filter()->all());
+
+        return $lotes->map(function (Lote $l) use ($docs, $vist, $areas, $inscricoes, $cadastro) {
+            $c = $cadastro[InscricaoImobiliaria::normalizar($inscricoes[$l->id]) ?? ''] ?? null;
+            $ativoNoCadastro = $c ? \App\Cadastro\RetratoBci::isencaoAtiva($c->isencao) : null;
+
+            return [
+                'id'         => $l->id,
+                // NOME OFICIAL: fora do mapa é ele que identifica o bairro.
+                'bairro'     => $this->bairroOficial($l->bairro),
+                'quadra'     => $l->quadra,
+                'lote'       => $l->numero_lote,
+                'inscricao'  => $inscricoes[$l->id],
+                // Endereço DO CADASTRO, pela inscrição (o desenho não tem rua),
+                // com o tipo (R., AV.) completado só na leitura.
+                'logradouro' => $c ? \App\Cadastro\TipoDoLogradouro::completar($c->logradouro, $c->nome_bairro, $c->codigo_bairro) : null,
+                'numero'     => $c ? ($c->numero_predial !== null ? ltrim((string) $c->numero_predial, '0') ?: null : null) : null,
+                'area'       => $areas->doLote($l),   // a do cadastro, quando há
+                'documentos' => (int) ($docs[$l->id] ?? 0),
+                'vistorias'  => (int) ($vist[$l->id] ?? 0),
+                // A situação viaja SEMPRE, mesmo sem o filtro: sem ela, a linha
+                // de um inativo seria idêntica à de um imóvel vivo, e alguém
+                // acabaria lavrando peça contra um lote que não existe mais.
+                'situacao'   => $l->situacao,
+                'inativado_em' => $l->inativado_em?->format('d/m/Y'),
+                // A situação NO CADASTRO (true ativo, false inativo, null sem
+                // info.) — a mesma regra do balão e da ficha (RetratoBci).
+                'ativo_no_cadastro' => $ativoNoCadastro,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * A linha do cadastro de cada inscrição, numa consulta só. O cadastro grava
+     * a inscrição com ou sem pontos; procura pelas duas grafias.
+     *
+     * @param  array<int,string>  $inscricoes
+     * @return array<string,object>  15 dígitos => linha (a primeira presente)
+     */
+    private function cadastroDasInscricoes(array $inscricoes): array
+    {
+        $grafias = [];
+        foreach ($inscricoes as $i) {
+            if ($n = InscricaoImobiliaria::normalizar($i)) {
+                $grafias[] = $n;
+                $grafias[] = InscricaoImobiliaria::formatar($n);
+            }
+        }
+        if (! $grafias) {
+            return [];
+        }
+        $porInscricao = [];
+        foreach (array_chunk(array_values(array_unique($grafias)), 1000) as $parte) {
+            $linhas = DB::table('cadastro_externo_imoveis')->whereIn('inscricao', $parte)
+                ->orderByRaw('ausente_desde_carga_id IS NOT NULL')->orderBy('id')
+                ->get(['inscricao', 'logradouro', 'numero_predial', 'nome_bairro', 'codigo_bairro', 'isencao']);
+            foreach ($linhas as $l) {
+                $porInscricao[InscricaoImobiliaria::normalizar($l->inscricao)] ??= $l;
+            }
+        }
+
+        return $porInscricao;
+    }
+
+    /**
+     * A consulta montada a partir dos filtros. @return array{0:\Illuminate\Database\Eloquent\Builder, 1:bool}
+     */
+    private function consulta(array $d): array
+    {
+        // Lote inativo (unificado ou desmembrado) nao e mais um imovel que
+        // existe: fica na base para o historico, mas nao se busca nem se marca
+        // no mapa. A ficha dele continua abrindo — ver ficha().
+        //
+        // O FILTRO É O CAMINHO DE VOLTA. Desligado por padrão, porque a
+        // consulta de balcão pergunta pelo imóvel que existe hoje; ligado,
+        // acha o lote que foi unificado ou desmembrado e leva à história dele.
+        // Sem ele, um imóvel com processo em curso desaparecia do sistema no
+        // instante em que o ato cadastral era executado.
+        $q = empty($d['incluir_inativos']) ? Lote::query()->publicados() : Lote::query()->where('lotes.em_revisao', false);
+
+        return [$q, $this->aplicarFiltros($q, $d)];
+    }
+
+    /** @return array<string,array<int,mixed>> */
+    private function regras(): array
+    {
+        return [
             'bairro'        => ['nullable', 'string', 'max:120'],
             'quadra'        => ['nullable', 'string', 'max:20'],
             'lote'          => ['nullable', 'string', 'max:20'],
@@ -52,61 +264,8 @@ class BuscaController extends Controller
             // Campo único da busca do mapa
             'termo'         => ['nullable', 'string', 'max:120'],
             'incluir_inativos' => ['nullable', 'boolean'],
-        ]);
-
-        // Lote inativo (unificado ou desmembrado) nao e mais um imovel que
-        // existe: fica na base para o historico, mas nao se busca nem se marca
-        // no mapa. A ficha dele continua abrindo — ver ficha().
-        //
-        // O FILTRO É O CAMINHO DE VOLTA. Desligado por padrão, porque a
-        // consulta de balcão pergunta pelo imóvel que existe hoje; ligado,
-        // acha o lote que foi unificado ou desmembrado e leva à história dele.
-        // Sem ele, um imóvel com processo em curso desaparecia do sistema no
-        // instante em que o ato cadastral era executado.
-        $q = empty($d['incluir_inativos']) ? Lote::query()->publicados() : Lote::query()->where('lotes.em_revisao', false);
-        $usou = $this->aplicarFiltros($q, $d);
-
-        if (! $usou) {
-            return response()->json(['message' => 'Informe ao menos um filtro para buscar.'], 422);
-        }
-
-        $limite = 200;
-        $lotes = $q->orderBy('bairro')->orderByRaw(\App\Support\NumeroDoLote::ORDEM)
-                   ->limit($limite + 1)->get();
-
-        $truncado = $lotes->count() > $limite;
-        $lotes = $lotes->take($limite);
-
-        // Contagens numa consulta só: um COUNT por linha faria 200 idas ao
-        // banco para montar uma tabela de leitura.
-        $ids  = $lotes->pluck('id');
-        $docs = Documento::whereIn('lote_id', $ids)->selectRaw('lote_id, COUNT(*) c')
-                    ->groupBy('lote_id')->pluck('c', 'lote_id');
-        $vist = Vistoria::whereIn('lote_id', $ids)->selectRaw('lote_id, COUNT(*) c')
-                    ->groupBy('lote_id')->pluck('c', 'lote_id');
-
-        $areas = new \App\Cadastro\AreaOficial();
-
-        return response()->json([
-            'imoveis' => $lotes->map(fn (Lote $l) => [
-                'id'         => $l->id,
-                // NOME OFICIAL: fora do mapa é ele que identifica o bairro.
-                'bairro'     => $this->bairroOficial($l->bairro),
-                'quadra'     => $l->quadra,
-                'lote'       => $l->numero_lote,
-                'inscricao'  => $this->inscricaoDe($l),
-                'area'       => $areas->doLote($l),   // a do cadastro, quando há
-                'documentos' => (int) ($docs[$l->id] ?? 0),
-                'vistorias'  => (int) ($vist[$l->id] ?? 0),
-                // A situação viaja SEMPRE, mesmo sem o filtro: sem ela, a linha
-                // de um inativo seria idêntica à de um imóvel vivo, e alguém
-                // acabaria lavrando peça contra um lote que não existe mais.
-                'situacao'   => $l->situacao,
-                'inativado_em' => $l->inativado_em?->format('d/m/Y'),
-            ])->values(),
-            'total'    => $lotes->count(),
-            'truncado' => $truncado,
-        ]);
+            'pagina'        => ['nullable', 'integer', 'min:1'],
+        ];
     }
 
     /**
@@ -162,9 +321,11 @@ class BuscaController extends Controller
             $q->whereRaw("TRIM(LEADING '0' FROM numero_predial) = ?", [ltrim($numero, '0')]);
         }
 
-        // Teto de segurança: uma avenida inteira pode ter centenas de imóveis,
-        // e cada um vira uma condição OR na consulta do lote.
-        return $q->limit(600)->pluck('inscricao')
+        // Teto de segurança: cada imóvel vira um valor no IN da consulta do lote.
+        // Era 600 — e uma avenida longa ou um pedaço comum de nome ("brasil")
+        // passa disso no cadastro inteiro, cortando o resultado em silêncio
+        // (26/11/2026). O MySQL aceita até 65.535 marcadores.
+        return $q->limit(5000)->pluck('inscricao')
             ->map(fn ($i) => InscricaoImobiliaria::normalizar($i))->filter()->values()->all();
     }
 

@@ -925,6 +925,14 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
       </button>
+      {{-- Limpar e Buscar NA MESMA LINHA dos campos, alinhados pela base
+           (26/11/2026): numa linha própria, embaixo, deixavam uma faixa vazia
+           e ficavam longe de onde se acaba de digitar. Enter em qualquer campo
+           também busca (busca.js). --}}
+      <div class="bs-acoes">
+        <button type="button" class="btn" onclick="limparBusca()">Limpar</button>
+        <button type="button" class="btn primary" onclick="executarBusca()">Buscar</button>
+      </div>
     </div>
 
     <div class="busca-avancado" id="busca-avancado" hidden>
@@ -970,11 +978,6 @@
          com bairro ou quadra só produziria contradição. Em vez de devolver
          vazio e parecer defeito, o sistema diz o que está valendo. --}}
     <div class="bs-precedencia" id="bs-precedencia" hidden></div>
-
-    <div class="btn-row">
-      <button class="btn" onclick="limparBusca()">Limpar</button>
-      <button class="btn primary" onclick="executarBusca()">Buscar</button>
-    </div>
   </div>
 
   <div id="busca-resultado"></div>

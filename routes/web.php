@@ -66,6 +66,11 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         return view('mapa', ['total' => $lotes->total()]);
     })->name('mapa');
 
+    // A Consulta de imóveis em PDF: os mesmos filtros da busca, aberta também a
+    // externos como ela. Fora do /api: é arquivo, aberto com window.open.
+    Route::get('/imoveis/busca.pdf', [BuscaController::class, 'pdf'])
+        ->middleware('throttle:pesado')->name('busca.pdf');
+
     // ── ABERTO TAMBÉM A EXTERNOS ─────────────────────────────────
     // Topógrafo, arquiteto e contribuinte (User::EXTERNOS) usam o mapa, a busca
     // e a ficha do lote; o curador entre eles usa também a correção do desenho.

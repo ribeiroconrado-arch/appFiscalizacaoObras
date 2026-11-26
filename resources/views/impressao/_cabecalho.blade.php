@@ -26,7 +26,7 @@
         <tr>
           <td class="cab-titulo">{{ $titulo }}</td>
           <td class="cab-num">
-            <span class="cab-num-lbl">NÚMERO</span><span class="cab-num-val">{{ $numero }}</span>
+            <span class="cab-num-lbl">{{ $numeroRotulo ?? 'NÚMERO' }}</span><span class="cab-num-val">{{ $numero }}</span>
           </td>
         </tr>
       </table>

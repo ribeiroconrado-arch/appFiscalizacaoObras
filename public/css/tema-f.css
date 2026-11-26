@@ -1264,6 +1264,64 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
   display:flex;align-items:center;justify-content:center;padding:0}
 .bs-mais:hover{border-color:var(--gm);color:var(--gd)}
 .bs-mais.aberto{background:var(--gl);border-color:var(--gm);color:var(--gd)}
+/* Limpar e Buscar no fim da linha dos campos, pela base e com a altura de um
+   campo. Quebrando a linha (tela estreita), continuam encostados à direita. */
+.bs-acoes{display:flex;gap:8px;margin-left:auto;align-self:flex-end;margin-bottom:9px}
+.bs-acoes .btn{height:42px;min-height:42px;margin:0}
+/* O aviso de precedência agora fecha o formulário: sem sobra embaixo dele. */
+.bs-precedencia:last-child{margin-bottom:0}
+
+/* Tabela do resultado: colunas curtas com largura do conteúdo, e o bairro
+   com o resto. Antes Q e Lt ficavam a meio metro um do outro. */
+.bs-tabela .bs-w-insc{width:170px}
+.bs-tabela .bs-w-n{width:64px}
+.bs-tabela .bs-w-area{width:100px}
+.bs-tabela tr.bs-nenhum{cursor:default}
+.bs-tabela tr.bs-nenhum:hover{background:none}
+.bs-tabela tr.bs-nenhum td{text-align:center;color:var(--tx3);padding:22px 10px}
+.bs-tabela .bs-w-num{width:76px}
+.bs-tabela .bs-w-sit{width:96px}
+.bs-tabela td .badge{white-space:nowrap}
+
+/* ROLA SÓ A TABELA (26/11/2026): a tela vira coluna — título, filtros e o
+   resultado —, e o resultado ocupa o que sobra da altura, com o cabeçalho da
+   tabela preso no alto. Tela baixa demais (celular deitado), a tabela guarda
+   um mínimo e a página volta a rolar, em vez de sumir. */
+#t-busca.at{display:flex;flex-direction:column}
+#t-busca > .topo-lista,#t-busca > .busca-form{flex:none}
+#busca-resultado{flex:1 1 auto;min-height:260px;display:flex;flex-direction:column}
+#busca-resultado > .bs-cabecalho,#busca-resultado > .bs-paginacao{flex:none}
+#busca-resultado > .bs-tabela-rolagem{flex:1 1 auto;min-height:200px;overflow:auto}
+#busca-resultado > .bs-ficha{flex:0 1 auto;min-height:0;overflow:auto}
+.bs-tabela thead th{position:sticky;top:0;z-index:1}
+
+/* O total e o PDF na mesma linha; o PDF encostado à direita. */
+.bs-cabecalho{align-items:center}
+.bs-cabecalho .bs-pdf{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+
+/* Paginação embaixo da tabela, fora da rolagem. */
+.bs-paginacao{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;
+  padding:8px 0 0;font-size:12.5px;color:var(--tx2)}
+.bs-paginacao .bs-pag-faixa{margin-right:auto;color:var(--tx3)}
+.bs-paginacao .bs-pag-atual{padding:0 6px;font-weight:600;color:var(--tx)}
+.bs-paginacao .btn{margin:0}
+
+/* CABEÇALHO DA FICHA NA CONSULTA: inscrição com a situação, o endereço do
+   cadastro, e bairro/quadra/lote/área como rótulo e valor — a mesma leitura
+   da faixa de campos da ficha do mapa. */
+.bs-ficha{counter-reset:sec}   /* os títulos numeravam todos "1" */
+.bs-ficha-topo{align-items:flex-start;padding-bottom:12px;border-bottom:1px solid var(--bord)}
+.bs-ficha-id{min-width:0;display:flex;flex-direction:column;gap:5px}
+.bs-ficha-l1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bs-ficha-l1 h3{font-size:18px;color:var(--tx)}
+.bs-ficha-end{font-size:14px;font-weight:600;color:var(--tx)}
+.bs-ficha-end.vazio{font-weight:400;color:var(--tx3)}
+.bs-ficha-campos{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:2px}
+.bs-ficha-campos span{display:flex;align-items:baseline;gap:6px}
+.bs-ficha-campos small{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3)}
+.bs-ficha-campos b{font-size:13px;font-weight:600;color:var(--tx)}
+.bs-ficha-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.bs-ficha-acoes .btn{margin:0}
 
 .busca-avancado{border-top:1px solid var(--bord);margin-top:2px;padding-top:12px}
 .busca-avancado[hidden]{display:none}
