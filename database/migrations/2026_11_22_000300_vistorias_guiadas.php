@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -30,6 +31,16 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // A PRODUÇÃO JÁ TEM AS TABELAS, no formato da página de teste: a
+        // migração vazou no commit 7a43be6 (como 2026_11_22_000300_vistorias_
+        // guiadas_teste) e rodou lá antes de ser tirada do repositório. Criar
+        // de novo derrubava o deploy ("table already exists"). Nesse caso as
+        // tabelas são ADAPTADAS ao formato atual, sem perder o que houver.
+        if (Schema::hasTable('vg_vistorias')) {
+            $this->adaptarDaVersaoDeTeste();
+            return;
+        }
+
         Schema::create('vg_modelos', function (Blueprint $t) {
             $t->id();
             $t->string('nome', 120);
@@ -145,6 +156,82 @@ return new class extends Migration
             $t->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
             $t->timestamps();
         });
+    }
+
+    /**
+     * Da versão de teste (7a43be6) para a atual. Lá, `vg_vistorias` tinha
+     * `imovel` (texto, obrigatório) e `protocolo`, e não tinha número,
+     * módulo, local nem descrição; `vg_vinculos` e `vg_fiscais` não existiam.
+     * Modelos, versões, itens livres e arquivos já estavam no formato de hoje.
+     */
+    private function adaptarDaVersaoDeTeste(): void
+    {
+        Schema::table('vg_vistorias', function (Blueprint $t) {
+            if (! Schema::hasColumn('vg_vistorias', 'exercicio')) { $t->unsignedSmallInteger('exercicio')->nullable()->after('versao_id'); }
+            if (! Schema::hasColumn('vg_vistorias', 'numero')) { $t->unsignedInteger('numero')->nullable()->after('exercicio'); }
+            if (! Schema::hasColumn('vg_vistorias', 'modulo')) { $t->string('modulo', 20)->default('obras')->after('numero'); }
+            if (! Schema::hasColumn('vg_vistorias', 'local')) { $t->string('local', 255)->nullable()->after('modulo'); }
+            if (! Schema::hasColumn('vg_vistorias', 'descricao')) { $t->text('descricao')->nullable()->after('local'); }
+        });
+
+        // O que havia nas colunas antigas vai para as novas: o imóvel digitado
+        // vira o local; o protocolo digitado, uma linha da descrição.
+        $temImovel = Schema::hasColumn('vg_vistorias', 'imovel');
+        $temProt = Schema::hasColumn('vg_vistorias', 'protocolo');
+        $seq = [];
+        foreach (DB::table('vg_vistorias')->orderBy('id')->get() as $v) {
+            $ano = (int) substr((string) $v->created_at, 0, 4) ?: (int) date('Y');
+            $dados = [];
+            if ($v->exercicio === null) { $dados['exercicio'] = $ano; $dados['numero'] = $seq[$ano] = ($seq[$ano] ?? 0) + 1; }
+            if ($temImovel && $v->local === null && trim((string) $v->imovel) !== '') { $dados['local'] = mb_substr($v->imovel, 0, 255); }
+            if ($temProt && $v->descricao === null && trim((string) $v->protocolo) !== '') { $dados['descricao'] = 'Protocolo ' . $v->protocolo; }
+            if ($dados) { DB::table('vg_vistorias')->where('id', $v->id)->update($dados); }
+        }
+
+        Schema::table('vg_vistorias', function (Blueprint $t) use ($temImovel, $temProt) {
+            if ($temImovel) { $t->dropColumn('imovel'); }
+            if ($temProt) { $t->dropColumn('protocolo'); }
+        });
+        // Cada passo confere se já foi feito: no MySQL a mudança de tabela não
+        // volta atrás, e um deploy interrompido no meio roda isto de novo.
+        Schema::table('vg_vistorias', function (Blueprint $t) {
+            $t->unsignedSmallInteger('exercicio')->nullable(false)->change();
+            $t->unsignedInteger('numero')->nullable(false)->change();
+            if (! Schema::hasIndex('vg_vistorias', ['exercicio', 'numero'], 'unique')) {
+                $t->unique(['exercicio', 'numero']);
+            }
+        });
+
+        if (! Schema::hasTable('vg_vinculos')) {
+            Schema::create('vg_vinculos', function (Blueprint $t) {
+                $t->id();
+                $t->foreignId('vistoria_id')->constrained('vg_vistorias')->cascadeOnDelete();
+                $t->enum('tipo', ['imovel', 'pessoa', 'protocolo', 'denuncia']);
+                $t->unsignedBigInteger('ref_id');
+                $t->string('rotulo', 255);
+                $t->boolean('depois')->default(false);
+                $t->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+                $t->timestamps();
+                $t->unique(['vistoria_id', 'tipo', 'ref_id']);
+                $t->index(['tipo', 'ref_id']);
+            });
+        }
+        if (! Schema::hasTable('vg_fiscais')) {
+            Schema::create('vg_fiscais', function (Blueprint $t) {
+                $t->id();
+                $t->foreignId('vistoria_id')->constrained('vg_vistorias')->cascadeOnDelete();
+                $t->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+                $t->longText('assinatura')->nullable();
+                $t->timestamp('assinada_em')->nullable();
+                $t->timestamps();
+                $t->unique(['vistoria_id', 'user_id']);
+            });
+            // Quem criou cada vistoria de teste passa a ser o fiscal dela —
+            // sem fiscal relacionado, ninguém conseguiria mexer nela.
+            foreach (DB::table('vg_vistorias')->whereNotNull('user_id')->get(['id', 'user_id']) as $v) {
+                DB::table('vg_fiscais')->insert(['vistoria_id' => $v->id, 'user_id' => $v->user_id, 'created_at' => now(), 'updated_at' => now()]);
+            }
+        }
     }
 
     public function down(): void
