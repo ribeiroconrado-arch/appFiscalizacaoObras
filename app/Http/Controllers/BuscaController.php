@@ -42,7 +42,7 @@ class BuscaController extends Controller
             return response()->json(['message' => 'Informe ao menos um filtro para buscar.'], 422);
         }
 
-        $ordenada = fn () => $q->clone()->orderBy('bairro')->orderByRaw(\App\Support\NumeroDoLote::ORDEM);
+        $ordenada = fn () => $this->ordenar($q->clone(), $d);
 
         // PAGINADA quando a tela pede uma página (Consulta de imóveis,
         // 26/11/2026): POR_PAGINA linhas por vez, com o total de verdade. Sem
@@ -79,6 +79,37 @@ class BuscaController extends Controller
     /** Linhas por página na Consulta de imóveis. */
     private const POR_PAGINA = 50;
 
+    /** As colunas que se ordenam pelo cabeçalho da tabela. */
+    private const ORDENAVEIS = ['inscricao', 'bairro', 'quadra', 'lote', 'documentos', 'vistorias'];
+
+    /**
+     * A ordem pedida pelo clique no cabeçalho (26/11/2026), feita NO BANCO:
+     * com paginação, ordenar no navegador ordenaria só os 50 da página aberta.
+     *
+     * Logradouro, número, área e situação ficam de fora: vêm do cadastro
+     * municipal, outra tabela, casada pela inscrição depois da consulta — o
+     * banco não tem como ordenar por eles sem juntar as duas tabelas, que nem
+     * colação igual têm.
+     *
+     * Empate (mesma quadra, mesmo bairro) cai sempre na ordem natural —
+     * bairro, quadra, lote —, e a lista não embaralha de uma página a outra.
+     */
+    private function ordenar($q, array $d)
+    {
+        $s = ($d['sentido'] ?? 'asc') === 'desc' ? 'DESC' : 'ASC';
+        match ($d['ordem'] ?? null) {
+            'inscricao'  => $q->orderByRaw("inscricao_montada IS NULL, inscricao_montada {$s}"),
+            'bairro'     => $q->orderBy('bairro', $s),
+            'quadra'     => $q->orderByRaw("CAST(quadra AS UNSIGNED) {$s}, quadra {$s}"),
+            'lote'       => $q->orderByRaw("CAST(numero_lote AS UNSIGNED) {$s}, numero_lote {$s}"),
+            'documentos' => $q->orderByRaw("(SELECT COUNT(*) FROM documentos dd WHERE dd.lote_id = lotes.id) {$s}"),
+            'vistorias'  => $q->orderByRaw("(SELECT COUNT(*) FROM vistorias vv WHERE vv.lote_id = lotes.id) {$s}"),
+            default      => null,
+        };
+
+        return $q->orderBy('bairro')->orderByRaw(\App\Support\NumeroDoLote::ORDEM)->orderBy('lotes.id');
+    }
+
     /**
      * GET /imoveis/busca.pdf — a mesma consulta, em A4 (26/11/2026).
      *
@@ -96,8 +127,8 @@ class BuscaController extends Controller
         [$q, $usou] = $this->consulta($d);
         abort_unless($usou, 422, 'Informe ao menos um filtro para buscar.');
 
-        $lotes = $q->clone()->orderBy('bairro')->orderByRaw(\App\Support\NumeroDoLote::ORDEM)
-                   ->limit(self::PDF_LIMITE + 1)->get();
+        // Na MESMA ordem da tela: quem ordenou por quadra quer o papel assim.
+        $lotes = $this->ordenar($q->clone(), $d)->limit(self::PDF_LIMITE + 1)->get();
         $truncado = $lotes->count() > self::PDF_LIMITE;
         $lotes = $lotes->take(self::PDF_LIMITE);
 
@@ -265,6 +296,8 @@ class BuscaController extends Controller
             'termo'         => ['nullable', 'string', 'max:120'],
             'incluir_inativos' => ['nullable', 'boolean'],
             'pagina'        => ['nullable', 'integer', 'min:1'],
+            'ordem'         => ['nullable', Rule::in(self::ORDENAVEIS)],
+            'sentido'       => ['nullable', 'in:asc,desc'],
         ];
     }
 

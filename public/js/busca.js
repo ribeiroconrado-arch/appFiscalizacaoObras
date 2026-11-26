@@ -24,8 +24,19 @@ const bState = {
   /** @type {Object|null} a última resposta, para "Voltar à lista" */ ultima: null,
 }
 
+/**
+ * A tabela VAZIA, com o cabeçalho, que a tela mostra antes de qualquer busca
+ * (26/11/2026, a pedido dele): o lugar do resultado existe desde a abertura,
+ * e a primeira busca só o preenche.
+ */
+function tabelaInicialBusca() {
+  renderTabelaBusca({ imoveis: [], total: 0, inicial: true })
+}
+
 /** Primeira entrada na aba: popula o filtro de bairros. */
 async function prepararBusca() {
+  // A cada entrada, e não só na primeira: sem resultado na tela, a tabela vazia.
+  if (!document.getElementById('busca-resultado')?.children.length) tabelaInicialBusca()
   if (bState.bairros) return
   try {
     const r = await fetch('/api/imoveis/bairros', { headers: { Accept: 'application/json' } })
@@ -118,7 +129,7 @@ function limparBusca() {
     const e = document.getElementById(id)
     if (e) { e.checked = false }
   }
-  document.getElementById('busca-resultado').innerHTML = ''
+  tabelaInicialBusca()
   bState.resultado = []
   bState.params = null
   bState.ultima = null
@@ -231,6 +242,9 @@ async function executarBusca() {
   // Guardados para as outras páginas e para o PDF: a mesma pergunta, e não o
   // que estiver nos campos na hora (podem ter mudado depois do Buscar).
   bState.params = p
+  // Busca nova começa na ordem natural (bairro, quadra, lote).
+  bState.ordem = null
+  bState.sentido = 'asc'
   await irParaPagina(1)
 }
 
@@ -281,20 +295,33 @@ async function irParaPagina(pagina) {
 function renderTabelaBusca(d) {
   const n = d.total ?? d.imoveis.length
   const linhas = !d.imoveis.length
-    ? '<tr class="bs-nenhum"><td colspan="10">Nenhum imóvel com esses filtros.</td></tr>'
+    ? `<tr class="bs-nenhum"><td colspan="10">${d.inicial
+        ? 'Preencha um ou mais filtros acima e clique em Buscar.'
+        : 'Nenhum imóvel com esses filtros.'}</td></tr>`
     : d.imoveis.map(i => `
     <tr onclick="abrirImovel(${i.id})">
-      <td class="mono">${esc(i.inscricao || '—')}</td>
-      <td>${esc(i.logradouro || '—')}</td>
-      <td class="bs-c">${esc(i.numero || '—')}</td>
-      <td>${esc(i.bairro || '—')}</td>
-      <td class="bs-c">${esc(i.quadra ?? '—')}</td>
-      <td class="bs-c">${esc(i.lote ?? '—')}</td>
-      <td class="bs-d">${i.area ? fmtNum(i.area) + ' m²' : '—'}</td>
-      <td class="bs-c">${seloSituacaoBusca(i)}</td>
-      <td class="bs-c">${i.documentos || '—'}</td>
-      <td class="bs-c">${i.vistorias || '—'}</td>
+      <td class="mono bs-col-insc">${esc(i.inscricao || '—')}</td>
+      <td class="bs-col-logr">${esc(i.logradouro || '—')}${i.logradouro
+        ? `<span class="bs-so-cel">, ${esc(i.numero || 's/nº')}</span>` : ''}</td>
+      <td class="bs-c bs-col-num">${esc(i.numero || '—')}</td>
+      <td class="bs-col-bairro">${esc(i.bairro || '—')}<span class="bs-so-cel"> · Q ${esc(i.quadra ?? '—')} · L ${esc(i.lote ?? '—')}</span></td>
+      <td class="bs-c bs-col-q">${esc(i.quadra ?? '—')}</td>
+      <td class="bs-c bs-col-l">${esc(i.lote ?? '—')}</td>
+      <td class="bs-d bs-col-area">${i.area ? fmtNum(i.area) + ' m²' : '—'}</td>
+      <td class="bs-c bs-col-sit">${seloSituacaoBusca(i)}</td>
+      <td class="bs-c bs-col-doc" data-rot="Doc.">${i.documentos || '—'}</td>
+      <td class="bs-c bs-col-vist" data-rot="Vist.">${i.vistorias || '—'}</td>
     </tr>`).join('')
+
+  // Cabeçalho que ordena: as colunas que o banco sabe ordenar (ver
+  // BuscaController::ORDENAVEIS). As outras vêm do cadastro e não ordenam.
+  const th = (rot, cls, campo) => {
+    if (!campo || d.inicial || !d.imoveis.length) return `<th class="${cls}">${rot}</th>`
+    const at = bState.ordem === campo
+    const seta = at ? (bState.sentido === 'desc' ? '▼' : '▲') : '↕'
+    return `<th class="${cls} bs-ordena${at ? ' at' : ''}" aria-sort="${at ? (bState.sentido === 'desc' ? 'descending' : 'ascending') : 'none'}">
+      <button type="button" onclick="ordenarBusca('${campo}')" title="Ordenar por ${rot}">${rot}<span class="bs-seta" aria-hidden="true">${seta}</span></button></th>`
+  }
 
   // "1–50 de 711": de onde a onde vai esta página.
   const pag = d.pagina || 1, por = d.por_pagina || d.imoveis.length
@@ -303,7 +330,7 @@ function renderTabelaBusca(d) {
 
   document.getElementById('busca-resultado').innerHTML = `
     <div class="bs-cabecalho">
-      <span>${fmtNum(n)} ${n === 1 ? 'imóvel' : 'imóveis'}</span>
+      <span>${d.inicial ? 'Nenhuma busca feita' : `${fmtNum(n)} ${n === 1 ? 'imóvel' : 'imóveis'}`}</span>
       ${d.truncado ? `<span class="bs-aviso">Mostrando os ${d.imoveis.length} primeiros — refine os filtros.</span>` : ''}
       ${n ? `<button type="button" class="btn sm bs-pdf" onclick="exportarBuscaPdf()" title="Todas as páginas, até 400 imóveis">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v6M9 15l3 3 3-3"/></svg>
@@ -313,10 +340,11 @@ function renderTabelaBusca(d) {
       <table class="bs-tabela">
         <thead>
           <tr>
-            <th class="bs-w-insc">Inscrição</th><th>Logradouro</th><th class="bs-c bs-w-num">Número</th><th>Bairro</th>
-            <th class="bs-c bs-w-n">Quadra</th><th class="bs-c bs-w-n">Lote</th>
-            <th class="bs-d bs-w-area">Área</th><th class="bs-c bs-w-sit">Situação</th>
-            <th class="bs-c bs-w-n">Doc.</th><th class="bs-c bs-w-n">Vist.</th>
+            ${th('Inscrição', 'bs-w-insc bs-col-insc', 'inscricao')}${th('Logradouro', 'bs-col-logr')}
+            ${th('Número', 'bs-c bs-w-num bs-col-num')}${th('Bairro', 'bs-col-bairro', 'bairro')}
+            ${th('Quadra', 'bs-c bs-w-n bs-col-q', 'quadra')}${th('Lote', 'bs-c bs-w-n bs-col-l', 'lote')}
+            ${th('Área', 'bs-d bs-w-area bs-col-area')}${th('Situação', 'bs-c bs-w-sit bs-col-sit')}
+            ${th('Doc.', 'bs-c bs-w-n bs-col-doc', 'documentos')}${th('Vist.', 'bs-c bs-w-n bs-col-vist', 'vistorias')}
           </tr>
         </thead>
         <tbody>${linhas}</tbody>
@@ -325,9 +353,9 @@ function renderTabelaBusca(d) {
     ${(d.paginas || 1) > 1 ? `<nav class="bs-paginacao" aria-label="Páginas do resultado">
       <span class="bs-pag-faixa">${fmtNum(de)}–${fmtNum(ate)} de ${fmtNum(n)}</span>
       <button type="button" class="btn sm" ${pag <= 1 ? 'disabled' : ''} onclick="irParaPagina(1)" title="Primeira página">«</button>
-      <button type="button" class="btn sm" ${pag <= 1 ? 'disabled' : ''} onclick="irParaPagina(${pag - 1})">‹ Anterior</button>
+      <button type="button" class="btn sm" ${pag <= 1 ? 'disabled' : ''} onclick="irParaPagina(${pag - 1})" aria-label="Página anterior">‹<span class="bs-pag-txt"> Anterior</span></button>
       <span class="bs-pag-atual">Página ${pag} de ${d.paginas}</span>
-      <button type="button" class="btn sm" ${pag >= d.paginas ? 'disabled' : ''} onclick="irParaPagina(${pag + 1})">Próxima ›</button>
+      <button type="button" class="btn sm" ${pag >= d.paginas ? 'disabled' : ''} onclick="irParaPagina(${pag + 1})" aria-label="Próxima página"><span class="bs-pag-txt">Próxima </span>›</button>
       <button type="button" class="btn sm" ${pag >= d.paginas ? 'disabled' : ''} onclick="irParaPagina(${d.paginas})" title="Última página">»</button>
     </nav>` : ''}`
   // Página nova começa do alto da tabela, e não onde a anterior parou.
@@ -347,6 +375,21 @@ function seloSituacaoBusca(i) {
   if (i.ativo_no_cadastro === false) return '<span class="badge bd-cx" title="Inativo no cadastro municipal">Inativo</span>'
   if (i.ativo_no_cadastro === true) return '<span class="badge bd-ok">Ativo</span>'
   return '<span class="badge bd-in" title="O imóvel não está no cadastro municipal carregado">Sem info.</span>'
+}
+
+/**
+ * Clique no cabeçalho: ordena por aquela coluna; clicar de novo inverte.
+ * A ordem vai junto da pergunta (bState.params): vale para as outras páginas
+ * e para o PDF. Ordenar volta à página 1 — a 7 de outra ordem não é a mesma.
+ * @param {string} campo
+ */
+function ordenarBusca(campo) {
+  if (!bState.params) return
+  bState.sentido = bState.ordem === campo && bState.sentido === 'asc' ? 'desc' : 'asc'
+  bState.ordem = campo
+  bState.params.set('ordem', campo)
+  bState.params.set('sentido', bState.sentido)
+  irParaPagina(1)
 }
 
 /** O PDF da busca: os mesmos filtros, todas as páginas (até 400 imóveis). */
@@ -434,24 +477,27 @@ function renderFichaImovel(d) {
   document.getElementById('busca-resultado').innerHTML = `
     <div class="bs-ficha">
       ${selo}
-      <div class="bs-ficha-topo">
+      <div class="bs-ficha-cab">
+        <div class="bs-ficha-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg>
+        </div>
         <div class="bs-ficha-id">
+          <h3 class="bs-ficha-titulo${linha.logradouro ? '' : ' vazio'}">${linha.logradouro
+            ? esc(linha.logradouro) + (linha.numero ? ', ' + esc(linha.numero) : ', s/nº')
+            : 'Logradouro não cadastrado'}</h3>
           <div class="bs-ficha-l1">
-            <h3 class="mono">${esc(d.inscricao || 'sem inscrição')}</h3>
+            <span class="bs-ficha-insc mono" title="Inscrição imobiliária">${esc(d.inscricao || 'sem inscrição')}</span>
             ${seloSituacaoBusca({ ...linha, situacao: d.situacao, inativado_em: d.inativado_em })}
             <span class="lote-tag-origem">${esc(d.tag_origem || 'ORIGINAL')}</span>
           </div>
-          <div class="bs-ficha-end${linha.logradouro ? '' : ' vazio'}">${linha.logradouro
-            ? esc(linha.logradouro) + (linha.numero ? ', ' + esc(linha.numero) : ', s/nº')
-            : 'Logradouro não cadastrado'}</div>
-          <div class="bs-ficha-campos">
-            <span><small>Bairro</small><b>${esc(d.bairro || '—')}</b></span>
-            <span><small>Quadra</small><b>${esc(d.quadra ?? '—')}</b></span>
-            <span><small>Lote</small><b>${esc(d.lote ?? '—')}</b></span>
-            <span><small>${d.area_oficial ? 'Área BCI' : 'Área mapa'}</small><b>${d.area ? fmtNum(d.area) + ' m²' : '—'}</b></span>
-          </div>
         </div>
         <div class="bs-ficha-acoes">${voltar}${noMapa}</div>
+        <dl class="bs-ficha-dados">
+          <div class="bs-ficha-bairro"><dt>Bairro</dt><dd>${esc(d.bairro || '—')}</dd></div>
+          <div><dt>Quadra</dt><dd>${esc(d.quadra ?? '—')}</dd></div>
+          <div><dt>Lote</dt><dd>${esc(d.lote ?? '—')}</dd></div>
+          <div><dt>${d.area_oficial ? 'Área BCI' : 'Área mapa'}</dt><dd>${d.area ? fmtNum(d.area) + ' m²' : '—'}</dd></div>
+        </dl>
       </div>
 
       <div class="sec-title">Cadastro</div>

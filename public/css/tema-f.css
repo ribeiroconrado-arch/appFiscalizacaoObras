@@ -1306,22 +1306,120 @@ body.nivel-quadras .leaflet-tooltip.rot.rot-quadra.rot-quadra-contorno{display:b
 .bs-paginacao .bs-pag-atual{padding:0 6px;font-weight:600;color:var(--tx)}
 .bs-paginacao .btn{margin:0}
 
-/* CABEÇALHO DA FICHA NA CONSULTA: inscrição com a situação, o endereço do
-   cadastro, e bairro/quadra/lote/área como rótulo e valor — a mesma leitura
-   da faixa de campos da ficha do mapa. */
+/* CABEÇALHO QUE ORDENA: o rótulo vira botão, com a seta do sentido. A coluna
+   ordenada fica na cor da marca; as outras mostram ↕ apagado. */
+.bs-tabela th.bs-ordena{padding:0}
+.bs-tabela th.bs-ordena button{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:5px;
+  width:100%;padding:8px 10px;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}
+.bs-tabela th.bs-ordena.bs-c button{justify-content:center}
+.bs-tabela th.bs-ordena button:hover{color:var(--tx)}
+.bs-tabela th.bs-ordena button:focus-visible{outline:2px solid var(--f-bord-foco);outline-offset:-2px}
+.bs-tabela th.bs-ordena .bs-seta{font-size:9px;opacity:.45}
+.bs-tabela th.bs-ordena.at{color:var(--gd)}
+.bs-tabela th.bs-ordena.at .bs-seta{opacity:1}
+
+/* CABEÇALHO DA FICHA NA CONSULTA (26/11/2026, 2ª versão).
+   Um bloco só, em fundo levemente tingido: o ícone da casa, o ENDEREÇO como
+   título (é como se fala de um imóvel), a inscrição com a situação embaixo, e
+   os quatro dados — bairro, quadra, lote, área — em quadros de rótulo e
+   valor, como os do painel. */
 .bs-ficha{counter-reset:sec}   /* os títulos numeravam todos "1" */
-.bs-ficha-topo{align-items:flex-start;padding-bottom:12px;border-bottom:1px solid var(--bord)}
-.bs-ficha-id{min-width:0;display:flex;flex-direction:column;gap:5px}
+.bs-ficha-cab{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px 14px;align-items:center;
+  padding:14px 16px;margin:-2px 0 6px;border:1px solid var(--bord);border-radius:var(--rl);
+  background:linear-gradient(180deg,var(--gl),var(--sur) 85%)}
+.bs-ficha-ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  background:var(--sur);color:var(--gd);border:1px solid var(--bord);box-shadow:var(--sh)}
+.bs-ficha-ico svg{width:22px;height:22px}
+.bs-ficha-id{min-width:0;display:flex;flex-direction:column;gap:6px}
+.bs-ficha-titulo{margin:0;font-family:'Manrope',sans-serif;font-size:18px;font-weight:800;line-height:1.25;
+  color:var(--tx);overflow-wrap:anywhere}
+.bs-ficha-titulo.vazio{font-weight:600;color:var(--tx3)}
 .bs-ficha-l1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.bs-ficha-l1 h3{font-size:18px;color:var(--tx)}
-.bs-ficha-end{font-size:14px;font-weight:600;color:var(--tx)}
-.bs-ficha-end.vazio{font-weight:400;color:var(--tx3)}
-.bs-ficha-campos{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:2px}
-.bs-ficha-campos span{display:flex;align-items:baseline;gap:6px}
-.bs-ficha-campos small{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3)}
-.bs-ficha-campos b{font-size:13px;font-weight:600;color:var(--tx)}
-.bs-ficha-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.bs-ficha-insc{font-size:13px;font-weight:600;color:var(--tx2);letter-spacing:.02em}
+.bs-ficha-acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .bs-ficha-acoes .btn{margin:0}
+.bs-ficha-dados{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));
+  gap:8px;margin:0}
+.bs-ficha-dados > div{background:var(--sur);border:1px solid var(--bord);border-radius:var(--r);
+  padding:8px 12px;min-width:0}
+.bs-ficha-dados dt{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx3)}
+.bs-ficha-dados dd{margin:2px 0 0;font-size:14px;font-weight:700;color:var(--tx);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── CONSULTA NO TABLET (621–1023px) ──
+   A tabela fica, sem Doc. e Vist. (estão na ficha, um toque adiante) e sem a
+   coluna Número, que vai junto do logradouro. */
+@media (max-width:1023px){
+  .bs-tabela :is(.bs-col-doc,.bs-col-vist,.bs-col-num){display:none}
+  .bs-tabela .bs-so-cel{display:inline}
+  .bs-tabela td.bs-col-bairro .bs-so-cel{display:none}
+  .bs-tabela{min-width:0}
+  .bs-ficha-dados{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bs-ficha-dados .bs-ficha-bairro{grid-column:1/-1}
+}
+.bs-so-cel{display:none}
+
+/* ── CONSULTA NO CELULAR (até 620px; iPhone 14 = 390px, SE = 375/320px) ──
+   Dez colunas não cabem: cada imóvel vira um CARTÃO — inscrição e situação no
+   alto, o endereço, bairro · quadra · lote, e a área com doc./vist. embaixo.
+   A tela volta a rolar inteira (a rolagem interna, num telefone, deixava a
+   lista com duas linhas à vista), e os filtros viram grade de toque. */
+@media (max-width:620px){
+  #t-busca.at{display:block}
+  #busca-resultado{display:block;min-height:0}
+  #busca-resultado > .bs-tabela-rolagem{overflow:visible;min-height:0}
+
+  /* Filtros: inscrição e rua inteiras; número, quadra e lote lado a lado;
+     bairro com o funil; Limpar e Buscar dividindo a linha. */
+  .busca-form{padding:12px}
+  .busca-campos{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0 8px}
+  .busca-campos > *{min-width:0;max-width:none}
+  .busca-campos > .bc-insc,.busca-campos > .bc-logr,.busca-campos > .bs-acoes{grid-column:1/-1}
+  .busca-campos > .bc-num{grid-column:span 2}
+  .busca-campos > .bc-bairro{grid-column:span 5}
+  .busca-campos > .bs-mais{grid-column:span 1;width:auto;align-self:end}
+  .busca-avancado .busca-campos > .bc-insc{grid-column:span 3}
+  .busca-avancado .busca-campos > .bc-bairro{grid-column:1/-1}
+  .bs-acoes{margin:0 0 2px}
+  .bs-acoes .btn{flex:1}
+
+  /* O cartão. */
+  #busca-resultado .bs-tabela,#busca-resultado .bs-tabela tbody{display:block;min-width:0}
+  #busca-resultado .bs-tabela thead{display:none}
+  #busca-resultado .bs-tabela tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;
+    gap:4px 12px;padding:11px 12px;border-bottom:1px solid var(--bord);align-items:center}
+  #busca-resultado .bs-tabela td{display:block;padding:0;border:0;background:none;text-align:left;min-width:0}
+  #busca-resultado .bs-tabela td.bs-col-insc{grid-column:1/3;font-weight:700;color:var(--tx)}
+  #busca-resultado .bs-tabela td.bs-col-sit{grid-column:3;grid-row:1;justify-self:end}
+  #busca-resultado .bs-tabela td.bs-col-logr{grid-column:1/-1;font-weight:600;color:var(--tx)}
+  #busca-resultado .bs-tabela td.bs-col-bairro{grid-column:1/-1;font-size:12px}
+  #busca-resultado .bs-tabela td.bs-col-bairro .bs-so-cel{display:inline}
+  #busca-resultado .bs-tabela :is(td.bs-col-num,td.bs-col-q,td.bs-col-l){display:none}
+  #busca-resultado .bs-tabela td.bs-col-area{grid-column:1;font-size:12px}
+  #busca-resultado .bs-tabela :is(td.bs-col-doc,td.bs-col-vist){display:block;font-size:12px;color:var(--tx3)}
+  #busca-resultado .bs-tabela :is(td.bs-col-doc,td.bs-col-vist)::before{content:attr(data-rot) ' '}
+  #busca-resultado .bs-tabela tr.bs-nenhum{display:block}
+  #busca-resultado .bs-tabela tr.bs-nenhum td{text-align:center;padding:22px 10px}
+
+  /* O total e o PDF; a paginação compacta, com a faixa em cima. */
+  .bs-cabecalho .bs-pdf{padding:6px 10px}
+  .bs-paginacao{justify-content:center;gap:6px}
+  .bs-paginacao .bs-pag-faixa{flex-basis:100%;margin:0;text-align:center}
+  .bs-paginacao .bs-pag-txt{display:none}
+  .bs-paginacao .btn{min-width:44px;min-height:40px}
+
+  /* A ficha: ícone e endereço em cima, botões dividindo a linha embaixo. */
+  .bs-ficha{padding:12px}
+  .bs-ficha-cab{grid-template-columns:auto minmax(0,1fr);padding:12px}
+  .bs-ficha-ico{width:38px;height:38px;border-radius:10px}
+  .bs-ficha-titulo{font-size:16px}
+  .bs-ficha-acoes{grid-column:1/-1;grid-row:3}
+  .bs-ficha-acoes .btn{flex:1}
+  .bs-ficha-dados{grid-row:2;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .bs-ficha-dados > div{padding:7px 9px}
+  .bs-ficha-dados dd{font-size:13px}
+}
+
 
 .busca-avancado{border-top:1px solid var(--bord);margin-top:2px;padding-top:12px}
 .busca-avancado[hidden]{display:none}
