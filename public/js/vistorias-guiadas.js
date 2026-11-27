@@ -65,6 +65,12 @@ const MODULOS = { obras: 'Obras', posturas: 'Posturas' }
 const EU = window.VG_EU
 
 const VG = { modelos: [], vistorias: [], aba: 'vistorias', agentes: null }
+// EMBUTIDA: a página está numa janela do mapa (vistoria-guiada-ponte.js).
+// Fechar, atualizar a lista e gerar a peça são pedidos ao mapa.
+const EMB = !!window.VG_EMBUTIDA && window.parent !== window
+function avisarMapa(acao, dados = {}) {
+  if (EMB) window.parent.postMessage({ vg: acao, ...dados }, location.origin)
+}
 /** Como a vistoria se chama numa linha: o local, senão o primeiro vínculo. */
 const nomeV = v => v.local || v.vinculos?.[0]?.rotulo || 'Sem local informado'
 async function carregarAgentes() {
@@ -175,11 +181,8 @@ function renderNova() {
   const faltam = def.anexos.filter(a => a.obrig && !NV.anexos[a.id])
   alvo.innerHTML = `<div class="caixa"><div class="nova">
     <h1>Nova vistoria</h1>
-    <div class="grade2">
-      <label class="campo-f"><span>Modelo</span><select class="in" id="nv-mod" onchange="NV.modelo=+this.value;NV.anexos={};renderNova()">
-        ${usaveis.map(x => `<option value="${x.id}" ${x.id === NV.modelo ? 'selected' : ''}>${esc(x.nome)} (v${x.versao})</option>`).join('')}</select></label>
-      <div class="campo-f"><span>Módulo</span><div class="in" style="display:flex;align-items:center">${MODULOS[NV.modulo] || NV.modulo}</div></div>
-    </div>
+    <label class="campo-f"><span>Modelo</span><select class="in" id="nv-mod" onchange="NV.modelo=+this.value;NV.anexos={};renderNova()">
+      ${usaveis.map(x => `<option value="${x.id}" ${x.id === NV.modelo ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></label>
     ${NV.sinalizacao ? `<div class="instr">${ic('info')}<span>Esta vistoria nasce de uma <b>sinalização</b>: ao concluir, ela fica resolvida.</span></div>` : ''}
     <div class="campo-f"><span>Ligada a ${exige.length ? `<span class="tag-o">Exige: ${esc(exige.map(t => TIPOS[t].toLowerCase()).join(', '))}</span>` : '<span class="tag-o opc">Opcional</span>'}</span>
       ${NV.vinculos.map((l, k) => vinculoChip(l, `NV.vinculos.splice(${k},1);renderNova()`)).join('')}
@@ -201,6 +204,7 @@ function renderNova() {
       </div></div>
     <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
       <span class="falta-lista" id="nv-falta"></span>
+      ${EMB ? `<button class="btn" onclick="avisarMapa('fechar')">Cancelar</button>` : ''}
       <button class="btn pri" id="nv-criar" onclick="criarVistoria()">Criar vistoria</button>
     </div>
     <p style="margin:0;font-size:12.5px;color:var(--tx3)">Os PDFs ficam com a vistoria e abrem durante o roteiro. Até 30 MB cada.</p>
@@ -255,31 +259,36 @@ async function criarVistoria() {
   try {
     const d = await api('POST', '/', fd)
     NV = null; toast(d.message)
-    irAba('vistorias')
+    avisarMapa('mudou')
+    if (!EMB) irAba('vistorias')
     abrirVistoria(d.id)
   } catch (e) { toast(e.message, true) } finally { fim() }
 }
 
 // ══════════════ MODELOS ══════════════
-function chipsModelo(def) {
-  if (!def) return '<span class="chip">sem versão</span>'
-  const fotos = def.etapas.filter(e => e.foto === 'obrigatoria').length
-  return (def.etapas.length ? `<span class="chip">${def.etapas.length} etapas</span>` : `<span class="chip">Só itens livres</span>`)
-    + (def.local !== 'nao' ? `<span class="chip lar">${ic(def.local === 'mapa' ? 'mapa' : 'gps')}${LOCAL[def.local].r}</span>` : '')
-    + (def.anexos.length ? `<span class="chip az">${ic('doc')}${def.anexos.length}</span>` : '')
-    + (fotos ? `<span class="chip">${ic('camera')}${fotos}</span>` : '')
+// A TELA DOS MODELOS (refeita em 27/11/2026, "muito carregada"): duas
+// colunas — a lista, só com nome e uma linha cinza; o editor, com duas abas,
+// Roteiro (as etapas) e Regras (o resto). Sem selos coloridos nem textos
+// explicativos longos: cada regra tem uma linha de dica, no máximo.
+
+/** "v2 · 3 etapas" — o que a lista diz de cada modelo. */
+function resumoModelo(m) {
+  const d = m.rascunho, n = d?.etapas?.length || 0
+  return [m.versao ? 'v' + m.versao : 'sem versão', n ? `${n} etapa${n > 1 ? 's' : ''}` : 'só itens livres'].join(' · ')
 }
 function renderMontador() {
   const lista = $('#lista-modelos')
+  $('#mod-titulo').textContent = 'Modelos de ' + (MODULOS[window.VG_MODULO] || 'Obras')
   if (!VG.modelos.length) {
-    lista.innerHTML = `<div class="vazio" style="padding:12px">Nenhum modelo.<button class="btn sm" onclick="carregarExemplos()">Carregar exemplos</button></div>`
-    $('#editor').innerHTML = `<div class="vazio">Crie um modelo ou carregue os exemplos (Habite-se, Início de obra e Averiguação de denúncia).</div>`
-    $('#regras').innerHTML = ''
+    lista.innerHTML = `<div class="mod-vazio">Nenhum modelo neste módulo.</div>`
+    $('#editor').innerHTML = `<div class="vazio">Crie um modelo, ou carregue os exemplos deste módulo para começar.
+      <button class="btn" onclick="carregarExemplos()">Carregar exemplos</button></div>`
     return
   }
   lista.innerHTML = VG.modelos.map(m => `<button class="${VG.M?.id === m.id ? 'at' : ''}" onclick="abrirModelo(${m.id})">
-    <b>${esc(m.nome)}</b><span class="linha">${chipsModelo(m.rascunho)}${m.ativo ? '' : '<span class="chip">inativo</span>'}</span></button>`).join('')
-  if (VG.M) { renderEditor(); renderRegras() }
+    <span class="mod-nome">${esc(m.nome)}${m.alterado ? '<i class="mod-sujo" title="Alterado e não publicado"></i>' : ''}</span>
+    <small>${esc(resumoModelo(m))}${m.ativo ? '' : ' · inativo'}</small></button>`).join('')
+  if (VG.M) renderEditor()
 }
 async function carregarExemplos() {
   try { toast((await api('POST', '/modelos/exemplos')).message); await carregarModelos(); abrirModelo(VG.modelos[0].id) } catch (e) { toast(e.message, true) }
@@ -328,26 +337,74 @@ async function publicar() {
 }
 
 function renderEditor() {
-  const m = VG.M
+  const m = VG.M, d = D(), aba = VG.abaMod || 'roteiro'
+  const nItens = d.etapas.reduce((s, e) => s + e.itens.length, 0)
+  const nFotos = d.etapas.reduce((s, e) => s + (e.foto === 'obrigatoria' ? e.foto_min : 0), 0)
+  const resumo = [`${d.etapas.length} etapa${d.etapas.length === 1 ? '' : 's'}`, `${nItens} ite${nItens === 1 ? 'm' : 'ns'}`,
+    nFotos ? `${nFotos} foto${nFotos > 1 ? 's' : ''} mínima${nFotos > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ')
   $('#editor').innerHTML = `
     <div class="cab-mod">
-      <input class="nome" id="nome-mod" maxlength="120" value="${esc(m.nome)}" oninput="VG.M.nome=this.value;mexeu()" aria-label="Nome do modelo">
+      <div class="cab-mod-txt">
+        <input class="nome" id="nome-mod" maxlength="120" value="${esc(m.nome)}" oninput="VG.M.nome=this.value;mexeu()" aria-label="Nome do modelo">
+        <small>${esc(resumo)}</small>
+      </div>
       <span class="estado" id="estado-mod"></span>
       <button class="btn pri" id="bt-publicar" onclick="publicar()">Publicar</button>
     </div>
-    <p class="nota-v">O item <b>Confere / Não confere</b> tem três respostas; no <b>Não confere</b> o fiscal descreve, pode citar artigos e escrever a exigência com prazo. Os outros tipos pedem um <b>número</b> (com unidade e, se quiser, o método da medição), uma <b>escolha</b>, uma <b>data</b> ou um <b>texto</b>. Publicar cria uma versão nova; a vistoria guarda a versão em que nasceu.</p>
+    <nav class="mod-abas" role="tablist">
+      <button class="${aba === 'roteiro' ? 'at' : ''}" onclick="VG.abaMod='roteiro';renderEditor()">Roteiro</button>
+      <button class="${aba === 'regras' ? 'at' : ''}" onclick="VG.abaMod='regras';renderEditor()">Regras</button>
+    </nav>
     ${VG.erros ? `<div class="erros"><b>Não foi possível publicar:</b><ul>${VG.erros.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-    <div class="etapas">${D().etapas.length ? D().etapas.map(etapaHtml).join('')
-      : `<div class="instr">${ic('info')}<span>Modelo sem etapas: o fiscal registra tudo como itens livres (assunto, fotos e observação). É o formato da averiguação de denúncia.</span></div>`}</div>
-    <div style="padding:0 12px 14px"><button class="btn" onclick="addEtapa()">${ic('mais')}Adicionar etapa</button></div>`
+    ${aba === 'roteiro' ? roteiroHtml() : regrasHtml()}`
   atualizarEstado()
+}
+function roteiroHtml() {
+  const d = D()
+  return `<div class="etapas">${d.etapas.length ? d.etapas.map(etapaHtml).join('')
+      : `<p class="mod-dica">Sem etapas, o fiscal registra só itens livres (assunto, fotos e observação).</p>`}</div>
+    <div class="mod-pe"><button class="btn" onclick="addEtapa()">${ic('mais')}Adicionar etapa</button></div>`
+}
+/** Uma regra: rótulo à esquerda, o controle à direita (empilha no celular). */
+const regraL = (rot, dica, ctrl) => `<div class="regra-l"><div class="regra-rot"><b>${rot}</b>${dica ? `<small>${dica}</small>` : ''}</div><div class="regra-ctrl">${ctrl}</div></div>`
+function regrasHtml() {
+  const d = D(), vinc = d.vinculos || []
+  return `<div class="regras-l">
+    ${regraL('Ligar a', 'O que a vistoria precisa ter para ser criada. Nada marcado: basta o local.',
+      `<div class="pilulas">${Object.entries(TIPOS).map(([k, t]) => `<button class="pil ${vinc.includes(k) ? 'on' : ''}" onclick="alternarVinculo('${k}')">${t}</button>`).join('')}</div>`)}
+    ${regraL('Localização ao iniciar', LOCAL[d.local].d,
+      `<select class="in" id="sel-local" onchange="D().local=this.value;mexeu();renderEditor()">
+        ${Object.entries(LOCAL).map(([k, v]) => `<option value="${k}" ${d.local === k ? 'selected' : ''}>${v.r}</option>`).join('')}</select>`)}
+    ${regraL('Foto no "não confere"', 'A descrição é sempre pedida; a foto, só se marcar.',
+      `<label class="tog"><input type="checkbox" id="tg-nf" ${d.nao_foto ? 'checked' : ''} onchange="D().nao_foto=this.checked;mexeu()">Exigir foto</label>`)}
+    ${regraL('Anexos pedidos', 'PDFs juntados ao criar a vistoria.',
+      `<div class="anexos-l">${d.anexos.map(a => `<div class="anexo-esp">
+          <input class="in" id="ae-${a.id}" maxlength="160" value="${esc(a.nome)}" oninput="D().anexos.find(x=>x.id==='${a.id}').nome=this.value;mexeu()" aria-label="Nome do anexo">
+          <label><input type="checkbox" id="ao-${a.id}" ${a.obrig ? 'checked' : ''} onchange="D().anexos.find(x=>x.id==='${a.id}').obrig=this.checked;mexeu()">Obrigatório</label>
+          <button class="ib" title="Remover" onclick="tirarAnexo('${a.id}')">${ic('lixo')}</button></div>`).join('')}
+        <div><button class="btn sm" onclick="D().anexos.push({id:novoId('a'),nome:'Novo anexo',obrig:false});mexeu();renderEditor()">${ic('mais')}Anexo</button></div></div>`)}
+    ${regraL('Conclusões', 'As respostas possíveis no fim da vistoria.',
+      `<div class="pilulas">${d.conclusoes.map((c, k) => `<span class="pil on fixa">${esc(c)}<button title="Tirar" onclick="D().conclusoes.splice(${k},1);mexeu();renderEditor()">${ic('x')}</button></span>`).join('')}
+        <input class="in pil-in" id="concl-nova" maxlength="120" placeholder="+ conclusão" onkeydown="if(event.key==='Enter'){novaConclusao(this.value)}" onblur="if(this.value.trim())novaConclusao(this.value)"></div>`)}
+    ${regraL('Modelo ativo', 'Inativo não aparece para criar vistoria.',
+      `<label class="tog"><input type="checkbox" id="tg-ativo" ${VG.M.ativo ? 'checked' : ''} onchange="VG.M.ativo=this.checked;mexeu()">Ativo</label>`)}
+  </div>`
+}
+function alternarVinculo(k) {
+  const v = new Set(D().vinculos || []); v.has(k) ? v.delete(k) : v.add(k)
+  D().vinculos = Object.keys(TIPOS).filter(x => v.has(x)); mexeu(); renderEditor()
+}
+function novaConclusao(t) {
+  t = t.trim(); if (!t) return
+  if (!D().conclusoes.includes(t)) D().conclusoes.push(t)
+  mexeu(); renderEditor(); $('#concl-nova')?.focus()
 }
 const nomeAnexo = id => D().anexos.find(a => a.id === id)?.nome
 function chipsEtapa(e) {
-  const ob = e.itens.filter(i => i.obrig).length
-  return `<span class="chip">${e.itens.length} itens${ob < e.itens.length ? ` · ${ob} obrig.` : ''}</span>`
-    + (e.foto === 'obrigatoria' ? `<span class="chip lar">${ic('camera')}mín. ${e.foto_min}</span>` : e.foto === 'opcional' ? `<span class="chip">${ic('camera')}opcional</span>` : '')
-    + (nomeAnexo(e.anexo) ? `<span class="chip az">${ic('doc')}${esc(nomeAnexo(e.anexo).split(' ').slice(0, 2).join(' '))}</span>` : '')
+  const n = e.itens.length
+  return `<span class="et-resumo">${[`${n} ite${n === 1 ? 'm' : 'ns'}`,
+    e.foto === 'obrigatoria' ? `${e.foto_min} foto${e.foto_min > 1 ? 's' : ''}` : e.foto === 'opcional' ? 'foto opcional' : null,
+    nomeAnexo(e.anexo) ? 'consulta anexo' : null].filter(Boolean).join(' · ')}</span>`
 }
 function etapaHtml(e, n) {
   const ab = e.id === VG.etAberta
@@ -421,37 +478,7 @@ function addEtapa() {
 function moverE(id, d) { const a = D().etapas, i = a.findIndex(e => e.id === id), j = i + d; [a[i], a[j]] = [a[j], a[i]]; mexeu(); renderEditor() }
 function tirarE(id) { D().etapas = D().etapas.filter(e => e.id !== id); VG.etAberta = D().etapas[0]?.id; mexeu(); renderEditor() }
 
-function renderRegras() {
-  const d = D()
-  const nItens = d.etapas.reduce((s, e) => s + e.itens.length, 0)
-  const nFotos = d.etapas.reduce((s, e) => s + (e.foto === 'obrigatoria' ? e.foto_min : 0), 0)
-  $('#regras').innerHTML = `
-    <div class="resumo-mod"><div><b>${d.etapas.length}</b><span>etapas</span></div><div><b>${nItens}</b><span>itens</span></div><div><b>${nFotos}</b><span>fotos mínimas</span></div></div>
-    <div class="regra"><h3>${ic('doc')}Anexos da vistoria</h3>
-      <p>O fiscal anexa estes PDFs ao criar a vistoria. Os obrigatórios travam a criação.</p>
-      ${d.anexos.map(a => `<div class="anexo-esp">
-        <input class="in" id="ae-${a.id}" maxlength="160" value="${esc(a.nome)}" oninput="D().anexos.find(x=>x.id==='${a.id}').nome=this.value;mexeu()">
-        <label><input type="checkbox" id="ao-${a.id}" ${a.obrig ? 'checked' : ''} onchange="D().anexos.find(x=>x.id==='${a.id}').obrig=this.checked;mexeu()">Obrig.</label>
-        <button class="ib" title="Remover" onclick="tirarAnexo('${a.id}')">${ic('lixo')}</button></div>`).join('')}
-      <div><button class="btn sm" onclick="D().anexos.push({id:novoId('a'),nome:'Novo anexo',obrig:false});mexeu();renderMontador()">${ic('mais')}Anexo</button></div></div>
-    <div class="regra"><h3>${ic('doc')}Vínculo exigido</h3>
-      <p>Sem nada marcado, a vistoria pode nascer solta (só com o local) e ser ligada depois.</p>
-      ${Object.entries(TIPOS).map(([k, t]) => `<label class="tog"><input type="checkbox" id="vx-${k}" ${(d.vinculos || []).includes(k) ? 'checked' : ''}
-        onchange="D().vinculos=Object.keys(TIPOS).filter(x=>x==='${k}'?this.checked:(D().vinculos||[]).includes(x));mexeu()">${t}</label>`).join('')}</div>
-    <div class="regra"><h3>${ic('pin')}Localização antes de iniciar</h3>
-      <select class="in" id="sel-local" onchange="D().local=this.value;mexeu();renderRegras()">
-        ${Object.entries(LOCAL).map(([k, v]) => `<option value="${k}" ${d.local === k ? 'selected' : ''}>${v.r}</option>`).join('')}</select>
-      <p>${LOCAL[d.local].d}</p></div>
-    <div class="regra"><h3>${ic('alerta')}Quando não confere</h3>
-      <p>A descrição é sempre obrigatória.</p>
-      <label class="tog"><input type="checkbox" id="tg-nf" ${d.nao_foto ? 'checked' : ''} onchange="D().nao_foto=this.checked;mexeu()">Exigir também uma foto do problema</label></div>
-    <div class="regra"><h3>${ic('nota')}Itens livres</h3>
-      <p>Sempre disponíveis: o fiscal cria o item (assunto, fotos e observação) em qualquer etapa, na conclusão ou depois de concluída.</p></div>
-    <div class="regra"><h3>${ic('ok')}Conclusão</h3>
-      <label class="campo-f"><span>Conclusões possíveis (separe por ponto e vírgula)</span><input class="in" id="concl" value="${esc(d.conclusoes.join('; '))}" onchange="D().conclusoes=this.value.split(';').map(s=>s.trim()).filter(Boolean);mexeu()"></label>
-      <label class="tog"><input type="checkbox" id="tg-ativo" ${VG.M.ativo ? 'checked' : ''} onchange="VG.M.ativo=this.checked;mexeu()">Modelo ativo (aparece em Nova vistoria)</label></div>`
-}
-function tirarAnexo(id) { D().anexos = D().anexos.filter(a => a.id !== id); D().etapas.forEach(e => { if (e.anexo === id) e.anexo = '' }); mexeu(); renderMontador() }
+function tirarAnexo(id) { D().anexos = D().anexos.filter(a => a.id !== id); D().etapas.forEach(e => { if (e.anexo === id) e.anexo = '' }); mexeu(); renderEditor() }
 
 // ══════════════ EXECUÇÃO ══════════════
 let R = null
@@ -478,6 +505,7 @@ async function fecharVistoria() {
   R = null; mapaMarcar = null
   $('#exec').hidden = true; document.body.style.overflow = ''
   $('#pdf-slot').innerHTML = ''
+  if (EMB) { avisarMapa('fechar'); return }
   carregarVistorias()
 }
 window.addEventListener('resize', () => { if (R && !$('#exec').hidden) { if (!largo() && R.pdf.modo === 'lado') R.pdf.modo = 'janela'; renderTrilho(); renderPdf() } })
@@ -837,11 +865,12 @@ function renderRodape() {
   } else if (R.fase === 'complemento') {
     bts = `<button class="btn pri" onclick="R.novoLivre=null;R.fase='fim';renderExec()">${ic('ok')}Terminar complemento</button>`
   } else {
-    bts = `<button class="btn" onclick="fecharVistoria()">${ic('esq')}Lista</button>`
+    bts = `<button class="btn" onclick="fecharVistoria()">${ic(EMB ? 'x' : 'esq')}${EMB ? 'Fechar' : 'Lista'}</button>`
       + `<a class="btn" href="${R.v.relatorio}" target="_blank" rel="noopener">${ic('doc')}Relatório</a>`
       // A peça nasce no mapa, presa a esta vistoria: artigos citados, área e
       // exigências já vêm preenchidos (DocumentoController::sugestaoGuiada).
-      + (EU.lavra ? `<a class="btn" href="/?vg_doc=${R.v.id}">${ic('nota')}Notificação ou auto</a>` : '')
+      + (EU.lavra ? (EMB ? `<button class="btn" onclick="avisarMapa('doc',{id:${R.v.id}})">${ic('nota')}Notificação ou auto</button>`
+        : `<a class="btn" href="/?vg_doc=${R.v.id}">${ic('nota')}Notificação ou auto</a>`) : '')
       + (podeEditar() ?`<button class="btn pri" onclick="R.fase='complemento';renderExec()">${ic('mais')}Complementar</button>` : '')
   }
   r.innerHTML = msg + `<div class="bts">${bts}</div>`
@@ -858,6 +887,7 @@ async function concluir() {
   try {
     const d = await api('POST', `/${R.v.id}/concluir`, { conclusao: R.conclusao })
     toast(d.message)
+    avisarMapa('mudou')
     R.v = await api('GET', '/' + R.v.id)
     R.fase = 'fim'; R.pdf.modo = 'mini'; renderExec()
   } catch (e) { toast(e.message, true) }
@@ -1094,8 +1124,10 @@ function arrastavel(w) {
 // O endereço é limpo em seguida, para o "recarregar" não criar de novo.
 async function abrirPeloEndereco() {
   const p = new URLSearchParams(location.search)
-  if (p.has('v') || p.has('nova')) history.replaceState(null, '', location.pathname)
-  if (p.has('v')) { irAba('vistorias'); return abrirVistoria(+p.get('v')) }
+  if ((p.has('v') || p.has('nova')) && !EMB) history.replaceState(null, '', location.pathname)
+  // Parâmetros › Vistorias: só o montador de modelos.
+  if (p.has('modelos') && EU.admin) return irAba('modelos')
+  if (p.has('v')) { if (!EMB) irAba('vistorias'); return abrirVistoria(+p.get('v')) }
   if (p.has('nova') && EU.edita) {
     NV = novaVazia()
     NV.local = p.get('local') || ''
@@ -1107,6 +1139,7 @@ async function abrirPeloEndereco() {
     }
     return irAba('nova')
   }
+  if (EMB) { avisarMapa('fechar'); return }
   irAba('vistorias')
 }
 abrirPeloEndereco()

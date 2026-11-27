@@ -53,10 +53,18 @@ class VistoriaGuiadaController extends Controller
     public function pagina(Request $request)
     {
         $u = $request->user();
+        // A LISTA DAS VISTORIAS É A DA DOCUMENTOS (decisão dele, 27/11/2026):
+        // a página só existe como janela do mapa, ou aberta numa vistoria.
+        if (! $request->boolean('embed') && ! $request->has('v') && ! $request->has('nova')) {
+            return redirect()->route('mapa');
+        }
         return view('vistorias-guiadas', [
             // A página abre no módulo em que o usuário está: a lista e a
             // vistoria nova são desse módulo.
             'modulo' => \App\Support\Modulo::ativo($u),
+            // Aberta numa janela do mapa (vistoria-guiada-ponte.js) ou em
+            // Parâmetros › Vistorias: só o formulário, sem cabeçalho nem lista.
+            'embutida' => $request->boolean('embed'),
             'usuario' => ['id' => $u->id, 'nome' => $u->name, 'admin' => $u->isAdmin(), 'edita' => $u->canEdit(),
                 'lavra' => $u->podeLavrarDocumento(),
                 'tem_assinatura' => (bool) $u->assinatura],
@@ -68,7 +76,8 @@ class VistoriaGuiadaController extends Controller
     public function modelos(Request $request): JsonResponse
     {
         $admin = $request->user()->isAdmin();
-        $q = VgModelo::query()->orderBy('nome');
+        // Cada módulo tem os seus modelos: só os do módulo em que o usuário está.
+        $q = VgModelo::query()->where('modulo', $this->modulo($request))->orderBy('nome');
         if (! $admin) {
             $q->where('ativo', true)->where('versao_atual', '>', 0);
         }
@@ -91,7 +100,7 @@ class VistoriaGuiadaController extends Controller
         $this->soAdmin($request);
         $d = $request->validate(['nome' => ['required', 'string', 'max:120']]);
         $m = VgModelo::create([
-            'nome' => $d['nome'], 'user_id' => $request->user()->id, 'rascunho_alterado' => true,
+            'nome' => $d['nome'], 'modulo' => $this->modulo($request), 'user_id' => $request->user()->id, 'rascunho_alterado' => true,
             'rascunho' => [
                 'local' => 'gps', 'nao_foto' => true, 'conclusoes' => ['Regular', 'Com ressalvas', 'Irregular'],
                 'vinculos' => [], 'anexos' => [],
@@ -106,6 +115,7 @@ class VistoriaGuiadaController extends Controller
     public function salvarModelo(Request $request, VgModelo $modelo): JsonResponse
     {
         $this->soAdmin($request);
+        $this->doModulo($request, $modelo);
         $d = $request->validate([
             'nome' => ['required', 'string', 'max:120'],
             'ativo' => ['required', 'boolean'],
@@ -122,6 +132,7 @@ class VistoriaGuiadaController extends Controller
     public function publicar(Request $request, VgModelo $modelo): JsonResponse
     {
         $this->soAdmin($request);
+        $this->doModulo($request, $modelo);
         $def = $this->definicao($modelo->rascunho, true);
 
         $v = DB::transaction(function () use ($modelo, $def, $request) {
@@ -198,17 +209,27 @@ class VistoriaGuiadaController extends Controller
                 'conclusoes' => ['Procedente', 'Improcedente', 'Não constatado'], 'anexos' => [], 'etapas' => []],
         ];
 
-        DB::transaction(function () use ($defs, $request) {
+        // Cada exemplo é de um módulo; entram só os do módulo em que o
+        // administrador está.
+        $doModulo = ['Fiscalização de obra' => 'obras', 'Habite-se' => 'obras', 'Início de obra' => 'obras',
+            'Terreno sem limpeza' => 'posturas', 'Averiguação de denúncia' => 'posturas'];
+        $modulo = $this->modulo($request);
+        $defs = array_filter($defs, fn ($nome) => $doModulo[$nome] === $modulo, ARRAY_FILTER_USE_KEY);
+
+        $n = DB::transaction(function () use ($defs, $request, $modulo) {
+            $n = 0;
             foreach ($defs as $nome => $def) {
-                if (VgModelo::where('nome', $nome)->exists()) { continue; }   // não duplica o que já existe
+                if (VgModelo::where('modulo', $modulo)->where('nome', $nome)->exists()) { continue; }   // não duplica o que já existe
                 $def = $this->definicao($def, true);
-                $m = VgModelo::create(['nome' => $nome, 'rascunho' => $def, 'rascunho_alterado' => false,
+                $n++;
+                $m = VgModelo::create(['nome' => $nome, 'modulo' => $modulo, 'rascunho' => $def, 'rascunho_alterado' => false,
                     'versao_atual' => 1, 'user_id' => $request->user()->id]);
                 VgModeloVersao::create(['modelo_id' => $m->id, 'versao' => 1, 'nome' => $nome, 'definicao' => $def,
                     'publicado_por' => $request->user()->id, 'publicado_em' => now()]);
             }
+            return $n;
         });
-        return response()->json(['message' => 'Modelos de exemplo carregados.']);
+        return response()->json(['message' => $n ? "{$n} modelo(s) de exemplo carregado(s)." : 'Os exemplos deste módulo já estão todos aqui.']);
     }
 
     /**
@@ -312,7 +333,6 @@ class VistoriaGuiadaController extends Controller
         $this->soQuemEdita($request);
         $d = $request->validate([
             'modelo_id' => ['required', 'integer'],
-            'modulo' => ['required', Rule::in(array_keys(self::MODULOS))],
             'local' => ['nullable', 'string', 'max:255'],
             'descricao' => ['nullable', 'string', 'max:4000'],
             // A sinalização de que a vistoria nasce: a conclusão a resolve.
@@ -324,7 +344,9 @@ class VistoriaGuiadaController extends Controller
             'extras' => ['array', 'max:10'], 'extras.*' => ['file', 'mimetypes:application/pdf', 'max:30720'],
         ], [], ['anexos.*' => 'anexo', 'extras.*' => 'PDF']);
 
-        $modelo = VgModelo::where('ativo', true)->findOrFail($d['modelo_id']);
+        // O modelo é do módulo em que o usuário está, e a vistoria é do módulo do modelo.
+        $modelo = VgModelo::where('ativo', true)->where('modulo', $this->modulo($request))->findOrFail($d['modelo_id']);
+        $d['modulo'] = $modelo->modulo;
         $versao = $modelo->versaoVigente();
         abort_unless($versao, 422, 'Este modelo ainda não tem versão publicada.');
         $def = $versao->definicao;
@@ -750,6 +772,13 @@ class VistoriaGuiadaController extends Controller
     // ══════════════ apoio ══════════════
 
     private function soAdmin(Request $r): void { abort_unless($r->user()->isAdmin(), 403, 'Só o administrador monta modelos.'); }
+    /** O módulo em que o usuário está — o dos modelos que ele vê e monta. */
+    private function modulo(Request $r): string { return \App\Support\Modulo::ativo($r->user()); }
+    /** Modelo de outro módulo não se altera daqui: troque de módulo antes. */
+    private function doModulo(Request $r, VgModelo $m): void
+    {
+        abort_unless($m->modulo === $this->modulo($r), 404, 'Este modelo é de outro módulo.');
+    }
     private function soQuemEdita(Request $r): void { abort_unless($r->user()->canEdit(), 403, 'Seu perfil é só de consulta.'); }
 
     private function soRelacionado(Request $r, VgVistoria $v): void

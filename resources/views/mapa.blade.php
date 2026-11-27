@@ -1212,7 +1212,16 @@
     @else
       <button data-sub="decibelimetros" onclick="subParametros('decibelimetros')">Decibelímetros</button>
     @endif
+    {{-- Os modelos de vistoria do módulo aberto (cada módulo tem os seus). --}}
+    <button data-sub="vistorias" onclick="subParametros('vistorias')">Vistorias</button>
     <button data-sub="geral" onclick="subParametros('geral')">Formulário</button>
+  </div>
+
+  {{-- VISTORIAS — os modelos (roteiros) de vistoria deste módulo. O montador
+       é a página /vistorias-guiadas em modo embutido, carregada só quando a
+       aba abre (parametros.js). Só o administrador monta modelos. --}}
+  <div class="par-painel par-fixo" id="par-vistorias">
+    <iframe id="par-vistorias-quadro" class="par-quadro" title="Modelos de vistoria"></iframe>
   </div>
 
   {{-- PADRÃO DE TODAS AS ABAS (o do AppPOSTURAS): no topo só a busca e o
@@ -3707,8 +3716,8 @@
       </span>
       <span id="vato-titulo">Vistoria registrada</span>
     </h3>
-    <div class="sub">A constatação é de irregularidade. A peça nasce vinculada a esta
-      vistoria, com os artigos, a área aferida e as exigências que você registrou em campo.</div>
+    <div class="sub">A peça nasce vinculada a esta vistoria, com os artigos, a área
+      aferida e as exigências que você registrou em campo.</div>
 
     <div class="vato-lista" id="vato-lista"></div>
 

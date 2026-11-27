@@ -19,9 +19,11 @@
 <link rel="stylesheet" href="@assetv('css/vistorias-guiadas.css')">
 <script src="@assetv('js/tema.js')"></script>
 </head>
-<body>
+<body class="{{ $embutida ? 'embutida' : '' }}">
 
-<header class="vg-topo">
+{{-- EMBUTIDA (?embed=1): aberta numa janela do mapa — só o formulário, sem
+     cabeçalho nem lista. A lista das vistorias é a da Documentos. --}}
+<header class="vg-topo" @if ($embutida) hidden @endif>
   <a class="vg-voltar" href="{{ route('mapa') }}" title="Voltar ao mapa"><svg class="i"><use href="#i-esq"/></svg>Mapa</a>
   <div class="vg-marca"><b>Vistorias</b><span class="vg-teste">{{ $modulo === 'posturas' ? 'Posturas' : 'Obras' }}</span></div>
   <nav class="abas" role="tablist">
@@ -34,13 +36,15 @@
 <main class="vg-main">
   <section id="v-vistorias"></section>
   <section id="v-nova" hidden></section>
+  {{-- Os modelos do módulo aberto: a lista e o editor (abas Roteiro e Regras). --}}
   <section id="v-modelos" class="mont" hidden>
-    <aside class="caixa"><h2>Modelos</h2><div class="modelos" id="lista-modelos"></div>
-      <div class="pe-lista" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="novoModelo()"><svg class="i"><use href="#i-mais"/></svg>Novo modelo</button>
-        <button class="btn sm" title="Acrescenta os modelos de exemplo que ainda não existem" onclick="carregarExemplos()">Exemplos que faltam</button></div>
+    <aside class="caixa mod-lado">
+      <div class="mod-lado-cab"><h2 id="mod-titulo">Modelos</h2>
+        <button class="btn sm pri" onclick="novoModelo()"><svg class="i"><use href="#i-mais"/></svg>Novo</button></div>
+      <div class="modelos" id="lista-modelos"></div>
+      <button class="mod-link" title="Acrescenta os exemplos deste módulo que ainda não existem" onclick="carregarExemplos()">Carregar exemplos</button>
     </aside>
     <section class="caixa" id="editor"></section>
-    <aside class="caixa"><h2>Regras do modelo</h2><div class="regras" id="regras"></div></aside>
   </section>
 </main>
 
@@ -87,7 +91,7 @@
   <symbol id="i-nota" viewBox="0 0 24 24"><path d="M5 4h14v12l-4 4H5z"/><path d="M15 20v-4h4M8 9h8M8 13h5"/></symbol>
 </svg>
 
-<script>window.VG_EU = @json($usuario); window.VG_MODULO = @json($modulo);</script>
+<script>window.VG_EU = @json($usuario); window.VG_MODULO = @json($modulo); window.VG_EMBUTIDA = @json($embutida);</script>
 <script src="/vendor/leaflet-1.9.4/leaflet.js"></script>
 <script src="@assetv('js/vistorias-guiadas.js')"></script>
 </body>

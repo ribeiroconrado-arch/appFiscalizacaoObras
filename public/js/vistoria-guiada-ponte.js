@@ -21,13 +21,72 @@ function irParaVistoriaGuiada(p = {}) {
   for (const k of ['imovel', 'protocolo', 'denuncia', 'pessoa', 'sinalizacao', 'local']) {
     if (p[k]) q.set(k, String(p[k]))
   }
-  location.href = '/vistorias-guiadas?' + q.toString()
+  janelaVistoria(q)
 }
 
 /** Abre uma vistoria (guiada) já existente. @param {number} id */
 function abrirVistoriaGuiada(id) {
-  location.href = '/vistorias-guiadas?v=' + Number(id)
+  janelaVistoria(new URLSearchParams({ v: String(Number(id)) }))
 }
+
+// ── A JANELA ──
+// A vistoria abre POR CIMA do mapa, só o formulário (decisão dele, 27/11/2026):
+// a lista das vistorias é a da Documentos. Por dentro é a página
+// /vistorias-guiadas em modo embutido (?embed=1), num iframe — a tela da
+// vistoria tem estilo próprio e não pode herdar nem quebrar o do mapa. No
+// celular a janela ocupa a tela inteira.
+//
+// A página avisa o mapa por postMessage:
+//   fechar   o fiscal fechou ou cancelou;
+//   mudou    criou ou concluiu — a lista da Documentos e o histórico refazem;
+//   doc      pediu a notificação ou o auto a partir da vistoria.
+let _vgJanela = null
+let _vgMudou = false
+
+function janelaVistoria(q) {
+  fecharJanelaVistoria(true)
+  mapaState?.obj?.closePopup?.()
+  q.set('embed', '1')
+  const fundo = document.createElement('div')
+  fundo.className = 'vgj-fundo'
+  fundo.innerHTML = `<div class="vgj" role="dialog" aria-modal="true" aria-label="Vistoria">
+      <iframe src="/vistorias-guiadas?${q.toString()}" title="Vistoria" allow="geolocation; camera"></iframe>
+    </div>`
+  document.body.appendChild(fundo)
+  document.body.classList.add('vgj-aberta')
+  _vgJanela = fundo
+  _vgMudou = false
+}
+
+/** @param {boolean} [semAtualizar] ao trocar uma janela por outra */
+function fecharJanelaVistoria(semAtualizar) {
+  if (!_vgJanela) return
+  _vgJanela.remove()
+  _vgJanela = null
+  document.body.classList.remove('vgj-aberta')
+  if (_vgMudou && !semAtualizar) atualizarDepoisDaVistoria()
+  _vgMudou = false
+}
+
+/** O que mostra vistoria no mapa refaz: a lista da Documentos e o histórico aberto. */
+function atualizarDepoisDaVistoria() {
+  // Só se a Documentos está à vista (senão a lista carrega quando abrir).
+  if (typeof carregarDocumentos === 'function' && document.getElementById('lista-documentos')?.offsetParent) carregarDocumentos()
+  const lote = state.selecionado?.properties?.id
+  if (lote && typeof carregarHistorico === 'function' && document.getElementById('m-ficha')?.classList.contains('open')) carregarHistorico(lote)
+  if (typeof recarregarSinalizacoes === 'function') recarregarSinalizacoes()
+}
+
+window.addEventListener('message', ev => {
+  if (ev.origin !== location.origin || !ev.data || typeof ev.data.vg !== 'string') return
+  if (ev.data.vg === 'mudou') { _vgMudou = true; return }
+  if (ev.data.vg === 'fechar') { fecharJanelaVistoria(); return }
+  if (ev.data.vg === 'doc' && ev.data.id) {
+    _vgMudou = true
+    fecharJanelaVistoria()
+    documentoDaVistoriaGuiada(Number(ev.data.id))
+  }
+})
 
 // A ANTIGA SAI: quem chamava novaVistoria() abre a guiada, com o imóvel
 // selecionado e, vindo do protocolo, o protocolo (vState.protocoloId é o que

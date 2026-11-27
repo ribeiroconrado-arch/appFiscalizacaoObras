@@ -60,6 +60,11 @@ function subParametros(nome) {
   if (nome === 'cadastro' && typeof carregarCargasDoCadastro === 'function') { carregarCargasDoCadastro() }
   // Os nomes sem tipo percorrem o cadastro inteiro: só quando a aba abre.
   if (nome === 'ruas') { carregarRuasSemTipo() }
+  // Os modelos de vistoria: o montador carrega na primeira abertura da aba.
+  if (nome === 'vistorias') {
+    const q = document.getElementById('par-vistorias-quadro')
+    if (q && !q.getAttribute('src')) q.src = '/vistorias-guiadas?modelos=1&embed=1'
+  }
 }
 
 async function carregarParametros() {
